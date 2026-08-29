@@ -1,10 +1,5 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { createClient } from "@supabase/supabase-js";
+import { appOrigin, corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -40,11 +35,11 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { tenant_id, email, password, full_name, role } = body;
+    const { tenant_id, email, full_name, role } = body;
 
-    if (!tenant_id || !email || !password || !role) {
+    if (!tenant_id || !email || !role) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: tenant_id, email, password, role" }),
+        JSON.stringify({ error: "Missing required fields: tenant_id, email, role" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -56,9 +51,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (password.length < 6) {
+    const normalizedEmail = String(email).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return new Response(
-        JSON.stringify({ error: "Password must be at least 6 characters" }),
+        JSON.stringify({ error: "Invalid email" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -78,19 +74,51 @@ Deno.serve(async (req) => {
 
     if (!membership) {
       return new Response(
-        JSON.stringify({ error: "Not authorized. Only admins can create accounts." }),
+        JSON.stringify({ error: "Not authorized. Admin invitation requires owner or admin role." }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Create the user via Admin API
+    if (!appOrigin) {
+      return new Response(
+        JSON.stringify({ error: "AGVLOG_APP_ORIGIN is required to send secure invitations" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Authorize exactly one auth.users insertion. The database trigger rejects
+    // public signups and only accepts this short-lived, unguessable invite nonce.
+    const inviteNonce = crypto.randomUUID();
+    const { error: authorizationError } = await adminClient.rpc("prepare_auth_invite", {
+      _email: normalizedEmail,
+      _tenant_id: tenant_id,
+      _invited_by: caller.id,
+      _nonce: inviteNonce,
+    });
+
+    if (authorizationError) {
+      return new Response(
+        JSON.stringify({ error: "Unable to authorize invitation" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Invite the user so only the recipient chooses the initial password.
     const { data: newUser, error: createError } =
-      await adminClient.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: { full_name: full_name || email },
+      await adminClient.auth.admin.inviteUserByEmail(normalizedEmail, {
+        data: {
+          full_name: String(full_name || normalizedEmail).trim(),
+          agvlog_invite_nonce: inviteNonce,
+        },
+        redirectTo: new URL("/set-password", appOrigin).toString(),
       });
+
+    // This is a no-op when the trigger consumed the nonce. It closes the
+    // authorization window immediately when Auth failed before inserting.
+    await adminClient.rpc("cancel_auth_invite", {
+      _email: normalizedEmail,
+      _nonce: inviteNonce,
+    });
 
     if (createError) {
       return new Response(
@@ -110,6 +138,7 @@ Deno.serve(async (req) => {
       });
 
     if (memberError) {
+      await adminClient.auth.admin.deleteUser(newUser.user.id);
       return new Response(
         JSON.stringify({ error: memberError.message }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -119,6 +148,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
+        invited: true,
         user_id: newUser.user.id,
         email: newUser.user.email,
       }),

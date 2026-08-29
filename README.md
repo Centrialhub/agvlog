@@ -1,73 +1,55 @@
-# Welcome to your Lovable project
+# AGVLog TMS
 
-## Project info
+Plataforma web multi-tenant para operação logística: cargas, viagens, torre de controle, frota, aplicativo do motorista, portal do cliente, documentos fiscais e financeiro.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Arquitetura
 
-## How can I edit this code?
+- React 18, TypeScript, Vite, TanStack Query e Tailwind no frontend.
+- Supabase Auth, Postgres com RLS, Storage, RPCs e Edge Functions no backend.
+- Integrações externas isoladas em Edge Functions: SSX, Hub Fiscal e roteamento OSRM.
+- `load_items` é a fonte de verdade da composição de cargas; `dispatch_trip_loads` é a fonte de verdade do vínculo viagem-carga. Consulte [o contrato de dados](docs/data-contract.md) antes de alterar esses fluxos.
 
-There are several ways of editing your application.
+## Requisitos
 
-**Use Lovable**
+- Node.js 22 e npm 10.9.4 (fixados por `.node-version`, `engines` e `packageManager`).
+- Docker para o stack Supabase descartável e os testes E2E.
+- Supabase CLI instalado pelo lockfile do projeto.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Desenvolvimento local
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+cp .env.example .env
+npm ci
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Preencha apenas a URL, a chave publicável e o identificador público do projeto no `.env`. Service role, chaves fiscais, credenciais SSX e demais segredos pertencem ao cofre de secrets do Supabase, nunca ao frontend.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Validação
 
-**Use GitHub Codespaces**
+```sh
+npm run check
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Esse comando executa typecheck, lint geral e crítico, sintaxe das Edge Functions,
+testes com cobertura e build de produção com orçamento máximo de 500 KiB por
+chunk JavaScript. O job `database-and-e2e` do GitHub Actions acrescenta reset
+Supabase, contratos SQL/RLS e Playwright desktop/tablet/mobile.
 
-## What technologies are used for this project?
+Para o E2E local, inicie e resete o stack isolado antes de exportar `API_URL` e
+`ANON_KEY` retornados por `supabase status -o env` como variáveis `VITE_*`. O
+Playwright recusa por padrão qualquer backend não local.
 
-This project is built with:
+## Produção
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- Aplique migrações antes de publicar o frontend.
+- Faça deploy das Edge Functions respeitando o `verify_jwt` de `supabase/config.toml`.
+- Mantenha o Auth invite-only, com senha mínima de 12 caracteres e TOTP/AAL2
+  obrigatório para proprietário e administrador.
+- Configure `AGVLOG_APP_ORIGIN` com a origem HTTPS exata do frontend; o CORS das
+  Edge Functions falha fechado quando essa configuração está ausente ou inválida.
+- Configure um `OSRM_BASE_URL` aprovado e dedicado; a aplicação falha de forma segura sem ele.
+- Mantenha SSX e fiscal desativados por tenant até homologação específica; as
+  Edge Functions e os crons falham fechado quando as flags estão desligadas.
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+O procedimento completo de deploy, smoke test e rollback está no [runbook de produção](docs/production-runbook.md). A torre de controle e suas regras estão descritas em [docs/control-tower.md](docs/control-tower.md).

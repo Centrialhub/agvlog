@@ -13,10 +13,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, RotateCw, Send } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { useEmitters } from '@/hooks/useEmitters';
+import { useEmitters, type TenantEmitter } from '@/hooks/useEmitters';
 import { useHubCredentials } from '@/hooks/useEmitters';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useClients } from '@/hooks/useClients';
+import { useClients, type Client } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
@@ -24,7 +24,15 @@ import { useAlertStore } from '@/hooks/useAlertStore';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
-import { suggestIcmsAliquota, icmsIsentoByCst } from '@/lib/fiscal/icmsAliquota';
+import {
+  suggestIcmsAliquota,
+  icmsIsentoByCst,
+  shouldApplyIcmsAutoSuggestion,
+} from '@/lib/fiscal/icmsAliquota';
+import {
+  selectActiveEmitterById,
+  selectDefaultActiveEmitter,
+} from '@/lib/fiscal/emitterSelection';
 import { validateInsurance, formatCnpj, onlyDigits } from '@/lib/fiscal/insuranceValidation';
 import {
   applyInsuranceProfileToBatch,
@@ -58,6 +66,27 @@ interface DriverOpt {
   id: string;
   name: string;
   cpf: string | null;
+}
+
+interface CteDefaultsResult {
+  driver?: { id?: string | null; name?: string | null; cpf?: string | null } | null;
+  vehicle?: {
+    id?: string | null;
+    plate?: string | null;
+    state?: string | null;
+    renavam?: string | null;
+  } | null;
+  emitter?: { id?: string | null } | null;
+  remitter?: { remitter?: string | null; remitter_cnpj?: string | null } | null;
+  recipient?: {
+    recipient?: string | null;
+    recipient_cnpj?: string | null;
+    recipient_city?: string | null;
+    recipient_state?: string | null;
+    client_id?: string | null;
+  } | null;
+  nature_default?: string | null;
+  cargo_predominant?: string | null;
 }
 
 interface EditableCte {
@@ -160,8 +189,53 @@ interface EditableCte {
   transmitMessage?: string;
 }
 
+type FreightComponentKey =
+  | 'fcFreightWeight'
+  | 'fcDeliveryFee'
+  | 'fcOthers'
+  | 'fcInsurance'
+  | 'fcDispatch'
+  | 'fcGris'
+  | 'fcToll'
+  | 'fcTracking'
+  | 'fcLoading'
+  | 'fcHelper';
+
+const FREIGHT_COMPONENT_FIELDS: ReadonlyArray<readonly [FreightComponentKey, string]> = [
+  ['fcFreightWeight', 'Frete peso'],
+  ['fcDeliveryFee', 'Valor entrega'],
+  ['fcOthers', 'Outros'],
+  ['fcInsurance', 'Seguro (R$)'],
+  ['fcDispatch', 'Despacho'],
+  ['fcGris', 'GRIS'],
+  ['fcToll', 'Pedágio'],
+  ['fcTracking', 'Rastreamento'],
+  ['fcLoading', 'Carga/Descarga'],
+  ['fcHelper', 'Ajudante'],
+];
+
+function isSimpleTaxRegime(emitter: TenantEmitter | null | undefined): boolean {
+  return emitter?.regime_tributario === 'simples' || emitter?.regime_tributario === 'mei';
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : 'erro desconhecido';
+}
+
+function parseCteDefaults(value: unknown): CteDefaultsResult | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as CteDefaultsResult;
+}
+
+function getPayloadIcms(payload: Record<string, unknown>): Record<string, unknown> {
+  const icms = payload.icms;
+  return icms && typeof icms === 'object' && !Array.isArray(icms)
+    ? (icms as Record<string, unknown>)
+    : {};
+}
+
 function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): EditableCte {
-  const first = g.documents[0] as any;
+  const first = g.documents[0];
   return {
     key: g.key,
     emitterId: defaultEmitterId,
@@ -242,7 +316,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     cargoSpecies: 'CONFORME NF',
     cargoPredominant: '',
     clientId: g.client_id,
-    invoices: g.documents.map((d: any) => ({
+    invoices: g.documents.map((d) => ({
       id: d.id,
       access_key: d.access_key || null,
       number: d.invoice_number || null,
@@ -258,12 +332,12 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
 
 function toBuildInput(
   e: EditableCte,
-  emitter: any,
+  emitter: TenantEmitter | null | undefined,
   environment: 'sandbox' | 'production' = 'sandbox',
-  clients: any[] = [],
+  clients: Client[] = [],
 ): BuildCtePayloadInput {
   // Completa lacunas das partes com o cadastro local (CNPJ, IE, endereço).
-  const registry = buildClientIndex(clients as any[]);
+  const registry = buildClientIndex(clients);
   const enrichParty = (
     name: string,
     cnpj: string,
@@ -274,6 +348,7 @@ function toBuildInput(
       number?: string | null;
       neighborhood?: string | null;
       zip?: string | null;
+      city_ibge?: string | null;
     } | null,
     ieOverride?: string | null,
     clientId?: string | null,
@@ -315,13 +390,13 @@ function toBuildInput(
         neighborhood: e.recipientNeighborhood || null,
         zip: e.recipientZip || null,
         city_ibge: e.recipientCityIbge || null
-      } as any,
+      },
       e.recipientIe,
       e.clientId,
     ),
     overrides: {
       remitter: (e.remitterStreet || e.remitterNumber || e.remitterNeighborhood || e.remitterZip || e.remitterCnpj || e.remitterIe || e.remitterName) ? {
-        name: e.remitterName || null,
+        name: e.remitterName || undefined,
         cnpj: e.remitterCnpj || null,
         ie: e.remitterIe || null,
         address: {
@@ -329,10 +404,10 @@ function toBuildInput(
           number: e.remitterNumber || null,
           neighborhood: e.remitterNeighborhood || null,
           zip: e.remitterZip || null
-        } as any
+        }
       } : null,
       recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe || e.recipientCityIbge || e.recipientCity || e.recipientState || e.recipientName) ? {
-        name: e.recipientName || null,
+        name: e.recipientName || undefined,
         cnpj: e.recipientCnpj || null,
         ie: e.recipientIe || null,
         address: {
@@ -343,7 +418,7 @@ function toBuildInput(
           city: e.recipientCity || null,
           state: e.recipientState || null,
           city_ibge: e.recipientCityIbge || null
-        } as any
+        }
       } : null,
     },
 
@@ -457,14 +532,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const [bulkEditTransporte, setBulkEditTransporte] = useState(false);
   const [bulkEditCarga, setBulkEditCarga] = useState(false);
   const [bulkEditFiscal, setBulkEditFiscal] = useState(true);
-  
-  const bulkEdit = useMemo(() => {
-    // Para retrocompatibilidade com a lógica de patch(), mas agora baseada na aba ativa.
-    return true; // Sempre tentamos aplicar bulk, a lógica de filtro está no patch()
-  }, []);
   const { showAlert } = useAlertStore();
 
-  const defaultEmitter = emitters.find((e: any) => e.is_default && e.active) || emitters[0];
+  const activeEmitters = useMemo(() => emitters.filter(emitter => emitter.active), [emitters]);
+  const defaultEmitter = useMemo(() => selectDefaultActiveEmitter(emitters), [emitters]);
 
   // Assinatura do lote: muda sempre que as notas/grupos selecionados mudam.
   // Sem isso o diálogo mantinha o lote capturado na primeira abertura (bug:
@@ -477,7 +548,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   useEffect(() => {
     if (!currentTenant?.id) return;
     (async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('drivers')
         .select('id, name, cpf')
         .eq('tenant_id', currentTenant.id)
@@ -491,9 +562,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   // A consulta anterior é descartada quando a seleção muda, evitando que uma
   // resposta tardia restaure no modal as notas do lote anterior.
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
     let cancelled = false;
-    const registry = clients.length > 0 ? buildClientIndex(clients as any[]) : null;
+    const registry = clients.length > 0 ? buildClientIndex(clients) : null;
     
     const baseItems = groups.map((g) => {
       const it = groupToEditable(g, defaultEmitter?.id || '');
@@ -513,11 +584,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       const patched = await Promise.all(
         baseItems.map(async (it) => {
           if (it.loadIds.length === 0) return it;
-          const { data } = await (supabase as any).rpc('cte_defaults_for_group', {
+          const { data } = await supabase.rpc('cte_defaults_for_group', {
             p_load_ids: it.loadIds,
           });
-          if (!data) return it;
-          const d: any = data;
+          const d = parseCteDefaults(data);
+          if (!d) return it;
           
           let updated = {
             ...it,
@@ -562,6 +633,15 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, groupsSignature, defaultEmitter?.id, clients.length]);
 
+  const hasIncompleteInsurance = items.some(
+    (it) => !it.insurerName || !it.insurerCnpj || !it.insurerPolicy,
+  );
+  const hasIncompletePartyRegistry = items.some(
+    (it) =>
+      !it.remitterCnpj || !it.remitterIe || !it.recipientCnpj || !it.recipientIe ||
+      !it.recipientCity || !it.recipientState,
+  );
+
   // Aplica a seguradora padrão salva em todos os CT-es do lote. O CNPJ da
   // seguradora também é usado como Nº de averbação/CGC quando o campo está vazio.
   useEffect(() => {
@@ -571,26 +651,20 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       const { items: next, changed } = applyInsuranceProfileToBatch(prev, insuranceProfile);
       return changed ? next : prev;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     open,
     insuranceProfile,
     items.length,
     // Reaplica sempre que algum CT-e do lote estiver sem seguradora/CNPJ/apólice
     // (ex.: itens repopulados pelo RPC assíncrono ou troca de lote).
-    items.some(
-      (it) =>
-        !it.insurerName ||
-        !it.insurerCnpj ||
-        !it.insurerPolicy
-    ),
+    hasIncompleteInsurance,
   ]);
 
   // Auto-preenche nome, CNPJ, IE, cidade e UF de remetente/destinatário a partir
   // do cadastro local (clientes/fornecedores) quando a NF veio incompleta.
   useEffect(() => {
     if (!open || items.length === 0 || clients.length === 0) return;
-    const registry = buildClientIndex(clients as any[]);
+    const registry = buildClientIndex(clients);
     let changed = false;
     const next = items.map((it) => {
       const r = fillPartyFieldsFromRegistry(it, registry);
@@ -598,23 +672,18 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       return r.item;
     });
     if (changed) setItems(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     open,
     clients,
-    items.length,
+    items,
     // Reaplica quando itens são repopulados pelo RPC assíncrono e ficam sem dados.
-    items.some(
-      (it) =>
-        !it.remitterCnpj || !it.remitterIe || !it.recipientCnpj || !it.recipientIe ||
-        !it.recipientCity || !it.recipientState,
-    ),
+    hasIncompletePartyRegistry,
   ]);
 
   const active = items[activeIdx];
   const emitterForActive = useMemo(
-    () => emitters.find((e: any) => e.id === active?.emitterId) || defaultEmitter,
-    [emitters, active?.emitterId, defaultEmitter],
+    () => selectActiveEmitterById(emitters, active?.emitterId),
+    [emitters, active?.emitterId],
   );
 
   // Auto-sugere alíquota de ICMS conforme UF de origem (emitente) e destino (destinatário) quando ainda não editada.
@@ -622,14 +691,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     if (!active) return;
     
     // Se a alíquota já foi alterada manualmente, ou se o emitente for Simples Nacional (trava em 0), não auto-sugere mais.
-    const regime = (emitterForActive as any)?.regime_tributario;
-    const isSimples = regime === 'simples' || regime === 'mei';
-    if ((active as any)._aliqManual || isSimples) {
+    const isSimples = isSimpleTaxRegime(emitterForActive);
+    if (active._aliqManual || isSimples) {
       // Se for Simples Nacional e os valores não estiverem zerados, força o zeramento
       if (isSimples && (active.icmsAliquota !== 0 || active.icmsBase !== 0 || active.icmsValor !== 0)) {
-        console.log(`[CteEmissionPreviewDialog] Regra aplicada: zerando ICMS para emissor Simples Nacional (${(emitterForActive as any)?.razao_social})`);
+        console.log(`[CteEmissionPreviewDialog] Regra aplicada: zerando ICMS para emissor Simples Nacional (${emitterForActive?.razao_social})`);
         setItems(prev => prev.map((it, i) => {
-          if (i === activeIdx || (bulkEdit && !it._aliqManual)) {
+          if (shouldApplyIcmsAutoSuggestion(i, activeIdx, bulkEditFiscal, Boolean(it._aliqManual))) {
              return { ...it, icmsAliquota: 0, icmsBase: 0, icmsValor: 0, icmsIsento: true, icmsCst: '90' };
           }
           return it;
@@ -638,7 +706,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       return;
     }
 
-    const originUf = (emitterForActive as any)?.endereco?.uf || null;
+    const originUf = emitterForActive?.endereco?.uf || null;
     const destUf = active.recipientState || null;
     if (!originUf || !destUf) return;
     
@@ -652,11 +720,16 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       prev.map((it, i) => {
         // Se bulkEdit estiver ligado, aplica a sugestão a todos que NÃO tiverem trava manual
         // ou aplica apenas ao ativo se bulkEdit estiver desligado.
-        const shouldUpdate = bulkEdit ? !it._aliqManual : i === activeIdx;
+        const shouldUpdate = shouldApplyIcmsAutoSuggestion(
+          i,
+          activeIdx,
+          bulkEditFiscal,
+          Boolean(it._aliqManual),
+        );
         
         if (shouldUpdate) {
           // Recalcula o ICMS para cada item do lote se for bulk, pois o frete varia
-          const itemR = bulkEdit 
+          const itemR = bulkEditFiscal
             ? recalcIcms(it.freightValue || 0, suggested, it.icmsEmbutido, isento)
             : r;
 
@@ -671,30 +744,30 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIdx, active?.recipientState, active?.icmsCst, emitterForActive?.id]);
+  }, [activeIdx, active?.recipientState, active?.icmsCst, bulkEditFiscal, emitterForActive?.id]);
 
   // Ambiente e disponibilidade da credencial CT-e do emitente ativo
   const { data: activeCreds = [] } = useHubCredentials(emitterForActive?.id);
   const activeCteCred = useMemo(
     () =>
-      (activeCreds as any[]).find((c) => c.doc_scope === 'cte' && c.enabled) ||
-      (activeCreds as any[]).find((c) => c.doc_scope === 'all' && c.enabled) ||
+      activeCreds.find((credential) => credential.doc_scope === 'cte' && credential.enabled) ||
+      activeCreds.find((credential) => credential.doc_scope === 'all' && credential.enabled) ||
       null,
     [activeCreds],
   );
   const activeEnvironment: 'sandbox' | 'production' =
-    (activeCteCred?.environment as any) === 'production' ? 'production' : 'sandbox';
+    activeCteCred?.environment === 'production' ? 'production' : 'sandbox';
 
   const validation = useMemo(() => {
     if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[], consistencyError: false };
-    const em = emitters.find((e: any) => e.id === active.emitterId) || defaultEmitter;
+    const em = selectActiveEmitterById(emitters, active.emitterId);
     const input = toBuildInput(active, em, activeEnvironment, clients);
     const r = buildCtePayload(input);
     
     // Verificação de consistência Builder vs UI (especialmente para Simples Nacional)
-    const payloadIcms = (r.payload as any)?.icms || {};
-    const regime = (em as any)?.regime_tributario;
-    const isSimples = regime === 'simples' || regime === 'mei';
+    const payloadIcms = getPayloadIcms(r.payload);
+    const payloadIcmsValue = payloadIcms.vICMS;
+    const isSimples = isSimpleTaxRegime(em);
     
     // Builder logic check: se for Simples Nacional, o builder DEVE ter gerado 0.
     // UI logic check: a UI também deve estar exibindo 0.
@@ -702,13 +775,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       active.icmsAliquota !== 0 || 
       active.icmsBase !== 0 || 
       active.icmsValor !== 0 ||
-      (payloadIcms.vICMS !== 0 && payloadIcms.vICMS !== undefined)
+      (payloadIcmsValue !== 0 && payloadIcmsValue !== undefined)
     );
 
     if (hasMismatch) {
       console.error(`[CteConsistencyCheck] Mismatch detectado para ${active.remitterName}:`, {
         ui: { aliq: active.icmsAliquota, base: active.icmsBase, valor: active.icmsValor },
-        builder: { vICMS: payloadIcms.vICMS }
+        builder: { vICMS: payloadIcmsValue }
       });
     }
 
@@ -718,15 +791,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       warnings: r.warnings,
       consistencyError: hasMismatch
     };
-  }, [active, emitters, defaultEmitter, activeEnvironment, clients]);
+  }, [active, emitters, activeEnvironment, clients]);
 
   const allValid = items.every((it) => {
-    const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
+    const em = selectActiveEmitterById(emitters, it.emitterId);
     const input = toBuildInput(it, em, 'sandbox', clients);
     const r = buildCtePayload(input);
     
-    const regime = (em as any)?.regime_tributario;
-    const isSimples = regime === 'simples' || regime === 'mei';
+    const isSimples = isSimpleTaxRegime(em);
     const hasMismatch = isSimples && (it.icmsAliquota !== 0 || it.icmsBase !== 0 || it.icmsValor !== 0);
     
     return r.ok && !hasMismatch;
@@ -767,18 +839,24 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     }
 
     // Separa o patch em duas partes: bulk-safe e per-item.
-    const bulkPart: Record<string, any> = {};
-    const activePart: Record<string, any> = {};
-    for (const [k, v] of Object.entries(patch)) {
+    const entries = Object.entries(patch) as Array<[
+      keyof EditableCte,
+      EditableCte[keyof EditableCte],
+    ]>;
+    const bulkEntries: typeof entries = [];
+    const activeEntries: typeof entries = [];
+    for (const [k, v] of entries) {
       if (k === '_aliqManual') {
-        activePart[k] = v;
-        bulkPart[k] = v;
-      } else if (PER_ITEM_ONLY.has(k as keyof EditableCte)) {
-        activePart[k] = v;
+        activeEntries.push([k, v]);
+        bulkEntries.push([k, v]);
+      } else if (PER_ITEM_ONLY.has(k)) {
+        activeEntries.push([k, v]);
       } else {
-        bulkPart[k] = v;
+        bulkEntries.push([k, v]);
       }
     }
+    const bulkPart = Object.fromEntries(bulkEntries) as Partial<EditableCte>;
+    const activePart = Object.fromEntries(activeEntries) as Partial<EditableCte>;
     setItems((arr) =>
       arr.map((it, i) => {
         const base = { ...it, ...bulkPart };
@@ -806,11 +884,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
         
         const task = (async () => {
           try {
-            const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
+            const em = selectActiveEmitterById(emitters, it.emitterId);
             
             // Segurança final: impede transmissão se a regra de consistência for violada
-            const regime = (em as any)?.regime_tributario;
-            const isSimples = regime === 'simples' || regime === 'mei';
+            const isSimples = isSimpleTaxRegime(em);
             if (isSimples && (it.icmsAliquota !== 0 || it.icmsBase !== 0 || it.icmsValor !== 0)) {
                throw new Error('Bloqueio de segurança: ICMS não zerado para Simples Nacional.');
             }
@@ -824,8 +901,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 .eq('enabled', true);
                 
               const itCred =
-                (itCreds || []).find((c: any) => c.doc_scope === 'cte') ||
-                (itCreds || []).find((c: any) => c.doc_scope === 'all') ||
+                (itCreds || []).find((credential) => credential.doc_scope === 'cte') ||
+                (itCreds || []).find((credential) => credential.doc_scope === 'all') ||
                 null;
                 
               credsCache[it.emitterId] = {
@@ -849,13 +926,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               arr.map((x) => (x.key === it.key ? { ...x, transmitted: 'ok' } : x)),
             );
             okCount++;
-          } catch (err: any) {
+          } catch (error: unknown) {
+            const message = errorMessage(error);
             setItems((arr) =>
               arr.map((x) =>
-                x.key === it.key ? { ...x, transmitted: 'error', transmitMessage: err?.message } : x,
+                x.key === it.key ? { ...x, transmitted: 'error', transmitMessage: message } : x,
               ),
             );
-            errors.push(`#${i + 1}: ${err?.message || 'erro desconhecido'}`);
+            errors.push(`#${i + 1}: ${message}`);
           }
         })();
 
@@ -890,7 +968,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
   function handleTransmitClick() {
     const sameCityItems = items.filter((it) => {
-      const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
+      const em = selectActiveEmitterById(emitters, it.emitterId);
       const emitterCity = (em?.endereco?.municipio || "").toLowerCase().trim();
       const destCity = (it.recipientCity || "").toLowerCase().trim();
       return emitterCity && destCity && emitterCity === destCity;
@@ -967,9 +1045,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           <ScrollArea className="h-[540px] rounded-md border p-2">
             <div className="space-y-1">
               {items.map((it, i) => {
-                const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
-                const regime = (em as any)?.regime_tributario;
-                const isSimples = regime === 'simples' || regime === 'mei';
+                const em = selectActiveEmitterById(emitters, it.emitterId);
+                const isSimples = isSimpleTaxRegime(em);
                 const hasMismatch = isSimples && (it.icmsAliquota !== 0 || it.icmsBase !== 0 || it.icmsValor !== 0);
                 const ok = buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok && !hasMismatch;
                 return (
@@ -998,8 +1075,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                       {it.invoices.length} NF · R$ {it.freightValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </div>
                     {it.invoices.length > 0 && (
-                      <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground" title={it.invoices.map((n: any) => n.number || '—').join(', ')}>
-                        NF: {it.invoices.map((n: any) => n.number || '—').join(', ')}
+                      <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground" title={it.invoices.map((invoice) => invoice.number || '—').join(', ')}>
+                        NF: {it.invoices.map((invoice) => invoice.number || '—').join(', ')}
                       </div>
                     )}
                   </button>
@@ -1068,9 +1145,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <Select value={active.emitterId} onValueChange={(v) => patch({ emitterId: v }, 'partes')}>
                     <SelectTrigger><SelectValue placeholder="Selecione o emitente" /></SelectTrigger>
                     <SelectContent>
-                      {emitters.map((e: any) => (
-                        <SelectItem key={e.id} value={e.id}>
-                          {e.razao_social} — CNPJ {e.cnpj}
+                      {activeEmitters.map((emitter) => (
+                        <SelectItem key={emitter.id} value={emitter.id}>
+                          {emitter.razao_social} — CNPJ {emitter.cnpj}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1167,18 +1244,18 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     value={active.consigneeClientId || 'none'}
                     onValueChange={(v) => {
                       if (v === 'none') return patch({ consigneeClientId: null, consigneeName: '', consigneeCnpj: '' }, 'partes');
-                      const c: any = clients.find((x: any) => x.id === v);
+                      const c = clients.find((client) => client.id === v);
                       patch({
                         consigneeClientId: v,
                         consigneeName: c?.company_name || '',
-                        consigneeCnpj: c?.cnpj || '',
+                        consigneeCnpj: c?.tax_id || '',
                       }, 'partes');
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Nenhum</SelectItem>
-                      {clients.map((c: any) => (
+                      {clients.map((c) => (
                         <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1272,8 +1349,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         toast.success('Seguradora salva como padrão', {
                           description: 'Aplicada a este lote e às próximas emissões.',
                         });
-                      } catch (e: any) {
-                        toast.error('Falha ao salvar seguradora', { description: e?.message });
+                      } catch (error: unknown) {
+                        toast.error('Falha ao salvar seguradora', { description: errorMessage(error) });
                       }
                     }}
                   >
@@ -1320,7 +1397,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   </label>
                 </div>
                 <Label>Tomador do serviço</Label>
-                <RadioGroup value={active.takerRole} onValueChange={(v: any) => patch({ takerRole: v }, 'tomador')}>
+                <RadioGroup value={active.takerRole} onValueChange={(value) => patch({ takerRole: value as CteTakerRole }, 'tomador')}>
                   {(['remetente', 'destinatario', 'expedidor', 'recebedor', 'terceiro'] as CteTakerRole[]).map((r) => (
                     <div key={r} className="flex items-center gap-2">
                       <RadioGroupItem value={r} id={`taker-${r}`} />
@@ -1360,7 +1437,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <Label>Tipo CT-e</Label>
-                    <Select value={active.documentType} onValueChange={(v: any) => patch({ documentType: v }, 'transporte')}>
+                    <Select value={active.documentType} onValueChange={(value) => patch({ documentType: value as CteDocType }, 'transporte')}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="01">01 — Normal</SelectItem>
@@ -1420,14 +1497,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     value={active.vehicleId || 'none'}
                     onValueChange={(v) => {
                       if (v === 'none') return patch({ vehicleId: null, vehiclePlate: '' }, 'transporte');
-                      const veh: any = vehicles.find((x: any) => x.id === v);
+                      const veh = vehicles.find((vehicle) => vehicle.id === v);
                       patch({ vehicleId: v, vehiclePlate: veh?.plate || '' }, 'transporte');
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">— Nenhum —</SelectItem>
-                      {(vehicles as any[]).map((v) => (
+                      {vehicles.map((v) => (
                         <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1524,25 +1601,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 <div className="pt-2 border-t">
                   <Label className="text-xs font-semibold">Composição do frete (opcional)</Label>
                   <div className="grid grid-cols-5 gap-2 pt-1">
-                    {[
-                      ['fcFreightWeight', 'Frete peso'],
-                      ['fcDeliveryFee', 'Valor entrega'],
-                      ['fcOthers', 'Outros'],
-                      ['fcInsurance', 'Seguro (R$)'],
-                      ['fcDispatch', 'Despacho'],
-                      ['fcGris', 'GRIS'],
-                      ['fcToll', 'Pedágio'],
-                      ['fcTracking', 'Rastreamento'],
-                      ['fcLoading', 'Carga/Descarga'],
-                      ['fcHelper', 'Ajudante'],
-                    ].map(([k, label]) => (
-                      <div key={k}>
+                    {FREIGHT_COMPONENT_FIELDS.map(([key, label]) => (
+                      <div key={key}>
                         <Label className="text-xs">{label}</Label>
                         <Input
                           type="number"
                           step="0.01"
-                          value={(active as any)[k]}
-                          onChange={(e) => patch({ [k]: Number(e.target.value) } as any, 'carga')}
+                          value={active[key]}
+                          onChange={(e) => patch({ [key]: Number(e.target.value) } as Partial<EditableCte>, 'carga')}
                         />
                       </div>
                     ))}
@@ -1648,11 +1714,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         onChange={(e) => {
                           const cst = e.target.value;
                           const isento = icmsIsentoByCst(cst);
-                          const regime = (emitterForActive as any)?.regime_tributario;
-                          const isSimples = regime === 'simples' || regime === 'mei';
-                          const originUf = (emitterForActive as any)?.endereco?.uf || null;
+                          const isSimples = isSimpleTaxRegime(emitterForActive);
+                          const originUf = emitterForActive?.endereco?.uf || null;
                           const aliq = (isento || isSimples) ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
-                          const patchData: any = {
+                          const patchData: Partial<EditableCte> = {
                             icmsCst: cst,
                             icmsIsento: isento,
                             icmsAliquota: aliq,
@@ -1700,8 +1765,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         type="checkbox"
                         checked={active.icmsEmbutido}
                         onChange={(e) => {
-                          const regime = (emitterForActive as any)?.regime_tributario;
-                          const isSimples = regime === 'simples' || regime === 'mei';
+                          const isSimples = isSimpleTaxRegime(emitterForActive);
                           const embutido = e.target.checked;
                           const aliq = isSimples ? 0 : active.icmsAliquota;
                           const r = recalcIcms(active.freightValue || 0, aliq, embutido, active.icmsIsento || isSimples);
@@ -1715,8 +1779,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         type="checkbox"
                         checked={active.icmsIsento}
                         onChange={(e) => {
-                          const regime = (emitterForActive as any)?.regime_tributario;
-                          const isSimples = regime === 'simples' || regime === 'mei';
+                          const isSimples = isSimpleTaxRegime(emitterForActive);
                           const isento = e.target.checked || isSimples;
                           const aliq = isento ? 0 : active.icmsAliquota;
                           const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
@@ -1732,8 +1795,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         step="0.01"
                         value={active.icmsAliquota}
                         onChange={(e) => {
-                          const regime = (emitterForActive as any)?.regime_tributario;
-                          const isSimples = regime === 'simples' || regime === 'mei';
+                          const isSimples = isSimpleTaxRegime(emitterForActive);
                           const aliq = isSimples ? 0 : Number(e.target.value);
                           const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, active.icmsIsento || isSimples);
                            patch({
@@ -1741,7 +1803,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                             icmsBase: r.base,
                             icmsValor: r.valor,
                             _aliqManual: true, // Marca que foi alterado manualmente para parar a sugestão
-                          } as any, 'fiscal');
+                          }, 'fiscal');
                         }}
                       />
                     </div>
@@ -1777,10 +1839,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                       size="sm"
                       className="h-7 text-xs"
                       onClick={() => {
-                        const originUf = (emitterForActive as any)?.endereco?.uf || null;
+                        const originUf = emitterForActive?.endereco?.uf || null;
                         const isento = icmsIsentoByCst(active.icmsCst);
                         const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
-                        const patchData: any = {
+                        const patchData: Partial<EditableCte> = {
                           icmsAliquota: aliq,
                           _aliqManual: false, // Resetamos a trava ao clicar em recalcular
                         };

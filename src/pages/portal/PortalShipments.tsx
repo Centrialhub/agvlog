@@ -4,7 +4,6 @@ import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { PortalStatusBadge } from '@/components/portal/PortalStatusBadge';
 import { usePortalShipments, type ShipmentRow } from '@/hooks/portal/usePortalShipments';
-import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -42,7 +41,6 @@ const QUICK_CHIPS: QuickChip[] = [
 ];
 
 export default function PortalShipments() {
-  const { selectedClientId } = usePortalClientScope();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -73,7 +71,7 @@ export default function PortalShipments() {
     hasOccurrence: activeChip?.hasOccurrence ?? hasOccurrenceFilter,
     limit,
     offset: page * limit,
-  }), [debouncedSearch, startDate, endDate, city, state, activeChip, hasPodFilter, hasOccurrenceFilter, page, selectedClientId]);
+  }), [debouncedSearch, startDate, endDate, city, state, activeChip, hasPodFilter, hasOccurrenceFilter, page]);
 
   const { data, isLoading, error, refetch } = usePortalShipments(filters);
 

@@ -2,56 +2,23 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 /* ─── Types ─── */
-export interface VehicleMaintenance {
-  id: string;
-  tenant_id: string;
-  vehicle_id: string;
-  maintenance_type: string;
-  category: string;
-  description: string;
-  status: string;
-  scheduled_date: string | null;
-  completed_date: string | null;
-  odometer_at_service: number | null;
-  next_odometer: number | null;
-  next_date: string | null;
-  cost: number | null;
-  vendor: string | null;
-  notes: string | null;
-  created_at: string;
+export type VehicleMaintenance = Tables<'vehicle_maintenance'> & {
   vehicles?: { plate: string; nickname: string | null } | null;
-}
+};
 
-export interface VehicleFueling {
-  id: string;
-  tenant_id: string;
-  vehicle_id: string;
-  driver_id: string | null;
-  dispatch_trip_id: string | null;
-  fueled_at: string;
-  liters: number;
-  price_per_liter: number | null;
-  total_cost: number | null;
-  fuel_type: string;
-  odometer_km: number | null;
-  station_name: string | null;
-  is_full_tank: boolean;
-  notes: string | null;
-  created_at: string;
+export type VehicleFueling = Tables<'vehicle_fueling'> & {
   vehicles?: { plate: string; nickname: string | null } | null;
   drivers?: { name: string } | null;
-}
+};
 
-export interface VehicleOdometer {
-  id: string;
-  vehicle_id: string;
-  reading_km: number;
-  source: string;
-  recorded_at: string;
-  notes: string | null;
-}
+export type VehicleOdometer = Tables<'vehicle_odometer'>;
+
+export type CreateVehicleMaintenanceInput = Omit<TablesInsert<'vehicle_maintenance'>, 'tenant_id' | 'created_by'>;
+export type UpdateVehicleMaintenanceInput = TablesUpdate<'vehicle_maintenance'> & { id: string };
+export type CreateVehicleFuelingInput = Omit<TablesInsert<'vehicle_fueling'>, 'tenant_id' | 'created_by' | 'total_cost'>;
 
 /* ─── Maintenance ─── */
 export function useVehicleMaintenanceList(vehicleId?: string) {
@@ -60,7 +27,7 @@ export function useVehicleMaintenanceList(vehicleId?: string) {
     queryKey: ['vehicle_maintenance', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = (supabase as any)
+      let q = supabase
         .from('vehicle_maintenance')
         .select('*, vehicles(plate, nickname)')
         .eq('tenant_id', currentTenant.id)
@@ -79,8 +46,8 @@ export function useCreateMaintenance() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<VehicleMaintenance>) => {
-      const { data, error } = await (supabase as any).from('vehicle_maintenance').insert({
+    mutationFn: async (values: CreateVehicleMaintenanceInput) => {
+      const { data, error } = await supabase.from('vehicle_maintenance').insert({
         ...values,
         tenant_id: currentTenant!.id,
         created_by: user?.id,
@@ -95,8 +62,8 @@ export function useCreateMaintenance() {
 export function useUpdateMaintenance() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<VehicleMaintenance> & { id: string }) => {
-      const { data, error } = await (supabase as any).from('vehicle_maintenance')
+    mutationFn: async ({ id, ...values }: UpdateVehicleMaintenanceInput) => {
+      const { data, error } = await supabase.from('vehicle_maintenance')
         .update({ ...values, updated_at: new Date().toISOString() })
         .eq('id', id).select().single();
       if (error) throw error;
@@ -113,7 +80,7 @@ export function useVehicleFuelingList(vehicleId?: string) {
     queryKey: ['vehicle_fueling', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = (supabase as any)
+      let q = supabase
         .from('vehicle_fueling')
         .select('*, vehicles(plate, nickname), drivers(name)')
         .eq('tenant_id', currentTenant.id)
@@ -132,8 +99,8 @@ export function useCreateFueling() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<VehicleFueling>) => {
-      const payload: any = {
+    mutationFn: async (values: CreateVehicleFuelingInput) => {
+      const payload: TablesInsert<'vehicle_fueling'> = {
         ...values,
         tenant_id: currentTenant!.id,
         created_by: user?.id,
@@ -142,12 +109,12 @@ export function useCreateFueling() {
       if (payload.liters && payload.price_per_liter) {
         payload.total_cost = Number(payload.liters) * Number(payload.price_per_liter);
       }
-      const { data, error } = await (supabase as any).from('vehicle_fueling').insert(payload).select().single();
+      const { data, error } = await supabase.from('vehicle_fueling').insert(payload).select().single();
       if (error) throw error;
 
       // Also record odometer reading if provided
       if (values.odometer_km && values.vehicle_id) {
-        await (supabase as any).from('vehicle_odometer').insert({
+        await supabase.from('vehicle_odometer').insert({
           tenant_id: currentTenant!.id,
           vehicle_id: values.vehicle_id,
           reading_km: values.odometer_km,
@@ -169,7 +136,7 @@ export function useVehicleOdometerList(vehicleId?: string) {
     queryKey: ['vehicle_odometer', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = (supabase as any)
+      let q = supabase
         .from('vehicle_odometer')
         .select('*')
         .eq('tenant_id', currentTenant.id)
@@ -189,7 +156,7 @@ export function useCreateOdometerReading() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: { vehicle_id: string; reading_km: number; notes?: string }) => {
-      const { data, error } = await (supabase as any).from('vehicle_odometer').insert({
+      const { data, error } = await supabase.from('vehicle_odometer').insert({
         ...values,
         tenant_id: currentTenant!.id,
         source: 'manual',

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   useEdiProfiles, useEdiExports, useEligibleInvoicesForEdi, useRegisterEdiExport,
   useMarkEdiSent, useMarkEdiDownloaded, useCancelEdiExport, useSaveEdiProfile,
-  fetchInvoicesBundle, type EligibleInvoice, type EdiProfile, type EdiExport,
+  fetchInvoicesBundle, type EligibleInvoice, type EdiProfile, type EdiExport, type EdiProfileDraft,
 } from '@/hooks/useBillingEdi';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
@@ -21,10 +21,20 @@ import { Download, FileText, Send, XCircle, Settings, RefreshCw } from 'lucide-r
 import { toast } from '@/components/ui/sonner';
 import { generateDoccob } from '@/lib/doccob/doccobGenerator';
 import { validateDoccobExportInput, resolveFileName, validateFileName } from '@/lib/doccob/doccobValidator';
-import type { DoccobInvoiceInput, DoccobChargeInput, DoccobDetailInput } from '@/lib/doccob/doccobTypes';
+import type { DoccobBuildInput, DoccobInvoiceInput, DoccobChargeInput, DoccobDetailInput } from '@/lib/doccob/doccobTypes';
+import type { Json, Tables } from '@/integrations/supabase/types';
 
 const brl = (n: number) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = (s?: string | null) => s ? new Date(s.length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '-';
+
+function jsonObject(value: Json | undefined): Record<string, Json | undefined> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+const jsonString = (value: Json | undefined, key: string) => {
+  const candidate = jsonObject(value)[key];
+  return typeof candidate === 'string' ? candidate : '';
+};
 
 function downloadText(fileName: string, content: string) {
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -35,7 +45,6 @@ function downloadText(fileName: string, content: string) {
 }
 
 export default function BillingEdi() {
-  const { currentTenant } = useTenant();
   const { data: clients = [] } = useClients();
   const { data: profiles = [] } = useEdiProfiles();
   const { data: exports_ = [], isLoading: loadingExports } = useEdiExports();
@@ -61,7 +70,10 @@ export default function BillingEdi() {
   const [profileDlgOpen, setProfileDlgOpen] = useState(false);
 
   const toggle = (id: string) => setSelected(s => {
-    const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n;
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
   });
   const toggleAll = () => setSelected(s => s.size === eligible.length ? new Set() : new Set(eligible.map(e => e.id)));
 
@@ -114,7 +126,7 @@ export default function BillingEdi() {
               </div>
               <div>
                 <Label>Filtro Arq EDI</Label>
-                <Select value={ediStatusFilter} onValueChange={(v: any) => setEdiStatusFilter(v)}>
+                <Select value={ediStatusFilter} onValueChange={(v) => setEdiStatusFilter(v as typeof ediStatusFilter)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="not_generated">Não Gerado</SelectItem>
@@ -211,7 +223,11 @@ function HistoryTab({ exports_, loading }: { exports_: EdiExport[]; loading: boo
   const redownload = async (ex: EdiExport) => {
     if (!ex.generated_content) { toast.error('Arquivo sem conteúdo persistido'); return; }
     downloadText(ex.file_name, ex.generated_content);
-    try { await markDl.mutateAsync(ex.id); } catch {}
+    try {
+      await markDl.mutateAsync(ex.id);
+    } catch (error) {
+      console.warn('[BillingEdi] Falha ao registrar download', error);
+    }
   };
 
   return (
@@ -262,7 +278,7 @@ function HistoryTab({ exports_, loading }: { exports_: EdiExport[]; loading: boo
               <Button variant="outline" onClick={() => setCancelId(null)}>Voltar</Button>
               <Button variant="destructive" disabled={!reason.trim()} onClick={async () => {
                 try { await cancel.mutateAsync({ exportId: cancelId!, reason }); toast.success('Exportação cancelada'); setCancelId(null); }
-                catch (e: any) { toast.error(e.message || 'Erro ao cancelar'); }
+                catch (error: unknown) { toast.error(error instanceof Error ? error.message : 'Erro ao cancelar'); }
               }}>Confirmar cancelamento</Button>
             </DialogFooter>
           </DialogContent>
@@ -284,12 +300,10 @@ function GenerateDialog({
   const { currentTenant } = useTenant();
   const register = useRegisterEdiExport();
   const markDl = useMarkEdiDownloaded();
-  const markSent = useMarkEdiSent();
-
   const defaultPattern = profile?.file_name_pattern || 'SIAT_CTMS_DOCCOB_{dd}_{mm}_{yyyy}_{hh}_{MM}.txt';
   const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [carrierCnpj, setCarrierCnpj] = useState<string>((profile?.metadata as any)?.carrier_cnpj || '');
-  const [carrierName, setCarrierName] = useState<string>((profile?.metadata as any)?.carrier_name || currentTenant?.name || '');
+  const [carrierCnpj, setCarrierCnpj] = useState<string>(jsonString(profile?.metadata, 'carrier_cnpj'));
+  const [carrierName, setCarrierName] = useState<string>(jsonString(profile?.metadata, 'carrier_name') || currentTenant?.name || '');
   const [pattern, setPattern] = useState(defaultPattern);
   const [bankName, setBankName] = useState(profile?.bank_name || '');
   const [destination, setDestination] = useState(profile?.destination_name || '');
@@ -312,27 +326,27 @@ function GenerateDialog({
     if (!carrierCnpj.replace(/\D/g, '')) { setErrors(['CNPJ da transportadora obrigatório.']); return; }
 
     const bundle = await fetchInvoicesBundle(currentTenant.id, selectedInvoices.map(i => i.id));
-    const chargesByInv = new Map<string, any[]>();
+    const chargesByInv = new Map<string, Array<(typeof bundle.charges)[number]>>();
     for (const c of bundle.charges) {
       const arr = chargesByInv.get(c.invoice_id) ?? [];
       arr.push(c); chargesByInv.set(c.invoice_id, arr);
     }
-    const detailsByCharge = new Map<string, any[]>();
+    const detailsByCharge = new Map<string, Array<(typeof bundle.details)[number]>>();
     for (const d of bundle.details) {
       const arr = detailsByCharge.get(d.charge_id) ?? [];
       arr.push(d); detailsByCharge.set(d.charge_id, arr);
     }
 
-    const invoicesInput: DoccobInvoiceInput[] = bundle.invoices.map((inv: any) => ({
+    const invoicesInput: DoccobInvoiceInput[] = bundle.invoices.map((inv): DoccobInvoiceInput => ({
       id: inv.id,
       invoiceNumber: inv.invoice_number,
       issueDate: inv.issue_date,
-      dueDate: inv.due_date,
+      dueDate: inv.due_date || inv.issue_date,
       totalAmount: Number(inv.total_amount) || 0,
-      clientName: inv.clients?.company_name || inv.payer_snapshot?.name || '',
+      clientName: inv.clients?.company_name || jsonString(inv.payer_snapshot, 'name'),
       clientTaxId: inv.clients?.tax_id || null,
       paymentMethod: null,
-      charges: (chargesByInv.get(inv.id) ?? []).map((c: any): DoccobChargeInput => ({
+      charges: (chargesByInv.get(inv.id) ?? []).map((c): DoccobChargeInput => ({
         id: c.id,
         sourceType: c.source_type,
         sourceNumber: c.source_number,
@@ -342,7 +356,7 @@ function GenerateDialog({
         grossAmount: Number(c.gross_amount) || 0,
         description: c.description,
         carrierCnpj: carrierCnpj.replace(/\D/g, ''),
-        details: (detailsByCharge.get(c.id) ?? []).map((d: any): DoccobDetailInput => ({
+        details: (detailsByCharge.get(c.id) ?? []).map((d): DoccobDetailInput => ({
           id: d.id,
           chargeId: d.charge_id,
           documentNumber: d.document_number,
@@ -353,7 +367,7 @@ function GenerateDialog({
       })),
     }));
 
-    const buildInput = {
+    const buildInput: DoccobBuildInput = {
       carrier: { cnpj: carrierCnpj, name: carrierName },
       profile: {
         destinationName: destination || undefined,
@@ -364,18 +378,18 @@ function GenerateDialog({
         bankAgency: profile?.bank_agency || null,
         bankAccount: profile?.bank_account || null,
         layoutVersion: profile?.layout_version || 'SIAT_CTMS_DOCCOB_SAMPLE_2026',
-        allowChargeWithoutDetails: (profile?.metadata as any)?.allow_charge_without_details === true,
+        allowChargeWithoutDetails: jsonObject(profile?.metadata).allow_charge_without_details === true,
       },
       invoices: invoicesInput,
       generatedAt: new Date(),
     };
 
-    const issues = validateDoccobExportInput(buildInput as any);
+    const issues = validateDoccobExportInput(buildInput);
     const errs = issues.filter(i => i.level === 'error');
     if (errs.length > 0) { setErrors(errs.map(e => e.message)); return; }
 
     try {
-      const built = generateDoccob(buildInput as any);
+      const built = generateDoccob(buildInput);
       const payload = await register.mutateAsync({
         profileId: profile?.id || null,
         clientId: singleClientId,
@@ -394,10 +408,17 @@ function GenerateDialog({
       toast.success('DOCCOB gerado com sucesso');
       // auto-download
       downloadText(resolvedName, built.content);
-      if (payload?.export_id) { try { await markDl.mutateAsync(payload.export_id); } catch {} }
+      const exportId = jsonString(payload, 'export_id');
+      if (exportId) {
+        try {
+          await markDl.mutateAsync(exportId);
+        } catch (error) {
+          console.warn('[BillingEdi] Falha ao registrar download em lote', error);
+        }
+      }
       onSuccess();
-    } catch (e: any) {
-      setErrors([e.message || 'Falha ao gerar DOCCOB']);
+    } catch (error: unknown) {
+      setErrors([error instanceof Error ? error.message : 'Falha ao gerar DOCCOB']);
     }
   };
 
@@ -458,18 +479,23 @@ function GenerateDialog({
   );
 }
 
-function ProfileDialog({ open, onClose, clients, profiles }: { open: boolean; onClose: () => void; clients: any[]; profiles: EdiProfile[] }) {
+function ProfileDialog({ open, onClose, clients, profiles }: {
+  open: boolean;
+  onClose: () => void;
+  clients: Array<Pick<Tables<'clients'>, 'id' | 'company_name'>>;
+  profiles: EdiProfile[];
+}) {
   const save = useSaveEdiProfile();
-  const [editing, setEditing] = useState<Partial<EdiProfile>>({ name: '', client_id: null, enabled: true, file_name_pattern: 'SIAT_CTMS_DOCCOB_{dd}_{mm}_{yyyy}_{hh}_{MM}.txt' });
+  const [editing, setEditing] = useState<EdiProfileDraft>({ name: '', client_id: null, enabled: true, file_name_pattern: 'SIAT_CTMS_DOCCOB_{dd}_{mm}_{yyyy}_{hh}_{MM}.txt' });
 
   const load = (p: EdiProfile) => setEditing(p);
   const handleSave = async () => {
     if (!editing.name?.trim()) { toast.error('Nome obrigatório'); return; }
     try {
-      await save.mutateAsync(editing as any);
+      await save.mutateAsync(editing);
       toast.success('Perfil salvo');
       setEditing({ name: '', client_id: null, enabled: true });
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error: unknown) { toast.error(error instanceof Error ? error.message : 'Erro ao salvar perfil'); }
   };
 
   return (

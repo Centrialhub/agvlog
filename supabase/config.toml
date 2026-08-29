@@ -1,22 +1,62 @@
 project_id = "qcvnsdrbcchaxvawcngk"
 
+[auth]
+enable_signup = false
+enable_anonymous_sign_ins = false
+minimum_password_length = 12
+password_requirements = "lower_upper_letters_digits"
+site_url = "https://agvlog.lovable.app"
+additional_redirect_urls = ["https://agvlog.lovable.app/set-password"]
+
+[auth.sessions]
+timebox = "8h"
+inactivity_timeout = "30m"
+
+[auth.rate_limit]
+email_sent = 10
+token_refresh = 60
+sign_in_sign_ups = 10
+token_verifications = 10
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = true
+secure_password_change = true
+max_frequency = "1m"
+otp_length = 6
+otp_expiry = 3600
+
+[auth.mfa]
+max_enrolled_factors = 5
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[db]
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
 [functions.ssx-login]
 verify_jwt = false
 
 [functions.ssx-sync-telemetry]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ssx-poll-positions]
 verify_jwt = false
 
 [functions.agvlog-process-vehicle]
-verify_jwt = false
+verify_jwt = true
 
 [functions.agvlog-aggregate-daily]
 verify_jwt = false
 
 [functions.agvlog-integration-upsert]
-verify_jwt = false
+verify_jwt = true
 
 [functions.agvlog-run-queue]
 verify_jwt = false
@@ -25,16 +65,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.ssx-insert-person]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ssx-sync-units]
 verify_jwt = false
 
 [functions.ssx-diagnostic]
-verify_jwt = false
+verify_jwt = true
 
 [functions.extract-ort]
-verify_jwt = false
+verify_jwt = true
 
 [functions.agvlog-compute-state]
 verify_jwt = false
@@ -48,5 +88,47 @@ verify_jwt = false
 [functions.nfse-status-poll]
 verify_jwt = false
 
+[functions.cte-status-poll]
+verify_jwt = false
+
 [functions.hub-fiscal-credential-save]
+verify_jwt = true
+
+[functions.create-team-member]
+verify_jwt = true
+
+[functions.update-team-member]
+verify_jwt = true
+
+[functions.clients-merge-contacts-addresses]
+verify_jwt = true
+
+[functions.emit-nfse]
+verify_jwt = true
+
+[functions.calculate-trip-route]
+verify_jwt = true
+
+[functions.ssx-insert-person-client]
+verify_jwt = true
+
+[functions.update-trip-live-status]
+verify_jwt = true
+
+[functions.list-tenant-members]
+verify_jwt = true
+
+[functions.get-client-pod-signed-url]
+verify_jwt = true
+
+[functions.hub-fiscal-proxy]
+verify_jwt = true
+
+[functions.frontend-error-report]
+verify_jwt = true
+
+[functions.secure-upload]
+verify_jwt = true
+
+[functions.search-users-by-email]
 verify_jwt = true

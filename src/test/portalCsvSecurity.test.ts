@@ -15,4 +15,3 @@ describe('CSV do portal', () => {
     expect(escapePortalCsvCell('ACME, "Sul"')).toBe('"ACME, ""Sul"""');
   });
 });
-

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database, Json } from '@/integrations/supabase/types';
 import { useTenant } from '@/hooks/useTenant';
 import {
   calculateCompletedDeliveries, calculateProgressPercent, calculateRemainingDeliveries,
@@ -8,6 +9,18 @@ import {
 import type {
   ParsedDriverMonitoringWorkbook, ParsedMonitor, ParsedForecast,
 } from '@/lib/driverMonitoring/driverMonitoringSpreadsheetImport';
+
+type DriverMonitorDbRow = Database['public']['Tables']['driver_route_monitors']['Row'];
+type DriverMonitorUpdate = Database['public']['Tables']['driver_route_monitors']['Update'];
+type DriverMonitorQueryRow = DriverMonitorDbRow & {
+  drivers: { name: string } | null;
+  vehicles: { plate: string } | null;
+  loads: { load_number: string; external_load_number: string | null } | null;
+};
+
+function toStringArray(value: Json | null | undefined): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
 
 export interface DriverMonitorRow {
   id: string;
@@ -83,7 +96,7 @@ export interface DriverMonitoringFilters {
   startedTo?: string | null;
 }
 
-function toRow(m: any): DriverMonitorRow {
+function toRow(m: DriverMonitorQueryRow): DriverMonitorRow {
   const completed = Number(m.completed_deliveries || 0);
   const total = Number(m.total_deliveries || 0);
   const remaining = calculateRemainingDeliveries(total, completed);
@@ -94,11 +107,11 @@ function toRow(m: any): DriverMonitorRow {
     driver_id: m.driver_id,
     driver_name_snapshot: m.driver_name_snapshot || m.drivers?.name || null,
     vehicle_id: m.vehicle_id,
-    vehicle_plate_snapshot: m.vehicle_plate_snapshot || m.vehicles?.license_plate || null,
+    vehicle_plate_snapshot: m.vehicle_plate_snapshot || m.vehicles?.plate || null,
     load_id: m.load_id,
     load_number: m.loads?.load_number || m.loads?.external_load_number || null,
     planned_route_text: m.planned_route_text,
-    planned_cities: Array.isArray(m.planned_cities) ? m.planned_cities : [],
+    planned_cities: toStringArray(m.planned_cities),
     started_at: m.started_at,
     expected_return_date: m.expected_return_date,
     return_deadline_days: m.return_deadline_days,
@@ -109,7 +122,7 @@ function toRow(m: any): DriverMonitorRow {
     progress_percent: calculateProgressPercent(total, completed),
     current_city: m.current_city,
     next_city: m.next_city,
-    remaining_cities: Array.isArray(m.remaining_cities) ? m.remaining_cities : [],
+    remaining_cities: toStringArray(m.remaining_cities),
     arrival_forecast_text: m.arrival_forecast_text,
     arrival_forecast_at: m.arrival_forecast_at,
     status: m.status,
@@ -126,7 +139,7 @@ export function useDriverMonitorsList(filters: DriverMonitoringFilters = {}) {
     enabled: !!currentTenant?.id,
     queryFn: async () => {
       let q = supabase.from('driver_route_monitors')
-        .select('*, drivers:driver_id(name), vehicles:vehicle_id(license_plate), loads:load_id(load_number, external_load_number)')
+        .select('*, drivers:driver_route_monitors_driver_tenant_fk(name), vehicles:driver_route_monitors_vehicle_tenant_fk(plate), loads:driver_route_monitors_load_tenant_fk(load_number, external_load_number)')
         .eq('tenant_id', currentTenant!.id)
         .order('created_at', { ascending: false });
       if (filters.driverId) q = q.eq('driver_id', filters.driverId);
@@ -151,17 +164,19 @@ export function useDriverMonitorsList(filters: DriverMonitoringFilters = {}) {
 export function useMonitorUpdates(monitorId: string | null | undefined) {
   const { currentTenant } = useTenant();
   return useQuery({
-    queryKey: ['driver-monitor-updates', monitorId],
+    queryKey: ['driver-monitor-updates', currentTenant?.id, monitorId],
     enabled: !!monitorId && !!currentTenant?.id,
     queryFn: async () => {
       const { data, error } = await supabase.from('driver_route_progress_updates')
-        .select('*, drivers:driver_id(name)')
+        .select('*, drivers:driver_route_progress_updates_driver_tenant_fk(name)')
         .eq('monitor_id', monitorId!)
+        .eq('tenant_id', currentTenant!.id)
         .order('update_date', { ascending: true });
       if (error) throw error;
-      return (data || []).map((r: any) => ({
-        ...r, driver_name: r.drivers?.name,
-      })) as ProgressUpdateRow[];
+      return (data || []).map(({ drivers, ...row }): ProgressUpdateRow => ({
+        ...row,
+        driver_name: drivers?.name ?? null,
+      }));
     },
   });
 }
@@ -173,13 +188,16 @@ export function useMonitorForecasts(monitorId?: string | null) {
     enabled: !!currentTenant?.id,
     queryFn: async () => {
       let q = supabase.from('driver_arrival_forecasts')
-        .select('*, drivers:driver_id(name)')
+        .select('*, drivers:driver_arrival_forecasts_driver_tenant_fk(name)')
         .eq('tenant_id', currentTenant!.id)
         .order('forecast_date', { ascending: false });
       if (monitorId) q = q.eq('monitor_id', monitorId);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []).map((r: any) => ({ ...r, driver_name: r.drivers?.name })) as ForecastRow[];
+      return (data || []).map(({ drivers, ...row }): ForecastRow => ({
+        ...row,
+        driver_name: drivers?.name ?? null,
+      }));
     },
   });
 }
@@ -189,7 +207,8 @@ export function useCreateMonitor() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: Partial<DriverMonitorRow> & { monitor_number?: string }) => {
-      const tenantId = currentTenant!.id;
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const tenantId = currentTenant.id;
       const monitor_number = payload.monitor_number || `MON-${Date.now().toString(36).toUpperCase()}`;
       const { data, error } = await supabase.from('driver_route_monitors').insert({
         tenant_id: tenantId,
@@ -214,10 +233,11 @@ export function useCreateMonitor() {
         source_type: 'manual',
       }).select().single();
       if (error) throw error;
-      await supabase.from('driver_monitoring_history').insert({
+      const { error: historyError } = await supabase.from('driver_monitoring_history').insert({
         tenant_id: tenantId, monitor_id: data.id, action: 'created',
         new_value: monitor_number,
       });
+      if (historyError) throw historyError;
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['driver-monitors'] }),
@@ -238,9 +258,13 @@ export function useAddProgressUpdate() {
       city_finished_at?: string | null;
       observation?: string | null;
     }) => {
-      const tenantId = currentTenant!.id;
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const tenantId = currentTenant.id;
       const { data: monitor, error: eM } = await supabase.from('driver_route_monitors')
-        .select('*').eq('id', payload.monitor_id).single();
+        .select('*')
+        .eq('id', payload.monitor_id)
+        .eq('tenant_id', tenantId)
+        .single();
       if (eM) throw eM;
 
       const { error } = await supabase.from('driver_route_progress_updates').insert({
@@ -259,29 +283,38 @@ export function useAddProgressUpdate() {
       });
       if (error) throw error;
 
-      const { data: updates } = await supabase.from('driver_route_progress_updates')
+      const { data: updates, error: updatesError } = await supabase.from('driver_route_progress_updates')
         .select('deliveries_completed_in_city, update_date, observation, status, created_at')
-        .eq('monitor_id', payload.monitor_id);
+        .eq('monitor_id', payload.monitor_id)
+        .eq('tenant_id', tenantId);
+      if (updatesError) throw updatesError;
       const completed = calculateCompletedDeliveries(updates || []);
       const total = Number(monitor.total_deliveries || 0);
       const remaining = calculateRemainingDeliveries(total, completed);
       const newStatus = calculateDriverStatus(
-        { ...(monitor as any), completed_deliveries: completed, last_update_at: new Date().toISOString(), remaining_cities: [] },
-        (updates || []) as any,
+        {
+          ...monitor,
+          completed_deliveries: completed,
+          last_update_at: new Date().toISOString(),
+          remaining_cities: toStringArray(monitor.remaining_cities),
+        },
+        updates || [],
       );
-      await supabase.from('driver_route_monitors').update({
+      const { error: monitorUpdateError } = await supabase.from('driver_route_monitors').update({
         completed_deliveries: completed,
         remaining_deliveries: remaining,
         current_city: payload.city || monitor.current_city,
         next_city: payload.next_city || monitor.next_city,
         last_update_at: new Date().toISOString(),
         status: newStatus,
-      }).eq('id', payload.monitor_id);
+      }).eq('id', payload.monitor_id).eq('tenant_id', tenantId);
+      if (monitorUpdateError) throw monitorUpdateError;
 
-      await supabase.from('driver_monitoring_history').insert({
+      const { error: historyError } = await supabase.from('driver_monitoring_history').insert({
         tenant_id: tenantId, monitor_id: payload.monitor_id,
         action: 'progress_update', new_value: `${payload.city ?? ''} (+${payload.deliveries_completed_in_city ?? 0})`,
       });
+      if (historyError) throw historyError;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['driver-monitors'] });
@@ -303,9 +336,14 @@ export function useAddForecast() {
       remaining_cities_text?: string | null;
       observation?: string | null;
     }) => {
-      const tenantId = currentTenant!.id;
-      const { data: monitor } = await supabase.from('driver_route_monitors')
-        .select('driver_id').eq('id', payload.monitor_id).single();
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const tenantId = currentTenant.id;
+      const { data: monitor, error: monitorError } = await supabase.from('driver_route_monitors')
+        .select('driver_id')
+        .eq('id', payload.monitor_id)
+        .eq('tenant_id', tenantId)
+        .single();
+      if (monitorError) throw monitorError;
       const { error } = await supabase.from('driver_arrival_forecasts').insert({
         tenant_id: tenantId,
         monitor_id: payload.monitor_id,
@@ -319,10 +357,11 @@ export function useAddForecast() {
         status: 'active',
       });
       if (error) throw error;
-      await supabase.from('driver_route_monitors').update({
+      const { error: monitorUpdateError } = await supabase.from('driver_route_monitors').update({
         arrival_forecast_text: payload.forecast_text || null,
         current_city: payload.current_city || undefined,
-      }).eq('id', payload.monitor_id);
+      }).eq('id', payload.monitor_id).eq('tenant_id', tenantId);
+      if (monitorUpdateError) throw monitorUpdateError;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['driver-monitors'] });
@@ -338,26 +377,35 @@ export function useUpdateMonitorStatus() {
     mutationFn: async ({ id, status, reason, actual_returned_at }: {
       id: string; status: string; reason?: string; actual_returned_at?: string;
     }) => {
-      const patch: any = { status };
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const patch: DriverMonitorUpdate = { status };
       if (actual_returned_at) patch.actual_returned_at = actual_returned_at;
-      const { error } = await supabase.from('driver_route_monitors').update(patch).eq('id', id);
+      const { error } = await supabase.from('driver_route_monitors')
+        .update(patch)
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
-      await supabase.from('driver_monitoring_history').insert({
-        tenant_id: currentTenant!.id, monitor_id: id, action: 'status_changed',
+      const { error: historyError } = await supabase.from('driver_monitoring_history').insert({
+        tenant_id: currentTenant.id, monitor_id: id, action: 'status_changed',
         new_value: status, reason: reason || null,
       });
+      if (historyError) throw historyError;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['driver-monitors'] }),
   });
 }
 
 export function useMonitorHistory(monitorId?: string | null) {
+  const { currentTenant } = useTenant();
   return useQuery({
-    queryKey: ['driver-monitoring-history', monitorId],
-    enabled: !!monitorId,
+    queryKey: ['driver-monitoring-history', currentTenant?.id, monitorId],
+    enabled: !!monitorId && !!currentTenant,
     queryFn: async () => {
       const { data, error } = await supabase.from('driver_monitoring_history')
-        .select('*').eq('monitor_id', monitorId!).order('created_at', { ascending: false });
+        .select('*')
+        .eq('monitor_id', monitorId!)
+        .eq('tenant_id', currentTenant!.id)
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data || [];
     },
@@ -369,18 +417,15 @@ export function useImportDriverMonitoringWorkbook() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ file, parsed }: { file: File; parsed: ParsedDriverMonitoringWorkbook }) => {
-      const tenantId = currentTenant!.id;
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const tenantId = currentTenant.id;
       // Find existing drivers by name (case-insensitive).
-      const names = Array.from(new Set([
-        ...parsed.monitors.map((m) => m.driver_name),
-        ...parsed.forecasts.map((f) => f.driver_name || ''),
-      ].filter(Boolean)));
       const { data: driversData } = await supabase.from('drivers')
         .select('id, name').eq('tenant_id', tenantId);
       const findDriver = (n: string | null) => {
         if (!n) return null;
         const norm = n.trim().toLowerCase();
-        return (driversData || []).find((d: any) => (d.name || '').toLowerCase() === norm) || null;
+        return (driversData || []).find((driver) => (driver.name || '').toLowerCase() === norm) || null;
       };
 
       const { data: batch, error: eB } = await supabase.from('driver_monitoring_import_batches').insert({
@@ -388,7 +433,7 @@ export function useImportDriverMonitoringWorkbook() {
         file_name: file.name,
         row_count: parsed.monitors.length + parsed.forecasts.length,
         status: 'processing',
-        errors: parsed.errors as any,
+        errors: parsed.errors,
       }).select().single();
       if (eB) throw eB;
 
@@ -409,7 +454,7 @@ export function useImportDriverMonitoringWorkbook() {
           driver_id: driver?.id || null,
           driver_name_snapshot: m.driver_name,
           planned_route_text: m.planned_route_text,
-          planned_cities: m.planned_cities as any,
+          planned_cities: m.planned_cities,
           total_deliveries: m.total_deliveries,
           completed_deliveries: 0,
           remaining_deliveries: m.total_deliveries,
@@ -450,13 +495,14 @@ export function useImportDriverMonitoringWorkbook() {
           const completed = rows.reduce((s, r) => s + r.deliveries_completed_in_city, 0);
           const remaining = calculateRemainingDeliveries(m.total_deliveries, completed);
           const last = rows[rows.length - 1];
-          await supabase.from('driver_route_monitors').update({
+          const { error: monitorUpdateError } = await supabase.from('driver_route_monitors').update({
             completed_deliveries: completed,
             remaining_deliveries: remaining,
             current_city: last?.city || null,
             next_city: last?.next_city || null,
             last_update_at: new Date().toISOString(),
-          }).eq('id', mon.id);
+          }).eq('id', mon.id).eq('tenant_id', tenantId);
+          if (monitorUpdateError) errors.push(`Erro ao consolidar ${m.driver_name}: ${monitorUpdateError.message}`);
         }
       }
 
@@ -476,7 +522,7 @@ export function useImportDriverMonitoringWorkbook() {
           current_city: f.current_city,
           forecast_text: f.forecast_text,
           remaining_cities_text: f.remaining_cities_text,
-          remaining_cities: f.remaining_cities as any,
+          remaining_cities: f.remaining_cities,
           observation: f.observation,
           status: 'active',
         });
@@ -484,14 +530,15 @@ export function useImportDriverMonitoringWorkbook() {
         else importedForecasts++;
       }
 
-      await supabase.from('driver_monitoring_import_batches').update({
+      const { error: batchUpdateError } = await supabase.from('driver_monitoring_import_batches').update({
         imported_monitors: importedMonitors,
         imported_updates: importedUpdates,
         imported_forecasts: importedForecasts,
         error_count: errors.length,
         status: errors.length ? 'completed_with_errors' : 'completed',
-        errors: errors as any,
-      }).eq('id', batch.id);
+        errors,
+      }).eq('id', batch.id).eq('tenant_id', tenantId);
+      if (batchUpdateError) throw batchUpdateError;
 
       return { importedMonitors, importedUpdates, importedForecasts, errors };
     },

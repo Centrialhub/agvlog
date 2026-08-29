@@ -28,7 +28,7 @@ type CarouselContextProps = {
 
 const CarouselContext = React.createContext<CarouselContextProps | null>(null);
 
-function useCarousel() {
+function useCarousel(): CarouselContextProps {
   const context = React.useContext(CarouselContext);
 
   if (!context) {
@@ -50,7 +50,7 @@ const Carousel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivEl
     const [canScrollPrev, setCanScrollPrev] = React.useState(false);
     const [canScrollNext, setCanScrollNext] = React.useState(false);
 
-    const onSelect = React.useCallback((api: CarouselApi) => {
+    const onSelect = React.useCallback((api: CarouselApi): void => {
       if (!api) {
         return;
       }
@@ -90,7 +90,7 @@ const Carousel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivEl
 
     React.useEffect(() => {
       if (!api) {
-        return;
+        return undefined;
       }
 
       onSelect(api);

@@ -25,10 +25,20 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
+import type { Json, Tables } from '@/integrations/supabase/types';
+import type { JsonObject } from '@/lib/jsonTypes';
+import type { Load } from '@/hooks/useLoads';
+import { getErrorMessage } from '@/lib/errors';
+
+type LoadNoteDocument = Pick<Tables<'fiscal_documents'>,
+  'id' | 'document_type' | 'deleted_at' | 'delivery_meta' | 'client_load_source' |
+  'invoice_number' | 'recipient' | 'recipient_city' | 'recipient_neighborhood' |
+  'recipient_state' | 'reference_number' | 'remitter' | 'status' | 'value'
+>;
 
 interface Props {
-  load: any;
-  documents: any[];
+  load: Load;
+  documents: LoadNoteDocument[];
   onSaved?: () => void;
 }
 
@@ -69,9 +79,9 @@ const OCO_CODES = [
   { value: '09', label: '09 - Reentrega agendada' },
 ];
 
-const getDocObservation = (d: any): string => {
-  const cls = d?.client_load_source || {};
-  return (cls.observationSnippet || cls.infCpl || cls.observation || '').toString();
+const getDocObservation = (document: LoadNoteDocument): string => {
+  const source = jsonObject(document.client_load_source);
+  return String(source.observationSnippet || source.infCpl || source.observation || '');
 };
 
 const toLocalDT = (v?: string | null) => {
@@ -100,33 +110,38 @@ type DocMeta = {
   redelivery_at?: string;
 };
 
+const jsonObject = (value: Json): JsonObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
+const docMeta = (value: Json): DocMeta => jsonObject(value) as unknown as DocMeta;
+const metaJson = (value: DocMeta): Json => value as unknown as Json;
+
 export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const qc = useQueryClient();
   const inboundDocs = useMemo(
-    () => (documents || []).filter((d: any) => d.document_type === 'inbound' && !d.deleted_at),
+    () => documents.filter(document => document.document_type === 'inbound' && !document.deleted_at),
     [documents],
   );
 
   // Per-document meta state (keyed by doc.id)
   const [meta, setMeta] = useState<Record<string, DocMeta>>(() => {
     const m: Record<string, DocMeta> = {};
-    inboundDocs.forEach((d: any) => { m[d.id] = (d.delivery_meta || {}) as DocMeta; });
+    inboundDocs.forEach(document => { m[document.id] = docMeta(document.delivery_meta); });
     return m;
   });
   useEffect(() => {
     const m: Record<string, DocMeta> = {};
     const toPersist: Array<{ id: string; meta: DocMeta }> = [];
-    inboundDocs.forEach((d: any) => {
-      const dm = (d.delivery_meta || {}) as DocMeta;
+    inboundDocs.forEach(document => {
+      const dm = docMeta(document.delivery_meta);
       // Auto-detect forma de pagamento se ainda não definida
       if (!dm.payment_method) {
-        const detected = detectPaymentMethod(getDocObservation(d));
+        const detected = detectPaymentMethod(getDocObservation(document));
         if (detected) {
           dm.payment_method = detected;
-          toPersist.push({ id: d.id, meta: dm });
+          toPersist.push({ id: document.id, meta: dm });
         }
       }
-      m[d.id] = dm;
+      m[document.id] = dm;
     });
     setMeta(m);
     // Persiste silenciosamente as detecções no banco — usuário não precisa salvar manualmente
@@ -135,7 +150,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         try {
           await Promise.all(
             toPersist.map(({ id, meta }) =>
-              supabase.from('fiscal_documents').update({ delivery_meta: meta } as any).eq('id', id),
+              supabase.from('fiscal_documents').update({ delivery_meta: metaJson(meta) }).eq('id', id),
             ),
           );
           qc.invalidateQueries({ queryKey: ['load_documents'] });
@@ -162,7 +177,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const normalizeStr = (v: string) => v.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
   const filteredDocs = useMemo(() => {
-    return inboundDocs.filter((d: any) => {
+    return inboundDocs.filter((d) => {
       const docInvoice = normalizeStr(d.invoice_number || '');
       const docRecipient = normalizeStr(d.recipient || '');
       const docNeighborhood = normalizeStr(d.recipient_neighborhood || '');
@@ -199,9 +214,9 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       if (!load?.id) return;
 
       const detectedMethods = inboundDocs
-        .map((d: any) => {
-          const dm = (d.delivery_meta || {}) as DocMeta;
-          return dm.payment_method || detectPaymentMethod(getDocObservation(d));
+        .map((document) => {
+          const dm = docMeta(document.delivery_meta);
+          return dm.payment_method || detectPaymentMethod(getDocObservation(document));
         })
         .filter(Boolean) as string[];
 
@@ -211,7 +226,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       try {
         const { error } = await supabase
           .from('loads')
-          .update({ payment_method: nextLoadPaymentMethod } as any)
+          .update({ payment_method: nextLoadPaymentMethod })
           .eq('id', load.id);
         if (error) throw error;
         qc.invalidateQueries({ queryKey: ['load', load.id] });
@@ -232,15 +247,15 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         .update({
           cash_to_receive: Number(cashToReceive || 0),
           pix_to_receive: Number(pixToReceive || 0),
-        } as any)
+        })
         .eq('id', load.id);
       if (error) throw error;
       toast.success('Totais de fechamento salvos');
       await qc.invalidateQueries({ queryKey: ['load', load.id] });
       await qc.invalidateQueries({ queryKey: ['loads'] });
       onSaved?.();
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao salvar totais');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Erro ao salvar totais'));
     } finally {
       setSavingTotals(false);
     }
@@ -254,12 +269,12 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const markAllCanhotos = () => {
     setMeta(prev => {
       const next = { ...prev };
-      inboundDocs.forEach((d: any) => {
+      inboundDocs.forEach((d) => {
         next[d.id] = { ...(next[d.id] || {}), rec_canhoto: true };
       });
       return next;
     });
-    setDirty(new Set(inboundDocs.map((d: any) => d.id)));
+    setDirty(new Set(inboundDocs.map((d) => d.id)));
   };
 
   // Re-executa detecção de forma de pagamento para todos os documentos da carga
@@ -286,14 +301,14 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       setMeta(nextMeta);
       await Promise.all(
         updates.map(({ id, meta }) =>
-          supabase.from('fiscal_documents').update({ delivery_meta: meta } as any).eq('id', id),
+          supabase.from('fiscal_documents').update({ delivery_meta: metaJson(meta) }).eq('id', id),
         ),
       );
       // sincroniza carga com a primeira forma detectada se ainda estiver vazia
       if (!load.payment_method && updates[0]?.detected) {
         await supabase
           .from('loads')
-          .update({ payment_method: updates[0].detected } as any)
+          .update({ payment_method: updates[0].detected })
           .eq('id', load.id);
       }
       toast.success(`Forma de pagamento detectada em ${updates.length} nota(s)`);
@@ -302,8 +317,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       await qc.invalidateQueries({ queryKey: ['load', load.id] });
       await qc.invalidateQueries({ queryKey: ['loads'] });
       onSaved?.();
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao detectar forma de pagamento');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Erro ao detectar forma de pagamento'));
     } finally {
       setDetectingPayments(false);
     }
@@ -322,7 +337,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     try {
       const { error } = await supabase
         .from('fiscal_documents')
-        .update({ status: 'delivered', delivery_meta: next } as any)
+        .update({ status: 'delivered', delivery_meta: metaJson(next) })
         .eq('id', docId);
       if (error) throw error;
       toast.success('Nota marcada como Entregue');
@@ -330,8 +345,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
       onSaved?.();
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao marcar como entregue');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Erro ao marcar como entregue'));
     }
   };
 
@@ -348,7 +363,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     try {
       const { error } = await supabase
         .from('fiscal_documents')
-        .update({ status: 'confirmed', delivery_meta: next } as any)
+        .update({ status: 'confirmed', delivery_meta: metaJson(next) })
         .eq('id', docId);
       if (error) throw error;
       toast.success('Status revertido para Pendente');
@@ -356,8 +371,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
       onSaved?.();
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao reverter status');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Erro ao reverter status'));
     }
   };
 
@@ -386,7 +401,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     try {
       const { error } = await supabase
         .from('fiscal_documents')
-        .update({ status: 'not_delivered', delivery_meta: next } as any)
+        .update({ status: 'not_delivered', delivery_meta: metaJson(next) })
         .eq('id', docId);
       if (error) throw error;
       toast.success('Nota marcada como Não Entregue');
@@ -395,8 +410,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       setNeModal(null);
       setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
       onSaved?.();
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao salvar não entrega');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Erro ao salvar não entrega'));
     }
   };
 
@@ -418,26 +433,23 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     setMeta(prev => ({ ...prev, [docId]: next }));
     try {
       // status volta para 'confirmed' e load_id é liberado via RPC oficial
-      const currentLoadId = (reModal as any).loadId || (reModal as any).load_id || null;
       const { error: metaErr } = await supabase
         .from('fiscal_documents')
-        .update({ status: 'confirmed', delivery_meta: next } as any)
+        .update({ status: 'confirmed', delivery_meta: metaJson(next) })
         .eq('id', docId);
       if (metaErr) throw metaErr;
-      if (currentLoadId) {
-        const { data: fd } = await supabase
-          .from('fiscal_documents')
-          .select('tenant_id, load_id')
-          .eq('id', docId)
-          .maybeSingle();
-        if (fd?.tenant_id && fd.load_id) {
-          const { error: rmErr } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
-            _tenant_id: fd.tenant_id,
-            _load_id: fd.load_id,
-            _document_ids: [docId],
-          });
-          if (rmErr) throw rmErr;
-        }
+      const { data: fiscalDocument } = await supabase
+        .from('fiscal_documents')
+        .select('tenant_id, load_id')
+        .eq('id', docId)
+        .maybeSingle();
+      if (fiscalDocument?.tenant_id && fiscalDocument.load_id) {
+        const { error: rmErr } = await supabase.rpc('remove_fiscal_documents_from_load_v2', {
+          _tenant_id: fiscalDocument.tenant_id,
+          _load_id: fiscalDocument.load_id,
+          _document_ids: [docId],
+        });
+        if (rmErr) throw rmErr;
       }
       toast.success('Nota marcada para Reentrega — disponível para próxima carga');
       await qc.invalidateQueries({ queryKey: ['load_documents'] });
@@ -445,8 +457,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       setReModal(null);
       setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
       onSaved?.();
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao marcar reentrega');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Erro ao marcar reentrega'));
     }
   };
 
@@ -457,7 +469,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       for (const id of ids) {
         const { error } = await supabase
           .from('fiscal_documents')
-          .update({ delivery_meta: meta[id] || {} } as any)
+          .update({ delivery_meta: metaJson(meta[id] || {}) })
           .eq('id', id);
         if (error) throw error;
       }
@@ -466,8 +478,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       await qc.invalidateQueries({ queryKey: ['load_documents'] });
       await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       onSaved?.();
-    } catch (e: any) {
-      toast.error(e.message || 'Erro ao salvar notas');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Erro ao salvar notas'));
     } finally {
       setSavingAll(false);
     }
@@ -542,7 +554,10 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           size="sm"
           variant="outline"
           className="h-7 text-xs"
-          onClick={() => printLoadNotesReport(load, inboundDocs.map(d => ({ ...d, delivery_meta: meta[d.id] || d.delivery_meta })))}
+          onClick={() => printLoadNotesReport(load, inboundDocs.map(d => ({
+            ...d,
+            delivery_meta: meta[d.id] || docMeta(d.delivery_meta),
+          })))}
           disabled={!inboundDocs.length}
           title="Gerar relatório imprimível / Salvar como PDF"
         >
@@ -631,7 +646,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                   {inboundDocs.length === 0 ? 'Nenhuma nota fiscal vinculada a esta carga.' : 'Nenhuma nota fiscal corresponde aos filtros.'}
                 </TableCell>
               </TableRow>
-            ) : filteredDocs.map((d: any) => {
+            ) : filteredDocs.map((d) => {
               const m = meta[d.id] || {};
               const isDelivered = d.status === 'delivered';
               const isNotDelivered = d.status === 'not_delivered' || m.ne;
@@ -802,7 +817,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
               <TableRow className="bg-muted/40 font-bold">
                 <TableCell colSpan={7} className="text-xs text-right">Total:</TableCell>
                 <TableCell className="text-xs text-right whitespace-nowrap">
-                  {fmtMoney(inboundDocs.reduce((s: number, d: any) => s + Number(d.value || 0), 0))}
+                  {fmtMoney(inboundDocs.reduce((sum, document) => sum + Number(document.value || 0), 0))}
                 </TableCell>
                 <TableCell colSpan={6} />
               </TableRow>

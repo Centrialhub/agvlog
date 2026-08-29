@@ -19,28 +19,121 @@ import {
 } from './fiscalAddress';
 import { sanitizeIe } from './partyRegistry';
 
-function num(v: any): number {
+function num(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
 function nonEmpty<T extends Record<string, unknown>>(obj: T): T {
-  const out: any = {};
+  const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
     if (v === undefined || v === null) continue;
     if (typeof v === 'string' && v.trim() === '') continue;
     if (typeof v === 'object' && !Array.isArray(v)) {
-      const inner = nonEmpty(v as any);
+      const inner = nonEmpty(v as Record<string, unknown>);
       if (Object.keys(inner).length) out[k] = inner;
     } else {
       out[k] = v;
     }
   }
-  return out;
+  return out as T;
+}
+
+interface NFSeServiceItemInput {
+  description?: unknown;
+  quantity?: unknown;
+  unit_value?: unknown;
+  total?: unknown;
+}
+
+interface NFSeDocumentInput extends Record<string, unknown> {
+  id: string | number;
+  items?: unknown;
+  cliente_cnpj?: string | null;
+  cliente_nome?: string | null;
+  cliente_municipio?: string | null;
+  cliente_cod_municipio?: string | null;
+  cliente_cod_ibge?: string | null;
+  cliente_uf?: string | null;
+  cliente_cep?: string | null;
+  cliente_endereco?: string | null;
+  cliente_numero?: string | null;
+  cliente_bairro?: string | null;
+  cliente_im?: string | null;
+  cliente_ie?: string | null;
+  cliente_email?: string | null;
+  cliente_telefone?: string | null;
+  cliente_complemento?: string | null;
+  rps_number?: string | number | null;
+  issue_date?: string | null;
+  cod_servico?: string | null;
+  valor_servicos?: unknown;
+  regime_tributario?: string | null;
+  base_calculo?: unknown;
+  aliquota_iss?: unknown;
+  valor_iss?: unknown;
+  description?: string | null;
+  insurer_name?: string | null;
+  seguradora?: string | null;
+  insurer_cnpj?: string | null;
+  cnpjSeguradora?: string | null;
+  insurer_policy?: string | null;
+  apolice?: string | null;
+  insurer_endorsement?: string | null;
+  averbacao?: string | null;
+  insured_amount?: unknown;
+  valorSegurado?: unknown;
+  insurance_premium?: unknown;
+  valorSeguro?: unknown;
+  notes?: string | null;
+  doc_type?: string | null;
+  nat_operacao?: string | null;
+  cod_trib_municipal?: string | null;
+  cod_municipio_prestacao?: string | null;
+  cnae?: string | null;
+  iss_retido?: boolean | null;
+  exigibilidade_iss?: number | null;
+  valor_deducoes?: unknown;
+  valor_pis?: unknown;
+  valor_cofins?: unknown;
+  valor_inss?: unknown;
+  valor_ir?: unknown;
+  valor_csll?: unknown;
+  outras_retencoes?: unknown;
+  series?: string | number | null;
+  pedido?: string | null;
+  reference_number?: string | null;
+}
+
+interface NFSeEmitterAddress {
+  city_code?: string | null;
+  codigo_ibge?: string | null;
+  cep?: string | null;
+  uf?: string | null;
+  estado?: string | null;
+  logradouro?: string | null;
+  endereco?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  municipio?: string | null;
+  cidade?: string | null;
+}
+
+interface NFSeEmitterExtras {
+  endereco?: NFSeEmitterAddress | null;
+  metadata?: { environment?: 'sandbox' | 'production' } | null;
+  telefone?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}
+
+function isNFSeServiceItem(value: unknown): value is NFSeServiceItemInput {
+  return typeof value === 'object' && value !== null;
 }
 
 export interface BuildNFSeInput {
-  doc: any;                     // row from nfse_documents (or the pending form payload)
+  doc: NFSeDocumentInput;       // row from nfse_documents (or the pending form payload)
   emitter: TenantEmitter | null;
   environment?: 'sandbox' | 'production';
   callbackUrl?: string;
@@ -94,7 +187,8 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   // ---------------------------------------------------------------------------
   // Validação do PRESTADOR (emitente)
   // ---------------------------------------------------------------------------
-  const endRaw = (emitter.endereco || {}) as Record<string, any>;
+  const emitterDetails = emitter as TenantEmitter & NFSeEmitterExtras;
+  const endRaw = (emitterDetails.endereco || {}) as NFSeEmitterAddress;
   const prestadorMissing: string[] = [];
   if (!normalizeCpfCnpj(emitter.cnpj)) prestadorMissing.push('CNPJ do emitente');
   if (!fiscalText(emitter.razao_social, 150)) prestadorMissing.push('razão social do emitente');
@@ -131,7 +225,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
 
   const emitterCnpj = onlyDigits(emitter.cnpj);
   const env: 'sandbox' | 'production' =
-    environment || (emitter as any)?.metadata?.environment || 'production';
+    environment || emitterDetails.metadata?.environment || 'production';
 
   const end = endRaw;
   const totalServicos = money(doc.valor_servicos);
@@ -140,10 +234,10 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   const aliquota = isSimples ? 0 : num(doc.aliquota_iss);
   const valorIss = isSimples ? 0 : money(doc.valor_iss || (baseCalculo * aliquota) / 100);
 
-  const items = Array.isArray(doc.items) ? doc.items : [];
+  const items = Array.isArray(doc.items) ? doc.items.filter(isNFSeServiceItem) : [];
   const baseDiscriminacao = String(
     doc.description ||
-      items.map((it: any) => `${it.description} (${num(it.quantity)}x R$ ${num(it.unit_value).toFixed(2)})`).join(' | ') ||
+      items.map((item) => `${String(item.description ?? '')} (${num(item.quantity)}x R$ ${num(item.unit_value).toFixed(2)})`).join(' | ') ||
       'Serviço de transporte'
   );
 
@@ -195,8 +289,8 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
       inscricaoEstadual: sanitizeIe(emitter.ie) || undefined,
       razaoSocial: fiscalText(emitter.razao_social, 150) || undefined,
       nomeFantasia: fiscalText(emitter.nome_fantasia, 60) || undefined,
-      telefone: normalizePhone((emitter as any).telefone || (emitter as any).phone) || undefined,
-      email: isValidEmail((emitter as any).email) ? String((emitter as any).email).trim() : undefined,
+      telefone: normalizePhone(emitterDetails.telefone || emitterDetails.phone) || undefined,
+      email: isValidEmail(emitterDetails.email) ? String(emitterDetails.email).trim() : undefined,
       endereco: {
         logradouro: fiscalText(end.logradouro || end.endereco, 120) || undefined,
         numero: fiscalText(end.numero, 20) || 'S/N',
@@ -274,12 +368,12 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
         descontoCondicionado: 0,
       },
       itens: items
-        .filter((it: any) => fiscalText(it?.description, 120))
-        .map((it: any) => ({
-          descricao: fiscalText(it.description, 120),
-          quantidade: num(it.quantity) || 1,
-          valorUnitario: money(it.unit_value),
-          valorTotal: money(it.total || num(it.quantity) * num(it.unit_value)),
+        .filter((item) => fiscalText(item.description, 120))
+        .map((item) => ({
+          descricao: fiscalText(item.description, 120),
+          quantidade: num(item.quantity) || 1,
+          valorUnitario: money(item.unit_value),
+          valorTotal: money(item.total || num(item.quantity) * num(item.unit_value)),
         })),
     },
 

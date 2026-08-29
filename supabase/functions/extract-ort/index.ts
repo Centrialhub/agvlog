@@ -1,9 +1,5 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { createClient } from "@supabase/supabase-js";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const jsonResp = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -20,21 +16,25 @@ const parseGatewayError = (raw: string) => {
     if (type === "credit_limit_reached") {
       return {
         status: 402,
-        error: "Limite de créditos do workspace para IA atingido. Peça ao proprietário do workspace para ajustar o limite ou adicionar créditos antes de tentar ler a ORT novamente.",
+        error: "Limite de créditos do workspace para IA atingido. Peça ao proprietário do workspace para ajustar o limite ou adicionar créditos antes de tentar ler a NF-e/ORT novamente.",
       };
     }
 
     return {
       status: Number(parsed?.status) || 500,
-      error: details || message || "Falha no gateway de IA ao extrair a ORT.",
+      error: details || message || "Falha no gateway de IA ao extrair a NF-e/ORT.",
     };
   } catch {
     return {
       status: 500,
-      error: raw ? `Falha no gateway de IA ao extrair a ORT: ${raw.slice(0, 220)}` : "Falha no gateway de IA ao extrair a ORT.",
+      error: raw ? `Falha no gateway de IA ao extrair a NF-e/ORT: ${raw.slice(0, 220)}` : "Falha no gateway de IA ao extrair a NF-e/ORT.",
     };
   }
 };
+
+type AiContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -54,7 +54,19 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => null);
     const files = Array.isArray(body?.files) ? body.files : [];
-    if (files.length === 0 || files.length > 5) return jsonResp({ error: "Envie de 1 a 5 imagens/PDFs da ORT" }, 400);
+    const tenantId = typeof body?.tenantId === "string" ? body.tenantId : "";
+    if (!tenantId) return jsonResp({ error: "Tenant obrigatório" }, 400);
+    const { data: membership, error: membershipError } = await anonClient
+      .from("tenant_memberships")
+      .select("tenant_id, role")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userData.user.id)
+      .eq("active", true)
+      .in("role", ["owner", "admin", "operator"])
+      .maybeSingle();
+    if (membershipError || !membership) return jsonResp({ error: "Sem acesso ao tenant informado" }, 403);
+
+    if (files.length === 0 || files.length > 5) return jsonResp({ error: "Envie de 1 a 5 imagens/PDFs da NF-e ou ORT" }, 400);
 
     // Guard rails para o AI Gateway: rejeita cedo se o payload for grande demais
     // (a Gemini via chat-completions aceita ~4 MB por parte inline). Base64 =
@@ -75,16 +87,19 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "Conjunto de arquivos maior que ~6 MB. Envie em lotes menores." }, 413);
     }
 
-    const content: any[] = [{
+    const content: AiContentPart[] = [{
       type: "text",
       text: [
-        "Extraia dados de ORTs brasileiras para criar documentos compatíveis com NF-e no TMS.",
-        "Os arquivos podem conter scans de várias páginas que pertencem ao mesmo documento/cliente: quando o número da ORT, CNPJ, nome do destinatário ou endereço se repetirem, agrupe as páginas em UM ÚNICO documento, somando itens, peso, volume e paletes (sem duplicar linhas idênticas).",
-        "Quando claramente forem ORTs diferentes (números/clientes distintos), retorne um documento por ORT.",
+        "Extraia dados de DANFEs de NF-e e de ORTs brasileiras sem misturar os dois tipos.",
+        "Defina documentKind='nfe' somente quando o documento for uma DANFE/NF-e e documentKind='ort' quando for uma ordem/romaneio de transporte.",
+        "Para NF-e, extraia accessKey com exatamente os 44 dígitos impressos; se qualquer dígito estiver ilegível, retorne string vazia, confiança 0 e needsReview=true. ORT não possui chave NF-e: retorne accessKey vazio.",
+        "Os arquivos podem conter scans de várias páginas do mesmo documento: agrupe somente quando a identidade (chave NF-e, ou número ORT + emitente + destinatário) coincidir.",
+        "Totais da NF/ORT são totais do documento e podem se repetir em várias páginas: retorne-os uma única vez, nunca some cabeçalhos/totais repetidos. Não duplique linhas idênticas de itens.",
+        "Quando claramente forem documentos diferentes, retorne um documento por NF-e/ORT.",
         "Em sourcePages liste os nomes dos arquivos que compõem o documento e em pageCount informe quantas páginas foram unidas.",
-        "Extraia também: número da ORT (number), data de emissão (issueDate em YYYY-MM-DD), prazo de pagamento (paymentTerms — ex.: 'À VISTA', '30 DIAS', '30/60/90'), forma/responsável de cobrança (billing — ex.: 'CIF', 'FOB', 'Pago', 'A pagar', cliente faturado), descrição da carga (cargoDescription — natureza/tipo de mercadoria), telefone do cliente/destinatário (recipientPhone), endereço (recipientAddress — logradouro), número do endereço (recipientAddressNumber), complemento (recipientAddressComplement), bairro, cidade, UF, CEP (recipientZip), código IBGE do município (recipientCityCode quando visível), país (recipientCountry) e código do país (recipientCountryCode).",
+        "Extraia também: número do documento (invoiceNumber), data de emissão (issueDate em YYYY-MM-DD), prazo de pagamento (paymentTerms — ex.: 'À VISTA', '30 DIAS', '30/60/90'), forma/responsável de cobrança (billing — ex.: 'CIF', 'FOB', 'Pago', 'A pagar', cliente faturado), descrição da carga (cargoDescription — natureza/tipo de mercadoria), telefone do cliente/destinatário (recipientPhone), endereço (recipientAddress — logradouro), número do endereço (recipientAddressNumber), complemento (recipientAddressComplement), bairro, cidade, UF, CEP (recipientZip), código IBGE do município (recipientCityCode quando visível), país (recipientCountry) e código do país (recipientCountryCode).",
         "Extraia também dados cadastrais do destinatário quando legíveis: nome fantasia (recipientFantasyName), Inscrição Estadual (recipientStateRegistration — use 'ISENTO' quando indicado), Inscrição Municipal (recipientMunicipalRegistration), indicador de IE (recipientIeIndicator: '1' contribuinte ICMS, '2' isento, '9' não contribuinte) e e-mail do destinatário (recipientEmail).",
-        "Quando houver tabela/lista de mercadorias, extraia múltiplos itens com descrição, quantidade, unidade, valor unitário, valor total, peso e volume quando legíveis. Não invente itens: se a lista estiver ilegível, retorne items vazio e use productSummary com o melhor resumo possível ou 'Mercadoria ORT'.",
+        "Quando houver tabela/lista de mercadorias, extraia múltiplos itens com descrição, quantidade, unidade, valor unitário, valor total, peso e volume quando legíveis. Não invente itens nem resumo: se a lista estiver ilegível, retorne items vazio e productSummary vazio.",
         "Preencha sourceFileName com o arquivo principal e sourcePages com todos os arquivos agrupados. Use confidence 0-1 e needsReview=true se algum campo essencial estiver ilegível.",
         "REGRA CRÍTICA DE FALLBACK: NUNCA invente CEP, telefone, número de endereço, CNPJ ou logradouro. Se o campo estiver totalmente ilegível, parcialmente cortado, manuscrito impreciso, ou se você tiver menos de 70% de confiança naquele dígito/caractere específico, retorne literalmente a string 'UNKNOWN' (em maiúsculas) e marque fieldConfidences[campo]=0 e needsReview=true. Não tente completar dígitos faltantes em CEP (sempre 8 dígitos) nem em telefone (sempre 10/11 dígitos com DDD); se faltar qualquer dígito, retorne 'UNKNOWN'.",
       ].join(" "),
@@ -108,14 +123,14 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: "Você extrai ORTs logísticas com precisão. Não invente dados; deixe campos vazios e marque revisão quando houver dúvida." },
+          { role: "system", content: "Você extrai DANFEs de NF-e e ORTs logísticas com precisão. Não invente dados; deixe campos vazios e marque revisão quando houver dúvida." },
           { role: "user", content },
         ],
         tools: [{
           type: "function",
           function: {
-            name: "return_ort_documents",
-            description: "Retorna documentos ORT extraídos para pipeline NF-like.",
+            name: "return_fiscal_scan_documents",
+            description: "Retorna NF-e e ORTs extraídas, preservando a identidade real de cada tipo.",
             parameters: {
               type: "object",
               properties: {
@@ -124,6 +139,8 @@ Deno.serve(async (req) => {
                   items: {
                     type: "object",
                     properties: {
+                      documentKind: { type: "string", enum: ["nfe", "ort"] },
+                      accessKey: { type: "string", description: "Chave de acesso de 44 dígitos somente para NF-e; vazia para ORT ou leitura incompleta." },
                       invoiceNumber: { type: "string" },
                       issueDate: { type: "string" },
                       paymentTerms: { type: "string", description: "Prazo/condição de pagamento (ex.: À VISTA, 30 DIAS, 30/60/90)." },
@@ -142,8 +159,8 @@ Deno.serve(async (req) => {
                       recipientNeighborhood: { type: "string" },
                       recipientAddressComplement: { type: "string", description: "Complemento do endereço (sala, andar, bloco)." },
                       recipientCityCode: { type: "string", description: "Código IBGE do município (7 dígitos) quando visível." },
-                      recipientCountry: { type: "string", description: "País do destinatário (default BRASIL)." },
-                      recipientCountryCode: { type: "string", description: "Código BACEN do país (default 1058)." },
+                      recipientCountry: { type: "string", description: "País do destinatário quando explicitamente legível." },
+                      recipientCountryCode: { type: "string", description: "Código BACEN do país quando explicitamente legível." },
                       recipientFantasyName: { type: "string", description: "Nome fantasia do destinatário." },
                       recipientStateRegistration: { type: "string", description: "Inscrição Estadual (use 'ISENTO' quando indicado)." },
                       recipientMunicipalRegistration: { type: "string", description: "Inscrição Municipal." },
@@ -188,7 +205,7 @@ Deno.serve(async (req) => {
                       },
                       pageCount: { type: "number", description: "Número de páginas/folhas que foram unidas neste documento." },
                     },
-                    required: ["invoiceNumber", "recipientName", "recipientCity", "recipientState", "confidence", "needsReview"],
+                    required: ["documentKind", "accessKey", "invoiceNumber", "recipientName", "recipientCity", "recipientState", "confidence", "needsReview"],
                     additionalProperties: false,
                   },
                 },
@@ -198,7 +215,7 @@ Deno.serve(async (req) => {
             },
           },
         }],
-        tool_choice: { type: "function", function: { name: "return_ort_documents" } },
+        tool_choice: { type: "function", function: { name: "return_fiscal_scan_documents" } },
       }),
     });
 
@@ -216,6 +233,6 @@ Deno.serve(async (req) => {
     return jsonResp(args ? JSON.parse(args) : { documents: [] });
   } catch (e) {
     console.error("[extract-ort] exception", e);
-    return jsonResp({ error: e instanceof Error ? e.message : "Erro ao processar ORT" }, 500);
+    return jsonResp({ error: e instanceof Error ? e.message : "Erro ao processar NF-e/ORT" }, 500);
   }
 });

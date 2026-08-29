@@ -1,32 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
+import type { Tables } from '@/integrations/supabase/types';
 
-export interface PositionLast {
-  tenant_id: string;
-  vehicle_id: string;
-  lat: number;
-  lng: number;
-  speed: number | null;
-  heading: number | null;
-  captured_at: string;
-  received_at: string;
-  telemetry_snapshot: Record<string, any>;
-  source: Record<string, any>;
-}
-
-export interface PositionRaw {
-  id: string;
-  tenant_id: string;
-  vehicle_id: string;
-  captured_at: string;
-  received_at: string;
-  lat: number;
-  lng: number;
-  speed: number | null;
-  heading: number | null;
-  telemetry: Record<string, any>;
-}
+export type PositionLast = Tables<'positions_last'>;
+export type PositionRaw = Tables<'positions_raw'>;
 
 export function useFleetPositions() {
   const { currentTenant } = useTenant();

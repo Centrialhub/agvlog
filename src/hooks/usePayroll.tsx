@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 // ---------------- Constants / labels ----------------
 export const PAYROLL_PERIOD_STATUSES = ['draft','calculated','under_review','approved','closed','cancelled'] as const;
@@ -43,60 +44,15 @@ export const ADVANCE_STATUS_LABELS: Record<string,string> = {
 };
 
 // ---------------- Types ----------------
-export interface PayrollPeriod {
-  id: string; tenant_id: string; period_name: string;
-  period_start: string; period_end: string; competence_month: string | null;
-  status: PayrollPeriodStatus; payment_status: string;
-  include_drivers: boolean; include_non_drivers: boolean;
-  notes: string | null;
-  approved_by: string | null; approved_at: string | null;
-  closed_by: string | null; closed_at: string | null;
-  created_at: string; updated_at: string;
-}
-
-export interface PayrollEntry {
-  id: string; tenant_id: string; payroll_period_id: string;
-  employee_id: string; driver_id: string | null; contract_id: string | null;
-  entry_type: string; status: string; payment_status: string;
-  gross_amount: number; discount_amount: number; already_paid_amount: number;
-  net_amount: number; amount_to_pay: number; carryover_amount: number;
-  source_summary: Record<string, unknown>;
-  notes: string | null; created_at: string; updated_at: string;
-}
-
-export interface PayrollEntryItem {
-  id: string; tenant_id: string; payroll_period_id: string;
-  payroll_entry_id: string; employee_id: string; driver_id: string | null;
-  item_type: string; nature: 'credit'|'debit'|'already_paid'|'info';
-  description: string; amount: number;
-  quantity: number | null; unit_value: number | null;
-  source_table: string | null; source_id: string | null;
-  source_metadata: Record<string, unknown>;
-  competence_date: string | null; occurred_at: string | null;
-  locked: boolean; created_at: string;
-}
-
-export interface EmployeeContract {
-  id: string; tenant_id: string; employee_id: string;
-  contract_type: string; employment_regime: string | null;
-  position_title: string | null; department: string | null; branch: string | null; cost_center: string | null;
-  start_date: string; end_date: string | null;
-  base_salary: number; daily_rate: number; hourly_rate: number; commission_rate: number;
-  payment_cycle: string; payment_method: string | null;
-  bank_info: Record<string, unknown>;
-  active: boolean; notes: string | null;
-  created_at: string; updated_at: string;
-}
-
-export interface EmployeeAdvance {
-  id: string; tenant_id: string; employee_id: string; driver_id: string | null;
-  amount: number; advance_date: string; reason: string | null;
-  payment_method: string | null; payment_reference: string | null;
-  payable_id: string | null; financial_obligation_id: string | null;
-  status: string; approved_by: string | null; approved_at: string | null;
-  paid_by: string | null; paid_at: string | null;
-  created_at: string; updated_at: string;
-}
+export type PayrollPeriod = Omit<Tables<'payroll_periods'>, 'status'> & { status: PayrollPeriodStatus };
+export type PayrollEntry = Tables<'payroll_entries'>;
+export type PayrollEntryItem = Omit<Tables<'payroll_entry_items'>, 'nature'> & {
+  nature: 'credit' | 'debit' | 'already_paid' | 'info';
+};
+export type EmployeeContract = Tables<'employee_contracts'>;
+export type EmployeeAdvance = Tables<'employee_advances'>;
+export type CreateEmployeeContractInput = Omit<TablesInsert<'employee_contracts'>, 'tenant_id' | 'created_by'>;
+export type UpdateEmployeeContractInput = TablesUpdate<'employee_contracts'> & { id: string };
 
 // ---------------- Payroll Periods ----------------
 export function usePayrollPeriods() {
@@ -163,11 +119,11 @@ export function useGeneratePayrollPeriod() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: { period_start: string; period_end: string; period_name?: string; include_drivers?: boolean; include_non_drivers?: boolean }) => {
-      const { data, error } = await (supabase as any).rpc('generate_payroll_period', {
+      const { data, error } = await supabase.rpc('generate_payroll_period', {
         _tenant_id: currentTenant!.id,
         _period_start: args.period_start,
         _period_end: args.period_end,
-        _period_name: args.period_name ?? null,
+        _period_name: args.period_name ?? undefined,
         _include_drivers: args.include_drivers ?? true,
         _include_non_drivers: args.include_non_drivers ?? true,
       });
@@ -185,7 +141,7 @@ export function useRecalculatePayrollEntry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (entry_id: string) => {
-      const { error } = await (supabase as any).rpc('recalculate_payroll_entry', { _entry_id: entry_id });
+      const { error } = await supabase.rpc('recalculate_payroll_entry', { _entry_id: entry_id });
       if (error) throw error;
     },
     onSuccess: (_d, entry_id) => {
@@ -199,7 +155,7 @@ export function useApprovePayrollPeriod() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (period_id: string) => {
-      const { error } = await (supabase as any).rpc('approve_payroll_period', { _period_id: period_id });
+      const { error } = await supabase.rpc('approve_payroll_period', { _period_id: period_id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -214,7 +170,7 @@ export function useClosePayrollPeriod() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ period_id, reason }: { period_id: string; reason?: string }) => {
-      const { error } = await (supabase as any).rpc('close_payroll_period', { _period_id: period_id, _reason: reason ?? null });
+      const { error } = await supabase.rpc('close_payroll_period', { _period_id: period_id, _reason: reason ?? undefined });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll_periods'] }),
@@ -227,7 +183,7 @@ export function useAddPayrollManualItem() {
   return useMutation({
     mutationFn: async (args: { entry: PayrollEntry; nature: 'credit'|'debit'; description: string; amount: number; reason: string }) => {
       if (!args.reason || !args.reason.trim()) throw new Error('Motivo obrigatório para ajuste manual');
-      const { data, error } = await (supabase as any).rpc('add_payroll_manual_item', {
+      const { data, error } = await supabase.rpc('add_payroll_manual_item', {
         _entry_id: args.entry.id,
         _nature: args.nature,
         _description: args.description,
@@ -249,7 +205,7 @@ export function useDeletePayrollItem() {
   return useMutation({
     mutationFn: async (args: { item: PayrollEntryItem; reason: string }) => {
       if (!args.reason || !args.reason.trim()) throw new Error('Motivo obrigatório para exclusão');
-      const { error } = await (supabase as any).rpc('delete_payroll_entry_item', {
+      const { error } = await supabase.rpc('delete_payroll_entry_item', {
         _item_id: args.item.id,
         _reason: args.reason,
       });
@@ -285,15 +241,15 @@ export function useCreateEmployeeContract() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<EmployeeContract>) => {
+    mutationFn: async (values: CreateEmployeeContractInput) => {
       // Ensure exclusive active: if creating active, deactivate previous
       if (values.active) {
-        await (supabase as any).from('employee_contracts')
+        await supabase.from('employee_contracts')
           .update({ active: false, end_date: values.start_date ?? new Date().toISOString().slice(0,10) })
           .eq('employee_id', values.employee_id!)
           .eq('active', true);
       }
-      const { data, error } = await (supabase as any).from('employee_contracts').insert({
+      const { data, error } = await supabase.from('employee_contracts').insert({
         ...values, tenant_id: currentTenant!.id, created_by: user?.id,
       }).select().single();
       if (error) throw error;
@@ -307,14 +263,14 @@ export function useUpdateEmployeeContract() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<EmployeeContract> & { id: string }) => {
-      const { data, error } = await (supabase as any).from('employee_contracts')
+    mutationFn: async ({ id, ...values }: UpdateEmployeeContractInput) => {
+      const { data, error } = await supabase.from('employee_contracts')
         .update({ ...values, updated_by: user?.id, updated_at: new Date().toISOString() })
         .eq('id', id).select().single();
       if (error) throw error;
       return data as EmployeeContract;
     },
-    onSuccess: (d: any) => qc.invalidateQueries({ queryKey: ['employee_contracts', d?.employee_id] }),
+    onSuccess: (contract) => qc.invalidateQueries({ queryKey: ['employee_contracts', contract.employee_id] }),
   });
 }
 
@@ -346,14 +302,14 @@ export function useRegisterEmployeeAdvance() {
       reason?: string; payment_method?: string; payment_reference?: string;
       create_payable?: boolean; mark_paid?: boolean;
     }) => {
-      const { data, error } = await (supabase as any).rpc('register_employee_advance', {
+      const { data, error } = await supabase.rpc('register_employee_advance', {
         _tenant_id: currentTenant!.id,
         _employee_id: args.employee_id,
         _amount: args.amount,
         _advance_date: args.advance_date ?? new Date().toISOString().slice(0,10),
-        _reason: args.reason ?? null,
-        _payment_method: args.payment_method ?? null,
-        _payment_reference: args.payment_reference ?? null,
+        _reason: args.reason ?? undefined,
+        _payment_method: args.payment_method ?? undefined,
+        _payment_reference: args.payment_reference ?? undefined,
         _create_payable: args.create_payable ?? false,
         _mark_paid: args.mark_paid ?? false,
       });
@@ -372,10 +328,10 @@ export function useUpdateAdvanceStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const patch: any = { status, updated_at: new Date().toISOString() };
+      const patch: TablesUpdate<'employee_advances'> = { status, updated_at: new Date().toISOString() };
       if (status === 'approved') { patch.approved_by = user?.id; patch.approved_at = new Date().toISOString(); }
       if (status === 'paid') { patch.paid_by = user?.id; patch.paid_at = new Date().toISOString(); }
-      const { error } = await (supabase as any).from('employee_advances').update(patch).eq('id', id);
+      const { error } = await supabase.from('employee_advances').update(patch).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employee_advances'] }),
@@ -392,7 +348,7 @@ export function useEmployeeIncidentActions(employeeId?: string) {
         .eq('employee_id', employeeId)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data as any[];
+      return data || [];
     },
     enabled: !!employeeId,
   });

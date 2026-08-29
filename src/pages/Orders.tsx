@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useOrders, useCreateOrder, useUpdateOrder, ORDER_STATUSES, ORDER_STATUS_LABELS, Order } from '@/hooks/useOrders';
-import { useClients } from '@/hooks/useClients';
+import { useClients, type Client } from '@/hooks/useClients';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,16 +18,28 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import FreightAuditDrawer from '@/components/freight/FreightAuditDrawer';
 
-const n = (v: any) => (v ? Number(v) : 0);
-const numField = (label: string, value: any, onChange: (v: string) => void, opts?: { step?: string; prefix?: string }) => (
+const n = (value: unknown) => (value ? Number(value) : 0);
+const numField = (label: string, value: string | number, onChange: (v: string) => void, opts?: { step?: string; prefix?: string }) => (
   <div>
     <Label>{label}</Label>
     <Input type="number" step={opts?.step || '0.01'} placeholder="0,00" value={value || ''} onChange={e => onChange(e.target.value)} />
   </div>
 );
 
-function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; clients: any[]; onSave: (v: any) => void; onCancel: () => void }) {
-  const [form, setForm] = useState<Record<string, any>>({
+interface OrderFormState extends Record<string, string | number> {
+  order_number: string;
+  client_id: string;
+  status: string;
+  payer_type: string;
+}
+
+function OrderForm({ order, clients, onSave, onCancel }: {
+  order?: Order;
+  clients: Client[];
+  onSave: (values: Partial<Order>) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState<OrderFormState>({
     order_number: order?.order_number || '',
     client_id: order?.client_id || '',
     promised_date: order?.promised_date || '',
@@ -77,7 +89,10 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
     ibs_value: order?.ibs_value || '',
   });
 
-  const set = useCallback((key: string, val: any) => setForm(f => ({ ...f, [key]: val })), []);
+  const set = useCallback((key: string, value: string | number) => setForm((previous) => ({
+    ...previous,
+    [key]: value,
+  })), []);
 
   // Auto-calculate totals
   const calcTotals = useCallback(() => {
@@ -131,10 +146,10 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
       'cofins_rate', 'cofins_value', 'total_freight', 'discount_value', 'subtotal', 'financial_value',
       'cbs_base', 'cbs_rate', 'cbs_value', 'ibs_base', 'ibs_rate', 'ibs_value',
     ];
-    const out: any = { ...form };
+    const out: Record<string, string | number | null> = { ...form };
     numFields.forEach(k => { out[k] = out[k] ? Number(out[k]) : null; });
     ['client_id', 'remitter', 'recipient', 'nf_series', 'issue_date', 'payment_plan', 'city', 'neighborhood'].forEach(k => { out[k] = out[k] || null; });
-    onSave(out);
+    onSave(out as unknown as Partial<Order>);
   };
 
   return (
@@ -306,7 +321,7 @@ export default function Orders() {
     });
   }, [orders, search, statusFilter]);
 
-  const handleSave = async (values: any) => {
+  const handleSave = async (values: Partial<Order>) => {
     try {
       if (editingOrder) {
         await updateOrder.mutateAsync({ id: editingOrder.id, ...values });
@@ -317,8 +332,12 @@ export default function Orders() {
       }
       setDialogOpen(false);
       setEditingOrder(undefined);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+      });
     }
   };
 

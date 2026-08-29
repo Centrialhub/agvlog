@@ -4,6 +4,7 @@ import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { getGroupingMode } from '@/lib/cteGroupingModes';
+import type { Tables, TablesInsert } from '@/integrations/supabase/types';
 
 export interface CteBatch {
   id: string;
@@ -123,20 +124,27 @@ export function useIssuedCtes() {
         .order('created_at', { ascending: false })
         .limit(500);
       if (error) throw error;
-      const ctes = (data || []) as any[];
+      const ctes = data || [];
       if (ctes.length === 0) return [];
 
-      const { data: notes } = await supabase
+      const { data: notes, error: notesError } = await supabase
         .from('fiscal_documents')
         .select('id, invoice_number, recipient, value, cte_emitted_outbound_id')
         .eq('tenant_id', currentTenant.id)
         .in('cte_emitted_outbound_id', ctes.map((c) => c.id));
+      if (notesError) throw notesError;
 
       const byCte = new Map<string, IssuedCte['notes']>();
-      for (const n of (notes || []) as any[]) {
-        const arr = byCte.get(n.cte_emitted_outbound_id) || [];
-        arr.push({ id: n.id, invoice_number: n.invoice_number, recipient: n.recipient, value: Number(n.value || 0) });
-        byCte.set(n.cte_emitted_outbound_id, arr);
+      for (const note of notes || []) {
+        if (!note.cte_emitted_outbound_id) continue;
+        const linkedNotes = byCte.get(note.cte_emitted_outbound_id) || [];
+        linkedNotes.push({
+          id: note.id,
+          invoice_number: note.invoice_number,
+          recipient: note.recipient,
+          value: Number(note.value || 0),
+        });
+        byCte.set(note.cte_emitted_outbound_id, linkedNotes);
       }
 
       return ctes.map((c) => ({
@@ -166,8 +174,8 @@ export function useDeleteIssuedCte() {
         .maybeSingle();
       if (readErr) throw readErr;
       if (!doc) throw new Error('CT-e não encontrado');
-      const status = (doc as any).status as string;
-      const sefaz = (doc as any).sefaz_status as string | null;
+      const status = doc.status;
+      const sefaz = doc.sefaz_status;
       const isAuthorizedLive = status === 'authorized' && sefaz !== 'cancelled';
       if (isAuthorizedLive && sefaz !== 'cancel_rejected') {
         throw new Error('CT-e autorizado não pode ser excluído — cancele na SEFAZ primeiro');
@@ -176,7 +184,7 @@ export function useDeleteIssuedCte() {
       // Libera as NFs vinculadas para novo faturamento
       const { error: relErr } = await supabase
         .from('fiscal_documents')
-        .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+        .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
         .eq('tenant_id', currentTenant.id)
         .eq('cte_emitted_outbound_id', id);
       if (relErr) throw relErr;
@@ -229,48 +237,57 @@ export function useCreateCteBatch() {
       const totalFreight = input.groups.reduce((s, g) => s + g.freight_value, 0);
 
       // Resolve emitente (override → default ativo) para vincular remetente/CNPJ nos CT-es do lote.
-      let emitter: any = null;
+      let emitter: Pick<Tables<'tenant_emitters'>, 'id' | 'razao_social' | 'nome_fantasia' | 'cnpj'> | null = null;
       if (input.emitter_id) {
-        const { data } = await (supabase as any)
-          .from('tenant_emitters').select('*').eq('id', input.emitter_id).maybeSingle();
+        const { data, error } = await supabase
+          .from('tenant_emitters')
+          .select('id, razao_social, nome_fantasia, cnpj')
+          .eq('id', input.emitter_id)
+          .eq('tenant_id', currentTenant.id)
+          .eq('active', true)
+          .maybeSingle();
+        if (error) throw error;
         emitter = data || null;
       }
       if (!emitter) {
-        const { data } = await (supabase as any)
-          .from('tenant_emitters').select('*')
+        const { data, error } = await supabase
+          .from('tenant_emitters').select('id, razao_social, nome_fantasia, cnpj')
           .eq('tenant_id', currentTenant.id).eq('active', true)
           .order('is_default', { ascending: false })
           .order('created_at', { ascending: true })
           .limit(1);
+        if (error) throw error;
         emitter = data?.[0] || null;
       }
 
+      const batchPayload: TablesInsert<'cte_batches'> = {
+        tenant_id: currentTenant.id,
+        client_id: input.client_id,
+        emitter_id: emitter?.id || null,
+        grouping_mode: input.grouping_mode,
+        grouping_mode_label: mode.label,
+        source_type: input.source_type,
+        period_start: input.period_start || null,
+        period_end: input.period_end || null,
+        load_ids: input.load_ids || [],
+        fiscal_document_ids: input.fiscal_document_ids,
+        total_documents: input.groups.length,
+        total_value: totalValue,
+        total_freight: totalFreight,
+        status: 'generated',
+        notes: input.notes || null,
+        created_by: user?.id,
+      };
       const { data: batch, error: e1 } = await supabase
         .from('cte_batches')
-        .insert({
-          tenant_id: currentTenant.id,
-          client_id: input.client_id,
-          emitter_id: emitter?.id || input.emitter_id || null,
-          grouping_mode: input.grouping_mode,
-          grouping_mode_label: mode.label,
-          source_type: input.source_type,
-          period_start: input.period_start || null,
-          period_end: input.period_end || null,
-          load_ids: input.load_ids || [],
-          fiscal_document_ids: input.fiscal_document_ids,
-          total_documents: input.groups.length,
-          total_value: totalValue,
-          total_freight: totalFreight,
-          status: 'generated',
-          notes: input.notes || null,
-          created_by: user?.id,
-        } as any)
+        .insert(batchPayload)
         .select()
         .single();
       if (e1) throw e1;
 
-      // Generate sequential CT-e numbers per batch (placeholder; real numbering integra com SEFAZ).
-      const docsPayload = input.groups.map((g, idx) => {
+      // CT-e numbering is assigned only after authorization by the fiscal
+      // provider/SEFAZ. Drafts must never consume or invent fiscal numbers.
+      const docsPayload = input.groups.map((g): TablesInsert<'cte_documents'> => {
         const ibs_rate = 0.001; // 0,10%
         const cbs_rate = 0.009; // 0,90%
         const ibs_value = +(g.freight_value * ibs_rate).toFixed(2);
@@ -279,9 +296,9 @@ export function useCreateCteBatch() {
         return {
           tenant_id: currentTenant.id,
           batch_id: batch.id,
-          emitter_id: emitter?.id || input.emitter_id || null,
+          emitter_id: emitter?.id || null,
           client_id: g.client_id,
-          cte_number: `RASCUNHO-${String(idx + 1).padStart(4, '0')}`,
+          cte_number: null,
           cte_series: '1',
           remitter: emitter?.razao_social || emitter?.nome_fantasia || g.remitter,
           remitter_cnpj: emitter?.cnpj || null,
@@ -309,34 +326,37 @@ export function useCreateCteBatch() {
       });
 
       if (docsPayload.length > 0) {
-        const { error: e2 } = await supabase.from('cte_documents').insert(docsPayload as any);
+        const { error: e2 } = await supabase.from('cte_documents').insert(docsPayload);
         if (e2) throw e2;
       }
 
       // Sincronização com Financeiro: cria contas a receber por CT-e (se a tabela existir).
       try {
-        const { data: createdDocs } = await supabase
+        const { data: createdDocs, error: createdDocsError } = await supabase
           .from('cte_documents')
           .select('id, client_id, freight_value, net_value, recipient')
           .eq('batch_id', batch.id);
+        if (createdDocsError) throw createdDocsError;
 
         if (createdDocs && createdDocs.length > 0 && input.client_id) {
-          const receivables = createdDocs.map((d: any) => ({
+          const receivables = createdDocs.map((document): TablesInsert<'receivables'> => ({
             tenant_id: currentTenant.id,
-            client_id: d.client_id,
-            cte_document_id: d.id,
-            description: `CT-e ${d.id.slice(0, 8)} • ${d.recipient || '-'}`,
-            amount: d.freight_value,
-            net_amount: d.net_value,
+            client_id: document.client_id,
+            cte_document_id: document.id,
+            description: `CT-e ${document.id.slice(0, 8)} • ${document.recipient || '-'}`,
+            amount: document.freight_value,
             status: 'pending',
-            issue_date: new Date().toISOString().slice(0, 10),
             created_by: user?.id,
           }));
           // Tenta inserir; se a tabela não existir ou colunas divergirem, ignora silenciosamente.
-          await supabase.from('receivables').insert(receivables as any);
+          const { error: receivablesError } = await supabase.from('receivables').upsert(receivables, {
+            onConflict: 'tenant_id,cte_document_id',
+            ignoreDuplicates: true,
+          });
+          if (receivablesError) throw receivablesError;
         }
-      } catch {
-        /* sincronização opcional */
+      } catch (error: unknown) {
+        console.warn('Falha na sincronização opcional do lote com contas a receber', error);
       }
 
       return batch;
@@ -353,32 +373,41 @@ export function useCreateCteBatch() {
 
 export function useCancelCteBatch() {
   const qc = useQueryClient();
+  const { currentTenant } = useTenant();
   return useMutation({
     mutationFn: async (batchId: string) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const { error } = await supabase
         .from('cte_batches')
-        .update({ status: 'cancelled', updated_at: new Date().toISOString() } as any)
-        .eq('id', batchId);
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', batchId)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
       // Descobre as NFs consumidas pelo lote antes de cancelar, para devolvê-las ao pool.
-      const { data: rows } = await supabase
+      const { data: rows, error: rowsError } = await supabase
         .from('cte_documents')
         .select('fiscal_document_ids')
-        .eq('batch_id', batchId);
-      await supabase
+        .eq('batch_id', batchId)
+        .eq('tenant_id', currentTenant.id);
+      if (rowsError) throw rowsError;
+      const { error: cancelDocumentsError } = await supabase
         .from('cte_documents')
-        .update({ status: 'cancelled' } as any)
-        .eq('batch_id', batchId);
+        .update({ status: 'cancelled' })
+        .eq('batch_id', batchId)
+        .eq('tenant_id', currentTenant.id);
+      if (cancelDocumentsError) throw cancelDocumentsError;
 
       const nfIds = Array.from(
-        new Set(((rows || []) as any[]).flatMap((r) => r.fiscal_document_ids || []).filter(Boolean)),
+        new Set((rows || []).flatMap((row) => row.fiscal_document_ids || []).filter(Boolean)),
       );
       if (nfIds.length > 0) {
         // Espelha useDeleteIssuedCte: cancelar o lote libera a NF para novo faturamento.
-        await supabase
+        const { error: releaseDocumentsError } = await supabase
           .from('fiscal_documents')
-          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
+          .eq('tenant_id', currentTenant.id)
           .in('id', nfIds);
+        if (releaseDocumentsError) throw releaseDocumentsError;
       }
     },
     onSuccess: () => {

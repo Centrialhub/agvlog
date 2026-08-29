@@ -6,6 +6,7 @@ import {
   fillPartyFieldsFromRegistry,
   normalizeName,
   sanitizeIe,
+  type PartyFields,
 } from '@/lib/fiscal/partyRegistry';
 
 const clients = [
@@ -72,7 +73,7 @@ describe('partyRegistry', () => {
   });
 
   it('preenche campos do diálogo sem sobrescrever o que já existe', () => {
-    const item = {
+    const item: PartyFields = {
       remitterName: 'J. MACEDO S/A',
       remitterCnpj: '',
       remitterIe: '',
@@ -93,7 +94,7 @@ describe('partyRegistry', () => {
   });
 
   it('não marca changed quando nada falta', () => {
-    const item = {
+    const item: PartyFields = {
       remitterName: 'J. MACEDO S/A',
       remitterCnpj: '11222333000144',
       remitterIe: '1234567',

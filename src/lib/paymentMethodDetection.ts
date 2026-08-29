@@ -61,7 +61,7 @@ const KEYWORD_RULES: Array<{ re: RegExp; value: string }> = [
   // a_prazo: aceita "A PRAZO", listas N/N/N ou N-N-N, NX, N DDL/DDF, N PARCELAS,
   // ou "NN DIA(S)" — inclusive grudado em texto seguinte (ex.: "28 DIASCarga"
   // gerado por ERPs que removem espaços).
-  { re: /(\b(?:A\s*PRAZO|APRAZO)\b|\b\d+(?:[\/\-]\d+)+\s*(?:DIAS?)?\b|\b\d+\s*DDL\b|\b\d+\s*DDF\b|\b\d+\s*X(?:\s|$)|\b\d+\s*PARCELAS?\b|\b\d{1,3}\s*DIAS?(?:\W|$|[A-Z]))/, value: 'a_prazo' },
+  { re: /(\b(?:A\s*PRAZO|APRAZO)\b|\b\d+(?:[/-]\d+)+\s*(?:DIAS?)?\b|\b\d+\s*DDL\b|\b\d+\s*DDF\b|\b\d+\s*X(?:\s|$)|\b\d+\s*PARCELAS?\b|\b\d{1,3}\s*DIAS?(?:\W|$|[A-Z]))/, value: 'a_prazo' },
   { re: /\b(A\s*VISTA|AVISTA|ANTECIPADO|PRE\s*PAGO)\b/, value: 'a_vista' },
 ];
 

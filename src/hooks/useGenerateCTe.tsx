@@ -4,6 +4,30 @@ import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Load } from './useLoads';
 import { calculateFreight, logFreightCalculation } from './useFreightCalculator';
+import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
+
+interface GenerateCteOptions {
+  load: Load;
+  emitterId?: string | null;
+}
+
+interface GenerateCteDiagnostics {
+  warnings: string[];
+  missingContext: string[];
+  freightSuccess: boolean;
+  freightError: string | null;
+  fallbackUsed: boolean;
+  fallbackReason: string | null;
+  missingFields: string[];
+}
+
+export type GeneratedCteDocument = Tables<'fiscal_documents'> & {
+  _diagnostics: GenerateCteDiagnostics;
+};
+
+function isGenerateCteOptions(arg: Load | GenerateCteOptions): arg is GenerateCteOptions {
+  return 'load' in arg;
+}
 
 export function useGenerateCTe() {
   const { currentTenant } = useTenant();
@@ -11,30 +35,34 @@ export function useGenerateCTe() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (arg: Load | { load: Load; emitterId?: string | null }) => {
-      const load: Load = (arg as any).load ?? (arg as Load);
-      const overrideEmitterId: string | null | undefined = (arg as any).emitterId;
+    mutationFn: async (arg: Load | GenerateCteOptions): Promise<GeneratedCteDocument> => {
+      const load = isGenerateCteOptions(arg) ? arg.load : arg;
+      const overrideEmitterId = isGenerateCteOptions(arg) ? arg.emitterId : undefined;
       if (!currentTenant) throw new Error('Tenant não selecionado');
 
       // Resolve o emitente (override → default ativo) para preencher remitter/emitter_id na NF-e/CT-e.
-      let emitter: any = null;
+      let emitter: Pick<Tables<'tenant_emitters'>, 'id' | 'razao_social' | 'nome_fantasia' | 'cnpj'> | null = null;
       if (overrideEmitterId) {
-        const { data } = await (supabase as any)
+        const { data, error } = await supabase
           .from('tenant_emitters')
-          .select('*')
+          .select('id, razao_social, nome_fantasia, cnpj')
           .eq('id', overrideEmitterId)
+          .eq('tenant_id', currentTenant.id)
+          .eq('active', true)
           .maybeSingle();
+        if (error) throw error;
         emitter = data || null;
       }
       if (!emitter) {
-        const { data } = await (supabase as any)
+        const { data, error } = await supabase
           .from('tenant_emitters')
-          .select('*')
+          .select('id, razao_social, nome_fantasia, cnpj')
           .eq('tenant_id', currentTenant.id)
           .eq('active', true)
           .order('is_default', { ascending: false })
           .order('created_at', { ascending: true })
           .limit(1);
+        if (error) throw error;
         emitter = data?.[0] || null;
       }
 
@@ -54,31 +82,34 @@ export function useGenerateCTe() {
       }
 
       // Fetch load_items (without invalid join)
-      const { data: loadItems } = await (supabase as any)
+      const { data: loadItems, error: loadItemsError } = await supabase
         .from('load_items')
         .select('item_description, quantity, pallet_count, weight_kg, order_id')
         .eq('load_id', load.id);
+      if (loadItemsError) throw loadItemsError;
 
       // Fetch linked orders via load_orders for item summary
-      const { data: loadOrders } = await supabase
+      const { data: loadOrders, error: loadOrdersError } = await supabase
         .from('load_orders')
         .select('order_id')
         .eq('load_id', load.id);
+      if (loadOrdersError) throw loadOrdersError;
 
       let orderNames: string[] = [];
       if (loadOrders && loadOrders.length > 0) {
-        const orderIds = loadOrders.map((lo: any) => lo.order_id);
-        const { data: orders } = await supabase
+        const orderIds = loadOrders.map((loadOrder) => loadOrder.order_id);
+        const { data: orders, error: ordersError } = await supabase
           .from('orders')
           .select('order_number, clients(company_name)')
           .in('id', orderIds);
+        if (ordersError) throw ordersError;
         if (orders) {
-          orderNames = orders.map((o: any) => o.order_number || o.clients?.company_name || 'Pedido');
+          orderNames = orders.map((order) => order.order_number || order.clients?.company_name || 'Pedido');
         }
       }
 
       const itemDescriptions = (loadItems || [])
-        .map((li: any) => li.item_description)
+        .map((loadItem) => loadItem.item_description)
         .filter((d: string) => d && d.trim());
 
       const itemSummary = [...itemDescriptions, ...orderNames]
@@ -86,43 +117,46 @@ export function useGenerateCTe() {
         .join(', ')
         .substring(0, 500) || `Carga ${load.load_number}`;
 
-      const totalPallets = (loadItems || []).reduce((s: number, li: any) => s + (li.pallet_count || 0), 0);
-      const totalWeight = (loadItems || []).reduce((s: number, li: any) => s + (Number(li.weight_kg) || 0), 0);
+      const totalPallets = (loadItems || []).reduce((sum, loadItem) => sum + (loadItem.pallet_count || 0), 0);
+      const totalWeight = (loadItems || []).reduce((sum, loadItem) => sum + (Number(loadItem.weight_kg) || 0), 0);
 
       // Fetch NF-e total value for percentage-based freight
-      const { data: nfeDocs } = await supabase
+      const { data: nfeDocs, error: nfeDocsError } = await supabase
         .from('fiscal_documents')
         .select('value')
         .eq('load_id', load.id)
         .eq('document_type', 'inbound')
         .eq('tenant_id', currentTenant.id);
+      if (nfeDocsError) throw nfeDocsError;
 
-      const nfeTotalValue = (nfeDocs || []).reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
+      const nfeTotalValue = (nfeDocs || []).reduce((sum, document) => sum + (Number(document.value) || 0), 0);
 
       // Resolve client / payer group / destination context from NF-e docs
-      const { data: refDocs } = await supabase
+      const { data: refDocs, error: refDocsError } = await supabase
         .from('fiscal_documents')
         .select('client_id, recipient_state, recipient_city, recipient_neighborhood, recipient')
         .eq('load_id', load.id)
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .limit(50);
+      if (refDocsError) throw refDocsError;
 
-      const refDoc = (refDocs || []).find((d: any) => d.client_id) || (refDocs || [])[0] || {};
-      const clientId: string | null = (refDoc as any).client_id || null;
+      const refDoc = (refDocs || []).find((document) => document.client_id) || refDocs?.[0];
+      const clientId = refDoc?.client_id || null;
 
       let payerGroup: string | null = null;
       if (clientId) {
-        const { data: cli } = await supabase
+        const { data: client, error: clientError } = await supabase
           .from('clients')
           .select('payer_group')
           .eq('id', clientId)
           .maybeSingle();
-        payerGroup = (cli as any)?.payer_group || null;
+        if (clientError) throw clientError;
+        payerGroup = client?.payer_group || null;
       }
 
-      const destState = (refDoc as any).recipient_state || null;
-      const destMunicipality = (refDoc as any).recipient_city || null;
+      const destState = refDoc?.recipient_state || null;
+      const destMunicipality = refDoc?.recipient_city || null;
 
       // Calculate freight using the full rule engine (region + payer group + client)
       const freightResult = await calculateFreight({
@@ -173,7 +207,7 @@ export function useGenerateCTe() {
       const cbsValue = freightValue > 0 ? freightValue * cbsRate / 100 : null;
       const ibsValue = freightValue > 0 ? freightValue * ibsRate / 100 : null;
 
-      const { data, error } = await supabase.from('fiscal_documents').insert({
+      const insertPayload: TablesInsert<'fiscal_documents'> = {
         tenant_id: currentTenant.id,
         created_by: user?.id,
         document_type: 'outbound',
@@ -192,7 +226,7 @@ export function useGenerateCTe() {
         freight_value: freightValue > 0 ? freightValue : null,
         freight_value_original: freightValue > 0 ? freightValue : null,
         freight_table_id: breakdown?.tableId || null,
-        freight_breakdown: breakdown ? (breakdown as any) : null,
+        freight_breakdown: breakdown ? breakdown as unknown as Json : null,
         product_summary: itemSummary,
         status: 'confirmed',
         issue_date: new Date().toISOString().slice(0, 10),
@@ -202,7 +236,8 @@ export function useGenerateCTe() {
         ibs_base: freightValue > 0 ? freightValue : null,
         ibs_rate: ibsRate,
         ibs_value: ibsValue,
-      } as any).select().single();
+      };
+      const { data, error } = await supabase.from('fiscal_documents').insert(insertPayload).select().single();
 
       if (error) throw error;
 
@@ -226,7 +261,7 @@ export function useGenerateCTe() {
           fallbackReason: breakdown?.fallbackReason || null,
           missingFields: breakdown?.missingFields || [],
         },
-      } as any;
+      };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });

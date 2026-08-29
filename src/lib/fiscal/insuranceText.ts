@@ -25,7 +25,7 @@ export interface InsuranceSnapshot {
   valorSeguro?: number | string | null;
 }
 
-function money(v: any): string | null {
+function money(v: unknown): string | null {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return null;
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

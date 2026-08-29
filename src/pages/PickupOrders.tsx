@@ -1,12 +1,13 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, Pencil, Trash2, PackageOpen, FileText } from 'lucide-react';
-import { usePickupOrders, useDeletePickupOrder, usePickupOrderCounts, PICKUP_STATUSES, PICKUP_STATUS_LABELS, PickupOrder } from '@/hooks/usePickupOrders';
+import { usePickupOrders, useDeletePickupOrder, usePickupOrderCounts, PICKUP_STATUSES, PICKUP_STATUS_LABELS, type PickupOrder, type PickupStatus } from '@/hooks/usePickupOrders';
 import NewPickupOrderDialog from '@/components/pickup/NewPickupOrderDialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -20,16 +21,20 @@ const STATUS_COLOR: Record<string, string> = {
   cancelada: 'bg-red-500/15 text-red-700 dark:text-red-400',
 };
 
+function isPickupStatus(value: string): value is PickupStatus {
+  return PICKUP_STATUSES.some((status) => status === value);
+}
+
 export default function PickupOrders() {
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<PickupStatus | 'all'>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PickupOrder | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const { data: pickups = [], isLoading } = usePickupOrders({
-    status: statusFilter as any,
+    status: statusFilter,
     search: search.length >= 2 ? search : undefined,
   });
   const ids = useMemo(() => pickups.map(p => p.id), [pickups]);
@@ -47,12 +52,16 @@ export default function PickupOrders() {
   const handleEdit = (p: PickupOrder) => { setEditing(p); setDialogOpen(true); };
   const handleNew = () => { setEditing(null); setDialogOpen(true); };
   const handleDelete = async (p: PickupOrder) => {
-    if (!confirm(`Excluir Coleta nº ${p.pickup_number}?`)) return;
+    if (!await confirmAction(`Excluir Coleta nº ${p.pickup_number}?`, {
+      title: 'Excluir coleta',
+      confirmLabel: 'Excluir',
+    })) return;
     try {
       await deleteMut.mutateAsync(p.id);
       toast({ title: 'Coleta excluída' });
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      const description = error instanceof Error ? error.message : 'Não foi possível excluir a coleta.';
+      toast({ title: 'Erro', description, variant: 'destructive' });
     }
   };
 
@@ -101,7 +110,14 @@ export default function PickupOrders() {
                 className="pl-9"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => {
+                if (value === 'all' || isPickupStatus(value)) {
+                  setStatusFilter(value);
+                }
+              }}
+            >
               <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>

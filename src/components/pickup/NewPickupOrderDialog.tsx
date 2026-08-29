@@ -11,7 +11,15 @@ import { useVehicles } from '@/hooks/useVehicles';
 import { useTenant } from '@/hooks/useTenant';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useCreatePickupOrder, useUpdatePickupOrder, PickupOrder, PICKUP_STATUSES, PICKUP_STATUS_LABELS } from '@/hooks/usePickupOrders';
+import {
+  useCreatePickupOrder,
+  useUpdatePickupOrder,
+  type CreatePickupOrderInput,
+  type PickupOrder,
+  type PickupStatus,
+  PICKUP_STATUSES,
+  PICKUP_STATUS_LABELS,
+} from '@/hooks/usePickupOrders';
 
 interface Props {
   open: boolean;
@@ -21,6 +29,10 @@ interface Props {
 }
 
 const NONE = '__none__';
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Falha inesperada ao salvar a coleta';
+}
 
 export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pickup }: Props) {
   const { currentTenant } = useTenant();
@@ -78,7 +90,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const remitter = clients.find(c => c.id === remitterClientId);
-    const driver = drivers.find((d: any) => d.id === driverId);
+    const driver = drivers.find((candidate) => candidate.id === driverId);
     const vehicle = vehicles.find(v => v.id === vehicleId);
 
     if (!driver) {
@@ -94,13 +106,13 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
       return;
     }
 
-    const payload: Partial<PickupOrder> = {
+    const payload: CreatePickupOrderInput = {
       remitter_client_id: remitter?.id || null,
       remitter_name: remitter?.company_name || null,
       remitter_cnpj: remitter?.tax_id || null,
       recipient_name: recipientName.trim(),
       driver_id: driver.id,
-      driver_name_snapshot: (driver as any).name,
+      driver_name_snapshot: driver.name,
       vehicle_id: vehicle.id,
       vehicle_plate_snapshot: vehicle.plate,
       pickup_at: new Date(pickupAt).toISOString(),
@@ -119,8 +131,8 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
         onCreated?.(created);
         onOpenChange(false);
       }
-    } catch (err: any) {
-      toast({ title: 'Erro ao salvar coleta', description: err.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao salvar coleta', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -154,9 +166,9 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>—</SelectItem>
-                  {drivers.map((d: any) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}{d.doc ? ` • ${d.doc}` : ''}
+                  {drivers.map((driver) => (
+                    <SelectItem key={driver.id} value={driver.id}>
+                      {driver.name}{driver.doc ? ` • ${driver.doc}` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -182,7 +194,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
             </div>
             <div className="space-y-2">
               <Label>Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as any)}>
+              <Select value={status} onValueChange={(value) => setStatus(value as PickupStatus)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {PICKUP_STATUSES.map(s => (

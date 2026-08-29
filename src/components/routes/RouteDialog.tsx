@@ -10,15 +10,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/components/ui/sonner';
-import { WaypointEditor, type Waypoint } from './WaypointEditor';
+import { WaypointEditor } from './WaypointEditor';
+import type { Waypoint } from '@/lib/routes/waypoints';
+import type { Tables, TablesInsert } from '@/integrations/supabase/types';
+import { getErrorMessage } from '@/lib/errors';
+
+type RouteTemplate = Tables<'route_templates'>;
+type GeofenceOption = Pick<Tables<'geofences'>, 'id' | 'name' | 'category'>;
+type PoiOption = Pick<Tables<'pois'>, 'id' | 'name' | 'category'>;
 
 interface RouteDialogProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   tenantId?: string;
-  geofences: any[];
-  pois: any[];
-  editRoute: any;
+  geofences: GeofenceOption[];
+  pois: PoiOption[];
+  editRoute: RouteTemplate | null;
 }
 
 export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, editRoute }: RouteDialogProps) {
@@ -76,7 +83,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
   useEffect(() => {
     if (!open || !editRoute || initialized) return;
     if (existingWaypoints.length > 0 || editRoute) {
-      setWaypoints(existingWaypoints.map((w: any) => ({
+      setWaypoints(existingWaypoints.map((w) => ({
         id: w.id,
         waypoint_order: w.waypoint_order,
         waypoint_type: w.waypoint_type,
@@ -96,7 +103,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
     if (!tenantId || !name) return;
     setLoading(true);
     try {
-      const payload = {
+      const payload: TablesInsert<'route_templates'> = {
         tenant_id: tenantId,
         name,
         corridor_geofence_id: corridorId || null,
@@ -136,7 +143,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
           estimated_duration_min: wp.estimated_duration_min,
           notes: wp.notes || null,
         }));
-        const { error: wpErr } = await supabase.from('route_waypoints').insert(wpRows as any);
+        const { error: wpErr } = await supabase.from('route_waypoints').insert(wpRows);
         if (wpErr) throw wpErr;
       }
 
@@ -144,8 +151,8 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
       queryClient.invalidateQueries({ queryKey: ['route_templates'] });
       queryClient.invalidateQueries({ queryKey: ['route_waypoints'] });
       onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
     }
     setLoading(false);
   };
@@ -170,7 +177,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
                   <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Nenhum</SelectItem>
-                    {geofences.map((g: any) => (
+                    {geofences.map((g) => (
                       <SelectItem key={g.id} value={g.id}>{g.name} ({g.category})</SelectItem>
                     ))}
                   </SelectContent>

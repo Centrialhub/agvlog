@@ -15,15 +15,17 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   Package, CheckCircle, AlertTriangle, Truck, Camera, X, ImageIcon,
-  ChevronRight, ChevronDown, Search, PenLine, FileSignature,
+  ChevronRight, Search, PenLine, FileSignature,
   Ban, AlertCircle, PackageX, MapPinned, UserX,
-  Phone, MessageSquare, Send, Percent, FileText, RotateCcw, Clock, User as UserIcon, Loader2
+  Phone, MessageSquare, Send, Percent, FileText, Clock, User as UserIcon
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
 import { isStopTerminal } from '@/lib/status/stopStatus';
-import { validateUpload } from '@/lib/uploadPolicy';
+import { validateUploadFile } from '@/lib/uploadPolicy';
+import { removeSecureFiles, uploadSecureFile } from '@/lib/secureUpload';
+import type { Tables } from '@/integrations/supabase/types';
 
 
 
@@ -33,7 +35,7 @@ type EventCategory = 'finalizador' | 'informativo';
 type EventDef = {
   key: string;
   label: string;
-  icon: React.ComponentType<any>;
+  icon: React.ComponentType<{ className?: string }>;
   category: EventCategory;
   finalAction?: 'delivered' | 'partial' | 'refused';
   requiresReceiver?: boolean;
@@ -64,9 +66,28 @@ function getEventDef(key: string) {
 }
 
 // ====== Helpers ======
-function getStopOrderNumber(stop: any): string | null {
-  // Procura nº pedido/nota em vários campos prováveis
-  const candidates = [stop?.order_number, stop?.invoice_number, stop?.reference, stop?.external_id];
+type DriverStopClient = Pick<Tables<'clients'>, 'company_name' | 'phone' | 'mobile' | 'email'>;
+type DriverStopDocument = {
+  fiscal_documents: Pick<Tables<'fiscal_documents'>, 'invoice_number' | 'reference_number'> | null;
+};
+type DriverStop = Tables<'dispatch_stops'> & {
+  clients: DriverStopClient | null;
+  dispatch_stop_documents: DriverStopDocument[];
+};
+type StopProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  qty: number;
+  unit: string;
+  price: number;
+};
+
+function getStopOrderNumber(stop: DriverStop): string | null {
+  const fiscalDocument = stop.dispatch_stop_documents
+    ?.map((link) => link.fiscal_documents)
+    .find(Boolean);
+  const candidates = [fiscalDocument?.invoice_number, fiscalDocument?.reference_number];
   for (const c of candidates) if (c) return String(c);
   // fallback: extrai dígitos do notes
   if (stop?.notes) {
@@ -84,17 +105,15 @@ export default function DriverDeliveries() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
 
-  const effectiveTrip: any = trip || {};
-
   const [tab, setTab] = useState<'em_rota' | 'concluidas'>('em_rota');
   const [search, setSearch] = useState('');
   // Detalhe da entrega
-  const [detailStop, setDetailStop] = useState<any | null>(null);
+  const [detailStop, setDetailStop] = useState<DriverStop | null>(null);
 
   // catálogo de eventos do stop selecionado
-  const [eventCatalogStop, setEventCatalogStop] = useState<any | null>(null);
+  const [eventCatalogStop, setEventCatalogStop] = useState<DriverStop | null>(null);
   // formulário "Dados do evento"
-  const [eventForm, setEventForm] = useState<{ stop: any; eventKey: string } | null>(null);
+  const [eventForm, setEventForm] = useState<{ stop: DriverStop; eventKey: string } | null>(null);
 
   const [receiverName, setReceiverName] = useState('');
   const [receiverDoc, setReceiverDoc] = useState('');
@@ -133,59 +152,64 @@ export default function DriverDeliveries() {
   const threadKey = eventForm ? `${eventForm.stop.id}|${eventForm.eventKey}` : '';
   const currentThread = threadKey ? (threads[threadKey] || []) : [];
 
-  // Itens reais da parada: fiscal_documents da carga (por client_id da parada) → load_items.
-  const { data: realStopProducts = [] } = useQuery({
-    queryKey: ['driver_stop_products', trip?.load_id, eventForm?.stop?.client_id],
+  // Itens reais da parada: o vínculo canônico é dispatch_stop_documents.
+  // Não dependa do load_id legado da viagem nem do client_id, pois uma viagem
+  // pode ter várias cargas e uma parada pode conter documentos sem cliente.
+  const { data: realStopProducts = [] } = useQuery<StopProduct[]>({
+    queryKey: ['driver_stop_products', eventForm?.stop?.id],
     queryFn: async () => {
-      if (!trip?.load_id || !eventForm?.stop?.client_id) return [] as any[];
-      const { data: docs, error: docsErr } = await supabase
-        .from('fiscal_documents')
-        .select('id, invoice_number')
-        .eq('load_id', trip.load_id)
-        .eq('client_id', eventForm.stop.client_id);
-      if (docsErr) throw docsErr;
-      const docIds = (docs || []).map((d: any) => d.id);
-      if (docIds.length === 0) return [] as any[];
+      if (!eventForm?.stop?.id) return [];
+      const { data: stopDocuments, error: stopDocumentsError } = await supabase
+        .from('dispatch_stop_documents')
+        .select('fiscal_document_id')
+        .eq('dispatch_stop_id', eventForm.stop.id);
+      if (stopDocumentsError) throw stopDocumentsError;
+      const docIds = Array.from(new Set(
+        (stopDocuments || [])
+          .map((row) => row.fiscal_document_id)
+          .filter((id): id is string => Boolean(id)),
+      ));
+      if (docIds.length === 0) return [];
       const { data: items, error: itemsErr } = await supabase
         .from('load_items')
         .select('id, item_description, quantity, weight_kg, volume_m3, fiscal_document_id')
         .in('fiscal_document_id', docIds);
       if (itemsErr) throw itemsErr;
-      return (items || []).map((it: any) => ({
+      return (items || []).map((it) => ({
         id: it.id,
         sku: it.fiscal_document_id ? String(it.fiscal_document_id).slice(0, 8) : '',
         name: it.item_description || 'Item',
         qty: Number(it.quantity) || 0,
         unit: 'UN',
         price: 0,
-      })) as any[];
+      }));
     },
-    enabled: !!eventForm?.stop && !!trip?.load_id && !!eventForm?.stop?.client_id,
+    enabled: !!eventForm?.stop?.id,
   });
 
-  const stopProducts: any[] = realStopProducts;
+  const stopProducts = realStopProducts;
 
   const totalReturnValue = stopProducts.reduce((sum, p) => {
     const q = returnedItems[p.id] || 0;
     return sum + q * p.price;
   }, 0);
 
-  const { data: stops = [], isLoading: stopsLoading } = useQuery({
-    queryKey: ['driver_delivery_stops', effectiveTrip?.id],
+  const { data: stops, isLoading: stopsLoading } = useQuery({
+    queryKey: ['driver_delivery_stops', trip?.id],
     queryFn: async () => {
-      if (!effectiveTrip?.id) return [];
+      if (!trip?.id) return [];
       const { data, error } = await supabase
         .from('dispatch_stops')
-        .select('*, clients(company_name)')
-        .eq('dispatch_trip_id', effectiveTrip.id)
+        .select('*, clients(company_name, phone, mobile, email), dispatch_stop_documents(fiscal_documents(invoice_number, reference_number))')
+        .eq('dispatch_trip_id', trip.id)
         .order('stop_order', { ascending: true });
       if (error) throw error;
       return data || [];
     },
-    enabled: !!effectiveTrip?.id,
+    enabled: !!trip?.id,
   });
 
-  const effectiveStops: any[] = (stops as any[]) || [];
+  const effectiveStops = useMemo<DriverStop[]>(() => stops ?? [], [stops]);
 
   const filteredStops = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -233,6 +257,17 @@ export default function DriverDeliveries() {
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+    try {
+      files.forEach((file) => validateUploadFile(file, 'image'));
+    } catch (error) {
+      toast({
+        title: 'Foto inválida',
+        description: error instanceof Error ? error.message : 'Selecione imagens válidas.',
+        variant: 'destructive',
+      });
+      e.target.value = '';
+      return;
+    }
     const next = [...photos, ...files].slice(0, 5);
     setPhotos(next);
     photoPreviews.forEach((u) => URL.revokeObjectURL(u));
@@ -290,11 +325,13 @@ export default function DriverDeliveries() {
       if (photos.length > 0) {
         const results = await Promise.allSettled(
           photos.map(async (photo) => {
-            const { contentType, safeName } = validateUpload(photo, 'image');
-            const path = `${currentTenant!.id}/deliveries/${trip!.id}/${eventForm.stop.id}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-            const { error } = await supabase.storage.from('receipts').upload(path, photo, { contentType });
-            if (error) throw error;
-            return path;
+            return uploadSecureFile({
+              tenantId: currentTenant!.id,
+              bucket: 'receipts',
+              folder: `deliveries/${trip!.id}/${eventForm.stop.id}`,
+              file: photo,
+              kind: 'image',
+            });
           }),
         );
         for (const r of results) {
@@ -303,7 +340,7 @@ export default function DriverDeliveries() {
         const failed = results.filter((r) => r.status === 'rejected');
         if (failed.length > 0) {
           if (photoPaths.length > 0) {
-            await supabase.storage.from('receipts').remove(photoPaths).catch(() => {});
+            await removeSecureFiles(currentTenant!.id, 'receipts', photoPaths).catch(() => {});
           }
           const firstErr = (failed[0] as PromiseRejectedResult).reason;
           throw new Error(`Falha ao enviar ${failed.length} foto(s): ${firstErr?.message || firstErr}`);
@@ -313,11 +350,19 @@ export default function DriverDeliveries() {
       let signaturePath: string | null = null;
       if (signatureDataUrl) {
         const blob = await (await fetch(signatureDataUrl)).blob();
-        const path = `${currentTenant!.id}/deliveries/${trip!.id}/${eventForm.stop.id}/signature_${Date.now()}.png`;
-        const { error } = await supabase.storage.from('receipts').upload(path, blob, { contentType: 'image/png' });
-        if (error) {
+        const signatureFile = new File([blob], 'assinatura.png', { type: 'image/png' });
+        let path: string;
+        try {
+          path = await uploadSecureFile({
+            tenantId: currentTenant!.id,
+            bucket: 'receipts',
+            folder: `deliveries/${trip!.id}/${eventForm.stop.id}/signatures`,
+            file: signatureFile,
+            kind: 'image',
+          });
+        } catch (error) {
           if (photoPaths.length > 0) {
-            await supabase.storage.from('receipts').remove(photoPaths).catch(() => {});
+            await removeSecureFiles(currentTenant!.id, 'receipts', photoPaths).catch(() => {});
           }
           throw error;
         }
@@ -330,20 +375,20 @@ export default function DriverDeliveries() {
           const { error: rpcErr, data } = await supabase.rpc('driver_finalize_delivery', {
             _stop_id: eventForm.stop.id,
             _receiver_name: receiverName.trim(),
-            _signature_path: signaturePath,
+            _signature_path: signaturePath ?? undefined,
             _photo_paths: photoPaths,
-            _receiver_document: receiverDoc.trim() || null,
-            _receiver_role: null,
-            _notes: notes || null,
-          } as any);
+            _receiver_document: receiverDoc.trim() || undefined,
+            _receiver_role: undefined,
+            _notes: notes || undefined,
+          });
           if (rpcErr) {
             console.error('[DriverDeliveries] Finalize RPC error:', rpcErr);
             throw rpcErr;
           }
           return data;
-        } catch (err: any) {
-          console.error('[DriverDeliveries] Finalize mutation error:', err);
-          throw err;
+        } catch (error: unknown) {
+          console.error('[DriverDeliveries] Finalize mutation error:', error);
+          throw error;
         }
       }
 
@@ -352,15 +397,15 @@ export default function DriverDeliveries() {
 
       if (def.key === 'chegada_no_cliente') {
         try {
-          const { error, data } = await supabase.rpc('driver_mark_arrival', { _stop_id: eventForm.stop.id } as any);
+          const { error, data } = await supabase.rpc('driver_mark_arrival', { _stop_id: eventForm.stop.id });
           if (error) {
             console.error('[DriverDeliveries] Arrival RPC error:', error);
             throw error;
           }
           return data;
-        } catch (err: any) {
-          console.error('[DriverDeliveries] Arrival mutation error:', err);
-          throw err;
+        } catch (error: unknown) {
+          console.error('[DriverDeliveries] Arrival mutation error:', error);
+          throw error;
         }
       }
 
@@ -377,8 +422,8 @@ export default function DriverDeliveries() {
           const { error: statusErr } = await supabase.rpc('driver_update_stop_status', {
             _stop_id: eventForm.stop.id,
             _new_status: mappedStatus,
-            _reason: reason,
-          } as any);
+            _reason: reason ?? undefined,
+          });
           
           if (statusErr) {
             console.error('[DriverDeliveries] Status update RPC error:', statusErr);
@@ -400,8 +445,8 @@ export default function DriverDeliveries() {
               returned_items: returnedItems,
             },
             _stop_id: eventForm.stop.id,
-            _notes: reason,
-          } as any);
+            _notes: reason ?? undefined,
+          });
           
           if (evtErr) {
             console.error('[DriverDeliveries] Contextual event RPC error:', evtErr);
@@ -409,10 +454,10 @@ export default function DriverDeliveries() {
           }
 
           setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
-          return;
-        } catch (err: any) {
-          console.error('[DriverDeliveries] Status update chain error:', err);
-          throw err;
+          return null;
+        } catch (error: unknown) {
+          console.error('[DriverDeliveries] Status update chain error:', error);
+          throw error;
         }
       }
 
@@ -436,8 +481,8 @@ export default function DriverDeliveries() {
             boleto_note: boletoNote || null,
           },
           _stop_id: eventForm.stop.id,
-          _notes: reason,
-        } as any);
+          _notes: reason ?? undefined,
+        });
         
         if (evtErr) {
           console.error('[DriverDeliveries] Info event RPC error:', evtErr);
@@ -446,9 +491,9 @@ export default function DriverDeliveries() {
         
         setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
         return data;
-      } catch (err: any) {
-        console.error('[DriverDeliveries] Info event mutation error:', err);
-        throw err;
+      } catch (error: unknown) {
+        console.error('[DriverDeliveries] Info event mutation error:', error);
+        throw error;
       }
     },
     onSuccess: () => {
@@ -458,10 +503,14 @@ export default function DriverDeliveries() {
       qc.invalidateQueries({ queryKey: ['driver_delivery_stops'] });
       qc.invalidateQueries({ queryKey: ['driver_stops'] });
     },
-    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+    onError: (error: unknown) => toast({
+      title: 'Erro',
+      description: error instanceof Error ? error.message : 'Não foi possível registrar o evento.',
+      variant: 'destructive',
+    }),
   });
 
-  if (!effectiveTrip?.id && !stopsLoading) {
+  if (!trip?.id && !stopsLoading) {
     return (
       <Card>
         <CardContent className="py-12 text-center space-y-4">
@@ -524,7 +573,7 @@ export default function DriverDeliveries() {
       <div>
         <h1 className="text-lg font-bold">Entregas e Coletas</h1>
         <p className="text-xs text-muted-foreground">
-          Carga {effectiveTrip?.loads?.load_number || '—'} · {completedStops.length}/{effectiveStops.length} concluídas
+          Carga {trip?.loads?.load_number || '—'} · {completedStops.length}/{effectiveStops.length} concluídas
         </p>
       </div>
 
@@ -541,7 +590,9 @@ export default function DriverDeliveries() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+      <Tabs value={tab} onValueChange={(value) => {
+        if (value === 'em_rota' || value === 'concluidas') setTab(value);
+      }}>
         <TabsList className="grid grid-cols-2 w-full h-10">
           <TabsTrigger value="em_rota" className="text-xs">Em Rota ({filteredStops.length})</TabsTrigger>
           <TabsTrigger value="concluidas" className="text-xs">Concluídas ({completedStops.length})</TabsTrigger>
@@ -558,7 +609,7 @@ export default function DriverDeliveries() {
               </CardContent>
             </Card>
           ) : (
-            filteredStops.map((stop: any, idx: number) => {
+            filteredStops.map((stop, idx) => {
               const orderNum = getStopOrderNumber(stop);
               const isArrived = stop.status === 'arrived';
               return (
@@ -604,7 +655,7 @@ export default function DriverDeliveries() {
           {tab === 'em_rota' && completedStops.length > 0 && (
             <div className="pt-2 space-y-2">
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Concluídas</p>
-              {completedStops.map((stop: any) => (
+              {completedStops.map((stop) => (
                 <Card key={stop.id} className="opacity-70">
                   <CardContent className="p-3 flex items-center gap-3">
                     <CheckCircle className="h-4 w-4 text-primary shrink-0" />
@@ -635,6 +686,7 @@ export default function DriverDeliveries() {
                   <button
                     key={e.key}
                     onClick={() => {
+                      if (!eventCatalogStop) return;
                       setEventForm({ stop: eventCatalogStop, eventKey: e.key });
                       setEventCatalogStop(null);
                     }}
@@ -655,6 +707,7 @@ export default function DriverDeliveries() {
                   <button
                     key={e.key}
                     onClick={() => {
+                      if (!eventCatalogStop) return;
                       setEventForm({ stop: eventCatalogStop, eventKey: e.key });
                       setEventCatalogStop(null);
                     }}
@@ -705,10 +758,10 @@ export default function DriverDeliveries() {
                       <a href={`tel:${eventForm.stop.clients.phone}`} className="text-primary">{eventForm.stop.clients.phone}</a>
                     </div>
                   )}
-                  {eventForm.stop.clients.whatsapp && (
+                  {eventForm.stop.clients.mobile && (
                     <div className="flex items-center gap-2 text-sm">
                       <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
-                      <a target="_blank" rel="noreferrer" href={`https://wa.me/${eventForm.stop.clients.whatsapp}`} className="text-primary">
+                      <a target="_blank" rel="noreferrer" href={`https://wa.me/${eventForm.stop.clients.mobile}`} className="text-primary">
                         WhatsApp
                       </a>
                     </div>
@@ -1157,7 +1210,7 @@ export default function DriverDeliveries() {
 
 function ActionButton({
   icon: Icon, label, active, onClick,
-}: { icon: React.ComponentType<any>; label: string; active?: boolean; onClick: () => void }) {
+}: { icon: React.ComponentType<{ className?: string }>; label: string; active?: boolean; onClick: () => void }) {
   return (
     <button
       type="button"

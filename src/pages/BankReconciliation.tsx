@@ -9,18 +9,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { Landmark, Upload, RefreshCw, Play, Check, X, Link2, Plus, Calendar, Tag } from 'lucide-react';
+import { Landmark, Upload, RefreshCw, Play, Check, X, Link2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   useBankAccounts, useCreateBankAccount, useBankTransactions, useFinancialObligations,
   useSuggestedMatches, useSyncObligations, useImportBankStatement, useRunReconciliation,
   useAcceptMatch, useRejectMatch, useCreateManualMatch, useCreateManualTransaction,
-  type FinancialObligation, type BankTransaction,
+  type FinancialObligation, type BankTransaction, type SuggestedMatch,
+  type BankAccountType, type BankTransactionType,
 } from '@/hooks/useBankReconciliation';
 import {
-  parseWorkbook, buildParsedRows, computeFileHash, type ColumnMapping,
+  parseWorkbook, buildParsedRows, computeFileHash, type ColumnMapping, type ParsedRow,
 } from '@/lib/bankStatementParser';
 import { useCostCenters } from '@/hooks/useCostCenters';
+import { getErrorMessage } from '@/lib/errors';
+import type { Json } from '@/integrations/supabase/types';
+import type { JsonObject } from '@/lib/jsonTypes';
 
 const OBLIGATION_TYPE_LABEL: Record<string, string> = {
   receivable: 'Recebível',
@@ -49,6 +53,14 @@ function todayIso(offset = 0) {
 
 function fmt(n: number | null | undefined) {
   return (Number(n || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function jsonRecord(value: Json): JsonObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function jsonNumber(value: Json, key: string): number {
+  return Number(jsonRecord(value)[key] ?? 0);
 }
 
 export default function BankReconciliation() {
@@ -89,16 +101,16 @@ export default function BankReconciliation() {
           <NewManualTransactionDialog accountId={effectiveAccount} />
           <ImportStatementDialog accountId={effectiveAccount} periodStart={periodStart} periodEnd={periodEnd} />
           <Button variant="outline" size="sm" onClick={() => syncObg.mutate({ from: periodStart, to: periodEnd }, {
-            onSuccess: (r: any) => toast({ title: 'Títulos sincronizados', description: JSON.stringify(r) }),
-            onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+            onSuccess: result => toast({ title: 'Títulos sincronizados', description: JSON.stringify(result) }),
+            onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
           })} disabled={syncObg.isPending}>
             <RefreshCw className="h-4 w-4 mr-1" /> Sincronizar títulos
           </Button>
           <Button size="sm" disabled={!effectiveAccount || runRecon.isPending} onClick={() => runRecon.mutate(
             { bank_account_id: effectiveAccount, period_start: periodStart, period_end: periodEnd },
             {
-              onSuccess: (r: any) => toast({ title: 'Conciliação executada', description: `${r.auto} auto · ${r.suggested} sugestões · ${r.scanned} transações` }),
-              onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+              onSuccess: result => toast({ title: 'Conciliação executada', description: `${jsonNumber(result, 'auto')} auto · ${jsonNumber(result, 'suggested')} sugestões · ${jsonNumber(result, 'scanned')} transações` }),
+              onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
             }
           )}>
             <Play className="h-4 w-4 mr-1" /> Rodar conciliação
@@ -176,7 +188,7 @@ function KpiCard({ label, value }: { label: string; value: string }) {
 function NewBankAccountDialog() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: '', bank_name: '', account_type: 'checking' as any, account_number: '', branch_number: '', pix_key: '', initial_balance: '0' });
+  const [form, setForm] = useState({ name: '', bank_name: '', account_type: 'checking' as BankAccountType, account_number: '', branch_number: '', pix_key: '', initial_balance: '0' });
   const create = useCreateBankAccount();
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -189,7 +201,7 @@ function NewBankAccountDialog() {
             <div><Label>Banco</Label><Input value={form.bank_name} onChange={e => setForm(f => ({ ...f, bank_name: e.target.value }))} /></div>
             <div>
               <Label>Tipo</Label>
-              <Select value={form.account_type} onValueChange={v => setForm(f => ({ ...f, account_type: v }))}>
+              <Select value={form.account_type} onValueChange={value => setForm(f => ({ ...f, account_type: value as BankAccountType }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="checking">Corrente</SelectItem>
@@ -213,9 +225,9 @@ function NewBankAccountDialog() {
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
           <Button disabled={!form.name.trim() || create.isPending} onClick={() => create.mutate({
             ...form, initial_balance: Number(form.initial_balance || 0),
-          } as any, {
+          }, {
             onSuccess: () => { toast({ title: 'Conta criada' }); setOpen(false); },
-            onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+            onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
           })}>Salvar</Button>
         </DialogFooter>
       </DialogContent>
@@ -228,11 +240,11 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
-  const [rowsRaw, setRowsRaw] = useState<Record<string, any>[]>([]);
+  const [rowsRaw, setRowsRaw] = useState<Record<string, unknown>[]>([]);
   const [mapping, setMapping] = useState<ColumnMapping>({ date: '', description: '', amount: '' });
-  const [preview, setPreview] = useState<any[]>([]);
+  const [preview, setPreview] = useState<ParsedRow[]>([]);
   const [headerRowIndex, setHeaderRowIndex] = useState<number>(0);
-  const [matrix, setMatrix] = useState<any[][]>([]);
+  const [matrix, setMatrix] = useState<unknown[][]>([]);
   const [autoGuessFailed, setAutoGuessFailed] = useState(false);
   const importMut = useImportBankStatement();
 
@@ -293,6 +305,9 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
       return;
     }
     const hash = await computeFileHash(file);
+    const mappingMetadata = Object.fromEntries(
+      Object.entries(mapping).map(([key, value]) => [key, value ?? null]),
+    ) as Record<string, Json>;
     importMut.mutate({
       bank_account_id: accountId,
       file_name: file.name,
@@ -300,13 +315,13 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
       period_start: periodStart,
       period_end: periodEnd,
       rows: parsed,
-      raw_metadata: { mapping, source_headers: headers },
+      raw_metadata: { mapping: mappingMetadata, source_headers: headers },
     }, {
-      onSuccess: (r: any) => {
-        toast({ title: 'Extrato importado', description: `${r.rows_inserted} novas · ${r.rows_skipped} ignoradas` });
+      onSuccess: result => {
+        toast({ title: 'Extrato importado', description: `${jsonNumber(result, 'rows_inserted')} novas · ${jsonNumber(result, 'rows_skipped')} ignoradas` });
         reset(); setOpen(false);
       },
-      onError: (e: any) => toast({ title: 'Erro', description: e.message || 'Falha ao importar', variant: 'destructive' }),
+      onError: error => toast({ title: 'Erro', description: getErrorMessage(error, 'Falha ao importar'), variant: 'destructive' }),
     });
   };
 
@@ -391,7 +406,7 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
     posted_at: todayIso(),
     description: '',
     amount: '',
-    type: 'debit' as 'credit' | 'debit',
+    type: 'debit' as BankTransactionType,
     document_number: '',
     cost_center: '',
   });
@@ -426,7 +441,7 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
         setOpen(false);
         reset();
       },
-      onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+      onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
     });
   };
 
@@ -455,7 +470,7 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
               <Label>Tipo</Label>
               <Select
                 value={form.type}
-                onValueChange={v => setForm(f => ({ ...f, type: v as any }))}
+                onValueChange={value => setForm(f => ({ ...f, type: value as BankTransactionType }))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -543,7 +558,7 @@ function MappingSelect({ label, value, onChange, headers }: { label: string; val
   );
 }
 
-function ExtratoTab({ transactions, suggested, obligations }: { transactions: BankTransaction[]; suggested: any[]; obligations: FinancialObligation[] }) {
+function ExtratoTab({ transactions, suggested, obligations }: { transactions: BankTransaction[]; suggested: SuggestedMatch[]; obligations: FinancialObligation[] }) {
   const accept = useAcceptMatch();
   const reject = useRejectMatch();
   const { toast } = useToast();
@@ -551,7 +566,7 @@ function ExtratoTab({ transactions, suggested, obligations }: { transactions: Ba
   const [rejectReason, setRejectReason] = useState('');
 
   const suggMap = useMemo(() => {
-    const m = new Map<string, any>();
+    const m = new Map<string, SuggestedMatch>();
     for (const s of suggested) m.set(s.bank_transaction_id, s);
     return m;
   }, [suggested]);
@@ -587,7 +602,7 @@ function ExtratoTab({ transactions, suggested, obligations }: { transactions: Ba
                     <div className="flex gap-1">
                       <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => accept.mutate(s.id, {
                         onSuccess: () => toast({ title: 'Match aceito' }),
-                        onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+                        onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
                       })}><Check className="h-3 w-3" /></Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setRejectId(s.id); setRejectReason(''); }}><X className="h-3 w-3" /></Button>
                       <ManualMatchDialog transaction={t} obligations={obligations} />
@@ -609,7 +624,7 @@ function ExtratoTab({ transactions, suggested, obligations }: { transactions: Ba
             <Button variant="outline" onClick={() => setRejectId(null)}>Cancelar</Button>
             <Button disabled={!rejectReason.trim()} onClick={() => rejectId && reject.mutate({ matchId: rejectId, reason: rejectReason }, {
               onSuccess: () => { toast({ title: 'Sugestão rejeitada' }); setRejectId(null); },
-              onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+              onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
             })}>Rejeitar</Button>
           </DialogFooter>
         </DialogContent>
@@ -628,7 +643,7 @@ function ManualMatchDialog({ transaction, obligations }: { transaction: BankTran
   const create = useCreateManualMatch();
   const direction = transaction.amount >= 0 ? 'inflow' : 'outflow';
   const candidates = useMemo(() => obligations.filter(o =>
-    o.direction === direction && o.open_balance > 0 && o.status !== 'paid' && o.status !== 'cancelled'
+    o.direction === direction && Number(o.open_balance || 0) > 0 && o.status !== 'paid' && o.status !== 'cancelled'
     && (search === '' || (o.description || '').toLowerCase().includes(search.toLowerCase()) || (o.counterparty_name || '').toLowerCase().includes(search.toLowerCase()))
   ).slice(0, 100), [obligations, search, direction]);
 
@@ -646,7 +661,7 @@ function ManualMatchDialog({ transaction, obligations }: { transaction: BankTran
             <TableHeader><TableRow><TableHead></TableHead><TableHead>Descrição</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Saldo</TableHead></TableRow></TableHeader>
             <TableBody>
               {candidates.map(o => (
-                <TableRow key={o.id} className={pickedId === o.id ? 'bg-accent' : 'cursor-pointer'} onClick={() => { setPickedId(o.id); setAmount(String(Math.min(Math.abs(transaction.amount), o.open_balance))); }}>
+                <TableRow key={o.id} className={pickedId === o.id ? 'bg-accent' : 'cursor-pointer'} onClick={() => { setPickedId(o.id); setAmount(String(Math.min(Math.abs(transaction.amount), Number(o.open_balance || 0)))); }}>
                   <TableCell><input type="radio" checked={pickedId === o.id} readOnly /></TableCell>
                   <TableCell className="text-xs">{o.description || '—'}<div className="text-[10px] text-muted-foreground">{o.counterparty_name}</div></TableCell>
                   <TableCell className="text-xs">{OBLIGATION_TYPE_LABEL[o.obligation_type] || o.obligation_type}</TableCell>
@@ -670,7 +685,7 @@ function ManualMatchDialog({ transaction, obligations }: { transaction: BankTran
             reason: reason || null,
           }, {
             onSuccess: () => { toast({ title: 'Conciliação criada' }); setOpen(false); setPickedId(null); setAmount(''); setReason(''); },
-            onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+            onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
           })}>Conciliar</Button>
         </DialogFooter>
       </DialogContent>
@@ -750,7 +765,7 @@ function DivergenciasTab({ transactions, obligations }: { transactions: BankTran
   );
 }
 
-function MotoristasTab({ obligations, transactions }: { obligations: FinancialObligation[]; transactions: BankTransaction[] }) {
+function MotoristasTab({ obligations }: { obligations: FinancialObligation[]; transactions: BankTransaction[] }) {
   const settlements = obligations.filter(o => o.obligation_type === 'driver_settlement_payment');
   const expenses = obligations.filter(o => o.obligation_type === 'driver_expense');
   const totalPending = settlements.reduce((s, o) => s + Number(o.open_balance), 0);

@@ -15,14 +15,14 @@
  * Returns structured results per test, with error classification and attempt matrix.
  */
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
+import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import {
   corsHeaders,
   buildSsxUrlCandidates,
   buildAdminUrlCandidates,
   buildPositionHistoryUrlCandidates,
   readAccountConfig,
-  extractResponseItems,
   tryEndpointWithFallback,
   getAdminToken,
   ADMIN_BODY_CANDIDATES,
@@ -87,6 +87,9 @@ Deno.serve(async (req) => {
     if (!role || !["owner", "admin"].includes(role)) {
       return jsonResp({ error: "Forbidden" }, 403);
     }
+
+    const capabilityResponse = await requireIntegrationCapability(supabase, account.tenant_id, "ssx");
+    if (capabilityResponse) return capabilityResponse;
 
     const config = readAccountConfig(account);
     const tests: DiagnosticTest[] = [];

@@ -5,7 +5,8 @@
  * Preserves real error classification in logs.
  */
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
+import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import {
   corsHeaders,
   buildSsxUrlCandidates,
@@ -16,6 +17,7 @@ import {
   summarizeAttemptMatrix,
   getTenantRole,
   type AttemptLog,
+  type SsxHttpResult,
 } from "../_shared/ssx-utils.ts";
 
 Deno.serve(async (req) => {
@@ -54,6 +56,9 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "Forbidden" }, 403);
     }
 
+    const capabilityResponse = await requireIntegrationCapability(supabase, tenant_id, "ssx");
+    if (capabilityResponse) return capabilityResponse;
+
     const { data: driver, error: driverErr } = await supabase
       .from("drivers").select("*").eq("id", driver_id).eq("tenant_id", tenant_id).single();
     if (driverErr || !driver) {
@@ -79,7 +84,7 @@ Deno.serve(async (req) => {
     }
 
     // Build swagger-aligned PersonInsert payload
-    const personPayload: Record<string, any> = {
+    const personPayload: Record<string, unknown> = {
       Name: driver.name.trim(),
     };
 
@@ -114,7 +119,9 @@ Deno.serve(async (req) => {
     if (settings.default_timezone) personPayload.TimeZone = settings.default_timezone;
 
     // Optional fields from driver metadata if present
-    const meta = (driver as any).metadata || {};
+    const meta = driver.metadata && typeof driver.metadata === "object"
+      ? driver.metadata as Record<string, unknown>
+      : {};
     if (meta.email) personPayload.Email = meta.email;
     if (meta.date_of_birth) personPayload.DateOfBirth = meta.date_of_birth;
     if (meta.gender) personPayload.Gender = meta.gender;
@@ -130,7 +137,7 @@ Deno.serve(async (req) => {
     const insertUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/Person/InsertPerson");
     const allAttempts: AttemptLog[] = [];
 
-    let resp: any = null;
+    let resp: SsxHttpResult | null = null;
     let usedUrl = insertUrls[0];
 
     for (const url of insertUrls) {
@@ -139,7 +146,7 @@ Deno.serve(async (req) => {
 
       allAttempts.push({
         endpoint: url, format: "person_payload",
-        statusCode: resp.status, errorClass: resp.ok ? "unknown" as any : resp.errorClass,
+        statusCode: resp.status, errorClass: resp.ok ? "unknown" : resp.errorClass,
         durationMs: resp.durationMs, itemCount: resp.ok ? 1 : 0,
         responsePreview: (resp.text || "").substring(0, 150),
       });
@@ -210,13 +217,14 @@ Deno.serve(async (req) => {
     });
 
     return jsonResp({ success: true, person_id: personId });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error("[SSX:insert-person] error:", err);
-    return jsonResp({ error: "Internal error", details: err.message }, 500);
+    return jsonResp({ error: "Internal error", details: message }, 500);
   }
 });
 
-function jsonResp(body: any, status = 200): Response {
+function jsonResp(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });

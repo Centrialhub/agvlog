@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { readCtePayloadRecipient } from '@/lib/fiscal/ctePayload';
 import { useTenant } from './useTenant';
 
 export type TriState = 'all' | 'yes' | 'no';
@@ -165,7 +166,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
       const { data: outboundData, error: outErr } = await supabase
         .from('fiscal_documents')
         .select(
-          'id, invoice_number, invoice_numbers, access_key, sefaz_status, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
+          'id, invoice_number, access_key, sefaz_status, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
         )
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
@@ -173,20 +174,19 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         .eq('document_type', 'outbound');
       
       if (outErr) throw outErr;
-      const outbound = outboundData as any[];
+      const outbound = outboundData || [];
 
-
-
-      const hubByKey = new Map<string, any>();
-      for (const d of outbound || []) {
-        const key = (d as any).access_key;
+      const hubByKey = new Map<string, (typeof outbound)[number]>();
+      for (const d of outbound) {
+        const key = d.access_key;
         if (key && !hubByKey.has(key)) hubByKey.set(key, d);
       }
 
       const usedHubIds = new Set<string>();
-      const draftRows: CteSearchRow[] = ((data || []) as any[]).map((r) => {
+      const draftRows: CteSearchRow[] = (data || []).map((r) => {
         const match = r.access_key ? hubByKey.get(r.access_key) : null;
         if (match) usedHubIds.add(match.id);
+        const payloadRecipient = readCtePayloadRecipient(match?.cte_payload);
         
         // Prioriza dados do rascunho (cte_documents) que tem mais colunas, 
         // mas usa o status e ids reais do Hub quando houver vínculo.
@@ -203,9 +203,9 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           created_at: r.created_at,
           payer_name: r.payer_name ?? null,
           remitter: r.remitter ?? null,
-          recipient: (match?.cte_payload?.payload?.destinatario?.nome || r.recipient) ?? null,
-          recipient_city: (match?.cte_payload?.payload?.fim?.municipio || match?.cte_payload?.payload?.destinatario?.endereco?.municipio || r.recipient_city) ?? null,
-          recipient_state: (match?.cte_payload?.payload?.fim?.uf || match?.cte_payload?.payload?.destinatario?.endereco?.uf || r.recipient_state) ?? null,
+          recipient: payloadRecipient.name ?? r.recipient ?? null,
+          recipient_city: payloadRecipient.city ?? r.recipient_city ?? null,
+          recipient_state: payloadRecipient.state ?? r.recipient_state ?? null,
           vehicle_plate: r.vehicle_plate ?? null,
           driver_name: r.driver_name ?? null,
           invoice_numbers: r.invoice_numbers ?? null,
@@ -218,11 +218,13 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         };
       });
 
-      const hubRows: CteSearchRow[] = (outbound || [])
-        .filter((d: any) => !usedHubIds.has(d.id))
-        .map((d: any) => ({
+      const hubRows: CteSearchRow[] = outbound
+        .filter((d) => !usedHubIds.has(d.id))
+        .map((d): CteSearchRow => {
+          const payloadRecipient = readCtePayloadRecipient(d.cte_payload);
+          return {
           id: d.id,
-          source: 'hub' as const,
+          source: 'hub',
           cte_number: d.invoice_number ?? null,
           cte_series: null,
           cte_type: 'normal',
@@ -233,21 +235,22 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           created_at: d.created_at,
           payer_name: d.remitter ?? null,
           remitter: d.remitter ?? null,
-          recipient: (d.cte_payload?.payload?.destinatario?.nome || d.recipient) ?? null,
-          recipient_city: (d.cte_payload?.payload?.fim?.municipio || d.cte_payload?.payload?.destinatario?.endereco?.municipio || d.recipient_city) ?? null,
-          recipient_state: (d.cte_payload?.payload?.fim?.uf || d.cte_payload?.payload?.destinatario?.endereco?.uf || d.recipient_state) ?? null,
+          recipient: payloadRecipient.name ?? d.recipient ?? null,
+          recipient_city: payloadRecipient.city ?? d.recipient_city ?? null,
+          recipient_state: payloadRecipient.state ?? d.recipient_state ?? null,
           vehicle_plate: null,
           driver_name: null,
-          invoice_numbers: d.invoice_numbers ?? null,
+          invoice_numbers: d.invoice_number ?? null,
           freight_value: Number(d.freight_value ?? d.value ?? 0),
           cargo_value: Number(d.value ?? 0),
           hub_document_id: d.hub_document_id ?? null,
           emission_id: d.emission_id ?? null,
           pdf_url: null,
           xml_url: null,
-        }))
+          };
+        })
         // Filtros equivalentes aplicados em memória (a fonte é outra tabela).
-        .filter((r: any) => {
+        .filter((r) => {
           if (docNumber) {
             const hit = has(r.cte_number, docNumber) || has(r.invoice_numbers, docNumber);
             if (!hit) return false;

@@ -23,6 +23,8 @@ export interface HubDocument {
 
 export interface HubResponse<T = unknown> {
   success: boolean;
+  source?: string;
+  scope_matched?: string | null;
   hub?: {
     success?: boolean;
     document?: HubDocument;
@@ -169,8 +171,8 @@ export const hubFiscal = {
     });
   },
 
-  query(filters: Record<string, string>) {
-    return invoke({ action: 'query', query: filters });
+  query(filters: Record<string, string>, emitterId: string) {
+    return invoke({ action: 'query', query: filters, emitterId });
   },
 
   /** CT-e — Desacordo do Tomador (mín. 15 caracteres). */

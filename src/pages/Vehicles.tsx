@@ -1,19 +1,21 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { VEHICLE_SAFE_SELECT } from '@/integrations/supabase/selects';
+import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Table,
@@ -28,8 +30,14 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Pencil, Trash2, ExternalLink, User, LinkIcon, Unlink } from 'lucide-react';
+import { Plus, Pencil, Trash2, User } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
+
+type VehicleRow = Omit<Tables<'vehicles'>, 'tracker_password'> & {
+  current_driver: Pick<Tables<'drivers'>, 'id' | 'name'> | null;
+};
+
+type VehicleForm = Record<string, string | number | boolean | null | undefined>;
 
 export default function Vehicles() {
   const { currentTenant } = useTenant();
@@ -38,7 +46,7 @@ export default function Vehicles() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingVehicle, setEditingVehicle] = useState<any>(null);
+  const [editingVehicle, setEditingVehicle] = useState<VehicleRow | null>(null);
 
   const { data: vehicles = [], isLoading } = useQuery({
     queryKey: ['vehicles', currentTenant?.id],
@@ -46,11 +54,11 @@ export default function Vehicles() {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('vehicles')
-        .select('*, current_driver:drivers!vehicles_current_driver_id_fkey(id, name)')
+        .select(`${VEHICLE_SAFE_SELECT}, current_driver:drivers!vehicles_current_driver_id_fkey(id, name)`)
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data;
+      return (data || []) as unknown as VehicleRow[];
     },
     enabled: !!currentTenant,
   });
@@ -59,8 +67,9 @@ export default function Vehicles() {
     queryKey: ['drivers_for_assign', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase.from('drivers').select('id, name, current_vehicle_id')
+      const { data, error } = await supabase.from('drivers').select('id, name, current_vehicle_id')
         .eq('tenant_id', currentTenant.id).eq('active', true).order('name');
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -68,9 +77,11 @@ export default function Vehicles() {
 
   const assignMutation = useMutation({
     mutationFn: async ({ vehicleId, driverId }: { vehicleId: string; driverId: string | null }) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const { error } = await supabase.from('vehicles')
         .update({ current_driver_id: driverId })
-        .eq('id', vehicleId);
+        .eq('id', vehicleId)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -79,22 +90,25 @@ export default function Vehicles() {
       queryClient.invalidateQueries({ queryKey: ['drivers_for_assign'] });
       toast.success('Vínculo atualizado');
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : String(error)),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('vehicles').delete().eq('id', id);
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { error } = await supabase.from('vehicles').delete()
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       toast.success('Veículo removido');
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : String(error)),
   });
 
-  const handleEdit = (v: any) => {
+  const handleEdit = (v: VehicleRow) => {
     setEditingVehicle(v);
     setDialogOpen(true);
   };
@@ -149,7 +163,7 @@ export default function Vehicles() {
                   </TableCell>
                 </TableRow>
               ) : (
-                vehicles.map((v: any) => (
+                vehicles.map((v) => (
                   <TableRow key={v.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/vehicles/${v.id}`)}>
                     <TableCell className="font-mono font-medium">{v.plate}</TableCell>
                     <TableCell>{v.nickname || '—'}</TableCell>
@@ -168,7 +182,7 @@ export default function Vehicles() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">Sem motorista</SelectItem>
-                            {drivers.map((d: any) => (
+                            {drivers.map((d) => (
                               <SelectItem key={d.id} value={d.id}>
                                 {d.name} {d.current_vehicle_id && d.current_vehicle_id !== v.id ? '(em outro)' : ''}
                               </SelectItem>
@@ -200,8 +214,8 @@ export default function Vehicles() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => {
-                              if (confirm('Remover este veículo?')) deleteMutation.mutate(v.id);
+                            onClick={async () => {
+                              if (await confirmAction('Remover este veículo?', { title: 'Remover veículo', confirmLabel: 'Remover' })) deleteMutation.mutate(v.id);
                             }}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
@@ -231,30 +245,41 @@ export default function Vehicles() {
 function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  vehicle: any;
+  vehicle: VehicleRow | null;
   tenantId?: string;
   userId?: string;
 }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<any>({});
+  const [form, setForm] = useState<VehicleForm>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (open) setForm(vehicle ? { ...vehicle } : { type: 'truck', active: true, blocked: false, in_maintenance: false });
+    if (open) {
+      setForm(vehicle
+        ? { ...vehicle, tags: undefined, current_driver: undefined } as VehicleForm
+        : { type: 'truck', active: true, blocked: false, in_maintenance: false });
+    }
   }, [open, vehicle]);
 
-  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+  const set = (key: string, value: VehicleForm[string]) =>
+    setForm((previous) => ({ ...previous, [key]: value }));
 
   const text = (k: string, label: string, placeholder?: string) => (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
-      <Input value={form[k] ?? ''} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
+      <Input value={String(form[k] ?? '')} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
+    </div>
+  );
+  const secret = (k: string, label: string, placeholder?: string) => (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <Input type="password" autoComplete="new-password" value={String(form[k] ?? '')} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
     </div>
   );
   const num = (k: string, label: string, placeholder?: string) => (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
-      <Input type="number" step="any" value={form[k] ?? ''} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
+      <Input type="number" step="any" value={String(form[k] ?? '')} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
     </div>
   );
   const bool = (k: string, label: string) => (
@@ -270,7 +295,7 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
     setLoading(true);
 
     const numKeys = ['odometer_km','year_of_manufacture','capacity_ton','avg_km_per_liter','max_pallets','max_weight_kg','max_volume_m3','tank_capacity_liters','speed_limit_kmh'];
-    const payload: any = { tenant_id: tenantId, updated_by: userId };
+    const payload: Record<string, unknown> = { tenant_id: tenantId, updated_by: userId };
     Object.keys(form).forEach(k => {
       if (['id','tenant_id','created_at','updated_at','created_by','updated_by','current_driver','current_driver_id','tags'].includes(k)) return;
       let v = form[k];
@@ -284,8 +309,10 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
     }
 
     const { error } = vehicle
-      ? await supabase.from('vehicles').update(payload).eq('id', vehicle.id)
-      : await supabase.from('vehicles').insert({ ...payload, created_by: userId });
+      ? await supabase.from('vehicles').update(payload as TablesUpdate<'vehicles'>)
+          .eq('id', vehicle.id)
+          .eq('tenant_id', tenantId)
+      : await supabase.from('vehicles').insert({ ...payload, created_by: userId } as TablesInsert<'vehicles'>);
     if (error) { toast.error(error.message); setLoading(false); return; }
     toast.success(vehicle ? 'Veículo atualizado' : 'Veículo criado');
     queryClient.invalidateQueries({ queryKey: ['vehicles'] });
@@ -367,7 +394,7 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Observações</Label>
-                <Textarea value={form.owner_notes ?? ''} onChange={e => set('owner_notes', e.target.value)} rows={3} />
+                <Textarea value={String(form.owner_notes ?? '')} onChange={e => set('owner_notes', e.target.value)} rows={3} />
               </div>
             </TabsContent>
 
@@ -375,7 +402,7 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
               <div className="grid grid-cols-3 gap-3">
                 {text('tracker_name','Rastreador')}
                 {text('tracker_login','Login')}
-                {text('tracker_password','Senha')}
+                {secret('tracker_password','Senha','Preencha somente para definir uma nova senha')}
               </div>
             </TabsContent>
           </Tabs>

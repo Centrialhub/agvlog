@@ -1,11 +1,10 @@
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
+import { createClient } from '@supabase/supabase-js';
+import { requireIntegrationCapability } from '../_shared/capabilities.ts';
 
-const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') ||
-  'https://rvgcsmuyvesusbxsqevr.supabase.co/functions/v1').replace(/\/$/, '');
+const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') || '').trim().replace(/\/$/, '');
 const DEFAULT_HUB_KEY = Deno.env.get('HUB_FISCAL_API_KEY') || '';
-const MANAGERSAAS_BASE = (Deno.env.get('MANAGERSAAS_BASE_URL') ||
-  'https://managersaas.tecnospeed.com.br:8081/ManagerAPIWeb').replace(/\/$/, '');
+const MANAGERSAAS_BASE = (Deno.env.get('MANAGERSAAS_BASE_URL') || '').trim().replace(/\/$/, '');
 const MANAGERSAAS_GROUP = Deno.env.get('MANAGERSAAS_GROUP') || '';
 const MANAGERSAAS_AUTH = Deno.env.get('MANAGERSAAS_AUTH') || '';
 
@@ -37,6 +36,7 @@ type Action =
 
 interface ProxyRequest {
   action: Action;
+  tenantId?: string;
   type?: 'nfe' | 'nfce' | 'nfse' | 'cte' | 'mdfe';
   id?: string;          // hub document id
   emissionId?: string;  // local hub_fiscal_emissions.id
@@ -66,6 +66,7 @@ function json(status: number, payload: unknown) {
 }
 
 function buildUrl(path: string, qs?: Record<string, string>) {
+  if (!HUB_BASE) throw new Error('HUB_FISCAL_BASE_URL não configurado');
   const u = new URL(`${HUB_BASE}${path}`);
   if (qs) for (const [k, v] of Object.entries(qs)) if (v != null) u.searchParams.set(k, String(v));
   return u.toString();
@@ -88,7 +89,7 @@ async function callHub(method: string, path: string, qs?: Record<string, string>
     });
     const text = await res.text();
     let data: any;
-    try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+    try { data = text ? JSON.parse(text) : {}; } catch { data = { parse_error: true }; }
 
     const upstreamCode = String(data?.code || data?.error?.code || '');
     const retryableBootFailure =
@@ -193,11 +194,105 @@ Deno.serve(async (req) => {
     const action = payload.action;
     if (!action) return json(400, { success: false, error: { code: 'MISSING_ACTION' } });
 
-    // Resolve tenant via membership of the calling user.
-    const { data: memberships } = await admin
-      .from('tenant_memberships').select('tenant_id').eq('user_id', userId).limit(1);
-    const tenantId = memberships?.[0]?.tenant_id as string | undefined;
-    if (!tenantId) return json(403, { success: false, error: { code: 'NO_TENANT' } });
+    // Resolve o tenant a partir dos recursos locais informados e cruza com as
+    // memberships operacionais do usuário. Nunca escolhe o primeiro tenant:
+    // isso evita uso de credenciais fiscais de outra empresa em contas multi-tenant.
+    const { data: memberships, error: membershipsError } = await admin
+      .from('tenant_memberships')
+      .select('tenant_id, role')
+      .eq('user_id', userId)
+      .eq('active', true)
+      .in('role', ['owner', 'admin', 'operator']);
+    if (membershipsError) throw membershipsError;
+
+    const permittedTenantIds = new Set(
+      (memberships || []).map((membership) => String(membership.tenant_id)),
+    );
+    if (permittedTenantIds.size === 0) {
+      return json(403, { success: false, error: { code: 'NO_OPERATIONAL_TENANT' } });
+    }
+
+    const tenantHints: Array<{ source: string; tenantIds: Set<string> }> = [];
+    const addTenantHint = (source: string, rows: Array<{ tenant_id: string | null }> | null) => {
+      tenantHints.push({
+        source,
+        tenantIds: new Set((rows || []).map((row) => String(row.tenant_id)).filter(Boolean)),
+      });
+    };
+    const addResourceHint = async (table: string, column: string, value?: string) => {
+      if (!value) return;
+      const { data, error } = await admin.from(table).select('tenant_id').eq(column, value).limit(10);
+      if (error) throw error;
+      addTenantHint(`${table}.${column}`, data as Array<{ tenant_id: string | null }> | null);
+    };
+
+    if (payload.tenantId) {
+      addTenantHint('payload.tenantId', [{ tenant_id: payload.tenantId }]);
+    }
+    await Promise.all([
+      addResourceHint('tenant_emitters', 'id', payload.emitterId),
+      addResourceHint('hub_fiscal_emissions', 'id', payload.emissionId),
+      addResourceHint('fiscal_documents', 'id', payload.fiscalDocumentId),
+      addResourceHint('cte_documents', 'id', payload.cteDocumentId),
+      addResourceHint('nfse_documents', 'id', payload.nfseDocumentId),
+    ]);
+
+    if (payload.id) {
+      const [emissionsResult, documentsResult] = await Promise.all([
+        admin.from('hub_fiscal_emissions').select('tenant_id').eq('hub_document_id', payload.id).limit(10),
+        admin.from('fiscal_documents').select('tenant_id').eq('hub_document_id', payload.id).limit(10),
+      ]);
+      if (emissionsResult.error) throw emissionsResult.error;
+      if (documentsResult.error) throw documentsResult.error;
+      const hubRows = [
+        ...(emissionsResult.data || []),
+        ...(documentsResult.data || []),
+      ] as Array<{ tenant_id: string | null }>;
+      // Um id externo sem vínculo local só é aceito quando outro recurso
+      // (por exemplo emitterId/emissionId) já ancora a requisição ao tenant.
+      if (hubRows.length > 0) addTenantHint('hub_document_id', hubRows);
+      else if (tenantHints.length === 0) {
+        return json(403, {
+          success: false,
+          error: { code: 'DOCUMENT_NOT_LINKED', message: 'Documento sem vínculo fiscal local.' },
+        });
+      }
+    }
+
+    if ((action === 'query' || action === 'import') && !payload.emitterId) {
+      return json(400, {
+        success: false,
+        error: { code: 'MISSING_EMITTER', message: 'Informe o emitente para esta operação.' },
+      });
+    }
+
+    let eligibleTenantIds = new Set(permittedTenantIds);
+    for (const hint of tenantHints) {
+      eligibleTenantIds = new Set(
+        [...eligibleTenantIds].filter((tenantId) => hint.tenantIds.has(tenantId)),
+      );
+      if (eligibleTenantIds.size === 0) {
+        console.warn('[hub-fiscal-proxy] tenant scope rejected', { source: hint.source, user_id: userId });
+        return json(403, { success: false, error: { code: 'TENANT_FORBIDDEN' } });
+      }
+    }
+
+    if (eligibleTenantIds.size !== 1) {
+      return json(400, {
+        success: false,
+        error: { code: 'TENANT_REQUIRED', message: 'Informe um recurso ou tenant para desambiguar a operação.' },
+      });
+    }
+    const tenantId = [...eligibleTenantIds][0];
+    const resolvedMembership = (memberships || []).find(
+      (membership) => String(membership.tenant_id) === tenantId,
+    );
+    if (!resolvedMembership) {
+      return json(403, { success: false, error: { code: 'TENANT_FORBIDDEN' } });
+    }
+
+    const capabilityResponse = await requireIntegrationCapability(admin, tenantId, 'fiscal');
+    if (capabilityResponse) return capabilityResponse;
 
     // Resolve Hub token for this call — per-emitter credential if provided, else per-emission emitter, else default.
     interface ResolvedToken {
@@ -210,7 +305,17 @@ Deno.serve(async (req) => {
       let emId = emitterHint || null;
       if (!emId && payload.emissionId) {
         const { data: em } = await admin.from('hub_fiscal_emissions')
-          .select('emitter_id').eq('id', payload.emissionId).maybeSingle();
+          .select('emitter_id').eq('id', payload.emissionId).eq('tenant_id', tenantId).maybeSingle();
+        emId = em?.emitter_id || null;
+      }
+      if (!emId && payload.id) {
+        const { data: em } = await admin.from('hub_fiscal_emissions')
+          .select('emitter_id')
+          .eq('hub_document_id', payload.id)
+          .eq('tenant_id', tenantId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
         emId = em?.emitter_id || null;
       }
       if (!emId) {
@@ -223,7 +328,7 @@ Deno.serve(async (req) => {
         null;
       const { data: creds } = await admin.from('hub_fiscal_credentials')
         .select('doc_scope, environment, secret_name, secret_ciphertext, enabled')
-        .eq('emitter_id', emId).eq('enabled', true);
+        .eq('tenant_id', tenantId).eq('emitter_id', emId).eq('enabled', true);
       const list = (creds || []) as any[];
       // Nunca cruza ambientes: uma emissão de produção não pode usar credencial sandbox e vice-versa.
       const pick = (fn: (c: any) => boolean) => list.find(fn);
@@ -411,7 +516,6 @@ Deno.serve(async (req) => {
 
         if (payload.emissionId) {
           await admin.rpc('increment_hfe_sync', { p_id: payload.emissionId }).catch(() => {});
-          const dSync = (data as any)?.document || {};
           await admin.from('hub_fiscal_emissions').update({
             status: d.status || undefined,
             plugnotas_status: d.plugnotasStatus || undefined,
@@ -585,7 +689,7 @@ Deno.serve(async (req) => {
         const b64ToBytes = (b64: string) =>
           Uint8Array.from(atob(b64.replace(/^data:[^,]+,/, '').replace(/\s/g, '')), (c) => c.charCodeAt(0));
 
-        let hubMessage = '';
+        let upstreamRouteMissing = false;
         const attemptLog: string[] = [];
 
         // 0) Download SOB DEMANDA (API v1 atualizada): o Hub gera/baixa o arquivo do
@@ -639,10 +743,10 @@ Deno.serve(async (req) => {
               return got;
             }
             const msg = String((data as any)?.error?.message || (data as any)?.error?.code || '');
-            attemptLog.push(`/hub_documents_deliver: ${status} ${msg}`.trim());
-            if (msg) hubMessage = msg;
-          } catch (e) {
-            attemptLog.push(`/hub_documents_deliver: ${String((e as Error)?.message || e).slice(0, 160)}`);
+            upstreamRouteMissing ||= /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(msg);
+            attemptLog.push(`/hub_documents_deliver: ${status}`);
+          } catch {
+            attemptLog.push('/hub_documents_deliver: network_error');
           }
           try {
             const { status, data } = await callHub('GET', '/hub_documents_links', {
@@ -655,10 +759,10 @@ Deno.serve(async (req) => {
               return got;
             }
             const msg = String((data as any)?.error?.message || (data as any)?.error?.code || '');
-            attemptLog.push(`/hub_documents_links: ${status} ${msg}`.trim());
-            if (msg) hubMessage = msg;
-          } catch (e) {
-            attemptLog.push(`/hub_documents_links: ${String((e as Error)?.message || e).slice(0, 160)}`);
+            upstreamRouteMissing ||= /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(msg);
+            attemptLog.push(`/hub_documents_links: ${status}`);
+          } catch {
+            attemptLog.push('/hub_documents_links: network_error');
           }
           return null;
         };
@@ -680,6 +784,7 @@ Deno.serve(async (req) => {
           if (managerTried.has(sig)) return null;
           managerTried.add(sig);
           const directPath = format === 'pdf' ? '/cte/imprime' : '/cte/xml';
+          if (!MANAGERSAAS_BASE) throw new Error('MANAGERSAAS_BASE_URL não configurado');
           const directUrl = new URL(`${MANAGERSAAS_BASE}${directPath}`);
           directUrl.searchParams.set('Grupo', MANAGERSAAS_GROUP);
           directUrl.searchParams.set('CNPJ', cnpj);
@@ -710,9 +815,10 @@ Deno.serve(async (req) => {
                 return fileResponse(directBuffer, directContentType);
               }
             }
-            attemptLog.push(`ManagerSaaS${directPath}: ${direct.status} ${directText.slice(0, 160)}`.trim());
-          } catch (e) {
-            attemptLog.push(`ManagerSaaS${directPath}: ${String((e as Error)?.message || e).slice(0, 160)}`);
+            upstreamRouteMissing ||= /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(directText);
+            attemptLog.push(`ManagerSaaS${directPath}: ${direct.status}`);
+          } catch {
+            attemptLog.push(`ManagerSaaS${directPath}: network_error`);
           }
           return null;
         };
@@ -760,8 +866,8 @@ Deno.serve(async (req) => {
             upstream = await fetch(buildUrl(attempt.path, attempt.query), {
               headers: { Authorization: `Bearer ${token}` },
             });
-          } catch (e) {
-            attemptLog.push(`${attempt.path}: ${String((e as Error)?.message || e).slice(0, 120)}`);
+          } catch {
+            attemptLog.push(`${attempt.path}: network_error`);
             continue;
           }
           const ct = upstream.headers.get('Content-Type') || '';
@@ -778,17 +884,21 @@ Deno.serve(async (req) => {
               if (follow.ok) return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
             }
             const msg = String(parsed?.error?.message || parsed?.message || parsed?.error?.code || '');
-            attemptLog.push(`${attempt.path}(${Object.keys(attempt.query).join(',')}): ${upstream.status} ${msg}`.trim());
-            if (msg) hubMessage = msg;
+            upstreamRouteMissing ||= /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(msg);
+            attemptLog.push(`${attempt.path}(${Object.keys(attempt.query).join(',')}): ${upstream.status}`);
           } else if (upstream.ok && buf.byteLength > 0) {
             return fileResponse(buf, ct);
           } else {
             const msg = new TextDecoder().decode(buf).slice(0, 200);
-            attemptLog.push(`${attempt.path}: ${upstream.status} ${msg}`.trim());
-            if (msg) hubMessage = msg;
+            upstreamRouteMissing ||= /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(msg);
+            attemptLog.push(`${attempt.path}: ${upstream.status}`);
           }
         }
-        console.log('[hub-fiscal-proxy] file attempts exhausted', { id: payload.id, format, attemptLog });
+        console.log('[hub-fiscal-proxy] file attempts exhausted', {
+          id: payload.id,
+          format,
+          attemptCount: attemptLog.length,
+        });
 
         // 2) Fallback: o documento no Hub costuma carregar links/base64 do DACTE e XML.
         //    Necessário porque o ManagerSaaS pode não expor a rota de arquivo ("Rota
@@ -878,7 +988,7 @@ Deno.serve(async (req) => {
           docStatus < 400 &&
           isAuthorized &&
           accessKey.length === 44 &&
-          attemptLog.some((entry) => /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(entry));
+          upstreamRouteMissing;
 
         return json(502, {
           success: false,
@@ -887,9 +997,7 @@ Deno.serve(async (req) => {
             message: upstreamContractIssue
               ? `O CT-e está autorizado, mas a rota de arquivo do Hub Fiscal está configurada incorretamente e a contingência direta da TecnoSpeed não conseguiu recuperar o arquivo. ` +
                 `Confira as credenciais ManagerSaaS do emitente e o acesso à rota ${format === 'pdf' ? 'GET /cte/imprime' : 'GET /cte/xml'}.`
-              : `O Hub Fiscal não disponibilizou o ${format === 'pdf' ? 'DACTE (PDF)' : 'XML'} deste documento` +
-                (hubMessage ? ` — ${hubMessage}` : '') +
-                '. Verifique no Hub Fiscal se o documento está autorizado e se a rota de download está habilitada para o emitente.',
+              : `O Hub Fiscal não disponibilizou o ${format === 'pdf' ? 'DACTE (PDF)' : 'XML'} deste documento. Verifique no Hub Fiscal se o documento está autorizado e se a rota de download está habilitada para o emitente.`,
             attempts: attemptLog,
             document: {
               authorized: isAuthorized,

@@ -12,8 +12,9 @@ import { useClients } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useTenant } from '@/hooks/useTenant';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
-import { useCreatePickupOrder, PickupOrder } from '@/hooks/usePickupOrders';
+import { useCreatePickupOrder, type CreatePickupOrderInput, type PickupOrder } from '@/hooks/usePickupOrders';
 import { maskCpfCnpj, maskCurrencyBRL } from '@/lib/inputMasks';
 
 interface Props {
@@ -87,6 +88,16 @@ const empty = () => ({
 });
 
 type FormState = ReturnType<typeof empty>;
+type TextFormKey = {
+  [Key in keyof FormState]: FormState[Key] extends string ? Key : never;
+}[keyof FormState];
+type BooleanFormKey = {
+  [Key in keyof FormState]: FormState[Key] extends boolean ? Key : never;
+}[keyof FormState];
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Falha inesperada ao salvar a ORT';
+}
 
 export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Props) {
   const { currentTenant } = useTenant();
@@ -113,19 +124,21 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
     enabled: !!currentTenant && open,
   });
 
-  const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
+  const setText = (k: TextFormKey, v: string) =>
+    setForm(f => ({ ...f, [k]: v }));
+  const setBoolean = (k: BooleanFormKey, v: boolean) =>
     setForm(f => ({ ...f, [k]: v }));
 
   const handleClientSelect = (id: string) => {
     setRemitterClientId(id);
-    const c = clients.find((x: any) => x.id === id);
+    const c = clients.find((client) => client.id === id);
     if (c) {
       setForm(f => ({
         ...f,
         rem_nome: c.company_name || '',
         rem_cnpj: c.tax_id || '',
-        rem_endereco: (c as any).address || '',
-        rem_municipio: (c as any).city || '',
+        rem_endereco: c.address_street || '',
+        rem_municipio: c.address_city || '',
       }));
     }
   };
@@ -136,23 +149,24 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
       toast({ title: 'Destinatário obrigatório', variant: 'destructive' });
       return;
     }
-    const driver = drivers.find((d: any) => d.id === driverId);
+    const driver = drivers.find((candidate) => candidate.id === driverId);
     const vehicle = vehicles.find(v => v.id === vehicleId);
     try {
-      const created = await createMut.mutateAsync({
+      const payload: CreatePickupOrderInput = {
         remitter_client_id: remitterClientId !== NONE ? remitterClientId : null,
         remitter_name: form.rem_nome.trim() || null,
         remitter_cnpj: form.rem_cnpj.trim() || null,
         recipient_name: form.dest_nome.trim(),
         driver_id: driver?.id || null,
-        driver_name_snapshot: (driver as any)?.name || form.motorista || null,
+        driver_name_snapshot: driver?.name || form.motorista || null,
         vehicle_id: vehicle?.id || null,
         vehicle_plate_snapshot: vehicle?.plate || form.placa || null,
         pickup_at: new Date(form.data_emissao).toISOString(),
         status: 'pendente',
         notes: form.observacao.trim() || form.obs_manual.trim() || null,
-        manual_meta: form,
-      } as any);
+        manual_meta: { ...form } satisfies Json,
+      };
+      const created = await createMut.mutateAsync(payload);
       toast({ title: `ORT manual nº ${created.pickup_number} criada` });
       onCreated?.(created);
       onOpenChange(false);
@@ -160,12 +174,12 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
       setRemitterClientId(NONE);
       setDriverId(NONE);
       setVehicleId(NONE);
-    } catch (err: any) {
-      toast({ title: 'Erro ao salvar ORT', description: err.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao salvar ORT', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
-  const F = (label: string, k: keyof FormState, opts?: { type?: string; cls?: string; mask?: 'cpfcnpj' | 'currency' }) => (
+  const F = (label: string, k: TextFormKey, opts?: { type?: string; cls?: string; mask?: 'cpfcnpj' | 'currency' }) => (
     <div className={`space-y-1 ${opts?.cls || ''}`}>
       <Label className="text-xs">{label}</Label>
       <Input
@@ -175,16 +189,16 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
           let v = e.target.value;
           if (opts?.mask === 'cpfcnpj') v = maskCpfCnpj(v);
           if (opts?.mask === 'currency') v = maskCurrencyBRL(v);
-          set(k, v as any);
+          setText(k, v);
         }}
         className="h-8 text-sm"
       />
     </div>
   );
 
-  const C = (label: string, k: keyof FormState) => (
+  const C = (label: string, k: BooleanFormKey) => (
     <label className="flex items-center gap-2 text-xs">
-      <Checkbox checked={!!form[k]} onCheckedChange={v => set(k, !!v as any)} /> {label}
+      <Checkbox checked={form[k]} onCheckedChange={v => setBoolean(k, !!v)} /> {label}
     </label>
   );
 
@@ -234,11 +248,11 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                 {F('Prev. entrega data/hora', 'prev_entrega', { type: 'datetime-local' })}
                 <div className="space-y-1">
                   <Label className="text-xs">Nat. Prestação</Label>
-                  <Input value={form.nat_prestacao} onChange={e => set('nat_prestacao', e.target.value)} className="h-8 text-sm" />
+                  <Input value={form.nat_prestacao} onChange={e => setText('nat_prestacao', e.target.value)} className="h-8 text-sm" />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Modal</Label>
-                  <Select value={form.modal} onValueChange={v => set('modal', v)}>
+                  <Select value={form.modal} onValueChange={v => setText('modal', v)}>
                     <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Rodoviário">Rodoviário</SelectItem>
@@ -265,7 +279,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                       <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Buscar cliente cadastrado…" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value={NONE}>— manual —</SelectItem>
-                        {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                        {clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -297,7 +311,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                     {(['CIF', 'FOB', 'Consignatario'] as const).map(opt => (
                       <label key={opt} className="flex items-center gap-1 text-xs">
                         <input type="radio" checked={form.pagador_tipo === opt}
-                          onChange={() => set('pagador_tipo', opt)} /> {opt === 'CIF' ? 'Pago (CIF)' : opt === 'FOB' ? 'À pagar (FOB)' : 'Consignatário'}
+                          onChange={() => setText('pagador_tipo', opt)} /> {opt === 'CIF' ? 'Pago (CIF)' : opt === 'FOB' ? 'À pagar (FOB)' : 'Consignatário'}
                       </label>
                     ))}
                   </div>
@@ -313,11 +327,11 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Observação</Label>
-                <Textarea value={form.observacao} onChange={e => set('observacao', e.target.value)} rows={2} />
+                <Textarea value={form.observacao} onChange={e => setText('observacao', e.target.value)} rows={2} />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Obs. Manual</Label>
-                <Textarea value={form.obs_manual} onChange={e => set('obs_manual', e.target.value)} rows={2} />
+                <Textarea value={form.obs_manual} onChange={e => setText('obs_manual', e.target.value)} rows={2} />
               </div>
             </TabsContent>
 
@@ -340,7 +354,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                     <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NONE}>—</SelectItem>
-                      {drivers.map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                      {drivers.map((driver) => <SelectItem key={driver.id} value={driver.id}>{driver.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -448,7 +462,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                 {F('Descrição Plano', 'plano_pagto_descricao', { cls: 'md:col-span-3' })}
                 <div className="space-y-1">
                   <Label className="text-xs">Condição</Label>
-                  <Select value={form.condicao_pagto} onValueChange={v => set('condicao_pagto', v)}>
+                  <Select value={form.condicao_pagto} onValueChange={v => setText('condicao_pagto', v)}>
                     <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="A_VISTA">À Vista</SelectItem>
@@ -462,7 +476,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Forma Pagto</Label>
-                  <Select value={form.forma_pagto} onValueChange={v => set('forma_pagto', v)}>
+                  <Select value={form.forma_pagto} onValueChange={v => setText('forma_pagto', v)}>
                     <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="BOLETO">Boleto</SelectItem>

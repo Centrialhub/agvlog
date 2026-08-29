@@ -46,17 +46,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const { data, error } = await supabase
-          .from('tenant_memberships')
-          .select('tenant_id, role, tenants(id, name, plan_key, timezone)')
-          .eq('user_id', user.id)
-          .eq('active', true);
+        const { data, error } = await supabase.rpc('get_current_memberships_v1');
 
       if (!error && data) {
-        let mapped = (data as any[]).map(d => ({
+        let mapped = data.map(d => ({
           tenant_id: d.tenant_id,
           role: d.role,
-          tenants: d.tenants,
+          tenants: {
+            id: d.tenant_id,
+            name: d.tenant_name,
+            plan_key: d.plan_key,
+            timezone: d.timezone,
+          },
         }));
 
         // Portal-only users (no operational membership) may still belong to tenants
@@ -79,7 +80,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         const stored = localStorage.getItem('agvlog_tenant_id');
         const validStored = stored && mapped.some(m => m.tenant_id === stored) ? stored : null;
         if (validStored) {
-          if (validStored !== currentTenantId) setCurrentTenantId(validStored);
+          setCurrentTenantId(validStored);
         } else if (mapped.length > 0) {
           const firstId = mapped[0].tenant_id;
           setCurrentTenantId(firstId);

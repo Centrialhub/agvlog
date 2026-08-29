@@ -40,6 +40,7 @@ export interface MdfeProprietor {
 export interface MdfeDocument {
   key: string; // Chave de acesso do CT-e ou NF-e
   type: 'cte' | 'nfe';
+  destination?: MdfeLocation | null;
 }
 
 export interface MdfeLocation {
@@ -52,6 +53,28 @@ export interface MdfeInsurance {
   providerName: string;
   providerCnpj: string;
   policyNumber: string;
+}
+
+interface MdfeContractorAddressPayload {
+  xLgr: string;
+  nro: string;
+  xBairro: string;
+  cMun: string;
+  xMun: string;
+  UF: string;
+  CEP: string;
+}
+
+interface MdfeMunicipalUnloadGroup {
+  cMunDescarga: string;
+  xMunDescarga: string;
+  infCTe: Array<{
+    chCTe: string;
+    infSeg?: { xSeg: string; CNPJ: string };
+    nApol?: string;
+    nAv?: string[];
+  }>;
+  infNFe: Array<{ chNFe: string }>;
 }
 
 /** Parcela do pagamento a prazo (grupo infPrazo). */
@@ -148,23 +171,39 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
   const missing: string[] = [];
 
   if (!input.emitter?.cnpj) missing.push('CNPJ do emitente');
-  if (!input.driver?.cpf) missing.push('CPF do motorista');
+  if (!(input.driver?.name || '').trim()) missing.push('Nome do motorista');
+  if (digits(input.driver?.cpf).length !== 11) missing.push('CPF válido do motorista');
   if (!input.vehicle?.plate) missing.push('Placa do veículo');
   if (!input.documents?.length) missing.push('Documentos vinculados (CT-e/NF-e)');
   if (input.documents?.some(document => digits(document.key).length !== 44)) {
     missing.push('Chave de acesso válida dos documentos vinculados');
   }
+  if (input.documents?.some(document => digits(document.destination?.city_ibge || input.destination?.city_ibge).length !== 7)) {
+    missing.push('Município de descarga (IBGE) de todos os documentos');
+  }
+  if (input.documents?.some(document => !(document.destination?.city_name || input.destination?.city_name || '').trim())) {
+    missing.push('Nome do município de descarga de todos os documentos');
+  }
   if (!input.vehicle?.tara || input.vehicle.tara <= 0) {
     missing.push('Tara do veículo (obrigatório)');
   }
-  if (!input.origin?.city_ibge) missing.push('Cidade de origem (IBGE)');
+  if (digits(input.origin?.city_ibge).length !== 7) missing.push('Cidade de origem (IBGE)');
+  if (!(input.origin?.city_name || '').trim()) missing.push('Nome da cidade de origem');
+  if (digits(input.origin?.state).length !== 2) missing.push('Código IBGE da UF de origem');
   if (!input.insurance?.providerCnpj) missing.push('CNPJ da Seguradora');
   if (!input.insurance?.policyNumber) missing.push('Número da Apólice');
   if (!input.insurance?.providerName) missing.push('Nome da Seguradora');
 
-  // Validação local de documentos
-  if (!input.documents || input.documents.length === 0) {
-    missing.push('Documentos vinculados (CT-e/NF-e)');
+  if (input.valePedagio) {
+    if (digits(input.valePedagio.cnpjFornecedor).length !== 14) {
+      missing.push('CNPJ válido do fornecedor do vale-pedágio');
+    }
+    if (!(input.valePedagio.numeroComprovante || '').trim()) {
+      missing.push('Número do comprovante do vale-pedágio');
+    }
+    if (!(Number(input.valePedagio.valor) > 0)) {
+      missing.push('Valor do vale-pedágio');
+    }
   }
 
 
@@ -271,7 +310,13 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
             RNTRC: input.vehicle.rntrc || 'ISENTO',
             infContratante: contractors.map(t => {
               const d = digits(t.cnpj);
-              const party: any = {
+              const party: {
+                xNome: string;
+                CPF?: string;
+                CNPJ?: string;
+                IE: string;
+                enderContratante?: MdfeContractorAddressPayload;
+              } = {
                 xNome: t.name.slice(0, 60),
                 ...(d.length === 11 ? { CPF: d } : { CNPJ: d }),
                 IE: digits(t.ie) || 'ISENTO',
@@ -322,17 +367,14 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       },
       infDoc: {
         infMunDescarga: input.documents.reduce((acc, doc) => {
-          // Para MDF-e, o Hub espera que os documentos sejam agrupados por município de descarga.
-          // Se tivermos múltiplos documentos para o mesmo município, eles devem ir no mesmo array infCTe/infNFe.
-          // Como o input.destination é global por enquanto, agrupamos tudo nele.
-          // TODO: Se suportarmos multi-paradas no futuro, o input.documents deve carregar seu próprio city_ibge.
-          const cMun = digits(input.destination.city_ibge);
+          const destination = doc.destination || input.destination;
+          const cMun = digits(destination.city_ibge);
           let group = acc.find(g => g.cMunDescarga === cMun);
           
           if (!group) {
             group = {
               cMunDescarga: cMun,
-              xMunDescarga: input.destination.city_name,
+              xMunDescarga: destination.city_name,
               infCTe: [],
               infNFe: [],
             };
@@ -356,24 +398,29 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
           }
 
           return acc;
-        }, [] as any[]),
+        }, [] as MdfeMunicipalUnloadGroup[]),
       },
       // Contrato de entrada do Hub Fiscal. O Hub converte este bloco para
       // infDoc/infMunDescarga e usa as chaves para identificar os tomadores.
-      descarregamento: [
-        {
-          municipio: {
-            codigoIBGE: digits(input.destination.city_ibge),
-            nome: input.destination.city_name,
-          },
-          ctes: input.documents
-            .filter(document => document.type === 'cte')
-            .map(document => ({ chave: digits(document.key) })),
-          nfes: input.documents
-            .filter(document => document.type === 'nfe')
-            .map(document => ({ chave: digits(document.key) })),
-        },
-      ],
+      descarregamento: Array.from(
+        input.documents.reduce((groups, document) => {
+          const destination = document.destination || input.destination;
+          const cityCode = digits(destination.city_ibge);
+          const group = groups.get(cityCode) || {
+            municipio: { codigoIBGE: cityCode, nome: destination.city_name },
+            ctes: [] as Array<{ chave: string }>,
+            nfes: [] as Array<{ chave: string }>,
+          };
+          const target = document.type === 'cte' ? group.ctes : group.nfes;
+          target.push({ chave: digits(document.key) });
+          groups.set(cityCode, group);
+          return groups;
+        }, new Map<string, {
+          municipio: { codigoIBGE: string; nome: string };
+          ctes: Array<{ chave: string }>;
+          nfes: Array<{ chave: string }>;
+        }>()),
+      ).map(([, group]) => group),
       infMunCarrega: [
         {
           cMunCarrega: digits(input.origin.city_ibge),
@@ -412,7 +459,13 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         } : {}),
         contratantes: contractors.map(t => {
           const d = digits(t.cnpj);
-          const c: any = {
+          const c: {
+            xNome: string;
+            CPF?: string;
+            CNPJ?: string;
+            ie: string;
+            enderContratante?: MdfeContractorAddressPayload;
+          } = {
             xNome: t.name.slice(0, 60),
             ...(d.length === 11 ? { CPF: d } : { CNPJ: d }),
             ie: digits(t.ie) || 'ISENTO',

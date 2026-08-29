@@ -2,7 +2,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
-import { calculateFreight, logFreightCalculation } from './useFreightCalculator';
+import { calculateFreight, freightBreakdownToJson, logFreightCalculation } from './useFreightCalculator';
+import type { Tables } from '@/integrations/supabase/types';
+
+type RecalculationDocument = Pick<
+  Tables<'fiscal_documents'>,
+  'id' | 'client_id' | 'recipient' | 'recipient_state' | 'recipient_city' | 'weight_kg' |
+  'pallet_count' | 'value' | 'freight_overridden'
+>;
 
 /**
  * Batch-recalcula a prévia de frete das NF-es (inbound) informadas.
@@ -21,7 +28,7 @@ export function useRecalculateInboundFreight() {
 
       // Fetch docs in chunks (avoid IN() blowup)
       const chunk = 200;
-      const docs: any[] = [];
+      const docs: RecalculationDocument[] = [];
       for (let i = 0; i < docIds.length; i += chunk) {
         const { data, error } = await supabase
           .from('fiscal_documents')
@@ -34,14 +41,18 @@ export function useRecalculateInboundFreight() {
       }
 
       // Cache payer_group by client_id
-      const clientIds = Array.from(new Set(docs.map(d => d.client_id).filter(Boolean)));
+      const clientIds = Array.from(new Set(
+        docs.map(d => d.client_id).filter((id): id is string => id !== null),
+      ));
       const payerGroupByClient = new Map<string, string | null>();
       if (clientIds.length > 0) {
-        const { data: clients } = await supabase
+        const { data: clients, error: clientsError } = await supabase
           .from('clients')
           .select('id, payer_group')
+          .eq('tenant_id', currentTenant.id)
           .in('id', clientIds);
-        (clients || []).forEach((c: any) => payerGroupByClient.set(c.id, c.payer_group || null));
+        if (clientsError) throw clientsError;
+        (clients || []).forEach((client) => payerGroupByClient.set(client.id, client.payer_group || null));
       }
 
       let updated = 0, skipped = 0, failed = 0;
@@ -75,9 +86,9 @@ export function useRecalculateInboundFreight() {
               freight_value: result.value,
               freight_value_original: result.value,
               freight_table_id: result.breakdown.tableId || null,
-              freight_breakdown: result.breakdown as any,
+              freight_breakdown: freightBreakdownToJson(result.breakdown),
               updated_at: new Date().toISOString(),
-            } as any)
+            })
             .eq('id', d.id)
             .eq('tenant_id', currentTenant.id);
           if (upErr) { failed++; continue; }

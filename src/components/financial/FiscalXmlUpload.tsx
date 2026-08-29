@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { FileUp, FileCheck2, AlertTriangle } from 'lucide-react';
 import { parseFiscalXml, type ParsedFiscalXml } from '@/lib/nfeXmlParser';
 import { toast } from '@/components/ui/sonner';
+import { getErrorMessage } from '@/lib/errors';
 
 type Props = {
   onExtracted: (data: ParsedFiscalXml, file: File) => void;
@@ -38,8 +39,8 @@ export default function FiscalXmlUpload({ onExtracted, perspective, className }:
       setLastFile(file);
       setLastKind(parsed.kind);
       onExtracted(parsed, file);
-    } catch (e: any) {
-      toast.error(e.message || 'Falha ao ler XML');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Falha ao ler XML'));
     } finally {
       setBusy(false);
     }

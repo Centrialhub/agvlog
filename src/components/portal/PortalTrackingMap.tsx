@@ -1,15 +1,9 @@
-import { useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import { useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { PortalTrackingItem } from '@/hooks/portal/usePortalTracking';
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
+import { MapAutoFit } from '@/components/maps/MapAutoFit';
+import { DEFAULT_BRAZIL_MAP_CENTER, L } from '@/lib/maps/leaflet';
 
 function vehicleIcon(label: string) {
   return L.divIcon({
@@ -25,24 +19,9 @@ function vehicleIcon(label: string) {
   });
 }
 
-function FitBounds({ points }: { points: [number, number][] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!points.length) return;
-    if (points.length === 1) {
-      map.setView(points[0], 11);
-      return;
-    }
-    const bounds = L.latLngBounds(points);
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
-  }, [points.length, points.map((p) => p.join(',')).join('|')]);
-  return null;
-}
-
 export default function PortalTrackingMap({
   items,
   onSelect,
-  selectedLoadId,
 }: {
   items: PortalTrackingItem[];
   onSelect?: (item: PortalTrackingItem) => void;
@@ -56,7 +35,7 @@ export default function PortalTrackingMap({
     () => withPosition.map((i) => [i.lat as number, i.lng as number]),
     [withPosition],
   );
-  const center: [number, number] = points[0] ?? [-14.235, -51.9253];
+  const center: [number, number] = points[0] ?? DEFAULT_BRAZIL_MAP_CENTER;
 
   return (
     <div className="h-[420px] w-full rounded-md overflow-hidden border border-border">
@@ -65,7 +44,7 @@ export default function PortalTrackingMap({
           attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <FitBounds points={points} />
+        <MapAutoFit points={points} padding={40} maxZoom={12} singlePointZoom={11} />
         {withPosition.map((i) => (
           <Marker
             key={i.load_id}

@@ -4,55 +4,27 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, GripVertical, Fuel, Moon, UtensilsCrossed, MapPin, Flag, CircleDot } from 'lucide-react';
-
-export interface Waypoint {
-  id?: string;
-  waypoint_order: number;
-  waypoint_type: string;
-  label: string;
-  address: string;
-  poi_id: string | null;
-  geofence_id: string | null;
-  estimated_duration_min: number | null;
-  notes: string;
-}
-
-const WAYPOINT_TYPES = [
-  { value: 'origin', label: 'Origem', icon: Flag, color: 'text-green-500' },
-  { value: 'destination', label: 'Destino', icon: MapPin, color: 'text-red-500' },
-  { value: 'fueling', label: 'Abastecimento', icon: Fuel, color: 'text-amber-500' },
-  { value: 'overnight', label: 'Pernoite', icon: Moon, color: 'text-indigo-500' },
-  { value: 'meal', label: 'Refeição', icon: UtensilsCrossed, color: 'text-orange-500' },
-  { value: 'client', label: 'Cliente/Entrega', icon: MapPin, color: 'text-blue-500' },
-  { value: 'checkpoint', label: 'Ponto de passagem', icon: CircleDot, color: 'text-muted-foreground' },
-] as const;
-
-const getTypeConfig = (type: string) => WAYPOINT_TYPES.find(t => t.value === type) || WAYPOINT_TYPES[6];
-
-const emptyWaypoint = (order: number, type = 'checkpoint'): Waypoint => ({
-  waypoint_order: order,
-  waypoint_type: type,
-  label: '',
-  address: '',
-  poi_id: null,
-  geofence_id: null,
-  estimated_duration_min: null,
-  notes: '',
-});
+import { Flag, Fuel, GripVertical, MapPin, Moon, Trash2, UtensilsCrossed } from 'lucide-react';
+import {
+  createEmptyWaypoint,
+  getWaypointTypeConfig,
+  WAYPOINT_TYPES,
+  type Waypoint,
+  type WaypointType,
+} from '@/lib/routes/waypoints';
 
 interface WaypointEditorProps {
   waypoints: Waypoint[];
   onChange: (waypoints: Waypoint[]) => void;
-  pois: any[];
-  geofences: any[];
+  pois: Array<{ id: string; name?: string | null; category?: string | null }>;
+  geofences: Array<{ id: string; name: string }>;
 }
 
 export function WaypointEditor({ waypoints, onChange, pois, geofences }: WaypointEditorProps) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
-  const addWaypoint = (type = 'checkpoint') => {
-    const newWp = emptyWaypoint(waypoints.length, type);
+  const addWaypoint = (type: WaypointType = 'checkpoint') => {
+    const newWp = createEmptyWaypoint(waypoints.length, type);
     const updated = [...waypoints, newWp];
     onChange(updated);
     setExpandedIdx(updated.length - 1);
@@ -94,7 +66,7 @@ export function WaypointEditor({ waypoints, onChange, pois, geofences }: Waypoin
 
       <div className="space-y-2">
         {waypoints.map((wp, idx) => {
-          const config = getTypeConfig(wp.waypoint_type);
+          const config = getWaypointTypeConfig(wp.waypoint_type);
           const Icon = config.icon;
           const isExpanded = expandedIdx === idx;
 
@@ -123,7 +95,7 @@ export function WaypointEditor({ waypoints, onChange, pois, geofences }: Waypoin
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Tipo</Label>
-                      <Select value={wp.waypoint_type} onValueChange={v => updateWaypoint(idx, { waypoint_type: v })}>
+                      <Select value={wp.waypoint_type} onValueChange={v => updateWaypoint(idx, { waypoint_type: v as WaypointType })}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {WAYPOINT_TYPES.map(t => (
@@ -150,7 +122,7 @@ export function WaypointEditor({ waypoints, onChange, pois, geofences }: Waypoin
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Nenhum" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhum</SelectItem>
-                          {pois.map((p: any) => (
+                          {pois.map((p) => (
                             <SelectItem key={p.id} value={p.id}>{p.name || p.category}</SelectItem>
                           ))}
                         </SelectContent>
@@ -162,7 +134,7 @@ export function WaypointEditor({ waypoints, onChange, pois, geofences }: Waypoin
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Nenhum" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhum</SelectItem>
-                          {geofences.map((g: any) => (
+                          {geofences.map((g) => (
                             <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -221,5 +193,3 @@ export function WaypointEditor({ waypoints, onChange, pois, geofences }: Waypoin
     </div>
   );
 }
-
-export { WAYPOINT_TYPES, getTypeConfig };

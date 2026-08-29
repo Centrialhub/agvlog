@@ -32,7 +32,7 @@ export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driv
   });
 
   const handlePrint = () => {
-    const romaneioDocs: RomaneioDoc[] = docs.map((d: any) => ({
+    const romaneioDocs: RomaneioDoc[] = docs.map((d) => ({
       city: d.recipient_city || '',
       state: d.recipient_state || '',
       remetente: d.remitter || '',
@@ -57,8 +57,8 @@ export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driv
     );
   };
 
-  const totalValue = docs.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
-  const totalWeight = docs.reduce((s: number, d: any) => s + (Number(d.weight_kg) || 0), 0);
+  const totalValue = docs.reduce((sum, document) => sum + (Number(document.value) || 0), 0);
+  const totalWeight = docs.reduce((sum, document) => sum + (Number(document.weight_kg) || 0), 0);
 
   return (
     <div className="border-t pt-2 mt-2 space-y-2">
@@ -106,7 +106,7 @@ export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driv
           {!isLoading && !error && docs.length > 0 && (
             <>
               <div className="max-h-56 overflow-y-auto rounded border bg-muted/30 divide-y">
-                {docs.map((d: any) => (
+                {docs.map((d) => (
                   <div key={d.id} className="p-2 text-[11px] space-y-0.5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-semibold">NF {d.invoice_number || '—'}</span>

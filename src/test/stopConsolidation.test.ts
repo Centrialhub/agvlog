@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { consolidateLoadsIntoStops, type ConsolidationLoad } from '@/lib/route-planning/stopConsolidation';
+import {
+  consolidateLoadsIntoStops,
+  type ConsolidationLoad,
+  type ConsolidationLoadItem,
+} from '@/lib/route-planning/stopConsolidation';
 
-const mkItem = (over: Partial<any> = {}) => ({
+type FiscalDocumentFixture = NonNullable<ConsolidationLoadItem['fiscal_documents']>;
+
+const mkItem = (over: Partial<FiscalDocumentFixture> = {}): ConsolidationLoadItem => ({
   id: crypto.randomUUID(),
   load_id: 'L1',
   pallet_count: 1,

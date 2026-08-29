@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { AlertTriangle, CheckCircle, Info, Search } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { FreightBreakdown } from '@/hooks/useFreightCalculator';
 
@@ -15,7 +15,7 @@ interface Props {
   breakdown?: FreightBreakdown | null;
 }
 
-export default function FreightAuditDrawer({ open, onOpenChange, entityId, entityType, breakdown: propBreakdown }: Props) {
+export default function FreightAuditDrawer({ open, onOpenChange, entityId, breakdown: propBreakdown }: Props) {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -154,7 +154,7 @@ export default function FreightAuditDrawer({ open, onOpenChange, entityId, entit
                   <CardTitle className="text-xs font-medium text-muted-foreground">Histórico ({logs.length})</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {logs.map((log, i) => (
+                  {logs.map((log) => (
                     <div key={log.id} className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
                         {new Date(log.created_at).toLocaleString('pt-BR')}

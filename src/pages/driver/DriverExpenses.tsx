@@ -15,7 +15,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useToast } from '@/hooks/use-toast';
-import { validateUpload } from '@/lib/uploadPolicy';
+import { validateUploadFile } from '@/lib/uploadPolicy';
+import { uploadSecureFile } from '@/lib/secureUpload';
 
 const CATEGORIES = [
   { value: 'fuel', label: 'Combustível', icon: Fuel },
@@ -77,7 +78,7 @@ export default function DriverExpenses() {
 
   // Realtime: refresh when operator approves/rejects or updates expenses.
   useEffect(() => {
-    if (!driver?.id) return;
+    if (!driver?.id) return undefined;
     const channel = supabase
       .channel(`driver_expenses_${driver.id}`)
       .on(
@@ -96,6 +97,17 @@ export default function DriverExpenses() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    try {
+      validateUploadFile(file, 'image');
+    } catch (error) {
+      e.target.value = '';
+      toast({
+        title: 'Comprovante inválido',
+        description: error instanceof Error ? error.message : 'Selecione uma imagem válida.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setReceiptFile(file);
     const reader = new FileReader();
     reader.onload = () => setReceiptPreview(reader.result as string);
@@ -109,13 +121,13 @@ export default function DriverExpenses() {
 
       let receiptPath: string | null = null;
       if (receiptFile) {
-        const { contentType, safeName } = validateUpload(receiptFile, 'image');
-        const path = `${currentTenant.id}/expenses/${trip.id}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-        const { error: uploadErr } = await supabase.storage
-          .from('receipts')
-          .upload(path, receiptFile, { contentType });
-        if (uploadErr) throw uploadErr;
-        receiptPath = path;
+        receiptPath = await uploadSecureFile({
+          tenantId: currentTenant.id,
+          bucket: 'receipts',
+          folder: `expenses/${trip.id}`,
+          file: receiptFile,
+          kind: 'image',
+        });
       }
 
       try {
@@ -123,27 +135,27 @@ export default function DriverExpenses() {
           _trip_id: trip.id,
           _category: form.category,
           _amount: parseFloat(form.amount) || 0,
-          _notes: form.notes || null,
-          _receipt_path: receiptPath,
-          _supplier_name: form.supplier_name || null,
-          _document_number: form.document_number || null,
-          _city: form.city || null,
-          _state: form.state || null,
-          _odometer: form.odometer ? parseFloat(form.odometer) : null,
+          _notes: form.notes || undefined,
+          _receipt_path: receiptPath ?? undefined,
+          _supplier_name: form.supplier_name || undefined,
+          _document_number: form.document_number || undefined,
+          _city: form.city || undefined,
+          _state: form.state || undefined,
+          _odometer: form.odometer ? parseFloat(form.odometer) : undefined,
           _no_receipt: form.no_receipt,
-          _no_receipt_reason: form.no_receipt ? (form.no_receipt_reason || null) : null,
+          _no_receipt_reason: form.no_receipt ? (form.no_receipt_reason || undefined) : undefined,
           _paid_with_advance: form.paid_with_advance,
           _payment_source: form.payment_source,
-        } as any);
+        });
         
         if (error) {
           console.error('[DriverExpenses] RPC error:', error);
           throw error;
         }
         return data;
-      } catch (err: any) {
-        console.error('[DriverExpenses] Mutation error:', err);
-        throw err;
+      } catch (error: unknown) {
+        console.error('[DriverExpenses] Mutation error:', error);
+        throw error;
       }
     },
     onSuccess: () => {
@@ -159,8 +171,12 @@ export default function DriverExpenses() {
       setReceiptPreview(null);
       qc.invalidateQueries({ queryKey: ['driver_expenses'] });
     },
-    onError: (e: any) => {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    onError: (error: unknown) => {
+      toast({
+        title: 'Erro',
+        description: error instanceof Error ? error.message : 'Não foi possível registrar a despesa.',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -262,7 +278,7 @@ export default function DriverExpenses() {
               </div>
               {trip && (
                 <p className="text-[10px] text-muted-foreground">
-                  Vinculada à viagem da carga {(trip as any).loads?.load_number || ''}
+                  Vinculada à viagem da carga {trip.loads?.load_number || ''}
                 </p>
               )}
               <Button
@@ -288,7 +304,7 @@ export default function DriverExpenses() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {effectiveExpenses.map((exp: any) => {
+          {effectiveExpenses.map((exp) => {
             const cat = CATEGORIES.find(c => c.value === exp.category);
             const Icon = cat?.icon || Receipt;
             return (

@@ -9,42 +9,7 @@ import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from '@/components/ui/sonner';
 import type { PdfWorkerRequest, PdfWorkerResponse } from './pdfReportWorker';
-
-export interface IngestionReport {
-  totalDocs: number;
-  savedDocs: number;
-  errorDocs: number;
-  needsReviewDocs: number;
-  clientsAutoCreated: number;
-  clientsMatched: number;
-  clientsUnresolved: number;
-  fieldCoverage: {
-    label: string;
-    key: string;
-    filled: number;
-    total: number;
-  }[];
-  reviewItems?: ReviewItem[];
-  reviewThreshold?: number;
-  auditMeta?: {
-    tenantId?: string | null;
-    tenantName?: string | null;
-    batchId?: string | null;
-    sourceLabel?: string | null;
-    generatedAt?: string | null;
-    periodFrom?: string | null;
-    periodTo?: string | null;
-    generatedByUserId?: string | null;
-  };
-}
-
-export interface ReviewItem {
-  invoiceNumber: string;
-  fileName?: string;
-  recipientName?: string;
-  confidence?: number;
-  reasons: string[]; // e.g. "Baixa confiança (62%)", "Campos UNKNOWN: IE, CEP", "OCR ilegível"
-}
+import type { IngestionReport } from '@/lib/ingestion/types';
 
 interface ResultsStepProps {
   results: string[];

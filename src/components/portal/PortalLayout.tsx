@@ -20,7 +20,6 @@ import {
   MapPin,
   BarChart3,
   Settings,
-  MoreHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeDestinations } from '@/pages/LoadReallocation';
+import { mergeDestinations } from '@/lib/loads/mergeDestinations';
 import { normalizeCity } from '@/lib/utils/normalizeCity';
 
 describe('mergeDestinations – dedupe acento/case invariante', () => {

@@ -41,7 +41,7 @@ export function useDispatchRoutePlan() {
           load_ids: s.load_ids,
         }));
 
-    const { data, error } = await supabase.rpc('dispatch_planned_route' as any, {
+    const { data, error } = await supabase.rpc('dispatch_planned_route', {
         _payload: {
           tenant_id: currentTenant.id,
           vehicle_id: payload.vehicle_id,

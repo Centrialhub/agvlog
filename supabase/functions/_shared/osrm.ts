@@ -1,8 +1,9 @@
 // Shared OSRM client for Edge Functions.
-// Defaults to the public demo server. Set OSRM_BASE_URL to point at a self-hosted instance.
+// Production must point OSRM_BASE_URL at an approved provider or self-hosted
+// instance. Vehicle coordinates must never fall back to a public demo server.
 
 export const OSRM_BASE_URL =
-  Deno.env.get('OSRM_BASE_URL')?.replace(/\/$/, '') || 'https://router.project-osrm.org';
+  Deno.env.get('OSRM_BASE_URL')?.replace(/\/$/, '') || '';
 
 export type OsrmCoordinate = { lat: number; lng: number };
 
@@ -19,6 +20,9 @@ export async function calculateOsrmRoute(
   coordinates: OsrmCoordinate[],
   opts: { profile?: 'driving' | 'car' | 'bike' | 'foot'; timeoutMs?: number } = {},
 ): Promise<OsrmRouteResult> {
+  if (!OSRM_BASE_URL) {
+    throw new Error('OSRM_BASE_URL is not configured with an approved routing provider');
+  }
   if (!Array.isArray(coordinates) || coordinates.length < 2) {
     throw new Error('OSRM requires at least 2 coordinates');
   }
@@ -64,30 +68,5 @@ export async function calculateOsrmRoute(
   };
 }
 
-/** Haversine distance in meters. */
-export function haversineMeters(a: OsrmCoordinate, b: OsrmCoordinate): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
-/** Distance (meters) from a point to the nearest vertex of a GeoJSON LineString.
- * Approximate but cheap — good enough for off-route detection at city scale.
- * For higher precision, sample the line every ~100m before calling. */
-export function pointToLineDistanceMeters(
-  point: OsrmCoordinate,
-  line: { type: 'LineString'; coordinates: [number, number][] },
-): number {
-  if (!line?.coordinates?.length) return Number.POSITIVE_INFINITY;
-  let min = Number.POSITIVE_INFINITY;
-  for (const [lng, lat] of line.coordinates) {
-    const d = haversineMeters(point, { lat, lng });
-    if (d < min) min = d;
-  }
-  return min;
-}
+export { haversineMeters, pointToLineDistanceMeters };
+import { haversineMeters, pointToLineDistanceMeters } from './geo.ts';

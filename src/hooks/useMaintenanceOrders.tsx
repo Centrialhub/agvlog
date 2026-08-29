@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 export const MAINT_TYPES = ['preventive','corrective','predictive','emergency'] as const;
 export const MAINT_STATUSES = ['open','waiting_parts','in_progress','waiting_approval','completed','cancelled'] as const;
@@ -13,32 +14,16 @@ export const MAINT_STATUS_LABELS: Record<string,string> = {
   waiting_approval:'Aguard. Aprovação', completed:'Concluída', cancelled:'Cancelada',
 };
 
-export interface MaintenanceOrder {
-  id: string; tenant_id: string; order_number: string;
-  asset_id: string | null; vehicle_id: string | null;
-  maintenance_type: string; status: string; priority: string;
-  reported_problem: string | null; diagnosis: string | null;
-  opened_at: string; scheduled_at: string | null;
-  started_at: string | null; completed_at: string | null;
-  odometer_km: number | null; horimeter_hours: number | null;
-  parts_cost: number; labor_cost: number; total_cost: number;
-  downtime_hours: number;
-  supplier_vendor: string | null;
-  responsible_employee_id: string | null;
-  services_performed: string | null; notes: string | null;
-  incident_id: string | null;
-  created_at: string; updated_at: string;
+export type MaintenanceOrder = Tables<'maintenance_orders'> & {
   vehicles?: { plate: string; nickname: string | null } | null;
   assets?: { name: string } | null;
   employees?: { name: string } | null;
-}
+};
 
-export interface MaintenancePart {
-  id: string; tenant_id: string; maintenance_order_id: string;
-  stock_item_id: string | null; item_description: string;
-  quantity: number; unit_cost: number; total_cost: number;
-  notes: string | null;
-}
+export type MaintenancePart = Tables<'maintenance_parts'>;
+export type CreateMaintenanceOrderInput = Omit<TablesInsert<'maintenance_orders'>, 'tenant_id' | 'created_by' | 'order_number'>;
+export type UpdateMaintenanceOrderInput = TablesUpdate<'maintenance_orders'> & { id: string };
+export type AddMaintenancePartInput = Omit<TablesInsert<'maintenance_parts'>, 'tenant_id'>;
 
 export function useMaintenanceOrders(vehicleId?: string) {
   const { currentTenant } = useTenant();
@@ -46,7 +31,7 @@ export function useMaintenanceOrders(vehicleId?: string) {
     queryKey: ['maintenance_orders', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = (supabase as any)
+      let q = supabase
         .from('maintenance_orders')
         .select('*, vehicles(plate, nickname), assets(name), employees(name)')
         .eq('tenant_id', currentTenant.id)
@@ -65,9 +50,9 @@ export function useCreateMaintenanceOrder() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<MaintenanceOrder>) => {
+    mutationFn: async (values: CreateMaintenanceOrderInput) => {
       const num = `OS-${Date.now().toString(36).toUpperCase()}`;
-      const { data, error } = await (supabase as any).from('maintenance_orders').insert({
+      const { data, error } = await supabase.from('maintenance_orders').insert({
         ...values, tenant_id: currentTenant!.id, order_number: num, created_by: user?.id,
       }).select().single();
       if (error) throw error;
@@ -81,8 +66,8 @@ export function useUpdateMaintenanceOrder() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<MaintenanceOrder> & { id: string }) => {
-      const { data, error } = await (supabase as any).from('maintenance_orders')
+    mutationFn: async ({ id, ...values }: UpdateMaintenanceOrderInput) => {
+      const { data, error } = await supabase.from('maintenance_orders')
         .update({ ...values, updated_by: user?.id, updated_at: new Date().toISOString() })
         .eq('id', id).select().single();
       if (error) throw error;
@@ -97,7 +82,7 @@ export function useMaintenanceParts(orderId?: string) {
     queryKey: ['maintenance_parts', orderId],
     queryFn: async () => {
       if (!orderId) return [];
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('maintenance_parts').select('*').eq('maintenance_order_id', orderId);
       if (error) throw error;
       return (data || []) as MaintenancePart[];
@@ -110,8 +95,8 @@ export function useAddMaintenancePart() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<MaintenancePart>) => {
-      const { data, error } = await (supabase as any).from('maintenance_parts').insert({
+    mutationFn: async (values: AddMaintenancePartInput) => {
+      const { data, error } = await supabase.from('maintenance_parts').insert({
         ...values, tenant_id: currentTenant!.id,
       }).select().single();
       if (error) throw error;

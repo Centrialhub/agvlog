@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useOrders, ORDER_STATUS_LABELS, OrderStatus } from '@/hooks/useOrders';
-import { useLoads, LOAD_STATUS_LABELS, LoadStatus } from '@/hooks/useLoads';
+import { useLoads } from '@/hooks/useLoads';
 import { useInventoryBalances } from '@/hooks/useInventory';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useIncidents, SEVERITY_LABELS, INCIDENT_STATUS_LABELS } from '@/hooks/useIncidents';
@@ -13,8 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Progress } from '@/components/ui/progress';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import {
-  ShoppingCart, PackageCheck, Warehouse, Truck, AlertTriangle,
-  Clock, Package, Activity, AlertOctagon, CheckCircle, TrendingDown,
+  ShoppingCart, PackageCheck, Truck, AlertTriangle,
+  Package, Activity, AlertOctagon, CheckCircle,
   Users, Wrench, Boxes, DollarSign,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -75,7 +75,9 @@ export default function OperationsDashboard() {
   });
 
   // Stock KPIs
-  const lowStockItems = stockItems.filter(i => i.current_quantity <= i.min_quantity && i.min_quantity > 0);
+  const lowStockItems = stockItems.filter(i =>
+    (i.current_quantity ?? 0) <= (i.min_quantity ?? 0) && (i.min_quantity ?? 0) > 0,
+  );
 
   const totalPalletsInStock = balances.reduce((s, b) => s + Math.max(0, b.pallet_count), 0);
 
@@ -102,13 +104,6 @@ export default function OperationsDashboard() {
     });
     return Object.values(map).sort((a, b) => b.pallets - a.pallets);
   }, [balances]);
-
-  // Incidents by type chart
-  const incidentsByType = useMemo(() => {
-    const counts: Record<string, number> = {};
-    incidents.forEach(i => { counts[i.incident_type] = (counts[i.incident_type] || 0) + 1; });
-    return Object.entries(counts).map(([type, count]) => ({ name: type, value: count }));
-  }, [incidents]);
 
   return (
     <div className="animate-fade-in space-y-6">

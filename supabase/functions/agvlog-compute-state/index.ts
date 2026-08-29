@@ -19,13 +19,9 @@
  * Detects events: stop_detected, movement_resumed, went_offline, came_online, idle_detected
  */
 
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-agvlog-cron-secret",
-};
+import { createClient } from "@supabase/supabase-js";
+import { isCronRequest } from "../_shared/cron-auth.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const OFFLINE_THRESHOLD_MS = 25 * 60 * 1000;     // 25 min — no signal = offline
 const IDLE_THRESHOLD_MS = 30 * 60 * 1000;         // 30 min stopped = idle
@@ -50,9 +46,8 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     // Auth: cron secret or JWT
-    const cronSecret = req.headers.get("x-agvlog-cron-secret");
-    const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
-    const isCron = !!(cronSecret && expectedCronSecret && cronSecret === expectedCronSecret);
+    const isCron = await isCronRequest(req, supabaseUrl, serviceKey);
+    let callerId: string | null = null;
 
     if (!isCron) {
       const authHeader = req.headers.get("Authorization");
@@ -67,6 +62,7 @@ Deno.serve(async (req) => {
       if (userError || !userData?.user) {
         return jsonResp({ error: "Unauthorized" }, 401);
       }
+      callerId = userData.user.id;
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -75,6 +71,18 @@ Deno.serve(async (req) => {
 
     if (!tenant_id) {
       return jsonResp({ error: "tenant_id required" }, 400);
+    }
+
+    if (!isCron) {
+      const { data: membership } = await supabase
+        .from("tenant_memberships")
+        .select("role")
+        .eq("tenant_id", tenant_id)
+        .eq("user_id", callerId!)
+        .eq("active", true)
+        .in("role", ["owner", "admin"])
+        .maybeSingle();
+      if (!membership) return jsonResp({ error: "Forbidden" }, 403);
     }
 
     const now = new Date();
@@ -106,14 +114,14 @@ Deno.serve(async (req) => {
           .select("*")
           .eq("tenant_id", tenant_id)
           .eq("vehicle_id", vehicleId)
-          .single();
+          .maybeSingle();
 
         // 2. Get previous state (if exists)
         const { data: prevState } = await supabase
           .from("vehicles_state")
           .select("*")
           .eq("vehicle_id", vehicleId)
-          .single();
+          .maybeSingle();
 
         // 3. Get the latest raw position for reference
         const { data: latestRaw } = await supabase
@@ -123,7 +131,7 @@ Deno.serve(async (req) => {
           .eq("vehicle_id", vehicleId)
           .order("captured_at", { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         // 4. Get previous raw position for haversine computation
         const { data: prevPositions } = await supabase

@@ -6,106 +6,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
+import { isUnknown } from '@/lib/ortFieldFallbacks';
 import ClientContactPicker from './ClientContactPicker';
 import { cn } from '@/lib/utils';
-import { contactKey as makeContactKey, addressKey as makeAddressKey, findContactByKey, findAddressByKey } from '@/lib/clientContactKeys';
+import {
+  contactKey as makeContactKey,
+  addressKey as makeAddressKey,
+  findContactByKey,
+  findAddressByKey,
+  parseContactSnapshots,
+  parseAddressSnapshots,
+} from '@/lib/clientContactKeys';
 import { useClients } from '@/hooks/useClients';
-
-export interface OrtReviewItem {
-  description: string;
-  quantity: number;
-  unit: string;
-  unitPrice: number;
-  totalPrice: number;
-  weightKg?: number;
-  volumeM3?: number;
-  confidence?: number;
-}
-
-export interface OrtAuditEntry {
-  field: string;
-  fieldLabel: string;
-  previousValue: string;
-  newValue: string;
-  changedAt: string; // ISO
-  changedBy: string; // email or user id
-}
-
-export interface OrtApplyHistoryEntry {
-  type: 'contact' | 'address';
-  appliedAt: string;
-  label: string;
-  /** Snapshot of fields BEFORE the application (used to undo) */
-  previousValues: Record<string, string>;
-  /** Snapshot of fields AFTER the application */
-  newValues: Record<string, string>;
-  /** Reference key written into the unified document on apply (for audit/reuse) */
-  refKey?: string;
-  /**
-   * For replays: which compatibility rule resolved the live record.
-   * 'exact' means the live refKey still matches; 'snapshot' means no live
-   * record was found and we fell back to the stored values.
-   */
-  matchRule?: 'exact' | 'phone-tail' | 'email-local' | 'name-token' | 'zip' | 'street-city' | 'snapshot';
-  /** Field names that actually differed between snapshot and live record. */
-  changedFields?: string[];
-}
-
-export interface OrtReviewDocument {
-  invoiceNumber: string;
-  issueDate: string;
-  paymentTerms: string;
-  billing: string;
-  cargoDescription: string;
-  emitterName: string;
-  emitterCnpj: string;
-  recipientName: string;
-  recipientCnpj: string;
-  recipientPhone: string;
-  recipientCity: string;
-  recipientState: string;
-  recipientAddress: string;
-  recipientAddressNumber: string;
-  recipientZip: string;
-  recipientNeighborhood: string;
-  // Dados cadastrais adicionais (opcional, alimenta auto-cadastro de cliente)
-  recipientFantasyName?: string;
-  recipientStateRegistration?: string;
-  recipientMunicipalRegistration?: string;
-  recipientIeIndicator?: string;
-  recipientEmail?: string;
-  recipientAddressComplement?: string;
-  recipientCountry?: string;
-  recipientCountryCode?: string;
-  recipientCityCode?: string;
-  totalValue: number;
-  totalWeight: number;
-  totalVolume: number;
-  estimatedPallets: number;
-  productSummary: string;
-  items?: OrtReviewItem[];
-  confidence: number;
-  needsReview: boolean;
-  fieldConfidences?: Record<string, number>;
-  fileName: string;
-  sourcePages?: string[];
-  pageCount?: number;
-  extractedPayload?: Record<string, unknown>;
-  unifiedDocId?: string;
-  mergedFrom?: number;
-  unknownFields?: string[];
-  auditLog?: OrtAuditEntry[];
-  appliedHistory?: OrtApplyHistoryEntry[];
-  /** Audit linkage to client master record (persisted on the unified ORT). */
-  linkedClientId?: string | null;
-  /** Stable contact identity (e.g. "phone:11999998888") */
-  linkedContactKey?: string | null;
-  /** Stable address identity (e.g. "zip:01310100|num:200") */
-  linkedAddressKey?: string | null;
-  /** When the linkage was last set */
-  linkedAt?: string | null;
-}
+import type { OrtApplyHistoryEntry, OrtReviewDocument } from '@/lib/ingestion/types';
 
 interface ORTReviewStepProps {
   docs: OrtReviewDocument[];
@@ -137,8 +50,8 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
     if (!client) {
       return { missingClient: true as const, contactMismatch: false, addressMismatch: false };
     }
-    const contacts: any[] = Array.isArray(client.contacts) ? client.contacts : [];
-    const addresses: any[] = Array.isArray(client.addresses) ? client.addresses : [];
+    const contacts = parseContactSnapshots(client.contacts);
+    const addresses = parseAddressSnapshots(client.addresses);
     const contactKeys = new Set(contacts.map((c) => makeContactKey(c)).filter(Boolean));
     const addressKeys = new Set(addresses.map((a) => makeAddressKey(a)).filter(Boolean));
     const contactMismatch = !!doc.linkedContactKey && !contactKeys.has(doc.linkedContactKey);
@@ -161,8 +74,8 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Revisão das ORTs</h2>
-          <p className="text-xs text-muted-foreground">Confira cada documento NF-like lido pela IA antes de entrar na validação.</p>
+          <h2 className="text-lg font-semibold">Revisão dos scans</h2>
+          <p className="text-xs text-muted-foreground">Confirme o tipo real e os campos lidos antes da validação fiscal.</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <Badge variant="outline" className="gap-1.5">
@@ -179,7 +92,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between gap-3 text-sm">
               <span className="flex flex-wrap items-center gap-2">
-                ORT {doc.invoiceNumber || index + 1}
+                {doc.documentKind === 'nfe' ? 'NF-e' : 'ORT'} {doc.invoiceNumber || index + 1}
                 {(doc.pageCount || 0) > 1 && (
                   <Badge variant="outline" className="border-info/30 bg-info/10 text-info gap-1">
                     <Files className="h-3 w-3" /> {doc.pageCount} páginas unidas
@@ -187,7 +100,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                 )}
                 {(doc.mergedFrom || 0) > 1 && (
                   <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary gap-1">
-                    <Users className="h-3 w-3" /> Unificado de {doc.mergedFrom} scans (mesmo cliente)
+                    <Users className="h-3 w-3" /> Unificado de {doc.mergedFrom} páginas da mesma identidade
                   </Badge>
                 )}
                 {(doc.unknownFields?.length || 0) > 0 && (
@@ -246,12 +159,29 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                 </CollapsibleContent>
               </Collapsible>
             )}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div><Label className="text-xs">Nº ORT</Label><Input className={fieldClass(doc, 'invoiceNumber', true)} value={doc.invoiceNumber} onChange={e => onUpdate(index, { invoiceNumber: e.target.value })} /></div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+              <div>
+                <Label className="text-xs">Tipo</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={doc.documentKind}
+                  onChange={e => onUpdate(index, { documentKind: e.target.value as 'nfe' | 'ort', accessKey: e.target.value === 'ort' ? '' : doc.accessKey })}
+                >
+                  <option value="nfe">NF-e / DANFE</option>
+                  <option value="ort">ORT</option>
+                </select>
+              </div>
+              <div><Label className="text-xs">Nº {doc.documentKind === 'nfe' ? 'NF-e' : 'ORT'}</Label><Input className={fieldClass(doc, 'invoiceNumber', true)} value={doc.invoiceNumber} onChange={e => onUpdate(index, { invoiceNumber: e.target.value })} /></div>
               <div><Label className="text-xs">Data</Label><Input type="date" className={fieldClass(doc, 'issueDate')} value={doc.issueDate} onChange={e => onUpdate(index, { issueDate: e.target.value })} /></div>
               <div><Label className="text-xs">Paletes</Label><Input type="number" className={fieldClass(doc, 'estimatedPallets')} value={doc.estimatedPallets} onChange={e => onUpdate(index, { estimatedPallets: Number(e.target.value) || 0 })} /></div>
               <div><Label className="text-xs">Peso kg</Label><Input type="number" className={fieldClass(doc, 'totalWeight')} value={doc.totalWeight} onChange={e => onUpdate(index, { totalWeight: Number(e.target.value) || 0 })} /></div>
             </div>
+            {doc.documentKind === 'nfe' && (
+              <div>
+                <Label className="text-xs">Chave de acesso NF-e (44 dígitos)</Label>
+                <Input className={fieldClass(doc, 'accessKey', true)} maxLength={60} value={doc.accessKey || ''} onChange={e => onUpdate(index, { accessKey: e.target.value })} />
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div><Label className="text-xs">Prazo de pagamento</Label><Input className={fieldClass(doc, 'paymentTerms')} value={doc.paymentTerms} onChange={e => onUpdate(index, { paymentTerms: e.target.value })} placeholder="Ex.: 30 DIAS" /></div>
               <div><Label className="text-xs">Cobrança</Label><Input className={fieldClass(doc, 'billing')} value={doc.billing} onChange={e => onUpdate(index, { billing: e.target.value })} placeholder="CIF / FOB / A pagar" /></div>
@@ -420,8 +350,8 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                             const liveClient = doc.linkedClientId
                               ? allClients.find(c => c.id === doc.linkedClientId)
                               : undefined;
-                            const liveContacts: any[] = Array.isArray(liveClient?.contacts) ? liveClient!.contacts : [];
-                            const liveAddresses: any[] = Array.isArray(liveClient?.addresses) ? liveClient!.addresses : [];
+                            const liveContacts = parseContactSnapshots(liveClient?.contacts);
+                            const liveAddresses = parseAddressSnapshots(liveClient?.addresses);
 
                             const liveContactMatch = lastContact
                               ? findContactByKey(liveContacts, lastContact.refKey)
@@ -510,7 +440,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                               linkedContactKey: lastContact?.refKey || doc.linkedContactKey || null,
                               linkedAddressKey: lastAddress?.refKey || doc.linkedAddressKey || null,
                               linkedAt: nowIso,
-                            } as any);
+                            });
                           }}
                         >
                           <RotateCcw className="h-3 w-3" /> Reaplicar último vínculo
@@ -528,7 +458,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                         onUpdate(index, {
                           ...last.previousValues,
                           appliedHistory: history.slice(0, -1),
-                        } as any);
+                        });
                       }}
                     >
                       <Undo2 className="h-3 w-3" /> Desfazer última
@@ -631,7 +561,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                                   const remaining = [...history.slice(0, realIdx), ...history.slice(realIdx + 1)];
                                   // Recalculate the linked keys from whatever events of the same type remain.
                                   const lastSameType = [...remaining].reverse().find(e => e.type === target.type);
-                                  const updates: Partial<OrtReviewDocument> & Record<string, any> = {
+                                  const updates: Partial<OrtReviewDocument> = {
                                     ...target.previousValues,
                                     appliedHistory: remaining,
                                   };
@@ -696,7 +626,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
           {docs.map((doc, index) => (
             <div key={`summary-${doc.fileName}-${index}`} className="rounded-md border border-border bg-background/80 p-3">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium text-sm">ORT {doc.invoiceNumber || index + 1}</span>
+                <span className="font-medium text-sm">{doc.documentKind === 'nfe' ? 'NF-e' : 'ORT'} {doc.invoiceNumber || index + 1}</span>
                 <Badge variant="outline">{currency.format(doc.totalValue || 0)}</Badge>
               </div>
               <div className="grid grid-cols-1 gap-3 text-xs md:grid-cols-3">
@@ -712,7 +642,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 font-medium text-foreground"><Package className="h-3.5 w-3.5 text-muted-foreground" /> Itens</div>
-                  <p className="line-clamp-2 text-foreground">{doc.items?.length ? `${doc.items.length} item(ns): ${doc.items.map(item => item.description).join(', ')}` : (doc.productSummary || 'Mercadoria ORT')}</p>
+                  <p className="line-clamp-2 text-foreground">{doc.items?.length ? `${doc.items.length} item(ns): ${doc.items.map(item => item.description).join(', ')}` : (doc.productSummary || 'Não identificados — revisar')}</p>
                   <p className="text-muted-foreground">Destino: <span className="text-foreground">{[doc.recipientCity, doc.recipientState].filter(Boolean).join(' - ') || '—'}</span></p>
                 </div>
               </div>
@@ -723,7 +653,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
 
       <div className="flex justify-between border-t border-border pt-4">
         <Button variant="outline" onClick={onBack}><ArrowLeft className="mr-2 h-4 w-4" /> Voltar</Button>
-        <Button onClick={onConfirm}>Validar ORTs <ArrowRight className="ml-2 h-4 w-4" /></Button>
+        <Button onClick={onConfirm}>Validar documentos <ArrowRight className="ml-2 h-4 w-4" /></Button>
       </div>
     </div>
   );

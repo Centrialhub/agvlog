@@ -64,7 +64,7 @@ export default function NoLoadsHelp({
       if (error) throw error;
       const rows = data || [];
       const terminal = new Set(['delivered', 'completed', 'cancelled', 'archived']);
-      const hidden = rows.filter((r: any) => r.on_hold || terminal.has(r.status)).length;
+      const hidden = rows.filter((row) => row.on_hold || terminal.has(row.status)).length;
       return { total: rows.length, hidden };
     },
     enabled: !!driverId,

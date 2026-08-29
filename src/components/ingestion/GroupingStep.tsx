@@ -60,7 +60,7 @@ function findBestVehicle(
   return candidates[0] || null;
 }
 
-export default function GroupingStep({ suggestions, vehicles, drivers, routes = [], executing, onBack, onExecute }: GroupingStepProps) {
+export default function GroupingStep({ suggestions, vehicles, drivers, executing, onBack, onExecute }: GroupingStepProps) {
   const [assignments, setAssignments] = useState<Map<number, { vehicleId: string | null; driverId: string | null }>>(new Map());
   const [autoSuggested, setAutoSuggested] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -137,7 +137,7 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
 
   // Auto-save on every assignment change
   useEffect(() => {
-    if (assignments.size === 0) return;
+    if (assignments.size === 0) return undefined;
     const timer = setTimeout(() => persistState(), 1500);
     return () => clearTimeout(timer);
   }, [assignments, persistState]);
@@ -415,7 +415,6 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
           {suggestions.map((s, i) => {
             const occ = getOccupancy(s, i);
             const isOver = occ && occ.maxPct > 100;
-            const isUnder = occ && occ.maxPct < 50;
             const assignment = assignments.get(i);
             const isAutoSuggested = assignment?.vehicleId && autoSuggested;
 

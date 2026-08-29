@@ -29,7 +29,7 @@ export interface RawFiscalDoc {
   load_id?: string | null;
   client_id?: string | null;
   imported_note_status?: string | null;
-  delivery_meta?: any;
+  delivery_meta?: { delivered_at?: string | null } | null;
 }
 
 export interface RawCte {
@@ -147,7 +147,7 @@ export interface BuiltPreview {
   summaryByDestination: SummaryLine[];
 }
 
-const num = (v: any): number => {
+const num = (v: unknown): number => {
   const x = Number(v ?? 0);
   return Number.isFinite(x) ? x : 0;
 };

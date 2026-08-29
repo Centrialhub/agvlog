@@ -2,20 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
-export interface BankAccount {
-  id: string;
-  tenant_id: string;
-  name: string;
-  bank_name: string | null;
-  bank_code: string | null;
-  branch_number: string | null;
-  account_number: string | null;
-  account_type: 'checking' | 'savings' | 'cash' | 'company_card' | 'pix' | 'other';
-  pix_key: string | null;
-  initial_balance: number;
-  active: boolean;
-}
+export type BankAccountType = 'checking' | 'savings' | 'cash' | 'company_card' | 'pix' | 'other';
+export type BankAccount = Omit<Tables<'bank_accounts'>, 'account_type'> & { account_type: BankAccountType };
+export type CreateBankAccountInput = Omit<TablesInsert<'bank_accounts'>, 'tenant_id' | 'created_by'>;
+export type UpdateBankAccountInput = TablesUpdate<'bank_accounts'> & { id: string };
 
 export function useBankAccounts() {
   const { currentTenant } = useTenant();
@@ -40,12 +32,12 @@ export function useCreateBankAccount() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<BankAccount>) => {
+    mutationFn: async (values: CreateBankAccountInput) => {
       const { data, error } = await supabase.from('bank_accounts').insert({
         ...values,
         tenant_id: currentTenant!.id,
         created_by: user?.id,
-      } as any).select().single();
+      }).select().single();
       if (error) throw error;
       return data;
     },
@@ -56,8 +48,8 @@ export function useCreateBankAccount() {
 export function useUpdateBankAccount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<BankAccount> & { id: string }) => {
-      const { data, error } = await supabase.from('bank_accounts').update(values as any).eq('id', id).select().single();
+    mutationFn: async ({ id, ...values }: UpdateBankAccountInput) => {
+      const { data, error } = await supabase.from('bank_accounts').update(values).eq('id', id).select().single();
       if (error) throw error;
       return data;
     },
@@ -65,18 +57,12 @@ export function useUpdateBankAccount() {
   });
 }
 
-export interface BankTransaction {
-  id: string;
-  bank_account_id: string;
-  posted_at: string;
-  description: string | null;
-  amount: number;
-  transaction_type: 'credit' | 'debit';
-  document_number: string | null;
-  counterparty_name: string | null;
-  reconciliation_status: 'unmatched' | 'suggested' | 'matched' | 'ignored' | 'manual_review';
-  cost_center: string | null;
-}
+export type BankTransactionType = 'credit' | 'debit';
+export type ReconciliationStatus = 'unmatched' | 'suggested' | 'matched' | 'ignored' | 'manual_review';
+export type BankTransaction = Omit<Tables<'bank_transactions'>, 'transaction_type' | 'reconciliation_status'> & {
+  transaction_type: BankTransactionType;
+  reconciliation_status: ReconciliationStatus;
+};
 
 export function useBankTransactions(bankAccountId: string | null, periodStart: string, periodEnd: string) {
   const { currentTenant } = useTenant();
@@ -123,7 +109,7 @@ export function useCreateManualTransaction() {
         document_number: payload.document_number || null,
         cost_center: payload.cost_center || null,
         reconciliation_status: 'unmatched',
-      } as any).select().single();
+      }).select().single();
       if (error) throw error;
       return data;
     },
@@ -133,25 +119,14 @@ export function useCreateManualTransaction() {
   });
 }
 
-export interface FinancialObligation {
-  id: string;
-  tenant_id: string;
+export type FinancialObligation = Omit<Tables<'financial_obligations'>, 'direction'> & {
   direction: 'inflow' | 'outflow';
-  obligation_type: string;
-  source_table: string | null;
-  source_id: string | null;
-  description: string | null;
-  counterparty_type: string | null;
-  counterparty_id: string | null;
-  counterparty_name: string | null;
-  amount_expected: number;
-  amount_matched: number;
-  open_balance: number;
-  due_date: string | null;
-  status: string;
-  matching_status: string;
-  metadata: any;
-}
+};
+
+export type SuggestedMatch = Tables<'financial_matches'> & {
+  bank_transactions: Pick<Tables<'bank_transactions'>, 'id' | 'bank_account_id' | 'posted_at' | 'description' | 'amount'>;
+  financial_obligations: Pick<Tables<'financial_obligations'>, 'id' | 'description' | 'counterparty_name' | 'amount_expected' | 'open_balance'> | null;
+};
 
 export function useFinancialObligations(periodStart: string, periodEnd: string) {
   const { currentTenant } = useTenant();
@@ -187,7 +162,7 @@ export function useSuggestedMatches(bankAccountId: string | null) {
         .eq('status', 'suggested')
         .limit(500);
       if (error) throw error;
-      const rows = (data as any[]) || [];
+      const rows = data || [];
       return bankAccountId ? rows.filter(r => r.bank_transactions?.bank_account_id === bankAccountId) : rows;
     },
     enabled: !!currentTenant,
@@ -200,8 +175,8 @@ export function useSyncObligations() {
   return useMutation({
     mutationFn: async ({ from, to }: { from?: string | null; to?: string | null }) => {
       const { data, error } = await supabase.rpc('sync_financial_obligations', {
-        _tenant_id: currentTenant!.id, _date_from: from ?? null, _date_to: to ?? null,
-      } as any);
+        _tenant_id: currentTenant!.id, _date_from: from ?? undefined, _date_to: to ?? undefined,
+      });
       if (error) throw error;
       return data;
     },
@@ -221,8 +196,8 @@ export function useImportBankStatement() {
       file_hash: string;
       period_start: string;
       period_end: string;
-      rows: any[];
-      raw_metadata?: any;
+      rows: Json[];
+      raw_metadata?: Json;
     }) => {
       const { data, error } = await supabase.rpc('import_bank_statement', {
         _tenant_id: currentTenant!.id,
@@ -233,7 +208,7 @@ export function useImportBankStatement() {
         _period_end: payload.period_end,
         _rows: payload.rows,
         _raw_metadata: payload.raw_metadata ?? {},
-      } as any);
+      });
       if (error) throw error;
       return data;
     },
@@ -254,7 +229,7 @@ export function useRunReconciliation() {
         _bank_account_id: payload.bank_account_id,
         _period_start: payload.period_start,
         _period_end: payload.period_end,
-      } as any);
+      });
       if (error) throw error;
       return data;
     },
@@ -270,7 +245,7 @@ export function useAcceptMatch() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (matchId: string) => {
-      const { error } = await supabase.rpc('accept_financial_match', { _match_id: matchId } as any);
+      const { error } = await supabase.rpc('accept_financial_match', { _match_id: matchId });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -285,7 +260,7 @@ export function useRejectMatch() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ matchId, reason }: { matchId: string; reason: string }) => {
-      const { error } = await supabase.rpc('reject_financial_match', { _match_id: matchId, _reason: reason } as any);
+      const { error } = await supabase.rpc('reject_financial_match', { _match_id: matchId, _reason: reason });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -311,8 +286,8 @@ export function useCreateManualMatch() {
         _bank_transaction_id: payload.bank_transaction_id,
         _financial_obligation_id: payload.financial_obligation_id,
         _amount_matched: payload.amount_matched,
-        _reason: payload.reason ?? null,
-      } as any);
+        _reason: payload.reason ?? undefined,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -327,7 +302,7 @@ export function useReverseMatch() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ matchId, reason }: { matchId: string; reason: string }) => {
-      const { error } = await supabase.rpc('reverse_financial_match', { _match_id: matchId, _reason: reason } as any);
+      const { error } = await supabase.rpc('reverse_financial_match', { _match_id: matchId, _reason: reason });
       if (error) throw error;
     },
     onSuccess: () => {

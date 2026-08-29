@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { PalletProtocol } from '@/hooks/usePalletReturns';
+import { getAutoTableFinalY } from '@/lib/pdf/autoTable';
 
 function fmtDate(v: string | null | undefined): string {
   if (!v) return '';
@@ -113,7 +114,7 @@ export function generatePalletReturnProtocolPdf(protocol: PalletProtocol, option
     },
   });
 
-  let y = (doc as any).lastAutoTable.finalY + 12;
+  let y = getAutoTableFinalY(doc, 20) + 12;
   doc.setFontSize(10);
   doc.text(`Recebemos de: ${company.toUpperCase()} a quantidade de paletes total relacionada acima.`, 14, y, { maxWidth: 180 });
   y += 20;
@@ -137,7 +138,7 @@ export function generatePalletReturnProtocolPdf(protocol: PalletProtocol, option
   if (meta.length) doc.text(meta.join('   |   '), 14, y);
   if (protocol.notes) doc.text(`Observações: ${protocol.notes}`, 14, y + 6, { maxWidth: 180 });
 
-  const pageCount = (doc as any).internal.getNumberOfPages?.() || 1;
+  const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);
@@ -174,11 +175,11 @@ export function generatePalletReportPdf(title: string, headers: string[], rows: 
     headStyles: { fillColor: [40, 40, 40], textColor: 255 },
   });
   if (meta.totals?.length) {
-    let y = (doc as any).lastAutoTable.finalY + 6;
+    let y = getAutoTableFinalY(doc, 20) + 6;
     doc.setFontSize(9); doc.setTextColor(20);
     for (const [k, v] of meta.totals) { doc.text(`${k}: ${v}`, 14, y); y += 5; }
   }
-  const pageCount = (doc as any).internal.getNumberOfPages?.() || 1;
+  const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8); doc.setTextColor(120);

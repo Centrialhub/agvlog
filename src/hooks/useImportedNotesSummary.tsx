@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
+import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
+import type { JsonObject } from '@/lib/jsonTypes';
 
 export type NoteOperationalStatus =
   | 'not_processed' | 'not_processed_redispatch' | 'processed'
@@ -43,6 +45,7 @@ export interface ImportedNoteRow {
   import_batch_id: string | null;
   control_lot: string | null;
   dynamic_lot: string | null;
+  created_at: string | null;
   imported_at: string | null;
   issue_date: string | null;
   remitter: string | null;
@@ -60,13 +63,13 @@ export interface ImportedNoteRow {
   freight_fob_value: number | null;
   imported_note_status: NoteOperationalStatus | null;
   status: string | null;
-  delivery_meta: any;
+  delivery_meta: Json;
   load_id: string | null;
   client_id: string | null;
   document_type: string | null;
   clients?: { company_name: string | null; tax_id: string | null } | null;
   suppliers?: { company_name: string | null; tax_id: string | null } | null;
-  loads?: { id: string; load_number: string | null; status: string | null; origin: any; destination: any; vehicle_id: string | null; driver_id: string | null } | null;
+  loads?: { id: string; load_number: string | null; status: string | null; origin: string | null; destination: string | null; vehicle_id: string | null; driver_id: string | null } | null;
   cte_number?: string | null;
   cte_id?: string | null;
   cte_freight_value?: number | null;
@@ -75,6 +78,32 @@ export interface ImportedNoteRow {
   nfse_number?: string | null;
   nfse_id?: string | null;
   operational_status: NoteOperationalStatus;
+}
+
+type CteSummary = Pick<
+  Tables<'cte_documents'>,
+  'id' | 'cte_number' | 'access_key' | 'freight_value' | 'issued_at' | 'status' | 'fiscal_document_ids' | 'cancelled_at'
+>;
+type OutboundCteSummary = Pick<
+  Tables<'fiscal_documents'>,
+  'id' | 'access_key' | 'invoice_number' | 'freight_value' | 'status' | 'sefaz_status'
+>;
+type NfseSummary = Pick<
+  Tables<'nfse_documents'>,
+  'id' | 'nfse_number' | 'rps_number' | 'status' | 'fiscal_document_ids' | 'created_at'
+>;
+
+const NOTE_OPERATIONAL_STATUSES = new Set<NoteOperationalStatus>([
+  'not_processed', 'not_processed_redispatch', 'processed', 'in_transit',
+  'delivered', 'not_delivered', 'transferred', 'not_transferred',
+]);
+
+function isNoteOperationalStatus(value: string | null): value is NoteOperationalStatus {
+  return value != null && NOTE_OPERATIONAL_STATUSES.has(value as NoteOperationalStatus);
+}
+
+function jsonObject(value: Json): JsonObject {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
 /**
@@ -88,11 +117,11 @@ export function cteNumberFromAccessKey(key?: string | null): string | null {
   return n || null;
 }
 
-export function resolveNoteStatus(row: Partial<ImportedNoteRow> & { cte_id?: string | null; loads?: any }): NoteOperationalStatus {
+export function resolveNoteStatus(row: Partial<ImportedNoteRow>): NoteOperationalStatus {
   if (row.imported_note_status) return row.imported_note_status;
-  const dm = row.delivery_meta || {};
-  if (dm?.delivered === true || row.status === 'delivered') return 'delivered';
-  if (dm?.ne === true || row.status === 'not_delivered') return 'not_delivered';
+  const deliveryMeta = jsonObject(row.delivery_meta ?? {});
+  if (deliveryMeta.delivered === true || row.status === 'delivered') return 'delivered';
+  if (deliveryMeta.ne === true || row.status === 'not_delivered') return 'not_delivered';
   const loadStatus = row.loads?.status;
   if (loadStatus === 'in_transit') return 'in_transit';
   if (loadStatus === 'delivered') return 'delivered';
@@ -107,20 +136,21 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
     queryKey: ['imported_notes_summary', currentTenant?.id, filters],
     enabled: !!currentTenant,
     queryFn: async () => {
+      if (!currentTenant) return [];
       let q = supabase
         .from('fiscal_documents')
         .select(`
           id, invoice_number, access_key, import_batch_id, control_lot, dynamic_lot,
-          imported_at, issue_date, remitter, recipient, origin_city, origin_state,
+          created_at, imported_at, issue_date, remitter, recipient, origin_city, origin_state,
           recipient_city, recipient_state, value, weight_kg, volume_count, pallet_count,
           freight_value, freight_cif_value, freight_fob_value, imported_note_status,
           status, delivery_meta, load_id, client_id, document_type,
           cte_emitted_at, cte_emitted_outbound_id, nfse_emitted_at, nfse_emitted_document_id,
-          clients:client_id(company_name, tax_id),
-          suppliers:supplier_id(company_name, tax_id),
-          loads:load_id(id, load_number, status, origin, destination, vehicle_id, driver_id)
+          clients:clients!fiscal_documents_client_id_fkey(company_name, tax_id),
+          suppliers:clients!fiscal_documents_supplier_id_fkey(company_name, tax_id),
+          loads:loads!fiscal_documents_load_id_fkey(id, load_number, status, origin, destination, vehicle_id, driver_id)
         `)
-        .eq('tenant_id', currentTenant!.id)
+        .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .is('deleted_at', null)
         .order('imported_at', { ascending: false, nullsFirst: false })
@@ -144,19 +174,20 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
 
       const { data, error } = await q;
       if (error) throw error;
-      const rows = (data || []) as any[];
+      const rows = data || [];
 
       // Cross com CT-e via cte_documents.fiscal_document_ids
       const ids = rows.map(r => r.id);
-      const cteMap = new Map<string, any>();
+      const cteMap = new Map<string, CteSummary>();
       if (ids.length > 0) {
-        const { data: allCtes } = await supabase
+        const { data: allCtes, error: ctesError } = await supabase
           .from('cte_documents')
           .select('id, cte_number, access_key, freight_value, issued_at, status, fiscal_document_ids, cancelled_at')
-          .eq('tenant_id', currentTenant!.id)
-          .overlaps('fiscal_document_ids', ids as any)
+          .eq('tenant_id', currentTenant.id)
+          .overlaps('fiscal_document_ids', ids)
           .order('issued_at', { ascending: false })
           .limit(2000);
+        if (ctesError) throw ctesError;
         for (const c of allCtes || []) {
           const fids = Array.isArray(c.fiscal_document_ids) ? c.fiscal_document_ids : [];
           for (const fid of fids) {
@@ -170,28 +201,31 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
       const outboundIds = Array.from(
         new Set(rows.map(r => r.cte_emitted_outbound_id).filter(Boolean)),
       ) as string[];
-      const outboundMap = new Map<string, any>();
+      const outboundMap = new Map<string, OutboundCteSummary>();
       if (outboundIds.length > 0) {
-        const { data: outbound } = await supabase
+        const { data: outbound, error: outboundError } = await supabase
           .from('fiscal_documents')
           .select('id, access_key, invoice_number, freight_value, status, sefaz_status')
           .in('id', outboundIds);
+        if (outboundError) throw outboundError;
         for (const o of outbound || []) outboundMap.set(o.id, o);
       }
 
       // NFS-e (Montes Claros) — número real vem de `nfse_documents`
-      const nfseMap = new Map<string, any>();
-      const nfseById = new Map<string, any>();
+      const nfseMap = new Map<string, NfseSummary>();
+      const nfseById = new Map<string, NfseSummary>();
       if (ids.length > 0) {
-        const { data: nfses } = await supabase
+        const { data: nfses, error: nfsesError } = await supabase
           .from('nfse_documents')
           .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
-          .eq('tenant_id', currentTenant!.id)
-          .overlaps('fiscal_document_ids', ids as any)
+          .eq('tenant_id', currentTenant.id)
+          .overlaps('fiscal_document_ids', ids)
           .order('created_at', { ascending: false })
           .limit(2000);
-        for (const n of (nfses || []) as any[]) {
+        if (nfsesError) throw nfsesError;
+        for (const n of nfses || []) {
           if (n.status === 'cancelled') continue;
+          nfseById.set(n.id, n);
           const fids = Array.isArray(n.fiscal_document_ids) ? n.fiscal_document_ids : [];
           for (const fid of fids) if (!nfseMap.has(fid)) nfseMap.set(fid, n);
         }
@@ -204,11 +238,12 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
       ) as string[];
       const missingNfseIds = nfseDirectIds.filter(id => !nfseById.has(id));
       if (missingNfseIds.length > 0) {
-        const { data: extra } = await supabase
+        const { data: extra, error: extraNfseError } = await supabase
           .from('nfse_documents')
           .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
           .in('id', missingNfseIds);
-        for (const n of (extra || []) as any[]) nfseById.set(n.id, n);
+        if (extraNfseError) throw extraNfseError;
+        for (const n of extra || []) nfseById.set(n.id, n);
       }
 
       const enriched: ImportedNoteRow[] = rows.map(r => {
@@ -218,8 +253,9 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
           nfseMap.get(r.id) ||
           (r.nfse_emitted_document_id ? nfseById.get(r.nfse_emitted_document_id) : null) ||
           null;
-        const base: any = {
+        const base: Omit<ImportedNoteRow, 'operational_status'> = {
           ...r,
+          imported_note_status: isNoteOperationalStatus(r.imported_note_status) ? r.imported_note_status : null,
           cte_id: cte?.id ?? out?.id ?? null,
           cte_number:
             cte?.cte_number ??
@@ -233,8 +269,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
           nfse_id: nfse?.id ?? null,
           nfse_number: nfse ? String(nfse.nfse_number ?? nfse.rps_number ?? '') || null : null,
         };
-        base.operational_status = resolveNoteStatus(base);
-        return base as ImportedNoteRow;
+        return { ...base, operational_status: resolveNoteStatus(base) };
       });
 
       // Filtro derivado por status operacional (client-side)
@@ -288,10 +323,10 @@ export function exportImportedNotesCsv(rows: ImportedNoteRow[]): string {
     'Valor Frete CIF','Valor Frete FOB','Data Emissão','Município Origem','UF Origem',
     'Município Destino','UF Destino','Valor Nota','Volume','Peso','Situação','Carga/Romaneio',
   ];
-  const fmt = (v: any) => v == null ? '' : String(v).replace(/"/g, '""');
-  const dt = (s: any) => s ? new Date(String(s).length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '';
-  const num = (n: any) => n == null ? '' : String(Number(n).toFixed(2)).replace('.', ',');
-  const numW = (n: any) => n == null ? '' : String(Number(n).toFixed(3)).replace('.', ',');
+  const fmt = (value: string | number | null | undefined) => value == null ? '' : String(value).replace(/"/g, '""');
+  const dt = (value: string | null | undefined) => value ? new Date(value.length <= 10 ? value + 'T00:00:00' : value).toLocaleDateString('pt-BR') : '';
+  const num = (value: number | null | undefined) => value == null ? '' : String(Number(value).toFixed(2)).replace('.', ',');
+  const numW = (value: number | null | undefined) => value == null ? '' : String(Number(value).toFixed(3)).replace('.', ',');
   const lines = [header.join(';')];
   for (const r of rows) {
     lines.push([
@@ -330,16 +365,17 @@ export async function createSummaryReportSnapshot(
   rows: ImportedNoteRow[],
 ) {
   const totals = getImportedNoteSummaryTotals(rows);
-  const { data, error } = await supabase.from('imported_note_summary_reports' as any).insert({
+  const payload: TablesInsert<'imported_note_summary_reports'> = {
     tenant_id: tenantId,
     report_type: reportType,
     grouped,
-    filters: filters as any,
+    filters: filters as unknown as Json,
     row_count: totals.rowCount,
     total_invoice_value: totals.totalValue,
     total_weight_kg: totals.totalWeight,
     total_volume: totals.totalVolume,
-  } as any).select().maybeSingle();
+  };
+  const { data, error } = await supabase.from('imported_note_summary_reports').insert(payload).select().maybeSingle();
   if (error) throw error;
   return data;
 }

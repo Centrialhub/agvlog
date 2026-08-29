@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import type { Client } from '@/hooks/useClients';
+import type { Client, CreateClientInput } from '@/hooks/useClients';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Loader2, DollarSign } from 'lucide-react';
+import { Search, Loader2, DollarSign, AlertCircle, RefreshCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 
@@ -41,10 +41,19 @@ type FormState = typeof empty;
 
 function clientToForm(c?: Client | null): FormState {
   if (!c) return { ...empty };
-  return {
-    ...empty,
-    ...Object.fromEntries(Object.entries(c).filter(([k]) => k in empty).map(([k, v]) => [k, v ?? (typeof (empty as any)[k] === 'boolean' ? false : '')])),
-  } as FormState;
+  const source = c as unknown as Record<string, unknown>;
+  const form = { ...empty };
+  for (const key of Object.keys(empty) as Array<keyof FormState>) {
+    const value = source[key];
+    if (key === 'cubage_factor') {
+      form.cubage_factor = value == null ? '' : String(value);
+    } else if (typeof empty[key] === 'boolean') {
+      Object.assign(form, { [key]: typeof value === 'boolean' ? value : false });
+    } else {
+      Object.assign(form, { [key]: value == null ? '' : String(value) });
+    }
+  }
+  return form;
 }
 
 const onlyDigits = (s: string) => s.replace(/\D/g, '');
@@ -55,7 +64,7 @@ export function ClientFormDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   client?: Client | null;
-  onSave: (values: any) => Promise<void> | void;
+  onSave: (values: CreateClientInput) => Promise<void> | void;
   defaultKind?: 'client' | 'supplier';
 }) {
   const [form, setForm] = useState<FormState>(clientToForm(client));
@@ -76,7 +85,7 @@ export function ClientFormDialog({
     setForm(prev => ({ ...prev, [k]: v }));
 
   // Tabelas de frete já cadastradas para esse cliente (auto-aparecem ao digitar grupo pagador)
-  const { data: freightTables = [] } = useQuery({
+  const { data: freightTables = [], isError: freightTablesFailed, refetch: refetchFreightTables } = useQuery({
     queryKey: ['client_freight_tables', currentTenant?.id, client?.id, form.payer_group, form.tax_id],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -95,7 +104,7 @@ export function ClientFormDialog({
         return [];
       }
       const { data, error } = await q;
-      if (error) return [];
+      if (error) throw error;
       return data || [];
     },
     enabled: open && !!currentTenant && (!!client?.id || !!form.payer_group),
@@ -130,8 +139,9 @@ export function ClientFormDialog({
         person_type: 'CNPJ',
       }));
       toast({ title: 'CNPJ consultado', description: `${d.razao_social} — dados preenchidos.` });
-    } catch (e: any) {
-      toast({ title: 'Falha na consulta', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      const description = error instanceof Error ? error.message : 'Não foi possível consultar o CNPJ.';
+      toast({ title: 'Falha na consulta', description, variant: 'destructive' });
     } finally {
       setLookupLoading(false);
     }
@@ -154,7 +164,9 @@ export function ClientFormDialog({
         address_city_ibge_code: prev.address_city_ibge_code || d.city_ibge || '',
 
       }));
-    } catch {}
+    } catch {
+      // A consulta de CEP é assistiva; o formulário continua disponível para preenchimento manual.
+    }
   };
 
   const handleSubmit = async () => {
@@ -162,10 +174,12 @@ export function ClientFormDialog({
       toast({ title: 'Nome obrigatório', variant: 'destructive' });
       return;
     }
-    const payload: any = { ...form };
-    payload.cubage_factor = form.cubage_factor === '' ? null : Number(form.cubage_factor);
-    // Sanitiza vazios para null
-    Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = null; });
+    const payload = Object.fromEntries(
+      Object.entries({
+        ...form,
+        cubage_factor: form.cubage_factor === '' ? null : Number(form.cubage_factor),
+      }).map(([key, value]) => [key, value === '' ? null : value]),
+    ) as CreateClientInput;
     await onSave(payload);
   };
 
@@ -470,13 +484,21 @@ export function ClientFormDialog({
                 </div>
                 <Badge variant="outline">{freightTables.length}</Badge>
               </div>
-              {freightTables.length === 0 ? (
+              {freightTablesFailed ? (
+                <div role="alert" className="px-3 py-6 text-center space-y-2">
+                  <AlertCircle className="h-5 w-5 text-destructive mx-auto" />
+                  <p className="text-xs text-muted-foreground">Não foi possível carregar as tabelas de frete.</p>
+                  <Button type="button" size="sm" variant="outline" onClick={() => void refetchFreightTables()}>
+                    <RefreshCcw className="h-3.5 w-3.5 mr-1.5" /> Tentar novamente
+                  </Button>
+                </div>
+              ) : freightTables.length === 0 ? (
                 <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                   Digite o Grupo Pagador acima para listar tabelas, ou cadastre em Frete → Tabelas.
                 </div>
               ) : (
                 <div className="divide-y max-h-56 overflow-y-auto">
-                  {freightTables.map((t: any) => (
+                  {freightTables.map((t) => (
                     <div key={t.id} className="px-3 py-2 text-xs flex items-center justify-between hover:bg-muted/40">
                       <div>
                         <div className="font-medium">{t.table_name} <span className="text-muted-foreground">({t.table_code || '—'})</span></div>

@@ -3,10 +3,9 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, FileSearch, FileText, Hand, History, Lightbulb, MessageSquareText, PackageCheck, Search, Truck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, FileSearch, History, Lightbulb, PackageCheck, Search, Truck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -145,13 +144,6 @@ const extractionLabel: Record<ExtractionStatus, string> = {
   missing: 'Não encontrado',
 };
 
-const extractionBadgeClass = (status: ExtractionStatus) => {
-  if (status === 'xPed') return 'bg-success/10 text-success border-success/20';
-  if (status === 'observation') return 'bg-warning/10 text-warning border-warning/20';
-  if (status === 'manual') return 'bg-info/10 text-info border-info/20';
-  return 'bg-destructive/10 text-destructive border-destructive/30 ring-1 ring-destructive/20';
-};
-
 const loadStatusToSiat = (doc: TraceDocument): SiatStatus => {
   const loadStatus = doc.loads?.status;
   if (loadStatus === 'delivered' || doc.status === 'delivered') return 'delivered';
@@ -206,7 +198,6 @@ const DEFAULT_SLA_THRESHOLD_H = 72;
 
 export default function Traceability() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
@@ -235,21 +226,30 @@ export default function Traceability() {
         .limit(1000);
       if (docsError) throw docsError;
 
-      const loadIds = Array.from(new Set((docs || []).map((d: any) => d.load_id).filter(Boolean)));
+      const loadIds = Array.from(new Set(
+        (docs || []).map((document) => document.load_id).filter((id): id is string => Boolean(id)),
+      ));
       if (!loadIds.length) return { docs: (docs || []) as TraceDocument[], events: [], trips: [], stops: [] };
 
       const [{ data: events, error: eventsError }, { data: trips, error: tripsError }] = await Promise.all([
-        (supabase as any).from('operational_events').select('id, load_id, event_type, severity, description, resolved_at, created_at, drivers(name)').eq('tenant_id', currentTenant.id).in('load_id', loadIds).order('created_at', { ascending: false }),
+        supabase.from('operational_events').select('id, load_id, event_type, severity, description, resolved_at, created_at, drivers(name)').eq('tenant_id', currentTenant.id).in('load_id', loadIds).order('created_at', { ascending: false }),
         supabase.from('dispatch_trips').select('id, load_id, actual_start_at, actual_end_at, planned_start_at, planned_end_at, status').eq('tenant_id', currentTenant.id).in('load_id', loadIds),
       ]);
       if (eventsError) throw eventsError;
       if (tripsError) throw tripsError;
 
-      const tripIds = (trips || []).map((t: any) => t.id);
-      const { data: stops, error: stopsError } = tripIds.length
-        ? await supabase.from('dispatch_stops').select('id, dispatch_trip_id, destination, status, actual_arrival_at, actual_departure_at, planned_arrival_at, stop_order').eq('tenant_id', currentTenant.id).in('dispatch_trip_id', tripIds).order('stop_order')
-        : { data: [], error: null };
-      if (stopsError) throw stopsError;
+      const tripIds = (trips || []).map((trip) => trip.id);
+      let stops: DispatchStop[] = [];
+      if (tripIds.length) {
+        const stopsResult = await supabase
+          .from('dispatch_stops')
+          .select('id, dispatch_trip_id, destination, status, actual_arrival_at, actual_departure_at, planned_arrival_at, stop_order')
+          .eq('tenant_id', currentTenant.id)
+          .in('dispatch_trip_id', tripIds)
+          .order('stop_order');
+        if (stopsResult.error) throw stopsResult.error;
+        stops = (stopsResult.data || []) as DispatchStop[];
+      }
 
       return {
         docs: (docs || []) as TraceDocument[],
@@ -452,14 +452,14 @@ export default function Traceability() {
       const entityType = 'fiscal_document';
       const entityId = selectedRow.doc.id;
       const newStatus = eventForm.status === 'no_change' ? null : eventForm.status;
-      const { error } = await (supabase as any).rpc('record_operational_event_with_status', {
+      const { error } = await supabase.rpc('record_operational_event_with_status', {
         _tenant_id: currentTenant.id,
         _entity_type: entityType,
         _entity_id: entityId,
         _event_type: eventForm.type,
         _description: eventForm.description,
         _severity: eventForm.severity,
-        _new_status: newStatus,
+        _new_status: newStatus ?? undefined,
         _visible_to_client: false,
       });
       if (error) throw error;
@@ -471,7 +471,11 @@ export default function Traceability() {
       queryClient.invalidateQueries({ queryKey: ['operational_events'] });
       queryClient.invalidateQueries({ queryKey: ['loads'] });
     },
-    onError: (error: any) => toast({ title: 'Erro', description: error.message, variant: 'destructive' }),
+    onError: (error: unknown) => toast({
+      title: 'Erro',
+      description: error instanceof Error ? error.message : 'Não foi possível registrar o evento.',
+      variant: 'destructive',
+    }),
   });
 
   const exportCsv = () => {
@@ -903,7 +907,9 @@ export default function Traceability() {
                   const n = Number(e.target.value);
                   if (Number.isFinite(n) && n > 0) {
                     setSlaThresholdH(n);
-                    try { window.localStorage.setItem(SLA_THRESHOLD_KEY, String(n)); } catch {}
+                    try { window.localStorage.setItem(SLA_THRESHOLD_KEY, String(n)); } catch {
+                      // O limite permanece ativo nesta sessão quando o storage falha.
+                    }
                   }
                 }}
               />
@@ -966,7 +972,6 @@ export default function Traceability() {
                 : sortedFilteredRows.length === 0 ? <TableRow><TableCell colSpan={22} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
                 : sortedFilteredRows.map(row => {
                   const lastStop = row.stops.at(-1);
-                  const extr = extractionStatus(row.doc);
                   const delivered = row.siatStatus === 'delivered';
                   const slaHours = delivered ? computeSlaHours(row.doc.created_at, lastStop?.actual_arrival_at) : null;
                   const slaBreached = slaHours !== null && slaHours > slaThresholdH;

@@ -21,6 +21,10 @@ import NewManualOrtDialog from '@/components/pickup/NewManualOrtDialog';
 const OPERACAO_LABELS = ['Distribuição', 'Filial', 'Armazenagem', 'Frota'];
 const ROMANEIO_LABELS = ['Entrega/Coleta', 'Viagem Direta', 'Retira', 'Transferência', 'Devolução', 'Redespacho/Sub'];
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Falha inesperada ao gerar ORT';
+}
+
 export default function OrtGeracaoTab() {
   const { currentTenant } = useTenant();
   const { data: clients = [] } = useClients();
@@ -88,12 +92,12 @@ export default function OrtGeracaoTab() {
 
   const selectedIds = useMemo(() => Object.entries(selected).filter(([, v]) => v).map(([k]) => k), [selected]);
   const totals = useMemo(() => {
-    const rows = candidates.filter((c: any) => selected[c.id]);
+    const rows = candidates.filter((candidate) => selected[candidate.id]);
     return {
       count: rows.length,
-      value: rows.reduce((s: number, c: any) => s + (Number(c.value) || 0), 0),
-      pallets: rows.reduce((s: number, c: any) => s + (Number(c.pallet_count) || 0), 0),
-      weight: rows.reduce((s: number, c: any) => s + (Number(c.weight_kg) || 0), 0),
+      value: rows.reduce((sum, candidate) => sum + (Number(candidate.value) || 0), 0),
+      pallets: rows.reduce((sum, candidate) => sum + (Number(candidate.pallet_count) || 0), 0),
+      weight: rows.reduce((sum, candidate) => sum + (Number(candidate.weight_kg) || 0), 0),
     };
   }, [candidates, selected]);
 
@@ -115,6 +119,10 @@ export default function OrtGeracaoTab() {
   };
 
   const handleGenerate = async () => {
+    if (!currentTenant) {
+      toast({ title: 'Tenant não selecionado', variant: 'destructive' });
+      return;
+    }
     if (selectedIds.length === 0) {
       toast({ title: 'Selecione ao menos uma NF', variant: 'destructive' });
       return;
@@ -124,22 +132,23 @@ export default function OrtGeracaoTab() {
         status: 'pendente',
         pickup_at: new Date().toISOString(),
         notes: `Geração automática de ORT • ${selectedIds.length} NF(s)`,
-      } as any);
+      });
 
       const { error } = await supabase
         .from('fiscal_documents')
-        .update({ pickup_order_id: (pickup as any).id })
-        .in('id', selectedIds);
+        .update({ pickup_order_id: pickup.id })
+        .in('id', selectedIds)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
 
       toast({
         title: 'ORT gerada',
-        description: `Coleta #${(pickup as any).pickup_number} criada com ${selectedIds.length} NF(s).`,
+        description: `Coleta #${pickup.pickup_number} criada com ${selectedIds.length} NF(s).`,
       });
       setSelected({});
       navigate('/pickup-orders');
-    } catch (e: any) {
-      toast({ title: 'Erro ao gerar ORT', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao gerar ORT', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -179,7 +188,7 @@ export default function OrtGeracaoTab() {
                 <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                  {clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -288,7 +297,7 @@ export default function OrtGeracaoTab() {
                     <Checkbox
                       checked={candidates.length > 0 && selectedIds.length === candidates.length}
                       onCheckedChange={(v) => {
-                        if (v) setSelected(Object.fromEntries(candidates.map((c: any) => [c.id, true])));
+                        if (v) setSelected(Object.fromEntries(candidates.map((candidate) => [candidate.id, true])));
                         else setSelected({});
                       }}
                     />
@@ -307,7 +316,7 @@ export default function OrtGeracaoTab() {
                   <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Buscando...</TableCell></TableRow>
                 ) : candidates.length === 0 ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Nenhuma NF candidata encontrada.</TableCell></TableRow>
-                ) : candidates.map((c: any) => (
+                ) : candidates.map((c) => (
                   <TableRow key={c.id} className="cursor-pointer" onClick={() => setSelected(s => ({ ...s, [c.id]: !s[c.id] }))}>
                     <TableCell onClick={e => e.stopPropagation()}>
                       <Checkbox checked={!!selected[c.id]} onCheckedChange={(v) => setSelected(s => ({ ...s, [c.id]: !!v }))} />

@@ -2,12 +2,10 @@ import { useState, useMemo, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useImportedNotes } from '@/hooks/useImportedNotesSummary';
 import { useAuth } from '@/hooks/useAuth';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,9 +13,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { FileText, Calculator, AlertTriangle, CheckCircle, Eye, Edit3, Search } from 'lucide-react';
+import { FileText, Calculator, CheckCircle, Eye, Edit3, Search } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import FreightReviewDialog from '@/components/freight/FreightReviewDialog';
+import type { Json, TablesInsert } from '@/integrations/supabase/types';
 
 interface Doc {
   id: string;
@@ -31,10 +30,11 @@ interface Doc {
   status: string;
   freight_value?: number | null;
   freight_value_original?: number | null;
-  freight_breakdown?: any;
+  freight_breakdown?: Json;
   freight_overridden?: boolean | null;
   freight_override_reason?: string | null;
   freight_confirmed_at?: string | null;
+  deleted_at?: string | null;
 }
 
 interface Props {
@@ -49,8 +49,8 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
   const { user } = useAuth();
   const qc = useQueryClient();
 
-  const inboundDocs = useMemo(() => documents.filter(d => d.document_type === 'inbound' && !(d as any).deleted_at), [documents]);
-  const outboundDocs = useMemo(() => documents.filter(d => d.document_type === 'outbound' && !(d as any).deleted_at), [documents]);
+  const inboundDocs = useMemo(() => documents.filter(document => document.document_type === 'inbound' && !document.deleted_at), [documents]);
+  const outboundDocs = useMemo(() => documents.filter(document => document.document_type === 'outbound' && !document.deleted_at), [documents]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState({ invoice: '', recipient: '' });
@@ -84,7 +84,8 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
   const toggleDoc = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -137,7 +138,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
         .join(', ')
         .substring(0, 500);
 
-      const { data, error } = await supabase.from('fiscal_documents').insert({
+      const payload: TablesInsert<'fiscal_documents'> = {
         tenant_id: currentTenant.id,
         created_by: user?.id,
         document_type: 'outbound',
@@ -152,7 +153,8 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
         product_summary: itemSummary,
         status: 'confirmed',
         issue_date: new Date().toISOString().slice(0, 10),
-      } as any).select().single();
+      };
+      const { data, error } = await supabase.from('fiscal_documents').insert(payload).select().single();
 
       if (error) throw error;
 
@@ -198,7 +200,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['load_documents'] });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: Error) => toast.error(error.message),
   });
 
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
@@ -368,7 +370,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
         <FreightReviewDialog
           open={!!reviewDoc}
           onOpenChange={(v) => { if (!v) setReviewDoc(null); }}
-          doc={reviewDoc as any}
+          doc={reviewDoc}
         />
       </CardContent>
     </Card>

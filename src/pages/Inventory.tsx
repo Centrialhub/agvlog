@@ -1,7 +1,11 @@
 import { useState, useMemo } from 'react';
-import { useInventoryBalances, useInventoryMovements, useInventoryLocations, useCreateMovement, useCreateLocation, MOVEMENT_TYPES, MOVEMENT_TYPE_LABELS } from '@/hooks/useInventory';
-import { useClients } from '@/hooks/useClients';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  useInventoryBalances, useInventoryMovements, useInventoryLocations,
+  useCreateMovement, useCreateLocation, MOVEMENT_TYPES, MOVEMENT_TYPE_LABELS,
+  type InventoryLocation, type InventoryMovement, type MovementType,
+} from '@/hooks/useInventory';
+import { useClients, type Client } from '@/hooks/useClients';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -16,9 +20,14 @@ import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-function MovementForm({ clients, locations, onSave, onCancel }: { clients: any[]; locations: any[]; onSave: (v: any) => void; onCancel: () => void }) {
+function MovementForm({ clients, locations, onSave, onCancel }: {
+  clients: Client[];
+  locations: InventoryLocation[];
+  onSave: (values: Partial<InventoryMovement>) => void;
+  onCancel: () => void;
+}) {
   const [form, setForm] = useState({
-    movement_type: 'inbound' as string,
+    movement_type: 'inbound' as MovementType,
     location_id: '',
     client_id: '',
     item_description: '',
@@ -33,7 +42,10 @@ function MovementForm({ clients, locations, onSave, onCancel }: { clients: any[]
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label>Tipo de Movimento *</Label>
-          <Select value={form.movement_type} onValueChange={v => setForm(f => ({ ...f, movement_type: v }))}>
+          <Select value={form.movement_type} onValueChange={(value) => setForm((previous) => ({
+            ...previous,
+            movement_type: value as MovementType,
+          }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {MOVEMENT_TYPES.map(t => <SelectItem key={t} value={t}>{MOVEMENT_TYPE_LABELS[t]}</SelectItem>)}
@@ -77,7 +89,10 @@ function MovementForm({ clients, locations, onSave, onCancel }: { clients: any[]
   );
 }
 
-function LocationForm({ onSave, onCancel }: { onSave: (v: any) => void; onCancel: () => void }) {
+function LocationForm({ onSave, onCancel }: {
+  onSave: (values: Partial<InventoryLocation>) => void;
+  onCancel: () => void;
+}) {
   const [form, setForm] = useState({ name: '', code: '', description: '' });
   return (
     <div className="space-y-4">
@@ -116,23 +131,23 @@ export default function Inventory() {
     return 'bg-warning/10 text-warning';
   };
 
-  const handleMovementSave = async (values: any) => {
+  const handleMovementSave = async (values: Partial<InventoryMovement>) => {
     try {
       await createMovement.mutateAsync(values);
       toast({ title: 'Movimento registrado' });
       setMovDialog(false);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: error instanceof Error ? error.message : String(error), variant: 'destructive' });
     }
   };
 
-  const handleLocationSave = async (values: any) => {
+  const handleLocationSave = async (values: Partial<InventoryLocation>) => {
     try {
       await createLocation.mutateAsync(values);
       toast({ title: 'Local criado' });
       setLocDialog(false);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: error instanceof Error ? error.message : String(error), variant: 'destructive' });
     }
   };
 

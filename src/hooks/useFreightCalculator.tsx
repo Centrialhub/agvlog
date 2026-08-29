@@ -1,4 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
+
+type FreightTable = Tables<'freight_tables'>;
 
 export interface FreightInput {
   tenantId: string;
@@ -62,12 +65,99 @@ export interface FreightResult {
   error?: string;
 }
 
-export function computeSpecificity(table: any, input: FreightInput): { score: number; matched: Record<string, string>; ignored: string[] } {
+export function freightBreakdownToJson(breakdown: FreightBreakdown): Json {
+  return {
+    tableName: breakdown.tableName,
+    tableId: breakdown.tableId,
+    tableCode: breakdown.tableCode,
+    regionId: breakdown.regionId ?? null,
+    regionName: breakdown.regionName ?? null,
+    matchedCriteria: breakdown.matchedCriteria,
+    ignoredCriteria: breakdown.ignoredCriteria,
+    specificityScore: breakdown.specificityScore,
+    components: breakdown.components,
+    baseValue: breakdown.baseValue,
+    minValue: breakdown.minValue,
+    finalValue: breakdown.finalValue,
+    fallbackUsed: breakdown.fallbackUsed,
+    fallbackReason: breakdown.fallbackReason ?? null,
+    missingFields: breakdown.missingFields ?? [],
+    unknownSubstitutions: breakdown.unknownSubstitutions ?? {},
+  };
+}
+
+function jsonObject(value: Json | null | undefined): { [key: string]: Json | undefined } | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function jsonNumber(value: Json | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+export function freightBreakdownFromJson(value: Json | null | undefined): FreightBreakdown | null {
+  const source = jsonObject(value);
+  const componentSource = jsonObject(source?.components);
+  if (!source || !componentSource || typeof source.tableName !== 'string' ||
+      typeof source.tableId !== 'string' || typeof source.tableCode !== 'number') return null;
+
+  const matchedSource = jsonObject(source.matchedCriteria);
+  const matchedCriteria = Object.fromEntries(
+    Object.entries(matchedSource ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  );
+  const ignoredCriteria = Array.isArray(source.ignoredCriteria)
+    ? source.ignoredCriteria.filter((item): item is string => typeof item === 'string')
+    : [];
+  const missingFields = Array.isArray(source.missingFields)
+    ? source.missingFields.filter((item): item is string => typeof item === 'string')
+    : undefined;
+  const substitutionsSource = jsonObject(source.unknownSubstitutions);
+  const unknownSubstitutions = substitutionsSource
+    ? Object.fromEntries(
+        Object.entries(substitutionsSource).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+      )
+    : undefined;
+
+  return {
+    tableName: source.tableName,
+    tableId: source.tableId,
+    tableCode: source.tableCode,
+    regionId: typeof source.regionId === 'string' ? source.regionId : null,
+    regionName: typeof source.regionName === 'string' ? source.regionName : null,
+    matchedCriteria,
+    ignoredCriteria,
+    specificityScore: jsonNumber(source.specificityScore),
+    components: {
+      ratePercent: jsonNumber(componentSource.ratePercent),
+      rateValue: jsonNumber(componentSource.rateValue),
+      fixedValue: jsonNumber(componentSource.fixedValue),
+      perKgValue: jsonNumber(componentSource.perKgValue),
+      perKgTotal: jsonNumber(componentSource.perKgTotal),
+      perPalletValue: jsonNumber(componentSource.perPalletValue),
+      perPalletTotal: jsonNumber(componentSource.perPalletTotal),
+      dispatchValue: jsonNumber(componentSource.dispatchValue),
+      trackingValue: jsonNumber(componentSource.trackingValue),
+      tollValue: jsonNumber(componentSource.tollValue),
+      loadingValue: jsonNumber(componentSource.loadingValue),
+      grisValue: jsonNumber(componentSource.grisValue),
+      insurancePercent: jsonNumber(componentSource.insurancePercent),
+      insuranceValue: jsonNumber(componentSource.insuranceValue),
+    },
+    baseValue: jsonNumber(source.baseValue),
+    minValue: jsonNumber(source.minValue),
+    finalValue: jsonNumber(source.finalValue),
+    fallbackUsed: source.fallbackUsed === true,
+    fallbackReason: typeof source.fallbackReason === 'string' ? source.fallbackReason : undefined,
+    missingFields,
+    unknownSubstitutions,
+  };
+}
+
+export function computeSpecificity(table: Partial<FreightTable>, input: FreightInput): { score: number; matched: Record<string, string>; ignored: string[] } {
   let score = 0;
   const matched: Record<string, string> = {};
   const ignored: string[] = [];
 
-  const check = (field: string, tableVal: string | null, inputVal: string | null | undefined) => {
+  const check = (field: string, tableVal: string | null | undefined, inputVal: string | null | undefined) => {
     if (!tableVal) return; // wildcard
     if (inputVal && tableVal.toLowerCase() === inputVal.toLowerCase()) {
       score += 10;
@@ -82,7 +172,7 @@ export function computeSpecificity(table: any, input: FreightInput): { score: nu
   // Only pushes negative on a real mismatch (both sides present and different).
   // This prevents generic all-null tables from being wrongly rejected in favor of
   // a specific-but-mismatched fallback.
-  const checkSoft = (field: string, tableVal: string | null, inputVal: string | null | undefined) => {
+  const checkSoft = (field: string, tableVal: string | null | undefined, inputVal: string | null | undefined) => {
     if (!tableVal) return;
     if (!inputVal) {
       ignored.push(`${field}: table="${tableVal}" vs input="(vazio)" (não pontua, não desqualifica)`);
@@ -97,7 +187,7 @@ export function computeSpecificity(table: any, input: FreightInput): { score: nu
     }
   };
 
-  const checkContains = (field: string, tableVal: string | null, inputVal: string | null | undefined) => {
+  const checkContains = (field: string, tableVal: string | null | undefined, inputVal: string | null | undefined) => {
     if (!tableVal) return;
     if (inputVal && inputVal.toLowerCase().includes(tableVal.toLowerCase())) {
       score += 5;
@@ -130,7 +220,7 @@ export function computeSpecificity(table: any, input: FreightInput): { score: nu
   return { score, matched, ignored };
 }
 
-function computeFreightValue(table: any, input: FreightInput): FreightBreakdown['components'] {
+function computeFreightValue(table: FreightTable, input: FreightInput): FreightBreakdown['components'] {
   const ratePercent = Number(table.rate_percent) || 0;
   const rateValue = input.totalValue * (ratePercent / 100);
   const fixedValue = Number(table.fixed_value) || 0;
@@ -200,15 +290,15 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
   }
 
   // Filter by validity
-  const valid = tables.filter((t: any) => !t.valid_until || t.valid_until >= today);
+  const valid = tables.filter((table) => !table.valid_until || table.valid_until >= today);
   if (valid.length === 0) {
     return { success: false, value: 0, breakdown: null, error: 'Nenhuma tabela de frete vigente' };
   }
 
   // Score each table — using normalized input (missing fields treated as wildcards / null)
-  const scored = valid.map((t: any) => {
-    const { score, matched, ignored } = computeSpecificity(t, normalizedInput);
-    return { table: t, score, matched, ignored };
+  const scored = valid.map((table) => {
+    const { score, matched, ignored } = computeSpecificity(table, normalizedInput);
+    return { table, score, matched, ignored };
   });
 
   // Filter out disqualified (negative score means hard mismatch)
@@ -307,7 +397,7 @@ export async function logFreightCalculation(
   userId?: string,
 ): Promise<void> {
   // Upsert by (tenant_id, entity_type, entity_id) — keeps a single current row per CT-e
-  await supabase.from('freight_calculation_log').upsert({
+  const log: TablesInsert<'freight_calculation_log'> = {
     tenant_id: tenantId,
     entity_id: entityId,
     entity_type: entityType,
@@ -320,11 +410,15 @@ export async function logFreightCalculation(
       ...breakdown.ignoredCriteria,
       ...(breakdown.missingFields?.map(f => `missing:${f}=UNKNOWN`) || []),
     ],
-    components: breakdown.components as any,
+    components: breakdown.components,
     base_value: breakdown.baseValue,
     final_value: breakdown.finalValue,
     fallback_used: breakdown.fallbackUsed,
     fallback_reason: breakdown.fallbackReason || null,
     created_by: userId || null,
-  } as any, { onConflict: 'tenant_id,entity_type,entity_id' });
+  };
+  const { error } = await supabase
+    .from('freight_calculation_log')
+    .upsert(log, { onConflict: 'tenant_id,entity_type,entity_id' });
+  if (error) throw error;
 }

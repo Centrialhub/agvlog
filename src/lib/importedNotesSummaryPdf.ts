@@ -1,7 +1,9 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import type { RowInput } from 'jspdf-autotable';
 import type { ImportedNoteRow } from '@/hooks/useImportedNotesSummary';
 import { getImportedNoteSummaryTotals, groupNotesBy } from '@/hooks/useImportedNotesSummary';
+import { getAutoTableFinalY } from '@/lib/pdf/autoTable';
 
 export interface CarrierInfo {
   name: string;
@@ -41,7 +43,9 @@ export interface ReportOptions {
 
 const brl = (n: number) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const num3 = (n: number) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-const dt = (s: any) => s ? new Date(String(s).length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '';
+const dt = (value: unknown) => value
+  ? new Date(String(value).length <= 10 ? `${String(value)}T00:00:00` : String(value)).toLocaleDateString('pt-BR')
+  : '';
 
 const TABLE_HEAD = [
   'Origem','Remetente','Destinatário','Destino','Emissão','Nº Nota',
@@ -110,35 +114,36 @@ export function generateImportedNotesSummaryPdf(opts: ReportOptions) {
   if (manifest && (manifest.manifestNumber || manifest.vehiclePlate || manifest.driverName)) {
     drawHeader();
     doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    const manifestRows: RowInput[] = [
+      [
+        { content: `Nº Manifesto: ${manifest.manifestNumber || '—'}`, styles: { fontStyle: 'bold' } },
+        `Marca: ${manifest.vehicleBrand || '—'}`,
+        `Placa: ${manifest.vehiclePlate || '—'}`,
+        `Cidade/UF: ${[manifest.vehicleCity, manifest.vehicleState].filter(Boolean).join('/') || '—'}`,
+      ],
+      [
+        `Proprietário: ${manifest.vehicleOwner || '—'}`,
+        { content: `Endereço: ${manifest.vehicleAddress || '—'}`, colSpan: 2 },
+        `Motorista: ${manifest.driverName || '—'}`,
+      ],
+      [
+        `Origem: ${manifest.origin || '—'}`,
+        { content: `Destino: ${manifest.destination || '—'}`, colSpan: 3 },
+      ],
+    ];
     autoTable(doc, {
       startY,
       theme: 'plain',
-      body: [
-        [
-          { content: `Nº Manifesto: ${manifest.manifestNumber || '—'}`, styles: { fontStyle: 'bold' } },
-          `Marca: ${manifest.vehicleBrand || '—'}`,
-          `Placa: ${manifest.vehiclePlate || '—'}`,
-          `Cidade/UF: ${[manifest.vehicleCity, manifest.vehicleState].filter(Boolean).join('/') || '—'}`,
-        ],
-        [
-          `Proprietário: ${manifest.vehicleOwner || '—'}`,
-          { content: `Endereço: ${manifest.vehicleAddress || '—'}`, colSpan: 2 },
-          `Motorista: ${manifest.driverName || '—'}`,
-        ],
-        [
-          `Origem: ${manifest.origin || '—'}`,
-          { content: `Destino: ${manifest.destination || '—'}`, colSpan: 3 },
-        ],
-      ] as any,
+      body: manifestRows,
       styles: { fontSize: 8, cellPadding: 1.2 },
       margin: { left: 14, right: 14 },
     });
-    startY = (doc as any).lastAutoTable.finalY + 4;
+    startY = getAutoTableFinalY(doc, startY) + 4;
   }
 
   const totals = getImportedNoteSummaryTotals(rows);
 
-  const buildTable = (dataRows: any[][], startingY: number) => {
+  const buildTable = (dataRows: RowInput[], startingY: number) => {
     autoTable(doc, {
       startY: startingY,
       head: [TABLE_HEAD],
@@ -163,10 +168,14 @@ export function generateImportedNotesSummaryPdf(opts: ReportOptions) {
     let first = true;
     for (const g of groups) {
       const label = reportType === 'destination_summary' ? 'Destino' : 'Origem';
-      const sub = [
-        [{ content: `${label}: ${g.key} — ${g.items.length} nota(s)`, colSpan: TABLE_HEAD.length, styles: { fontStyle: 'bold' as const, fillColor: [230, 230, 230] as any } }],
+      const sub: RowInput[] = [
+        [{
+          content: `${label}: ${g.key} — ${g.items.length} nota(s)`,
+          colSpan: TABLE_HEAD.length,
+          styles: { fontStyle: 'bold', fillColor: [230, 230, 230] },
+        }],
       ];
-      const body = [
+      const body: RowInput[] = [
         ...sub,
         ...g.items.map(rowToTuple),
         [
@@ -182,7 +191,7 @@ export function generateImportedNotesSummaryPdf(opts: ReportOptions) {
       autoTable(doc, {
         startY: first ? currentY : undefined,
         head: first ? [TABLE_HEAD] : undefined,
-        body: body as any,
+        body,
         styles: { fontSize: 7, cellPadding: 1.1, overflow: 'linebreak' },
         headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: 7 },
         columnStyles: {
@@ -193,19 +202,19 @@ export function generateImportedNotesSummaryPdf(opts: ReportOptions) {
         didDrawPage: () => drawHeader(),
         showHead: 'firstPage',
       });
-      currentY = (doc as any).lastAutoTable.finalY + 2;
+      currentY = getAutoTableFinalY(doc, currentY) + 2;
       first = false;
     }
   }
 
   // Total geral
-  const finalY = (doc as any).lastAutoTable?.finalY ?? startY;
+  const finalY = getAutoTableFinalY(doc, startY);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
   const totalLine = `TOTAL GERAL — Notas: ${totals.rowCount}   Valor: R$ ${brl(totals.totalValue)}   Volume: ${num3(totals.totalVolume)}   Peso: ${num3(totals.totalWeight)} kg   CIF: R$ ${brl(totals.totalCif)}   FOB: R$ ${brl(totals.totalFob)}`;
   doc.text(totalLine, 14, finalY + 6);
 
   // Rodapé "Página X de Y"
-  const pageCount = (doc as any).internal.getNumberOfPages();
+  const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
     doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.getWidth() - 14, doc.internal.pageSize.getHeight() - 6, { align: 'right' });

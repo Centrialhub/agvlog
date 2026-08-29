@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useReceivables, useCreateReceivable, useUpdateReceivable, RECEIVABLE_STATUS_LABELS, RECEIVABLE_STATUSES } from '@/hooks/useReceivables';
 import { useClients } from '@/hooks/useClients';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,7 @@ import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
 import ReceivablePaymentDialog from '@/components/financial/ReceivablePaymentDialog';
 import type { Receivable } from '@/hooks/useReceivables';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
+import { getErrorMessage } from '@/lib/errors';
 
 export default function Receivables() {
   const { data: receivables = [], isLoading } = useReceivables();
@@ -33,7 +34,7 @@ export default function Receivables() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return receivables.filter((r: any) => {
+    return receivables.filter(r => {
       if (q && !(r.description || '').toLowerCase().includes(q) && !(r.invoice_number || '').toLowerCase().includes(q) && !(r.clients?.company_name || '').toLowerCase().includes(q)) return false;
       if (statusFilter !== 'all' && r.status !== statusFilter) return false;
       return true;
@@ -41,9 +42,9 @@ export default function Receivables() {
   }, [receivables, search, statusFilter]);
 
   const totals = useMemo(() => ({
-    pending: receivables.filter((r: any) => r.status === 'pending').reduce((s: number, r: any) => s + Number(r.amount || 0), 0),
-    invoiced: receivables.filter((r: any) => r.status === 'invoiced').reduce((s: number, r: any) => s + Number(r.amount || 0), 0),
-    received: receivables.filter((r: any) => r.status === 'received').reduce((s: number, r: any) => s + Number(r.received_amount || r.amount || 0), 0),
+    pending: receivables.filter(r => r.status === 'pending').reduce((sum, r) => sum + Number(r.amount || 0), 0),
+    invoiced: receivables.filter(r => r.status === 'invoiced').reduce((sum, r) => sum + Number(r.amount || 0), 0),
+    received: receivables.filter(r => r.status === 'received').reduce((sum, r) => sum + Number(r.received_amount || r.amount || 0), 0),
   }), [receivables]);
 
   const resetForm = () => {
@@ -52,7 +53,7 @@ export default function Receivables() {
     setDialogOpen(false);
   };
 
-  const openEdit = (r: any) => {
+  const openEdit = (r: Receivable) => {
     setEditingId(r.id);
     setForm({
       description: r.description || '',
@@ -70,7 +71,7 @@ export default function Receivables() {
     // Match client by CNPJ if possible (recipient of NFe = customer)
     const cnpj = data.recipient.tax_id;
     const match = cnpj
-      ? clients.find((c: any) => (c.tax_id || '').replace(/\D/g, '') === cnpj)
+      ? clients.find(c => (c.tax_id || '').replace(/\D/g, '') === cnpj)
       : null;
     setForm(prev => ({
       ...prev,
@@ -92,7 +93,7 @@ export default function Receivables() {
 
   const handleSave = async () => {
     try {
-      const values: any = {
+      const values = {
         description: form.description || null,
         client_id: form.client_id || null,
         amount: form.amount ? Number(form.amount) : 0,
@@ -100,8 +101,8 @@ export default function Receivables() {
         invoice_number: form.invoice_number || null,
         notes: form.notes || null,
         status: form.status,
+        received_at: form.status === 'received' ? new Date().toISOString() : undefined,
       };
-      if (form.status === 'received') values.received_at = new Date().toISOString();
       if (editingId) {
         await updateReceivable.mutateAsync({ id: editingId, ...values });
         toast.success('Título atualizado');
@@ -110,8 +111,8 @@ export default function Receivables() {
         toast.success('Título criado');
       }
       resetForm();
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível salvar o título.'));
     }
   };
 
@@ -190,7 +191,7 @@ export default function Receivables() {
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum título encontrado</TableCell></TableRow>
-              ) : filtered.map((r: any) => (
+              ) : filtered.map(r => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEdit(r)}>
                   <TableCell className="text-sm font-medium">{r.description || '—'}</TableCell>
                   <TableCell className="text-sm">{r.clients?.company_name || '—'}</TableCell>

@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Plus, Wrench, Edit } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
+import { getErrorMessage } from '@/lib/errors';
 
 export default function MaintenanceOrdersPage() {
   const { data: orders = [], isLoading } = useMaintenanceOrders();
@@ -62,23 +63,31 @@ export default function MaintenanceOrdersPage() {
   };
 
   const handleSave = async () => {
-    const payload: any = {
-      ...form,
+    const payload = {
+      vehicle_id: form.vehicle_id || null,
+      maintenance_type: form.maintenance_type,
+      priority: form.priority,
+      reported_problem: form.reported_problem || null,
+      diagnosis: form.diagnosis || null,
+      supplier_vendor: form.supplier_vendor || null,
+      responsible_employee_id: form.responsible_employee_id || null,
       odometer_km: form.odometer_km ? Number(form.odometer_km) : null,
       parts_cost: form.parts_cost ? Number(form.parts_cost) : 0,
       labor_cost: form.labor_cost ? Number(form.labor_cost) : 0,
       total_cost: (Number(form.parts_cost) || 0) + (Number(form.labor_cost) || 0),
+      services_performed: form.services_performed || null,
+      notes: form.notes || null,
+      status: form.status,
+      completed_at: form.status === 'completed' && !editing?.completed_at
+        ? new Date().toISOString()
+        : editing?.completed_at ?? null,
     };
-    ['vehicle_id','responsible_employee_id'].forEach(k => { if (!payload[k]) payload[k] = null; });
-    Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = null; });
-    payload.maintenance_type = form.maintenance_type; payload.priority = form.priority; payload.status = form.status;
-    if (form.status === 'completed' && !editing?.completed_at) payload.completed_at = new Date().toISOString();
     try {
       if (editing) await updateOrder.mutateAsync({ id: editing.id, ...payload });
       else await createOrder.mutateAsync(payload);
       setDialogOpen(false);
       toast.success(editing ? 'OS atualizada' : 'OS criada');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível salvar a ordem de manutenção.')); }
   };
 
   const kpis = useMemo(() => ({
@@ -126,7 +135,7 @@ export default function MaintenanceOrdersPage() {
               <TableCell className="text-sm font-medium">{o.vehicles?.plate || '—'}</TableCell>
               <TableCell className="text-sm">{MAINT_TYPE_LABELS[o.maintenance_type]}</TableCell>
               <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{o.reported_problem || '—'}</TableCell>
-              <TableCell className="text-sm">{fmt(o.total_cost)}</TableCell>
+              <TableCell className="text-sm">{fmt(o.total_cost ?? 0)}</TableCell>
               <TableCell><Badge variant="outline" className="text-[10px]">{MAINT_STATUS_LABELS[o.status]}</Badge></TableCell>
               <TableCell><Button variant="ghost" size="icon" onClick={() => openEdit(o)}><Edit className="h-4 w-4" /></Button></TableCell>
             </TableRow>

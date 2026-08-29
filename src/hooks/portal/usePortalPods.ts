@@ -25,17 +25,17 @@ export function usePortalPods(filters?: { status?: string; start?: string; end?:
     queryKey: ['portal_pods', currentTenant?.id, selectedClientId, filters],
     queryFn: async (): Promise<PortalPod[]> => {
       if (!currentTenant) return [];
-      const { data, error } = await (supabase as any).rpc('list_client_pods_v2', {
+      const { data, error } = await supabase.rpc('list_client_pods_v2', {
         _tenant_id: currentTenant.id,
-        _client_id: selectedClientId,
-        _status: filters?.status || null,
-        _start_date: filters?.start || null,
-        _end_date: filters?.end || null,
+        _client_id: selectedClientId ?? undefined,
+        _status: filters?.status || undefined,
+        _start_date: filters?.start || undefined,
+        _end_date: filters?.end || undefined,
         _limit: 200,
         _offset: 0,
       });
       if (error) throw error;
-      return (data as any[]) as PortalPod[];
+      return data as PortalPod[];
     },
     enabled: !!currentTenant,
   });
@@ -50,8 +50,10 @@ export function useDownloadPortalPod() {
         body: { tenant_id: currentTenant.id, pod_id: podId },
       });
       if (error) throw error;
-      const url = (data as any)?.signed_url;
-      if (!url) throw new Error('Arquivo indisponível');
+      const url = data && typeof data === 'object' && 'signed_url' in data
+        ? data.signed_url
+        : null;
+      if (typeof url !== 'string' || !url) throw new Error('Arquivo indisponível');
       return url;
     },
   });

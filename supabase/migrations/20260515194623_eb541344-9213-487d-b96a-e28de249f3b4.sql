@@ -1,1 +1,0 @@
-ALTER TABLE public.operational_events ADD COLUMN IF NOT EXISTS report_details jsonb;

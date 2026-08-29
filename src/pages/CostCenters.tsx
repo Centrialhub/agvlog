@@ -21,17 +21,29 @@ import {
 import { format, subDays } from 'date-fns';
 import { CostCenterManager } from '@/components/cost-centers/CostCenterManager';
 import { toast } from '@/components/ui/sonner';
+import { cn } from '@/lib/utils';
 
 const COLORS = [
   'hsl(215, 80%, 48%)', 'hsl(142, 64%, 38%)', 'hsl(38, 92%, 50%)',
   'hsl(0, 72%, 51%)', 'hsl(270, 60%, 55%)', 'hsl(180, 60%, 40%)',
 ];
 
+type Period = '30d' | '90d' | 'all';
+
+interface CostCenterTransaction {
+  id: string;
+  amount: number;
+  description: string | null;
+  cost_center: string | null;
+  date: string;
+  type: 'Pagável' | 'Recebível' | 'Banco' | 'Despesa' | 'Manutenção';
+}
+
 export default function CostCenters() {
   const { currentTenant } = useTenant();
   const { data: costCenters = [] } = useCostCenters();
   const [selectedCostCenter, setSelectedCostCenter] = useState<string>('all');
-  const [period, setPeriod] = useState<'30d' | '90d' | 'all'>('30d');
+  const [period, setPeriod] = useState<Period>('30d');
 
   const periodStart = useMemo(() => {
     if (period === '30d') return subDays(new Date(), 30);
@@ -46,18 +58,19 @@ export default function CostCenters() {
       
       const [payRes, recRes, bankRes, expRes, maintRes] = await Promise.all([
         supabase.from('payables').select('id, amount, description, cost_center, created_at, status').eq('tenant_id', currentTenant.id).not('cost_center', 'is', null),
-        supabase.from('receivables').select('id, amount, description, created_at, status').eq('tenant_id', currentTenant.id),
+        supabase.from('receivables').select('id, amount, description, cost_center, created_at, status').eq('tenant_id', currentTenant.id).not('cost_center', 'is', null),
         supabase.from('bank_transactions').select('id, amount, description, cost_center, posted_at').eq('tenant_id', currentTenant.id).not('cost_center', 'is', null),
         supabase.from('driver_expenses').select('id, amount, category, cost_center, expense_at').eq('tenant_id', currentTenant.id).not('cost_center', 'is', null),
         supabase.from('maintenance_orders').select('id, total_cost, maintenance_type, cost_center, created_at').eq('tenant_id', currentTenant.id).not('cost_center', 'is', null)
       ]);
 
-      const all: any[] = [];
+      const all: CostCenterTransaction[] = [];
       
       payRes.data?.forEach(p => all.push({ id: p.id, amount: -p.amount, description: p.description, cost_center: p.cost_center, date: p.created_at, type: 'Pagável' }));
+      recRes.data?.forEach(r => all.push({ id: r.id, amount: r.amount, description: r.description, cost_center: r.cost_center, date: r.created_at, type: 'Recebível' }));
       bankRes.data?.forEach(b => all.push({ id: b.id, amount: b.amount, description: b.description, cost_center: b.cost_center, date: b.posted_at, type: 'Banco' }));
-      expRes.data?.forEach((e: any) => all.push({ id: e.id, amount: -e.amount, description: e.category, cost_center: e.cost_center, date: e.expense_at, type: 'Despesa' }));
-      maintRes.data?.forEach((m: any) => all.push({ id: m.id, amount: -m.total_cost, description: m.maintenance_type, cost_center: m.cost_center, date: m.created_at, type: 'Manutenção' }));
+      expRes.data?.forEach(e => all.push({ id: e.id, amount: -e.amount, description: e.category, cost_center: e.cost_center, date: e.expense_at, type: 'Despesa' }));
+      maintRes.data?.forEach(m => all.push({ id: m.id, amount: -Number(m.total_cost || 0), description: m.maintenance_type, cost_center: m.cost_center, date: m.created_at, type: 'Manutenção' }));
 
       return all.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     },
@@ -126,7 +139,7 @@ export default function CostCenters() {
           <Button variant="outline" size="sm" onClick={handleExport}>
             <FileDown className="h-4 w-4 mr-2" /> Relatório
           </Button>
-          <Select value={period} onValueChange={(v: any) => setPeriod(v)}>
+          <Select value={period} onValueChange={value => setPeriod(value as Period)}>
             <SelectTrigger className="w-[140px] h-9">
               <Calendar className="h-4 w-4 mr-2" />
               <SelectValue />
@@ -322,8 +335,4 @@ export default function CostCenters() {
       </Tabs>
     </div>
   );
-}
-
-function cn(...classes: any[]) {
-  return classes.filter(Boolean).join(' ');
 }

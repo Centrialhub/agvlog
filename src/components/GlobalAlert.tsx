@@ -9,6 +9,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAlertStore } from "@/hooks/useAlertStore";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { XCircle, AlertTriangle, Info, CheckCircle2 } from "lucide-react";
 
 export function GlobalAlert() {
@@ -24,6 +26,11 @@ export function GlobalAlert() {
     confirmLabel,
     secondaryLabel,
     cancelLabel,
+    input,
+    inputValue,
+    inputError,
+    setInputValue,
+    setInputError,
   } = useAlertStore();
 
   const icons = {
@@ -34,7 +41,16 @@ export function GlobalAlert() {
   };
 
   const handleConfirm = () => {
-    if (onConfirm) onConfirm();
+    const normalizedValue = inputValue.trim();
+    if (input?.required && !normalizedValue) {
+      setInputError(`${input.label} é obrigatória.`);
+      return;
+    }
+    if (input?.minLength && normalizedValue.length < input.minLength) {
+      setInputError(`${input.label} deve ter pelo menos ${input.minLength} caracteres.`);
+      return;
+    }
+    if (onConfirm) onConfirm(input ? normalizedValue : undefined);
     hideAlert();
   };
 
@@ -60,6 +76,25 @@ export function GlobalAlert() {
             <AlertDialogDescription className="text-sm text-foreground/80 whitespace-pre-wrap">
               {description}
             </AlertDialogDescription>
+          )}
+          {input && (
+            <div className="space-y-2 pt-2 text-left">
+              <Label htmlFor="global-alert-input">{input.label}</Label>
+              <Textarea
+                id="global-alert-input"
+                autoFocus
+                value={inputValue}
+                placeholder={input.placeholder}
+                aria-invalid={Boolean(inputError)}
+                aria-describedby={inputError ? "global-alert-input-error" : undefined}
+                onChange={(event) => setInputValue(event.target.value)}
+              />
+              {inputError && (
+                <p id="global-alert-input-error" role="alert" className="text-sm text-destructive">
+                  {inputError}
+                </p>
+              )}
+            </div>
           )}
         </AlertDialogHeader>
         <AlertDialogFooter className="sm:flex-col sm:gap-2 sm:items-stretch">

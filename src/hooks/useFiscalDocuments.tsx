@@ -9,6 +9,7 @@ import {
   normalizeTaxId,
   normalizeFiscalNumber,
 } from '@/lib/fiscalDocuments/fiscalIdentity';
+import type { Database, Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 const FREIGHT_TRIGGER_FIELDS = [
   'recipient',
@@ -50,11 +51,13 @@ export interface FiscalDocument {
   remitter_cnpj: string | null;
   remitter_state_registration?: string | null;
   recipient: string | null;
+  recipient_cnpj?: string | null;
   recipient_city: string | null;
   recipient_state: string | null;
   recipient_neighborhood: string | null;
   issue_date: string | null;
   order_id: string | null;
+  operation_type: Database['public']['Enums']['operation_type'] | null;
   load_id: string | null;
   pickup_order_id: string | null;
   product_summary: string | null;
@@ -62,11 +65,18 @@ export interface FiscalDocument {
   weight_kg: number | null;
   value: number | null;
   freight_value: number | null;
-  freight_breakdown: any | null;
+  freight_breakdown: Json | null;
   freight_table_id: string | null;
   client_load_number: string | null;
-  client_load_source: any | null;
-  delivery_meta?: any | null;
+  client_load_source: Json | null;
+  reference_number?: string | null;
+  delivery_meta?: Json | null;
+  insurer_name?: string | null;
+  insurer_cnpj?: string | null;
+  insurer_policy?: string | null;
+  insurer_endorsement?: string | null;
+  insured_amount?: number | null;
+  insurance_premium?: number | null;
   cbs_base: number | null;
   cbs_rate: number | null;
   cbs_value: number | null;
@@ -78,6 +88,141 @@ export interface FiscalDocument {
   clients?: { company_name: string } | null;
   loads?: { load_number: string } | null;
   orders?: { order_number: string } | null;
+}
+
+export type CreateFiscalDocumentInput = Omit<
+  TablesInsert<'fiscal_documents'>,
+  'tenant_id' | 'created_by'
+>;
+
+export type UpdateFiscalDocumentInput = Omit<
+  TablesUpdate<'fiscal_documents'>,
+  'id' | 'tenant_id' | 'updated_at'
+> & { id: string };
+
+interface FiscalDocumentPageInput {
+  page: number;
+  pageSize: number;
+  search?: string;
+  typeFilter?: string;
+  statusFilter?: string;
+  loadFilter?: string;
+}
+
+export interface FiscalDocumentPage {
+  rows: FiscalDocument[];
+  totalCount: number;
+}
+
+export interface FiscalDocumentSummary {
+  totalCount: number;
+  inboundCount: number;
+  outboundCount: number;
+  pendingCount: number;
+  totalValue: number;
+  totalWeight: number;
+  totalPallets: number;
+}
+
+function safePostgrestSearch(input: string): string {
+  return input.trim().replace(/[,%()"\\]/g, ' ').replace(/\s+/g, ' ');
+}
+
+export function useFiscalDocumentsPage({
+  page,
+  pageSize,
+  search = '',
+  typeFilter = 'all',
+  statusFilter = 'all',
+  loadFilter = 'all',
+}: FiscalDocumentPageInput) {
+  const { currentTenant } = useTenant();
+  const normalizedSearch = safePostgrestSearch(search);
+
+  return useQuery({
+    queryKey: [
+      'fiscal_documents', 'page', currentTenant?.id, page, pageSize,
+      normalizedSearch, typeFilter, statusFilter, loadFilter,
+    ],
+    queryFn: async (): Promise<FiscalDocumentPage> => {
+      if (!currentTenant) return { rows: [], totalCount: 0 };
+
+      let matchingClientIds: string[] = [];
+      if (normalizedSearch) {
+        const { data: matchingClients, error: clientsError } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('tenant_id', currentTenant.id)
+          .ilike('company_name', `%${normalizedSearch}%`)
+          .limit(100);
+        if (clientsError) throw clientsError;
+        matchingClientIds = (matchingClients || []).map(client => client.id);
+      }
+
+      let query = supabase
+        .from('fiscal_documents')
+        .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)', { count: 'exact' })
+        .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null);
+
+      if (normalizedSearch) {
+        const pattern = `*${normalizedSearch}*`;
+        const filters = [
+          `invoice_number.ilike.${pattern}`,
+          `remitter.ilike.${pattern}`,
+          `recipient.ilike.${pattern}`,
+          `access_key.ilike.${pattern}`,
+        ];
+        if (matchingClientIds.length > 0) {
+          filters.push(`client_id.in.(${matchingClientIds.join(',')})`);
+        }
+        query = query.or(filters.join(','));
+      }
+      if (typeFilter !== 'all') query = query.eq('document_type', typeFilter);
+      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+      if (loadFilter === 'no_load') query = query.is('load_id', null);
+      if (loadFilter === 'with_load') query = query.not('load_id', 'is', null);
+
+      const from = (page - 1) * pageSize;
+      const { data, count, error } = await query
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      return { rows: (data || []) as FiscalDocument[], totalCount: count || 0 };
+    },
+    enabled: !!currentTenant,
+    placeholderData: previous => previous,
+  });
+}
+
+export function useFiscalDocumentSummary() {
+  const { currentTenant } = useTenant();
+  return useQuery({
+    queryKey: ['fiscal_documents', 'summary', currentTenant?.id],
+    queryFn: async (): Promise<FiscalDocumentSummary> => {
+      if (!currentTenant) {
+        return {
+          totalCount: 0, inboundCount: 0, outboundCount: 0, pendingCount: 0,
+          totalValue: 0, totalWeight: 0, totalPallets: 0,
+        };
+      }
+      const { data, error } = await supabase.rpc('get_fiscal_document_summary_v1', {
+        _tenant_id: currentTenant.id,
+      });
+      if (error) throw error;
+      const row = data?.[0];
+      return {
+        totalCount: Number(row?.total_count) || 0,
+        inboundCount: Number(row?.inbound_count) || 0,
+        outboundCount: Number(row?.outbound_count) || 0,
+        pendingCount: Number(row?.pending_count) || 0,
+        totalValue: Number(row?.total_value) || 0,
+        totalWeight: Number(row?.total_weight) || 0,
+        totalPallets: Number(row?.total_pallets) || 0,
+      };
+    },
+    enabled: !!currentTenant,
+  });
 }
 
 export function useFiscalDocuments() {
@@ -104,23 +249,28 @@ export function useCreateFiscalDocument() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<FiscalDocument>) => {
-      const { data, error } = await supabase.from('fiscal_documents').insert({
+    mutationFn: async (values: CreateFiscalDocumentInput) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const payload: TablesInsert<'fiscal_documents'> = {
         ...values,
-        tenant_id: currentTenant!.id,
-        created_by: user?.id,
-      } as any).select().single();
+        tenant_id: currentTenant.id,
+        created_by: user?.id ?? null,
+      };
+      const { data, error } = await supabase.from('fiscal_documents').insert(payload).select().single();
       if (error) {
         if (isUniqueViolation(error) && values.document_type === 'inbound') {
           const existing = await findExistingFiscalDocument({
-            tenantId: currentTenant!.id,
+            tenantId: currentTenant.id,
             accessKey: values.access_key,
-            remitterCnpj: (values as any).remitter_cnpj,
+            remitterCnpj: values.remitter_cnpj,
             invoiceNumber: values.invoice_number,
-            invoiceSeries: (values as any).invoice_series,
-            fiscalModel: (values as any).fiscal_model,
+            invoiceSeries: values.invoice_series,
+            fiscalModel: values.fiscal_model,
           });
-          throw new DuplicateFiscalDocumentError(existing, (error as any).constraint);
+          const constraint = 'constraint' in error && typeof error.constraint === 'string'
+            ? error.constraint
+            : undefined;
+          throw new DuplicateFiscalDocumentError(existing, constraint);
         }
         throw error;
       }
@@ -174,7 +324,7 @@ export async function findExistingFiscalDocument(input: {
       .eq('tenant_id', input.tenantId)
       .eq('document_type', 'inbound')
       .limit(50);
-    const match = (broad || []).find((d: any) =>
+    const match = (broad || []).find((d) =>
       normalizeTaxId(d.remitter_cnpj) === cnpj &&
       normalizeFiscalNumber(d.invoice_number) === number &&
       (normalizeFiscalNumber(d.invoice_series) || '0') === series &&
@@ -190,18 +340,25 @@ export function useUpdateFiscalDocument() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<FiscalDocument> & { id: string }) => {
-      const { data, error } = await supabase.from('fiscal_documents').update({
+    mutationFn: async ({ id, ...values }: UpdateFiscalDocumentInput) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const updatePayload: TablesUpdate<'fiscal_documents'> = {
         ...values,
         updated_at: new Date().toISOString(),
-      } as any).eq('id', id).select().single();
+      };
+      const { data, error } = await supabase.from('fiscal_documents')
+        .update(updatePayload)
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id)
+        .select()
+        .single();
       if (error) throw error;
 
       // Auto-recalc freight when destination/weight/pallets change on a CT-e (outbound)
       // and the freight isn't manually overridden
       try {
         const triggered = FREIGHT_TRIGGER_FIELDS.some((f) => f in values);
-        const doc: any = data;
+        const doc = data;
         if (
           triggered &&
           currentTenant &&
@@ -213,23 +370,29 @@ export function useUpdateFiscalDocument() {
           let clientId: string | null = doc.client_id || null;
           let nfeTotalValue = 0;
           if (doc.load_id) {
-            const { data: nfeDocs } = await supabase
+            const { data: nfeDocs, error: nfeError } = await supabase
               .from('fiscal_documents')
               .select('client_id, value')
               .eq('load_id', doc.load_id)
               .eq('tenant_id', currentTenant.id)
               .eq('document_type', 'inbound');
-            nfeTotalValue = (nfeDocs || []).reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
+            if (nfeError) throw nfeError;
+            nfeTotalValue = (nfeDocs || []).reduce((sum, document) => sum + (Number(document.value) || 0), 0);
             if (!clientId) {
-              const ref = (nfeDocs || []).find((d: any) => d.client_id);
-              clientId = ref ? (ref as any).client_id : null;
+              const ref = (nfeDocs || []).find((document) => document.client_id);
+              clientId = ref?.client_id || null;
             }
           }
           let payerGroup: string | null = null;
           if (clientId) {
-            const { data: cli } = await supabase
-              .from('clients').select('payer_group').eq('id', clientId).maybeSingle();
-            payerGroup = (cli as any)?.payer_group || null;
+            const { data: cli, error: clientError } = await supabase
+              .from('clients')
+              .select('payer_group')
+              .eq('id', clientId)
+              .eq('tenant_id', currentTenant.id)
+              .maybeSingle();
+            if (clientError) throw clientError;
+            payerGroup = cli?.payer_group || null;
           }
 
           const result = await calculateFreight({
@@ -247,16 +410,21 @@ export function useUpdateFiscalDocument() {
           if (result.success && result.breakdown) {
             const v = result.value;
             const cbsRate = 0.90, ibsRate = 0.10;
-            await supabase.from('fiscal_documents').update({
+            const freightUpdate = {
               freight_value: v,
               freight_value_original: v,
               value: v,
               freight_table_id: result.breakdown.tableId || null,
-              freight_breakdown: result.breakdown as any,
+              freight_breakdown: result.breakdown as unknown as Json,
               cbs_base: v, cbs_rate: cbsRate, cbs_value: v * cbsRate / 100,
               ibs_base: v, ibs_rate: ibsRate, ibs_value: v * ibsRate / 100,
               updated_at: new Date().toISOString(),
-            } as any).eq('id', id);
+            } satisfies TablesUpdate<'fiscal_documents'>;
+            const { error: freightUpdateError } = await supabase.from('fiscal_documents')
+              .update(freightUpdate)
+              .eq('id', id)
+              .eq('tenant_id', currentTenant.id);
+            if (freightUpdateError) throw freightUpdateError;
 
             await logFreightCalculation(currentTenant.id, id, 'cte', result.breakdown, user?.id);
           }

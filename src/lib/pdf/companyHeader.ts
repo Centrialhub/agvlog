@@ -75,7 +75,7 @@ export function drawCompanyHeader(
 ): number {
   if (!info) return opts.y ?? 14;
   const x = opts.x ?? 14;
-  let y = opts.y ?? 12;
+  const y = opts.y ?? 12;
   const maxWidth = opts.maxWidth ?? 180;
 
   let textX = x;

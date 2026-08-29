@@ -1,10 +1,10 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,8 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from '@/components/ui/sonner';
 import {
   Route, Plus, Wand2, Trash2,
-  PackageCheck, Truck, ChevronDown, ChevronUp,
-  FileText, Send, Download, ListOrdered, Sparkles, Bot, Rocket, Printer,
+  PackageCheck, ChevronDown, ChevronUp,
+  Send, Download, ListOrdered, Sparkles, Bot, Rocket, Printer,
   AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -36,9 +36,11 @@ import { useCustomerDeliveryWindowsForRouting } from '@/hooks/route-planning/use
 import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePlan';
 import { validateRouteConsistency } from '@/lib/route-planning/routeConsistency';
 import { computeRouteStatus, STATUS_VISUALS, type RoutePlanStatusExt } from '@/lib/route-planning/routeStatus';
-import { useRoutePlanningDrafts, useSavePlanSnapshot, useDeleteDraft, DraftConflictError } from '@/hooks/useRoutePlanningDrafts';
+import { useRoutePlanningDrafts, useSavePlanSnapshot, useDeleteDraft, DraftConflictError, type RoutePlanSnapshot } from '@/hooks/useRoutePlanningDrafts';
 import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
 import { normalizeCity } from '@/lib/utils/normalizeCity';
+import type { Json } from '@/integrations/supabase/types';
+import { getErrorMessage } from '@/lib/errors';
 
 /* ────────────── types ────────────── */
 const recipientCollator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
@@ -113,6 +115,11 @@ interface RoutePlan {
   lastDispatchError?: string;
 }
 
+const routeSnapshot = (value: Json | null): RoutePlanSnapshot =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as unknown as RoutePlanSnapshot
+    : {};
+
 /* ────────────── main component ────────────── */
 /** If all selected loads share the same vehicle_id / driver_id, inherit those
  *  into the newly-created route plan. Empty when loads disagree — the user
@@ -128,7 +135,6 @@ function inheritAssignmentFromLoads(loads: Array<{ vehicle_id?: string | null; d
 
 export default function RoutePlanning() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const { data: vehicles = [] } = useVehicles();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -138,7 +144,7 @@ export default function RoutePlanning() {
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers_for_routing', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return [] as any[];
+      if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('drivers')
         .select('id, name, active, current_vehicle_id')
@@ -156,7 +162,7 @@ export default function RoutePlanning() {
     queryKey: ['pending_loads_for_routing', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data: loads, error } = await (supabase.from('loads') as any)
+      const { data: loads, error } = await supabase.from('loads')
         .select('*')
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'planned')
@@ -167,7 +173,7 @@ export default function RoutePlanning() {
       if (!loads || loads.length === 0) return [];
 
       // Buscar items com NF-es para cada carga
-      const loadIds = loads.map((l: any) => l.id);
+      const loadIds = loads.map(load => load.id);
       const { data: items, error: itemsErr } = await supabase
         .from('load_items')
         .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, client_id, value, weight_kg, issue_date)')
@@ -176,14 +182,19 @@ export default function RoutePlanning() {
       if (itemsErr) throw itemsErr;
 
       const itemsByLoad: Record<string, LoadItem[]> = {};
-      (items || []).forEach((item: any) => {
+      (items || []).forEach((item) => {
         if (!itemsByLoad[item.load_id]) itemsByLoad[item.load_id] = [];
-        itemsByLoad[item.load_id].push(item);
+        itemsByLoad[item.load_id].push({
+          ...item,
+          pallet_count: item.pallet_count ?? 0,
+          weight_kg: item.weight_kg ?? 0,
+          volume_m3: item.volume_m3 ?? 0,
+        });
       });
 
-      return loads.map((l: any) => ({
-        ...l,
-        items: itemsByLoad[l.id] || [],
+      return loads.map((load) => ({
+        ...load,
+        items: itemsByLoad[load.id] || [],
       })) as PendingLoad[];
     },
     enabled: !!currentTenant,
@@ -220,12 +231,12 @@ export default function RoutePlanning() {
     if (!pendingLoads || pendingLoads.length === 0) return;
     if (persistedDrafts.length === 0) { draftsHydratedRef.current = true; return; }
     const loadById = new Map(pendingLoads.map(l => [l.id, l] as const));
-    const hydrated: RoutePlan[] = persistedDrafts.map((d: any) => {
+    const hydrated: RoutePlan[] = persistedDrafts.map((d) => {
       // Semeia versão conhecida para guarda otimista de concorrência.
       savePlanSnapshot.seedVersion(d.id, d.updated_at);
-      const cfg = d.route_config || {};
+      const cfg = routeSnapshot(d.route_config);
       const ids: string[] = Array.isArray(d.load_ids) ? d.load_ids : (Array.isArray(cfg.load_ids) ? cfg.load_ids : []);
-      const loads = ids.map(id => loadById.get(id)).filter(Boolean) as PendingLoad[];
+      const loads = ids.map(id => loadById.get(id)).filter((load): load is PendingLoad => Boolean(load));
       const missingCount = ids.length - loads.length;
       return {
         id: d.id,
@@ -246,12 +257,12 @@ export default function RoutePlanning() {
       setRestoredFromDraft(true);
     }
     draftsHydratedRef.current = true;
-  }, [pendingLoads, persistedDrafts]);
+  }, [pendingLoads, persistedDrafts, savePlanSnapshot]);
 
   // ──── Persistir cada rota como draft (debounce) ────
   useEffect(() => {
-    if (!draftsHydratedRef.current) return;
-    if (routes.length === 0) return;
+    if (!draftsHydratedRef.current) return undefined;
+    if (routes.length === 0) return undefined;
     const timers = routes.map(r => setTimeout(() => {
       savePlanSnapshot.mutate({
         routeId: r.id,
@@ -268,7 +279,7 @@ export default function RoutePlanning() {
           notes: r.notes,
         },
       }, {
-        onError: (err: any) => {
+        onError: (err: Error) => {
           if (err instanceof DraftConflictError) {
             toast.error('Rascunho alterado em outra sessão. Recarregando última versão.');
             savePlanSnapshot.forgetVersion(r.id);
@@ -308,11 +319,11 @@ export default function RoutePlanning() {
     return availableLoads.filter(l => selectedLoads.has(l.id) && !visibleIds.has(l.id));
   }, [filteredLoads, availableLoads, selectedLoads]);
 
-  const confirmIfHidden = useCallback((proceed: () => void) => {
+  const confirmIfHidden = useCallback(async (proceed: () => void) => {
     if (hiddenSelectedLoads.length === 0) { proceed(); return; }
     const names = hiddenSelectedLoads.slice(0, 5).map(l => l.load_number).join(', ');
     const extra = hiddenSelectedLoads.length > 5 ? ` e mais ${hiddenSelectedLoads.length - 5}` : '';
-    if (window.confirm(
+    if (await confirmAction(
       `Existem ${hiddenSelectedLoads.length} carga(s) selecionada(s) fora do filtro atual (${names}${extra}). Deseja incluí-las mesmo assim?`,
     )) proceed();
   }, [hiddenSelectedLoads]);
@@ -342,7 +353,7 @@ export default function RoutePlanning() {
       const loads = [...r.loads, ...selected];
       if (!r.stops || r.stops.length === 0) return { ...r, loads };
       const stops = regenerateStopsPreservingEdits(
-        loads as any, r.stops, r.sortMode,
+        loads, r.stops, r.sortMode,
         r.planned_start_at || globalStartAt, r.initial_transit_minutes ?? 30,
       );
       return { ...r, loads, stops, dirty: false };
@@ -398,11 +409,11 @@ export default function RoutePlanning() {
       return;
     }
     const plans = generateAutomaticRoutePlans({
-      loads: scoped as any,
-      vehicles: vehicles as any,
-      drivers: drivers as any,
-      operationalRoutes: operationalRoutes as any,
-      customerWindows: customerWindows as any,
+      loads: scoped,
+      vehicles,
+      drivers,
+      operationalRoutes,
+      customerWindows,
       plannedStartAt: globalStartAt,
     });
     if (plans.length === 0) {
@@ -412,7 +423,7 @@ export default function RoutePlanning() {
     const newRoutes: RoutePlan[] = plans.map(p => ({
       id: p.id,
       name: p.name,
-      loads: p.loads as any,
+      loads: p.loads.map(load => scoped.find(candidate => candidate.id === load.id)).filter((load): load is PendingLoad => Boolean(load)),
       stops: p.stops,
       vehicle_id: p.vehicle_id,
       driver_id: p.driver_id,
@@ -432,7 +443,7 @@ export default function RoutePlanning() {
       const loads = r.loads.filter(l => l.id !== loadId);
       if (!r.stops || r.stops.length === 0) return { ...r, loads };
       const stops = regenerateStopsPreservingEdits(
-        loads as any, r.stops, r.sortMode,
+        loads, r.stops, r.sortMode,
         r.planned_start_at || globalStartAt, r.initial_transit_minutes ?? 30,
       );
       return { ...r, loads, stops, dirty: false };
@@ -466,7 +477,7 @@ export default function RoutePlanning() {
       }
       // sortMode 'original' ou 'auto': reflete a nova ordem das cargas nas paradas.
       const stops = regenerateStopsPreservingEdits(
-        loads as any, r.stops, r.sortMode,
+        loads, r.stops, r.sortMode,
         r.planned_start_at || globalStartAt, r.initial_transit_minutes ?? 30,
       );
       return { ...r, loads, stops, dirty: false };
@@ -477,14 +488,15 @@ export default function RoutePlanning() {
   const dispatchRouteMutation = useMutation({
     mutationFn: async (route: RoutePlan) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const c = validateRouteConsistency(route as any, {
-        vehicles: vehicles as any,
+      const c = validateRouteConsistency(route, {
+        vehicles,
         otherRoutes: routes.map(o => ({ id: o.id, vehicle_id: o.vehicle_id, driver_id: o.driver_id, name: o.name })),
         routeId: route.id,
       });
       if (!c.valid) {
         throw new Error(c.blockingErrors.join(' · '));
       }
+      if (!route.planned_start_at) throw new Error('Data/hora planejada é obrigatória para despachar a rota');
       const stops = route.stops!;
       const tripId = await dispatchPlan.dispatchRoute({
         vehicle_id: route.vehicle_id!,
@@ -506,7 +518,7 @@ export default function RoutePlanning() {
         navigate(`/loads/${firstLoadId}`);
       }
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: Error) => toast.error(error.message),
   });
 
   const routeTotals = (route: RoutePlan) => {
@@ -523,7 +535,7 @@ export default function RoutePlanning() {
   const generateStops = (routeId: string) => {
     setRoutes(prev => prev.map(r => {
       if (r.id !== routeId) return r;
-      const stops = consolidateLoadsIntoStops(r.loads as any).map((s, i) => ({ ...s, manual_order: i + 1 }));
+      const stops = consolidateLoadsIntoStops(r.loads).map((s, i) => ({ ...s, manual_order: i + 1 }));
       return { ...r, stops, sortMode: 'original' as const, dirty: false };
     }));
   };
@@ -573,9 +585,9 @@ export default function RoutePlanning() {
   };
 
   const routeConsistency = useCallback((r: RoutePlan) => validateRouteConsistency(
-    r as any,
+    r,
     {
-      vehicles: vehicles as any,
+      vehicles,
       otherRoutes: routes.map(o => ({ id: o.id, vehicle_id: o.vehicle_id, driver_id: o.driver_id, name: o.name })),
       routeId: r.id,
     },
@@ -626,9 +638,9 @@ export default function RoutePlanning() {
         setRoutes(prev => prev.filter(x => x.id !== r.id));
         savePlanSnapshot.forgetVersion(r.id);
         deleteDraft.mutate(r.id, { onError: () => {} });
-      } catch (e: any) {
+      } catch (error: unknown) {
         fail++;
-        const msg = e?.message || String(e);
+        const msg = getErrorMessage(error);
         errors.push(`${r.name}: ${msg}`);
         setRoutes(prev => prev.map(x => x.id === r.id ? { ...x, dispatching: false, lastDispatchError: msg } : x));
       }
@@ -640,8 +652,8 @@ export default function RoutePlanning() {
   };
 
   const buildRouteRomaneio = (route: RoutePlan) => {
-    const vehicle = vehicles.find((v: any) => v.id === route.vehicle_id) as any;
-    const driver = drivers.find((d: any) => d.id === route.driver_id) as any;
+    const vehicle = vehicles.find(candidate => candidate.id === route.vehicle_id);
+    const driver = drivers.find(candidate => candidate.id === route.driver_id);
     const docs: RomaneioDoc[] = sortLoadsByRecipient(route.loads).flatMap(load =>
       sortItemsByRecipient(load.items).map(item => {
         const fd = item.fiscal_documents;
@@ -885,15 +897,15 @@ export default function RoutePlanning() {
                       <Select value={route.vehicle_id || ''} onValueChange={v => setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, vehicle_id: v } : r))}>
                         <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Veículo" /></SelectTrigger>
                         <SelectContent>
-                          {vehicles.filter((v: any) => v.active).map((v: any) => (
-                            <SelectItem key={v.id} value={v.id}>{v.plate} {v.nickname ? `(${v.nickname})` : ''}</SelectItem>
+                          {vehicles.filter(vehicleOption => vehicleOption.active).map((vehicleOption) => (
+                            <SelectItem key={vehicleOption.id} value={vehicleOption.id}>{vehicleOption.plate} {vehicleOption.nickname ? `(${vehicleOption.nickname})` : ''}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                       <Select value={route.driver_id || ''} onValueChange={v => setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, driver_id: v } : r))}>
                         <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Motorista" /></SelectTrigger>
                         <SelectContent>
-                          {drivers.map((d: any) => (
+                          {drivers.map((d) => (
                             <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                           ))}
                         </SelectContent>

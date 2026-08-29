@@ -91,14 +91,14 @@ function findSheet(wb: XLSX.WorkBook, ...targets: string[]): XLSX.WorkSheet | nu
  * (non-empty, not equal to header "Rastreio").
  */
 function parseEntregasSheet(ws: XLSX.WorkSheet, errors: string[]): ParsedMonitor[] {
-  const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, raw: true });
   if (!rows.length) return [];
 
   const monitors: ParsedMonitor[] = [];
   let current: ParsedMonitor | null = null;
   let headerIdx: Record<string, number> = {};
 
-  const applyHeader = (row: any[]) => {
+  const applyHeader = (row: unknown[]) => {
     headerIdx = {};
     row.forEach((c, i) => {
       const h = normHeader(c);
@@ -199,7 +199,7 @@ function parseEntregasSheet(ws: XLSX.WorkSheet, errors: string[]): ParsedMonitor
 }
 
 function parseChegadaSheet(ws: XLSX.WorkSheet, errors: string[]): ParsedForecast[] {
-  const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, raw: true });
   if (!rows.length) return [];
   let idx: Record<string, number> = {};
   const forecasts: ParsedForecast[] = [];

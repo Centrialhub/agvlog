@@ -17,14 +17,13 @@ export interface EventMessage {
 }
 
 export function useEventMessages(eventId: string | null | undefined) {
-  const { currentTenant } = useTenant();
   const qc = useQueryClient();
 
   const query = useQuery({
     queryKey: ['event_messages', eventId],
     queryFn: async () => {
       if (!eventId) return [];
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('operational_event_messages')
         .select('*')
         .eq('event_id', eventId)
@@ -37,7 +36,7 @@ export function useEventMessages(eventId: string | null | undefined) {
 
   // Realtime subscription
   useEffect(() => {
-    if (!eventId) return;
+    if (!eventId) return undefined;
     const channel = supabase
       .channel(`event_msg_${eventId}`)
       .on(
@@ -62,8 +61,9 @@ export function useSendEventMessage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ eventId, message, role, name }: { eventId: string; message: string; role?: string; name?: string }) => {
-      const { error } = await (supabase as any).from('operational_event_messages').insert({
-        tenant_id: currentTenant!.id,
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { error } = await supabase.from('operational_event_messages').insert({
+        tenant_id: currentTenant.id,
         event_id: eventId,
         sender_id: user?.id || null,
         sender_role: role || 'operator',

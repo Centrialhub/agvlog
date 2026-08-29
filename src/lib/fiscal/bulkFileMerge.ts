@@ -24,6 +24,10 @@ export interface BulkResult {
   failures: BulkItemFailure[];
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 /** Evita nomes repetidos dentro do ZIP (`nota.pdf`, `nota (2).pdf`, ...). */
 export function uniqueFilename(taken: Set<string>, filename: string): string {
   if (!taken.has(filename)) {
@@ -45,8 +49,9 @@ export function uniqueFilename(taken: Set<string>, filename: string): string {
 
 /** Lê o conteúdo binário do Blob (com fallback para ambientes sem Blob.arrayBuffer). */
 export async function blobToUint8(blob: Blob): Promise<Uint8Array> {
-  if (typeof (blob as any).arrayBuffer === 'function') {
-    return new Uint8Array(await blob.arrayBuffer());
+  const arrayBuffer = (blob as Blob & { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer;
+  if (typeof arrayBuffer === 'function') {
+    return new Uint8Array(await arrayBuffer.call(blob));
   }
   // Ambientes sem Blob.arrayBuffer (ex.: jsdom nos testes) — usa FileReader.
   const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
@@ -75,8 +80,8 @@ export async function mergePdfBlobs(
       const pages = await out.copyPages(src, src.getPageIndices());
       pages.forEach((p) => out.addPage(p));
       merged++;
-    } catch (e: any) {
-      onFailure?.({ label: file.label, message: e?.message || 'PDF inválido para junção' });
+    } catch (error: unknown) {
+      onFailure?.({ label: file.label, message: errorMessage(error, 'PDF inválido para junção') });
     }
   }
   if (merged === 0) return null;
@@ -137,8 +142,8 @@ export async function runBulkDownload<T>(opts: BulkDownloadOptions<T>): Promise<
         const blob = await fetchOne(row);
         if (!blob || blob.size === 0) throw new Error('Arquivo vazio retornado pelo Hub Fiscal');
         fetched[index] = { label, filename: filenameOf(row), blob };
-      } catch (e: any) {
-        failures.push({ label, message: e?.message || 'Falha desconhecida' });
+      } catch (error: unknown) {
+        failures.push({ label, message: errorMessage(error, 'Falha desconhecida') });
       }
       done++;
       opts.onProgress?.(done, rows.length, label);

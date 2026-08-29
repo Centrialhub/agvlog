@@ -4,9 +4,18 @@ import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { buildCtePayload, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
+import type { EmitParams, HubResponse } from '@/lib/fiscal/hubFiscalClient';
+import type { Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from '@/components/ui/sonner';
 
-export interface IssueCteGroupInput {
+type FiscalDocumentInsert = TablesInsert<'fiscal_documents'>;
+type FiscalDocumentUpdate = TablesUpdate<'fiscal_documents'>;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export interface IssueCteGroupInput extends BuildCtePayloadInput {
   /** Ids das NFs de entrada agrupadas neste CT-e. */
   fiscal_document_ids: string[];
   /** Ids das cargas cobertas pelo CT-e. */
@@ -17,26 +26,6 @@ export interface IssueCteGroupInput {
     consignee_client_id?: string | null;
     invoice_number?: string | null;
   };
-  emitter: any;
-  remitter: any;
-  recipient: any;
-  expedidor?: any;
-  recebedor?: any;
-  consignee?: any;
-  insurer?: any;
-  driver: any;
-  vehicle: any;
-  documentType?: any;
-  nature: any;
-  observations?: string | null;
-  totals: any;
-  freightComposition?: any;
-  icms?: any;
-  gnre?: any;
-  cbsIbs?: any;
-  cargo?: any;
-  invoices: any[];
-  takerRole: any;
 }
 
 /**
@@ -100,7 +89,7 @@ export function useIssueCTe() {
           ibs_rate: ibsRate,
           ibs_value: ibsValue,
           emitter_id: input.emitter.id,
-          cte_payload: built.payload as any,
+          cte_payload: built.payload as Json,
           cte_taker_role: input.takerRole,
           cte_driver_id: input.driver?.id || null,
           cte_vehicle_id: input.vehicle?.id || null,
@@ -114,33 +103,30 @@ export function useIssueCTe() {
           insured_amount:
             input.insurer?.insured_amount ?? (input.totals.cargo_value || null),
           insurance_premium: input.freightComposition?.insurance_value ?? null,
-        } as any)
+        } satisfies FiscalDocumentInsert)
         .select()
         .single();
       if (insErr) throw insErr;
 
       // 2. Emite no Hub
-      const emitBody = { ...(built.payload as any), externalId };
-      let hubResponse: any;
+      const emitBody = { ...built.payload, externalId } as EmitParams['body'];
+      let hubResponse: HubResponse;
       try {
-        console.log(`[useIssueCTe] Transmitindo CT-e ${inserted.id} (emitter: ${input.emitter.id})`);
         hubResponse = await hubFiscal.emit({
           type: 'cte',
           body: emitBody,
           fiscalDocumentId: inserted.id,
           emitterId: input.emitter.id,
         });
-        console.log(`[useIssueCTe] Resposta do Hub:`, hubResponse);
-      } catch (err: any) {
-        console.error(`[useIssueCTe] Erro na transmissão:`, err);
+      } catch (err: unknown) {
         // Erro de invocação — deixa como rejected para o operador ver
         await supabase
           .from('fiscal_documents')
           .update({
             status: 'rejected',
             sefaz_status: 'error',
-            sefaz_message: err?.message || 'Falha ao invocar Hub Fiscal',
-          } as any)
+            sefaz_message: errorMessage(err) || 'Falha ao invocar Hub Fiscal',
+          } satisfies FiscalDocumentUpdate)
           .eq('id', inserted.id);
         throw err;
       }
@@ -151,7 +137,7 @@ export function useIssueCTe() {
       const rejectedByHub = ['rejected', 'error', 'failed', 'sefaz_error'].includes(hubStatus);
       const success = hubResponse?.success !== false && !doc?.error && !rejectedByHub;
 
-      const update: Record<string, any> = {
+      const update: FiscalDocumentUpdate = {
         hub_document_id: doc.id || null,
         emission_id: emissionId || null,
         access_key: doc.accessKey || null,
@@ -161,9 +147,11 @@ export function useIssueCTe() {
         sefaz_message: doc.message || null,
         status: success ? (hubStatus === 'authorized' ? 'authorized' : 'transmitting') : 'rejected',
       };
-      for (const k of Object.keys(update)) if (update[k] == null) delete update[k];
+      for (const key of Object.keys(update) as Array<keyof FiscalDocumentUpdate>) {
+        if (update[key] == null) delete update[key];
+      }
 
-      await supabase.from('fiscal_documents').update(update as any).eq('id', inserted.id);
+      await supabase.from('fiscal_documents').update(update).eq('id', inserted.id);
 
       // Marca as NFs de entrada agrupadas neste CT-e para que sumam da tela de
       // Faturamento (CT-e Hub) e evitem dupla emissão. Só marcamos se a
@@ -175,7 +163,7 @@ export function useIssueCTe() {
             .update({
               cte_emitted_at: new Date().toISOString(),
               cte_emitted_outbound_id: inserted.id,
-            } as any)
+            } satisfies FiscalDocumentUpdate)
             .in('id', input.fiscal_document_ids)
             .eq('tenant_id', currentTenant.id);
         } catch {
@@ -190,7 +178,7 @@ export function useIssueCTe() {
             .update({
               cte_emitted_at: null,
               cte_emitted_outbound_id: null,
-            } as any)
+            } satisfies FiscalDocumentUpdate)
             .in('id', input.fiscal_document_ids)
             .eq('tenant_id', currentTenant.id);
         } catch { /* ignore */ }
@@ -205,8 +193,8 @@ export function useIssueCTe() {
       qc.invalidateQueries({ queryKey: ['loads'] });
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
     },
-    onError: (e: any) => {
-      toast.error('Falha ao emitir CT-e', { description: e?.message });
+    onError: (e: unknown) => {
+      toast.error('Falha ao emitir CT-e', { description: errorMessage(e) });
     },
   });
 }
@@ -220,12 +208,11 @@ export function useSyncCTe() {
         .select('id, hub_document_id, emission_id')
         .eq('id', fiscalDocumentId)
         .maybeSingle();
-      const anyDoc = doc as any;
-      if (!anyDoc?.hub_document_id) throw new Error('CT-e ainda não transmitido ao Hub Fiscal');
-      const res = await hubFiscal.sync(anyDoc.hub_document_id, anyDoc.emission_id || undefined);
-      const d: any = res?.hub?.document || {};
+      if (!doc?.hub_document_id) throw new Error('CT-e ainda não transmitido ao Hub Fiscal');
+      const res = await hubFiscal.sync(doc.hub_document_id, doc.emission_id || undefined);
+      const d = res.hub?.document || {};
       const success = res?.success !== false;
-      const update: Record<string, any> = {
+      const update: FiscalDocumentUpdate = {
         access_key: d.accessKey || undefined,
         sefaz_protocol: d.authorizationProtocol || d.plugnotasProtocol || undefined,
         sefaz_status: d.status || undefined,
@@ -234,9 +221,11 @@ export function useSyncCTe() {
         status:
           d.status === 'authorized' ? 'authorized' : d.status === 'rejected' ? 'rejected' : undefined,
       };
-      for (const k of Object.keys(update)) if (update[k] === undefined) delete update[k];
+      for (const key of Object.keys(update) as Array<keyof FiscalDocumentUpdate>) {
+        if (update[key] === undefined) delete update[key];
+      }
       if (Object.keys(update).length) {
-        await supabase.from('fiscal_documents').update(update as any).eq('id', fiscalDocumentId);
+        await supabase.from('fiscal_documents').update(update).eq('id', fiscalDocumentId);
       }
       return { success, hub: res };
     },
@@ -259,12 +248,11 @@ export function useCancelCTe() {
         .select('id, hub_document_id, emission_id')
         .eq('id', args.fiscalDocumentId)
         .maybeSingle();
-      const anyDoc = doc as any;
-      if (!anyDoc?.hub_document_id) throw new Error('CT-e ainda não transmitido');
+      if (!doc?.hub_document_id) throw new Error('CT-e ainda não transmitido');
       const res = await hubFiscal.cancel(
-        anyDoc.hub_document_id,
+        doc.hub_document_id,
         args.justificativa.trim(),
-        anyDoc.emission_id || undefined,
+        doc.emission_id || undefined,
         args.fiscalDocumentId
       );
       if (res?.success === true) {
@@ -275,7 +263,10 @@ export function useCancelCTe() {
         // o Hub retorna success=false. Preservamos o status original (authorized)
         // para que o botão de cancelamento continue disponível.
         const hubError = res?.hub?.error || res?.error;
-        const msg = hubError?.message || (hubError as any)?.technicalMessage || 'Cancelamento recusado pelo Hub Fiscal.';
+        const technicalMessage = hubError && 'technicalMessage' in hubError
+          ? String(hubError.technicalMessage || '')
+          : '';
+        const msg = hubError?.message || technicalMessage || 'Cancelamento recusado pelo Hub Fiscal.';
         
         // Atualiza sefaz_message para que o usuário veja o motivo da rejeição no monitor
         await supabase
@@ -283,7 +274,7 @@ export function useCancelCTe() {
           .update({
             sefaz_message: `Rejeição cancelamento: ${msg}`,
             sefaz_status: 'authorized' // Reverte para autorizado se o cancelamento falhar, permitindo nova tentativa
-          } as any)
+          } satisfies FiscalDocumentUpdate)
           .eq('id', args.fiscalDocumentId);
 
         throw new Error(msg);
@@ -297,8 +288,8 @@ export function useCancelCTe() {
       qc.invalidateQueries({ queryKey: ['cte_monitor'] });
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
     },
-    onError: (e: any) => {
-      toast.error('Falha ao cancelar CT-e', { description: e?.message });
+    onError: (e: unknown) => {
+      toast.error('Falha ao cancelar CT-e', { description: errorMessage(e) });
       // Uma recusa fiscal também pode atualizar sefaz_status no proxy.
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['issued_ctes'] });
@@ -326,7 +317,7 @@ export function useResendCte() {
             status: 'transmitting',
             sefaz_status: 'pending',
             sefaz_message: null,
-          } as any)
+          } satisfies FiscalDocumentUpdate)
           .eq('id', id);
         if (error) throw error;
       } else {
@@ -337,7 +328,7 @@ export function useResendCte() {
             sefaz_status: 'pending',
             sefaz_status_reason: null,
             sefaz_status_at: new Date().toISOString(),
-          } as any)
+          } satisfies TablesUpdate<'cte_documents'>)
           .eq('id', id);
         if (error) throw error;
       }

@@ -1,10 +1,6 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-agvlog-cron-secret",
-};
+import { createClient } from "@supabase/supabase-js";
+import { isCronRequest } from "../_shared/cron-auth.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -19,9 +15,7 @@ Deno.serve(async (req) => {
     let callerId: string | null = null;
 
     // Auth: JWT or cron secret
-    const cronSecret = req.headers.get("x-agvlog-cron-secret");
-    const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
-    const isCron = cronSecret && expectedCronSecret && cronSecret === expectedCronSecret;
+    const isCron = await isCronRequest(req, supabaseUrl, serviceKey);
 
     if (!isCron) {
       const authHeader = req.headers.get("Authorization");
@@ -309,10 +303,7 @@ async function processVehicle(
 
   // 5) Overspeed SESSIONS
   const overspeedSessions = detectOverspeedSessions(classified, overspeedLimit);
-  let overspeedMinutes = 0;
   for (const session of overspeedSessions) {
-    const durMs = new Date(session.end_at).getTime() - new Date(session.start_at).getTime();
-    overspeedMinutes += durMs / 60000;
     const { error: evErr } = await supabase.from("events").insert({
       tenant_id: tenantId, vehicle_id: vehicleId,
       event_type: "overspeed", severity: "warning", source: "engine",
@@ -380,7 +371,7 @@ async function processVehicle(
     .from("positions_last")
     .select("captured_at")
     .eq("tenant_id", tenantId).eq("vehicle_id", vehicleId)
-    .single();
+    .maybeSingle();
 
   const ageMin = lastPos
     ? (Date.now() - new Date(lastPos.captured_at).getTime()) / 60000
@@ -589,7 +580,7 @@ function extractCanonicalSignals(telemetry: any, mappingMap: Map<string, string>
 async function processFuel(
   supabase: any, tenantId: string, vehicleId: string,
   points: ClassifiedPoint[], canonicals: Record<string, number>[],
-  fuelKey: string, tankCapacity: number | null
+  fuelKey: string, _tankCapacity: number | null
 ): Promise<{ readingsCreated: number; eventsCreated: number }> {
   let readingsCreated = 0;
   let eventsCreated = 0;
@@ -1007,7 +998,7 @@ async function checkGeofences(
     const { data: state } = await supabase
       .from("geofence_states").select("*")
       .eq("tenant_id", tenantId).eq("vehicle_id", vehicleId).eq("geofence_id", geo.id)
-      .single();
+      .maybeSingle();
 
     const wasInside = state?.is_inside || false;
 
@@ -1140,7 +1131,7 @@ async function updateTelemetryObservations(supabase: any, tenantId: string, vehi
       .from("telemetry_observations")
       .select("id, times_seen")
       .eq("tenant_id", tenantId).eq("vehicle_id", vehicleId).eq("canonical_key", key)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       await supabase.from("telemetry_observations")

@@ -3,15 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { toast } from '@/components/ui/sonner';
+import { getErrorMessage } from '@/lib/errors';
+import type { Tables } from '@/integrations/supabase/types';
 
-export interface CostCenter {
-  id: string;
-  tenant_id: string;
-  name: string;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+export type CostCenter = Tables<'cost_centers'>;
 
 export function useCostCenters() {
   const { currentTenant } = useTenant();
@@ -23,14 +18,14 @@ export function useCostCenters() {
       if (!currentTenant) return [];
       
       const { data, error } = await supabase
-        .from('cost_centers' as any)
+        .from('cost_centers')
         .select('*')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
         .order('name');
         
       if (error) throw error;
-      return (data as any[] as CostCenter[]).map(cc => cc.name);
+      return data.map(cc => cc.name);
     },
     enabled: !!currentTenant,
   });
@@ -41,13 +36,13 @@ export function useCostCenters() {
       if (!currentTenant) return [];
       
       const { data, error } = await supabase
-        .from('cost_centers' as any)
+        .from('cost_centers')
         .select('*')
         .eq('tenant_id', currentTenant.id)
         .order('name');
         
       if (error) throw error;
-      return data as any[] as CostCenter[];
+      return data;
     },
     enabled: !!currentTenant,
   });
@@ -56,7 +51,7 @@ export function useCostCenters() {
     mutationFn: async (name: string) => {
       if (!currentTenant) throw new Error('Tenant not found');
       const { error } = await supabase
-        .from('cost_centers' as any)
+        .from('cost_centers')
         .insert({ tenant_id: currentTenant.id, name });
       if (error) throw error;
     },
@@ -65,16 +60,16 @@ export function useCostCenters() {
       queryClient.invalidateQueries({ queryKey: ['cost_centers_full'] });
       toast.success('Centro de custo adicionado com sucesso');
     },
-    onError: (err: any) => {
-      toast.error('Erro ao adicionar centro de custo: ' + err.message);
+    onError: (error) => {
+      toast.error('Erro ao adicionar centro de custo: ' + getErrorMessage(error));
     }
   });
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, active }: { id: string, active: boolean }) => {
       const { error } = await supabase
-        .from('cost_centers' as any)
-        .update({ active } as any)
+        .from('cost_centers')
+        .update({ active })
         .eq('id', id);
       if (error) throw error;
     },

@@ -1,67 +1,42 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useFleetPositions } from '@/hooks/usePositions';
-import { isBillableFiscalDoc, fiscalDocRevenue, isVoidFiscalStatus } from '@/lib/fiscal/documentStatus';
-import { useFleetState, MovementState, stateColor, stateLabel, stateDotClass, formatStoppedDuration } from '@/hooks/useVehiclesState';
+import { fiscalDocRevenue, isVoidFiscalStatus } from '@/lib/fiscal/documentStatus';
+import { useFleetState, MovementState, stateColor, stateLabel, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { MapAutoFit } from '@/components/maps/MapAutoFit';
+import { createTruckMarkerIcon, DEFAULT_BRAZIL_MAP_CENTER } from '@/lib/maps/leaflet';
 import {
   PackageCheck, AlertTriangle, Truck, Clock, ArrowRight, Receipt,
-  TrendingUp, FileText, Wrench, Users, Weight, Layers, MapPin,
-  BarChart3, Activity, ShieldAlert, Fuel, Bell, Eye, Zap,
+  TrendingUp, FileText, Wrench, Users, Layers, MapPin,
+  BarChart3, ShieldAlert, Bell, Eye, Zap,
   ChevronRight, Navigation, CircleDot, Package, Scale,
-  Sun, Moon, CloudRain, Cloud, CloudSun, Sunrise, Sunset,
+  Sun, Moon, Sunrise,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { format, formatDistanceToNow, subDays } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, CartesianGrid, Area, AreaChart, Legend,
+  PieChart, Pie, Cell, CartesianGrid, Area, AreaChart,
 } from 'recharts';
-
-// Fix Leaflet icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
 
 function createVehicleIcon(state: MovementState) {
   const color = stateColor(state);
-  const opacity = state === 'offline' || state === 'unknown' ? '0.6' : '1';
-  return L.divIcon({
+  return createTruckMarkerIcon({
+    color,
+    opacity: state === 'offline' || state === 'unknown' ? 0.6 : 1,
     className: 'custom-vehicle-marker',
-    html: `<div style="
-      width: 32px; height: 32px; border-radius: 50%;
-      background: ${color}; border: 3px solid white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      display: flex; align-items: center; justify-content: center;
-      opacity: ${opacity};
-    "><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
   });
-}
-
-function FitBounds({ positions }: { positions: { lat: number; lng: number }[] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (positions.length === 0) return;
-    const bounds = L.latLngBounds(positions.map(p => [p.lat, p.lng]));
-    map.fitBounds(bounds, { padding: [20, 20], maxZoom: 12 });
-  }, [positions.length]);
-  return null;
 }
 
 const COLORS = [
@@ -157,22 +132,21 @@ export default function OperationsCenter() {
     'Um dia produtivo começa com foco e atitude.',
   ];
 
-  const dailyQuote = useMemo(() => {
-    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
-    return MOTIVATIONAL_QUOTES[dayOfYear % MOTIVATIONAL_QUOTES.length];
-  }, [now.toDateString()]);
+  const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
+  const dailyQuote = MOTIVATIONAL_QUOTES[dayOfYear % MOTIVATIONAL_QUOTES.length];
 
 
   const { data: loads = [] } = useQuery({
     queryKey: ['ops_loads', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('loads')
         .select('*, vehicles(plate, nickname), drivers(name)')
         .eq('tenant_id', currentTenant.id)
         .order('updated_at', { ascending: false })
         .limit(200);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -184,12 +158,13 @@ export default function OperationsCenter() {
     queryKey: ['ops_fiscal', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('fiscal_documents')
         .select('id, document_type, value, weight_kg, pallet_count, status, created_at, issue_date, freight_value')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -200,13 +175,14 @@ export default function OperationsCenter() {
     queryKey: ['ops_alerts', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('alert_instances')
         .select('*, alert_rules(rule_type, params), vehicles(plate, nickname)')
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'open')
         .order('opened_at', { ascending: false })
         .limit(20);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -218,12 +194,13 @@ export default function OperationsCenter() {
     queryKey: ['ops_incidents', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('incidents')
         .select('id, status, severity, title, incident_type, created_at, occurred_at')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(50);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -239,10 +216,11 @@ export default function OperationsCenter() {
     queryKey: ['ops_drivers', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('drivers')
         .select('id, active, name, current_vehicle_id')
         .eq('tenant_id', currentTenant.id);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -253,11 +231,12 @@ export default function OperationsCenter() {
     queryKey: ['ops_expenses_count', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return 0;
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('driver_expenses')
         .select('*', { count: 'exact', head: true })
         .eq('tenant_id', currentTenant.id)
         .eq('approval_status', 'pending');
+      if (error) throw error;
       return count || 0;
     },
     enabled: !!currentTenant,
@@ -268,11 +247,12 @@ export default function OperationsCenter() {
     queryKey: ['ops_maintenance', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return 0;
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('maintenance_orders')
         .select('*', { count: 'exact', head: true })
         .eq('tenant_id', currentTenant.id)
         .not('status', 'in', '("closed","completed")');
+      if (error) throw error;
       return count || 0;
     },
     enabled: !!currentTenant,
@@ -283,12 +263,13 @@ export default function OperationsCenter() {
     queryKey: ['ops_trips', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('dispatch_trips')
         .select('id, status, vehicle_id, driver_id, load_id, planned_start_at, actual_start_at')
         .eq('tenant_id', currentTenant.id)
         .in('status', ['planned', 'in_progress'])
         .limit(50);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -296,7 +277,7 @@ export default function OperationsCenter() {
 
   // ── Fleet Map Data ──
   const stateMap = useMemo(() => {
-    const map: Record<string, any> = {};
+    const map: Record<string, (typeof vehicleStates)[number]> = {};
     for (const s of vehicleStates) map[s.vehicle_id] = s;
     return map;
   }, [vehicleStates]);
@@ -304,7 +285,7 @@ export default function OperationsCenter() {
   const enrichedVehicles = useMemo(() => {
     return vehicles.map(v => {
       const state = stateMap[v.id];
-      const pos = positions.find((p: any) => p.vehicle_id === v.id);
+      const pos = positions.find((position) => position.vehicle_id === v.id);
       return {
         vehicle: v,
         state: (state?.movement_state || 'unknown') as MovementState,
@@ -321,6 +302,10 @@ export default function OperationsCenter() {
     enrichedVehicles.filter(e => e.lat != null && e.lng != null),
     [enrichedVehicles]
   );
+  const mapPoints = useMemo<[number, number][]>(
+    () => vehiclesWithPosition.map((entry) => [entry.lat as number, entry.lng as number]),
+    [vehiclesWithPosition],
+  );
 
   const fleetStats = useMemo(() => {
     const moving = enrichedVehicles.filter(e => e.state === 'moving').length;
@@ -333,31 +318,31 @@ export default function OperationsCenter() {
 
   // ── Computed Stats ──
   const stats = useMemo(() => {
-    const activeLoads = loads.filter((l: any) => !['delivered', 'cancelled'].includes(l.status));
-    const inTransit = loads.filter((l: any) => l.status === 'in_transit');
-    const delivered = loads.filter((l: any) => l.status === 'delivered');
-    const delayed = loads.filter((l: any) => {
-      if (l.status === 'delivered' || l.status === 'cancelled') return false;
-      const hoursSince = (Date.now() - new Date(l.updated_at).getTime()) / 3600000;
+    const activeLoads = loads.filter((load) => !['delivered', 'cancelled'].includes(load.status));
+    const inTransit = loads.filter((load) => load.status === 'in_transit');
+    const delivered = loads.filter((load) => load.status === 'delivered');
+    const delayed = loads.filter((load) => {
+      if (load.status === 'delivered' || load.status === 'cancelled') return false;
+      const hoursSince = (Date.now() - new Date(load.updated_at).getTime()) / 3600000;
       return hoursSince > 24;
     });
-    const totalWeightActive = activeLoads.reduce((s: number, l: any) => s + (Number(l.total_weight_kg) || 0), 0);
-    const totalPalletsActive = activeLoads.reduce((s: number, l: any) => s + (Number(l.total_pallet_count) || 0), 0);
+    const totalWeightActive = activeLoads.reduce((sum, load) => sum + (Number(load.total_weight_kg) || 0), 0);
+    const totalPalletsActive = activeLoads.reduce((sum, load) => sum + (Number(load.total_pallet_count) || 0), 0);
 
     // Documentos válidos seguindo lógica fiscal centralizada
-    const nfes = fiscalDocs.filter((d: any) => d.document_type === 'inbound' && !isVoidFiscalStatus(d.status));
-    const ctes = fiscalDocs.filter((d: any) => d.document_type === 'outbound' && !isVoidFiscalStatus(d.status));
+    const nfes = fiscalDocs.filter((document) => document.document_type === 'inbound' && !isVoidFiscalStatus(document.status));
+    const ctes = fiscalDocs.filter((document) => document.document_type === 'outbound' && !isVoidFiscalStatus(document.status));
     
-    const totalNfeValue = nfes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
+    const totalNfeValue = nfes.reduce((sum, document) => sum + (Number(document.value) || 0), 0);
     // Receita de CT-e (confirmados): rascunhos/transmitindo não somam em faturamento real no dashboard
     const totalFreight = ctes.filter(d => !['draft', 'pending', 'processing', 'submitted'].includes(d.status))
-      .reduce((s: number, d: any) => s + fiscalDocRevenue(d), 0);
+      .reduce((sum, document) => sum + fiscalDocRevenue(document), 0);
     const totalCteValue = totalFreight;
 
-    const activeDrivers = drivers.filter((d: any) => d.active);
-    const driversWithVehicle = drivers.filter((d: any) => d.active && d.current_vehicle_id);
-    const openIncidents = incidents.filter((i: any) => !['closed', 'resolved', 'cancelled'].includes(i.status));
-    const criticalIncidents = openIncidents.filter((i: any) => i.severity === 'critical' || i.severity === 'high');
+    const activeDrivers = drivers.filter((driver) => driver.active);
+    const driversWithVehicle = drivers.filter((driver) => driver.active && driver.current_vehicle_id);
+    const openIncidents = incidents.filter((incident) => !['closed', 'resolved', 'cancelled'].includes(incident.status));
+    const criticalIncidents = openIncidents.filter((incident) => incident.severity === 'critical' || incident.severity === 'high');
 
     return {
       activeLoads: activeLoads.length,
@@ -381,13 +366,13 @@ export default function OperationsCenter() {
 
   // ── Chart Data ──
   const destChart = useMemo(() => {
-    const activeLoads = loads.filter((l: any) => !['delivered'].includes(l.status));
+    const activeLoads = loads.filter((load) => !['delivered'].includes(load.status));
     const groups: Record<string, { pallets: number; weight: number; count: number }> = {};
-    activeLoads.forEach((l: any) => {
-      const dest = (l.destination || 'Sem destino').substring(0, 20);
+    activeLoads.forEach((load) => {
+      const dest = (load.destination || 'Sem destino').substring(0, 20);
       if (!groups[dest]) groups[dest] = { pallets: 0, weight: 0, count: 0 };
-      groups[dest].pallets += Number(l.total_pallet_count) || 0;
-      groups[dest].weight += Number(l.total_weight_kg) || 0;
+      groups[dest].pallets += Number(load.total_pallet_count) || 0;
+      groups[dest].weight += Number(load.total_weight_kg) || 0;
       groups[dest].count += 1;
     });
     return Object.entries(groups)
@@ -398,8 +383,8 @@ export default function OperationsCenter() {
 
   const statusChart = useMemo(() => {
     const counts: Record<string, number> = {};
-    loads.forEach((l: any) => {
-      const s = l.status || 'unknown';
+    loads.forEach((load) => {
+      const s = load.status || 'unknown';
       counts[s] = (counts[s] || 0) + 1;
     });
     return Object.entries(counts).map(([status, value]) => ({
@@ -410,9 +395,9 @@ export default function OperationsCenter() {
 
   const nfeByDay = useMemo(() => {
     const days: Record<string, number> = {};
-    const nfes = fiscalDocs.filter((d: any) => d.document_type === 'inbound');
-    nfes.forEach((d: any) => {
-      const day = (d.issue_date || d.created_at?.slice(0, 10)) || '';
+    const nfes = fiscalDocs.filter((document) => document.document_type === 'inbound');
+    nfes.forEach((document) => {
+      const day = (document.issue_date || document.created_at?.slice(0, 10)) || '';
       if (day) days[day] = (days[day] || 0) + 1;
     });
     return Object.entries(days)
@@ -588,7 +573,7 @@ export default function OperationsCenter() {
           { icon: Receipt, label: 'CT-es', value: stats.cteCount, sub: stats.cteCount > 0 ? fmtCurrency(stats.totalCteValue) : '—', color: 'text-emerald-500', path: '/fiscal-documents' },
           { icon: Truck, label: 'Frota', value: fleetStats.total, sub: `${fleetStats.online} online`, color: 'text-indigo-500', path: '/vehicles' },
           { icon: Users, label: 'Motoristas', value: stats.activeDrivers, sub: `${stats.driversWithVehicle} alocados`, color: 'text-teal-500', path: '/drivers' },
-          { icon: Wrench, label: 'Manutenção', value: openMaintenance, sub: 'OS abertas', color: 'text-orange-500', path: '/maintenance', warn: openMaintenance > 0 },
+          { icon: Wrench, label: 'Manutenção', value: openMaintenance, sub: 'OS abertas', color: 'text-orange-500', path: '/maintenance-orders', warn: openMaintenance > 0 },
           { icon: Receipt, label: 'Despesas', value: pendingExpenses, sub: 'pendentes', color: 'text-amber-500', path: '/expense-approval', warn: pendingExpenses > 0 },
           { icon: Bell, label: 'Alertas', value: alerts.length, sub: 'ativos', color: 'text-red-500', path: '/alerts', warn: alerts.length > 0 },
         ].map(({ icon: Icon, label, value, sub, color, path, warn }) => (
@@ -633,7 +618,7 @@ export default function OperationsCenter() {
           <CardContent className="p-0">
             <div className="h-[320px] w-full">
               <MapContainer
-                center={[-14.235, -51.925]}
+                center={mapPoints[0] ?? DEFAULT_BRAZIL_MAP_CENTER}
                 zoom={4}
                 style={{ height: '100%', width: '100%' }}
                 zoomControl={true}
@@ -642,8 +627,8 @@ export default function OperationsCenter() {
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                {vehiclesWithPosition.length > 0 && (
-                  <FitBounds positions={vehiclesWithPosition.map(e => ({ lat: e.lat!, lng: e.lng! }))} />
+                {mapPoints.length > 0 && (
+                  <MapAutoFit points={mapPoints} padding={20} maxZoom={12} />
                 )}
                 {vehiclesWithPosition.map(e => (
                   <Marker
@@ -698,7 +683,7 @@ export default function OperationsCenter() {
               </div>
             </CardHeader>
             <CardContent className="space-y-1.5 max-h-[140px] overflow-y-auto">
-              {alerts.slice(0, 6).map((alert: any) => (
+              {alerts.slice(0, 6).map((alert) => (
                 <div key={alert.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-muted/30 hover:bg-muted/60 transition-colors">
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-medium truncate">
@@ -730,7 +715,7 @@ export default function OperationsCenter() {
               </div>
             </CardHeader>
             <CardContent className="space-y-1.5 max-h-[120px] overflow-y-auto">
-              {incidents.filter((i: any) => !['closed', 'resolved'].includes(i.status)).slice(0, 5).map((inc: any) => (
+              {incidents.filter((incident) => !['closed', 'resolved'].includes(incident.status)).slice(0, 5).map((inc) => (
                 <div key={inc.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-muted/30">
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-medium truncate">{inc.title}</p>
@@ -879,7 +864,7 @@ export default function OperationsCenter() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
-              {loads.slice(0, 8).map((load: any) => {
+              {loads.slice(0, 8).map((load) => {
                 const vehicle = load.vehicles;
                 const driver = load.drivers;
                 return (
@@ -955,7 +940,7 @@ export default function OperationsCenter() {
                 </Button>
               )}
               {openMaintenance > 0 && (
-                <Button variant="outline" size="sm" className="w-full justify-start text-xs h-8 border-orange-400/40 text-orange-600" onClick={() => navigate('/maintenance')}>
+                <Button variant="outline" size="sm" className="w-full justify-start text-xs h-8 border-orange-400/40 text-orange-600" onClick={() => navigate('/maintenance-orders')}>
                   <Wrench className="h-3.5 w-3.5 mr-2" /> {openMaintenance} OS de manutenção
                 </Button>
               )}

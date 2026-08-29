@@ -72,8 +72,7 @@ export interface FallbackReport {
 
 export const isUnknown = (v: unknown) => String(v ?? '').trim().toUpperCase() === UNKNOWN;
 
-/** Apply fallbacks to an ORT-shaped object. Returns the patched object + report. */
-export function applyOrtFallbacks<T extends {
+interface OrtFallbackFields {
   recipientZip?: string;
   recipientPhone?: string;
   recipientAddress?: string;
@@ -81,11 +80,14 @@ export function applyOrtFallbacks<T extends {
   recipientCnpj?: string;
   recipientNeighborhood?: string;
   recipientCity?: string;
-}>(input: T): { patched: T; report: FallbackReport } {
+}
+
+/** Apply fallbacks to an ORT-shaped object. Returns the patched object + report. */
+export function applyOrtFallbacks<T extends OrtFallbackFields>(input: T): { patched: T; report: FallbackReport } {
   const unknownFields: string[] = [];
   const fixedFields: string[] = [];
 
-  const map: Array<[keyof T, (raw: any) => string]> = [
+  const map: Array<[keyof OrtFallbackFields, (raw: string | undefined | null) => string]> = [
     ['recipientZip', normalizeZip],
     ['recipientPhone', normalizePhone],
     ['recipientAddress', normalizeAddress],
@@ -94,11 +96,11 @@ export function applyOrtFallbacks<T extends {
     ['recipientNeighborhood', normalizeShortText],
   ];
 
-  const patched: any = { ...input };
+  const patched = { ...input };
   for (const [field, fn] of map) {
-    const original = String((input as any)[field] ?? '').trim();
+    const original = String(input[field] ?? '').trim();
     const normalized = fn(original);
-    patched[field] = normalized;
+    Object.assign(patched, { [field]: normalized });
     if (normalized === UNKNOWN) {
       unknownFields.push(String(field));
     } else if (original && original !== normalized) {

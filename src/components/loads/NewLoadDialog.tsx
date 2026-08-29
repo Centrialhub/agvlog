@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getNextLoadNumberFromExisting, useCreateLoadWithNextNumber } from '@/hooks/useLoads';
@@ -16,10 +16,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertTriangle, Eye, Loader2, Plus, Search, UserX, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import type { Vehicle } from '@/hooks/useVehicles';
+import type { TablesInsert } from '@/integrations/supabase/types';
+import { getErrorMessage } from '@/lib/errors';
+
+type DriverOption = { id: string; name: string; user_id: string | null };
+type AvailableFiscalDocument = {
+  id: string;
+  invoice_number: string | null;
+  remitter: string | null;
+  recipient: string | null;
+  recipient_neighborhood: string | null;
+  recipient_city: string | null;
+  recipient_state: string | null;
+  pallet_count: number | null;
+  weight_kg: number | null;
+  product_summary: string | null;
+  status: string;
+  load_id: string | null;
+  created_at: string;
+  clients: { company_name: string } | null;
+  loads: { id: string; load_number: string } | null;
+};
 
 interface Props {
-  vehicles: any[];
-  drivers: any[];
+  vehicles: Vehicle[];
+  drivers: DriverOption[];
   onCreated: () => void;
 }
 
@@ -70,8 +92,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [docFilters, setDocFilters] = useState(emptyDocFilters);
   const [docSort, setDocSort] = useState<'recent' | 'alpha'>('recent');
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
-  const [previewDoc, setPreviewDoc] = useState<any | null>(null);
-  const [detailsDoc, setDetailsDoc] = useState<any | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<AvailableFiscalDocument | null>(null);
+  const [detailsDoc, setDetailsDoc] = useState<AvailableFiscalDocument | null>(null);
   const [docAutofillSnapshots, setDocAutofillSnapshots] = useState<Record<string, Record<string, string>>>({});
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
   const [visibleRecentDocCount, setVisibleRecentDocCount] = useState(DOC_PAGE_SIZE);
@@ -91,19 +113,19 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   // Auto-fill driver from vehicle's current_driver_id whenever a vehicle is chosen and no driver is set.
   useEffect(() => {
     if (!form.vehicle_id) return;
-    const v = vehicles.find((x: any) => x.id === form.vehicle_id);
+    const v = vehicles.find(vehicle => vehicle.id === form.vehicle_id);
     const suggested = v?.current_driver_id;
     if (!suggested) return;
     // Only auto-fill if driver field is empty or previously auto-suggested (avoid overriding a manual pick).
     if (form.driver_id && !driverAutoSuggested) return;
     if (form.driver_id === suggested) return;
-    const exists = drivers.some((d: any) => d.id === suggested);
+    const exists = drivers.some(driver => driver.id === suggested);
     if (!exists) return;
     setForm(f => ({ ...f, driver_id: suggested }));
     setDriverAutoSuggested(true);
   }, [form.vehicle_id, form.driver_id, driverAutoSuggested, drivers, vehicles]);
 
-  const selectedDriver = form.driver_id ? drivers.find((d: any) => d.id === form.driver_id) : null;
+  const selectedDriver = form.driver_id ? drivers.find(driver => driver.id === form.driver_id) : null;
   const driverHasAppAccess = !!selectedDriver?.user_id;
 
   const { data: fiscalDocs = [], isFetching: isFetchingFiscalDocs } = useQuery({
@@ -112,7 +134,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, created_at, clients!fiscal_documents_client_id_fkey(company_name), loads(id, load_number)')
+        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, status, load_id, created_at, clients!fiscal_documents_client_id_fkey(company_name), loads(id, load_number)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .order('created_at', { ascending: false })
@@ -147,10 +169,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     enabled: !!currentTenant && open,
   });
 
-  const linkedLoadById = useMemo(() => new Map(linkedLoads.map((load: any) => [load.id, load])), [linkedLoads]);
+  const linkedLoadById = useMemo(() => new Map(linkedLoads.map(load => [load.id, load])), [linkedLoads]);
   const isDocsUpdating = isFetchingFiscalDocs || isFetchingNextLoadNumber || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
 
-  const getLinkedLoad = (doc: any) => doc.loads || linkedLoadById.get(doc.load_id) || null;
+  const getLinkedLoad = (doc: AvailableFiscalDocument) => doc.loads || (doc.load_id ? linkedLoadById.get(doc.load_id) : null) || null;
 
   useEffect(() => {
     if (!open || loadNumberTouched || !nextLoadNumber) return;
@@ -160,18 +182,18 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   useEffect(() => {
     if (!isDocPreferenceLoaded) return;
     const sourcePreference = sessionOnlyPreference ? loadSessionPreference() : docPreference;
-    setDocFilters({ ...emptyDocFilters, ...(sourcePreference as any).filters });
-    setDocSort((sourcePreference as any).sort === 'alpha' ? 'alpha' : 'recent');
-    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((sourcePreference as any).visibleDocCount) || DOC_PAGE_SIZE));
-    setVisibleRecentDocCount(Math.max(DOC_PAGE_SIZE, Number((sourcePreference as any).visibleRecentDocCount) || DOC_PAGE_SIZE));
-    setDocScrollTop(Number((sourcePreference as any).scrollTop) || 0);
-    setRecentDocScrollTop(Number((sourcePreference as any).recentScrollTop) || 0);
+    setDocFilters({ ...emptyDocFilters, ...sourcePreference.filters });
+    setDocSort(sourcePreference.sort === 'alpha' ? 'alpha' : 'recent');
+    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number(sourcePreference.visibleDocCount) || DOC_PAGE_SIZE));
+    setVisibleRecentDocCount(Math.max(DOC_PAGE_SIZE, Number(sourcePreference.visibleRecentDocCount) || DOC_PAGE_SIZE));
+    setDocScrollTop(Number(sourcePreference.scrollTop) || 0);
+    setRecentDocScrollTop(Number(sourcePreference.recentScrollTop) || 0);
     skipNextFilterReset.current = true;
     isDocPreferenceHydrated.current = true;
   }, [docPreference, isDocPreferenceLoaded, sessionOnlyPreference]);
 
   useEffect(() => {
-    if (!isDocPreferenceHydrated.current) return;
+    if (!isDocPreferenceHydrated.current) return undefined;
     const timeout = window.setTimeout(() => {
       if (sessionOnlyPreference) {
         window.sessionStorage.setItem(NEW_LOAD_SESSION_PREF_KEY, JSON.stringify(currentDocPreference));
@@ -187,7 +209,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     const invoiceDigits = debouncedDocFilters.invoice.replace(/\D/g, '');
     const client = normalize(debouncedDocFilters.client);
     const neighborhood = normalize(debouncedDocFilters.neighborhood);
-    const docs = fiscalDocs.filter((doc: any) => {
+    const docs = fiscalDocs.filter((doc) => {
       const docInvoice = normalize(doc.invoice_number || '');
       const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
       const docClient = normalize(doc.clients?.company_name || doc.recipient || '');
@@ -197,24 +219,24 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
       return true;
     });
-    return docs.sort((a: any, b: any) => docSort === 'alpha'
+    return docs.sort((a, b) => docSort === 'alpha'
       ? String(a.clients?.company_name || a.recipient || a.invoice_number || '').localeCompare(String(b.clients?.company_name || b.recipient || b.invoice_number || ''), 'pt-BR')
       : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   }, [debouncedDocFilters, docSort, fiscalDocs]);
 
-  const recentDocs = useMemo(() => [...fiscalDocs].sort((a: any, b: any) => docSort === 'alpha'
+  const recentDocs = useMemo(() => [...fiscalDocs].sort((a, b) => docSort === 'alpha'
     ? String(a.clients?.company_name || a.recipient || a.invoice_number || '').localeCompare(String(b.clients?.company_name || b.recipient || b.invoice_number || ''), 'pt-BR')
     : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()), [docSort, fiscalDocs]);
 
   const selectableFilteredDocs = useMemo(() => filteredDocs, [filteredDocs]);
 
-  const linkedFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => doc.load_id), [filteredDocs]);
+  const linkedFilteredDocs = useMemo(() => filteredDocs.filter(doc => doc.load_id), [filteredDocs]);
 
-  const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
+  const selectedDocs = useMemo(() => fiscalDocs.filter(doc => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
   const selectedDocsPreview = selectedDocs.slice(0, 4);
 
   const loadPreview = useMemo(() => {
-    const totals = selectedDocs.reduce((acc: any, doc: any) => ({
+    const totals = selectedDocs.reduce((acc, doc) => ({
       pallets: acc.pallets + (Number(doc.pallet_count) || 0),
       weight: acc.weight + (Number(doc.weight_kg) || 0),
     }), { pallets: 0, weight: 0 });
@@ -258,13 +280,13 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
     recalculateModalHeight();
     window.addEventListener('resize', recalculateModalHeight);
     return () => window.removeEventListener('resize', recalculateModalHeight);
   }, [open]);
 
-  const handleListScroll = (event: any, total: number, visible: number, setVisible: (updater: (count: number) => number) => void, setScroll: (top: number) => void) => {
+  const handleListScroll = (event: UIEvent<HTMLDivElement>, total: number, visible: number, setVisible: (updater: (count: number) => number) => void, setScroll: (top: number) => void) => {
     const target = event.currentTarget;
     setScroll(target.scrollTop);
     const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
@@ -336,7 +358,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const previewIssueFields = useMemo(() => new Set(previewValidationIssues.map(issue => issue.field)), [previewValidationIssues]);
 
-  const getDocAutofillFields = (doc: any) => ({
+  const getDocAutofillFields = (doc: AvailableFiscalDocument) => ({
     invoice_number: doc.invoice_number || '',
     client_name: doc.clients?.company_name || doc.recipient || '',
     supplier: doc.remitter || '',
@@ -344,7 +366,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     destination: [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - '),
   });
 
-  const buildAggregatedFields = (docs: any[]) => {
+  const buildAggregatedFields = (docs: AvailableFiscalDocument[]) => {
     const unique = (values: string[]) => Array.from(new Set(values.map(v => v.trim()).filter(Boolean)));
     const invoices = unique(docs.map(doc => doc.invoice_number || ''));
     const clientsList = unique(docs.map(doc => doc.clients?.company_name || doc.recipient || ''));
@@ -362,8 +384,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const validationSuggestions = useMemo(() => {
-    const primaryDoc: any = selectedDocs[0];
-    const knownNeighborhoods = new Set(fiscalDocs.map((doc: any) => normalize(doc.recipient_neighborhood || '')).filter(Boolean));
+    const primaryDoc = selectedDocs[0];
+    const knownNeighborhoods = new Set(fiscalDocs.map(doc => normalize(doc.recipient_neighborhood || '')).filter(Boolean));
     const suggestions: { key: string; title: string; description: string; action?: 'neighborhood' | 'destination' | 'client' | 'invoice' }[] = [];
 
     if (form.neighborhood.trim() && knownNeighborhoods.size > 0 && !knownNeighborhoods.has(normalize(form.neighborhood))) {
@@ -399,7 +421,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   }, [fiscalDocs, form.client_name, form.destination, form.invoice_number, form.neighborhood, selectedDocs]);
 
   const applySuggestion = (action: 'neighborhood' | 'destination' | 'client' | 'invoice') => {
-    const doc: any = selectedDocs[0];
+    const doc = selectedDocs[0];
     if (!doc) return;
     setForm(f => ({
       ...f,
@@ -410,12 +432,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     }));
   };
 
-  const applyDocSelection = (doc: any) => {
+  const applyDocSelection = (doc: AvailableFiscalDocument) => {
     const autoFilledFields = getDocAutofillFields(doc);
     setSelectedDocIds(prev => {
       const next = new Set(prev);
       next.add(doc.id);
-      const docs = fiscalDocs.filter((item: any) => next.has(item.id));
+      const docs = fiscalDocs.filter(item => next.has(item.id));
       setForm(f => ({ ...f, ...buildAggregatedFields(docs) }));
       return next;
     });
@@ -428,7 +450,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     setSelectedDocIds(prev => {
       const next = new Set(prev);
       next.delete(docId);
-      const docs = fiscalDocs.filter((item: any) => next.has(item.id));
+      const docs = fiscalDocs.filter(item => next.has(item.id));
       setForm(f => ({ ...f, ...buildAggregatedFields(docs) }));
       return next;
     });
@@ -440,11 +462,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const selectFilteredDocs = () => {
-    const nextIds = new Set([...Array.from(selectedDocIds), ...selectableFilteredDocs.map((doc: any) => doc.id)]);
-    const nextSnapshots = selectableFilteredDocs.reduce((acc, doc: any) => ({ ...acc, [doc.id]: getDocAutofillFields(doc) }), docAutofillSnapshots);
+    const nextIds = new Set([...Array.from(selectedDocIds), ...selectableFilteredDocs.map(doc => doc.id)]);
+    const nextSnapshots = selectableFilteredDocs.reduce((acc, doc) => ({ ...acc, [doc.id]: getDocAutofillFields(doc) }), docAutofillSnapshots);
     setSelectedDocIds(nextIds);
     setDocAutofillSnapshots(nextSnapshots);
-    setForm(f => ({ ...f, ...buildAggregatedFields(fiscalDocs.filter((doc: any) => nextIds.has(doc.id))) }));
+    setForm(f => ({ ...f, ...buildAggregatedFields(fiscalDocs.filter(doc => nextIds.has(doc.id))) }));
     setPreviewDoc(null);
   };
 
@@ -453,26 +475,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     setDocAutofillSnapshots({});
     setForm(f => ({ ...f, invoice_number: '', client_name: '', supplier: '', neighborhood: '', destination: '' }));
     setPreviewDoc(null);
-  };
-
-  const refreshLoadTotals = async (loadIds: string[]) => {
-    const uniqueLoadIds = Array.from(new Set(loadIds.filter(Boolean)));
-    await Promise.all(uniqueLoadIds.map(async loadId => {
-      const { data, error } = await (supabase as any).from('load_items').select('pallet_count, weight_kg, volume_m3').eq('load_id', loadId);
-      if (error) throw error;
-      const totals = (data || []).reduce((acc: any, item: any) => ({
-        pallet_count: acc.pallet_count + (Number(item.pallet_count) || 0),
-        weight_kg: acc.weight_kg + (Number(item.weight_kg) || 0),
-        volume_m3: acc.volume_m3 + (Number(item.volume_m3) || 0),
-      }), { pallet_count: 0, weight_kg: 0, volume_m3: 0 });
-      const { error: updateError } = await supabase.from('loads').update({
-        total_pallet_count: totals.pallet_count,
-        total_weight_kg: totals.weight_kg,
-        total_volume_m3: totals.volume_m3,
-        updated_at: new Date().toISOString(),
-      } as any).eq('id', loadId);
-      if (updateError) throw updateError;
-    }));
   };
 
   const handleSave = async () => {
@@ -493,11 +495,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         vehicle_id: form.vehicle_id || null,
         driver_id: form.driver_id || null,
         status: 'planned',
-      } as any);
+      });
 
       let manualDocId: string | null = null;
       const selectedDocIdList = Array.from(selectedDocIds);
-      const previousLoadIds = Array.from(new Set(selectedDocIdList.map(docId => fiscalDocs.find((d: any) => d.id === docId)?.load_id).filter(Boolean)));
 
       if (selectedDocIdList.length === 1) {
         const { error: updateDocError } = await supabase.from('fiscal_documents').update({
@@ -507,12 +508,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           recipient_neighborhood: form.neighborhood || null,
           recipient_city: form.destination || null,
           updated_at: new Date().toISOString(),
-        } as any).eq('id', selectedDocIdList[0]);
+        }).eq('id', selectedDocIdList[0]);
         if (updateDocError) throw updateDocError;
       }
 
       if (form.invoice_number.trim() && selectedDocIdList.length === 0) {
-        const { data: createdDoc, error: docError } = await supabase.from('fiscal_documents').insert({
+        const payload: TablesInsert<'fiscal_documents'> = {
           tenant_id: currentTenant!.id,
           created_by: user?.id,
           document_type: 'inbound',
@@ -522,9 +523,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           remitter: form.supplier || null,
           recipient_neighborhood: form.neighborhood || null,
           recipient_city: form.destination || null,
-          load_id: load.id,
+          // load_items is the canonical document/load relationship. The
+          // compatibility mirror is synchronized by the database trigger.
+          load_id: null,
           status: 'confirmed',
-        } as any).select('id').single();
+        };
+        const { data: createdDoc, error: docError } = await supabase.from('fiscal_documents').insert(payload).select('id').single();
         if (docError) throw docError;
         manualDocId = createdDoc.id;
       }
@@ -532,14 +536,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       const docIds = [...selectedDocIdList, ...(manualDocId ? [manualDocId] : [])];
       if (docIds.length > 0) {
         if (selectedDocIdList.length > 0) {
-          const { error: assignError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+          const { error: assignError } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
             _tenant_id: currentTenant!.id,
             _load_id: load.id,
             _document_ids: selectedDocIdList,
           });
           if (assignError) throw assignError;
           const auditEvents = selectedDocIdList.map(docId => {
-            const doc: any = fiscalDocs.find((d: any) => d.id === docId);
+            const doc = fiscalDocs.find(document => document.id === docId);
             const autoFilledFields = docAutofillSnapshots[docId] || {};
             return {
               tenant_id: currentTenant!.id,
@@ -575,18 +579,17 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               },
             };
           });
-          const { error: auditError } = await (supabase as any).from('load_note_audit_events').insert(auditEvents);
+          const { error: auditError } = await supabase.from('load_note_audit_events').insert(auditEvents);
           if (auditError) throw auditError;
         }
         if (manualDocId) {
-          const { error: assignManualError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+          const { error: assignManualError } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
             _tenant_id: currentTenant!.id,
             _load_id: load.id,
             _document_ids: [manualDocId],
           });
           if (assignManualError) throw assignManualError;
         }
-        await refreshLoadTotals([...previousLoadIds, load.id]);
       }
 
       toast({ title: 'Carga criada' });
@@ -600,8 +603,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
       queryClient.invalidateQueries({ queryKey: ['load_items'] });
       onCreated();
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -636,7 +639,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Nenhum</SelectItem>
-                  {drivers.map((d: any) => (
+                  {drivers.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
                       {d.name}{!d.user_id ? ' — sem app' : ''}
                     </SelectItem>
@@ -679,7 +682,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">Nenhuma NF selecionada ainda.</div>
             ) : (
               <div className="max-h-28 space-y-1 overflow-y-auto pr-1">
-                {selectedDocs.map((doc: any) => {
+                {selectedDocs.map((doc) => {
                   const linkedLoad = getLinkedLoad(doc);
                   return (
                     <div key={doc.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
@@ -775,7 +778,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
                 <div className="font-medium text-primary">Seleções mantidas: {selectedDocs.length} NF(s) · {loadPreview.pallets} pal · {loadPreview.weight.toLocaleString('pt-BR')} kg</div>
                 <div className="mt-1 truncate text-[11px] text-muted-foreground">
-                  {selectedDocsPreview.map((doc: any) => `NF ${doc.invoice_number || '—'}`).join(' · ')}{selectedDocs.length > selectedDocsPreview.length ? ` · +${selectedDocs.length - selectedDocsPreview.length}` : ''}
+                  {selectedDocsPreview.map((doc) => `NF ${doc.invoice_number || '—'}`).join(' · ')}{selectedDocs.length > selectedDocsPreview.length ? ` · +${selectedDocs.length - selectedDocsPreview.length}` : ''}
                 </div>
               </div>
             )}
@@ -791,7 +794,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     A nota foi encontrada e pode ser reatribuída para a nova carga. Ela sairá da carga antiga ao criar.
                   </div>
                   <div className="mt-2 flex flex-wrap justify-center gap-2">
-                    {linkedFilteredDocs.map((doc: any) => {
+                    {linkedFilteredDocs.map((doc) => {
                       const linkedLoad = getLinkedLoad(doc);
                       return (
                         <Button key={doc.id} asChild type="button" variant="outline" size="sm" className="h-7 text-[11px]">
@@ -801,7 +804,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     })}
                   </div>
                 </div>
-                ) : visibleFilteredDocs.map((doc: any) => {
+                ) : visibleFilteredDocs.map((doc) => {
                 const isSelected = selectedDocIds.has(doc.id);
                 const isLinked = !!doc.load_id;
                 const linkedLoad = getLinkedLoad(doc);
@@ -888,7 +891,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <div key={`recent-${docsLayoutKey}`} ref={recentDocListRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4" onScroll={event => handleListScroll(event, recentDocs.length, visibleRecentDocs.length, setVisibleRecentDocCount, setRecentDocScrollTop)}>
                 {recentDocs.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-6 text-center">Nenhuma nota recente disponível</div>
-                ) : visibleRecentDocs.map((doc: any) => {
+                ) : visibleRecentDocs.map((doc) => {
                   const isSelected = selectedDocIds.has(doc.id);
                   const isLinked = !!doc.load_id;
                   const linkedLoad = getLinkedLoad(doc);

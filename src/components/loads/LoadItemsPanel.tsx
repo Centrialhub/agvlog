@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem } from '@/hooks/useLoadItems';
+import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem, type ItemStatus } from '@/hooks/useLoadItems';
 import { useOrders } from '@/hooks/useOrders';
 import { useTenant } from '@/hooks/useTenant';
 import { useUserUiPreference } from '@/hooks/useUserUiPreference';
@@ -17,6 +17,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Progress } from '@/components/ui/progress';
 import { Plus, Trash2, AlertTriangle, Loader2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage } from '@/lib/errors';
+import { usePagination } from '@/hooks/usePagination';
+import { DataPagination } from '@/components/ui/data-pagination';
 
 interface LoadItemsPanelProps {
   loadId: string;
@@ -90,7 +93,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     return items.filter(item => {
       const desc = normalize(item.item_description || '');
       const order = normalize(item.orders?.order_number || '');
-      const recipient = normalize((item as any).fiscal_documents?.recipient || '');
+      const recipient = normalize(item.fiscal_documents?.recipient || '');
       
       const fDesc = normalize(debouncedItemsFilter.description);
       const fOrder = normalize(debouncedItemsFilter.order);
@@ -102,6 +105,10 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       return true;
     });
   }, [items, debouncedItemsFilter]);
+  const itemsPagination = usePagination(filteredItems, {
+    pageSize: 50,
+    resetKey: JSON.stringify(debouncedItemsFilter),
+  });
   const [form, setForm] = useState({
     order_id: '',
     item_description: '',
@@ -136,7 +143,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     const neighborhood = normalize(debouncedDocFilters.neighborhood);
     const city = normalize(debouncedDocFilters.city || '');
     const currentDocIds = new Set(items.map(item => item.fiscal_document_id).filter(Boolean));
-    const docs = fiscalDocs.filter((doc: any) => {
+    const docs = fiscalDocs.filter((doc) => {
       if (currentDocIds.has(doc.id)) return false;
       const docInvoice = normalize(doc.invoice_number || '');
       const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
@@ -149,13 +156,13 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       if (city && !docCity.includes(city)) return false;
       return true;
     });
-    return docs.sort((a: any, b: any) => docSort === 'alpha'
+    return docs.sort((a, b) => docSort === 'alpha'
       ? String(a.clients?.company_name || a.recipient || a.invoice_number || '').localeCompare(String(b.clients?.company_name || b.recipient || b.invoice_number || ''), 'pt-BR')
       : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   }, [debouncedDocFilters, docSort, fiscalDocs, items]);
 
-  const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
-  const selectedDocTotals = useMemo(() => selectedDocs.reduce((acc: any, doc: any) => ({
+  const selectedDocs = useMemo(() => fiscalDocs.filter((doc) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
+  const selectedDocTotals = useMemo(() => selectedDocs.reduce((acc, doc) => ({
     pallets: acc.pallets + (Number(doc.pallet_count) || 0),
     weight: acc.weight + (Number(doc.weight_kg) || 0),
   }), { pallets: 0, weight: 0 }), [selectedDocs]);
@@ -172,16 +179,16 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   useEffect(() => {
     if (!isDocPreferenceLoaded) return;
     const sourcePreference = sessionOnlyPreference ? loadSessionPreference() : docPreference;
-    setDocFilters({ ...emptyDocFilters, ...(sourcePreference as any).filters });
-    setDocSort((sourcePreference as any).sort === 'alpha' ? 'alpha' : 'recent');
-    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((sourcePreference as any).visibleDocCount) || DOC_PAGE_SIZE));
-    setDocScrollTop(Number((sourcePreference as any).scrollTop) || 0);
+    setDocFilters({ ...emptyDocFilters, ...sourcePreference.filters });
+    setDocSort(sourcePreference.sort === 'alpha' ? 'alpha' : 'recent');
+    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number(sourcePreference.visibleDocCount) || DOC_PAGE_SIZE));
+    setDocScrollTop(Number(sourcePreference.scrollTop) || 0);
     skipNextFilterReset.current = true;
     isDocPreferenceHydrated.current = true;
   }, [docPreference, isDocPreferenceLoaded, sessionOnlyPreference]);
 
   useEffect(() => {
-    if (!isDocPreferenceHydrated.current) return;
+    if (!isDocPreferenceHydrated.current) return undefined;
     const timeout = window.setTimeout(() => {
       if (sessionOnlyPreference) {
         window.sessionStorage.setItem(LOAD_ITEMS_SESSION_PREF_KEY, JSON.stringify(currentDocPreference));
@@ -209,13 +216,13 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   };
 
   useEffect(() => {
-    if (!addOpen) return;
+    if (!addOpen) return undefined;
     recalculateModalHeight();
     window.addEventListener('resize', recalculateModalHeight);
     return () => window.removeEventListener('resize', recalculateModalHeight);
   }, [addOpen]);
 
-  const handleDocListScroll = (event: any) => {
+  const handleDocListScroll = (event: UIEvent<HTMLDivElement>) => {
     const target = event.currentTarget;
     setDocScrollTop(target.scrollTop);
     const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
@@ -258,34 +265,32 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
 
   const handleAdd = async () => {
     if (mode === 'note') {
-      const docs = fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id));
+      const docs = fiscalDocs.filter((doc) => selectedDocIds.has(doc.id));
       if (docs.length === 0) {
         toast({ title: 'Selecione ao menos uma NF', variant: 'destructive' });
         return;
       }
-      const newPallets = totalPallets + docs.reduce((sum: number, doc: any) => sum + (Number(doc.pallet_count) || 0), 0);
+      const newPallets = totalPallets + docs.reduce((sum, doc) => sum + (Number(doc.pallet_count) || 0), 0);
       if (vehicleMaxPallets && newPallets > vehicleMaxPallets) {
         toast({ title: 'Capacidade excedida', description: `Máx: ${vehicleMaxPallets} paletes. Atual + novo: ${newPallets}`, variant: 'destructive' });
         return;
       }
       try {
-        const previousLoadIds = Array.from(new Set(docs.map((doc: any) => doc.load_id).filter(Boolean)));
-        const docIds = docs.map((doc: any) => doc.id);
-        const { error: assignError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+        const docIds = docs.map(doc => doc.id);
+        const { error: assignError } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
           _tenant_id: currentTenant!.id,
           _load_id: loadId,
           _document_ids: docIds,
         });
         if (assignError) throw assignError;
-        await refreshLoadTotals([...previousLoadIds, loadId]);
         setAddOpen(false);
         setSelectedDocIds(new Set());
         qc.invalidateQueries({ queryKey: ['load_items'] });
         qc.invalidateQueries({ queryKey: ['load_documents'] });
         qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
         toast({ title: 'NF(s) puxada(s) para a carga' });
-      } catch (e: any) {
-        toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+      } catch (error: unknown) {
+        toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
       }
       return;
     }
@@ -303,39 +308,19 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
         quantity: form.quantity,
         pallet_count: form.pallet_count,
         weight_kg: form.weight_kg,
-      } as any);
+      });
       setAddOpen(false);
       setForm({ order_id: '', item_description: '', quantity: 0, pallet_count: 0, weight_kg: 0 });
       toast({ title: 'Item adicionado' });
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
     }
-  };
-
-  const refreshLoadTotals = async (loadIds: string[]) => {
-    const uniqueLoadIds = Array.from(new Set(loadIds.filter(Boolean)));
-    await Promise.all(uniqueLoadIds.map(async id => {
-      const { data, error } = await (supabase as any).from('load_items').select('pallet_count, weight_kg, volume_m3').eq('load_id', id);
-      if (error) throw error;
-      const totals = (data || []).reduce((acc: any, item: any) => ({
-        pallet_count: acc.pallet_count + (Number(item.pallet_count) || 0),
-        weight_kg: acc.weight_kg + (Number(item.weight_kg) || 0),
-        volume_m3: acc.volume_m3 + (Number(item.volume_m3) || 0),
-      }), { pallet_count: 0, weight_kg: 0, volume_m3: 0 });
-      const { error: updateError } = await supabase.from('loads').update({
-        total_pallet_count: totals.pallet_count,
-        total_weight_kg: totals.weight_kg,
-        total_volume_m3: totals.volume_m3,
-        updated_at: new Date().toISOString(),
-      } as any).eq('id', id);
-      if (updateError) throw updateError;
-    }));
   };
 
   const handleDelete = async (item: LoadItem) => {
     try {
       if (item.fiscal_document_id) {
-        const { error: removeError } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
+        const { error: removeError } = await supabase.rpc('remove_fiscal_documents_from_load_v2', {
           _tenant_id: currentTenant!.id,
           _load_id: loadId,
           _document_ids: [item.fiscal_document_id],
@@ -344,20 +329,19 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       } else {
         await deleteItem.mutateAsync(item.id);
       }
-      await refreshLoadTotals([loadId]);
       qc.invalidateQueries({ queryKey: ['load_documents'] });
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       toast({ title: 'NF removida da carga e da geração de CT-e' });
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
   const handleStatusChange = async (item: LoadItem, status: string) => {
     try {
-      await updateItem.mutateAsync({ id: item.id, status } as any);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+      await updateItem.mutateAsync({ id: item.id, status: status as ItemStatus });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -425,19 +409,19 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                       <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
                         <div className="font-medium text-primary">Seleções mantidas: {selectedDocs.length} NF(s) · {selectedDocTotals.pallets} pal · {selectedDocTotals.weight.toLocaleString('pt-BR')} kg</div>
                         <div className="mt-1 truncate text-[11px] text-muted-foreground">
-                          {selectedDocsPreview.map((doc: any) => `NF ${doc.invoice_number || '—'}`).join(' · ')}{selectedDocs.length > selectedDocsPreview.length ? ` · +${selectedDocs.length - selectedDocsPreview.length}` : ''}
+                          {selectedDocsPreview.map((doc) => `NF ${doc.invoice_number || '—'}`).join(' · ')}{selectedDocs.length > selectedDocsPreview.length ? ` · +${selectedDocs.length - selectedDocsPreview.length}` : ''}
                         </div>
                       </div>
                     )}
                     <div key={docsLayoutKey} ref={docListRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" onScroll={handleDocListScroll}>
                       {filteredDocs.length === 0 ? (
                         <div className="rounded-md border border-border py-6 text-center text-sm text-muted-foreground">Nenhuma NF disponível para esses filtros</div>
-                      ) : visibleFilteredDocs.map((doc: any) => {
+                      ) : visibleFilteredDocs.map((doc) => {
                         const isSelected = selectedDocIds.has(doc.id);
                         const isLinked = !!doc.load_id;
                         const actionLabel = isSelected ? 'Selecionada' : isLinked ? 'Será reatribuída' : 'Será puxada';
                         return (
-                          <button key={doc.id} type="button" onClick={() => setSelectedDocIds(prev => { const next = new Set(prev); next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id); return next; })} className="flex w-full items-start gap-2 rounded-md border border-border px-3 py-1.5 text-left hover:bg-muted/60">
+                          <button key={doc.id} type="button" onClick={() => setSelectedDocIds(prev => { const next = new Set(prev); if (next.has(doc.id)) next.delete(doc.id); else next.add(doc.id); return next; })} className="flex w-full items-start gap-2 rounded-md border border-border px-3 py-1.5 text-left hover:bg-muted/60">
                             <Checkbox checked={isSelected} className="mt-0.5" />
                             <span className="min-w-0 flex-1">
                               <span className="block text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
@@ -567,12 +551,12 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
               <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-4">Carregando...</TableCell></TableRow>
             ) : filteredItems.length === 0 ? (
               <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-4">Nenhum item encontrado</TableCell></TableRow>
-            ) : filteredItems.map(item => (
+            ) : itemsPagination.items.map(item => (
               <TableRow key={item.id}>
                 <TableCell className="text-sm font-medium">{item.item_description || '—'}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{item.orders?.order_number || '—'}</TableCell>
-                <TableCell className="text-[11px] text-muted-foreground truncate max-w-[120px]" title={(item as any).fiscal_documents?.recipient || '—'}>
-                  {(item as any).fiscal_documents?.recipient || '—'}
+                <TableCell className="text-[11px] text-muted-foreground truncate max-w-[120px]" title={item.fiscal_documents?.recipient || '—'}>
+                  {item.fiscal_documents?.recipient || '—'}
                 </TableCell>
                 <TableCell>{item.quantity}</TableCell>
                 <TableCell>{item.pallet_count}</TableCell>
@@ -600,6 +584,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
             ))}
           </TableBody>
         </Table>
+        <DataPagination {...itemsPagination} onPageChange={itemsPagination.setPage} />
       </CardContent>
     </Card>
   );

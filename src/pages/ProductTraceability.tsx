@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, FileSearch, Download, Truck, Package } from 'lucide-react';
+import { Search, FileSearch, Download, Package } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { usePagination } from '@/hooks/usePagination';
+import { DataPagination } from '@/components/ui/data-pagination';
 
 interface TraceRow {
   id: string;
@@ -127,6 +129,10 @@ export default function ProductTraceability() {
     value: rows.reduce((a, r) => a + (Number(r.fiscal_documents?.value) || 0), 0),
     pallets: rows.reduce((a, r) => a + (Number(r.pallet_count) || 0), 0),
   }), [rows]);
+  const pagination = usePagination(rows, {
+    pageSize: 50,
+    resetKey: JSON.stringify(filters),
+  });
 
   const exportCsv = () => {
     const headers = ['Fornecedor', 'CNPJ', 'Produto', 'Qtde', 'Peso (kg)', 'Paletes', 'Vl. NF', 'NF', 'Emissão', 'Carga', 'Motorista', 'Veículo', 'Destinatário', 'Cidade/UF', 'Status'];
@@ -306,7 +312,7 @@ export default function ProductTraceability() {
                   <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Nenhum item encontrado para os filtros aplicados.</TableCell></TableRow>
-                ) : rows.map(r => (
+                ) : pagination.items.map(r => (
                   <TableRow key={r.id} className="text-xs">
                     <TableCell className="max-w-[160px] truncate" title={r.fiscal_documents?.remitter || ''}>
                       {r.fiscal_documents?.remitter || '—'}
@@ -342,6 +348,7 @@ export default function ProductTraceability() {
                 ))}
               </TableBody>
             </Table>
+            <DataPagination {...pagination} onPageChange={pagination.setPage} />
           </CardContent>
         </Card>
       </div>

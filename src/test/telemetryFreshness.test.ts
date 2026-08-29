@@ -37,4 +37,3 @@ describe('telemetry freshness policy', () => {
     });
   });
 });
-

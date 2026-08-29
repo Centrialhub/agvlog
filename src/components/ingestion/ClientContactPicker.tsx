@@ -7,11 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { useClients, useUpdateClient, useCreateClient, Client } from '@/hooks/useClients';
+import { useClients, useCreateClient, type Client, type CreateClientInput } from '@/hooks/useClients';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
+import type { Json } from '@/integrations/supabase/types';
+import { parseAddressSnapshots, parseContactSnapshots } from '@/lib/clientContactKeys';
 
 export interface ContactSnapshot {
   phone?: string;
@@ -52,13 +54,37 @@ const addressLabel = (a: AddressSnapshot) =>
 const contactLabel = (c: ContactSnapshot) =>
   [c.name, c.phone, c.email].filter(Boolean).join(' · ');
 
+function contactToJson(contact: ContactSnapshot): Json {
+  return { phone: contact.phone, name: contact.name, email: contact.email };
+}
+
+function addressToJson(address: AddressSnapshot): Json {
+  return {
+    street: address.street,
+    number: address.number,
+    neighborhood: address.neighborhood,
+    city: address.city,
+    state: address.state,
+    zip: address.zip,
+  };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Falha inesperada ao atualizar o cliente';
+}
+
+interface MergeResult {
+  added_contacts: number;
+  added_addresses: number;
+  error?: string;
+}
+
 export default function ClientContactPicker({
   hintName, hintCnpj, hintPhone, selectedClientId,
   currentContact, currentAddress,
   onSelectClient, onApplyContact, onApplyAddress,
 }: ClientContactPickerProps) {
   const { data: clients = [] } = useClients();
-  const updateClient = useUpdateClient();
   const createClient = useCreateClient();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -72,8 +98,7 @@ export default function ClientContactPicker({
   const phoneMatches = useMemo(() => {
     if (!phoneDigits || phoneDigits.length < 8) return [] as Client[];
     return clients.filter(c => {
-      const list: any[] = Array.isArray(c.contacts) ? c.contacts as any[] : [];
-      return list.some(ct => onlyDigits(ct?.phone || '') === phoneDigits);
+      return parseContactSnapshots(c.contacts).some(contact => onlyDigits(contact.phone || '') === phoneDigits);
     });
   }, [clients, phoneDigits]);
 
@@ -101,8 +126,8 @@ export default function ClientContactPicker({
   const phoneVsCnpjConflict = !!(cnpjMatch && phoneMatches.length > 0 && !phoneMatches.some(c => c.id === cnpjMatch.id));
 
   const selectedClient = clients.find(c => c.id === selectedClientId) || suggested;
-  const contacts: ContactSnapshot[] = Array.isArray(selectedClient?.contacts) ? (selectedClient!.contacts as any[]) : [];
-  const addresses: AddressSnapshot[] = Array.isArray(selectedClient?.addresses) ? (selectedClient!.addresses as any[]) : [];
+  const contacts = parseContactSnapshots(selectedClient?.contacts);
+  const addresses = parseAddressSnapshots(selectedClient?.addresses);
 
   const filtered = useMemo(() => clients.slice(0, 200), [clients]);
 
@@ -112,31 +137,15 @@ export default function ClientContactPicker({
     setOpen(false);
   };
 
-  const isContactDuplicate = (target: ContactSnapshot) => {
-    const ph = onlyDigits(target.phone || '');
-    if (!ph) return false;
-    return contacts.some(c => onlyDigits(c.phone || '') === ph);
-  };
-  const isAddressDuplicate = (target: AddressSnapshot) => {
-    const zip = onlyDigits(target.zip || '');
-    const street = (target.street || '').trim().toLowerCase();
-    const num = (target.number || '').trim().toLowerCase();
-    if (!street && !zip) return false;
-    return addresses.some(a =>
-      (zip && onlyDigits(a.zip || '') === zip && (a.number || '').toLowerCase() === num)
-      || ((a.street || '').trim().toLowerCase() === street && (a.number || '').toLowerCase() === num && street.length > 0)
-    );
-  };
-
   const mergeOnServer = async (payload: { contacts?: ContactSnapshot[]; addresses?: AddressSnapshot[] }) => {
     if (!selectedClient) return null;
-    const { data, error } = await supabase.functions.invoke('clients-merge-contacts-addresses', {
+    const { data, error } = await supabase.functions.invoke<MergeResult>('clients-merge-contacts-addresses', {
       body: { client_id: selectedClient.id, contacts: payload.contacts || [], addresses: payload.addresses || [] },
     });
     if (error) throw error;
     if (data?.error) throw new Error(data.error);
     queryClient.invalidateQueries({ queryKey: ['clients'] });
-    return data as { added_contacts: number; added_addresses: number };
+    return data;
   };
 
   const handleSaveContact = async () => {
@@ -155,8 +164,8 @@ export default function ClientContactPicker({
       } else {
         toast({ title: 'Contato já cadastrado nesse cliente (validado no servidor)' });
       }
-    } catch (e: any) {
-      toast({ title: 'Erro ao salvar contato', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao salvar contato', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -176,8 +185,8 @@ export default function ClientContactPicker({
       } else {
         toast({ title: 'Endereço já cadastrado nesse cliente (validado no servidor)' });
       }
-    } catch (e: any) {
-      toast({ title: 'Erro ao salvar endereço', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao salvar endereço', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -186,12 +195,13 @@ export default function ClientContactPicker({
     try {
       const includeContact = autoSaveOnCreate && !!currentContact.phone;
       const includeAddress = autoSaveOnCreate && !!(currentAddress.street || currentAddress.zip);
-      const created: any = await createClient.mutateAsync({
+      const payload: CreateClientInput = {
         company_name: hintName,
         tax_id: hintCnpj || null,
-        contacts: includeContact ? [currentContact] : [],
-        addresses: includeAddress ? [currentAddress] : [],
-      } as any);
+        contacts: includeContact ? [contactToJson(currentContact)] : [],
+        addresses: includeAddress ? [addressToJson(currentAddress)] : [],
+      };
+      const created = await createClient.mutateAsync(payload);
       if (created?.id) onSelectClient(created.id, created);
       const parts: string[] = [];
       if (includeContact) parts.push('contato');
@@ -200,8 +210,8 @@ export default function ClientContactPicker({
         title: 'Cliente cadastrado a partir da ORT',
         description: parts.length > 0 ? `Salvo automaticamente: ${parts.join(' + ')}` : 'Sem contato/endereço anexado',
       });
-    } catch (e: any) {
-      toast({ title: 'Erro ao cadastrar cliente', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao cadastrar cliente', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -224,7 +234,7 @@ export default function ClientContactPicker({
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" role="combobox" className="h-8 justify-between text-xs" size="sm">
-                {selectedClient ? selectedClient.company_name : (suggested ? `Sugestão: ${suggested.company_name}` : 'Vincular cliente')}
+                {selectedClient ? selectedClient.company_name : 'Vincular cliente'}
                 <ChevronsUpDown className="ml-2 h-3.5 w-3.5 opacity-50" />
               </Button>
             </PopoverTrigger>

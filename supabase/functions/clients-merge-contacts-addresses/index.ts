@@ -1,10 +1,5 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '../_shared/cors.ts';
 
 interface ContactSnapshot { phone?: string; name?: string; email?: string }
 interface AddressSnapshot { street?: string; number?: string; neighborhood?: string; city?: string; state?: string; zip?: string }
@@ -115,7 +110,7 @@ Deno.serve(async (req) => {
       // Verify caller belongs to client tenant
       const { data: membership } = await admin
         .from('tenant_memberships')
-        .select('id')
+        .select('id, role')
         .eq('user_id', userData.user.id)
         .eq('tenant_id', client.tenant_id)
         .eq('active', true)
@@ -123,7 +118,6 @@ Deno.serve(async (req) => {
       if (!membership) {
         return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
-
       const existingContacts: ContactSnapshot[] = Array.isArray(client.contacts) ? client.contacts as any : [];
       const existingAddresses: AddressSnapshot[] = Array.isArray(client.addresses) ? client.addresses as any : [];
 

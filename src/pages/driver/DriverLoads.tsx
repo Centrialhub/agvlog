@@ -4,15 +4,27 @@ import { useCurrentDriver } from '@/hooks/useCurrentDriver';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Package, MapPin, Truck, ArrowRight, Calendar, Info } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Package, MapPin, Truck, ArrowRight, Calendar, Info, AlertCircle, RefreshCcw } from 'lucide-react';
 import { LOAD_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status/loadStatus';
+import { useDriverTripActions } from '@/hooks/useDriverTripActions';
+import { resolveCanonicalTripLink } from '@/lib/driverTrip';
+import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
 
 export default function DriverLoads() {
-  const { data: driver, isLoading: driverLoading } = useCurrentDriver();
-  const navigate = useNavigate();
+  const {
+    data: driver,
+    isLoading: driverLoading,
+    isError: driverFailed,
+    refetch: refetchDriver,
+  } = useCurrentDriver();
+  const { accessTrip, isStartingTrip } = useDriverTripActions();
 
-  const { data: loads = [], isLoading: loadsLoading } = useQuery({
+  const {
+    data: loads = [],
+    isLoading: loadsLoading,
+    isError: loadsFailed,
+    refetch: refetchLoads,
+  } = useQuery({
     queryKey: ['driver_all_assigned_loads', driver?.id],
     queryFn: async () => {
       if (!driver) return [];
@@ -24,11 +36,14 @@ export default function DriverLoads() {
           origin, 
           destination, 
           status, 
-          trip_id,
           scheduled_load_at,
           total_pallet_count, 
           total_weight_kg,
-          vehicles(plate, nickname)
+          vehicles(plate, nickname),
+          dispatch_trip_loads!dispatch_trip_loads_load_id_fkey(
+            dispatch_trip_id,
+            dispatch_trips!dispatch_trip_loads_dispatch_trip_id_fkey(status)
+          )
         `)
         .eq('driver_id', driver.id)
         .order('created_at', { ascending: false });
@@ -40,6 +55,11 @@ export default function DriverLoads() {
   });
 
   const loading = driverLoading || loadsLoading;
+  const failed = driverFailed || loadsFailed;
+
+  const retry = async () => {
+    await Promise.all([refetchDriver(), refetchLoads()]);
+  };
 
   return (
     <div className="space-y-4 pb-20">
@@ -54,6 +74,22 @@ export default function DriverLoads() {
             <div key={i} className="h-32 w-full animate-pulse bg-muted rounded-xl" />
           ))}
         </div>
+      ) : failed ? (
+        <Card role="alert" className="border-destructive/40">
+          <CardContent className="py-10 text-center space-y-3">
+            <AlertCircle className="h-10 w-10 text-destructive mx-auto" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Não foi possível carregar suas cargas</p>
+              <p className="text-xs text-muted-foreground">
+                Confira sua conexão e tente novamente. Nenhum dado foi tratado como vazio.
+              </p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => void retry()}>
+              <RefreshCcw className="h-3.5 w-3.5 mr-1.5" />
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
       ) : loads.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center space-y-3">
@@ -68,7 +104,11 @@ export default function DriverLoads() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {loads.map((load: any) => (
+          {loads.map((load) => {
+            const tripLink = resolveCanonicalTripLink(load.dispatch_trip_loads, TRIP_ACTIVE_STATUSES);
+            const tripStatus = tripLink?.dispatch_trips?.status ?? null;
+
+            return (
             <Card key={load.id} className="overflow-hidden">
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -114,29 +154,21 @@ export default function DriverLoads() {
                     </div>
                   </div>
 
-                  {load.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(load.status) && load.trip_id && (
+                  {load.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(load.status) && tripLink && (
                     <Button 
                       size="sm" 
                       className="w-full mt-2" 
-                      onClick={async () => {
-                        // 1. Marcar a viagem como ativa (dispatched) se for a primeira interação
-                        const { error } = await supabase
-                          .from('dispatch_trips')
-                          .update({ status: 'dispatched' })
-                          .eq('id', load.trip_id)
-                          .eq('status', 'planned'); // Só muda se ainda estiver planejada
-                        
-                        // 2. Navegar para a página de paradas
-                        navigate(`/driver/stops?trip=${load.trip_id}`);
-                      }}
+                      disabled={isStartingTrip}
+                      onClick={() => accessTrip(tripLink.dispatch_trip_id, tripStatus)}
                     >
-                      Acessar Viagem
+                      {tripStatus === 'in_transit' ? 'Acessar Viagem' : 'Iniciar Viagem'}
                     </Button>
                   )}
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

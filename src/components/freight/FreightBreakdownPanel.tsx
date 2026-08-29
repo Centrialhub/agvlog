@@ -12,7 +12,7 @@ interface Props {
   error?: string;
 }
 
-export default function FreightBreakdownPanel({ breakdown, finalValue, success = true, error }: Props) {
+export default function FreightBreakdownPanel({ breakdown, finalValue, error }: Props) {
   if (!breakdown) {
     return (
       <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive flex items-center gap-2">

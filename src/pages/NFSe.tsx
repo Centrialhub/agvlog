@@ -1,7 +1,8 @@
+import { confirmAction, promptAction } from '@/hooks/useAlertStore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,7 +16,9 @@ import { toast } from '@/components/ui/sonner';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
 import NFSeFromInvoicesDialog from '@/components/nfse/NFSeFromInvoicesDialog';
 
-const STATUS_LABEL: Record<string, { label: string; variant: any }> = {
+type BadgeVariant = NonNullable<BadgeProps['variant']>;
+
+const STATUS_LABEL: Record<string, { label: string; variant: BadgeVariant }> = {
   draft: { label: 'Rascunho', variant: 'secondary' },
   queued: { label: 'Em fila', variant: 'outline' },
   processing: { label: 'Processando', variant: 'outline' },
@@ -129,8 +132,9 @@ export default function NFSePage() {
       const summary = summarizeBulkResult(result, total);
       const fn = summary.tone === 'success' ? toast.success : summary.tone === 'error' ? toast.error : toast.warning;
       fn(summary.title, { id: toastId, description: summary.description, duration: 12_000 });
-    } catch (e: any) {
-      toast.error('Falha no download em massa', { id: toastId, description: e?.message, duration: 12_000 });
+    } catch (error: unknown) {
+      const description = error instanceof Error ? error.message : 'Não foi possível baixar os arquivos.';
+      toast.error('Falha no download em massa', { id: toastId, description, duration: 12_000 });
     } finally {
       setBulkBusy(false);
       setBulkProgress(null);
@@ -147,7 +151,7 @@ export default function NFSePage() {
   const syncRef = useRef(sync);
   syncRef.current = sync;
   useEffect(() => {
-    if (pendingCount === 0) return;
+    if (pendingCount === 0) return undefined;
     const tick = () => { if (!syncRef.current.isPending) syncRef.current.mutate({ silent: true }); };
     tick();
     const t = setInterval(tick, 60_000);
@@ -155,22 +159,32 @@ export default function NFSePage() {
   }, [pendingCount]);
 
   const handleCancel = async (id: string) => {
-    const reason = window.prompt('Motivo do cancelamento:');
+    const reason = await promptAction('Informe por que esta NFS-e deve ser cancelada.', {
+      title: 'Cancelar NFS-e',
+      label: 'Motivo do cancelamento',
+    });
     if (!reason) return;
     await cancel.mutateAsync({ id, reason });
   };
 
   const handleDelete = async (d: NFSeDoc) => {
     const label = d.nfse_number || `RPS ${d.rps_number}`;
-    if (!window.confirm(`Excluir ${label}? As NFs vinculadas voltam a ficar disponíveis para faturamento.`)) return;
+    if (!await confirmAction(
+      `Excluir ${label}? As NFs vinculadas voltam a ficar disponíveis para faturamento.`,
+      { title: 'Excluir NFS-e', confirmLabel: 'Excluir' },
+    )) return;
     await del.mutateAsync(d.id);
   };
 
   const rejectionText = (d: NFSeDoc) => {
-    const m: any = d.rejection_messages;
-    if (!m) return null;
-    if (typeof m === 'string') return m;
-    return m.message || m.error || JSON.stringify(m);
+    const message = d.rejection_messages;
+    if (!message) return null;
+    if (typeof message === 'string') return message;
+    if (!Array.isArray(message) && typeof message === 'object') {
+      const detail = message.message ?? message.error;
+      if (typeof detail === 'string') return detail;
+    }
+    return JSON.stringify(message);
   };
 
   return (
@@ -311,7 +325,7 @@ export default function NFSePage() {
                       <TableCell className="text-right tabular-nums">R$ {Number(d.valor_iss).toFixed(2)}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Badge variant={st.variant as any}>{st.label}</Badge>
+                          <Badge variant={st.variant}>{st.label}</Badge>
                           {rejectionText(d) && (
                             <TooltipProvider>
                               <Tooltip>
@@ -334,8 +348,8 @@ export default function NFSePage() {
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>
-                                {(d as any).last_status_check_at
-                                  ? `Última consulta: ${new Date((d as any).last_status_check_at).toLocaleString('pt-BR')} (${(d as any).status_check_attempts || 0} tentativas)`
+                                {d.last_status_check_at
+                                  ? `Última consulta: ${new Date(d.last_status_check_at).toLocaleString('pt-BR')} (${d.status_check_attempts || 0} tentativas)`
                                   : 'Nenhuma consulta automática realizada ainda'}
                               </TooltipContent>
                             </Tooltip>

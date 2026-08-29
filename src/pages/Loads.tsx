@@ -1,6 +1,6 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useLoads, useDeleteLoad, useDeleteLoads, LOAD_STATUSES, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLoadsPage, useDeleteLoad, useDeleteLoads, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
 import { useHoldLoad, useUnholdLoad } from '@/hooks/useLoads';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon, CalendarDays, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, FileSpreadsheet, FileText, LayoutGrid, List, PauseCircle, PlayCircle } from 'lucide-react';
+import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon, CalendarDays, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, FileSpreadsheet, FileText, LayoutGrid, List, PauseCircle, PlayCircle, AlertCircle, RefreshCcw } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,12 +20,21 @@ import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import type { Json } from '@/integrations/supabase/types';
 import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 import NewLoadDialog from '@/components/loads/NewLoadDialog';
 import BatchReimportDialog from '@/components/loads/BatchReimportDialog';
-import LoadAdvancedFilters, { EMPTY_LOAD_ADVANCED_FILTERS, LoadAdvancedFiltersValue } from '@/components/loads/LoadAdvancedFilters';
-import AppliedFiltersChips, { buildAppliedChips } from '@/components/loads/AppliedFiltersChips';
+import LoadAdvancedFilters from '@/components/loads/LoadAdvancedFilters';
+import AppliedFiltersChips from '@/components/loads/AppliedFiltersChips';
+import {
+  buildAppliedLoadFilterChips,
+  EMPTY_LOAD_ADVANCED_FILTERS,
+  type LoadAdvancedFiltersValue,
+  type LoadDatePreset,
+} from '@/lib/loads/loadAdvancedFilters';
 import { exportLoadsCSV, exportLoadsPDF } from '@/lib/loadsExport';
+import { getErrorMessage } from '@/lib/errors';
 
 const STATUS_COLORS: Record<string, string> = {
   delivered: 'bg-success/10 text-success',
@@ -38,9 +47,7 @@ const STATUS_COLORS: Record<string, string> = {
   assembling: 'bg-warning/10 text-warning',
 };
 
-type DatePreset = 'all' | 'today' | '7' | '14' | '30' | 'custom';
-
-const datePresetLabels: Record<DatePreset, string> = {
+const datePresetLabels: Record<LoadDatePreset, string> = {
   all: 'Todas',
   today: 'Hoje',
   '7': '7 dias',
@@ -61,28 +68,52 @@ const endOfDay = (date: Date) => {
   return next;
 };
 
+const isLoadDatePreset = (value: string | null): value is LoadDatePreset =>
+  value !== null && ['all', 'today', '7', '14', '30', 'custom'].includes(value);
+
+function parseAdvancedFilters(value: string | null): LoadAdvancedFiltersValue {
+  if (!value) return EMPTY_LOAD_ADVANCED_FILTERS;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return EMPTY_LOAD_ADVANCED_FILTERS;
+    const record = parsed as Record<string, unknown>;
+    return {
+      ...EMPTY_LOAD_ADVANCED_FILTERS,
+      ...record,
+      romexpTypes: Array.isArray(record.romexpTypes) ? record.romexpTypes.filter(item => typeof item === 'string') : [],
+      statuses: Array.isArray(record.statuses) ? record.statuses.filter(item => typeof item === 'string') : [],
+      romaneioTypes: Array.isArray(record.romaneioTypes) ? record.romaneioTypes.filter(item => typeof item === 'string') : [],
+    } as LoadAdvancedFiltersValue;
+  } catch {
+    return EMPTY_LOAD_ADVANCED_FILTERS;
+  }
+}
+
 export default function Loads() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentTenant } = useTenant();
   const { toast } = useToast();
-  const { data: loads = [], isLoading, refetch } = useLoads();
   const { data: vehicles = [] } = useVehicles();
   const deleteOne = useDeleteLoad();
   const deleteBulk = useDeleteLoads();
   const holdMut = useHoldLoad();
   const unholdMut = useUnholdLoad();
 
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [datePreset, setDatePreset] = useState<DatePreset>('30');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const [search, setSearch] = useState(searchParams.get('q') || '');
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') || 'all');
+  const initialDatePreset = searchParams.get('period');
+  const [datePreset, setDatePreset] = useState<LoadDatePreset>(isLoadDatePreset(initialDatePreset) ? initialDatePreset : '30');
+  const [customStart, setCustomStart] = useState(searchParams.get('from') || '');
+  const [customEnd, setCustomEnd] = useState(searchParams.get('to') || '');
   const [groupingOpen, setGroupingOpen] = useState(false);
-  const [advFilters, setAdvFilters] = useState<LoadAdvancedFiltersValue>(EMPTY_LOAD_ADVANCED_FILTERS);
+  const [advFilters, setAdvFilters] = useState<LoadAdvancedFiltersValue>(() => parseAdvancedFilters(searchParams.get('af')));
 
   // Pagination
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page')) || 1));
+  const initialPageSize = Number(searchParams.get('pageSize'));
+  const [pageSize, setPageSize] = useState([10, 25, 50, 100, 200].includes(initialPageSize) ? initialPageSize : 25);
+  const mountedFilters = useRef(false);
 
   // Selection state
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -99,7 +130,43 @@ export default function Loads() {
   const [holdTarget, setHoldTarget] = useState<Load | null>(null);
   const [holdReason, setHoldReason] = useState('');
 
-  const { data: pendingCount = 0 } = useQuery({
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const createdRange = useMemo(() => {
+    const now = new Date();
+    const start = datePreset === 'today'
+      ? startOfDay(now)
+      : ['7', '14', '30'].includes(datePreset)
+        ? startOfDay(new Date(now.getTime() - (Number(datePreset) - 1) * 24 * 60 * 60 * 1000))
+        : datePreset === 'custom' && customStart
+          ? startOfDay(new Date(`${customStart}T12:00:00`))
+          : null;
+    const end = datePreset === 'all'
+      ? null
+      : datePreset === 'custom' && customEnd
+        ? endOfDay(new Date(`${customEnd}T12:00:00`))
+        : endOfDay(now);
+    return {
+      createdFrom: start?.toISOString() || '',
+      createdTo: end?.toISOString() || '',
+    };
+  }, [customEnd, customStart, datePreset]);
+  const pageFilters = useMemo<Record<string, Json>>(() => ({
+    search: debouncedSearch,
+    statusFilter,
+    ...createdRange,
+    ...advFilters,
+  }), [advFilters, createdRange, debouncedSearch, statusFilter]);
+  const {
+    data: loadPage,
+    isLoading,
+    isError,
+    refetch,
+  } = useLoadsPage({ page, pageSize, filters: pageFilters });
+  const loads = loadPage?.rows || [];
+  const totalCount = loadPage?.totalCount || 0;
+  const statusCounts = loadPage?.statusCounts || {};
+
+  const { data: pendingCount = 0, isError: pendingCountFailed, refetch: refetchPendingCount } = useQuery({
     queryKey: ['pending_docs_count', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return 0;
@@ -110,7 +177,7 @@ export default function Loads() {
         .eq('status', 'confirmed')
         .eq('document_type', 'inbound')
         .is('load_id', null);
-      if (error) return 0;
+      if (error) throw error;
       return count || 0;
     },
     enabled: !!currentTenant,
@@ -126,84 +193,39 @@ export default function Loads() {
     enabled: !!currentTenant,
   });
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    const now = new Date();
-    const start = datePreset === 'today'
-      ? startOfDay(now)
-      : ['7', '14', '30'].includes(datePreset)
-        ? startOfDay(new Date(now.getTime() - (Number(datePreset) - 1) * 24 * 60 * 60 * 1000))
-        : datePreset === 'custom' && customStart
-          ? startOfDay(new Date(`${customStart}T12:00:00`))
-          : null;
-    const end = datePreset === 'custom' && customEnd ? endOfDay(new Date(`${customEnd}T12:00:00`)) : endOfDay(now);
-    const f = advFilters;
-    const dateInRange = (raw: string | null | undefined, from: string, to: string) => {
-      if (!from && !to) return true;
-      if (!raw) return false;
-      const d = new Date(raw).getTime();
-      if (from && d < startOfDay(new Date(`${from}T12:00:00`)).getTime()) return false;
-      if (to && d > endOfDay(new Date(`${to}T12:00:00`)).getTime()) return false;
-      return true;
-    };
-    const opNorm = (s: string | null | undefined) =>
-      String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    return loads.filter(l => {
-      if (q && !l.load_number.toLowerCase().includes(q) && !(l.vehicles?.plate || '').toLowerCase().includes(q) && !(l.destination || '').toLowerCase().includes(q)) return false;
-      if (statusFilter !== 'all' && l.status !== statusFilter) return false;
-      const createdAt = new Date(l.created_at);
-      if (datePreset !== 'all' && start && createdAt < start) return false;
-      if (datePreset !== 'all' && createdAt > end) return false;
-      if (f.loadNumber && !l.load_number.toLowerCase().includes(f.loadNumber.toLowerCase())) return false;
-      if (f.plate && !(l.vehicles?.plate || '').toLowerCase().includes(f.plate.toLowerCase())) return false;
-      if (f.trailerPlate && !((l as any).trailer_plate || '').toLowerCase().includes(f.trailerPlate.toLowerCase())) return false;
-      if (f.driverId && f.driverId !== 'all' && l.driver_id !== f.driverId) return false;
-      if (f.statuses.length && !f.statuses.includes(l.status)) return false;
-      if (f.cargoType && l.operation_type !== f.cargoType) return false;
-      if (f.romexpTypes.length && !f.romexpTypes.some(t => opNorm(l.operation_type).includes(opNorm(t)))) return false;
-      if (f.romaneioTypes.length && !f.romaneioTypes.some(t => opNorm(l.operation_type).includes(opNorm(t)))) return false;
-      const hasManifest = !!(l.supplier_manifest || l.distribution_manifest || l.shipment_manifest || l.origin_manifest);
-      if (f.manifest === 'yes' && !hasManifest) return false;
-      if (f.manifest === 'no' && hasManifest) return false;
-      const monitored = !!(l as any).monitored;
-      if (f.monitored === 'yes' && !monitored) return false;
-      if (f.monitored === 'no' && monitored) return false;
-      const dedicated = !!(l as any).dedicated_vehicle;
-      if (f.dedicated === 'yes' && !dedicated) return false;
-      if (f.dedicated === 'no' && dedicated) return false;
-      const ciotVal = String((l as any).ciot || '').trim();
-      if (f.ciot === 'yes' && !ciotVal) return false;
-      if (f.ciot === 'no' && ciotVal) return false;
-      if (f.monitorResponsible && !opNorm((l as any).monitor_responsible).includes(opNorm(f.monitorResponsible))) return false;
-      if (f.driverType && !opNorm((l as any).driver_type).includes(opNorm(f.driverType))) return false;
-      if (f.smManager && !opNorm((l as any).sm_manager).includes(opNorm(f.smManager))) return false;
-      if (f.smRelease && !opNorm((l as any).sm_release).includes(opNorm(f.smRelease))) return false;
-      const mv = (l as any).merchandise_value;
-      const mvNum = mv == null ? null : Number(mv);
-      if (f.valueMin) { if (mvNum == null || mvNum < Number(f.valueMin)) return false; }
-      if (f.valueMax) { if (mvNum == null || mvNum > Number(f.valueMax)) return false; }
-      if (!dateInRange(l.created_at, f.emissionFrom, f.emissionTo)) return false;
-      if (!dateInRange(l.actual_load_at, f.loadingFrom, f.loadingTo)) return false;
-      if (!dateInRange((l as any).estimated_arrival_at, f.arrivalEstFrom, f.arrivalEstTo)) return false;
-      if (!dateInRange((l as any).gate_departure_at, f.departureFrom, f.departureTo)) return false;
-      if (!dateInRange((l as any).arrival_at, f.arrivalFrom, f.arrivalTo)) return false;
-      if (f.remitter && !opNorm(l.origin).includes(opNorm(f.remitter))) return false;
-      if (f.client && !opNorm(l.destination).includes(opNorm(f.client))) return false;
-      if (f.city && !opNorm(l.destination).includes(opNorm(f.city))) return false;
-      if (f.supplier && !opNorm(l.supplier_manifest).includes(opNorm(f.supplier))) return false;
-      return true;
-    });
-  }, [customEnd, customStart, datePreset, loads, search, statusFilter, advFilters]);
-
   // Reset to first page whenever filters change result set or page size shrinks
-  useEffect(() => { setPage(1); }, [search, statusFilter, datePreset, customStart, customEnd, advFilters, pageSize]);
+  useEffect(() => {
+    if (!mountedFilters.current) {
+      mountedFilters.current = true;
+      return;
+    }
+    setPage(1);
+  }, [debouncedSearch, statusFilter, datePreset, customStart, customEnd, advFilters, pageSize]);
 
-  const totalCount = filtered.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageStart = (safePage - 1) * pageSize;
   const pageEnd = Math.min(pageStart + pageSize, totalCount);
-  const paginated = useMemo(() => filtered.slice(pageStart, pageEnd), [filtered, pageStart, pageEnd]);
+  const filtered = loads;
+  const paginated = loads;
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (debouncedSearch) next.set('q', debouncedSearch);
+    if (statusFilter !== 'all') next.set('status', statusFilter);
+    if (datePreset !== '30') next.set('period', datePreset);
+    if (customStart) next.set('from', customStart);
+    if (customEnd) next.set('to', customEnd);
+    const advanced = JSON.stringify(advFilters);
+    if (advanced !== JSON.stringify(EMPTY_LOAD_ADVANCED_FILTERS)) next.set('af', advanced);
+    if (page > 1) next.set('page', String(page));
+    if (pageSize !== 25) next.set('pageSize', String(pageSize));
+    setSearchParams(next, { replace: true });
+  }, [advFilters, customEnd, customStart, datePreset, debouncedSearch, page, pageSize, setSearchParams, statusFilter]);
 
   const groupedByDay = useMemo(() => {
     return paginated.reduce((groups, load) => {
@@ -213,12 +235,6 @@ export default function Loads() {
       return groups;
     }, {} as Record<string, Load[]>);
   }, [paginated]);
-
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    loads.forEach(l => { counts[l.status] = (counts[l.status] || 0) + 1; });
-    return counts;
-  }, [loads]);
 
   const activeStatuses = ['planned', 'assembling', 'ready', 'loading', 'loaded', 'in_transit'] as const;
 
@@ -251,8 +267,8 @@ export default function Loads() {
       await deleteOne.mutateAsync(confirmDeleteId);
       toast({ title: 'Carga excluída' });
       setSelected(prev => { const n = new Set(prev); n.delete(confirmDeleteId); return n; });
-    } catch (e: any) {
-      toast({ title: 'Erro ao excluir', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao excluir', description: getErrorMessage(error), variant: 'destructive' });
     } finally {
       setConfirmDeleteId(null);
     }
@@ -265,8 +281,8 @@ export default function Loads() {
       await deleteBulk.mutateAsync(ids);
       toast({ title: `${ids.length} carga(s) excluída(s)` });
       exitSelectionMode();
-    } catch (e: any) {
-      toast({ title: 'Erro ao excluir', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao excluir', description: getErrorMessage(error), variant: 'destructive' });
     } finally {
       setConfirmBulkDelete(false);
     }
@@ -289,29 +305,29 @@ export default function Loads() {
         .eq('load_id', loadId)
         .order('created_at');
 
-      const veh: any = (load as any).vehicles;
-      const drv: any = (load as any).drivers;
+      const veh = load.vehicles;
+      const drv = load.drivers;
 
-      const fmtEmissao = (raw: any): string => {
+      const fmtEmissao = (raw: string | null): string => {
         if (!raw) return '';
         const s = String(raw).substring(0, 10);
         const d = new Date(s + 'T12:00:00');
         return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
       };
 
-      const docs: RomaneioDoc[] = (items || []).map((it: any) => {
-        const fd = it.fiscal_documents || {};
-        const emissao = fmtEmissao(fd.issue_date);
+      const docs: RomaneioDoc[] = (items || []).map((it) => {
+        const fd = it.fiscal_documents;
+        const emissao = fmtEmissao(fd?.issue_date || null);
         return {
-          city: fd.recipient_city || 'SEM CIDADE',
-          state: fd.recipient_state || '',
-          remetente: fd.remitter || '—',
-          destinatario: fd.recipient || '—',
-          bairro: fd.recipient_neighborhood || '—',
-          nfNumber: fd.invoice_number || '—',
+          city: fd?.recipient_city || 'SEM CIDADE',
+          state: fd?.recipient_state || '',
+          remetente: fd?.remitter || '—',
+          destinatario: fd?.recipient || '—',
+          bairro: fd?.recipient_neighborhood || '—',
+          nfNumber: fd?.invoice_number || '—',
           emissao,
-          valor: Number(fd.value) || 0,
-          peso: Number(it.weight_kg) || Number(fd.weight_kg) || 0,
+          valor: Number(fd?.value) || 0,
+          peso: Number(it.weight_kg) || Number(fd?.weight_kg) || 0,
           volumes: Number(it.pallet_count) || 0,
         };
       });
@@ -324,8 +340,8 @@ export default function Loads() {
       }], `Romaneio ${load.load_number}`);
 
       toast({ title: 'Romaneio aberto para impressão' });
-    } catch (e: any) {
-      toast({ title: 'Erro ao gerar romaneio', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao gerar romaneio', description: getErrorMessage(error), variant: 'destructive' });
     }
   }, [currentTenant, toast]);
 
@@ -347,36 +363,36 @@ export default function Loads() {
         .order('created_at');
       if (itemsError) throw itemsError;
 
-      const fmtEmissao = (raw: any): string => {
+      const fmtEmissao = (raw: string | null): string => {
         if (!raw) return '';
         const s = String(raw).substring(0, 10);
         const d = new Date(s + 'T12:00:00');
         return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
       };
 
-      const itemsByLoad = new Map<string, any[]>();
-      (items || []).forEach((item: any) => {
+      const itemsByLoad = new Map<string, NonNullable<typeof items>>();
+      (items || []).forEach((item) => {
         const current = itemsByLoad.get(item.load_id) || [];
         current.push(item);
         itemsByLoad.set(item.load_id, current);
       });
 
-      const loadsById = new Map((fullLoads || []).map((load: any) => [load.id, load]));
-      const routes = loadIds.map(id => loadsById.get(id)).filter(Boolean).map((load: any) => {
-        const veh: any = load.vehicles;
-        const drv: any = load.drivers;
-        const docs: RomaneioDoc[] = (itemsByLoad.get(load.id) || []).map((it: any) => {
-          const fd = it.fiscal_documents || {};
+      const loadsById = new Map((fullLoads || []).map((load) => [load.id, load]));
+      const routes = loadIds.map(id => loadsById.get(id)).filter((load): load is NonNullable<typeof load> => Boolean(load)).map((load) => {
+        const veh = load.vehicles;
+        const drv = load.drivers;
+        const docs: RomaneioDoc[] = (itemsByLoad.get(load.id) || []).map((it) => {
+          const fd = it.fiscal_documents;
           return {
-            city: fd.recipient_city || 'SEM CIDADE',
-            state: fd.recipient_state || '',
-            remetente: fd.remitter || '—',
-            destinatario: fd.recipient || '—',
-            bairro: fd.recipient_neighborhood || '—',
-            nfNumber: fd.invoice_number || '—',
-            emissao: fmtEmissao(fd.issue_date),
-            valor: Number(fd.value) || 0,
-            peso: Number(it.weight_kg) || Number(fd.weight_kg) || 0,
+            city: fd?.recipient_city || 'SEM CIDADE',
+            state: fd?.recipient_state || '',
+            remetente: fd?.remitter || '—',
+            destinatario: fd?.recipient || '—',
+            bairro: fd?.recipient_neighborhood || '—',
+            nfNumber: fd?.invoice_number || '—',
+            emissao: fmtEmissao(fd?.issue_date || null),
+            valor: Number(fd?.value) || 0,
+            peso: Number(it.weight_kg) || Number(fd?.weight_kg) || 0,
             volumes: Number(it.pallet_count) || 0,
           };
         });
@@ -391,8 +407,8 @@ export default function Loads() {
 
       printRomaneioRoutes(routes, 'Romaneios de Cargas');
       toast({ title: 'Romaneios abertos para impressão' });
-    } catch (e: any) {
-      toast({ title: 'Erro ao gerar romaneios', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao gerar romaneios', description: getErrorMessage(error), variant: 'destructive' });
     }
   }, [currentTenant, filtered, toast]);
 
@@ -406,8 +422,8 @@ export default function Loads() {
       toast({ title: 'Carga colocada em espera' });
       setHoldTarget(null);
       setHoldReason('');
-    } catch (e: any) {
-      toast({ title: 'Erro ao pausar', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao pausar', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -415,8 +431,8 @@ export default function Loads() {
     try {
       await unholdMut.mutateAsync(id);
       toast({ title: 'Carga retomada' });
-    } catch (e: any) {
-      toast({ title: 'Erro ao retomar', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao retomar', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -429,9 +445,7 @@ export default function Loads() {
             <PackageCheck className="h-5 w-5 text-primary" /> Cargas
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {totalCount === loads.length
-              ? `${loads.length} cargas no total`
-              : `${totalCount} de ${loads.length} cargas (filtros ativos)`}
+            {totalCount} cargas correspondem aos filtros
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -459,7 +473,7 @@ export default function Loads() {
             </Button>
           )}
           <Button size="sm" variant="outline" onClick={printAllRomaneios} disabled={isLoading || filtered.length === 0}>
-            <Printer className="h-4 w-4 mr-1" /> Reimprimir todas
+            <Printer className="h-4 w-4 mr-1" /> Reimprimir página
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -471,20 +485,20 @@ export default function Loads() {
               <DropdownMenuItem
                 onClick={() => {
                   const ts = new Date().toISOString().slice(0, 10);
-                  exportLoadsCSV(filtered as any, `cargas_${ts}.csv`);
+                  exportLoadsCSV(filtered, `cargas_${ts}.csv`);
                   toast({ title: `CSV exportado (${filtered.length} cargas)` });
                 }}
               >
-                <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar CSV
+                <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar página em CSV
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
                   const ts = new Date().toISOString().slice(0, 10);
-                  exportLoadsPDF(filtered as any, `cargas_${ts}.pdf`, 'Cargas / Romaneios');
+                  exportLoadsPDF(filtered, `cargas_${ts}.pdf`, 'Cargas / Romaneios');
                   toast({ title: `PDF exportado (${filtered.length} cargas)` });
                 }}
               >
-                <FileText className="h-4 w-4 mr-2" /> Exportar PDF
+                <FileText className="h-4 w-4 mr-2" /> Exportar página em PDF
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -493,6 +507,11 @@ export default function Loads() {
             <Button size="sm" variant="secondary" onClick={() => setGroupingOpen(true)}>
               <FileStack className="h-4 w-4 mr-1" /> Agrupar NF-es
               <Badge className="ml-1.5 bg-primary text-primary-foreground text-[10px] px-1.5">{pendingCount}</Badge>
+            </Button>
+          )}
+          {pendingCountFailed && (
+            <Button size="sm" variant="outline" onClick={() => void refetchPendingCount()}>
+              <AlertCircle className="h-4 w-4 mr-1 text-destructive" /> Falha ao contar NF-es
             </Button>
           )}
           <NewLoadDialog vehicles={vehicles} drivers={drivers} onCreated={refetch} />
@@ -557,7 +576,7 @@ export default function Loads() {
           <CalendarDays className="h-4 w-4" /> Filtros avançados por período
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {(Object.keys(datePresetLabels) as DatePreset[]).map(preset => (
+          {(Object.keys(datePresetLabels) as LoadDatePreset[]).map(preset => (
             <Button key={preset} type="button" size="sm" variant={datePreset === preset ? 'default' : 'outline'} className="h-8" onClick={() => setDatePreset(preset)}>
               {datePresetLabels[preset]}
             </Button>
@@ -579,19 +598,19 @@ export default function Loads() {
       <LoadAdvancedFilters
         value={advFilters}
         onChange={setAdvFilters}
-        drivers={drivers as any}
-        vehicles={vehicles as any}
-        trailerPlateSuggestions={Array.from(new Set(loads.map(l => (l as any).trailer_plate || '').filter(Boolean)))}
+        drivers={drivers}
+        vehicles={vehicles}
+        trailerPlateSuggestions={Array.from(new Set(loads.map(load => load.trailer_plate || '').filter(Boolean)))}
       />
 
       <AppliedFiltersChips
-        chips={buildAppliedChips({
+        chips={buildAppliedLoadFilterChips({
           search, setSearch,
           statusFilter, setStatusFilter,
           datePreset, setDatePreset,
           customStart, customEnd, setCustomStart, setCustomEnd,
           adv: advFilters, setAdv: setAdvFilters,
-          drivers: drivers as any,
+          drivers,
         })}
         onClearAll={() => {
           setSearch('');
@@ -606,6 +625,17 @@ export default function Loads() {
       {/* Load cards */}
       {isLoading ? (
         <div className="text-center text-muted-foreground py-12">Carregando...</div>
+      ) : isError ? (
+        <Card role="alert" className="border-destructive/40">
+          <CardContent className="py-12 text-center space-y-3">
+            <AlertCircle className="h-10 w-10 text-destructive mx-auto" />
+            <p className="font-medium">Não foi possível carregar as cargas</p>
+            <p className="text-sm text-muted-foreground">A falha não foi convertida em uma lista vazia.</p>
+            <Button type="button" variant="outline" onClick={() => void refetch()}>
+              <RefreshCcw className="h-4 w-4 mr-2" /> Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
       ) : filtered.length === 0 ? (
         <div className="text-center text-muted-foreground py-12">Nenhuma carga encontrada</div>
       ) : viewMode === 'kanban' ? (
@@ -619,7 +649,7 @@ export default function Loads() {
               </div>
               <div className="grid gap-3">
           {dayLoads.map(l => {
-            const veh = vehicles.find((v: any) => v.id === l.vehicle_id) as any;
+            const veh = vehicles.find(vehicle => vehicle.id === l.vehicle_id);
             const maxP = veh?.max_pallets;
             const occ = maxP ? Math.round(((l.total_pallet_count || 0) / maxP) * 100) : null;
             const isSelected = selected.has(l.id);
@@ -627,9 +657,8 @@ export default function Loads() {
             return (
               <Card
                 key={l.id}
-                className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 ${isSelected ? 'ring-2 ring-primary bg-primary/5' : ''}`}
+                className={`border-l-4 ${isSelected ? 'ring-2 ring-primary bg-primary/5' : ''}`}
                 style={{ borderLeftColor: l.status === 'divergent' ? 'hsl(var(--destructive))' : l.status === 'delivered' ? 'hsl(var(--success))' : ['in_transit', 'loaded'].includes(l.status) ? 'hsl(var(--info))' : 'hsl(var(--border))' }}
-                onClick={() => selectionMode ? toggleSelect(l.id) : navigate(`/loads/${l.id}`)}
               >
                 <CardContent className="py-3 px-4">
                   <div className="flex items-center gap-4">
@@ -642,11 +671,18 @@ export default function Loads() {
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm">{l.load_number}</span>
+                        <Button
+                          type="button"
+                          variant="link"
+                          className="h-auto p-0 text-sm font-semibold"
+                          onClick={() => navigate(`/loads/${l.id}`)}
+                        >
+                          {l.load_number}
+                        </Button>
                         <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[l.status] || ''}`}>
                           {LOAD_STATUS_LABELS[l.status] || l.status}
                         </Badge>
-                        {(l as any).on_hold && (
+                        {l.on_hold && (
                           <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/30">
                             <PauseCircle className="h-3 w-3 mr-1" /> Em espera
                           </Badge>
@@ -682,8 +718,8 @@ export default function Loads() {
                       {!selectionMode && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => e.stopPropagation()}>
-                              <MoreVertical className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Ações da carga ${l.load_number}`}>
+                              <MoreVertical className="h-4 w-4" aria-hidden="true" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
@@ -696,7 +732,7 @@ export default function Loads() {
                             <DropdownMenuItem onClick={e => { e.stopPropagation(); navigate('/route-planning'); }}>
                               <RouteIcon className="h-4 w-4 mr-2" /> Reanalisar na Roteirização
                             </DropdownMenuItem>
-                            {(l as any).on_hold ? (
+                            {l.on_hold ? (
                               <DropdownMenuItem onClick={e => { e.stopPropagation(); doUnhold(l.id); }}>
                                 <PlayCircle className="h-4 w-4 mr-2" /> Retomar
                               </DropdownMenuItem>
@@ -715,7 +751,7 @@ export default function Loads() {
                         </DropdownMenu>
                       )}
 
-                      {!selectionMode && <ArrowRight className="h-4 w-4 text-muted-foreground" />}
+                      {!selectionMode && <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />}
                     </div>
                   </div>
                 </CardContent>
@@ -742,19 +778,19 @@ export default function Loads() {
                 </SelectContent>
               </Select>
               <div className="flex items-center gap-1 ml-2">
-                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage <= 1} onClick={() => setPage(1)}>
+                <Button size="icon" variant="outline" className="h-8 w-8" aria-label="Primeira página" disabled={safePage <= 1} onClick={() => setPage(1)}>
                   <ChevronsLeft className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                <Button size="icon" variant="outline" className="h-8 w-8" aria-label="Página anterior" disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-xs text-muted-foreground px-2">
                   Página <span className="font-medium text-foreground">{safePage}</span> de {totalPages}
                 </span>
-                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
+                <Button size="icon" variant="outline" className="h-8 w-8" aria-label="Próxima página" disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage >= totalPages} onClick={() => setPage(totalPages)}>
+                <Button size="icon" variant="outline" className="h-8 w-8" aria-label="Última página" disabled={safePage >= totalPages} onClick={() => setPage(totalPages)}>
                   <ChevronsRight className="h-4 w-4" />
                 </Button>
               </div>

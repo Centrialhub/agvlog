@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Play, Coffee, Moon, CheckCircle, ClipboardCheck, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 
 const eventLabels: Record<string, { label: string; icon: typeof Play }> = {
@@ -49,7 +49,7 @@ export default function DriverJourney() {
 
   // Realtime: sync journey events created by other clients (e.g. operator).
   useEffect(() => {
-    if (!trip?.id) return;
+    if (!trip?.id) return undefined;
     const channel = supabase
       .channel(`driver_journey_${trip.id}`)
       .on(
@@ -75,26 +75,30 @@ export default function DriverJourney() {
         const { error, data } = await supabase.rpc('driver_create_event', {
           _trip_id: trip.id,
           _event_type: eventType,
-          _payload: { source: 'driver_app' } as any,
-          _stop_id: null,
-          _notes: null,
-        } as any);
+          _payload: { source: 'driver_app' },
+          _stop_id: undefined,
+          _notes: undefined,
+        });
         
         if (error) {
           console.error('[DriverJourney] RPC error:', error);
           throw error;
         }
         return data;
-      } catch (err: any) {
-        console.error('[DriverJourney] Mutation error:', err);
-        throw err;
+      } catch (error: unknown) {
+        console.error('[DriverJourney] Mutation error:', error);
+        throw error;
       }
     },
     onSuccess: () => {
       toast({ title: 'Evento registrado' });
       qc.invalidateQueries({ queryKey: ['driver_journey_events'] });
     },
-    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+    onError: (error: unknown) => toast({
+      title: 'Erro',
+      description: error instanceof Error ? error.message : 'Não foi possível registrar o evento.',
+      variant: 'destructive',
+    }),
   });
 
   const effectiveEvents = events;
@@ -198,7 +202,7 @@ export default function DriverJourney() {
             <Card>
               <CardContent className="p-3 space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase">Linha do tempo</p>
-                {effectiveEvents.map((e: any) => {
+                {effectiveEvents.map((e) => {
                   const meta = eventLabels[e.event_type];
                   return (
                     <div key={e.id} className="flex items-center justify-between text-xs border-b last:border-0 pb-1.5">

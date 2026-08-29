@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { Json, TablesInsert } from '@/integrations/supabase/types';
 
 export const CHECKLIST_TYPES = ['pre_trip', 'post_trip', 'damage', 'equipment', 'tire', 'safety', 'documentation'] as const;
 export const CHECKLIST_TYPE_LABELS: Record<string, string> = {
@@ -40,11 +41,11 @@ export function useOperationalChecklists() {
     queryKey: ['operational_checklists', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('operational_checklists').select('*')
         .eq('tenant_id', currentTenant.id).order('name');
       if (error) throw error;
-      return (data || []) as OperationalChecklist[];
+      return (data || []) as unknown as OperationalChecklist[];
     },
     enabled: !!currentTenant,
   });
@@ -56,9 +57,14 @@ export function useCreateChecklist() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<OperationalChecklist>) => {
-      const { data, error } = await (supabase as any).from('operational_checklists').insert({
-        ...values, tenant_id: currentTenant!.id, created_by: user?.id,
-      }).select().single();
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const payload = {
+        ...values,
+        items: (values.items || []) as Json,
+        tenant_id: currentTenant.id,
+        created_by: user?.id,
+      } as unknown as TablesInsert<'operational_checklists'>;
+      const { data, error } = await supabase.from('operational_checklists').insert(payload).select().single();
       if (error) throw error;
       return data;
     },
@@ -72,7 +78,7 @@ export function useChecklistExecutions(checklistId?: string) {
     queryKey: ['checklist_executions', currentTenant?.id, checklistId],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = (supabase as any)
+      let q = supabase
         .from('checklist_executions')
         .select('*, operational_checklists(name, checklist_type), vehicles(plate), employees(name)')
         .eq('tenant_id', currentTenant.id)
@@ -81,7 +87,7 @@ export function useChecklistExecutions(checklistId?: string) {
       if (checklistId) q = q.eq('checklist_id', checklistId);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as ChecklistExecution[];
+      return (data || []) as unknown as ChecklistExecution[];
     },
     enabled: !!currentTenant,
   });
@@ -93,21 +99,30 @@ export function useCreateChecklistExecution() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<ChecklistExecution>) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const checkedItems = values.checked_items || [];
       const passed = checkedItems.filter(i => i.status === 'ok').length;
       const failed = checkedItems.filter(i => i.status === 'nok').length;
       const total = checkedItems.length;
       const status = failed === 0 ? 'passed' : passed === 0 ? 'failed' : 'partial';
-      const { data, error } = await (supabase as any).from('checklist_executions').insert({
-        ...values,
-        tenant_id: currentTenant!.id,
+      const {
+        operational_checklists: _operationalChecklists,
+        vehicles: _vehicles,
+        employees: _employees,
+        ...recordValues
+      } = values;
+      const payload = {
+        ...recordValues,
+        checked_items: checkedItems as Json,
+        tenant_id: currentTenant.id,
         executed_by: user?.id,
         total_items: total,
         passed_items: passed,
         failed_items: failed,
         status,
         blocked_operation: values.blocked_operation ?? (failed > 0),
-      }).select().single();
+      } as unknown as TablesInsert<'checklist_executions'>;
+      const { data, error } = await supabase.from('checklist_executions').insert(payload).select().single();
       if (error) throw error;
       return data;
     },

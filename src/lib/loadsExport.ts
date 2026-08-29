@@ -46,10 +46,11 @@ const fmtMoney = (v?: number | null) =>
 const fmtNum = (v?: number | null) =>
   v == null ? '' : Number(v).toLocaleString('pt-BR');
 const yn = (v?: boolean | null) => (v ? 'Sim' : 'Não');
+const loadStatusLabels: Readonly<Record<string, string>> = LOAD_STATUS_LABELS;
 
 const COLUMNS: Array<{ key: string; label: string; get: (l: ExportableLoad) => string }> = [
   { key: 'load_number', label: 'Romaneio', get: l => l.load_number || '' },
-  { key: 'status', label: 'Situação', get: l => LOAD_STATUS_LABELS[l.status] || l.status || '' },
+  { key: 'status', label: 'Situação', get: l => loadStatusLabels[l.status] || l.status || '' },
   { key: 'created_at', label: 'Emissão', get: l => fmtDate(l.created_at) },
   { key: 'actual_load_at', label: 'Carregamento', get: l => fmtDateTime(l.actual_load_at) },
   { key: 'plate', label: 'Placa', get: l => l.vehicles?.plate || '' },

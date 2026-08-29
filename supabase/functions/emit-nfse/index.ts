@@ -1,14 +1,9 @@
-// Generic NFS-e emission edge function with pluggable provider.
-// Currently supports providers: manual (no-op simulation), focus_nfe, nfeio, enotas, prefeitura.
-// Real provider HTTP calls are stubbed — they only need credential wiring to go live.
+// Legacy NFS-e endpoint kept only to reject unsupported provider paths safely.
+// Production emission/cancellation is performed by hub-fiscal-proxy.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { createClient } from "@supabase/supabase-js";
+import { requireIntegrationCapability } from "../_shared/capabilities.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 interface Body {
   action: "emit" | "cancel" | "consult";
@@ -52,6 +47,19 @@ Deno.serve(async (req) => {
   if (dErr) return json({ error: dErr.message }, 400);
   if (!doc) return json({ error: "NFS-e não encontrada" }, 404);
 
+  const { data: membership } = await admin
+    .from("tenant_memberships")
+    .select("role")
+    .eq("tenant_id", doc.tenant_id)
+    .eq("user_id", userId)
+    .eq("active", true)
+    .in("role", ["owner", "admin", "operator"])
+    .maybeSingle();
+  if (!membership) return json({ error: "Forbidden" }, 403);
+
+  const capabilityResponse = await requireIntegrationCapability(admin, doc.tenant_id, "fiscal");
+  if (capabilityResponse) return capabilityResponse;
+
   // Load provider config
   const { data: cfg } = await supabase
     .from("nfse_provider_configs").select("*")
@@ -64,51 +72,35 @@ Deno.serve(async (req) => {
 
   if (body.action === "emit") {
     if (!enabled || provider === "manual") {
-      // Simulate "ready to emit" — marks queued/issued without webservice
-      const fake = `MANUAL-${Date.now()}`;
-      await admin.from("nfse_documents").update({
-        status: "issued",
-        provider: "manual",
-        protocol_number: fake,
-        verification_code: fake.slice(-8),
-        nfse_number: doc.rps_number,
-        authorization_date: new Date().toISOString(),
-      }).eq("id", doc.id);
       await admin.from("nfse_events").insert({
         tenant_id: doc.tenant_id, nfse_id: doc.id,
-        event_type: "issued", message: "Emissão simulada (provedor não configurado)",
-        payload: { simulated: true, provider: "manual" }, created_by: userId,
+        event_type: "configuration_error",
+        message: "Emissão bloqueada: provedor fiscal real não configurado",
+        payload: { provider }, created_by: userId,
       });
-      return json({ status: "issued", simulated: true, protocol: fake });
+      return json({
+        error: "Provedor fiscal real não configurado. Use uma credencial Hub Fiscal habilitada.",
+        code: "NFSE_PROVIDER_NOT_CONFIGURED",
+      }, 409);
     }
 
-    // Real provider call goes here (Focus NFe, NFE.io, eNotas, prefeitura).
-    // Structure ready: read encrypted credentials from cfg.credentials_encrypted
-    // and call the provider HTTP API. Mark as queued for now.
-    await admin.from("nfse_documents").update({
-      status: "queued", provider,
-    }).eq("id", doc.id);
     await admin.from("nfse_events").insert({
       tenant_id: doc.tenant_id, nfse_id: doc.id,
-      event_type: "submitted",
-      message: `Enviado ao provedor ${provider} (integração pendente de credenciais)`,
+      event_type: "configuration_error",
+      message: `Emissão bloqueada: integração ${provider} não implementada`,
       created_by: userId,
     });
-    return json({ status: "queued", provider });
+    return json({
+      error: `Integração ${provider} não implementada. Use o Hub Fiscal.`,
+      code: "NFSE_PROVIDER_NOT_IMPLEMENTED",
+    }, 501);
   }
 
   if (body.action === "cancel") {
-    if (doc.status !== "issued") return json({ error: "Apenas notas emitidas podem ser canceladas" }, 400);
-    await admin.from("nfse_documents").update({
-      status: "cancelled", cancelled: true,
-      cancellation_date: new Date().toISOString(),
-      cancellation_reason: body.reason ?? null,
-    }).eq("id", doc.id);
-    await admin.from("nfse_events").insert({
-      tenant_id: doc.tenant_id, nfse_id: doc.id,
-      event_type: "cancelled", message: body.reason ?? "Cancelada", created_by: userId,
-    });
-    return json({ status: "cancelled" });
+    return json({
+      error: "Cancelamento legado bloqueado. Cancele a NFS-e pelo Hub Fiscal.",
+      code: "NFSE_LEGACY_CANCEL_DISABLED",
+    }, 409);
   }
 
   return json({ error: "ação desconhecida" }, 400);

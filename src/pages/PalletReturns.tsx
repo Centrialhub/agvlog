@@ -19,7 +19,7 @@ import {
   useUpdatePalletStatus, useCancelPalletProtocol, useUpsertPalletType,
   useImportPalletReturns, useAttachPalletProof, getPalletProofSignedUrl,
   useEditPalletProtocol,
-  type PalletFilters, type PalletProtocol,
+  type PalletFilters, type PalletProtocol, type PalletType,
 } from '@/hooks/usePalletReturns';
 import {
   parsePalletReturnSheet, type ParsedPalletReturn,
@@ -39,6 +39,9 @@ const STATUS_LABEL: Record<PalletProtocol['status'], string> = {
   confirmed: 'Confirmado',
   cancelled: 'Cancelado',
 };
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 function StatusBadge({ status }: { status: PalletProtocol['status'] }) {
   const map: Record<string, string> = {
@@ -105,7 +108,7 @@ export default function PalletReturns() {
     }
     if (status === 'confirmed' && !returnDate) { toast({ title: 'Data de devolução obrigatória para confirmar', variant: 'destructive' }); return; }
 
-    const client = clients.find((c: any) => c.id === supplierId);
+    const client = clients.find((candidate) => candidate.id === supplierId);
     try {
       const res = await createMut.mutateAsync({
         supplier_id: supplierId || null,
@@ -124,8 +127,8 @@ export default function PalletReturns() {
       });
       toast({ title: `Protocolo ${res.protocol_number} criado`, description: `Total: ${res.total_quantity} paletes` });
       resetForm();
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e?.message || String(e), variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -157,8 +160,8 @@ export default function PalletReturns() {
       const buf = await file.arrayBuffer();
       const parsed = parsePalletReturnSheet(buf, file.name);
       setPreviewList([parsed]);
-    } catch (e: any) {
-      toast({ title: 'Erro ao ler planilha', description: e?.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao ler planilha', description: errorMessage(error), variant: 'destructive' });
     }
   };
   const commitImport = async () => {
@@ -176,8 +179,8 @@ export default function PalletReturns() {
       });
       toast({ title: 'Importação concluída', description: `${res.imported} importados, ${res.errors.length} erros` });
       setPreviewList([]);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e?.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -247,8 +250,8 @@ export default function PalletReturns() {
       });
       toast({ title: 'Protocolo atualizado' });
       setEditTarget(null);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e?.message || String(e), variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -271,8 +274,8 @@ export default function PalletReturns() {
     try {
       await statusMut.mutateAsync({ protocolId: p.id, status, payload });
       toast({ title: 'Status atualizado', description: STATUS_LABEL[status] });
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e?.message || String(e), variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -388,11 +391,11 @@ export default function PalletReturns() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <Label>Fornecedor / Cliente</Label>
-                <Select value={supplierId || '__manual__'} onValueChange={(v) => { setSupplierId(v === '__manual__' ? '' : v); if (v !== '__manual__') setSupplierName(clients.find((c: any) => c.id === v)?.company_name || ''); }}>
+                <Select value={supplierId || '__manual__'} onValueChange={(v) => { setSupplierId(v === '__manual__' ? '' : v); if (v !== '__manual__') setSupplierName(clients.find((candidate) => candidate.id === v)?.company_name || ''); }}>
                   <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__manual__">— Digitar manualmente —</SelectItem>
-                    {clients.map((c: any) => (<SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>))}
+                    {clients.map((client) => (<SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>))}
                   </SelectContent>
                 </Select>
                 {!supplierId && (<Input className="mt-2" placeholder="Nome do fornecedor" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} />)}
@@ -549,7 +552,7 @@ export default function PalletReturns() {
           <Card><CardContent className="p-4 space-y-3">
             <div className="flex items-center gap-3">
               <Input type="file" accept=".xlsx,.xls" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
-              <Select value={importStatus} onValueChange={(v) => setImportStatus(v as any)}>
+              <Select value={importStatus} onValueChange={(value: 'confirmed' | 'returned') => setImportStatus(value)}>
                 <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="confirmed">Importar como confirmado</SelectItem>
@@ -612,7 +615,7 @@ export default function PalletReturns() {
           <Textarea placeholder="Motivo do cancelamento" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCancelTarget(null)}>Voltar</Button>
-            <Button variant="destructive" onClick={async () => { if (!cancelTarget || !cancelReason.trim()) { toast({ title: 'Motivo obrigatório', variant: 'destructive' }); return; } try { await cancelMut.mutateAsync({ protocolId: cancelTarget.id, reason: cancelReason }); toast({ title: 'Cancelado' }); setCancelTarget(null); } catch (e: any) { toast({ title: 'Erro', description: e?.message, variant: 'destructive' }); } }}>Cancelar protocolo</Button>
+            <Button variant="destructive" onClick={async () => { if (!cancelTarget || !cancelReason.trim()) { toast({ title: 'Motivo obrigatório', variant: 'destructive' }); return; } try { await cancelMut.mutateAsync({ protocolId: cancelTarget.id, reason: cancelReason }); toast({ title: 'Cancelado' }); setCancelTarget(null); } catch (error: unknown) { toast({ title: 'Erro', description: errorMessage(error), variant: 'destructive' }); } }}>Cancelar protocolo</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -627,7 +630,7 @@ export default function PalletReturns() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAttachTarget(null)}>Cancelar</Button>
-            <Button onClick={async () => { if (!attachTarget || !proofFile) { toast({ title: 'Selecione um arquivo', variant: 'destructive' }); return; } try { await attachMut.mutateAsync({ protocolId: attachTarget.id, file: proofFile, receiverName, signatureDate }); toast({ title: 'Comprovante anexado' }); setAttachTarget(null); setProofFile(null); } catch (e: any) { toast({ title: 'Erro', description: e?.message, variant: 'destructive' }); } }}>Anexar</Button>
+            <Button onClick={async () => { if (!attachTarget || !proofFile) { toast({ title: 'Selecione um arquivo', variant: 'destructive' }); return; } try { await attachMut.mutateAsync({ protocolId: attachTarget.id, file: proofFile, receiverName, signatureDate }); toast({ title: 'Comprovante anexado' }); setAttachTarget(null); setProofFile(null); } catch (error: unknown) { toast({ title: 'Erro', description: errorMessage(error), variant: 'destructive' }); } }}>Anexar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -708,7 +711,10 @@ export default function PalletReturns() {
   );
 }
 
-function PalletTypesEditor({ types, onSave }: { types: any[]; onSave: (t: any) => void }) {
+function PalletTypesEditor({ types, onSave }: {
+  types: PalletType[];
+  onSave: (palletType: Partial<PalletType> & Pick<PalletType, 'code' | 'name'>) => void;
+}) {
   const [code, setCode] = useState(''); const [name, setName] = useState(''); const [color, setColor] = useState(''); const [desc, setDesc] = useState('');
   return (
     <>

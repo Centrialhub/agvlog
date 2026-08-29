@@ -50,7 +50,7 @@ export default function DriverSettlements() {
     page,
     page_size: pageSize,
   });
-  const list = (data?.items ?? []) as any[];
+  const list = data?.items ?? [];
   const totalCount = data?.total_count ?? 0;
   const summary = data?.summary ?? null;
   const { data: filterOpts } = useDriverSettlementFilterOptions();
@@ -118,7 +118,7 @@ export default function DriverSettlements() {
               <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
               <Input className="pl-8" placeholder="Motorista, placa, rota, romaneio, nota…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} />
             </div>
-            <Select value={status} onValueChange={(v: any) => { setPage(1); setStatus(v); }}>
+            <Select value={status} onValueChange={value => { setPage(1); setStatus(value as 'all' | DriverSettlementStatus); }}>
               <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos status</SelectItem>
@@ -182,7 +182,7 @@ export default function DriverSettlements() {
                 {!isLoading && filtered.length === 0 && (
                   <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">Nenhum acerto encontrado.</TableCell></TableRow>
                 )}
-                {filtered.map((s: any) => (
+                {filtered.map(s => (
                   <TableRow key={s.id} className="cursor-pointer hover:bg-accent" onClick={() => openSettlement(s.id)}>
                     <TableCell className="max-w-xs truncate">{s.route_name || `${s.route_origin ?? '—'} → ${s.route_destination ?? '—'}`}</TableCell>
                     <TableCell>{s.driver_name ?? '—'}</TableCell>

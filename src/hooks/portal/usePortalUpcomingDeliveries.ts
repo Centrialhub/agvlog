@@ -26,13 +26,13 @@ export function usePortalUpcomingDeliveries(opts?: { clientId?: string | null; l
     queryKey: ['portal_upcoming', currentTenant?.id, clientId, limit],
     queryFn: async (): Promise<UpcomingDelivery[]> => {
       if (!currentTenant || !clientId) return [];
-      const { data, error } = await supabase.rpc('get_client_portal_upcoming_deliveries_v2' as any, {
+      const { data, error } = await supabase.rpc('get_client_portal_upcoming_deliveries_v2', {
         _tenant_id: currentTenant.id,
         _client_id: clientId,
         _limit: limit,
       });
       if (error) throw error;
-      return (data as UpcomingDelivery[]) ?? [];
+      return (data as unknown as UpcomingDelivery[]) ?? [];
     },
     enabled: !!currentTenant && !!clientId,
     staleTime: 60_000,

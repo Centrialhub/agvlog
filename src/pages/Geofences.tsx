@@ -1,3 +1,4 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/components/ui/sonner';
@@ -26,6 +26,8 @@ const CATEGORIES = [
 ] as const;
 
 const getCategoryConfig = (cat: string) => CATEGORIES.find(c => c.value === cat) || CATEGORIES[3];
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
 
 export default function Geofences() {
   const { currentTenant } = useTenant();
@@ -82,9 +84,10 @@ export default function Geofences() {
     queryKey: ['positions_last_geo', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase.from('positions_last')
+      const { data, error } = await supabase.from('positions_last')
         .select('vehicle_id, lat, lng, vehicles(plate)')
         .eq('tenant_id', currentTenant.id);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -92,27 +95,33 @@ export default function Geofences() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
-      const { error } = await supabase.from('geofences').update({ enabled }).eq('id', id);
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { error } = await supabase.from('geofences').update({ enabled })
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['geofences'] }); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao atualizar geofence')),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('geofences').delete().eq('id', id);
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { error } = await supabase.from('geofences').delete()
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['geofences'] }); toast.success('Geofence removida'); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao remover geofence')),
   });
 
-  const filtered = geofences.filter((g: any) =>
+  const filtered = geofences.filter((g) =>
     !search || g.name.toLowerCase().includes(search.toLowerCase()) || g.category?.includes(search.toLowerCase())
   );
 
-  const activeCount = geofences.filter((g: any) => g.enabled).length;
+  const activeCount = geofences.filter((g) => g.enabled).length;
   const vehiclesInside = states.length;
 
   return (
@@ -200,7 +209,7 @@ export default function Geofences() {
       )}
 
       {/* Map */}
-      {(positions as any[]).length > 0 && (
+      {positions.length > 0 && (
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -211,12 +220,12 @@ export default function Geofences() {
           <CardContent className="p-0">
             <div className="h-[350px]">
               <MapContainer
-                center={[(positions[0] as any).lat, (positions[0] as any).lng]}
+                center={[positions[0].lat, positions[0].lng]}
                 zoom={10}
                 className="h-full w-full z-0"
               >
                 <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                {(positions as any[]).map((p: any) => (
+                {positions.map((p) => (
                   <CircleMarker key={p.vehicle_id} center={[p.lat, p.lng]} radius={6}
                     pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8 }}>
                     <Popup><strong>{p.vehicles?.plate || 'Veículo'}</strong></Popup>
@@ -238,7 +247,7 @@ export default function Geofences() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {(states as any[]).map((s: any, i: number) => (
+              {states.map((s, i) => (
                 <Badge key={i} variant="outline" className="text-xs gap-1">
                   <Truck className="h-3 w-3" />
                   {s.vehicles?.plate || '—'}
@@ -271,10 +280,10 @@ export default function Geofences() {
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              {filtered.map((g: any) => {
-                const config = getCategoryConfig(g.category);
+              {filtered.map((g) => {
+                const config = getCategoryConfig(g.category || 'general');
                 const Icon = config.icon;
-                const insideCount = states.filter((s: any) => s.geofence_id === g.id).length;
+                const insideCount = states.filter((s) => s.geofence_id === g.id).length;
 
                 return (
                   <div key={g.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
@@ -307,7 +316,7 @@ export default function Geofences() {
                             {g.enabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
                           </Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7"
-                            onClick={() => { if (confirm(`Remover a cerca "${g.name}"?`)) deleteMutation.mutate(g.id); }}>
+                            onClick={async () => { if (await confirmAction(`Remover a cerca "${g.name}"?`, { title: 'Remover cerca', confirmLabel: 'Remover' })) deleteMutation.mutate(g.id); }}>
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </Button>
                         </>
@@ -341,7 +350,7 @@ export default function Geofences() {
                     Eventos aparecem quando veículos cruzam os limites das cercas
                   </p>
                 </div>
-              ) : events.map((ev: any) => (
+              ) : events.map((ev) => (
                 <div key={ev.id} className="flex items-center gap-2 p-2 rounded text-sm">
                   <div className={`w-2 h-2 rounded-full shrink-0 ${ev.direction === 'enter' ? 'bg-success' : 'bg-warning'}`} />
                   <span className="font-medium text-xs">{ev.vehicles?.plate || '—'}</span>
@@ -432,8 +441,6 @@ function NewGeofenceDialog({ open, onOpenChange, tenantId }: { open: boolean; on
   const [radius, setRadius] = useState('200');
   const [loading, setLoading] = useState(false);
 
-  const selectedCat = getCategoryConfig(category);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId) return;
@@ -460,7 +467,7 @@ function NewGeofenceDialog({ open, onOpenChange, tenantId }: { open: boolean; on
     const geojson = JSON.stringify({ type: 'Polygon', coordinates: [coords] });
 
     const { error } = await supabase.rpc('upsert_geofence', {
-      _id: null as any,
+      _id: null as never,
       _tenant_id: tenantId,
       _name: name,
       _category: category,

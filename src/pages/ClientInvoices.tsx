@@ -1,13 +1,15 @@
+import { promptAction } from '@/hooks/useAlertStore';
 import { useState, useMemo } from 'react';
 import {
   useClientInvoices, useEligibleCtes, useEligibleNfse,
   useCreateClientInvoice, useCancelClientInvoice, useMarkInvoiceSent,
   useClientInvoiceDetail, fetchCteFiscalDocs,
   INVOICE_STATUS_LABELS, type ClientInvoice, type InvoiceStatus,
+  type ClientInvoiceChargeDraft, type ClientInvoiceDetailDraft,
 } from '@/hooks/useClientInvoices';
-import { useClients } from '@/hooks/useClients';
+import { useClients, type Client } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,18 +22,30 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, FileText, Download, Send, XCircle, Search } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
-import { generateClientInvoicePdf, type InvoiceCharge, computeInvoiceTotals } from '@/lib/clientInvoicePdf';
+import { generateClientInvoicePdf, computeInvoiceTotals, type InvoiceCharge } from '@/lib/clientInvoicePdf';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import type { Json } from '@/integrations/supabase/types';
 
 const brl = (n: number) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = (s?: string | null) => s ? new Date(s.length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '-';
 
-const statusVariant = (s: string) => {
+const statusVariant = (s: string): 'default' | 'destructive' | 'secondary' | 'outline' => {
   if (s === 'paid') return 'default';
   if (s === 'cancelled') return 'destructive';
   if (s === 'sent') return 'secondary';
   return 'outline';
 };
+
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
+const isJsonObject = (value: unknown): value is { [key: string]: Json | undefined } =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+const jsonString = (value: unknown) => typeof value === 'string' ? value : null;
+const jsonNumber = (value: unknown) => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+const isInvoiceSourceType = (value: string): value is InvoiceCharge['source_type'] =>
+  value === 'cte_document' || value === 'nfse_document' || value === 'manual_service';
 
 export default function ClientInvoices() {
   const { currentTenant } = useTenant();
@@ -70,14 +84,26 @@ export default function ClientInvoices() {
 
   const handleDownloadPdf = async (inv: ClientInvoice) => {
     try {
+      const tenantId = currentTenant?.id;
+      if (!tenantId) throw new Error('Tenant ativo não encontrado.');
+      const { supabase } = await import('@/integrations/supabase/client');
       const [chargesRes, detailsRes] = await Promise.all([
-        (await import('@/integrations/supabase/client')).supabase.from('client_invoice_charges').select('*').eq('invoice_id', inv.id).order('sort_order'),
-        (await import('@/integrations/supabase/client')).supabase.from('client_invoice_details').select('*').eq('invoice_id', inv.id).order('sort_order'),
+        supabase.from('client_invoice_charges').select('*').eq('invoice_id', inv.id).eq('tenant_id', tenantId).order('sort_order'),
+        supabase.from('client_invoice_details').select('*').eq('invoice_id', inv.id).eq('tenant_id', tenantId).order('sort_order'),
       ]);
-      const charges: any[] = (chargesRes.data || []).map(c => ({
-        ...c,
-        details: (detailsRes.data || []).filter((d: any) => d.charge_id === c.id),
-      }));
+      if (chargesRes.error) throw chargesRes.error;
+      if (detailsRes.error) throw detailsRes.error;
+      const charges: InvoiceCharge[] = (chargesRes.data || []).map(c => {
+        if (!isInvoiceSourceType(c.source_type)) {
+          throw new Error(`Tipo de cobrança inválido: ${c.source_type}`);
+        }
+        return {
+          ...c,
+          source_type: c.source_type,
+          gross_amount: Number(c.gross_amount),
+          details: (detailsRes.data || []).filter(d => d.charge_id === c.id),
+        };
+      });
       const doc = generateClientInvoicePdf({
         invoice_number: inv.invoice_number,
         issue_date: inv.issue_date,
@@ -101,11 +127,11 @@ export default function ClientInvoices() {
           logo_data_url: companyProfile?.logo_data_url,
         },
         payer: { name: inv.clients?.company_name, tax_id: inv.clients?.tax_id || undefined },
-        charges: charges as any,
+        charges,
       });
       doc.save(`fatura-${inv.invoice_number.replace('/', '-')}.pdf`);
-    } catch (e: any) {
-      toast.error('Falha ao gerar PDF: ' + e.message);
+    } catch (error: unknown) {
+      toast.error('Falha ao gerar PDF: ' + errorMessage(error));
     }
   };
 
@@ -157,7 +183,7 @@ export default function ClientInvoices() {
               <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os clientes</SelectItem>
-                {clients.map((c: any) => (<SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>))}
+                {clients.map(c => (<SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
@@ -188,7 +214,7 @@ export default function ClientInvoices() {
                     <TableCell>{dt(inv.issue_date)}</TableCell>
                     <TableCell>{dt(inv.due_date)}</TableCell>
                     <TableCell className="text-right font-medium">{brl(Number(inv.total_amount))}</TableCell>
-                    <TableCell><Badge variant={statusVariant(inv.status) as any}>{INVOICE_STATUS_LABELS[inv.status as InvoiceStatus] || inv.status}</Badge></TableCell>
+                    <TableCell><Badge variant={statusVariant(inv.status)}>{INVOICE_STATUS_LABELS[inv.status as InvoiceStatus] || inv.status}</Badge></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{dt(inv.sent_at)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
@@ -201,8 +227,11 @@ export default function ClientInvoices() {
                               <Send className="h-4 w-4" />
                             </Button>
                             <Button size="icon" variant="ghost" title="Cancelar"
-                              onClick={() => {
-                                const reason = prompt('Motivo do cancelamento:');
+                              onClick={async () => {
+                                const reason = await promptAction('Informe por que esta fatura deve ser cancelada.', {
+                                  title: 'Cancelar fatura',
+                                  label: 'Motivo do cancelamento',
+                                });
                                 if (!reason) return;
                                 cancelMut.mutateAsync({ id: inv.id, reason })
                                   .then(() => toast.success('Fatura cancelada'))
@@ -222,7 +251,7 @@ export default function ClientInvoices() {
         </CardContent>
       </Card>
 
-      <NewInvoiceWizard open={wizardOpen} onClose={() => setWizardOpen(false)} clients={clients as any[]} onGenerated={id => { setWizardOpen(false); setDetailId(id); }} />
+      <NewInvoiceWizard open={wizardOpen} onClose={() => setWizardOpen(false)} clients={clients} onGenerated={id => { setWizardOpen(false); setDetailId(id); }} />
       <InvoiceDetailDialog invoiceId={detailId} onClose={() => setDetailId(null)} />
     </div>
   );
@@ -232,7 +261,7 @@ export default function ClientInvoices() {
 
 type ManualService = { id: string; description: string; reference_number: string; gross_amount: string; net_amount: string; ir_amount: string; notes: string };
 
-function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boolean; onClose: () => void; clients: any[]; onGenerated: (id: string) => void }) {
+function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boolean; onClose: () => void; clients: Client[]; onGenerated: (id: string) => void }) {
   const { currentTenant } = useTenant();
   const [step, setStep] = useState(1);
   const [clientId, setClientId] = useState<string>('');
@@ -257,16 +286,18 @@ function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boole
   const closeAll = () => { reset(); onClose(); };
 
   // Build charges from selection
-  const buildCharges = async (): Promise<any[]> => {
-    const charges: any[] = [];
+  const buildCharges = async (): Promise<ClientInvoiceChargeDraft[]> => {
+    const tenantId = currentTenant?.id;
+    if (!tenantId) throw new Error('Tenant ativo não encontrado.');
+    const charges: ClientInvoiceChargeDraft[] = [];
     let sort = 0;
 
-    for (const cte of ctes.filter((c: any) => selectedCtes.has(c.id))) {
-      const details: any[] = [];
+    for (const cte of ctes.filter(c => selectedCtes.has(c.id))) {
+      const details: ClientInvoiceDetailDraft[] = [];
       const fdIds: string[] = cte.fiscal_document_ids || [];
       if (fdIds.length) {
-        const fds = await fetchCteFiscalDocs(fdIds);
-        fds.forEach((fd: any, idx: number) => {
+        const fds = await fetchCteFiscalDocs(tenantId, fdIds);
+        fds.forEach((fd, idx) => {
           details.push({
             source_type: 'fiscal_document',
             source_id: fd.id,
@@ -297,17 +328,17 @@ function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boole
       });
     }
 
-    for (const n of nfses.filter((x: any) => selectedNfses.has(x.id))) {
-      const items: any[] = Array.isArray((n as any).items) ? (n as any).items : [];
-      const details = items.length ? items.map((it: any, idx: number) => ({
+    for (const n of nfses.filter(x => selectedNfses.has(x.id))) {
+      const items = Array.isArray(n.items) ? n.items.filter(isJsonObject) : [];
+      const details: ClientInvoiceDetailDraft[] = items.length ? items.map((item, idx) => ({
         source_type: 'nfse_item',
         emission_date: n.issue_date,
         document_label: 'NFS-e',
         document_number: n.nfse_number,
-        ort_number: it.ort_number || n.reference_number,
+        ort_number: jsonString(item.ort_number) || n.reference_number,
         destination: n.cliente_municipio,
-        remitter: it.description || n.description,
-        cargo_value: Number(it.value || 0),
+        remitter: jsonString(item.description) || n.description,
+        cargo_value: jsonNumber(item.value),
         displayed_freight_value: Number(n.valor_total || 0),
         sort_order: idx,
       })) : [];
@@ -343,12 +374,16 @@ function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boole
     return charges;
   };
 
-  const [previewCharges, setPreviewCharges] = useState<any[]>([]);
+  const [previewCharges, setPreviewCharges] = useState<ClientInvoiceChargeDraft[]>([]);
   const goPreview = async () => {
-    const c = await buildCharges();
-    if (c.length === 0) { toast.error('Selecione ao menos um documento ou adicione um serviço.'); return; }
-    setPreviewCharges(c);
-    setStep(3);
+    try {
+      const c = await buildCharges();
+      if (c.length === 0) { toast.error('Selecione ao menos um documento ou adicione um serviço.'); return; }
+      setPreviewCharges(c);
+      setStep(3);
+    } catch (error: unknown) {
+      toast.error('Falha ao montar a prévia: ' + errorMessage(error));
+    }
   };
 
   const totals = useMemo(() => computeInvoiceTotals(previewCharges, Number(discount || 0), Number(interest || 0)), [previewCharges, discount, interest]);
@@ -370,8 +405,8 @@ function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boole
       toast.success('Fatura gerada com sucesso');
       onGenerated(id);
       reset();
-    } catch (e: any) {
-      toast.error('Falha ao gerar fatura: ' + e.message);
+    } catch (error: unknown) {
+      toast.error('Falha ao gerar fatura: ' + errorMessage(error));
     }
   };
 
@@ -390,7 +425,7 @@ function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boole
                 <Select value={clientId} onValueChange={setClientId}>
                   <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                   <SelectContent>
-                    {clients.map((c: any) => (<SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>))}
+                    {clients.map(c => (<SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>))}
                   </SelectContent>
                 </Select>
               </div>
@@ -416,7 +451,7 @@ function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boole
                   <TableHeader><TableRow><TableHead className="w-10"></TableHead><TableHead>CT-e</TableHead><TableHead>Emissão</TableHead><TableHead>Destinatário</TableHead><TableHead className="text-right">Frete</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {ctes.length === 0 && (<TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Nenhum CT-e elegível.</TableCell></TableRow>)}
-                    {ctes.map((c: any) => (
+                    {ctes.map(c => (
                       <TableRow key={c.id}>
                         <TableCell><Checkbox checked={selectedCtes.has(c.id)} onCheckedChange={v => { const s = new Set(selectedCtes); if (v) s.add(c.id); else s.delete(c.id); setSelectedCtes(s); }} /></TableCell>
                         <TableCell>{c.cte_number}{c.cte_series ? '/' + c.cte_series : ''}</TableCell>
@@ -435,7 +470,7 @@ function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boole
                   <TableHeader><TableRow><TableHead className="w-10"></TableHead><TableHead>NFS-e</TableHead><TableHead>Emissão</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {nfses.length === 0 && (<TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Nenhuma NFS-e elegível.</TableCell></TableRow>)}
-                    {nfses.map((n: any) => (
+                    {nfses.map(n => (
                       <TableRow key={n.id}>
                         <TableCell><Checkbox checked={selectedNfses.has(n.id)} onCheckedChange={v => { const s = new Set(selectedNfses); if (v) s.add(n.id); else s.delete(n.id); setSelectedNfses(s); }} /></TableCell>
                         <TableCell>{n.nfse_number}</TableCell>
@@ -547,7 +582,7 @@ function InvoiceDetailDialog({ invoiceId, onClose }: { invoiceId: string | null;
               <Table>
                 <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Referência</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {data.charges.map((c: any) => (
+                  {data.charges.map(c => (
                     <TableRow key={c.id}>
                       <TableCell>{c.source_type}</TableCell>
                       <TableCell>{c.source_number || c.reference_number}</TableCell>

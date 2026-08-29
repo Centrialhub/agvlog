@@ -29,7 +29,7 @@ export default function PortalReports() {
   const ninetyAgo = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().slice(0, 10);
   const [start, setStart] = useState(ninetyAgo);
   const [end, setEnd] = useState(today);
-  const { data, isLoading } = usePortalReports({ start, end });
+  const { data, isLoading, error, refetch } = usePortalReports({ start, end });
 
   return (
     <PortalSection
@@ -56,6 +56,11 @@ export default function PortalReports() {
 
       {isLoading ? (
         <div className="p-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
+      ) : error ? (
+        <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/30 p-8 text-center text-sm text-destructive">
+          <span>Erro ao carregar relatórios: {(error as Error).message}</span>
+          <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
+        </div>
       ) : !data ? (
         <PortalEmptyState title="Sem dados" description="Nenhum dado encontrado para o período." />
       ) : (
@@ -69,21 +74,21 @@ export default function PortalReports() {
 
           <ReportSection
             title="Entregas por status"
-            rows={data.deliveries_by_status}
+            rows={data.deliveries_by_status.map((row) => ({ ...row }))}
             columns={[{ key: 'status', label: 'Status' }, { key: 'total', label: 'Total', right: true }]}
             csvName="entregas-por-status"
           />
 
           <ReportSection
             title="Ocorrências por tipo"
-            rows={data.occurrences_by_type}
+            rows={data.occurrences_by_type.map((row) => ({ ...row }))}
             columns={[{ key: 'event_type', label: 'Tipo' }, { key: 'total', label: 'Total', right: true }]}
             csvName="ocorrencias-por-tipo"
           />
 
           <ReportSection
             title="Coletas por status"
-            rows={data.pickups_by_status}
+            rows={data.pickups_by_status.map((row) => ({ ...row }))}
             columns={[{ key: 'status', label: 'Status' }, { key: 'total', label: 'Total', right: true }]}
             csvName="coletas-por-status"
           />
@@ -107,7 +112,7 @@ export default function PortalReports() {
     title, rows, columns, csvName,
   }: {
     title: string;
-    rows: Array<Record<string, any>>;
+    rows: Array<Record<string, unknown>>;
     columns: Array<{ key: string; label: string; right?: boolean }>;
     csvName: string;
   }) {
@@ -135,7 +140,7 @@ export default function PortalReports() {
                 {rows.map((r, i) => (
                   <TableRow key={i}>
                     {columns.map((c) => (
-                      <TableCell key={c.key} className={c.right ? 'text-right font-mono' : ''}>{r[c.key]}</TableCell>
+                      <TableCell key={c.key} className={c.right ? 'text-right font-mono' : ''}>{String(r[c.key] ?? '')}</TableCell>
                     ))}
                   </TableRow>
                 ))}

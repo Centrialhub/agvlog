@@ -28,7 +28,7 @@ interface Prefs {
 const DEFAULT_PREFS: Prefs = { compactCards: false, emailNotifications: true };
 
 export default function PortalSettings() {
-  const { data: access = [], isLoading } = useClientPortalAccess();
+  const { data: access = [], isLoading, error, refetch } = useClientPortalAccess();
   const { user, signOut } = useAuth();
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
 
@@ -36,13 +36,17 @@ export default function PortalSettings() {
     try {
       const raw = localStorage.getItem(PREF_KEY);
       if (raw) setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(raw) });
-    } catch {}
+    } catch {
+      // Mantém as preferências padrão quando o storage local está inválido.
+    }
   }, []);
 
   const update = (patch: Partial<Prefs>) => {
     const next = { ...prefs, ...patch };
     setPrefs(next);
-    try { localStorage.setItem(PREF_KEY, JSON.stringify(next)); } catch {}
+    try { localStorage.setItem(PREF_KEY, JSON.stringify(next)); } catch {
+      // A preferência permanece ativa nesta sessão mesmo sem persistência local.
+    }
   };
 
   return (
@@ -91,6 +95,11 @@ export default function PortalSettings() {
         <CardContent className="space-y-3">
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Carregando…</p>
+          ) : error ? (
+            <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/30 p-6 text-center text-sm text-destructive">
+              <span>Erro ao carregar os vínculos: {(error as Error).message}</span>
+              <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
+            </div>
           ) : access.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhum cliente vinculado à sua conta.</p>
           ) : (

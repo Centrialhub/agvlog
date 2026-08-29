@@ -10,7 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -20,9 +19,6 @@ import { toast } from '@/components/ui/sonner';
 import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 
 const NONE = '__none__';
-const formatBRL = (n: number) =>
-  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
 export default function FreightSimulator() {
   const { currentTenant } = useTenant();
   const tenantId = currentTenant?.id;
@@ -31,7 +27,7 @@ export default function FreightSimulator() {
   const [clientId, setClientId] = useState<string>(NONE);
   const [regionId, setRegionId] = useState<string>(NONE);
   const [payerGroup, setPayerGroup] = useState<string>(NONE);
-  const [vehicleType, setVehicleType] = useState<string>('');
+  const vehicleType = '';
   const [totalValue, setTotalValue] = useState<string>('0');
   const [totalWeight, setTotalWeight] = useState<string>('0');
   const [totalPallets, setTotalPallets] = useState<string>('0');
@@ -65,12 +61,13 @@ export default function FreightSimulator() {
   const { data: clients = [] } = useQuery({
     queryKey: ['suppliers-min-freight', tenantId],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('clients')
         .select('id, company_name, payer_group')
         .eq('tenant_id', tenantId!)
         .eq('is_supplier', true)
         .order('company_name');
+      if (error) throw error;
       return data || [];
     },
     enabled: !!tenantId,
@@ -79,11 +76,12 @@ export default function FreightSimulator() {
   const { data: regions = [] } = useQuery({
     queryKey: ['client-regions-min', tenantId],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('client_regions')
         .select('id, region_name, municipality, state_code, payer_group, client_id')
         .eq('tenant_id', tenantId!)
         .order('region_name');
+      if (error) throw error;
       return data || [];
     },
     enabled: !!tenantId,
@@ -104,18 +102,19 @@ export default function FreightSimulator() {
         // Excluir status indesejados (cancelados/rejeitados/rascunhos)
         q = q.not('status', 'in', '(cancelled,canceled,rejected,denied,draft)');
       }
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) throw error;
       const rows = data || [];
       if (!onlyValid) return rows;
       // Deduplicar por chave de acesso (ou nº+emitente quando faltar) — mantém o mais recente
-      const seen = new Map<string, any>();
+      const seen = new Map<string, (typeof rows)[number]>();
       for (const r of rows) {
-        const key = (r as any).access_key
-          || `${(r as any).invoice_number || ''}|${(r as any).remitter || ''}|${(r as any).document_type || ''}`;
+        const key = r.access_key
+          || `${r.invoice_number || ''}|${r.remitter || ''}|${r.document_type || ''}`;
         if (!key) continue;
         const existing = seen.get(key);
         if (!existing) { seen.set(key, r); continue; }
-        const a = new Date((r as any).created_at || (r as any).issue_date || 0).getTime();
+        const a = new Date(r.created_at || r.issue_date || 0).getTime();
         const b = new Date(existing.created_at || existing.issue_date || 0).getTime();
         if (a > b) seen.set(key, r);
       }
@@ -126,26 +125,26 @@ export default function FreightSimulator() {
 
   const uniquePayerGroups = useMemo(() => {
     const s = new Set<string>();
-    regions.forEach((r: any) => r.payer_group && s.add(r.payer_group));
-    clients.forEach((c: any) => c.payer_group && s.add(c.payer_group));
+    regions.forEach((r) => r.payer_group && s.add(r.payer_group));
+    clients.forEach((c) => c.payer_group && s.add(c.payer_group));
     return Array.from(s).sort();
   }, [regions, clients]);
 
   const filteredRegions = useMemo(() => {
     if (clientId === NONE) return regions;
-    return regions.filter((r: any) => !r.client_id || r.client_id === clientId);
+    return regions.filter((r) => !r.client_id || r.client_id === clientId);
   }, [regions, clientId]);
 
   const filteredDocs = useMemo(() => {
     if (docTypeFilter === 'all') return docs;
-    if (docTypeFilter === 'cte') return docs.filter((d: any) => d.document_type === 'outbound');
-    return docs.filter((d: any) => d.document_type === 'inbound');
+    if (docTypeFilter === 'cte') return docs.filter((d) => d.document_type === 'outbound');
+    return docs.filter((d) => d.document_type === 'inbound');
   }, [docs, docTypeFilter]);
 
   function loadFromDoc(id: string) {
     setDocId(id);
     if (!id || id === NONE) return;
-    const d = docs.find((x: any) => x.id === id);
+    const d = docs.find((x) => x.id === id);
     if (!d) return;
     if (d.client_id) setClientId(d.client_id);
     setTotalValue(String(d.value || 0));
@@ -155,7 +154,7 @@ export default function FreightSimulator() {
     setDestMunicipality(d.recipient_city || '');
     // Try to auto-suggest region
     const match = regions.find(
-      (r: any) =>
+      (r) =>
         r.municipality?.toLowerCase() === (d.recipient_city || '').toLowerCase() &&
         (!d.recipient_state || r.state_code === d.recipient_state),
     );
@@ -167,7 +166,7 @@ export default function FreightSimulator() {
     const term = quickSearch.trim();
     if (!term || !tenantId) return;
     // Try local first
-    const local = filteredDocs.find((d: any) => {
+    const local = filteredDocs.find((d) => {
       const num = String(d.invoice_number || '');
       const key = String(d.access_key || '');
       return num === term || num.endsWith(term) || key.endsWith(term);
@@ -192,7 +191,7 @@ export default function FreightSimulator() {
         return;
       }
       // Inject into local docs cache by reusing loadFromDoc-like flow
-      const d: any = data[0];
+      const d = data[0];
       setDocId(d.id);
       if (d.client_id) setClientId(d.client_id);
       setTotalValue(String(d.value || 0));
@@ -201,15 +200,15 @@ export default function FreightSimulator() {
       setDestState(d.recipient_state || '');
       setDestMunicipality(d.recipient_city || '');
       const match = regions.find(
-        (r: any) =>
+        (r) =>
           r.municipality?.toLowerCase() === (d.recipient_city || '').toLowerCase() &&
           (!d.recipient_state || r.state_code === d.recipient_state),
       );
       if (match) setRegionId(match.id);
       setResult(null);
       toast.success(`Documento ${d.invoice_number || term} carregado (fora do período atual)`);
-    } catch (e: any) {
-      toast.error(e.message || 'Falha na busca');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Falha na busca');
     } finally {
       setQuickSearching(false);
     }
@@ -219,7 +218,7 @@ export default function FreightSimulator() {
     if (!tenantId) return;
     setLoading(true);
     try {
-      const region = regions.find((r: any) => r.id === regionId);
+      const region = regions.find((r) => r.id === regionId);
       const r = await calculateFreight({
         tenantId,
         clientId: clientId === NONE ? null : clientId,
@@ -234,8 +233,8 @@ export default function FreightSimulator() {
       });
       setResult(r);
       if (!silent && !r.success) toast.error(r.error || 'Falha no cálculo');
-    } catch (e: any) {
-      if (!silent) toast.error(e.message || 'Erro inesperado');
+    } catch (error: unknown) {
+      if (!silent) toast.error(error instanceof Error ? error.message : 'Erro inesperado');
     } finally {
       setLoading(false);
     }
@@ -243,11 +242,11 @@ export default function FreightSimulator() {
 
   // Auto-recalculate (debounced) when inputs change
   useEffect(() => {
-    if (!autoCalc || !tenantId) return;
+    if (!autoCalc || !tenantId) return undefined;
     const hasMinInput =
       regionId !== NONE || payerGroup !== NONE || clientId !== NONE ||
       Number(totalValue) > 0 || Number(totalWeight) > 0 || Number(totalPallets) > 0;
-    if (!hasMinInput) return;
+    if (!hasMinInput) return undefined;
     const t = setTimeout(() => { handleSimulate(true); }, 400);
     return () => clearTimeout(t);
   }, [autoCalc, tenantId, regionId, payerGroup, clientId, totalValue, totalWeight, totalPallets, destState, destMunicipality, vehicleType, handleSimulate]);
@@ -358,7 +357,7 @@ export default function FreightSimulator() {
                 >
                   <span className="truncate text-left">
                     {(() => {
-                      const sel = docs.find((x: any) => x.id === docId);
+                      const sel = docs.find((x) => x.id === docId);
                       if (!sel) return <span className="text-muted-foreground">Buscar por nº, emitente, destinatário ou cidade…</span>;
                       return `${sel.document_type?.toUpperCase()} ${sel.invoice_number || sel.access_key?.slice(-8) || ''} · ${sel.recipient || sel.remitter || '—'}`;
                     })()}
@@ -384,7 +383,7 @@ export default function FreightSimulator() {
                         <Check className={cn('mr-2 h-4 w-4', !docId ? 'opacity-100' : 'opacity-0')} />
                         — Manual —
                       </CommandItem>
-                      {filteredDocs.map((d: any) => {
+                      {filteredDocs.map((d) => {
                         const num = d.invoice_number || d.access_key?.slice(-8) || '';
                         const haystack = [
                           d.document_type,
@@ -430,7 +429,7 @@ export default function FreightSimulator() {
                 <SelectTrigger><SelectValue placeholder="Qualquer" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>Qualquer</SelectItem>
-                  {clients.map((c: any) => (
+                  {clients.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -442,7 +441,7 @@ export default function FreightSimulator() {
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>—</SelectItem>
-                  {filteredRegions.map((r: any) => (
+                  {filteredRegions.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
                       {r.region_name} {r.municipality ? `· ${r.municipality}/${r.state_code}` : ''}
                     </SelectItem>

@@ -10,13 +10,14 @@
  * 6. Tracker info stored in metadata only
  */
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
+import { isCronRequest } from "../_shared/cron-auth.ts";
+import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import {
   corsHeaders,
   buildAdminUrlCandidates,
   buildSsxUrlCandidates,
   readAccountConfig,
-  extractResponseItems,
   normalizeTrackerItem,
   pickVehicleIntegrationCode,
   pickTrackerCodeFromVehicle,
@@ -24,15 +25,10 @@ import {
   tryEndpointWithFallback,
   getAdminToken,
   ADMIN_BODY_CANDIDATES,
-  TRACKING_BODY_CANDIDATES,
-  ssxPost,
   logIntegration,
   logSsxCall,
   summarizeAttemptMatrix,
-  sanitize,
   getTenantRole,
-  classifyError,
-  isRetryable,
   type SsxErrorClass,
   type EndpointAttemptResult,
   type NormalizedUnit,
@@ -55,9 +51,7 @@ Deno.serve(async (req) => {
 
     let callerId: string | null = null;
 
-    const cronSecret = req.headers.get("x-agvlog-cron-secret");
-    const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
-    const isCron = !!(cronSecret && expectedCronSecret && cronSecret === expectedCronSecret);
+    const isCron = await isCronRequest(req, supabaseUrl, supabaseServiceKey);
 
     if (!isCron) {
       const authHeader = req.headers.get("Authorization");
@@ -93,6 +87,9 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "Forbidden: admin role required" }, 403);
       }
     }
+
+    const capabilityResponse = await requireIntegrationCapability(supabase, account.tenant_id, "ssx");
+    if (capabilityResponse) return capabilityResponse;
 
     const config = readAccountConfig(account);
     const settings = { ...config.settings };
@@ -258,7 +255,7 @@ Deno.serve(async (req) => {
         const plate = pickPlate(t);
         const trackerCode = pickTrackerCodeFromVehicle(t);
         if (vehicleCode) trackerEnrichmentByVehicleCode.set(vehicleCode, t);
-        if (plate) trackerEnrichmentByPlate.set(plate.replace(/[\s\-\.]/g, "").toUpperCase(), t);
+        if (plate) trackerEnrichmentByPlate.set(plate.replace(/[\s.-]/g, "").toUpperCase(), t);
         if (trackerCode) trackerEnrichmentByTrackerCode.set(trackerCode, t);
       }
     }
@@ -310,14 +307,14 @@ Deno.serve(async (req) => {
 
       if (plate && upsertedUnit) {
         // === DETERMINISTIC MATCHING: Find vehicle by exact normalized plate ===
-        const normalizedPlate = plate.replace(/[\s\-\.]/g, "").toUpperCase();
+        const normalizedPlate = plate.replace(/[\s.-]/g, "").toUpperCase();
         const { data: vehicleCandidates } = await supabase
           .from("vehicles").select("id, plate")
           .eq("tenant_id", account.tenant_id)
           .eq("active", true);
 
         const matchingVehicles = (vehicleCandidates || []).filter((v: any) =>
-          v.plate.replace(/[\s\-\.]/g, "").toUpperCase() === normalizedPlate
+          v.plate.replace(/[\s.-]/g, "").toUpperCase() === normalizedPlate
         );
 
         if (matchingVehicles.length > 1) {
@@ -476,7 +473,7 @@ function findTrackerEnrichment(
 
   // Priority 2: Match by normalized plate
   if (plate) {
-    const normalizedPlate = plate.replace(/[\s\-\.]/g, "").toUpperCase();
+    const normalizedPlate = plate.replace(/[\s.-]/g, "").toUpperCase();
     if (byPlate.has(normalizedPlate)) return byPlate.get(normalizedPlate);
   }
 

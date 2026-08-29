@@ -1,3 +1,4 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,7 +15,7 @@ import { toast } from '@/components/ui/sonner';
 import {
   useLoadControlList, useLoadDocuments, useUnloadingCharges, useImportBatches,
   useRegisterPayment, useMarkUnpaid, commitSpreadsheetImport, commitXmlImport,
-  PAYMENT_STATUS_LABELS, OPERATIONAL_STATUS_LABELS, BILLING_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS, OPERATIONAL_STATUS_LABELS,
   type LoadControlRow, type LoadControlFilters,
 } from '@/hooks/useLoadControl';
 import { useTenant } from '@/hooks/useTenant';
@@ -24,11 +25,14 @@ import { downloadLoadControlPdf, type LoadReportKind } from '@/lib/loadReports/l
 import { exportLoadControlCsv } from '@/lib/loadReports/loadControlCsv';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
+import { getErrorMessage } from '@/lib/errors';
+import type { ImportPreview } from '@/hooks/useLoadControl';
+import type { ReactNode } from 'react';
 
-const brl = (n: any) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const brl = (value: number | string | null | undefined) => 'R$ ' + Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = (v?: string | null) => v ? v.slice(0, 10).split('-').reverse().join('/') : '—';
 
-const STATUS_VARIANT: Record<string, any> = {
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   paid: 'default', partially_paid: 'secondary', unpaid: 'outline',
   overdue: 'destructive', disputed: 'destructive', cancelled: 'outline',
 };
@@ -62,7 +66,7 @@ export default function LoadControl() {
     return acc;
   }, [rows]);
 
-  const set = (k: keyof LoadControlFilters, v: any) => setFilters(f => ({ ...f, [k]: v === '' ? null : v }));
+  const set = (key: keyof LoadControlFilters, value: string | null) => setFilters(filters => ({ ...filters, [key]: value === '' ? null : value }));
 
   const doSearch = () => setApplied(filters);
   const doClear = () => { setFilters({}); setApplied({}); };
@@ -80,13 +84,15 @@ export default function LoadControl() {
         paymentDate: payForm.date, method: payForm.method, notes: payForm.notes,
       });
       toast.success('Pagamento registrado'); setPayDlg(null);
-    } catch (e: any) { toast.error(e.message || 'Falha'); }
+    } catch (error: unknown) { toast.error(getErrorMessage(error, 'Falha')); }
   };
 
   const [reportKind, setReportKind] = useState<LoadReportKind>('summary');
-  const runReport = () => {
+  const runReport = async () => {
     if (!rows.length) { toast.error('Sem dados no filtro atual.'); return; }
-    if (rows.length > 5000 && !window.confirm(`${rows.length} linhas. Continuar?`)) return;
+    if (rows.length > 5000 && !await confirmAction(`${rows.length} linhas serão incluídas. Continuar?`, {
+      title: 'Gerar relatório extenso',
+    })) return;
     downloadLoadControlPdf({
       kind: reportKind, rows, carrierName: currentTenant?.name || 'Transportadora',
       company: toCompanyPdfInfo(companyProfile, currentTenant?.name),
@@ -214,7 +220,7 @@ export default function LoadControl() {
                   <TableHead>Importados</TableHead><TableHead>Duplicados</TableHead><TableHead>Erros</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {batches.map((b: any) => (
+                  {batches.map((b) => (
                     <TableRow key={b.id}>
                       <TableCell>{new Date(b.created_at).toLocaleString('pt-BR')}</TableCell>
                       <TableCell className="text-xs">{b.file_name}</TableCell>
@@ -239,7 +245,7 @@ export default function LoadControl() {
           <Card><CardContent className="p-3 flex gap-2 items-end">
             <div className="flex-1 max-w-sm">
               <Label className="text-xs">Relatório</Label>
-              <Select value={reportKind} onValueChange={(v: any) => setReportKind(v)}>
+              <Select value={reportKind} onValueChange={(value) => setReportKind(value as LoadReportKind)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="summary">Resumo de Cargas Recebidas</SelectItem>
@@ -302,7 +308,7 @@ const REPORT_TITLES: Record<LoadReportKind, string> = {
   by_client: 'Por Cliente', by_city: 'Por Cidade', unloading: 'Descargas',
 };
 
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: 'warning' | 'destructive' }) {
+function Kpi({ label, value, tone }: { label: string; value: ReactNode; tone?: 'warning' | 'destructive' }) {
   return (
     <Card><CardContent className="p-3">
       <div className="text-xs text-muted-foreground">{label}</div>
@@ -313,7 +319,7 @@ function Kpi({ label, value, tone }: { label: string; value: any; tone?: 'warnin
 
 function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<any>(null);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
 
   const onXlsx = async (file: File) => {
     if (!tenantId) return;
@@ -324,7 +330,7 @@ function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => vo
       const { preview: p } = await commitSpreadsheetImport(tenantId, file.name, parsed);
       setPreview(p); onDone();
       toast.success('Planilha importada');
-    } catch (e: any) { toast.error(e.message || 'Falha ao importar'); }
+    } catch (error: unknown) { toast.error(getErrorMessage(error, 'Falha ao importar')); }
     finally { setBusy(false); }
   };
 
@@ -344,7 +350,7 @@ function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => vo
       const { preview: p } = await commitXmlImport(tenantId, `xmls-${files.length}`, docs);
       setPreview(p); onDone();
       toast.success('XMLs importados');
-    } catch (e: any) { toast.error(e.message || 'Falha'); }
+    } catch (error: unknown) { toast.error(getErrorMessage(error, 'Falha')); }
     finally { setBusy(false); }
   };
 
@@ -367,7 +373,7 @@ function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => vo
       {preview && (
         <div className="text-xs bg-muted p-2 rounded">
           <div>Cargas novas: <b>{preview.newLoads}</b> • Atualizadas: <b>{preview.updatedLoads}</b> • Documentos: <b>{preview.newDocuments}</b> • Duplicados: <b>{preview.duplicated}</b> • Pendências: <b>{preview.pending}</b> • Erros: <b>{preview.errors.length}</b></div>
-          {preview.errors.slice(0, 5).map((e: any, i: number) => <div key={i} className="text-destructive">• {e.message}</div>)}
+          {preview.errors.slice(0, 5).map((error, index) => <div key={index} className="text-destructive">• {error.message}</div>)}
         </div>
       )}
     </CardContent></Card>
@@ -456,7 +462,7 @@ function LoadDetailPanel({ row }: { row: LoadControlRow }) {
           <Table>
             <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Número</TableHead><TableHead>Emitente</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
             <TableBody>
-              {docs.map((d: any) => (
+              {docs.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell>{d.document_type}</TableCell>
                   <TableCell>{d.document_number}</TableCell>

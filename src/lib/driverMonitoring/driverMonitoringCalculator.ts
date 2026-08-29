@@ -27,7 +27,7 @@ export interface MonitorLike {
   actual_returned_at?: string | null;
   status?: string | null;
   last_update_at?: string | null;
-  remaining_cities?: any[] | null;
+  remaining_cities?: unknown[] | null;
   current_city?: string | null;
   notes?: string | null;
 }
@@ -92,7 +92,7 @@ export function calculateDriverStatus(
 export function parseRemainingCities(text: string | null | undefined): string[] {
   if (!text) return [];
   return String(text)
-    .split(/[\n;,\/•\-–]| e |\|/i)
+    .split(/[\n;,/•–-]| e |\|/i)
     .map((s) => s.trim())
     .filter((s) => s.length > 1 && !/^\d+$/.test(s));
 }

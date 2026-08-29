@@ -1,1 +1,0 @@
-DELETE FROM fiscal_documents WHERE status = 'confirmed' AND document_type = 'inbound' AND load_id IS NULL;

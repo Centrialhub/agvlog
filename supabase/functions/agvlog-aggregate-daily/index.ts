@@ -1,10 +1,6 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-agvlog-cron-secret",
-};
+import { createClient } from "@supabase/supabase-js";
+import { isCronRequest } from "../_shared/cron-auth.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -18,9 +14,7 @@ Deno.serve(async (req) => {
 
     let callerId: string | null = null;
 
-    const cronSecret = req.headers.get("x-agvlog-cron-secret");
-    const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
-    const isCron = cronSecret && expectedCronSecret && cronSecret === expectedCronSecret;
+    const isCron = await isCronRequest(req, supabaseUrl, serviceKey);
 
     if (!isCron) {
       const authHeader = req.headers.get("Authorization");

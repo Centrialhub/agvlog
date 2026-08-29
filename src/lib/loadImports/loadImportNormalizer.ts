@@ -10,10 +10,10 @@ export type FinancialStatus =
   | 'cancelled';
 
 /** Split "45671/45672;45673" into ["45671","45672","45673"]. Empty in => []. */
-export function splitMultiValue(v: string | number | null | undefined): string[] {
+export function splitMultiValue(v: unknown): string[] {
   if (v == null) return [];
   return String(v)
-    .split(/[;/\|,\s]+/g)
+    .split(/[;/|,\s]+/g)
     .map(s => s.trim())
     .filter(Boolean);
 }
@@ -50,7 +50,7 @@ export function excelSerialToIso(v: unknown): string | null {
 /** Try to extract a due date ("PREVISÃO PAGAMENTO DIA 23/01/2026") from legacy STATUS text. */
 export function extractLegacyExpectedPayment(text: string | null | undefined): string | null {
   if (!text) return null;
-  const m = String(text).match(/(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})/g);
+  const m = String(text).match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/g);
   if (!m || !m.length) return null;
   // Take the last date in the string (usually the payment forecast)
   const last = m[m.length - 1];
@@ -60,7 +60,7 @@ export function extractLegacyExpectedPayment(text: string | null | undefined): s
 /** Try to extract a "closed at" date ("FECHADO 08/01"). Returns YYYY-MM-DD or null. */
 export function extractLegacyClosedDate(text: string | null | undefined, fallbackYear = new Date().getFullYear()): string | null {
   if (!text) return null;
-  const m = /FECHAD[OA]\s+(\d{1,2})[\/\.\-](\d{1,2})(?:[\/\.\-](\d{2,4}))?/i.exec(String(text));
+  const m = /FECHAD[OA]\s+(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?/i.exec(String(text));
   if (!m) return null;
   const dd = m[1].padStart(2, '0');
   const mm = m[2].padStart(2, '0');
@@ -72,7 +72,7 @@ export function extractLegacyClosedDate(text: string | null | undefined, fallbac
 export function toNumber(v: unknown): number {
   if (v == null || v === '') return 0;
   if (typeof v === 'number') return isFinite(v) ? v : 0;
-  const s = String(v).replace(/[^\d,.\-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+  const s = String(v).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
   const n = parseFloat(s);
   return isFinite(n) ? n : 0;
 }

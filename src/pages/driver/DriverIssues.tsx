@@ -19,7 +19,7 @@ import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages'
 import { format } from 'date-fns';
 import { OCCURRENCE_TEMPLATES, getTemplateFields, formatOccurrenceReport } from '@/lib/occurrenceTemplate';
 import { EVENT_TYPE_LABELS, OperationalEventType } from '@/hooks/useOperationalEvents';
-import { Copy } from 'lucide-react';
+import type { Tables } from '@/integrations/supabase/types';
 
 // Tipos com modelo padronizado (texto pronto para o fornecedor) + tipos genéricos para casos do dia-a-dia.
 const TEMPLATE_TYPES = Object.keys(OCCURRENCE_TEMPLATES) as OperationalEventType[];
@@ -43,7 +43,7 @@ export default function DriverIssues() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<{ event_type: string; severity: string; description: string; details: Record<string, any> }>({
+  const [form, setForm] = useState<{ event_type: string; severity: string; description: string; details: Record<string, unknown> }>({
     event_type: 'missing_goods', severity: 'medium', description: '', details: {},
   });
 
@@ -81,7 +81,7 @@ export default function DriverIssues() {
 
   // Realtime: refletir mudanças (severidade, status, novas ocorrências) sem reabrir a tela.
   useEffect(() => {
-    if (!driver?.id) return;
+    if (!driver?.id) return undefined;
     const channel = supabase
       .channel(`driver_issues_${driver.id}`)
       .on(
@@ -109,8 +109,8 @@ export default function DriverIssues() {
           _event_type: form.event_type,
           _description: description || '',
           _severity: form.severity,
-          _stop_id: form.details.stop_id || null,
-          _client_id: form.details.client_id || null,
+          _stop_id: typeof form.details.stop_id === 'string' ? form.details.stop_id : undefined,
+          _client_id: typeof form.details.client_id === 'string' ? form.details.client_id : undefined,
         });
         
         if (error) {
@@ -118,9 +118,9 @@ export default function DriverIssues() {
           throw error;
         }
         return data;
-      } catch (err: any) {
-        console.error('[DriverIssues] Mutation error:', err);
-        throw err;
+      } catch (error: unknown) {
+        console.error('[DriverIssues] Mutation error:', error);
+        throw error;
       }
     },
     onSuccess: () => {
@@ -129,11 +129,15 @@ export default function DriverIssues() {
       setForm({ event_type: 'missing_goods', severity: 'medium', description: '', details: {} });
       qc.invalidateQueries({ queryKey: ['driver_operational_events'] });
     },
-    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+    onError: (error: unknown) => toast({
+      title: 'Erro',
+      description: error instanceof Error ? error.message : 'Não foi possível registrar a ocorrência.',
+      variant: 'destructive',
+    }),
   });
 
   const effectiveEvents = driver ? events : [];
-  const [chatEvent, setChatEvent] = useState<any | null>(null);
+  const [chatEvent, setChatEvent] = useState<Tables<'operational_events'> | null>(null);
 
   const severityColors: Record<string, string> = {
     low: 'bg-muted text-muted-foreground',
@@ -143,7 +147,14 @@ export default function DriverIssues() {
 
   const templateFields = getTemplateFields(form.event_type);
   const previewText = formatOccurrenceReport(form.event_type, form.details);
-  const setDetail = (k: string, v: any) => setForm(f => ({ ...f, details: { ...f.details, [k]: v } }));
+  const setDetail = (key: string, value: unknown) => setForm((current) => ({
+    ...current,
+    details: { ...current.details, [key]: value },
+  }));
+  const detailText = (key: string): string => {
+    const value = form.details[key];
+    return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+  };
   const allRequiredFilled = templateFields.filter(f => f.required).every(f => {
     const v = form.details[f.key];
     return v !== undefined && v !== null && String(v).trim() !== '';
@@ -164,9 +175,9 @@ export default function DriverIssues() {
                 <div>
                   <Label className="text-xs">Parada / Cliente (opcional)</Label>
                   <Select 
-                    value={form.details.stop_id || "none"} 
+                    value={detailText('stop_id') || "none"}
                     onValueChange={v => {
-                      const stop = stops.find((s: any) => s.id === v);
+                      const stop = stops.find((candidate) => candidate.id === v);
                       setForm(f => ({ 
                         ...f, 
                         details: { 
@@ -183,7 +194,7 @@ export default function DriverIssues() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Nenhuma específica</SelectItem>
-                      {stops.map((s: any) => (
+                      {stops.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.stop_order}. {s.clients?.company_name || s.destination}
                         </SelectItem>
@@ -224,20 +235,20 @@ export default function DriverIssues() {
                           rows={2}
                           className="text-sm"
                           placeholder={f.placeholder}
-                          value={form.details[f.key] || ''}
+                          value={detailText(f.key)}
                           onChange={e => setDetail(f.key, e.target.value)}
                         />
                       ) : f.type === 'select' ? (
-                        <Select value={form.details[f.key] || ''} onValueChange={v => setDetail(f.key, v)}>
+                        <Select value={detailText(f.key)} onValueChange={v => setDetail(f.key, v)}>
                           <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                           <SelectContent>
                             {(f.options || []).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       ) : f.type === 'date' ? (
-                        <Input type="date" className="h-9 text-sm" value={form.details[f.key] || ''} onChange={e => setDetail(f.key, e.target.value)} />
+                        <Input type="date" className="h-9 text-sm" value={detailText(f.key)} onChange={e => setDetail(f.key, e.target.value)} />
                       ) : (
-                        <Input className="h-9 text-sm" placeholder={f.placeholder} value={form.details[f.key] || ''} onChange={e => setDetail(f.key, e.target.value)} />
+                        <Input className="h-9 text-sm" placeholder={f.placeholder} value={detailText(f.key)} onChange={e => setDetail(f.key, e.target.value)} />
                       )}
                     </div>
                   ))}
@@ -282,10 +293,22 @@ export default function DriverIssues() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {effectiveEvents.map((evt: any) => {
+          {effectiveEvents.map((evt) => {
             const typeLabel = EVENT_TYPE_LABELS[evt.event_type as OperationalEventType] || ISSUE_TYPES.find(t => t.value === evt.event_type)?.label || evt.event_type;
             return (
-              <Card key={evt.id} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setChatEvent(evt)}>
+              <Card
+                key={evt.id}
+                className="cursor-pointer hover:bg-muted/30 transition-colors"
+                role="button"
+                tabIndex={0}
+                onClick={() => setChatEvent(evt)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setChatEvent(evt);
+                  }
+                }}
+              >
                 <CardContent className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">{typeLabel}</p>
@@ -317,7 +340,11 @@ export default function DriverIssues() {
   );
 }
 
-function DriverChatSheet({ event, driverName, onClose }: { event: any | null; driverName: string; onClose: () => void }) {
+function DriverChatSheet({ event, driverName, onClose }: {
+  event: Tables<'operational_events'> | null;
+  driverName: string;
+  onClose: () => void;
+}) {
   const isOpen = !!event;
   return (
     <Sheet open={isOpen} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -365,7 +392,7 @@ function DriverChat({ eventId, driverName }: { eventId: string; driverName: stri
             Aguardando mensagens da equipe de operação.
           </div>
         ) : (
-          messages.map((m: any) => {
+          messages.map((m) => {
             const fromDriver = m.sender_role === 'driver';
             return (
               <div key={m.id} className={`flex ${fromDriver ? 'justify-end' : 'justify-start'}`}>

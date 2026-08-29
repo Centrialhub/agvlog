@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useFleetState, stateLabel, formatStoppedDuration } from '@/hooks/useVehiclesState';
+import { useFleetState } from '@/hooks/useVehiclesState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Truck, TruckIcon, AlertTriangle, Clock, Route, MapPin, Gauge, Zap, Activity } from 'lucide-react';
@@ -21,25 +21,12 @@ export default function Dashboard() {
     queryKey: ['dashboard_vehicles', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return 0;
-      const { count, error } = await supabase.from('vehicles').select('*', { count: 'exact', head: true })
+      const { count, error } = await supabase.from('vehicles').select('id', { count: 'exact', head: true })
         .eq('tenant_id', currentTenant.id).eq('active', true);
       if (error) throw error;
       return count || 0;
     },
     enabled: !!currentTenant,
-  });
-
-  const { data: positions = [] } = useQuery({
-    queryKey: ['dashboard_positions', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('positions_last').select('vehicle_id, captured_at, speed')
-        .eq('tenant_id', currentTenant.id);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant,
-    refetchInterval: 30_000,
   });
 
   const { data: openAlerts = 0 } = useQuery({
@@ -98,7 +85,8 @@ export default function Dashboard() {
     queryKey: ['dashboard_vehicles_list', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase.from('vehicles').select('id, plate').eq('tenant_id', currentTenant.id).eq('active', true);
+      const { data, error } = await supabase.from('vehicles').select('id, plate').eq('tenant_id', currentTenant.id).eq('active', true);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -153,7 +141,7 @@ export default function Dashboard() {
   // Aggregate weekly data by day
   const dailyChartData = useMemo(() => {
     const byDay: Record<string, { day: string; km: number; trips: number; overspeed: number }> = {};
-    for (const m of weeklyMetrics as any[]) {
+    for (const m of weeklyMetrics) {
       if (!byDay[m.day]) byDay[m.day] = { day: m.day, km: 0, trips: 0, overspeed: 0 };
       byDay[m.day].km += m.km_estimated || 0;
       byDay[m.day].trips += m.trips_count || 0;
@@ -169,9 +157,9 @@ export default function Dashboard() {
   // Km by vehicle chart
   const vehicleKmData = useMemo(() => {
     const plateMap: Record<string, string> = {};
-    for (const v of vehiclesForChart as any[]) plateMap[v.id] = v.plate;
+    for (const vehicle of vehiclesForChart) plateMap[vehicle.id] = vehicle.plate;
     const byVehicle: Record<string, number> = {};
-    for (const m of weeklyMetrics as any[]) {
+    for (const m of weeklyMetrics) {
       const plate = plateMap[m.vehicle_id] || m.vehicle_id?.slice(0, 8);
       if (!plate) continue;
       byVehicle[plate] = (byVehicle[plate] || 0) + (m.km_estimated || 0);
@@ -276,7 +264,7 @@ export default function Dashboard() {
           <CardContent className="space-y-2">
             {recentAlerts.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Nenhum alerta</p>
-            ) : (recentAlerts as any[]).map((a: any) => (
+            ) : recentAlerts.map((a) => (
               <div key={a.id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0">
                 <div>
                   <span className="font-medium text-foreground">{a.vehicles?.plate || '—'}</span>
@@ -294,7 +282,7 @@ export default function Dashboard() {
           <CardContent className="space-y-2">
             {recentEvents.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Nenhum evento nas últimas 24h</p>
-            ) : (recentEvents as any[]).map((ev: any) => (
+            ) : recentEvents.map((ev) => (
               <div key={ev.id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0">
                 <div>
                   <span className="font-medium text-foreground">{ev.vehicles?.plate || '—'}</span>
@@ -313,14 +301,14 @@ export default function Dashboard() {
           <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Clock className="h-4 w-4 text-destructive" />Veículos Offline</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {offlineVehicles.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Todos os veículos estão online</p>
-            ) : offlineVehicles.map((s: any) => {
-              const v = vehiclesForChart.find((v: any) => v.id === s.vehicle_id) as any;
+              <p className="text-sm text-muted-foreground py-4 text-center">Nenhum veículo está offline</p>
+            ) : offlineVehicles.map((state) => {
+              const vehicle = vehiclesForChart.find((candidate) => candidate.id === state.vehicle_id);
               return (
-                <div key={s.vehicle_id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0 cursor-pointer hover:bg-accent/50 -mx-2 px-2 rounded" onClick={() => navigate(`/vehicles/${s.vehicle_id}`)}>
-                  <span className="font-medium text-foreground">{v?.plate || s.vehicle_id.slice(0, 8)}</span>
+                <div key={state.vehicle_id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0 cursor-pointer hover:bg-accent/50 -mx-2 px-2 rounded" onClick={() => navigate(`/vehicles/${state.vehicle_id}`)}>
+                  <span className="font-medium text-foreground">{vehicle?.plate || state.vehicle_id.slice(0, 8)}</span>
                   <span className="text-xs text-muted-foreground">
-                    {s.last_position_at ? formatDistanceToNow(new Date(s.last_position_at), { addSuffix: true, locale: ptBR }) : 'Sem posição'}
+                    {state.last_position_at ? formatDistanceToNow(new Date(state.last_position_at), { addSuffix: true, locale: ptBR }) : 'Sem posição'}
                   </span>
                 </div>
               );

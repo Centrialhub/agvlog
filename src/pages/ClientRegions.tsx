@@ -1,3 +1,4 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,11 +34,20 @@ import { Plus, Search, Pencil, Trash2, MapPin, Upload } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import * as XLSX from 'xlsx';
 import { useRef } from 'react';
+import type { Tables, TablesInsert } from '@/integrations/supabase/types';
 
 const UF_OPTIONS = [
   'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
   'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO',
 ];
+
+type RegionRow = Tables<'client_regions'> & {
+  clients: { company_name: string } | null;
+};
+type SpreadsheetRow = Record<string, unknown>;
+
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
 
 export default function ClientRegions() {
   const { currentTenant } = useTenant();
@@ -65,12 +75,13 @@ export default function ClientRegions() {
     queryKey: ['clients_list', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('clients')
         .select('id, company_name')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
         .order('company_name');
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -87,7 +98,7 @@ export default function ClientRegions() {
         .order('region_name')
         .order('municipality');
       if (error) throw error;
-      return data || [];
+      return (data || []) as RegionRow[];
     },
     enabled: !!currentTenant,
   });
@@ -107,7 +118,8 @@ export default function ClientRegions() {
         const { error } = await supabase
           .from('client_regions')
           .update(record)
-          .eq('id', values.id);
+          .eq('id', values.id)
+          .eq('tenant_id', currentTenant.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
@@ -121,19 +133,22 @@ export default function ClientRegions() {
       toast.success(editingId ? 'Região atualizada' : 'Região cadastrada');
       resetForm();
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao salvar região')),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('client_regions').delete().eq('id', id);
+      if (!currentTenant) throw new Error('Sem tenant');
+      const { error } = await supabase.from('client_regions').delete()
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client_regions'] });
       toast.success('Região removida');
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao remover região')),
   });
 
   async function handleFileImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -145,7 +160,7 @@ export default function ClientRegions() {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rowsRaw: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const rowsRaw = XLSX.utils.sheet_to_json<SpreadsheetRow>(ws, { defval: '' });
       if (rowsRaw.length === 0) {
         toast.error('Planilha vazia');
         return;
@@ -154,9 +169,9 @@ export default function ClientRegions() {
       // Normalize headers (case/accent insensitive)
       const norm = (s: string) =>
         s.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-      const cleanCell = (v: any) => (v ?? '').toString().replace(/\s+/g, ' ').trim();
-      const cleanUpper = (v: any) => cleanCell(v).toUpperCase();
-      const pick = (row: any, keys: string[]) => {
+      const cleanCell = (value: unknown) => String(value ?? '').replace(/\s+/g, ' ').trim();
+      const cleanUpper = (value: unknown) => cleanCell(value).toUpperCase();
+      const pick = (row: SpreadsheetRow, keys: string[]) => {
         for (const k of Object.keys(row)) {
           if (keys.includes(norm(k))) return cleanCell(row[k]);
         }
@@ -205,13 +220,13 @@ export default function ClientRegions() {
 
       // Build client name -> id map (case-insensitive, trimmed)
       const clientMap = new Map<string, string>();
-      clients.forEach((c: any) => clientMap.set(cleanUpper(c.company_name), c.id));
+      clients.forEach((c) => clientMap.set(cleanUpper(c.company_name), c.id));
 
       // Existing keys to dedupe (against DB)
       const keyOf = (cli: string | null, payer: string | null, muni: string, uf: string) =>
         `${muni}|${uf}|${payer || ''}|${cli || ''}`.toUpperCase();
       const existing = new Set(
-        regions.map((r: any) =>
+        regions.map((r) =>
           keyOf(r.client_id, r.payer_group, r.municipality, r.state_code),
         ),
       );
@@ -222,7 +237,7 @@ export default function ClientRegions() {
       let dupExisting = 0;
       let conflicts = 0;
 
-      const records: any[] = [];
+      const records: TablesInsert<'client_regions'>[] = [];
       for (const r of parsed) {
         let clientId: string | null = null;
         if (r.client) {
@@ -263,7 +278,7 @@ export default function ClientRegions() {
         `Pré-validação: ${parsed.length} válidas | ${dupInFile} duplicadas no arquivo | ${dupExisting} já no banco | ` +
         `${conflicts} conflitos | ${missingClients.size} clientes não encontrados | ${invalidUf} UFs inválidas | ${missingFields} sem campos obrigatórios.\n\n` +
         `Importar ${records.length} novas regiões?`;
-      if (!confirm(summary)) return;
+      if (!await confirmAction(summary, { title: 'Importar regiões', confirmLabel: 'Importar' })) return;
 
       if (records.length === 0) {
         toast.info('Nada para importar — todas já cadastradas ou inválidas');
@@ -296,8 +311,8 @@ export default function ClientRegions() {
         if (chunkErrors.length > 0) console.warn('[Import Regiões] Chunk errors:', chunkErrors);
       }
       qc.invalidateQueries({ queryKey: ['client_regions'] });
-    } catch (e: any) {
-      toast.error(`Erro ao importar: ${e.message}`);
+    } catch (error: unknown) {
+      toast.error(`Erro ao importar: ${errorMessage(error, 'falha desconhecida')}`);
     } finally {
       setImporting(false);
     }
@@ -309,7 +324,7 @@ export default function ClientRegions() {
     setDialogOpen(false);
   }
 
-  function openEdit(r: any) {
+  function openEdit(r: RegionRow) {
     setEditingId(r.id);
     setForm({
       client_id: r.client_id || '',
@@ -321,7 +336,7 @@ export default function ClientRegions() {
     setDialogOpen(true);
   }
 
-  const filtered = regions.filter((r: any) => {
+  const filtered = regions.filter((r) => {
     const clientName = r.clients?.company_name || '';
     if (filterRegion && !r.region_name.toLowerCase().includes(filterRegion.toLowerCase())) return false;
     if (filterClient && !clientName.toLowerCase().includes(filterClient.toLowerCase())) return false;
@@ -370,7 +385,7 @@ export default function ClientRegions() {
                 <Select value={form.client_id} onValueChange={(v) => setForm({ ...form, client_id: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                   <SelectContent>
-                    {clients.map((c: any) => (
+                    {clients.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -519,7 +534,7 @@ export default function ClientRegions() {
                   <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma região encontrada</TableCell>
                 </TableRow>
               ) : (
-                filtered.map((r: any) => (
+                filtered.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="text-sm">{r.clients?.company_name || '*'}</TableCell>
                     <TableCell className="text-sm">{r.payer_group || '—'}</TableCell>
@@ -535,8 +550,8 @@ export default function ClientRegions() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-destructive"
-                          onClick={() => {
-                            if (confirm('Remover esta região?')) deleteMutation.mutate(r.id);
+                          onClick={async () => {
+                            if (await confirmAction('Remover esta região?', { title: 'Remover região', confirmLabel: 'Remover' })) deleteMutation.mutate(r.id);
                           }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />

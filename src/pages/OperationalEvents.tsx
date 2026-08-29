@@ -4,6 +4,7 @@ import {
   useOperationalEventsFiltered,
   EVENT_TYPES, EVENT_TYPE_LABELS, SEVERITY_LABELS, OperationalEvent,
 } from '@/hooks/useOperationalEvents';
+import type { OperationalEventsFilters } from '@/hooks/useOperationalEvents';
 import { useLoads } from '@/hooks/useLoads';
 import { useClients } from '@/hooks/useClients';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -33,9 +34,13 @@ import { useEffect, useRef } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell, BarChart, Bar, LabelList } from 'recharts';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
 import { useDriverMessages, useSendDriverMessage } from '@/hooks/useDriverMessages';
+
+const SEVERITY_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 import { useAuth } from '@/hooks/useAuth';
 import { formatOccurrenceReport } from '@/lib/occurrenceTemplate';
 import { Copy } from 'lucide-react';
+import type { Json } from '@/integrations/supabase/types';
+import type { JsonObject } from '@/lib/jsonTypes';
 
 const TYPE_COLORS: Record<string, string> = {
   missing_goods: '#ec4899',
@@ -74,6 +79,28 @@ const RESPONSIBILITY_MAP: Record<string, 'deposito' | 'transporte'> = {
 
 const RESP_COLORS = { transporte: 'hsl(var(--primary))', deposito: 'hsl(var(--destructive))' };
 const SEPARATION_LINES = ['PESADO', 'LEVEZA', 'FRACIONADO', 'MIUDEZA'] as const;
+type SeparationLine = typeof SEPARATION_LINES[number];
+type ResponsibilityFilter = 'all' | 'deposito' | 'transporte';
+
+function getErrorMessage(error: unknown, fallback = 'Erro desconhecido.'): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function jsonRecord(value: Json | null | undefined): JsonObject | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function reportDetail(event: OperationalEvent, ...keys: string[]): Json | undefined {
+  const details = jsonRecord(event.report_details);
+  for (const key of keys) {
+    if (details?.[key] !== undefined) return details[key];
+  }
+  return undefined;
+}
+
+function isSeparationLine(value: string): value is SeparationLine {
+  return SEPARATION_LINES.some((line) => line === value);
+}
 
 // Cores para o painel "Ocorrências por Motorista" (estilo TudoEntregue)
 const DRIVER_BAR_COLORS = {
@@ -86,7 +113,7 @@ const DRIVER_BAR_COLORS = {
 export default function OperationalEvents() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
-  const { data: events = [], isLoading, isError, error, refetch, isFetching } = useOperationalEvents();
+  const { data: events = [], error } = useOperationalEvents();
 
   // Scroll callback para o botão da torre
   const scrollToDetail = useCallback(() => {
@@ -98,7 +125,7 @@ export default function OperationalEvents() {
   const createEvent = useCreateOperationalEvent();
   const updateEvent = useUpdateOperationalEvent();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('open');
+  const [statusFilter, setStatusFilter] = useState<NonNullable<OperationalEventsFilters['status']>>('open');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [vehicleFilter, setVehicleFilter] = useState<string>('all');
@@ -110,8 +137,7 @@ export default function OperationalEvents() {
   const [impactMin, setImpactMin] = useState<string>('');
   const [impactMax, setImpactMax] = useState<string>('');
   const [hasImpactOnly, setHasImpactOnly] = useState(false);
-  const [respFilter, setRespFilter] = useState<'all' | 'deposito' | 'transporte'>('all');
-  const [hasChatOnly, setHasChatOnly] = useState(false);
+  const [respFilter, setRespFilter] = useState<ResponsibilityFilter>('all');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [driverPanelSearch, setDriverPanelSearch] = useState('');
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
@@ -126,7 +152,7 @@ export default function OperationalEvents() {
     isFetching: isTableFetching,
     refetch: refetchTable,
   } = useOperationalEventsFiltered({
-    status: statusFilter as any,
+    status: statusFilter,
     type: typeFilter,
     severity: severityFilter,
     vehicleId: vehicleFilter,
@@ -150,7 +176,9 @@ export default function OperationalEvents() {
         const p = JSON.parse(raw);
         if (p?.key && p?.dir) return { key: p.key as SortKey, dir: p.dir };
       }
-    } catch {}
+    } catch {
+      // Reverte para a ordenação padrão quando a preferência local é inválida.
+    }
     return { key: 'created_at', dir: 'desc' };
   };
   const initialSort = loadSort();
@@ -165,10 +193,14 @@ export default function OperationalEvents() {
 
   // Persistir escolha do usuário
   useEffect(() => {
-    try { localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify({ key: sortKey, dir: sortDir })); } catch {}
+    try { localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify({ key: sortKey, dir: sortDir })); } catch {
+      // A ordenação continua ativa na sessão mesmo sem storage local.
+    }
   }, [sortKey, sortDir]);
   useEffect(() => {
-    try { localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize)); } catch {}
+    try { localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize)); } catch {
+      // A paginação continua ativa na sessão mesmo sem storage local.
+    }
   }, [pageSize]);
 
   // ====== Presets de filtros (por usuário) ======
@@ -198,12 +230,15 @@ export default function OperationalEvents() {
   }, [PRESETS_KEY]);
   const persistPresets = (next: Preset[]) => {
     setCustomPresets(next);
-    try { localStorage.setItem(PRESETS_KEY, JSON.stringify(next)); } catch {}
+    try { localStorage.setItem(PRESETS_KEY, JSON.stringify(next)); } catch {
+      // Preserva o preset em memória quando a persistência local falha.
+    }
   };
   const applyPreset = (p: Preset) => {
     const f = p.filters;
     setSearch(f.search ?? '');
-    setStatusFilter(f.status ?? 'all');
+    const nextStatus = f.status ?? 'all';
+    setStatusFilter(nextStatus === 'open' || nextStatus === 'resolved' ? nextStatus : 'all');
     setTypeFilter(f.type ?? 'all');
     setSeverityFilter(f.severity ?? 'all');
     setVehicleFilter(f.vehicleId ?? 'all');
@@ -241,8 +276,8 @@ export default function OperationalEvents() {
     const fmt = opts.format || 'xlsx';
     // Aplica filtro por motorista (sobre a lista JÁ ordenada/filtrada)
     const baseRows = opts.driverName
-      ? (sorted as any[]).filter(e => (e.drivers?.name?.trim() || 'Sem motorista') === opts.driverName)
-      : (sorted as any[]);
+      ? sorted.filter(e => (e.drivers?.name?.trim() || 'Sem motorista') === opts.driverName)
+      : sorted;
     if (!baseRows.length) {
       toast({ title: 'Nada para exportar', description: 'Ajuste os filtros para gerar resultados.' });
       return;
@@ -256,7 +291,7 @@ export default function OperationalEvents() {
         'Quando', 'Tipo', 'Severidade', 'Status', 'Carga', 'Cliente', 'Motorista',
         'Veículo', 'Impacto (R$)', 'Descrição', 'Resolvido em',
       ];
-      const detailRows = baseRows.map((e: any) => [
+      const detailRows = baseRows.map((e) => [
         format(new Date(e.created_at), 'dd/MM/yyyy HH:mm'),
         EVENT_TYPE_LABELS[e.event_type as keyof typeof EVENT_TYPE_LABELS] || e.event_type || '',
         SEVERITY_LABELS[e.severity] || e.severity || '',
@@ -275,7 +310,7 @@ export default function OperationalEvents() {
         ? `ocorrencias_${opts.driverName.replace(/[^\p{L}\p{N}_-]+/gu, '_')}_${format(new Date(), 'yyyyMMdd_HHmm')}`
         : `ocorrencias_${format(new Date(), 'yyyyMMdd_HHmm')}`;
       if (fmt === 'csv') {
-        const escape = (v: any) => {
+        const escape = (v: unknown) => {
           const s = v == null ? '' : String(v);
           return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
         };
@@ -299,7 +334,7 @@ export default function OperationalEvents() {
       // ---------- Aba 2: Resumo por motorista (modelo da planilha) ----------
       // Buscar cargas no período para entregas/notas/valor por motorista
       const periodFrom = dateFrom || (baseRows.length
-        ? new Date(Math.min(...baseRows.map((e: any) => +new Date(e.created_at))))
+        ? new Date(Math.min(...baseRows.map((e) => +new Date(e.created_at))))
         : startOfMonth(new Date()));
       const periodTo = dateTo || new Date();
       const loadsByDriver: Record<string, { entregas: number; notas: number; valor: number }> = {};
@@ -313,7 +348,7 @@ export default function OperationalEvents() {
           .limit(5000);
         // Restringe por motorista quando exportando individual
         if (opts.driverName) {
-          const driverIds = Array.from(new Set(baseRows.map((e: any) => e.driver_id).filter(Boolean)));
+          const driverIds = Array.from(new Set(baseRows.map((e) => e.driver_id).filter((id): id is string => Boolean(id))));
           if (driverIds.length) lq = lq.in('driver_id', driverIds as string[]);
         }
         const { data: loadsRows } = await lq;
@@ -340,8 +375,8 @@ export default function OperationalEvents() {
         observacao: string;
       };
       const driverMap = new Map<string, Acc>();
-      const keyFor = (e: any) => e.driver_id || `__sem__:${e.drivers?.name || 'Sem motorista'}`;
-      for (const e of baseRows as any[]) {
+      const keyFor = (e: OperationalEvent) => e.driver_id || `__sem__:${e.drivers?.name || 'Sem motorista'}`;
+      for (const e of baseRows) {
         const k = keyFor(e);
         const cur: Acc = driverMap.get(k) || {
           name: e.drivers?.name || 'Sem motorista',
@@ -376,7 +411,7 @@ export default function OperationalEvents() {
       const periodLabel = `${format(periodFrom, 'dd/MM/yyyy')} a ${format(periodTo, 'dd/MM/yyyy')}`;
 
       // Cabeçalho mesclado em 3 linhas (modelo)
-      const aoa: any[][] = [];
+      const aoa: unknown[][] = [];
       aoa.push([`RESUMO DIVERGÊNCIAS — ${periodLabel}${opts.driverName ? ` — ${opts.driverName}` : ''}`]);
       aoa.push([]);
       // Linha 3: grupos
@@ -490,8 +525,8 @@ export default function OperationalEvents() {
       XLSX.writeFile(wb, `${baseName}.xlsx`);
 
       toast({ title: 'Relatório exportado', description: `${baseRows.length} ocorrência(s)${opts.driverName ? ` — ${opts.driverName}` : ''} em 2 abas.` });
-    } catch (err: any) {
-      toast({ title: 'Falha ao exportar', description: err?.message || 'Erro desconhecido.', variant: 'destructive' });
+    } catch (err: unknown) {
+      toast({ title: 'Falha ao exportar', description: getErrorMessage(err), variant: 'destructive' });
     } finally {
       setExporting(false);
     }
@@ -528,7 +563,7 @@ export default function OperationalEvents() {
 
   // Realtime sync para sincronização ida/volta com app do motorista
   useEffect(() => {
-    if (!currentTenant) return;
+    if (!currentTenant) return undefined;
     const channel = supabase
       .channel('operational_events_live')
       .on('postgres_changes',
@@ -569,7 +604,6 @@ export default function OperationalEvents() {
     });
   }, [tableEvents, search, respFilter]);
 
-  const SEVERITY_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
   const sorted = useMemo(() => {
     const arr = [...filtered];
     const dir = sortDir === 'asc' ? 1 : -1;
@@ -645,10 +679,10 @@ export default function OperationalEvents() {
     recent.forEach(e => { typeSet.add(e.event_type); totalsMap[e.event_type] = (totalsMap[e.event_type] || 0) + 1; });
     const types = Array.from(typeSet);
     const data = months.map(m => {
-      const row: any = { month: m.label };
+      const row: Record<string, string | number> = { month: m.label };
       types.forEach(t => { row[t] = 0; });
       recent.forEach(e => {
-        if (format(new Date(e.created_at), 'yyyy-MM') === m.key) row[e.event_type] = (row[e.event_type] || 0) + 1;
+        if (format(new Date(e.created_at), 'yyyy-MM') === m.key) row[e.event_type] = Number(row[e.event_type] || 0) + 1;
       });
       return row;
     });
@@ -665,15 +699,13 @@ export default function OperationalEvents() {
     src.forEach(e => {
       const r = RESPONSIBILITY_MAP[e.event_type] || 'transporte';
       resp[r]++;
-      const rawLine = (e.report_details as any)?.separation_line
-        || (e.report_details as any)?.linha_separacao
-        || (e.report_details as any)?.linha
+      const rawLine = reportDetail(e, 'separation_line', 'linha_separacao', 'linha')
         || '';
       const norm = String(rawLine).trim().toUpperCase();
-      if (SEPARATION_LINES.includes(norm as any)) sep[norm]++;
+      if (isSeparationLine(norm)) sep[norm]++;
       else if (norm) outros++;
     });
-    if (outros > 0) (sep as any).OUTROS = outros;
+    if (outros > 0) sep.OUTROS = outros;
     const respArr = [
       { name: 'TRANSPORTE', value: resp.transporte, key: 'transporte' as const },
       { name: 'DEPÓSITO', value: resp.deposito, key: 'deposito' as const },
@@ -756,21 +788,21 @@ export default function OperationalEvents() {
         load_id: form.load_id || null,
         client_id: form.client_id || null,
         driver_id: form.driver_id || null,
-      } as any);
+      });
       toast({ title: 'Ocorrência registrada' });
       setDialogOpen(false);
       setForm({ event_type: 'missing_goods', severity: 'medium', load_id: '', client_id: '', driver_id: '', description: '', financial_impact: 0 });
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      toast({ title: 'Erro', description: getErrorMessage(e), variant: 'destructive' });
     }
   };
 
   const handleResolve = async (evt: OperationalEvent) => {
     try {
-      await updateEvent.mutateAsync({ id: evt.id, resolved_at: new Date().toISOString(), resolution: 'Resolvido' } as any);
+      await updateEvent.mutateAsync({ id: evt.id, resolved_at: new Date().toISOString(), resolution: 'Resolvido' });
       toast({ title: 'Ocorrência resolvida' });
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      toast({ title: 'Erro', description: getErrorMessage(e), variant: 'destructive' });
     }
   };
 
@@ -918,7 +950,9 @@ export default function OperationalEvents() {
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Status</Label>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <Select value={statusFilter} onValueChange={(value) => {
+                    if (value === 'all' || value === 'open' || value === 'resolved') setStatusFilter(value);
+                  }}>
                     <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas</SelectItem>
@@ -953,7 +987,9 @@ export default function OperationalEvents() {
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Responsabilidade</Label>
-                  <Select value={respFilter} onValueChange={(v) => setRespFilter(v as any)}>
+                  <Select value={respFilter} onValueChange={(v) => {
+                    if (v === 'all' || v === 'deposito' || v === 'transporte') setRespFilter(v);
+                  }}>
                     <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas</SelectItem>
@@ -968,7 +1004,7 @@ export default function OperationalEvents() {
                     <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos</SelectItem>
-                      {vehicles.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
+                      {vehicles.map((v) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -978,7 +1014,7 @@ export default function OperationalEvents() {
                     <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent className="max-h-[300px]">
                       <SelectItem value="all">Todos</SelectItem>
-                      {drivers.map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                      {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -992,7 +1028,7 @@ export default function OperationalEvents() {
                     <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent className="max-h-[300px]">
                       <SelectItem value="all">Todos</SelectItem>
-                      {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                      {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1002,7 +1038,7 @@ export default function OperationalEvents() {
                     <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent className="max-h-[300px]">
                       <SelectItem value="all">Todas</SelectItem>
-                      {loads.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.load_number}</SelectItem>)}
+                      {loads.map((l) => <SelectItem key={l.id} value={l.id}>{l.load_number}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1124,7 +1160,7 @@ export default function OperationalEvents() {
                   <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
                   <Tooltip
                     contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                    formatter={(v: any, name: any) => [v, EVENT_TYPE_LABELS[name as keyof typeof EVENT_TYPE_LABELS] || name]}
+                    formatter={(value, name) => [value, EVENT_TYPE_LABELS[name as keyof typeof EVENT_TYPE_LABELS] || name]}
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v) => EVENT_TYPE_LABELS[v as keyof typeof EVENT_TYPE_LABELS] || v} />
                   {chartTypes.map(t => (
@@ -1182,7 +1218,7 @@ export default function OperationalEvents() {
                       key={`card-${t}`}
                       onClick={() => { setTypeFilter(active ? 'all' : t); scrollToDetail(); }}
                       className={`group relative rounded-lg border-2 bg-card p-3 text-left transition-all hover:shadow-md ${active ? 'shadow-md ring-2 ring-offset-1' : ''}`}
-                      style={{ borderColor: color, ...(active ? { ['--tw-ring-color' as any]: color } : {}) }}
+                      style={{ borderColor: color, ...(active ? { '--tw-ring-color': color } : {}) } as React.CSSProperties}
                       title={`Filtrar por ${EVENT_TYPE_LABELS[t as keyof typeof EVENT_TYPE_LABELS] || t}`}
                     >
                       <div className="flex items-baseline gap-2">
@@ -1237,7 +1273,7 @@ export default function OperationalEvents() {
                     </Pie>
                     <Tooltip
                       contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                      formatter={(v: any, n: any) => [`${v} (${((Number(v) / respTotal) * 100).toFixed(1)}%)`, n]}
+                      formatter={(value, name) => [`${value} (${((Number(value) / respTotal) * 100).toFixed(1)}%)`, name]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -1279,7 +1315,7 @@ export default function OperationalEvents() {
                     <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
                     <Tooltip
                       contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                      formatter={(v: any) => [`${v} ocorrência(s)`, 'Total']}
+                      formatter={(value) => [`${value} ocorrência(s)`, 'Total']}
                     />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {separationData.map((d, i) => (
@@ -1463,10 +1499,10 @@ export default function OperationalEvents() {
                               className="h-7 px-2 gap-1 text-[11px]"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const drvId = (driverEvents[0] as any)?.driver_id || (driverEvents[0] as any)?.drivers?.id;
+                                const drvId = driverEvents[0]?.driver_id || driverEvents[0]?.drivers?.id;
                                 if (drvId) setChatDriver({ id: drvId, name: r.name });
                               }}
-                              disabled={!((driverEvents[0] as any)?.driver_id || (driverEvents[0] as any)?.drivers?.id)}
+                              disabled={!(driverEvents[0]?.driver_id || driverEvents[0]?.drivers?.id)}
                               title="Abrir chat direto com o motorista (tempo real)"
                             >
                               <MessageSquare className="h-3 w-3" /> Chat
@@ -1635,7 +1671,9 @@ export default function OperationalEvents() {
             </div>
           </DialogContent>
         </Dialog>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(value) => {
+          if (value === 'all' || value === 'open' || value === 'resolved') setStatusFilter(value);
+        }}>
           <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas</SelectItem>
@@ -1661,7 +1699,7 @@ export default function OperationalEvents() {
           <SelectTrigger className="w-44"><SelectValue placeholder="Veículo" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os veículos</SelectItem>
-            {vehicles.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
+            {vehicles.map((v) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select
@@ -1760,7 +1798,7 @@ export default function OperationalEvents() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-foreground">Não foi possível carregar as ocorrências</p>
-                        <p className="text-xs text-muted-foreground mt-1">{(error as any)?.message || 'Erro desconhecido. Verifique sua conexão.'}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{getErrorMessage(error, 'Erro desconhecido. Verifique sua conexão.')}</p>
                       </div>
                       <Button size="sm" variant="outline" onClick={() => refetchTable()}>
                         <RefreshCw className="h-3.5 w-3.5 mr-2" /> Tentar novamente
@@ -1816,7 +1854,7 @@ export default function OperationalEvents() {
                   <TableCell><Badge variant="outline" className={severityColor(e.severity)}>{SEVERITY_LABELS[e.severity] || e.severity}</Badge></TableCell>
                   <TableCell className="text-sm">{e.loads?.load_number || '—'}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {(e.report_details as any)?.stop_order ? `Parada ${(e.report_details as any).stop_order}` : '—'}
+                    {reportDetail(e, 'stop_order') ? `Parada ${String(reportDetail(e, 'stop_order'))}` : '—'}
                   </TableCell>
                   <TableCell className="text-sm">{e.clients?.company_name || '—'}</TableCell>
                   <TableCell className="text-sm">{e.drivers?.name || '—'}</TableCell>
@@ -1938,7 +1976,7 @@ function EventDetailDrawer({ event, onClose, onResolve }: { event: OperationalEv
                 <InfoRow 
                   icon={<MapPinned className="h-3.5 w-3.5" />} 
                   label="Parada" 
-                  value={(event.report_details as any)?.stop_order ? `Parada ${(event.report_details as any).stop_order}` : '—'} 
+                  value={reportDetail(event, 'stop_order') ? `Parada ${String(reportDetail(event, 'stop_order'))}` : '—'}
                 />
                 <InfoRow icon={<Building2 className="h-3.5 w-3.5" />} label="Cliente" value={event.clients?.company_name || '—'} />
                 <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Motorista" value={event.drivers?.name || '—'} />
@@ -1981,7 +2019,7 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 
 function SupplierTextBlock({ event }: { event: OperationalEvent }) {
   const { toast } = useToast();
-  const text = formatOccurrenceReport(event.event_type, (event as any).report_details);
+  const text = formatOccurrenceReport(event.event_type, jsonRecord(event.report_details));
   if (!text) return null;
   const copy = async () => {
     try {

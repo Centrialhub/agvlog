@@ -7,7 +7,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ClipboardCheck, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
+import type { Json } from '@/integrations/supabase/types';
 
 const PRE_TRIP_ITEMS = [
   'Pneus em bom estado',
@@ -69,24 +70,28 @@ function ChecklistSection({
         const { error, data } = await supabase.rpc('driver_save_checklist', {
           _trip_id: tripId,
           _kind: kind,
-          _payload: { checked_items: Array.from(checked), total_items: items.length } as any,
-        } as any);
+          _payload: { checked_items: Array.from(checked), total_items: items.length },
+        });
         
         if (error) {
           console.error('[DriverChecklist] RPC error:', error);
           throw error;
         }
         return data;
-      } catch (err: any) {
-        console.error('[DriverChecklist] Mutation error:', err);
-        throw err;
+      } catch (error: unknown) {
+        console.error('[DriverChecklist] Mutation error:', error);
+        throw error;
       }
     },
     onSuccess: () => {
       toast({ title: 'Checklist salvo' });
       qc.invalidateQueries({ queryKey: ['driver_checklist_events'] });
     },
-    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+    onError: (error: unknown) => toast({
+      title: 'Erro',
+      description: error instanceof Error ? error.message : 'Não foi possível salvar o checklist.',
+      variant: 'destructive',
+    }),
   });
 
   const allChecked = checked.size === items.length;
@@ -154,7 +159,7 @@ export default function DriverChecklist() {
 
   // Realtime: se outro dispositivo salvar o checklist, refresca.
   useEffect(() => {
-    if (!trip?.id) return;
+    if (!trip?.id) return undefined;
     const channel = supabase
       .channel(`driver_checklist_${trip.id}`)
       .on(
@@ -170,10 +175,17 @@ export default function DriverChecklist() {
     };
   }, [trip?.id, qc]);
 
-  const lastPre = savedEvents.find((e: any) => e.event_type === 'checklist_pre');
-  const lastPost = savedEvents.find((e: any) => e.event_type === 'checklist_post');
-  const preChecked = new Set<number>((lastPre?.payload as any)?.checked_items || []);
-  const postChecked = new Set<number>((lastPost?.payload as any)?.checked_items || []);
+  const checkedItems = (payload: Json | null): number[] => {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return [];
+    const items = payload.checked_items;
+    return Array.isArray(items)
+      ? items.filter((item): item is number => typeof item === 'number')
+      : [];
+  };
+  const lastPre = savedEvents.find((event) => event.event_type === 'checklist_pre');
+  const lastPost = savedEvents.find((event) => event.event_type === 'checklist_post');
+  const preChecked = new Set<number>(checkedItems(lastPre?.payload ?? null));
+  const postChecked = new Set<number>(checkedItems(lastPost?.payload ?? null));
 
   return (
     <div className="space-y-4">

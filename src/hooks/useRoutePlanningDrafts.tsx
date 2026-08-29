@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import { useRef } from 'react';
+import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import type { RouteStopDraft, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
 
 export class DraftConflictError extends Error {
   constructor(public routeId: string, public expected: string | null, public actual: string | null) {
@@ -11,23 +13,21 @@ export class DraftConflictError extends Error {
   }
 }
 
-export interface RoutePlanningDraft {
-  id: string;
-  tenant_id: string;
-  name: string;
-  order_ids: string[] | null;
-  vehicle_id: string | null;
-  operational_route_id: string | null;
-  notes: string | null;
-  status: string;
-  converted_load_id: string | null;
-  created_at: string;
-  updated_at: string;
-  load_ids?: string[] | null;
-  driver_id?: string | null;
-  planned_start_at?: string | null;
-  route_config?: any;
+export type RoutePlanningDraft = Tables<'route_planning_drafts'>;
+
+export interface RoutePlanSnapshot {
+  loads?: Array<{ id: string }>;
+  load_ids?: string[];
+  stops?: RouteStopDraft[];
+  vehicle_id?: string;
+  driver_id?: string;
+  planned_start_at?: string;
+  sortMode?: RouteStopSortMode;
+  initial_transit_minutes?: number;
+  notes?: string;
 }
+
+const toJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 
 export function useRoutePlanningDrafts() {
   const { currentTenant } = useTenant();
@@ -60,10 +60,10 @@ export function useSavePlanSnapshot() {
   // Guarda otimista: rastreia updated_at conhecido por routeId.
   const versionsRef = useRef<Map<string, string>>(new Map());
   const mutation = useMutation({
-    mutationFn: async ({ routeId, name, snapshot }: { routeId: string; name: string; snapshot: any }) => {
+    mutationFn: async ({ routeId, name, snapshot }: { routeId: string; name: string; snapshot: RoutePlanSnapshot }) => {
       if (!currentTenant) return null;
       const loadIds: string[] = Array.isArray(snapshot?.loads)
-        ? snapshot.loads.map((l: any) => l.id).filter(Boolean)
+        ? snapshot.loads.map(load => load.id).filter(Boolean)
         : [];
       // 1. Leitura da versão atual no banco (se existir)
       const { data: existing, error: readErr } = await supabase
@@ -72,14 +72,14 @@ export function useSavePlanSnapshot() {
         .eq('id', routeId)
         .maybeSingle();
       if (readErr) throw readErr;
-      const dbVersion = (existing as any)?.updated_at ?? null;
+      const dbVersion = existing?.updated_at ?? null;
       const knownVersion = versionsRef.current.get(routeId) ?? null;
       // Só bloqueia se já rastreamos uma versão prévia e ela difere do banco.
       if (knownVersion && dbVersion && knownVersion !== dbVersion) {
         throw new DraftConflictError(routeId, knownVersion, dbVersion);
       }
       const nowIso = new Date().toISOString();
-      const payload: any = {
+      const payload: TablesInsert<'route_planning_drafts'> = {
         id: routeId,
         tenant_id: currentTenant.id,
         name,
@@ -89,18 +89,18 @@ export function useSavePlanSnapshot() {
         driver_id: snapshot?.driver_id || null,
         planned_start_at: snapshot?.planned_start_at || null,
         notes: snapshot?.notes || null,
-        route_config: snapshot,
+        route_config: toJson(snapshot),
         status: 'draft',
         created_by: user?.id,
         updated_at: nowIso,
       };
       const { data: saved, error } = await supabase
         .from('route_planning_drafts')
-        .upsert(payload as any, { onConflict: 'id' })
+        .upsert(payload, { onConflict: 'id' })
         .select('id, updated_at')
         .single();
       if (error) throw error;
-      const savedVersion = (saved as any)?.updated_at ?? nowIso;
+      const savedVersion = saved?.updated_at ?? nowIso;
       versionsRef.current.set(routeId, savedVersion);
       return routeId;
     },
@@ -123,25 +123,27 @@ export function useSaveDraft() {
       id?: string; name: string; orderIds: string[]; vehicleId?: string | null; notes?: string;
     }) => {
       if (id) {
-        const { data, error } = await supabase.from('route_planning_drafts').update({
+        const payload: TablesUpdate<'route_planning_drafts'> = {
           name,
-          order_ids: orderIds as any,
+          order_ids: orderIds,
           vehicle_id: vehicleId || null,
           notes: notes || null,
           updated_at: new Date().toISOString(),
-        } as any).eq('id', id).select().single();
+        };
+        const { data, error } = await supabase.from('route_planning_drafts').update(payload).eq('id', id).select().single();
         if (error) throw error;
         return data;
       } else {
-        const { data, error } = await supabase.from('route_planning_drafts').insert({
+        const payload: TablesInsert<'route_planning_drafts'> = {
           tenant_id: currentTenant!.id,
           name,
-          order_ids: orderIds as any,
+          order_ids: orderIds,
           vehicle_id: vehicleId || null,
           notes: notes || null,
           status: 'draft',
           created_by: user?.id,
-        } as any).select().single();
+        };
+        const { data, error } = await supabase.from('route_planning_drafts').insert(payload).select().single();
         if (error) throw error;
         return data;
       }

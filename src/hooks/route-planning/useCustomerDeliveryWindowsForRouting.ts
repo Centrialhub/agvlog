@@ -22,12 +22,12 @@ export function useCustomerDeliveryWindowsForRouting(clientIds: string[]) {
         .eq('active', true);
       if (error) throw error;
       const byClient = new Map<string, CustomerWindow>();
-      (data || []).forEach((w: any) => {
-        if (!byClient.has(w.client_id)) {
-          byClient.set(w.client_id, {
-            client_id: w.client_id,
-            start_time: String(w.start_time).slice(0, 5),
-            end_time: String(w.end_time).slice(0, 5),
+      (data || []).forEach((window) => {
+        if (!byClient.has(window.client_id)) {
+          byClient.set(window.client_id, {
+            client_id: window.client_id,
+            start_time: String(window.start_time).slice(0, 5),
+            end_time: String(window.end_time).slice(0, 5),
           });
         }
       });

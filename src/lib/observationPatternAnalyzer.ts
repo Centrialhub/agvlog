@@ -175,7 +175,7 @@ export function analyzeObservations(
 
   // 2) Tokens-chave: palavra alfa antes de número/alfa-numérico
   // Capturamos: <palavra>(opt separadores)<valor>
-  const KEYWORD_VALUE_RE = /([a-zà-úç]{3,25})\s*[:\s\-#nº°.]{0,6}\s*([a-z0-9][a-z0-9\-\/]{1,30})/gi;
+  const KEYWORD_VALUE_RE = /([a-zà-úç]{3,25})\s*[:\s#nº°.-]{0,6}\s*([a-z0-9][a-z0-9/-]{1,30})/gi;
 
   type KAcc = {
     keyword: string;

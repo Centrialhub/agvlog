@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { Database, Json } from '@/integrations/supabase/types';
 
 export interface Client {
   id: string;
@@ -9,8 +10,8 @@ export interface Client {
   company_name: string;
   legal_name: string | null;
   tax_id: string | null;
-  contacts: any[];
-  addresses: any[];
+  contacts: Json | null;
+  addresses: Json | null;
   service_notes: string | null;
   payment_notes: string | null;
   active: boolean;
@@ -60,6 +61,124 @@ export interface Client {
   address_city_ibge_code?: string | null;
 }
 
+export type CreateClientInput = Omit<
+  Database['public']['Tables']['clients']['Insert'],
+  'tenant_id' | 'created_by'
+>;
+export type UpdateClientInput = Omit<
+  Database['public']['Tables']['clients']['Update'],
+  'id' | 'tenant_id' | 'updated_by' | 'updated_at'
+> & { id: string };
+
+export type ClientKindFilter = 'all' | 'client' | 'supplier' | 'both';
+
+interface ClientPageInput {
+  page: number;
+  pageSize: number;
+  search?: string;
+  kind?: ClientKindFilter;
+}
+
+export interface ClientPage {
+  rows: Client[];
+  totalCount: number;
+}
+
+function safePostgrestSearch(input: string): string {
+  return input.trim().replace(/[,%()"\\]/g, ' ').replace(/\s+/g, ' ');
+}
+
+function applyClientKindFilter<T extends {
+  or: (filters: string) => T;
+  eq: (column: string, value: boolean) => T;
+}>(query: T, kind: ClientKindFilter): T {
+  if (kind === 'client') {
+    return query
+      .or('is_client.is.null,is_client.eq.true')
+      .or('is_supplier.is.null,is_supplier.eq.false');
+  }
+  if (kind === 'supplier') {
+    return query
+      .eq('is_supplier', true)
+      .or('is_client.is.null,is_client.eq.false');
+  }
+  if (kind === 'both') {
+    return query.eq('is_client', true).eq('is_supplier', true);
+  }
+  return query;
+}
+
+export function useClientsPage({ page, pageSize, search = '', kind = 'all' }: ClientPageInput) {
+  const { currentTenant } = useTenant();
+  const normalizedSearch = safePostgrestSearch(search);
+
+  return useQuery({
+    queryKey: ['clients', 'page', currentTenant?.id, page, pageSize, normalizedSearch, kind],
+    queryFn: async (): Promise<ClientPage> => {
+      if (!currentTenant) return { rows: [], totalCount: 0 };
+
+      let query = supabase
+        .from('clients')
+        .select('*', { count: 'exact' })
+        .eq('tenant_id', currentTenant.id);
+      query = applyClientKindFilter(query, kind);
+      if (normalizedSearch) {
+        const pattern = `*${normalizedSearch}*`;
+        query = query.or([
+          `company_name.ilike.${pattern}`,
+          `legal_name.ilike.${pattern}`,
+          `trade_name.ilike.${pattern}`,
+          `tax_id.ilike.${pattern}`,
+          `internal_code.ilike.${pattern}`,
+          `sigla.ilike.${pattern}`,
+          `payer_group.ilike.${pattern}`,
+          `address_city.ilike.${pattern}`,
+        ].join(','));
+      }
+
+      const from = (page - 1) * pageSize;
+      const { data, count, error } = await query
+        .order('company_name')
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      return { rows: (data || []) as Client[], totalCount: count || 0 };
+    },
+    enabled: !!currentTenant,
+    placeholderData: previous => previous,
+  });
+}
+
+export function useClientCounts() {
+  const { currentTenant } = useTenant();
+
+  return useQuery({
+    queryKey: ['clients', 'counts', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return { clients: 0, suppliers: 0, both: 0, total: 0 };
+
+      const countFor = async (kind: ClientKindFilter) => {
+        let query = supabase
+          .from('clients')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', currentTenant.id);
+        query = applyClientKindFilter(query, kind);
+        const { count, error } = await query;
+        if (error) throw error;
+        return count || 0;
+      };
+
+      const [clients, suppliers, both, total] = await Promise.all([
+        countFor('client'),
+        countFor('supplier'),
+        countFor('both'),
+        countFor('all'),
+      ]);
+      return { clients, suppliers, both, total };
+    },
+    enabled: !!currentTenant,
+  });
+}
+
 export function useClients() {
   const { currentTenant } = useTenant();
   return useQuery({
@@ -102,12 +221,13 @@ export function useCreateClient() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<Client>) => {
+    mutationFn: async (values: CreateClientInput) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const { data, error } = await supabase.from('clients').insert({
         ...values,
-        tenant_id: currentTenant!.id,
-        created_by: user?.id,
-      } as any).select().single();
+        tenant_id: currentTenant.id,
+        created_by: user?.id ?? null,
+      }).select().single();
       if (error) throw error;
       return data;
     },
@@ -116,15 +236,17 @@ export function useCreateClient() {
 }
 
 export function useUpdateClient() {
+  const { currentTenant } = useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<Client> & { id: string }) => {
+    mutationFn: async ({ id, ...values }: UpdateClientInput) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const { data, error } = await supabase.from('clients').update({
         ...values,
-        updated_by: user?.id,
+        updated_by: user?.id ?? null,
         updated_at: new Date().toISOString(),
-      } as any).eq('id', id).select().single();
+      }).eq('id', id).eq('tenant_id', currentTenant.id).select().single();
       if (error) throw error;
       return data;
     },

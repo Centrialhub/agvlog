@@ -75,7 +75,7 @@ function excelDateToISO(v: unknown): string | null {
     return d.toISOString().slice(0, 10);
   }
   const s = String(v).trim();
-  const m = s.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
+  const m = s.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
   if (m) {
     const dd = m[1].padStart(2, '0');
     const mm = m[2].padStart(2, '0');

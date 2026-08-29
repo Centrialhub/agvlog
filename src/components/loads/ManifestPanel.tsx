@@ -17,6 +17,7 @@ import { toast } from '@/components/ui/sonner';
 import { Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import type { Tables } from '@/integrations/supabase/types';
 
 interface Props {
   loadId: string;
@@ -26,6 +27,10 @@ interface Props {
 }
 
 const UF_LIST = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+
+type Manifest = Tables<'load_manifests'>;
+type PdfWithLastTable = jsPDF & { lastAutoTable: { finalY: number } };
+const tableEndY = (document: jsPDF) => (document as PdfWithLastTable).lastAutoTable.finalY;
 
 export default function ManifestPanel({ loadId, loadNumber, origin, destination }: Props) {
   const { currentTenant } = useTenant();
@@ -49,7 +54,7 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
   // NF-e ids referenced by CT-es (exclude ORT-only / non-fiscal)
   const nfeIds = useMemo(() => {
     const set = new Set<string>();
-    for (const c of ctes as any[]) {
+    for (const c of ctes) {
       if (c.is_voided) continue;
       for (const id of (c.fiscal_document_ids || [])) set.add(id);
     }
@@ -62,7 +67,7 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
     queryFn: async () => {
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, recipient, recipient_city, recipient_state, weight_kg, value, pallet_count, operation_type')
+        .select('id, invoice_number, access_key, recipient, recipient_city, recipient_state, weight_kg, value, pallet_count, operation_type, status, sefaz_status')
         .in('id', nfeIds);
       if (error) throw error;
       return data || [];
@@ -115,12 +120,12 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
   });
 
   const totals = useMemo(() => ({
-    nfeCount: nfes.filter((d: any) => isBillableFiscalDoc(d)).length,
-    cteCount: ctes.filter((c: any) => !c.is_voided).length,
-    value: nfes.filter((d: any) => isBillableFiscalDoc(d)).reduce((s: number, d: any) => s + Number(d.value || 0), 0),
-    weight: nfes.filter((d: any) => isBillableFiscalDoc(d)).reduce((s: number, d: any) => s + Number(d.weight_kg || 0), 0),
-    pallets: nfes.filter((d: any) => isBillableFiscalDoc(d)).reduce((s: number, d: any) => s + Number(d.pallet_count || 0), 0),
-    freight: ctes.filter((c: any) => !c.is_voided).reduce((s: number, c: any) => s + Number(c.freight_value || 0), 0),
+    nfeCount: nfes.filter(document => isBillableFiscalDoc(document)).length,
+    cteCount: ctes.filter(document => !document.is_voided).length,
+    value: nfes.filter(document => isBillableFiscalDoc(document)).reduce((sum, document) => sum + Number(document.value || 0), 0),
+    weight: nfes.filter(document => isBillableFiscalDoc(document)).reduce((sum, document) => sum + Number(document.weight_kg || 0), 0),
+    pallets: nfes.filter(document => isBillableFiscalDoc(document)).reduce((sum, document) => sum + Number(document.pallet_count || 0), 0),
+    freight: ctes.filter(document => !document.is_voided).reduce((sum, document) => sum + Number(document.freight_value || 0), 0),
   }), [nfes, ctes]);
 
   const generateMutation = useMutation({
@@ -146,7 +151,7 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
         uf_route,
         observations: form.observations || null,
         fiscal_document_ids: nfeIds,
-        cte_document_ids: ctes.filter((c: any) => !c.is_voided).map((c: any) => c.id),
+        cte_document_ids: ctes.filter(document => !document.is_voided).map(document => document.id),
         status: 'issued',
         created_by: user?.id ?? null,
       }).select().single();
@@ -158,12 +163,12 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
       qc.invalidateQueries({ queryKey: ['load_manifest', loadId] });
       setForm(f => ({ ...f, manifest_number: '' }));
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: Error) => toast.error(error.message),
   });
 
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
-  const downloadPDF = (manifest?: any) => {
+  const downloadPDF = (manifest?: Manifest | null) => {
     const m = manifest || existing;
     const number = m?.manifest_number || form.manifest_number || `MDF-${loadNumber}`;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -202,40 +207,40 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
       columnStyles: { 0: { fontStyle: 'bold', cellWidth: 110 } },
       margin: { left: 30, right: 30 },
     });
-    y = (doc as any).lastAutoTable.finalY + 10;
+    y = tableEndY(doc) + 10;
 
     autoTable(doc, {
       startY: y,
       head: [['NF', 'Chave', 'Destinatário', 'Cidade/UF', 'Valor', 'Peso (kg)']],
-      body: (nfes as any[]).map(d => [
-        d.invoice_number || '—',
-        d.access_key || '—',
-        d.recipient || '—',
-        `${d.recipient_city || ''}${d.recipient_state ? '-' + d.recipient_state : ''}`,
-        d.value ? fmt(Number(d.value)) : '—',
-        String(d.weight_kg || 0),
+      body: nfes.map(document => [
+        document.invoice_number || '—',
+        document.access_key || '—',
+        document.recipient || '—',
+        `${document.recipient_city || ''}${document.recipient_state ? '-' + document.recipient_state : ''}`,
+        document.value ? fmt(Number(document.value)) : '—',
+        String(document.weight_kg || 0),
       ]),
       styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
       headStyles: { fillColor: [37, 99, 235], textColor: 255 },
       margin: { left: 30, right: 30 },
     });
-    y = (doc as any).lastAutoTable.finalY + 10;
+    y = tableEndY(doc) + 10;
 
     autoTable(doc, {
       startY: y,
       head: [['CT-e', 'Série', 'Chave', 'Destinatário', 'Frete']],
-      body: (ctes as any[]).filter(c => !c.is_voided).map(c => [
-        c.cte_number || '—',
-        c.cte_series || '—',
-        c.access_key || '—',
-        `${c.recipient || ''}${c.recipient_city ? ' / ' + c.recipient_city : ''}${c.recipient_state ? '-' + c.recipient_state : ''}`,
-        c.freight_value ? fmt(Number(c.freight_value)) : '—',
+      body: ctes.filter(document => !document.is_voided).map(document => [
+        document.cte_number || '—',
+        document.cte_series || '—',
+        document.access_key || '—',
+        `${document.recipient || ''}${document.recipient_city ? ' / ' + document.recipient_city : ''}${document.recipient_state ? '-' + document.recipient_state : ''}`,
+        document.freight_value ? fmt(Number(document.freight_value)) : '—',
       ]),
       styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
       headStyles: { fillColor: [37, 99, 235], textColor: 255 },
       margin: { left: 30, right: 30 },
     });
-    y = (doc as any).lastAutoTable.finalY + 14;
+    y = tableEndY(doc) + 14;
 
     doc.setFontSize(9); doc.setFont('helvetica', 'bold');
     doc.text('Totais', 30, y); y += 4;
@@ -251,7 +256,7 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
       columnStyles: { 0: { fontStyle: 'bold' }, 2: { fontStyle: 'bold' } },
       margin: { left: 30, right: 30 },
     });
-    y = (doc as any).lastAutoTable.finalY + 14;
+    y = tableEndY(doc) + 14;
 
     const obs = m?.observations || form.observations;
     if (obs) {
@@ -320,7 +325,7 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(nfes as any[]).map(d => (
+                    {nfes.map(d => (
                       <TableRow key={d.id}>
                         <TableCell className="text-xs font-medium">{d.invoice_number || '—'}</TableCell>
                         <TableCell className="text-[10px] font-mono text-muted-foreground">{d.access_key ? d.access_key.slice(-12) : '—'}</TableCell>

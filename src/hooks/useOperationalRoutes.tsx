@@ -2,19 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
-export interface OperationalRoute {
-  id: string;
-  tenant_id: string;
-  name: string;
-  description: string | null;
-  classification: string;
-  destinations: any[];
-  region_name: string | null;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+export type RouteDestination = string | { name: string };
+export type OperationalRoute = Omit<Tables<'operational_routes'>, 'destinations'> & {
+  destinations: RouteDestination[];
+};
 
 export function useOperationalRoutes(options: { includeInactive?: boolean } = {}) {
   const { includeInactive = false } = options;
@@ -41,12 +34,14 @@ export function useCreateOperationalRoute() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<OperationalRoute>) => {
-      const { data, error } = await supabase.from('operational_routes').insert({
+    mutationFn: async (values: Partial<OperationalRoute> & Pick<OperationalRoute, 'name'>) => {
+      const payload: TablesInsert<'operational_routes'> = {
         ...values,
+        name: values.name,
         tenant_id: currentTenant!.id,
         created_by: user?.id,
-      } as any).select().single();
+      };
+      const { data, error } = await supabase.from('operational_routes').insert(payload).select().single();
       if (error) throw error;
       return data;
     },
@@ -59,11 +54,12 @@ export function useUpdateOperationalRoute() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<OperationalRoute> & { id: string }) => {
-      const { data, error } = await supabase.from('operational_routes').update({
+      const payload: TablesUpdate<'operational_routes'> = {
         ...values,
         updated_by: user?.id,
         updated_at: new Date().toISOString(),
-      } as any).eq('id', id).select().single();
+      };
+      const { data, error } = await supabase.from('operational_routes').update(payload).eq('id', id).select().single();
       if (error) throw error;
       return data;
     },

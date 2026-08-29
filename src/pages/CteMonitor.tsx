@@ -1,3 +1,4 @@
+import { promptAction } from '@/hooks/useAlertStore';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,8 @@ import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
 import { useSortableData } from '@/hooks/useSortableData';
 import { Table, TableHead, TableHeader, TableRow, TableBody, TableCell } from '@/components/ui/table';
+
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Falha inesperada';
 
 function saveBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
@@ -111,9 +114,9 @@ async function downloadHubFile(
     });
     if (opts.view) openBlob(blob, filename); else saveBlob(blob, filename);
     if (!opts.silent) toast.success(`${label} ${opts.view ? 'aberto' : 'baixado'}`, { id: toastId });
-  } catch (e: any) {
-    if (opts.silent) throw e;
-    toast.error(`Falha ao ${opts.view ? 'abrir' : 'baixar'} ${label}`, { id: toastId, description: e?.message });
+  } catch (error: unknown) {
+    if (opts.silent) throw error;
+    toast.error(`Falha ao ${opts.view ? 'abrir' : 'baixar'} ${label}`, { id: toastId, description: errorMessage(error) });
   }
 }
 
@@ -208,8 +211,8 @@ export default function CteMonitor() {
       const summary = summarizeBulkResult(result, total);
       const fn = summary.tone === 'success' ? toast.success : summary.tone === 'error' ? toast.error : toast.warning;
       fn(summary.title, { id: toastId, description: summary.description, duration: 12_000 });
-    } catch (e: any) {
-      toast.error('Falha no download em massa', { id: toastId, description: e?.message, duration: 12_000 });
+    } catch (error: unknown) {
+      toast.error('Falha no download em massa', { id: toastId, description: errorMessage(error), duration: 12_000 });
     } finally {
       setBulkBusy(false);
       setBulkProgress(null);
@@ -457,7 +460,7 @@ export default function CteMonitor() {
                   <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
                 )}
                 {!isLoading && rows.length === 0 && (
-                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">ainda sem documentos aparecendo essa quebra aconteceu apos consertar buscar pelo número de nf</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado para os filtros informados.</TableCell></TableRow>
 
                 )}
                 {rows.map((r) => (
@@ -507,7 +510,7 @@ export default function CteMonitor() {
                         {r.sefaz_status.endsWith('_error') && (
                           <Button size="sm" variant="ghost" title="Reenviar à SEFAZ" onClick={() => resend.mutate(r.id, {
                             onSuccess: () => toast.success('CT-e marcado para reenvio'),
-                            onError: (e: any) => toast.error(e.message ?? 'Falha ao reenviar'),
+                            onError: (error: unknown) => toast.error(errorMessage(error)),
                           })}>
                             <RefreshCw className="h-4 w-4" />
                           </Button>
@@ -536,12 +539,16 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
   const cancelCte = useCancelCTe();
 
   const handleCancel = async () => {
-    const motive = window.prompt('Justificativa para o cancelamento (mínimo 15 caracteres):');
+    const motive = await promptAction('O cancelamento será enviado ao provedor fiscal.', {
+      title: 'Cancelar CT-e',
+      label: 'Justificativa',
+      minLength: 15,
+    });
     if (!motive) return;
     try {
       await cancelCte.mutateAsync({ fiscalDocumentId: row.id, justificativa: motive });
       toast.success('Cancelamento solicitado com sucesso');
-    } catch (e) {
+    } catch {
       // toast já disparado pelo hook
     }
   };

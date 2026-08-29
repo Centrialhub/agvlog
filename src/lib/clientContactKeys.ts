@@ -12,6 +12,45 @@ export interface MatchResult<T, R> { value: T; rule: R }
 const onlyDigits = (v: string) => (v || '').replace(/\D/g, '');
 const norm = (v: string) => (v || '').trim().toLowerCase();
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function optionalText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+export function parseContactSnapshots(value: unknown): ContactSnapshot[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) return [];
+    return [{
+      phone: optionalText(record.phone),
+      name: optionalText(record.name),
+      email: optionalText(record.email),
+    }];
+  });
+}
+
+export function parseAddressSnapshots(value: unknown): AddressSnapshot[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) return [];
+    return [{
+      street: optionalText(record.street),
+      number: optionalText(record.number),
+      neighborhood: optionalText(record.neighborhood),
+      city: optionalText(record.city),
+      state: optionalText(record.state),
+      zip: optionalText(record.zip),
+    }];
+  });
+}
+
 export function contactKey(c: ContactSnapshot | null | undefined): string {
   if (!c) return '';
   const phone = onlyDigits(c.phone || '');
@@ -119,7 +158,7 @@ export function findAddressByKey(
  * the snapshot stored in appliedHistory and the live record found via
  * findContactByKey/findAddressByKey. Empty array means no real divergence.
  */
-export function diffFields<T extends Record<string, any>>(
+export function diffFields<T extends Record<string, unknown>>(
   snapshot: T | null | undefined,
   live: T | null | undefined,
   fields: (keyof T)[],

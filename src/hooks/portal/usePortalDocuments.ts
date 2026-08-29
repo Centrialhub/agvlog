@@ -35,18 +35,18 @@ export function usePortalDocuments(filters?: {
     queryKey: ['portal_documents', currentTenant?.id, selectedClientId, filters],
     queryFn: async (): Promise<PortalDocument[]> => {
       if (!currentTenant) return [];
-      const { data, error } = await (supabase as any).rpc('list_client_documents_v2', {
+      const { data, error } = await supabase.rpc('list_client_documents_v2', {
         _tenant_id: currentTenant.id,
-        _client_id: selectedClientId,
-        _document_type: filters?.document_type || null,
-        _search: filters?.search || null,
-        _start_date: filters?.start || null,
-        _end_date: filters?.end || null,
+        _client_id: selectedClientId ?? undefined,
+        _document_type: filters?.document_type || undefined,
+        _search: filters?.search || undefined,
+        _start_date: filters?.start || undefined,
+        _end_date: filters?.end || undefined,
         _limit: filters?.limit ?? 50,
         _offset: filters?.offset ?? 0,
       });
       if (error) throw error;
-      return (data as any[]) as PortalDocument[];
+      return data as PortalDocument[];
     },
     enabled: !!currentTenant,
   });

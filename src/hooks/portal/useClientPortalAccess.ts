@@ -24,7 +24,7 @@ export function useClientPortalAccess() {
     queryFn: async (): Promise<PortalAccess[]> => {
       if (!currentTenant) return [];
       // Prefer detailed RPC (includes client name/tax_id). Fallback to legacy.
-      const detailed = await supabase.rpc('get_user_client_access_detailed' as any, {
+      const detailed = await supabase.rpc('get_user_client_access_detailed', {
         _tenant_id: currentTenant.id,
       });
       if (!detailed.error && detailed.data) {

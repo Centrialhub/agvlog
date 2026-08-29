@@ -30,7 +30,7 @@ function excelSerialToISO(v: unknown): string | null {
   if (typeof v === 'string') {
     const s = v.trim();
     // dd/mm/yyyy
-    const m = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    const m = s.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
     if (m) {
       const dd = m[1].padStart(2, '0');
       const mm = m[2].padStart(2, '0');
@@ -67,7 +67,7 @@ export function detectCompanyOrigin(text: string): string | null {
   return null;
 }
 
-export function parsePalletReturnSheet(buffer: ArrayBuffer | Uint8Array, fileName?: string): ParsedPalletReturn {
+export function parsePalletReturnSheet(buffer: ArrayBuffer | Uint8Array, _fileName?: string): ParsedPalletReturn {
   const wb = XLSX.read(buffer, { type: 'array', cellDates: false });
   const sheetName = wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
@@ -104,7 +104,7 @@ export function parsePalletReturnSheet(buffer: ArrayBuffer | Uint8Array, fileNam
     if (!issueDate) {
       for (const c of row || []) {
         if (typeof c === 'string' && /DATA[:\s]/i.test(c)) {
-          const m = c.match(/DATA[:\s]+([\d\/.\-]+)/i);
+          const m = c.match(/DATA[:\s]+([\d/.-]+)/i);
           if (m) {
             issueDate = excelSerialToISO(m[1]);
           }
@@ -113,10 +113,10 @@ export function parsePalletReturnSheet(buffer: ArrayBuffer | Uint8Array, fileNam
       // any numeric date cell close to "DATA"
       if (!issueDate) {
         for (let i = 0; i < (row || []).length; i++) {
-          const c = (row as any[])[i];
+          const c = row[i];
           if (typeof c === 'string' && /^DATA\b/i.test(c.trim())) {
             for (let j = i; j < row!.length; j++) {
-              const d = excelSerialToISO((row as any[])[j]);
+              const d = excelSerialToISO(row[j]);
               if (d) { issueDate = d; break; }
             }
           }

@@ -1,3 +1,4 @@
+import { confirmAction, promptAction } from '@/hooks/useAlertStore';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ const TONE_CLASS: Record<string, string> = {
 };
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Falha inesperada';
 
 function StatusPill({ status }: { status: string }) {
   const tone = SEFAZ_STATUS_TONE[status as SefazStatus] ?? 'default';
@@ -142,8 +144,6 @@ export default function CteSearch() {
 
   // Polling automático para documentos em cancelamento ou transmissão
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const pollingIdsRef = useRef<Set<string>>(new Set());
-
   useEffect(() => {
     const transientRows = rows.filter(r => 
       r.hub_document_id && 
@@ -277,8 +277,8 @@ export default function CteSearch() {
       const summary = summarizeBulkResult(result, total);
       const fn = summary.tone === 'success' ? toast.success : summary.tone === 'error' ? toast.error : toast.warning;
       fn(summary.title, { id: toastId, description: summary.description, duration: 12_000 });
-    } catch (e: any) {
-      toast.error('Falha no download em massa', { id: toastId, description: e?.message, duration: 12_000 });
+    } catch (error: unknown) {
+      toast.error('Falha no download em massa', { id: toastId, description: errorMessage(error), duration: 12_000 });
     } finally {
       setBulkBusy(false);
       setBulkProgress(null);
@@ -292,8 +292,8 @@ export default function CteSearch() {
       const blob = await fetchCteBlob(row, format);
       if (view) openBlob(blob, filename); else saveBlob(blob, filename);
       toast.success(`${format.toUpperCase()} ${view ? 'aberto' : 'baixado'}`, { id: toastId });
-    } catch (e: any) {
-      toast.error(`Falha ao obter ${format.toUpperCase()}`, { id: toastId, description: e?.message });
+    } catch (error: unknown) {
+      toast.error(`Falha ao obter ${format.toUpperCase()}`, { id: toastId, description: errorMessage(error) });
     }
   }
 
@@ -305,18 +305,25 @@ export default function CteSearch() {
   }
 
   async function handleCancel(row: CteSearchRow) {
-    const motive = window.prompt('Justificativa para o cancelamento (mínimo 15 caracteres):');
+    const motive = await promptAction('O cancelamento será enviado ao provedor fiscal.', {
+      title: 'Cancelar CT-e',
+      label: 'Justificativa',
+      minLength: 15,
+    });
     if (!motive) return;
     try {
       await cancelCte.mutateAsync({ fiscalDocumentId: row.id, justificativa: motive });
       toast.success('Cancelamento solicitado com sucesso');
-    } catch (e) {
+    } catch {
       // toast já disparado pelo hook
     }
   }
 
   async function handleDelete(row: CteSearchRow) {
-    if (!window.confirm('Deseja excluir este registro de erro? Esta ação é irreversível e serve apenas para limpar tentativas que falharam.')) return;
+    if (!await confirmAction(
+      'Deseja excluir este registro de erro? Esta ação é irreversível e serve apenas para limpar tentativas que falharam.',
+      { title: 'Excluir registro de erro', confirmLabel: 'Excluir' },
+    )) return;
     await deleteCte.mutateAsync(row.id);
   }
 
@@ -324,8 +331,8 @@ export default function CteSearch() {
     try {
       await resendCte.mutateAsync(row.id);
       toast.success('CT-e marcado para reenvio');
-    } catch (e: any) {
-      toast.error('Falha ao reenviar', { description: e?.message });
+    } catch (error: unknown) {
+      toast.error('Falha ao reenviar', { description: errorMessage(error) });
     }
   }
 
@@ -548,7 +555,7 @@ export default function CteSearch() {
               {isLoading && <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>}
               {!isLoading && rows.length === 0 && (
                 <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
-                  ainda sem documentos aparecendo essa quebra aconteceu apos consertar buscar pelo número de nf
+                  Nenhum CT-e encontrado para os filtros informados.
 
                 </TableCell></TableRow>
               )}

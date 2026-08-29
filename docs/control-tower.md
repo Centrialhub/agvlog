@@ -4,8 +4,9 @@ Painel em tempo real com mapa, KPIs, alertas e detalhes por viagem, baseado em O
 
 ## OSRM
 
-Por padrão o sistema usa o servidor público de demonstração (`https://router.project-osrm.org`).
-Esse servidor é compartilhado e tem limites — em produção configure um OSRM self-hosted.
+O sistema não envia coordenadas ao servidor público de demonstração. Sem um
+`OSRM_BASE_URL` configurado, o cálculo de rota falha de forma explícita e segura.
+Em produção use uma instância própria ou um fornecedor formalmente aprovado.
 
 Para apontar para seu OSRM:
 
@@ -44,5 +45,5 @@ Endpoint usado:
 ## Limitações conhecidas (MVP)
 
 - Sem histórico de posições visualizado (linha percorrida) — preparado para evolução futura.
-- Tempo parado estimado pela idade do último sinal; refinaremos com janela de posições.
+- Tempo parado calculado pela janela recente de `positions_raw`, sem confundir perda de sinal com veículo parado.
 - Sem reordenação automática de paradas, sem WebSocket, sem Google Routes (out of scope).

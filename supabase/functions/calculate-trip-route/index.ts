@@ -1,5 +1,5 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '../_shared/cors.ts';
 import { calculateOsrmRoute, type OsrmCoordinate } from '../_shared/osrm.ts';
 
 Deno.serve(async (req) => {
@@ -12,10 +12,19 @@ Deno.serve(async (req) => {
     }
 
     const auth = req.headers.get('Authorization') ?? '';
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    if (!auth.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const anon = createClient(
+      supabaseUrl,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: auth } } },
+    );
+    const { data: userData, error: userError } = await anon.auth.getUser();
+    if (userError || !userData?.user) return json({ error: 'Unauthorized' }, 401);
+
+    const supabase = createClient(
+      supabaseUrl,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
     // 1. Buscar trip
@@ -26,6 +35,16 @@ Deno.serve(async (req) => {
       .single();
     if (tripErr || !trip) return json({ error: 'trip not found' }, 404);
 
+    const { data: membership } = await supabase
+      .from('tenant_memberships')
+      .select('role')
+      .eq('tenant_id', trip.tenant_id)
+      .eq('user_id', userData.user.id)
+      .eq('active', true)
+      .in('role', ['owner', 'admin', 'operator'])
+      .maybeSingle();
+    if (!membership) return json({ error: 'Forbidden' }, 403);
+
     // 2. Buscar paradas ordenadas com coordenadas
     const { data: stops } = await supabase
       .from('dispatch_stops')
@@ -34,8 +53,8 @@ Deno.serve(async (req) => {
       .order('stop_order', { ascending: true });
 
     const stopCoords: OsrmCoordinate[] = (stops || [])
-      .filter((s: any) => s.latitude != null && s.longitude != null)
-      .map((s: any) => ({ lat: Number(s.latitude), lng: Number(s.longitude) }));
+      .filter((stop) => stop.latitude != null && stop.longitude != null)
+      .map((stop) => ({ lat: Number(stop.latitude), lng: Number(stop.longitude) }));
 
     // 3. Origem: posição atual do veículo (se houver), senão primeira parada
     let origin: OsrmCoordinate | null = null;

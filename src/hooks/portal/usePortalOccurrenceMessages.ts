@@ -18,7 +18,7 @@ export function usePortalOccurrenceMessages(occurrenceId: string | null) {
     queryKey: ['portal_occurrence_messages', currentTenant?.id, occurrenceId],
     queryFn: async (): Promise<PortalOccurrenceMessage[]> => {
       if (!currentTenant || !occurrenceId) return [];
-      const { data, error } = await supabase.rpc('list_client_occurrence_messages' as any, {
+      const { data, error } = await supabase.rpc('list_client_occurrence_messages', {
         _tenant_id: currentTenant.id,
         _occurrence_id: occurrenceId,
       });
@@ -33,7 +33,7 @@ export function usePortalOccurrenceMessages(occurrenceId: string | null) {
   });
 
   useEffect(() => {
-    if (!currentTenant || !occurrenceId) return;
+    if (!currentTenant || !occurrenceId) return undefined;
     const channel = supabase
       .channel(`portal_occ_msgs_${occurrenceId}`)
       .on(
@@ -65,7 +65,7 @@ export function useReplyPortalOccurrence() {
   return useMutation({
     mutationFn: async (args: { occurrence_id: string; message: string }) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { data, error } = await supabase.rpc('reply_client_occurrence' as any, {
+      const { data, error } = await supabase.rpc('reply_client_occurrence', {
         _tenant_id: currentTenant.id,
         _occurrence_id: args.occurrence_id,
         _message: args.message,

@@ -1,5 +1,6 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState, useMemo } from 'react';
-import { useOperationalRoutes, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute } from '@/hooks/useOperationalRoutes';
+import { useOperationalRoutes, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute, type OperationalRoute } from '@/hooks/useOperationalRoutes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Search, Plus, Pencil, Trash2, Map as MapIcon, X } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { normalizeCity as norm } from '@/lib/utils/normalizeCity';
+import { getErrorMessage } from '@/lib/errors';
 
 const CLASSIFICATIONS = [
   { value: 'general', label: 'Geral' },
@@ -49,8 +51,8 @@ export default function OperationalRoutesPage() {
     const counts = new Map<string, number>();
     routes.filter(r => r.active).forEach(r => {
       const seen = new Set<string>();
-      (Array.isArray(r.destinations) ? r.destinations : []).forEach((d: any) => {
-        const key = norm(typeof d === 'string' ? d : (d?.name || d?.city || ''));
+      r.destinations.forEach(destination => {
+        const key = norm(typeof destination === 'string' ? destination : destination.name);
         if (key && !seen.has(key)) {
           seen.add(key);
           counts.set(key, (counts.get(key) || 0) + 1);
@@ -60,10 +62,10 @@ export default function OperationalRoutesPage() {
     return counts;
   }, [routes]);
 
-  const hasDuplicate = (r: any) => {
+  const hasDuplicate = (r: OperationalRoute) => {
     if (!r.active) return false;
-    return (Array.isArray(r.destinations) ? r.destinations : []).some((d: any) => {
-      const key = norm(typeof d === 'string' ? d : (d?.name || d?.city || ''));
+    return r.destinations.some(destination => {
+      const key = norm(typeof destination === 'string' ? destination : destination.name);
       return key && (duplicateCities.get(key) || 0) > 1;
     });
   };
@@ -75,7 +77,7 @@ export default function OperationalRoutesPage() {
     setDialogOpen(false);
   };
 
-  const openEdit = (r: any) => {
+  const openEdit = (r: OperationalRoute) => {
     setEditingId(r.id);
     setForm({
       name: r.name || '',
@@ -83,7 +85,7 @@ export default function OperationalRoutesPage() {
       classification: r.classification || 'general',
       region_name: r.region_name || '',
       active: r.active !== false,
-      destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => typeof d === 'string' ? d : d.name || '') : [],
+      destinations: r.destinations.map(destination => typeof destination === 'string' ? destination : destination.name),
     });
     setDialogOpen(true);
   };
@@ -105,7 +107,7 @@ export default function OperationalRoutesPage() {
         toast.error('Informe o nome da rota');
         return;
       }
-      const values: any = {
+      const values: Partial<OperationalRoute> & Pick<OperationalRoute, 'name'> = {
         name: form.name,
         description: form.description || null,
         classification: form.classification,
@@ -121,8 +123,8 @@ export default function OperationalRoutesPage() {
         toast.success('Rota criada');
       }
       resetForm();
-    } catch (e: any) {
-      const msg = String(e?.message || '');
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error, '');
       if (msg.includes('operational_routes_tenant_name_key') || msg.toLowerCase().includes('duplicate')) {
         toast.error('Já existe uma rota ativa com este nome. Renomeie ou desative a existente.');
       } else {
@@ -181,7 +183,7 @@ export default function OperationalRoutesPage() {
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma rota encontrada</TableCell></TableRow>
-              ) : filtered.map((r: any) => (
+              ) : filtered.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
@@ -194,10 +196,10 @@ export default function OperationalRoutesPage() {
                   <TableCell><Badge variant="outline">{CLASSIFICATIONS.find(c => c.value === r.classification)?.label || r.classification}</Badge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.region_name || '—'}</TableCell>
                   <TableCell className="text-sm">
-                    {Array.isArray(r.destinations) ? r.destinations.slice(0, 3).map((d: any, i: number) => (
+                    {r.destinations.slice(0, 3).map((d, i) => (
                       <Badge key={i} variant="secondary" className="mr-1 text-xs">{typeof d === 'string' ? d : d.name || '?'}</Badge>
-                    )) : '—'}
-                    {Array.isArray(r.destinations) && r.destinations.length > 3 && <span className="text-xs text-muted-foreground">+{r.destinations.length - 3}</span>}
+                    ))}
+                    {r.destinations.length > 3 && <span className="text-xs text-muted-foreground">+{r.destinations.length - 3}</span>}
                   </TableCell>
                   <TableCell>
                     {r.active ? <Badge className="bg-green-500/10 text-green-600">Ativa</Badge> : <Badge variant="secondary">Inativa</Badge>}
@@ -205,8 +207,8 @@ export default function OperationalRoutesPage() {
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
-                        if (confirm('Excluir esta rota?')) deleteRoute.mutate(r.id, { onSuccess: () => toast.success('Rota removida'), onError: (e: any) => toast.error(e.message) });
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
+                        if (await confirmAction('Excluir esta rota?', { title: 'Excluir rota', confirmLabel: 'Excluir' })) deleteRoute.mutate(r.id, { onSuccess: () => toast.success('Rota removida'), onError: (error: Error) => toast.error(error.message) });
                       }}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
                   </TableCell>

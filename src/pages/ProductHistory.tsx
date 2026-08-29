@@ -2,17 +2,19 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, History, Package, Truck, FileText, MapPin, PackageOpen, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { Search, History, Package, Truck, FileText, MapPin, PackageOpen, ArrowDownToLine, ArrowUpFromLine, type LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/components/ui/command';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { cn } from '@/lib/utils';
+import { usePagination } from '@/hooks/usePagination';
+import { DataPagination } from '@/components/ui/data-pagination';
 
 interface TimelineEvent {
   at: string;
@@ -29,12 +31,7 @@ function fmtDateTime(d?: string | null) {
   if (!d) return '—';
   try { return format(new Date(d), 'dd/MM/yyyy HH:mm', { locale: ptBR }); } catch { return d; }
 }
-function fmtDate(d?: string | null) {
-  if (!d) return '—';
-  try { return format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }); } catch { return d; }
-}
-
-const KIND_META: Record<TimelineEvent['kind'], { label: string; icon: any; color: string }> = {
+const KIND_META: Record<TimelineEvent['kind'], { label: string; icon: LucideIcon; color: string }> = {
   inbound:  { label: 'Entrada (NF-e)',     icon: ArrowDownToLine, color: 'bg-blue-500' },
   pickup:   { label: 'Coleta',             icon: PackageOpen,    color: 'bg-amber-500' },
   load:     { label: 'Carga / Romaneio',   icon: Truck,          color: 'bg-violet-500' },
@@ -57,16 +54,17 @@ export default function ProductHistory() {
     queryKey: ['product-suggestions', currentTenant?.id, productInput],
     queryFn: async () => {
       if (!currentTenant || productInput.length < 2) return [];
-      const { data } = await (supabase as any)
+      const { data, error } = await supabase
         .from('load_items')
         .select('item_description')
         .eq('tenant_id', currentTenant.id)
         .ilike('item_description', `%${productInput}%`)
         .limit(50);
+      if (error) throw error;
       const seen = new Set<string>();
       const list: string[] = [];
-      (data || []).forEach((r: any) => {
-        const v = (r.item_description || '').trim();
+      (data || []).forEach((row) => {
+        const v = (row.item_description || '').trim();
         if (v && !seen.has(v.toLowerCase())) { seen.add(v.toLowerCase()); list.push(v); }
       });
       return list.slice(0, 12);
@@ -80,7 +78,7 @@ export default function ProductHistory() {
       if (!currentTenant || !product) return [];
 
       // 1) load_items matching product (with rich joins)
-      const q = (supabase as any)
+      const q = supabase
         .from('load_items')
         .select(`
           id, item_description, quantity, pallet_count, weight_kg, status, created_at,
@@ -99,14 +97,12 @@ export default function ProductHistory() {
       const events: TimelineEvent[] = [];
       const tripIds = new Set<string>();
       const pickupIds = new Set<string>();
-      const loadIds = new Set<string>();
 
-      (items || []).forEach((r: any) => {
+      (items || []).forEach((r) => {
         const fd = r.fiscal_documents;
         const ld = r.loads;
         if (fd?.pickup_order_id) pickupIds.add(fd.pickup_order_id);
         if (ld?.trip_id) tripIds.add(ld.trip_id);
-        if (r.load_id) loadIds.add(r.load_id);
 
         // Inbound NF
         if (fd && fd.document_type === 'inbound') {
@@ -118,7 +114,12 @@ export default function ProductHistory() {
             responsible: fd.remitter || undefined,
             destination: fd.recipient || undefined,
             reference: fd.invoice_number || undefined,
-            meta: { quantity: r.quantity, weight: r.weight_kg, pallets: r.pallet_count, value: fd.value },
+            meta: {
+              quantity: r.quantity ?? undefined,
+              weight: r.weight_kg ?? undefined,
+              pallets: r.pallet_count ?? undefined,
+              value: fd.value ?? undefined,
+            },
           });
         }
 
@@ -131,7 +132,7 @@ export default function ProductHistory() {
             description: r.item_description,
             destination: [fd.recipient, fd.recipient_city, fd.recipient_state].filter(Boolean).join(' • '),
             reference: fd.invoice_number || undefined,
-            meta: { value: fd.value },
+            meta: { value: fd.value ?? undefined },
           });
         }
 
@@ -146,18 +147,25 @@ export default function ProductHistory() {
             destination: ld.destination || undefined,
             responsible: [ld.drivers?.name, ld.vehicles?.plate].filter(Boolean).join(' • ') || undefined,
             reference: ld.load_number,
-            meta: { quantity: r.quantity, weight: r.weight_kg, pallets: r.pallet_count },
+            meta: {
+              quantity: r.quantity ?? undefined,
+              weight: r.weight_kg ?? undefined,
+              pallets: r.pallet_count ?? undefined,
+            },
           });
         }
       });
 
       // 2) Pickup orders details
       if (pickupIds.size > 0) {
-        const { data: pickups } = await (supabase as any)
+        const { data: pickups, error: pickupError } = await supabase
           .from('pickup_orders')
           .select('id, pickup_number, remitter_name, recipient_name, driver_name_snapshot, vehicle_plate_snapshot, pickup_at, status')
-          .in('id', Array.from(pickupIds));
-        (pickups || []).forEach((p: any) => {
+          .in('id', Array.from(pickupIds))
+          .eq('tenant_id', currentTenant.id);
+        if (pickupError) throw pickupError;
+        (pickups || []).forEach((p) => {
+          if (!p.pickup_at) return;
           events.push({
             at: p.pickup_at,
             kind: 'pickup',
@@ -173,11 +181,19 @@ export default function ProductHistory() {
       // 3) Trip stops + events (responsibles + dates)
       if (tripIds.size > 0) {
         const ids = Array.from(tripIds);
-        const [{ data: stops }, { data: evts }] = await Promise.all([
-          (supabase as any).from('dispatch_stops').select('dispatch_trip_id, stop_order, destination, planned_arrival_at, actual_arrival_at, actual_departure_at, status').in('dispatch_trip_id', ids),
-          (supabase as any).from('dispatch_events').select('dispatch_trip_id, event_type, event_at, notes').in('dispatch_trip_id', ids),
+        const [stopsResult, eventsResult] = await Promise.all([
+          supabase.from('dispatch_stops')
+            .select('dispatch_trip_id, stop_order, destination, planned_arrival_at, actual_arrival_at, actual_departure_at, status')
+            .in('dispatch_trip_id', ids)
+            .eq('tenant_id', currentTenant.id),
+          supabase.from('dispatch_events')
+            .select('dispatch_trip_id, event_type, event_at, notes')
+            .in('dispatch_trip_id', ids)
+            .eq('tenant_id', currentTenant.id),
         ]);
-        (stops || []).forEach((s: any) => {
+        if (stopsResult.error) throw stopsResult.error;
+        if (eventsResult.error) throw eventsResult.error;
+        (stopsResult.data || []).forEach((s) => {
           const at = s.actual_arrival_at || s.planned_arrival_at;
           if (!at) return;
           events.push({
@@ -188,7 +204,7 @@ export default function ProductHistory() {
             description: s.actual_departure_at ? `Saída: ${fmtDateTime(s.actual_departure_at)}` : undefined,
           });
         });
-        (evts || []).forEach((e: any) => {
+        (eventsResult.data || []).forEach((e) => {
           events.push({
             at: e.event_at,
             kind: 'event',
@@ -222,6 +238,10 @@ export default function ProductHistory() {
     const responsibles = new Set(timeline.map(e => e.responsible).filter(Boolean));
     return { total: timeline.length, byKind, destinations: destinations.size, responsibles: responsibles.size };
   }, [timeline]);
+  const pagination = usePagination(timeline, {
+    pageSize: 50,
+    resetKey: `${product}|${from}|${to}`,
+  });
 
   const handleSearch = () => {
     setProduct(productInput.trim());
@@ -323,7 +343,7 @@ export default function ProductHistory() {
                   </div>
                 ) : (
                   <ol className="relative border-l border-border ml-3 space-y-5">
-                    {timeline.map((ev, idx) => {
+                    {pagination.items.map((ev, idx) => {
                       const meta = KIND_META[ev.kind];
                       const Icon = meta.icon;
                       return (
@@ -362,6 +382,7 @@ export default function ProductHistory() {
                   </ol>
                 )}
               </CardContent>
+              <DataPagination {...pagination} onPageChange={pagination.setPage} />
             </Card>
           </>
         )}

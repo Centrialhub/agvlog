@@ -1,0 +1,76 @@
+name: Release candidate verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_url:
+        description: Immutable preview/staging URL produced from the candidate commit
+        required: true
+        type: string
+      release_id:
+        description: Candidate SHA or immutable release identifier
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ github.event.inputs.release_id }}
+  cancel-in-progress: false
+
+jobs:
+  verify-hosted-candidate:
+    environment: release-candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DEPLOY_SMOKE_URL: ${{ github.event.inputs.candidate_url }}
+      DEPLOY_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      DEPLOY_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SUPABASE_PROJECT_ID: staging
+      VITE_APP_RELEASE: ${{ github.event.inputs.release_id }}
+      E2E_BASE_URL: ${{ github.event.inputs.candidate_url }}
+      E2E_ALLOW_REMOTE: "true"
+      E2E_SKIP_WEBSERVER: "true"
+      E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
+    steps:
+      - name: Checkout candidate commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Frozen install and audit
+        run: |
+          npm ci
+          npm audit --audit-level=high
+          npm run lockfile:check
+
+      - name: Verify deployed security and hosted signup policy
+        run: npm run smoke:deploy
+
+      - name: Install Chromium
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Hosted desktop/tablet/mobile journeys
+        run: npm run e2e
+
+      - name: Critical journeys three consecutive times
+        run: npm run e2e:critical:3
+
+      - name: Upload hosted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-${{ github.event.inputs.release_id }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 30

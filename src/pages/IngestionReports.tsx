@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import type { Tables } from '@/integrations/supabase/types';
 import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,23 +15,57 @@ import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-interface IngestionReportRow {
-  id: string;
-  tenant_id: string;
-  batch_id: string;
-  source_label: string | null;
-  total_docs: number;
-  saved_docs: number;
-  error_docs: number;
-  needs_review_docs: number;
-  clients_auto_created: number;
-  clients_matched: number;
-  clients_unresolved: number;
-  field_coverage: any;
-  review_items: any;
-  report: any;
-  created_at: string;
-  created_by: string | null;
+interface FieldCoverage {
+  key: string;
+  label: string;
+  filled: number;
+  total: number;
+}
+
+interface ReviewItem {
+  invoiceNumber: string | null;
+  recipientName: string | null;
+  reasons: string[];
+}
+
+type IngestionReportRow = Omit<Tables<'ingestion_reports'>, 'field_coverage' | 'review_items'> & {
+  field_coverage: FieldCoverage[];
+  review_items: ReviewItem[];
+};
+
+type PdfWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function fieldCoverage(value: unknown): FieldCoverage[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const row = objectValue(entry);
+    if (!row) return [];
+    return [{
+      key: String(row.key ?? ''),
+      label: String(row.label ?? row.key ?? ''),
+      filled: Number(row.filled ?? 0),
+      total: Number(row.total ?? 0),
+    }];
+  });
+}
+
+function reviewItems(value: unknown): ReviewItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const row = objectValue(entry);
+    if (!row) return [];
+    return [{
+      invoiceNumber: row.invoiceNumber == null ? null : String(row.invoiceNumber),
+      recipientName: row.recipientName == null ? null : String(row.recipientName),
+      reasons: Array.isArray(row.reasons) ? row.reasons.map(String) : [],
+    }];
+  });
 }
 
 export default function IngestionReports() {
@@ -46,7 +81,7 @@ export default function IngestionReports() {
     enabled: !!currentTenant,
     queryFn: async () => {
       let q = supabase
-        .from('ingestion_reports' as any)
+        .from('ingestion_reports')
         .select('*')
         .eq('tenant_id', currentTenant!.id)
         .order('created_at', { ascending: false })
@@ -60,7 +95,11 @@ export default function IngestionReports() {
       if (batch) q = q.ilike('batch_id', `%${batch}%`);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as unknown as IngestionReportRow[];
+      return (data || []).map((row) => ({
+        ...row,
+        field_coverage: fieldCoverage(row.field_coverage),
+        review_items: reviewItems(row.review_items),
+      }));
     },
   });
 
@@ -173,7 +212,7 @@ export default function IngestionReports() {
                 <div>
                   <div className="text-xs font-medium text-muted-foreground mb-2">Cobertura de campos</div>
                   <div className="space-y-2">
-                    {selected.field_coverage.map((f: any) => {
+                    {selected.field_coverage.map((f) => {
                       const pct = f.total > 0 ? Math.round((f.filled / f.total) * 100) : 0;
                       return (
                         <div key={f.key} className="space-y-1">
@@ -193,7 +232,7 @@ export default function IngestionReports() {
                 <div>
                   <div className="text-xs font-medium text-muted-foreground mb-2">Documentos para revisão</div>
                   <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
-                    {selected.review_items.map((ri: any, i: number) => (
+                    {selected.review_items.map((ri, i) => (
                       <div key={i} className="px-3 py-2 text-xs">
                         <div className="font-medium">NF {ri.invoiceNumber}{ri.recipientName && ` · ${ri.recipientName}`}</div>
                         <div className="mt-1 flex flex-wrap gap-1">
@@ -290,7 +329,7 @@ function downloadReportCsv(r: IngestionReportRow) {
   URL.revokeObjectURL(url);
 }
 
-function aggregateDivergences(items: any[]): { reason: string; count: number }[] {
+function aggregateDivergences(items: ReviewItem[]): { reason: string; count: number }[] {
   const map = new Map<string, number>();
   for (const ri of items || []) {
     for (const r of (ri.reasons || [])) {
@@ -336,7 +375,7 @@ function downloadReportPdf(r: IngestionReportRow) {
     headStyles: { fillColor: [40, 40, 40] },
     margin: { left: 40, right: 40 },
   });
-  y = (doc as any).lastAutoTable.finalY + 16;
+  y = (doc as PdfWithAutoTable).lastAutoTable.finalY + 16;
 
   if (Array.isArray(r.field_coverage) && r.field_coverage.length) {
     doc.setFontSize(11);
@@ -346,14 +385,14 @@ function downloadReportPdf(r: IngestionReportRow) {
     autoTable(doc, {
       startY: y,
       head: [['Campo', 'Preenchidos', 'Total', 'Cobertura']],
-      body: r.field_coverage.map((f: any) => [
+      body: r.field_coverage.map((f) => [
         f.label, String(f.filled), String(f.total), pct(f.filled, f.total),
       ]),
       styles: { fontSize: 9 },
       headStyles: { fillColor: [40, 40, 40] },
       margin: { left: 40, right: 40 },
     });
-    y = (doc as any).lastAutoTable.finalY + 16;
+    y = (doc as PdfWithAutoTable).lastAutoTable.finalY + 16;
   }
 
   const divg = aggregateDivergences(Array.isArray(r.review_items) ? r.review_items : []);
@@ -370,7 +409,7 @@ function downloadReportPdf(r: IngestionReportRow) {
       headStyles: { fillColor: [180, 110, 0] },
       margin: { left: 40, right: 40 },
     });
-    y = (doc as any).lastAutoTable.finalY + 16;
+    y = (doc as PdfWithAutoTable).lastAutoTable.finalY + 16;
   }
 
   if (Array.isArray(r.review_items) && r.review_items.length) {
@@ -381,7 +420,7 @@ function downloadReportPdf(r: IngestionReportRow) {
     autoTable(doc, {
       startY: y,
       head: [['NF', 'Destinatário', 'Motivos']],
-      body: r.review_items.map((ri: any) => [
+      body: r.review_items.map((ri) => [
         String(ri.invoiceNumber ?? ''),
         String(ri.recipientName ?? ''),
         (ri.reasons || []).join(' • '),

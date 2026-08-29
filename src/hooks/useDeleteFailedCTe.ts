@@ -1,6 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
+import { useTenant } from './useTenant';
+
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Não foi possível excluir o registro.';
 
 /**
  * Exclui um registro de CT-e que esteja em estado de erro (sefaz-error).
@@ -8,15 +11,19 @@ import { toast } from '@/components/ui/sonner';
  */
 export function useDeleteFailedCTe() {
   const qc = useQueryClient();
+  const { currentTenant } = useTenant();
 
   return useMutation({
     mutationFn: async (fiscalDocumentId: string) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       // 1. Tenta buscar em fiscal_documents (emissões reais/tentativas no Hub)
       const { data: realDoc, error: realErr } = await supabase
         .from('fiscal_documents')
         .select('id, sefaz_status, hub_document_id')
         .eq('id', fiscalDocumentId)
+        .eq('tenant_id', currentTenant.id)
         .maybeSingle();
+      if (realErr) throw realErr;
 
       if (realDoc) {
         // Só permitimos excluir se for erro de SEFAZ e não tiver ID no Hub (ou seja, não foi autorizado)
@@ -28,16 +35,18 @@ export function useDeleteFailedCTe() {
         // Libera as NFs vinculadas a este outbound_id
         const { error: releaseErr } = await supabase
           .from('fiscal_documents')
-          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
           .eq('cte_emitted_outbound_id', fiscalDocumentId)
+          .eq('tenant_id', currentTenant.id)
           .is('deleted_at', null);
 
-        if (releaseErr) console.error('Erro ao liberar NFs vinculadas ao CT-e (real):', releaseErr);
+        if (releaseErr) throw releaseErr;
 
         const { error: delErr } = await supabase
           .from('fiscal_documents')
           .delete()
-          .eq('id', fiscalDocumentId);
+          .eq('id', fiscalDocumentId)
+          .eq('tenant_id', currentTenant.id);
 
         if (delErr) throw delErr;
         return true;
@@ -48,7 +57,9 @@ export function useDeleteFailedCTe() {
         .from('cte_documents')
         .select('id, fiscal_document_ids')
         .eq('id', fiscalDocumentId)
+        .eq('tenant_id', currentTenant.id)
         .maybeSingle();
+      if (draftErr) throw draftErr;
 
       if (draftDoc) {
         // Libera as NFs cujos IDs estão no array do rascunho
@@ -57,18 +68,20 @@ export function useDeleteFailedCTe() {
           if (ids.length > 0) {
             const { error: releaseErr } = await supabase
               .from('fiscal_documents')
-            .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+            .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
+            .eq('tenant_id', currentTenant.id)
             .in('id', ids)
             .is('deleted_at', null);
             
-            if (releaseErr) console.error('Erro ao liberar NFs vinculadas ao rascunho:', releaseErr);
+            if (releaseErr) throw releaseErr;
           }
         }
 
         const { error: delErr } = await supabase
           .from('cte_documents')
           .delete()
-          .eq('id', fiscalDocumentId);
+          .eq('id', fiscalDocumentId)
+          .eq('tenant_id', currentTenant.id);
 
         if (delErr) throw delErr;
         return true;
@@ -83,8 +96,8 @@ export function useDeleteFailedCTe() {
       qc.invalidateQueries({ queryKey: ['cte_monitor'] });
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
     },
-    onError: (err: any) => {
-      toast.error('Falha ao excluir registro', { description: err.message });
+    onError: (error: unknown) => {
+      toast.error('Falha ao excluir registro', { description: errorMessage(error) });
     }
   });
 }

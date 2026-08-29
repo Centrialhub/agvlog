@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,13 +17,29 @@ import { useInsuranceProfile } from '@/hooks/useInsuranceProfile';
 import { format } from 'date-fns';
 import { Loader2, Send, RefreshCw, XCircle, FileText, Truck, User, MapPin } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
+import { usePagination } from '@/hooks/usePagination';
+import { DataPagination } from '@/components/ui/data-pagination';
+import { useTenant } from '@/hooks/useTenant';
+import { deriveMdfeDialogDefaults, stateCodeFromCityIbge } from '@/lib/fiscal/mdfeFormDefaults';
+
+type ProprietorType = '0' | '1' | '2';
+
+function isProprietorType(value: string): value is ProprietorType {
+  return value === '0' || value === '1' || value === '2';
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Falha inesperada na transmissão';
+}
 
 export default function MdfeProvisional() {
   const { data: ctes, isLoading, refetch } = useAuthorizedCteList();
   const { data: vehicles = [] } = useVehicles();
   const { data: emitters = [] } = useEmitters();
   const { data: insurance } = useInsuranceProfile();
+  const { currentTenant } = useTenant();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const ctePagination = usePagination(ctes ?? [], { pageSize: 50 });
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTransmitting, setIsTransmitting] = useState(false);
@@ -31,11 +47,11 @@ export default function MdfeProvisional() {
   // Form states
   const [emitterId, setEmitterId] = useState<string>('');
   const [vehicleId, setVehicleId] = useState<string>('');
-  const [driverName, setDriverName] = useState('HAMILTON SANTOS RAMOS');
-  const [driverCpf, setDriverCpf] = useState('07044266681');
-  const [originCity, setOriginCity] = useState('MONTES CLAROS');
-  const [originIbge, setOriginIbge] = useState('3143302');
-  const [originUf, setOriginUf] = useState('31');
+  const [driverName, setDriverName] = useState('');
+  const [driverCpf, setDriverCpf] = useState('');
+  const [originCity, setOriginCity] = useState('');
+  const [originIbge, setOriginIbge] = useState('');
+  const [originUf, setOriginUf] = useState('');
   const [destCity, setDestCity] = useState('');
   const [destIbge, setDestIbge] = useState('');
   const [destUf, setDestUf] = useState('');
@@ -46,7 +62,7 @@ export default function MdfeProvisional() {
   
   // Vale Pedágio
   const [includeValePedagio, setIncludeValePedagio] = useState(false);
-  const [vpFornCnpj, setVpFornCnpj] = useState('04898488000177'); // Padrão observado no PDF
+  const [vpFornCnpj, setVpFornCnpj] = useState('');
   const [vpComprovante, setVpComprovante] = useState('');
   const [vpValor, setVpValor] = useState('');
 
@@ -76,57 +92,27 @@ export default function MdfeProvisional() {
   const [propIe, setPropIe] = useState('');
   const [propState, setPropState] = useState('');
   const [propRntrc, setPropRntrc] = useState('');
-  const [propType, setPropType] = useState<'0' | '1' | '2'>('2');
+  const [propType, setPropType] = useState<ProprietorType>('2');
   const [payInstallments, setPayInstallments] = useState<Array<{ dueDate: string; value: string }>>([
     { dueDate: '', value: '' },
   ]);
   const { data: hubCredentials = [] } = useHubCredentials(emitterId);
 
-  // Auto-fill from selected CTEs
-  useEffect(() => {
-    if (isDialogOpen && selectedIds.length > 0) {
-      const firstSelected = ctes?.find(c => c.id === selectedIds[0]);
-      if (firstSelected) {
-        setDestCity(firstSelected.recipient_city || '');
-      }
-      if (emitters.length > 0 && !emitterId) {
-        const def = emitters.find(e => e.is_default) || emitters[0];
-        setEmitterId(def.id);
-      }
-      if (vehicles.length > 0 && !vehicleId) {
-        const targetVehicle = vehicles.find(v => v.plate?.toUpperCase() === 'GVJ3744');
-        if (targetVehicle) {
-          setVehicleId(targetVehicle.id);
-          setVehicleTara((targetVehicle as any).tara_kg?.toString() || '');
-          setVehicleRenavam((targetVehicle as any).renavam || '');
-        }
-      }
-      
-      const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
-      const total = selectedDocs.reduce((acc, doc) => acc + (doc.cargo_value || 0), 0);
-      const totalWeight = selectedDocs.reduce((acc, doc) => acc + (doc.cargo_weight || 0), 0);
-      
-      setTotalCargoValue(total.toFixed(2));
-      setTotalCargoWeight(totalWeight.toFixed(3));
+  const handleEmitterChange = (id: string) => {
+    setEmitterId(id);
+    const emitter = emitters.find(item => item.id === id);
+    const cityCode = String(emitter?.city_code || '').replace(/\D/g, '');
+    setOriginCity(emitter?.endereco?.municipio || '');
+    setOriginIbge(cityCode);
+    setOriginUf(stateCodeFromCityIbge(cityCode));
+  };
 
-      // Pré-preenche o tomador com o fornecedor (Remetente) do primeiro documento selecionado
-      const first = selectedDocs[0];
-      if (first) {
-        setPayName(prev => prev || first.remitter || '');
-        setPayDoc(prev => prev || first.remitter_cnpj || '');
-        
-        // Se o tomador ainda não tem endereço preenchido, tentamos buscar no primeiro CT-e
-        if (!payStreet && first.remitter_street) setPayStreet(first.remitter_street);
-        if (!payNumber && first.remitter_number) setPayNumber(first.remitter_number);
-        if (!payNeighborhood && first.remitter_neighborhood) setPayNeighborhood(first.remitter_neighborhood);
-        if (!payZip && first.remitter_zip) setPayZip(first.remitter_zip);
-        if (!payCity && first.remitter_city) setPayCity(first.remitter_city);
-        if (!payState && first.remitter_uf) setPayState(first.remitter_uf);
-        if (!payCityIbge && first.remitter_city_ibge) setPayCityIbge(first.remitter_city_ibge);
-        if (!payIe && first.remitter_ie) setPayIe(first.remitter_ie);
-      }
-    }
-  }, [isDialogOpen, selectedIds, ctes, emitters, emitterId, vehicles, vehicleId]);
+  const handleVehicleChange = (id: string) => {
+    setVehicleId(id);
+    setVehicleRenavam(vehicles.find(item => item.id === id)?.renavam || '');
+    setDriverName('');
+    setDriverCpf('');
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => 
@@ -147,6 +133,58 @@ export default function MdfeProvisional() {
       toast.error("Selecione ao menos um CT-e");
       return;
     }
+    const selectedDocs = ctes?.filter(cte => selectedIds.includes(cte.id)) || [];
+    const defaults = deriveMdfeDialogDefaults(selectedDocs, emitters, vehicles);
+    const first = selectedDocs[0];
+
+    setEmitterId(defaults.emitterId);
+    setVehicleId(defaults.vehicleId);
+    setVehicleRenavam(defaults.vehicleRenavam);
+    setDriverName(defaults.driverName);
+    setDriverCpf(defaults.driverCpf);
+    setOriginCity(defaults.originCity);
+    setOriginIbge(defaults.originIbge);
+    setOriginUf(defaults.originUf);
+    setDestCity(defaults.destinationCity);
+    setDestIbge(defaults.destinationIbge);
+    setDestUf(defaults.destinationUf);
+    setTotalCargoValue(defaults.totalCargoValue);
+    setTotalCargoWeight(defaults.totalCargoWeight);
+    setVehicleTara('');
+
+    setIncludePayment(false);
+    setPayName(first?.remitter || '');
+    setPayDoc(first?.remitter_cnpj || '');
+    setPayIe(first?.remitter_ie || '');
+    setPayStreet(first?.remitter_street || '');
+    setPayNumber(first?.remitter_number || '');
+    setPayNeighborhood(first?.remitter_neighborhood || '');
+    setPayCity(first?.remitter_city || '');
+    setPayCityIbge(first?.remitter_city_ibge || '');
+    setPayState(first?.remitter_uf || '');
+    setPayZip(first?.remitter_zip || '');
+    setPayContractValue('');
+    setPayCondition('avista');
+    setPayAdvance('');
+    setPayPix('');
+    setPayBankCode('');
+    setPayAgency('');
+    setPayAccount('');
+    setPayIpefCnpj('');
+    setPayInstallments([{ dueDate: '', value: '' }]);
+
+    setIncludeProprietor(false);
+    setPropName('');
+    setPropDoc('');
+    setPropIe('');
+    setPropState('');
+    setPropRntrc('');
+    setPropType('2');
+
+    setIncludeValePedagio(false);
+    setVpFornCnpj('');
+    setVpComprovante('');
+    setVpValor('');
     setIsDialogOpen(true);
   };
 
@@ -156,8 +194,10 @@ export default function MdfeProvisional() {
     const mdfeCredential = hubCredentials.find(c => c.enabled && c.doc_scope === 'mdfe')
       || hubCredentials.find(c => c.enabled && c.doc_scope === 'all');
 
-    if (!emitter || !vehicle || !driverCpf || !originIbge || !destIbge || !vehicleTara) {
-      toast.error("Preencha todos os campos obrigatórios (incluindo a Tara do Veículo)");
+    if (!emitter || !vehicle || !driverName.trim() || !/^\d{11}$/.test(driverCpf.replace(/\D/g, ''))
+      || !/^\d{7}$/.test(originIbge.replace(/\D/g, ''))
+      || !/^\d{7}$/.test(destIbge.replace(/\D/g, '')) || !vehicleTara) {
+      toast.error("Preencha emitente, veículo, condutor, rota com códigos IBGE e a tara do veículo");
       return;
     }
 
@@ -178,10 +218,13 @@ export default function MdfeProvisional() {
       // A lista pode estar em cache sem a chave; busca o valor atual no banco.
       const needsKey = selectedDocs.filter(doc => !/^\d{44}$/.test(doc.access_key || '')).map(d => d.id);
       if (needsKey.length > 0) {
-        const { data: fresh } = await supabase
+        if (!currentTenant) throw new Error('Tenant não selecionado');
+        const { data: fresh, error: freshError } = await supabase
           .from('fiscal_documents')
           .select('id, access_key')
+          .eq('tenant_id', currentTenant.id)
           .in('id', needsKey);
+        if (freshError) throw freshError;
         for (const row of fresh || []) {
           const target = selectedDocs.find(d => d.id === row.id);
           if (target && /^\d{44}$/.test(String(row.access_key || ''))) {
@@ -213,8 +256,8 @@ export default function MdfeProvisional() {
         vehicle: {
           plate: vehicle.plate,
           state: vehicle.uf || emitter.endereco?.uf || '',
-          tara: Number(vehicleTara) || (vehicle as any).tara_kg || 0,
-          renavam: vehicleRenavam || (vehicle as any).renavam || '',
+          tara: Number(vehicleTara) || 0,
+          renavam: vehicleRenavam || vehicle.renavam || '',
         },
         origin: {
           city_ibge: originIbge,
@@ -228,7 +271,14 @@ export default function MdfeProvisional() {
         },
         documents: selectedDocs.map(d => ({
           key: d.access_key!,
-          type: 'cte'
+          type: 'cte',
+          destination: d.recipient_city_ibge
+            ? {
+                city_ibge: d.recipient_city_ibge,
+                city_name: d.recipient_city || destCity,
+                state: d.recipient_state || destUf,
+              }
+            : undefined,
         })),
         insurance: {
           providerName: insurance?.name || '',
@@ -314,9 +364,6 @@ export default function MdfeProvisional() {
         return;
       }
 
-      console.log('[MdfeProvisional] Payload final para o Hub:', JSON.stringify(payload, null, 2));
-
-
       const { data, error } = await supabase.functions.invoke('hub-fiscal-proxy', {
         body: { 
           type: 'mdfe',
@@ -340,9 +387,9 @@ export default function MdfeProvisional() {
       setIsDialogOpen(false);
       setSelectedIds([]);
       refetch();
-    } catch (err: any) {
-      console.error(err);
-      toast.error(`Falha na transmissão: ${err.message}`);
+    } catch (error: unknown) {
+      console.error(error);
+      toast.error(`Falha na transmissão: ${errorMessage(error)}`);
     } finally {
       setIsTransmitting(false);
     }
@@ -430,7 +477,7 @@ export default function MdfeProvisional() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ctes.map((cte) => (
+                  {ctePagination.items.map((cte) => (
                     <TableRow key={cte.id} className={selectedIds.includes(cte.id) ? "bg-muted/50" : ""}>
                       <TableCell>
                         <Checkbox 
@@ -456,6 +503,7 @@ export default function MdfeProvisional() {
                   ))}
                 </TableBody>
               </Table>
+              <DataPagination {...ctePagination} onPageChange={ctePagination.setPage} />
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -483,7 +531,7 @@ export default function MdfeProvisional() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Emitente</Label>
-                  <Select value={emitterId} onValueChange={setEmitterId}>
+                  <Select value={emitterId} onValueChange={handleEmitterChange}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o emitente" />
                     </SelectTrigger>
@@ -496,7 +544,7 @@ export default function MdfeProvisional() {
                 </div>
                 <div className="space-y-2">
                   <Label>Veículo (Placa)</Label>
-                  <Select value={vehicleId} onValueChange={setVehicleId}>
+                  <Select value={vehicleId} onValueChange={handleVehicleChange}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o veículo" />
                     </SelectTrigger>
@@ -868,7 +916,9 @@ export default function MdfeProvisional() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Tipo</Label>
-                    <Select value={propType} onValueChange={(v: any) => setPropType(v)}>
+                    <Select value={propType} onValueChange={(value) => {
+                      if (isProprietorType(value)) setPropType(value);
+                    }}>
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>

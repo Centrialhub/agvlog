@@ -22,17 +22,17 @@ export function usePortalPickups(filters?: { status?: string; start?: string; en
     queryKey: ['portal_pickups', currentTenant?.id, selectedClientId, filters],
     queryFn: async (): Promise<PortalPickup[]> => {
       if (!currentTenant) return [];
-      const { data, error } = await (supabase as any).rpc('list_client_pickups_v2', {
+      const { data, error } = await supabase.rpc('list_client_pickups_v2', {
         _tenant_id: currentTenant.id,
-        _client_id: selectedClientId,
-        _status: filters?.status || null,
-        _start_date: filters?.start || null,
-        _end_date: filters?.end || null,
+        _client_id: selectedClientId ?? undefined,
+        _status: filters?.status || undefined,
+        _start_date: filters?.start || undefined,
+        _end_date: filters?.end || undefined,
         _limit: 200,
         _offset: 0,
       });
       if (error) throw error;
-      return (data as any[]) as PortalPickup[];
+      return data as PortalPickup[];
     },
     enabled: !!currentTenant,
   });
@@ -48,8 +48,8 @@ export function useRequestPortalPickup() {
         _tenant_id: currentTenant.id,
         _client_id: args.client_id,
         _pickup_at: args.pickup_at,
-        _recipient_name: args.recipient_name || null,
-        _notes: args.notes || null,
+        _recipient_name: args.recipient_name || undefined,
+        _notes: args.notes || undefined,
       });
       if (error) throw error;
       return data as string;
@@ -64,7 +64,7 @@ export function useCancelPortalPickup() {
   return useMutation({
     mutationFn: async (pickup_id: string) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { error } = await supabase.rpc('cancel_client_pickup' as any, {
+      const { error } = await supabase.rpc('cancel_client_pickup', {
         _tenant_id: currentTenant.id,
         _pickup_id: pickup_id,
       });

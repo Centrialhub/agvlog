@@ -1,10 +1,5 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { createClient } from "@supabase/supabase-js";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -64,7 +59,6 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
     // Fetch tenant settings
     const { data: tenant } = await supabase
       .from("tenants")
@@ -120,7 +114,7 @@ Deno.serve(async (req) => {
 
     for (const trip of trips) {
       const distance = computeTripDistance(trip.points);
-      const movingTime = computeMovingTime(trip.points, classified);
+      const movingTime = computeMovingTime(trip.points);
 
       const { error: tripErr } = await supabase.from("trips").insert({
         tenant_id,
@@ -219,7 +213,7 @@ Deno.serve(async (req) => {
       .select("captured_at")
       .eq("tenant_id", tenant_id)
       .eq("vehicle_id", vehicle_id)
-      .single();
+      .maybeSingle();
 
     if (lastPos) {
       const ageMin = (Date.now() - new Date(lastPos.captured_at).getTime()) / 60000;
@@ -457,7 +451,7 @@ function computeTripDistance(points: ClassifiedPoint[]): number {
   return total / 1000; // km
 }
 
-function computeMovingTime(points: ClassifiedPoint[], classified: ClassifiedPoint[]): number {
+function computeMovingTime(points: ClassifiedPoint[]): number {
   let total = 0;
   for (let i = 1; i < points.length; i++) {
     if (points[i].moving) {
@@ -529,8 +523,8 @@ async function insertEvent(
 async function checkGeofences(
   supabase: any,
   tenantId: string,
-  vehicleId: string,
-  positions: any[]
+  _vehicleId: string,
+  _positions: any[]
 ): Promise<{ data: number }> {
   // Get enabled geofences for tenant
   const { data: geofences } = await supabase
@@ -541,20 +535,8 @@ async function checkGeofences(
 
   if (!geofences || geofences.length === 0) return { data: 0 };
 
-  const eventsCreated = 0;
-
-  // For each geofence, check first and last point to detect enter/exit
-  // Simple approach: check if first point is inside and last point is outside (or vice versa)
-  for (const geo of geofences) {
-    const first = positions[0];
-    const last = positions[positions.length - 1];
-
-    // Use a simple RPC-based check if available, otherwise skip
-    // For MVP, we log that geofence checking requires PostGIS spatial queries
-    // which are better done as a DB function
-  }
-
-  return { data: eventsCreated };
+  // Geofence evaluation is delegated to the PostGIS-backed queue processor.
+  return { data: 0 };
 }
 
 async function detectCapabilities(

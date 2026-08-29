@@ -1,15 +1,16 @@
 import * as XLSX from 'xlsx';
+import type { Json } from '@/integrations/supabase/types';
 
-export type ParsedRow = {
+export type ParsedRow = Record<string, Json> & {
   posted_at: string;
   description: string;
   amount: number;
-  document_number?: string | null;
-  counterparty_name?: string | null;
-  balance_after?: number | null;
+  document_number: string | null;
+  counterparty_name: string | null;
+  balance_after: number | null;
   normalized_key: string;
-  raw: Record<string, any>;
-  cost_center?: string | null;
+  raw: Record<string, Json>;
+  cost_center: string | null;
 };
 
 export type ColumnMapping = {
@@ -23,7 +24,7 @@ export type ColumnMapping = {
   costCenter?: string;
 };
 
-export function normalizeBrNumber(input: any): number | null {
+export function normalizeBrNumber(input: unknown): number | null {
   if (input == null) return null;
   if (typeof input === 'number') return input;
   let s = String(input).trim();
@@ -50,7 +51,7 @@ export function normalizeBrNumber(input: any): number | null {
   return negative ? -Math.abs(n) : n;
 }
 
-export function normalizeDate(input: any): string | null {
+export function normalizeDate(input: unknown): string | null {
   if (input == null || input === '') return null;
   if (typeof input === 'number') {
     // XLSX serial date
@@ -81,6 +82,15 @@ function normalizeText(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
 }
 
+function toJsonRecord(row: Record<string, unknown>): Record<string, Json> {
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => {
+    if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
+      return [key, value as Json];
+    }
+    return [key, String(value ?? '')];
+  }));
+}
+
 const HEADER_KEYWORDS = [
   'data', 'dt', 'date',
   'descri', 'histor', 'memo', 'lançamento', 'lancamento',
@@ -91,7 +101,7 @@ const HEADER_KEYWORDS = [
   'documento', 'doc', 'referen',
 ];
 
-function normHeader(v: any): string {
+function normHeader(v: unknown): string {
   return String(v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 }
 
@@ -101,7 +111,7 @@ function normHeader(v: any): string {
  * score = (non-empty cell count) + 2 * (number of keyword matches). Requires at
  * least one keyword match, otherwise returns 0.
  */
-export function detectHeaderRowIndex(matrix: any[][]): number {
+export function detectHeaderRowIndex(matrix: unknown[][]): number {
   const limit = Math.min(matrix.length, 20);
   let bestIdx = 0;
   let bestScore = -1;
@@ -122,7 +132,7 @@ export function detectHeaderRowIndex(matrix: any[][]): number {
   return bestScore < 0 ? 0 : bestIdx;
 }
 
-function matrixToRows(matrix: any[][], headerRowIndex: number): { headers: string[]; rows: Record<string, any>[] } {
+function matrixToRows(matrix: unknown[][], headerRowIndex: number): { headers: string[]; rows: Record<string, unknown>[] } {
   const rawHeaders = (matrix[headerRowIndex] || []).map((h, i) => {
     const s = String(h ?? '').trim();
     return s || `Coluna ${i + 1}`;
@@ -134,18 +144,18 @@ function matrixToRows(matrix: any[][], headerRowIndex: number): { headers: strin
     seen.set(h, n + 1);
     return n === 0 ? h : `${h} (${n + 1})`;
   });
-  const rows: Record<string, any>[] = [];
+  const rows: Record<string, unknown>[] = [];
   for (let i = headerRowIndex + 1; i < matrix.length; i++) {
     const arr = matrix[i] || [];
     if (arr.every(c => String(c ?? '').trim() === '')) continue;
-    const obj: Record<string, any> = {};
+    const obj: Record<string, unknown> = {};
     headers.forEach((h, j) => { obj[h] = arr[j] ?? ''; });
     rows.push(obj);
   }
   return { headers, rows };
 }
 
-export function parseCsv(text: string, headerRowIndex?: number): { headers: string[]; rows: Record<string, any>[]; headerRowIndex: number; matrix: any[][] } {
+export function parseCsv(text: string, headerRowIndex?: number): { headers: string[]; rows: Record<string, unknown>[]; headerRowIndex: number; matrix: unknown[][] } {
   const sep = (text.split('\n')[0] || '').includes(';') ? ';' : ',';
   const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
   if (!lines.length) return { headers: [], rows: [], headerRowIndex: 0, matrix: [] };
@@ -172,7 +182,7 @@ function splitCsvLine(line: string, sep: string): string[] {
 export async function parseWorkbook(
   file: File,
   headerRowIndex?: number,
-): Promise<{ headers: string[]; rows: Record<string, any>[]; headerRowIndex: number; matrix: any[][] }> {
+): Promise<{ headers: string[]; rows: Record<string, unknown>[]; headerRowIndex: number; matrix: unknown[][] }> {
   if (file.name.toLowerCase().endsWith('.csv')) {
     const text = await file.text();
     return parseCsv(text, headerRowIndex);
@@ -180,13 +190,13 @@ export async function parseWorkbook(
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array', cellDates: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const matrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true, blankrows: false }) as any[][];
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: true, blankrows: false });
   const idx = headerRowIndex ?? detectHeaderRowIndex(matrix);
   const { headers, rows } = matrixToRows(matrix, idx);
   return { headers, rows, headerRowIndex: idx, matrix };
 }
 
-export function buildParsedRows(rows: Record<string, any>[], map: ColumnMapping, bankAccountId: string): ParsedRow[] {
+export function buildParsedRows(rows: Record<string, unknown>[], map: ColumnMapping, bankAccountId: string): ParsedRow[] {
   const out: ParsedRow[] = [];
   for (const r of rows) {
     const iso = normalizeDate(r[map.date]);
@@ -216,10 +226,11 @@ export function buildParsedRows(rows: Record<string, any>[], map: ColumnMapping,
       description,
       amount,
       document_number,
+      counterparty_name: null,
       balance_after,
       cost_center,
       normalized_key,
-      raw: r,
+      raw: toJsonRecord(r),
     });
   }
   return out;

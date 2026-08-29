@@ -1,3 +1,4 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,8 +13,44 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
-import { Users, UserPlus, ShieldCheck, Truck, Building2, UserCog, Ban, CheckCircle2, AlertTriangle, Pencil, KeyRound, Link2 } from 'lucide-react';
+import { Users, UserPlus, ShieldCheck, Truck, Building2, UserCog, Ban, CheckCircle2, AlertTriangle, Pencil, Link2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import type { Enums, Tables, TablesInsert } from '@/integrations/supabase/types';
+
+type AppRole = Enums<'app_role'>;
+type TeamRole = Extract<AppRole, 'admin' | 'operator' | 'driver'>;
+type DriverOption = Pick<Tables<'drivers'>, 'id' | 'name' | 'phone' | 'doc'>;
+type ClientOption = Pick<Tables<'clients'>, 'id' | 'company_name'>;
+
+interface EdgeUserSummary {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+}
+
+interface EdgeUsersResponse {
+  users?: EdgeUserSummary[];
+  error?: string;
+}
+
+interface CreateMemberResponse {
+  success?: boolean;
+  invited?: boolean;
+  user_id?: string;
+  email?: string | null;
+  error?: string;
+}
+
+interface UpdateMemberResponse {
+  success?: boolean;
+  error?: string;
+}
+
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
+
+const isTeamRole = (role: string): role is TeamRole =>
+  role === 'admin' || role === 'operator' || role === 'driver';
 
 const roleLabels: Record<string, string> = {
   owner: 'Proprietário',
@@ -42,7 +79,7 @@ const roleIcons: Record<string, React.ReactNode> = {
 interface MemberRow {
   id: string;
   user_id: string;
-  role: string;
+  role: AppRole;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -72,12 +109,13 @@ export default function TeamManagement() {
 
       // Get profiles for names
       const userIds = (memberships || []).map(m => m.user_id);
-      let profiles: any[] = [];
+      let profiles: Pick<Tables<'profiles'>, 'id' | 'full_name'>[] = [];
       if (userIds.length > 0) {
-        const { data: p } = await supabase
+        const { data: p, error: profilesError } = await supabase
           .from('profiles')
           .select('id, full_name')
           .in('id', userIds);
+        if (profilesError) throw profilesError;
         profiles = p || [];
       }
       const profileMap = new Map(profiles.map(p => [p.id, p]));
@@ -85,10 +123,12 @@ export default function TeamManagement() {
       // Get emails and metadata names via edge function (Admin API)
       const emailMap = new Map<string, { email: string | null; full_name: string | null }>();
       try {
-        const { data: fnData } = await supabase.functions.invoke('list-tenant-members', {
+        const { data: fnData, error: fnError } = await supabase.functions.invoke<EdgeUsersResponse>('list-tenant-members', {
           body: { tenant_id: currentTenant.id },
         });
-        const list = (fnData as any)?.users || [];
+        if (fnError) throw fnError;
+        if (fnData?.error) throw new Error(fnData.error);
+        const list = fnData?.users || [];
         for (const u of list) emailMap.set(u.id, { email: u.email, full_name: u.full_name });
       } catch {
         // ignore — falls back to profile name only
@@ -111,51 +151,45 @@ export default function TeamManagement() {
     queryKey: ['drivers_for_team', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase.from('drivers').select('id, name, phone, doc').eq('tenant_id', currentTenant.id).eq('active', true);
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
-
-  // Clients
-  const { data: clients = [] } = useQuery({
-    queryKey: ['clients_for_team', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data } = await supabase.from('clients').select('id, company_name').eq('tenant_id', currentTenant.id).eq('active', true);
+      const { data, error } = await supabase.from('drivers').select('id, name, phone, doc').eq('tenant_id', currentTenant.id).eq('active', true);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
   });
 
   const updateRoleMutation = useMutation({
-    mutationFn: async ({ id, role }: { id: string; role: string }) => {
+    mutationFn: async ({ id, role }: { id: string; role: TeamRole }) => {
+      if (!currentTenant) throw new Error('Tenant ativo não encontrado.');
       const { error } = await supabase
         .from('tenant_memberships')
-        .update({ role: role as any, updated_at: new Date().toISOString() })
-        .eq('id', id);
+        .update({ role, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
       toast.success('Papel atualizado');
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao atualizar papel')),
   });
 
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      if (!currentTenant) throw new Error('Tenant ativo não encontrado.');
       const { error } = await supabase
         .from('tenant_memberships')
         .update({ active, updated_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
       toast.success('Status atualizado');
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao atualizar status')),
   });
 
   const filtered = filterRole === 'all' ? members : members.filter(m => m.role === filterRole);
@@ -289,7 +323,9 @@ export default function TeamManagement() {
                           ) : (
                             <Select
                               value={m.role}
-                              onValueChange={(v) => updateRoleMutation.mutate({ id: m.id, role: v })}
+                              onValueChange={(role) => {
+                                if (isTeamRole(role)) updateRoleMutation.mutate({ id: m.id, role });
+                              }}
                               disabled={updateRoleMutation.isPending}
                             >
                               <SelectTrigger className="w-36 h-7 text-xs">
@@ -354,7 +390,6 @@ export default function TeamManagement() {
         onOpenChange={setInviteOpen}
         tenantId={currentTenant?.id}
         drivers={drivers}
-        clients={clients}
       />
 
       <EditMemberDialog
@@ -379,7 +414,30 @@ const ACCESS_TYPES = [
   { value: 'viewer', label: 'Somente leitura' },
 ];
 
-const PERM_FIELDS: Array<[keyof PortalAccessRow, string]> = [
+type PortalAccessRow = Pick<
+  Tables<'client_portal_access'>,
+  | 'id'
+  | 'user_id'
+  | 'client_id'
+  | 'access_type'
+  | 'active'
+  | 'can_view_financial'
+  | 'can_download_documents'
+  | 'can_open_occurrences'
+  | 'can_request_pickup'
+  | 'can_view_vehicle_live'
+  | 'can_view_driver_contact'
+>;
+
+type PortalPermissionKey =
+  | 'can_view_financial'
+  | 'can_download_documents'
+  | 'can_open_occurrences'
+  | 'can_request_pickup'
+  | 'can_view_vehicle_live'
+  | 'can_view_driver_contact';
+
+const PERM_FIELDS: ReadonlyArray<readonly [PortalPermissionKey, string]> = [
   ['can_view_financial', 'Ver valores'],
   ['can_download_documents', 'Baixar documentos/canhotos'],
   ['can_open_occurrences', 'Abrir ocorrências'],
@@ -387,20 +445,6 @@ const PERM_FIELDS: Array<[keyof PortalAccessRow, string]> = [
   ['can_view_vehicle_live', 'Ver veículo ao vivo'],
   ['can_view_driver_contact', 'Ver contato do motorista'],
 ];
-
-interface PortalAccessRow {
-  id: string;
-  user_id: string;
-  client_id: string;
-  access_type: string;
-  active: boolean;
-  can_view_financial: boolean;
-  can_download_documents: boolean;
-  can_open_occurrences: boolean;
-  can_request_pickup: boolean;
-  can_view_vehicle_live: boolean;
-  can_view_driver_contact: boolean;
-}
 
 function PortalAccessTab({ tenantId }: { tenantId?: string }) {
   const queryClient = useQueryClient();
@@ -426,7 +470,8 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
     queryKey: ['clients_for_portal_access', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data } = await supabase.from('clients').select('id, company_name').eq('tenant_id', tenantId).eq('active', true).order('company_name');
+      const { data, error } = await supabase.from('clients').select('id, company_name').eq('tenant_id', tenantId).eq('active', true).order('company_name');
+      if (error) throw error;
       return data || [];
     },
     enabled: !!tenantId,
@@ -434,23 +479,25 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
 
   const toggleActive = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
-      const { error } = await supabase.from('client_portal_access').update({ active }).eq('id', id);
+      if (!tenantId) throw new Error('Tenant ativo não encontrado.');
+      const { error } = await supabase.from('client_portal_access').update({ active }).eq('id', id).eq('tenant_id', tenantId);
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['client_portal_access_admin'] }); toast.success('Acesso atualizado'); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao atualizar acesso')),
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('client_portal_access').delete().eq('id', id);
+      if (!tenantId) throw new Error('Tenant ativo não encontrado.');
+      const { error } = await supabase.from('client_portal_access').delete().eq('id', id).eq('tenant_id', tenantId);
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['client_portal_access_admin'] }); toast.success('Acesso removido'); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao remover acesso')),
   });
 
-  const clientMap = new Map(clients.map((c: any) => [c.id, c.company_name]));
+  const clientMap = new Map(clients.map(c => [c.id, c.company_name]));
 
   return (
     <div className="space-y-3">
@@ -487,7 +534,7 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
                   <TableCell>{clientMap.get(r.client_id) || r.client_id.slice(0, 8)}</TableCell>
                   <TableCell><Badge variant="outline" className="text-[10px]">{r.access_type}</Badge></TableCell>
                   <TableCell className="text-xs">
-                    {PERM_FIELDS.filter(([k]) => (r as any)[k]).map(([, l]) => l).join(' · ') || <span className="text-muted-foreground">—</span>}
+                    {PERM_FIELDS.filter(([key]) => r[key]).map(([, label]) => label).join(' · ') || <span className="text-muted-foreground">—</span>}
                   </TableCell>
                   <TableCell><Badge variant={r.active ? 'default' : 'secondary'}>{r.active ? 'Ativo' : 'Inativo'}</Badge></TableCell>
                   <TableCell className="text-right space-x-1">
@@ -507,7 +554,7 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
                     >
                       <Link2 className="h-3 w-3" />
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover acesso?')) remove.mutate(r.id); }}>
+                    <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover acesso?', { title: 'Remover acesso', confirmLabel: 'Remover' })) remove.mutate(r.id); }}>
                       <AlertTriangle className="h-3 w-3 text-destructive" />
                     </Button>
                   </TableCell>
@@ -521,7 +568,7 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
         open={open}
         onOpenChange={(v) => { if (!v) setEditing(null); setOpen(v); }}
         editing={editing}
-        clients={clients as any[]}
+        clients={clients}
         tenantId={tenantId}
       />
     </div>
@@ -529,7 +576,7 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
 }
 
 function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: {
-  open: boolean; onOpenChange: (v: boolean) => void; editing: PortalAccessRow | null; clients: any[]; tenantId?: string;
+  open: boolean; onOpenChange: (v: boolean) => void; editing: PortalAccessRow | null; clients: ClientOption[]; tenantId?: string;
 }) {
   const queryClient = useQueryClient();
   const [userId, setUserId] = useState('');
@@ -539,7 +586,7 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
   const [pickedLabel, setPickedLabel] = useState<string>('');
   const [clientId, setClientId] = useState('');
   const [accessType, setAccessType] = useState('full');
-  const [perms, setPerms] = useState<Record<string, boolean>>({});
+  const [perms, setPerms] = useState<Partial<Record<PortalPermissionKey, boolean>>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -549,7 +596,7 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
         setPickedLabel(editing.user_id);
         setClientId(editing.client_id);
         setAccessType(editing.access_type);
-        setPerms(Object.fromEntries(PERM_FIELDS.map(([k]) => [k, (editing as any)[k]])));
+        setPerms(Object.fromEntries(PERM_FIELDS.map(([key]) => [key, editing[key]])));
       } else {
         setUserId(''); setPickedLabel(''); setUserQuery(''); setUserResults([]);
         setClientId(''); setAccessType('full'); setPerms({});
@@ -558,20 +605,20 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
   }, [open, editing]);
 
   useEffect(() => {
-    if (!open || !tenantId) return;
+    if (!open || !tenantId) return undefined;
     const q = userQuery.trim();
-    if (q.length < 2) { setUserResults([]); return; }
+    if (q.length < 2) { setUserResults([]); return undefined; }
     const handle = setTimeout(async () => {
       setSearching(true);
       try {
-        const { data, error } = await supabase.functions.invoke('search-users-by-email', {
+        const { data, error } = await supabase.functions.invoke<EdgeUsersResponse>('search-users-by-email', {
           body: { tenant_id: tenantId, query: q },
         });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
         setUserResults(data?.users || []);
-      } catch (e: any) {
-        toast.error(e.message || 'Falha na busca de usuários');
+      } catch (error: unknown) {
+        toast.error(errorMessage(error, 'Falha na busca de usuários'));
       } finally { setSearching(false); }
     }, 300);
     return () => clearTimeout(handle);
@@ -581,16 +628,21 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
     if (!tenantId || !userId || !clientId) { toast.error('Preencha usuário, cliente e tipo'); return; }
     setLoading(true);
     try {
-      const payload: any = {
+      const payload: TablesInsert<'client_portal_access'> = {
         tenant_id: tenantId,
         user_id: userId.trim(),
         client_id: clientId,
         access_type: accessType,
         active: true,
-        ...Object.fromEntries(PERM_FIELDS.map(([k]) => [k, !!perms[k]])),
+        can_view_financial: !!perms.can_view_financial,
+        can_download_documents: !!perms.can_download_documents,
+        can_open_occurrences: !!perms.can_open_occurrences,
+        can_request_pickup: !!perms.can_request_pickup,
+        can_view_vehicle_live: !!perms.can_view_vehicle_live,
+        can_view_driver_contact: !!perms.can_view_driver_contact,
       };
       if (editing) {
-        const { error } = await supabase.from('client_portal_access').update(payload).eq('id', editing.id);
+        const { error } = await supabase.from('client_portal_access').update(payload).eq('id', editing.id).eq('tenant_id', tenantId);
         if (error) throw error;
         toast.success('Acesso atualizado');
       } else {
@@ -602,8 +654,8 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
       onOpenChange(false);
       setUserId(''); setPickedLabel(''); setUserQuery(''); setUserResults([]);
       setClientId(''); setAccessType('full'); setPerms({});
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, 'Falha ao salvar acesso'));
     } finally { setLoading(false); }
   };
 
@@ -662,7 +714,7 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
             <Select value={clientId} onValueChange={setClientId}>
               <SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
               <SelectContent>
-                {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -680,7 +732,7 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
             <div className="grid grid-cols-2 gap-2">
               {PERM_FIELDS.map(([k, label]) => (
                 <label key={k} className="flex items-center gap-2 text-xs cursor-pointer">
-                  <Checkbox checked={!!perms[k as string]} onCheckedChange={(c) => setPerms((p) => ({ ...p, [k as string]: !!c }))} />
+                  <Checkbox checked={!!perms[k]} onCheckedChange={(checked) => setPerms((current) => ({ ...current, [k]: !!checked }))} />
                   {label}
                 </label>
               ))}
@@ -727,18 +779,16 @@ function InviteDialog({
   onOpenChange,
   tenantId,
   drivers,
-  clients,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   tenantId?: string;
-  drivers: any[];
-  clients: any[];
+  drivers: DriverOption[];
 }) {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<string>('operator');
+  const [role, setRole] = useState<TeamRole>('operator');
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<'create' | 'existing'>('create');
 
@@ -749,27 +799,22 @@ function InviteDialog({
     setUserId('');
   };
 
-  const handleInvite = async () => {
-    if (!tenantId || !email.includes('@')) return;
+  const handleCreateAccount = async () => {
+    if (!tenantId || !email) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-team-member', {
-        body: {
-          tenant_id: tenantId,
-          email: email.trim(),
-          full_name: fullName || email.trim(),
-          role,
-        },
+      const { data, error } = await supabase.functions.invoke<CreateMemberResponse>('create-team-member', {
+        body: { tenant_id: tenantId, email, full_name: fullName || email, role },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-
-      toast.success('Convite enviado');
+      if (!data?.success || !data.email) throw new Error('Resposta inválida ao criar convite.');
+      toast.success(`Convite enviado para ${data.email}`);
       queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
       resetForm();
       onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao enviar convite');
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, 'Erro ao criar conta'));
     }
     setLoading(false);
   };
@@ -782,7 +827,7 @@ function InviteDialog({
       const { error } = await supabase.from('tenant_memberships').insert({
         tenant_id: tenantId,
         user_id: userId.trim(),
-        role: role as any,
+        role,
         active: true,
       });
       if (error) {
@@ -797,13 +842,13 @@ function InviteDialog({
         resetForm();
         onOpenChange(false);
       }
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, 'Erro ao vincular membro'));
     }
     setLoading(false);
   };
 
-  const isInviteValid = email.includes('@');
+  const isCreateValid = email.includes('@');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -811,13 +856,13 @@ function InviteDialog({
         <DialogHeader>
           <DialogTitle>Adicionar Membro</DialogTitle>
           <DialogDescription>
-            Convide por e-mail ou vincule um usuário existente à sua empresa.
+            Convide uma nova conta ou vincule um usuário existente à sua empresa.
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'create' | 'existing')}>
           <TabsList className="w-full">
-            <TabsTrigger value="create" className="flex-1"><UserPlus className="mr-1.5 h-3.5 w-3.5" />Convidar por e-mail</TabsTrigger>
+            <TabsTrigger value="create" className="flex-1"><UserPlus className="mr-1.5 h-3.5 w-3.5" />Convidar</TabsTrigger>
             <TabsTrigger value="existing" className="flex-1"><Users className="mr-1.5 h-3.5 w-3.5" />Usuário existente</TabsTrigger>
           </TabsList>
 
@@ -830,9 +875,10 @@ function InviteDialog({
               <Label>E-mail *</Label>
               <Input type="email" placeholder="joao@empresa.com" value={email} onChange={e => setEmail(e.target.value)} />
             </div>
+            <p className="text-xs text-muted-foreground">O usuário receberá um link seguro e definirá a própria senha.</p>
             <div className="space-y-2">
               <Label>Papel</Label>
-              <Select value={role} onValueChange={setRole}>
+              <Select value={role} onValueChange={(value) => { if (isTeamRole(value)) setRole(value); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Administrador — acesso total</SelectItem>
@@ -843,41 +889,25 @@ function InviteDialog({
               </Select>
             </div>
 
-            <div className="rounded-md bg-muted/50 p-3">
-              <p className="text-xs text-muted-foreground">
-                O convidado receberá um e-mail com link para definir a própria senha. O
-                administrador não define, visualiza nem altera senhas de terceiros.
-              </p>
-            </div>
-
             {role === 'driver' && drivers.length > 0 && (
               <div className="rounded-md bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground">
-                  <strong>Dica:</strong> Após o convite, vincule o usuário ao cadastro de motorista na página de Motoristas.
+                  <strong>Dica:</strong> Após criar a conta, vincule o usuário ao cadastro de motorista na página de Motoristas.
                 </p>
               </div>
             )}
-            {false && clients.length > 0 && (
-              <div className="rounded-md bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">
-                  <strong>Dica:</strong> Após criar a conta, vincule o usuário ao cadastro de cliente na página de Clientes.
-                </p>
-              </div>
-            )}
-
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button onClick={handleInvite} disabled={loading || !isInviteValid}>
+              <Button onClick={handleCreateAccount} disabled={loading || !isCreateValid}>
                 {loading ? 'Enviando...' : 'Enviar convite'}
               </Button>
             </div>
           </TabsContent>
 
-
           <TabsContent value="existing" className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label>Papel</Label>
-              <Select value={role} onValueChange={setRole}>
+              <Select value={role} onValueChange={(value) => { if (isTeamRole(value)) setRole(value); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Administrador — acesso total</SelectItem>
@@ -923,12 +953,12 @@ function EditMemberDialog({
 
   // Reset form when member changes
   const open = !!member;
-  useState(() => {
+  useEffect(() => {
     if (member) {
       setFullName(member.profile_name || '');
       setEmail(member.profile_email || '');
     }
-  });
+  }, [member]);
 
   // Use effect-like reset via key
   const handleOpenChange = (v: boolean) => {
@@ -956,15 +986,15 @@ function EditMemberDialog({
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('update-team-member', { body });
+      const { data, error } = await supabase.functions.invoke<UpdateMemberResponse>('update-team-member', { body });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
       toast.success('Conta atualizada com sucesso');
       queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
       handleOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao atualizar conta');
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, 'Erro ao atualizar conta'));
     }
     setLoading(false);
   };
@@ -999,20 +1029,12 @@ function EditMemberDialog({
             />
           </div>
 
-          <div className="space-y-2 rounded-md bg-muted/50 p-3">
-            <p className="flex items-center gap-1.5 text-xs font-medium">
-              <KeyRound className="h-3.5 w-3.5" />
-              Senha
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Senhas são definidas exclusivamente pelo próprio usuário, pelo link seguro recebido no
-              convite. Administradores não definem nem alteram senhas de terceiros.
-            </p>
-          </div>
-
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={loading}>
+            <Button
+              onClick={handleSave}
+              disabled={loading}
+            >
               {loading ? 'Salvando...' : 'Salvar alterações'}
             </Button>
           </div>

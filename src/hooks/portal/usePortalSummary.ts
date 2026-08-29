@@ -33,11 +33,11 @@ export function usePortalSummary(opts?: { clientId?: string | null; startDate?: 
       if (!currentTenant) {
         return empty;
       }
-      const { data, error } = await supabase.rpc('get_client_portal_summary_v2' as any, {
+      const { data, error } = await supabase.rpc('get_client_portal_summary_v2', {
         _tenant_id: currentTenant.id,
-        _client_id: clientId,
-        _start_date: startDate ?? null,
-        _end_date: endDate ?? null,
+        _client_id: clientId ?? undefined,
+        _start_date: startDate,
+        _end_date: endDate,
       });
       if (error) throw error;
       return { ...empty, ...(data as unknown as PortalSummary) };

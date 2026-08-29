@@ -16,11 +16,18 @@ export function normalizeCompanyName(name: string | null | undefined): string {
     .replace(/\s+/g, ' ');
 }
 
+export interface FiscalClientMatchCandidate {
+  tax_id?: string | null;
+  company_name?: string | null;
+  legal_name?: string | null;
+  address_city?: string | null;
+}
+
 /**
  * Verifica se um destinatário da NF-e (xml) corresponde a um cliente cadastrado,
  * considerando CNPJ e normalização de endereço/filiais.
  */
-export function matchClientForFiscalDoc(
+export function matchClientForFiscalDoc<T extends FiscalClientMatchCandidate>(
   recipient: {
     cnpj: string | null;
     name: string | null;
@@ -29,8 +36,8 @@ export function matchClientForFiscalDoc(
     address?: string | null;
     zip?: string | null;
   },
-  clients: any[]
-): any | null {
+  clients: readonly T[],
+): T | null {
   const cnpj = normalizeTaxId(recipient.cnpj);
   
   // 1. Busca por CNPJ exato (Método mais seguro)

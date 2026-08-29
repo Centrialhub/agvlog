@@ -2,19 +2,22 @@ import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useAuth } from '@/hooks/useAuth';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
 import { useCreateLoad, getNextLoadNumberFromExisting } from '@/hooks/useLoads';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileStack, MapPin, Truck, CheckCircle, Loader2, AlertTriangle, X, User, UserX } from 'lucide-react';
+import { FileStack, MapPin, Truck, CheckCircle, Loader2, User, UserX } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
+import type { Json } from '@/integrations/supabase/types';
+import type { JsonObject } from '@/lib/jsonTypes';
+import { getErrorMessage } from '@/lib/errors';
+import { matchOperationalRoute } from '@/lib/routes/matchOperationalRoute';
 
 interface PendingDoc {
   id: string;
@@ -40,17 +43,18 @@ interface RouteGroup {
   ambiguousCities?: string[];
 }
 
-import { normalizeCity } from '@/lib/utils/normalizeCity';
-
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onCreated: () => void;
 }
 
+function jsonRecord(value: Json): JsonObject | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : null;
+}
+
 export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: Props) {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const { data: vehicles = [] } = useVehicles();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
   const createLoad = useCreateLoad();
@@ -65,7 +69,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers_for_grouping', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return [] as any[];
+      if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('drivers')
         .select('id, name, user_id, current_vehicle_id, active')
@@ -103,7 +107,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
       id: r.id,
       name: r.name,
       destinations: Array.isArray(r.destinations)
-        ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' }))
+        ? r.destinations.map(destination => ({ name: typeof destination === 'string' ? destination : destination.name || '' }))
         : [],
     }));
 
@@ -111,30 +115,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
 
     for (const doc of pendingDocs) {
       const city = doc.recipient_city || '';
-      const normalized = normalizeCity(city);
-
-      // 1) match exato tem prioridade absoluta; 2) só considera substring quando não há exato.
-      // Coleta todos os candidatos exatos para sinalizar ambiguidade quando >1 rota cobre a cidade.
-      const exactMatches = routeRefs.filter(route =>
-        route.destinations.some(dest => normalizeCity(dest.name) === normalized)
-      );
-      // Fuzzy fallback com limite de palavra: "RIO" só casa com cidades que contenham
-      // "RIO" como palavra inteira (não com "RIO PARDO"), evitando falsos positivos.
-      const fuzzyMatches = exactMatches.length > 0 ? [] : routeRefs.filter(route =>
-        route.destinations.some(dest => {
-          const nd = normalizeCity(dest.name);
-          if (!nd) return false;
-          const escaped = nd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const wordRe = new RegExp(`(^|\\s)${escaped}(\\s|$)`);
-          return wordRe.test(normalized) || wordRe.test(nd) && new RegExp(`(^|\\s)${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`).test(nd);
-        })
-      );
-      const candidates = exactMatches.length > 0 ? exactMatches : fuzzyMatches;
-      // Determinístico: se >1, escolhe pelo menor nome (estável) e marca ambiguidade.
-      const matchedRoute = candidates.length > 0
-        ? [...candidates].sort((a, b) => a.name.localeCompare(b.name))[0]
-        : null;
-      const ambiguous = candidates.length > 1;
+      const { matched: matchedRoute, ambiguous } = matchOperationalRoute(city, routeRefs);
 
       const key = matchedRoute ? matchedRoute.name : (city ? `${doc.recipient_state || ''} - ${city}` : 'Sem região');
       
@@ -172,10 +153,10 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     if (groups.length > 0 && selectedGroups.size === 0) {
       setSelectedGroups(new Set(groups.map(g => g.routeName)));
     }
-  }, [groups]);
+  }, [groups, selectedGroups.size]);
 
   // Auto-suggest vehicles
-  const vehiclesWithCapacity = useMemo(() => vehicles.filter((v: any) => (v.max_pallets || 0) > 0), [vehicles]);
+  const vehiclesWithCapacity = useMemo(() => vehicles.filter(vehicle => (vehicle.max_pallets || 0) > 0), [vehicles]);
 
   useEffect(() => {
     if (vehiclesWithCapacity.length === 0 || groups.length === 0) return;
@@ -184,9 +165,9 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     const sorted = [...groups].sort((a, b) => b.totalPallets - a.totalPallets);
     for (const g of sorted) {
       const best = vehiclesWithCapacity
-        .filter((v: any) => !used.has(v.id))
-        .filter((v: any) => (v.max_pallets || 0) >= g.totalPallets)
-        .sort((a: any, b: any) => (a.max_pallets || 0) - (b.max_pallets || 0))[0] as any;
+        .filter(vehicle => !used.has(vehicle.id))
+        .filter(vehicle => (vehicle.max_pallets || 0) >= g.totalPallets)
+        .sort((left, right) => (left.max_pallets || 0) - (right.max_pallets || 0))[0];
       if (best) {
         used.add(best.id);
         newMap.set(g.routeName, best.id);
@@ -202,9 +183,9 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     for (const g of groups) {
       const vId = vehicleAssignments.get(g.routeName);
       if (!vId) continue;
-      const veh = (vehicles as any[]).find(v => v.id === vId);
+      const veh = vehicles.find(vehicle => vehicle.id === vId);
       const derived = veh?.current_driver_id
-        ? (drivers as any[]).find(d => d.id === veh.current_driver_id)
+        ? drivers.find(driver => driver.id === veh.current_driver_id)
         : null;
       if (derived) next.set(g.routeName, derived.id);
     }
@@ -249,29 +230,29 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
             vehicle_id: vehicleId,
             driver_id: driverId,
             status: 'planned',
-          } as any);
+          });
           createdLoadId = createdLoad.id;
 
           // Vincula documentos à carga via RPC oficial (cria load_items + atualiza fiscal_documents + audita)
           const docIds = group.docs.map(d => d.id);
           if (docIds.length > 0) {
-            const { data: assignResult, error: assignError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+            const { data: assignResult, error: assignError } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
               _tenant_id: currentTenant!.id,
               _load_id: createdLoad.id,
               _document_ids: docIds,
             });
             if (assignError) throw assignError;
-            const updatedCount = Number((assignResult as any)?.updated ?? docIds.length);
+            const updatedCount = Number(jsonRecord(assignResult)?.updated ?? docIds.length);
             if (updatedCount !== docIds.length) {
               throw new Error(`Vínculo incompleto: ${updatedCount} de ${docIds.length} NF(s).`);
             }
           }
 
           created++;
-        } catch (error: any) {
+        } catch (error: unknown) {
           if (createdLoadId && currentTenant) {
             try {
-              await (supabase as any).rpc('delete_load_safely', {
+              await supabase.rpc('delete_load_safely', {
                 _tenant_id: currentTenant.id,
                 _load_id: createdLoadId,
               });
@@ -280,7 +261,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
             }
           }
           errors++;
-          errorMessages.push(`${group.routeName}: ${error?.message || 'falha ao criar carga'}`);
+          errorMessages.push(`${group.routeName}: ${getErrorMessage(error, 'falha ao criar carga')}`);
         }
       }
 
@@ -306,7 +287,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
 
   const getOccupancy = (group: RouteGroup) => {
     const vId = vehicleAssignments.get(group.routeName);
-    const vehicle = vId ? (vehicles as any[]).find(v => v.id === vId) : null;
+    const vehicle = vId ? vehicles.find(candidate => candidate.id === vId) : null;
     if (!vehicle || !vehicle.max_pallets) return null;
     const pct = Math.round((group.totalPallets / vehicle.max_pallets) * 100);
     return { pct, vehicle };
@@ -391,12 +372,12 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">Sem veículo</SelectItem>
-                            {(vehicles as any[]).map(v => (
-                              <SelectItem key={v.id} value={v.id}>
+                            {vehicles.map(vehicle => (
+                              <SelectItem key={vehicle.id} value={vehicle.id}>
                                 <div className="flex items-center gap-1">
                                   <Truck className="h-3 w-3 shrink-0" />
-                                  <span>{v.plate}</span>
-                                  {v.max_pallets && <span className="text-muted-foreground">({v.max_pallets}p)</span>}
+                                  <span>{vehicle.plate}</span>
+                                  {vehicle.max_pallets && <span className="text-muted-foreground">({vehicle.max_pallets}p)</span>}
                                 </div>
                               </SelectItem>
                             ))}
@@ -417,12 +398,12 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">Sem motorista</SelectItem>
-                            {(drivers as any[]).map(d => (
-                              <SelectItem key={d.id} value={d.id}>
+                            {drivers.map(driver => (
+                              <SelectItem key={driver.id} value={driver.id}>
                                 <div className="flex items-center gap-1">
-                                  {d.user_id ? <User className="h-3 w-3 shrink-0" /> : <UserX className="h-3 w-3 shrink-0 text-warning" />}
-                                  <span>{d.name}</span>
-                                  {!d.user_id && <span className="text-warning text-[9px]">(sem app)</span>}
+                                  {driver.user_id ? <User className="h-3 w-3 shrink-0" /> : <UserX className="h-3 w-3 shrink-0 text-warning" />}
+                                  <span>{driver.name}</span>
+                                  {!driver.user_id && <span className="text-warning text-[9px]">(sem app)</span>}
                                 </div>
                               </SelectItem>
                             ))}

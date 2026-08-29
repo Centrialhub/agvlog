@@ -1,8 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
+import { useTenant } from './useTenant';
 
 const PRE_TRIP_TOTAL = 8;
 const POST_TRIP_TOTAL = 5;
+
+function checkedItemCount(payload: Json | null | undefined): number {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return 0;
+  return Array.isArray(payload.checked_items) ? payload.checked_items.length : 0;
+}
 
 export interface ChecklistStatus {
   preCompleted: boolean;
@@ -15,14 +22,16 @@ export interface ChecklistStatus {
 }
 
 export function useChecklistStatus(tripId: string | undefined): ChecklistStatus {
+  const { currentTenant } = useTenant();
   const { data, isLoading } = useQuery({
-    queryKey: ['checklist_status', tripId],
+    queryKey: ['checklist_status', currentTenant?.id, tripId],
     queryFn: async () => {
       try {
-        if (!tripId) return { pre: null, post: null };
+        if (!tripId || !currentTenant) return { pre: null, post: null };
         const { data: events, error } = await supabase
           .from('dispatch_events')
           .select('event_type, payload')
+          .eq('tenant_id', currentTenant.id)
           .eq('dispatch_trip_id', tripId)
           .in('event_type', ['checklist_pre', 'checklist_post'])
           .order('event_at', { ascending: false });
@@ -31,21 +40,19 @@ export function useChecklistStatus(tripId: string | undefined): ChecklistStatus 
           console.error('[useChecklistStatus] Query error:', error);
           return { pre: null, post: null };
         }
-        const pre = events?.find((e: any) => e.event_type === 'checklist_pre');
-        const post = events?.find((e: any) => e.event_type === 'checklist_post');
+        const pre = events?.find((event) => event.event_type === 'checklist_pre');
+        const post = events?.find((event) => event.event_type === 'checklist_post');
         return { pre, post };
       } catch (err) {
         console.error('[useChecklistStatus] Fatal error:', err);
         return { pre: null, post: null };
       }
     },
-    enabled: !!tripId,
+    enabled: !!tripId && !!currentTenant,
   });
 
-  const prePayload = (data?.pre as any)?.payload;
-  const postPayload = (data?.post as any)?.payload;
-  const preCheckedCount = prePayload?.checked_items?.length || 0;
-  const postCheckedCount = postPayload?.checked_items?.length || 0;
+  const preCheckedCount = checkedItemCount(data?.pre?.payload);
+  const postCheckedCount = checkedItemCount(data?.post?.payload);
 
   return {
     preCompleted: preCheckedCount === PRE_TRIP_TOTAL,

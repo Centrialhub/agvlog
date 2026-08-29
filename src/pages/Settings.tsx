@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { confirmAction } from '@/hooks/useAlertStore';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { INTEGRATION_ACCOUNT_SAFE_SELECT } from '@/integrations/supabase/selects';
+import type { Json, Tables } from '@/integrations/supabase/types';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
-import { useAuth } from '@/hooks/useAuth';
+import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useProviderUnits, useProviderUnitMutations, useTrackerLinks, useTrackerLinkMutations } from '@/hooks/useProviderUnits';
 import { Button } from '@/components/ui/button';
@@ -17,13 +20,70 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/components/ui/sonner';
 import {
   Plug, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Clock, Plus, Trash2,
-  Activity, Wifi, Link2, Unlink, Radio,
+  Activity, Wifi, Link2, Unlink, Radio, Pencil,
 } from 'lucide-react';
 import { CompanySettings } from '@/components/settings/CompanySettings';
 import { InsuranceSettings } from '@/components/settings/InsuranceSettings';
 import EmittersSettings from '@/components/settings/EmittersSettings';
+import { IntegrationUnavailable } from '@/components/integrations/IntegrationUnavailable';
+
+type IntegrationAccount = Pick<
+  Tables<'integration_accounts'>,
+  | 'id'
+  | 'tenant_id'
+  | 'provider'
+  | 'base_url'
+  | 'username'
+  | 'status'
+  | 'settings'
+  | 'last_login_at'
+  | 'last_error'
+  | 'created_at'
+  | 'updated_at'
+  | 'token_expires_at'
+>;
+
+interface SsxAccountSettings {
+  sync_units_backoff_until?: string;
+  last_units_sync_at?: string;
+  credential_reentry_required?: boolean;
+}
+
+interface SsxMutationError extends Error {
+  retryAt?: string;
+  cooldownActive?: boolean;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function parseObject(value: unknown): Record<string, unknown> | null {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function readSsxSettings(value: Json): SsxAccountSettings {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as SsxAccountSettings
+    : {};
+}
 
 export default function Settings() {
+  const { isEnabled, error, refetch } = useTenantCapabilities();
+  const ssxEnabled = isEnabled('ssx');
+  const ssxUnavailable = (
+    <IntegrationUnavailable
+      capability="ssx"
+      degraded={Boolean(error)}
+      onRetry={error ? () => { void refetch(); } : undefined}
+    />
+  );
+
   return (
     <div className="animate-fade-in space-y-6">
       <div>
@@ -34,10 +94,10 @@ export default function Settings() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="company">Empresa</TabsTrigger>
           <TabsTrigger value="emitters">Emitentes Fiscais</TabsTrigger>
-          <TabsTrigger value="integration">Integração SSX</TabsTrigger>
-          <TabsTrigger value="units">Rastreadores</TabsTrigger>
-          <TabsTrigger value="telemetry">Catálogo Telemetria</TabsTrigger>
-          <TabsTrigger value="mapping">Mapeamento</TabsTrigger>
+          <TabsTrigger value="integration" disabled={!ssxEnabled}>Integração SSX · Em implantação</TabsTrigger>
+          <TabsTrigger value="units" disabled={!ssxEnabled}>Rastreadores</TabsTrigger>
+          <TabsTrigger value="telemetry" disabled={!ssxEnabled}>Catálogo Telemetria</TabsTrigger>
+          <TabsTrigger value="mapping" disabled={!ssxEnabled}>Mapeamento</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
           <TabsTrigger value="maintenance">Manutenção</TabsTrigger>
         </TabsList>
@@ -46,10 +106,10 @@ export default function Settings() {
           <InsuranceSettings />
         </TabsContent>
         <TabsContent value="emitters" className="mt-4"><EmittersSettings /></TabsContent>
-        <TabsContent value="integration" className="mt-4"><IntegrationSection /></TabsContent>
-        <TabsContent value="units" className="mt-4"><UnitsSection /></TabsContent>
-        <TabsContent value="telemetry" className="mt-4"><TelemetryCatalogSection /></TabsContent>
-        <TabsContent value="mapping" className="mt-4"><TelemetryMappingSection /></TabsContent>
+        <TabsContent value="integration" className="mt-4">{ssxEnabled ? <IntegrationSection /> : ssxUnavailable}</TabsContent>
+        <TabsContent value="units" className="mt-4">{ssxEnabled ? <UnitsSection /> : ssxUnavailable}</TabsContent>
+        <TabsContent value="telemetry" className="mt-4">{ssxEnabled ? <TelemetryCatalogSection /> : ssxUnavailable}</TabsContent>
+        <TabsContent value="mapping" className="mt-4">{ssxEnabled ? <TelemetryMappingSection /> : ssxUnavailable}</TabsContent>
         <TabsContent value="logs" className="mt-4"><IntegrationLogsSection /></TabsContent>
         <TabsContent value="maintenance" className="mt-4"><MaintenanceSection /></TabsContent>
       </Tabs>
@@ -140,12 +200,13 @@ function IntegrationSection() {
   const { currentTenant } = useTenant();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<IntegrationAccount | null>(null);
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['integration_accounts', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.from('integration_accounts').select('*')
+      const { data, error } = await supabase.from('integration_accounts').select(INTEGRATION_ACCOUNT_SAFE_SELECT)
         .eq('tenant_id', currentTenant.id).order('created_at', { ascending: false });
       if (error) throw error;
       return data;
@@ -159,12 +220,14 @@ function IntegrationSection() {
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['integration_accounts'] }); toast.success('Integração removida'); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: unknown) => toast.error(errorMessage(e)),
   });
 
   const loginMutation = useMutation({
     mutationFn: async (accountId: string) => {
-      const { data, error } = await supabase.functions.invoke('ssx-login', { body: { integration_account_id: accountId } });
+      const { data, error } = await supabase.functions.invoke('ssx-login', {
+        body: { integration_account_id: accountId, force: true },
+      });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return data;
@@ -173,7 +236,14 @@ function IntegrationSection() {
       queryClient.invalidateQueries({ queryKey: ['integration_accounts'] });
       toast.success(data.cached ? 'Token ainda válido (cache)' : 'Login SSX realizado!');
     },
-    onError: (e: any) => toast.error(`Falha no login SSX: ${e.message}`),
+    onError: (e: unknown) => {
+      const message = errorMessage(e);
+      toast.error(
+        message.includes('informada novamente') || message.includes('CREDENTIAL_REENTRY')
+          ? 'Regrave a senha SSX pelo botão “Atualizar credencial”.'
+          : `Falha no login SSX: ${message}`,
+      );
+    },
   });
 
   const syncTelemetryMutation = useMutation({
@@ -184,27 +254,26 @@ function IntegrationSection() {
       return data;
     },
     onSuccess: (data) => { queryClient.invalidateQueries({ queryKey: ['telemetry_catalog'] }); toast.success(`Sincronizado: ${data.upserted} telemetrias`); },
-    onError: (e: any) => toast.error(`Falha: ${e.message}`),
+    onError: (e: unknown) => toast.error(`Falha: ${errorMessage(e)}`),
   });
 
   const syncUnitsMutation = useMutation({
     mutationFn: async ({ accountId, force }: { accountId: string; force?: boolean }) => {
       const { data, error } = await supabase.functions.invoke('ssx-sync-units', { body: { integration_account_id: accountId, force: !!force } });
       // Parse error from any source (SDK puts body in error.message, error.context, or even data for some versions)
-      const tryParse = (v: any): any => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
-      const parsed = tryParse(error?.message) || tryParse(error?.context) || (error ? null : undefined);
+      const parsed = parseObject(error?.message) || parseObject(error?.context);
       if (error) {
-        const info = parsed || data || {};
-        if (info?.cooldown_active || info?.retry_at) {
-          const err = new Error(info.error || 'Rate limit') as any;
-          err.retryAt = info.retry_at;
-          err.cooldownActive = info.cooldown_active;
+        const info = parsed || parseObject(data) || {};
+        if (info.cooldown_active || info.retry_at) {
+          const err = new Error(String(info.error || 'Rate limit')) as SsxMutationError;
+          err.retryAt = typeof info.retry_at === 'string' ? info.retry_at : undefined;
+          err.cooldownActive = info.cooldown_active === true;
           throw err;
         }
-        throw new Error(info?.error || error.message || 'Erro desconhecido');
+        throw new Error(String(info.error || error.message || 'Erro desconhecido'));
       }
       if (data?.error) {
-        const err = new Error(data.error) as any;
+        const err = new Error(data.error) as SsxMutationError;
         err.retryAt = data.retry_at;
         err.cooldownActive = data.cooldown_active;
         throw err;
@@ -225,7 +294,7 @@ function IntegrationSection() {
         toast.success(`Sincronizado (${method}${endpoint}): ${data.upserted} rastreadores, ${data.vehicles_created || 0} veículos, ${data.links_created || 0} vínculos`);
       }
     },
-    onError: (e: any) => {
+    onError: (e: SsxMutationError) => {
       if (e.retryAt || e.cooldownActive) {
         const retryTime = e.retryAt ? new Date(e.retryAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
         toast.error(`Limite SSX excedido. Tente novamente${retryTime ? ` às ${retryTime}` : ' em alguns minutos'}.`, { duration: 8000 });
@@ -249,9 +318,13 @@ function IntegrationSection() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['positions_last'] });
       queryClient.invalidateQueries({ queryKey: ['alert_instances'] });
+      if (data.status === 'attention_required') {
+        toast.error('Pipeline pausado: regrave a senha SSX em “Atualizar credencial”.');
+        return;
+      }
       toast.success(`Pipeline concluído: ${data.total_inserted || 0} posições, ${data.processed_vehicles || 0} veículos processados`);
     },
-    onError: (e: any) => toast.error(`Falha no pipeline: ${e.message}`),
+    onError: (e: unknown) => toast.error(`Falha no pipeline: ${errorMessage(e)}`),
   });
 
   const statusBadge = (status: string) => {
@@ -270,7 +343,7 @@ function IntegrationSection() {
           <h2 className="text-lg font-semibold text-foreground">Contas de Integração SSX</h2>
           <p className="text-sm text-muted-foreground">Configure suas credenciais de rastreamento</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Nova integração</Button>
+        <Button onClick={() => { setEditingAccount(null); setDialogOpen(true); }}><Plus className="mr-2 h-4 w-4" />Nova integração</Button>
       </div>
 
       {isLoading ? (
@@ -283,7 +356,7 @@ function IntegrationSection() {
         </CardContent></Card>
       ) : (
         <div className="space-y-4">
-          {accounts.map((acc: any) => (
+          {(accounts as IntegrationAccount[]).map((acc) => (
             <Card key={acc.id}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -309,13 +382,20 @@ function IntegrationSection() {
                   <Button size="sm" onClick={() => loginMutation.mutate(acc.id)} disabled={loginMutation.isPending}>
                     <RefreshCw className={`mr-2 h-3 w-3 ${loginMutation.isPending ? 'animate-spin' : ''}`} />Testar Login
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={acc.status === 'invalid_credentials' ? 'default' : 'outline'}
+                    onClick={() => { setEditingAccount(acc); setDialogOpen(true); }}
+                  >
+                    <Pencil className="mr-2 h-3 w-3" />Atualizar credencial
+                  </Button>
                    {(() => {
-                      const s = acc.settings as any;
+                      const s = readSsxSettings(acc.settings);
                       const backoffUntil = s?.sync_units_backoff_until;
-                      const isCooldown = backoffUntil && new Date(backoffUntil).getTime() > Date.now();
-                      const retryTime = isCooldown ? new Date(backoffUntil).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+                       const isCooldown = Boolean(backoffUntil && new Date(backoffUntil).getTime() > Date.now());
+                       const retryTime = isCooldown && backoffUntil ? new Date(backoffUntil).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
                       const lastSync = s?.last_units_sync_at;
-                      const hasCachedSync = lastSync && (Date.now() - new Date(lastSync).getTime()) < 3600000;
+                       const hasCachedSync = Boolean(lastSync && (Date.now() - new Date(lastSync).getTime()) < 3600000);
                       return (
                         <>
                           <Button size="sm" variant="outline" onClick={() => syncUnitsMutation.mutate({ accountId: acc.id })} disabled={syncUnitsMutation.isPending || !['ok', 'degraded'].includes(acc.status) || isCooldown}>
@@ -336,7 +416,7 @@ function IntegrationSection() {
                    <Button size="sm" variant="outline" onClick={() => pollMutation.mutate(acc.id)} disabled={pollMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
                     <Radio className={`mr-2 h-3 w-3 ${pollMutation.isPending ? 'animate-spin' : ''}`} />Rodar Polling
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover integração?')) deleteMutation.mutate(acc.id); }}>
+                  <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover integração?', { title: 'Remover integração', confirmLabel: 'Remover' })) deleteMutation.mutate(acc.id); }}>
                     <Trash2 className="h-3 w-3 text-destructive" />
                   </Button>
                 </div>
@@ -345,12 +425,22 @@ function IntegrationSection() {
           ))}
         </div>
       )}
-      <IntegrationDialog open={dialogOpen} onOpenChange={setDialogOpen} tenantId={currentTenant?.id} />
+      <IntegrationDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        tenantId={currentTenant?.id}
+        account={editingAccount}
+      />
     </div>
   );
 }
 
-function IntegrationDialog({ open, onOpenChange, tenantId }: { open: boolean; onOpenChange: (v: boolean) => void; tenantId?: string }) {
+function IntegrationDialog({ open, onOpenChange, tenantId, account }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  tenantId?: string;
+  account: IntegrationAccount | null;
+}) {
   const queryClient = useQueryClient();
   const [baseUrl, setBaseUrl] = useState('https://integration.systemsatx.com.br');
   const [username, setUsername] = useState('');
@@ -359,6 +449,15 @@ function IntegrationDialog({ open, onOpenChange, tenantId }: { open: boolean; on
   const [hashcode, setHashcode] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (!open) return;
+    setBaseUrl(account?.base_url || 'https://integration.systemsatx.com.br');
+    setUsername(account?.username || '');
+    setPassword('');
+    setHashauth('');
+    setHashcode('');
+  }, [account, open]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId) return;
@@ -366,17 +465,18 @@ function IntegrationDialog({ open, onOpenChange, tenantId }: { open: boolean; on
     try {
       const { data, error } = await supabase.functions.invoke('agvlog-integration-upsert', {
         body: {
+          id: account?.id,
           tenant_id: tenantId, base_url: baseUrl, username, password,
           hashauth: hashauth || null, hashcode: hashcode || null,
         },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success('Integração criada! Faça o teste de login.');
+      toast.success(account ? 'Credencial atualizada. Faça o teste de login.' : 'Integração criada! Faça o teste de login.');
       queryClient.invalidateQueries({ queryKey: ['integration_accounts'] });
       onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(errorMessage(err));
     }
     setLoading(false);
   };
@@ -384,24 +484,24 @@ function IntegrationDialog({ open, onOpenChange, tenantId }: { open: boolean; on
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Nova Integração SSX</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{account ? 'Atualizar credencial SSX' : 'Nova Integração SSX'}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2"><Label>URL Base</Label><Input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} required /></div>
           <div className="space-y-2"><Label>Usuário</Label><Input value={username} onChange={e => setUsername(e.target.value)} required /></div>
           <div className="space-y-2"><Label>Senha</Label><Input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></div>
           <div className="space-y-2">
             <Label>HashAuth</Label>
-            <Input value={hashauth} onChange={e => setHashauth(e.target.value)} placeholder="Recomendado para polling" />
-            {!hashauth && (
+            <Input value={hashauth} onChange={e => setHashauth(e.target.value)} placeholder={account ? 'Deixe em branco para manter o atual' : 'Recomendado para polling'} />
+            {!account && !hashauth && (
               <p className="text-xs text-warning">
                 ⚠ Sem HashAuth, o polling de posições (PositionHistory) e violações de regras podem não funcionar. Configure se disponível.
               </p>
             )}
           </div>
-          <div className="space-y-2"><Label>Hashcode</Label><Input value={hashcode} onChange={e => setHashcode(e.target.value)} placeholder="Opcional" /></div>
+          <div className="space-y-2"><Label>Hashcode</Label><Input value={hashcode} onChange={e => setHashcode(e.target.value)} placeholder={account ? 'Deixe em branco para manter o atual' : 'Opcional'} /></div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
+            <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : account ? 'Atualizar' : 'Salvar'}</Button>
           </div>
         </form>
       </DialogContent>
@@ -515,7 +615,7 @@ function UnitsSection() {
                     <TableCell>{u.label || '—'}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{u.integration_account_id?.slice(0, 8)}...</TableCell>
                     <TableCell>{linkedUnitIds.has(u.id) ? <Badge className="bg-success text-success-foreground text-xs"><Link2 className="mr-1 h-3 w-3" />Vinculado</Badge> : <Badge variant="secondary" className="text-xs"><Unlink className="mr-1 h-3 w-3" />Livre</Badge>}</TableCell>
-                    <TableCell><Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover?')) removeUnit.mutate(u.id); }}><Trash2 className="h-3 w-3 text-destructive" /></Button></TableCell>
+                    <TableCell><Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover esta unidade?', { title: 'Remover unidade', confirmLabel: 'Remover' })) removeUnit.mutate(u.id); }}><Trash2 className="h-3 w-3 text-destructive" /></Button></TableCell>
                   </TableRow>
                 ))
               )}
@@ -581,7 +681,7 @@ function UnitsSection() {
                     <TableCell className="font-medium">{l.vehicles?.plate || '—'}{l.vehicles?.nickname ? ` (${l.vehicles.nickname})` : ''}</TableCell>
                     <TableCell className="font-mono text-xs">{l.provider_units?.external_code || '—'}{l.provider_units?.label ? ` (${l.provider_units.label})` : ''}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{new Date(l.start_at).toLocaleDateString('pt-BR')}</TableCell>
-                    <TableCell><Button size="sm" variant="ghost" onClick={() => { if (confirm('Desvincular?')) removeLink.mutate(l.id); }}><Unlink className="h-3 w-3 text-destructive" /></Button></TableCell>
+                    <TableCell><Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Desvincular veículo e unidade?', { title: 'Desvincular unidade', confirmLabel: 'Desvincular' })) removeLink.mutate(l.id); }}><Unlink className="h-3 w-3 text-destructive" /></Button></TableCell>
                   </TableRow>
                 ))
               )}

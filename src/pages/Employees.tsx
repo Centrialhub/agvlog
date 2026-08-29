@@ -5,6 +5,7 @@ import {
   useEmployeeAdvances, useEmployeeIncidentActions,
   CONTRACT_TYPES, CONTRACT_TYPE_LABELS, EMPLOYMENT_REGIMES, EMPLOYMENT_REGIME_LABELS,
   PAYMENT_CYCLES, PAYMENT_CYCLE_LABELS, ADVANCE_STATUS_LABELS,
+  type EmployeeContract,
 } from '@/hooks/usePayroll';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -22,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, Plus, Users, Edit, AlertTriangle, Eye } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { format, differenceInDays, parseISO } from 'date-fns';
+import { getErrorMessage } from '@/lib/errors';
 
 export default function Employees() {
   const { data: employees = [], isLoading } = useEmployees();
@@ -80,16 +82,29 @@ export default function Employees() {
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error('Nome obrigatório'); return; }
-    const payload: any = { ...form };
-    Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = null; });
-    payload.name = form.name;
-    payload.status = form.status;
+    const payload = {
+      name: form.name,
+      doc_cpf: form.doc_cpf || null,
+      role_title: form.role_title || null,
+      department: form.department || null,
+      branch: form.branch || null,
+      cost_center: form.cost_center || null,
+      phone: form.phone || null,
+      email: form.email || null,
+      hire_date: form.hire_date || null,
+      cnh_number: form.cnh_number || null,
+      cnh_category: form.cnh_category || null,
+      cnh_expiry: form.cnh_expiry || null,
+      medical_exam_expiry: form.medical_exam_expiry || null,
+      status: form.status,
+      notes: form.notes || null,
+    };
     try {
       if (editing) await updateEmployee.mutateAsync({ id: editing.id, ...payload });
       else await createEmployee.mutateAsync(payload);
       setDialogOpen(false);
       toast.success(editing ? 'Funcionário atualizado' : 'Funcionário cadastrado');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível salvar o funcionário.')); }
   };
 
   const statusColor = (s: string) => {
@@ -265,7 +280,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
         .eq('employee_id', employee.id)
         .order('created_at', { ascending: false }).limit(20);
       if (error) throw error;
-      return data as any[];
+      return data || [];
     },
   });
   const { data: driverInfo } = useQuery({
@@ -289,7 +304,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
         .eq('driver_id', employee.driver_id)
         .order('trip_completed_at', { ascending: false, nullsFirst: false }).limit(10);
       if (error) throw error;
-      return data as any[];
+      return data || [];
     },
     enabled: !!employee.driver_id,
   });
@@ -336,7 +351,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
                 <TableHead>Ação</TableHead><TableHead className="text-right">Desconto</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {incidentActions.map((a: any) => (
+                {incidentActions.map(a => (
                   <TableRow key={a.id} className={Number(a.amount) > 0 ? 'bg-red-500/5' : ''}>
                     <TableCell className="text-xs">{a.created_at ? format(new Date(a.created_at), 'dd/MM/yyyy') : '—'}</TableCell>
                     <TableCell className="text-xs">{a.incidents?.title || '—'}</TableCell>
@@ -363,7 +378,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
                 <TableHead>Status</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {payrollEntries.map((e: any) => (
+                {payrollEntries.map(e => (
                   <TableRow key={e.id}>
                     <TableCell className="text-xs">{e.payroll_periods?.period_name || '—'}</TableCell>
                     <TableCell className="text-right text-xs">{fmtBRL(Number(e.gross_amount))}</TableCell>
@@ -425,7 +440,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
                     <TableHead>Status</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
-                    {driverSettlements.map((s: any) => {
+                    {driverSettlements.map(s => {
                       const start = s.trip_started_at || s.created_at;
                       const end = s.trip_completed_at || s.created_at;
                       const fmtDate = (d: string | null | undefined) =>
@@ -450,7 +465,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
   );
 }
 
-function ContractTab({ employeeId, contracts }: { employeeId: string; contracts: any[] }) {
+function ContractTab({ employeeId, contracts }: { employeeId: string; contracts: EmployeeContract[] }) {
   const create = useCreateEmployeeContract();
   const update = useUpdateEmployeeContract();
   const [showNew, setShowNew] = useState(false);
@@ -470,10 +485,10 @@ function ContractTab({ employeeId, contracts }: { employeeId: string; contracts:
         base_salary: Number(form.base_salary) || 0,
         start_date: form.start_date,
         active: true,
-      } as any);
+      });
       toast.success('Contrato criado (anterior desativado automaticamente)');
       setShowNew(false);
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível criar o contrato.')); }
   };
   return (
     <div className="space-y-3">
@@ -520,7 +535,7 @@ function ContractTab({ employeeId, contracts }: { employeeId: string; contracts:
             <TableHead></TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {contracts.map((c: any) => (
+            {contracts.map(c => (
               <TableRow key={c.id}>
                 <TableCell>{c.active ? <Badge className="text-[10px]">Ativo</Badge> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
                 <TableCell className="text-xs">{CONTRACT_TYPE_LABELS[c.contract_type] || c.contract_type}</TableCell>

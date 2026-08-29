@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { generateDoccob } from '../doccobGenerator';
 import { DOCCOB_LINE_LENGTHS } from '../doccobTypes';
+import type { DoccobBuildInput } from '../doccobTypes';
 
-const baseInput = () => ({
+const baseInput = (): DoccobBuildInput => ({
   carrier: { cnpj: '12.345.678/0001-90', name: 'AGV Transportes LTDA' },
   profile: {
     destinationName: 'CLARA SISTEMAS',
@@ -57,7 +58,7 @@ const baseInput = () => ({
 
 describe('generateDoccob', () => {
   it('gera arquivo com registros na ordem correta e CRLF', () => {
-    const res = generateDoccob(baseInput() as any);
+    const res = generateDoccob(baseInput());
     const lines = res.content.split('\r\n').filter(Boolean);
     const types = lines.map((l) => l.slice(0, 3));
     expect(types[0]).toBe('000');
@@ -71,7 +72,7 @@ describe('generateDoccob', () => {
   });
 
   it('respeita comprimento de linha por tipo de registro', () => {
-    const res = generateDoccob(baseInput() as any);
+    const res = generateDoccob(baseInput());
     for (const line of res.content.split('\r\n').filter(Boolean)) {
       const type = line.slice(0, 3) as keyof typeof DOCCOB_LINE_LENGTHS;
       expect(line.length).toBe(DOCCOB_LINE_LENGTHS[type]);
@@ -80,14 +81,14 @@ describe('generateDoccob', () => {
   });
 
   it('não duplica valor de frete quando charge tem várias NFs', () => {
-    const res = generateDoccob(baseInput() as any);
+    const res = generateDoccob(baseInput());
     expect(res.totalAmount).toBe(15285.25);
     expect(res.chargeCount).toBe(2);
     expect(res.detailCount).toBe(3);
   });
 
   it('bloqueia charge sem details a menos que perfil autorize', () => {
-    const input = baseInput() as any;
+    const input = baseInput();
     input.invoices[0].charges[0].details = [];
     expect(() => generateDoccob(input)).toThrow();
     input.profile.allowChargeWithoutDetails = true;
@@ -96,7 +97,7 @@ describe('generateDoccob', () => {
   });
 
   it('trailer contém total em centavos correto', () => {
-    const res = generateDoccob(baseInput() as any);
+    const res = generateDoccob(baseInput());
     const trailer = res.content.split('\r\n').filter(Boolean).pop()!;
     // total field: chars 9..24 => 15 dígitos, 15285.25 => 1528525 cents
     const cents = parseInt(trailer.slice(9, 24), 10);

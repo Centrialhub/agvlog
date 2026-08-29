@@ -4,8 +4,15 @@ import { normalizeCity as norm } from '@/lib/utils/normalizeCity';
 export interface OperationalRouteLite {
   id: string;
   name: string;
-  destinations: any[] | null;
+  destinations: Array<string | { city?: string | null; name?: string | null } | null> | null;
   region_name: string | null;
+}
+
+function normalizedDestinationCity(
+  destination: string | { city?: string | null; name?: string | null } | null,
+): string {
+  if (!destination) return '';
+  return norm(typeof destination === 'string' ? destination : (destination.city || destination.name));
 }
 
 export interface LoadGroup {
@@ -59,11 +66,7 @@ function matchOperationalRoute(load: ConsolidationLoad, routes: OperationalRoute
   const sorted = [...routes].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   const matches = sorted.filter((r) => {
     const dests = Array.isArray(r.destinations) ? r.destinations : [];
-    return dests.some((d: any) => {
-      if (!d) return false;
-      const dc = norm(typeof d === 'string' ? d : (d.city || d.name));
-      return dc && dc === city;
-    });
+    return dests.some((destination) => normalizedDestinationCity(destination) === city);
   });
   return matches[0] || null;
 }
@@ -74,11 +77,7 @@ function countOperationalMatches(load: ConsolidationLoad, routes: OperationalRou
   if (!city) return 0;
   return routes.filter((r) => {
     const dests = Array.isArray(r.destinations) ? r.destinations : [];
-    return dests.some((d: any) => {
-      if (!d) return false;
-      const dc = norm(typeof d === 'string' ? d : (d.city || d.name));
-      return dc && dc === city;
-    });
+    return dests.some((destination) => normalizedDestinationCity(destination) === city);
   }).length;
 }
 

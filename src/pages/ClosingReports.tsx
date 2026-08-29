@@ -1,3 +1,4 @@
+import { promptAction } from '@/hooks/useAlertStore';
 import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,13 +18,13 @@ import {
   useMarkClosingSent, useGenerateInvoiceFromClosing,
   useUpdateClosingReportItem,
   STATUS_LABELS, PAYMENT_LABELS, REPORT_TYPE_LABELS,
-  type ClosingFilters, type ClosingReportRow,
+  type ClosingFilters, type ClosingReportRow, type ItemTripUpdate,
 } from '@/hooks/useClosingReports';
 import { useClients } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { periodFromType, type BuiltPreview, type FreightAllocation, type ReportType } from '@/lib/closingReports/closingReportBuilder';
+import { periodFromType, type BuiltItem, type BuiltPreview, type FreightAllocation, type ReportType } from '@/lib/closingReports/closingReportBuilder';
 import { downloadClosingReportPdf } from '@/lib/closingReports/closingReportPdf';
 import { buildWorkbook, downloadWorkbook } from '@/lib/closingReports/closingReportExcel';
 import { buildDetailedCsv, downloadCsv } from '@/lib/closingReports/closingReportCsv';
@@ -31,15 +32,27 @@ import { parseLegacyWorkbook, legacyDetailedToItems, type LegacyImport } from '@
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { useTenant } from '@/hooks/useTenant';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
+import type { Tables } from '@/integrations/supabase/types';
 
-const brl = (n: any) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const kg = (n: any) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 }) + ' kg';
+const brl = (n: unknown) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const kg = (n: unknown) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 }) + ' kg';
 const dt = (v?: string | null) => v ? v.slice(0, 10).split('-').reverse().join('/') : '—';
 
-const STATUS_VARIANT: Record<string, any> = {
+const STATUS_VARIANT: Record<string, React.ComponentProps<typeof Badge>['variant']> = {
   paid: 'default', partially_paid: 'secondary', unpaid: 'outline', overdue: 'destructive',
   cancelled: 'outline', closed: 'default', draft: 'outline', reviewing: 'secondary', sent: 'secondary', invoiced: 'default',
 };
+
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
+
+const isBuiltItemSource = (source: string): source is BuiltItem['source_type'] =>
+  source === 'system' || source === 'xml_import' || source === 'spreadsheet_import' || source === 'manual_adjustment';
+
+const toBuiltItems = (rows: Tables<'closing_report_items'>[]): BuiltItem[] => rows.map(row => {
+  if (!isBuiltItemSource(row.source_type)) throw new Error(`Origem inválida no fechamento: ${row.source_type}`);
+  return { ...row, source_type: row.source_type };
+});
 
 export default function ClosingReports() {
   const [filters, setFilters] = useState<ClosingFilters>({});
@@ -53,14 +66,31 @@ export default function ClosingReports() {
     queryKey: ['drivers-min', currentTenant?.id],
     enabled: !!currentTenant?.id,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from('drivers').select('id, name').eq('tenant_id', currentTenant!.id).order('name');
+      const tenantId = currentTenant?.id;
+      if (!tenantId) return [];
+      const { data, error } = await supabase.from('drivers').select('id, name').eq('tenant_id', tenantId).order('name');
       if (error) throw error;
       return (data ?? []) as { id: string; name: string }[];
     },
   });
-  const [openReport, setOpenReport] = useState<ClosingReportRow | null>(null);
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ['closing-payment-bank-accounts', currentTenant?.id],
+    enabled: !!currentTenant?.id,
+    queryFn: async () => {
+      const tenantId = currentTenant?.id;
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('bank_accounts')
+        .select('id, name, bank_name')
+        .eq('tenant_id', tenantId)
+        .eq('active', true)
+        .order('name');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const [payDlg, setPayDlg] = useState<ClosingReportRow | null>(null);
-  const [payForm, setPayForm] = useState({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'pix', notes: '' });
+  const [payForm, setPayForm] = useState({ amount: '', bankAccountId: '', date: new Date().toISOString().slice(0, 10), method: 'pix', notes: '' });
   const [editTripsFor, setEditTripsFor] = useState<ClosingReportRow | null>(null);
   const closeMut = useCloseClosingReport();
   const cancelMut = useCancelClosingReport();
@@ -141,28 +171,47 @@ export default function ClosingReports() {
     setForm(f => ({ ...f, reportType: t, periodStart: p.period_start, periodEnd: p.period_end }));
   };
 
-  const exportPdf = (r: ClosingReportRow, model: 'summary' | 'detailed' | 'trips' = 'detailed') => {
-    // Reload items to build snapshot pdf
-    (async () => {
-      const { data: items } = await (await import('@/integrations/supabase/client')).supabase
-        .from('closing_report_items' as any).select('*').eq('closing_report_id', r.id).order('sort_order');
+  const fetchReportItems = async (reportId: string): Promise<BuiltItem[]> => {
+    const tenantId = currentTenant?.id;
+    if (!tenantId) throw new Error('Tenant ativo não encontrado.');
+    const { data, error } = await supabase
+      .from('closing_report_items')
+      .select('*')
+      .eq('closing_report_id', reportId)
+      .eq('tenant_id', tenantId)
+      .order('sort_order');
+    if (error) throw error;
+    return toBuiltItems(data || []);
+  };
+
+  const exportPdf = async (r: ClosingReportRow, model: 'summary' | 'detailed' | 'trips' = 'detailed') => {
+    try {
+      const items = await fetchReportItems(r.id);
       downloadClosingReportPdf(`${r.closing_number}.pdf`, {
         title: r.title, clientName: r.client?.name, periodStart: r.period_start, periodEnd: r.period_end,
-        closingNumber: r.closing_number, items: (items ?? []) as any, model,
+        closingNumber: r.closing_number, items, model,
         company: toCompanyPdfInfo(companyProfile, currentTenant?.name),
       });
-    })();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, 'Falha ao exportar PDF'));
+    }
   };
   const exportExcel = async (r: ClosingReportRow) => {
-    const { data: items } = await (await import('@/integrations/supabase/client')).supabase
-      .from('closing_report_items' as any).select('*').eq('closing_report_id', r.id).order('sort_order');
-    const wb = buildWorkbook({ title: r.title, clientName: r.client?.name ?? null, periodStart: r.period_start, periodEnd: r.period_end, items: (items ?? []) as any });
-    downloadWorkbook(`${r.closing_number}.xlsx`, wb);
+    try {
+      const items = await fetchReportItems(r.id);
+      const wb = buildWorkbook({ title: r.title, clientName: r.client?.name ?? null, periodStart: r.period_start, periodEnd: r.period_end, items });
+      downloadWorkbook(`${r.closing_number}.xlsx`, wb);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, 'Falha ao exportar Excel'));
+    }
   };
   const exportCsv = async (r: ClosingReportRow) => {
-    const { data: items } = await (await import('@/integrations/supabase/client')).supabase
-      .from('closing_report_items' as any).select('*').eq('closing_report_id', r.id).order('sort_order');
-    downloadCsv(`${r.closing_number}.csv`, buildDetailedCsv((items ?? []) as any));
+    try {
+      const items = await fetchReportItems(r.id);
+      downloadCsv(`${r.closing_number}.csv`, buildDetailedCsv(items));
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, 'Falha ao exportar CSV'));
+    }
   };
 
   const onLegacyFile = async (f: File) => {
@@ -239,7 +288,7 @@ export default function ClosingReports() {
                   <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">Todos</SelectItem>
-                    {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    {clients.map(client => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -332,30 +381,44 @@ export default function ClosingReports() {
                       <TableCell><Badge variant={STATUS_VARIANT[r.payment_status] ?? 'outline'}>{PAYMENT_LABELS[r.payment_status] ?? r.payment_status}</Badge></TableCell>
                       <TableCell>
                         <div className="flex gap-1 flex-wrap">
-                          <Button size="sm" variant="outline" onClick={() => setOpenReport(r)}>Abrir</Button>
                           {['draft', 'reviewing'].includes(r.status) && (
                             <Button size="sm" onClick={() => closeMut.mutate(r.id, { onSuccess: () => toast.success('Fechado') })}><CheckCircle2 className="h-3 w-3" /></Button>
                           )}
                           <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'detailed')} title="PDF detalhado"><FileText className="h-3 w-3" /></Button>
-                          <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'trips' as any)} title="PDF controle de viagens"><FileText className="h-3 w-3" />V</Button>
+                          <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'trips')} title="PDF controle de viagens"><FileText className="h-3 w-3" />V</Button>
                           <Button size="sm" variant="outline" onClick={() => exportExcel(r)} title="Excel"><FileSpreadsheet className="h-3 w-3" /></Button>
                           <Button size="sm" variant="outline" onClick={() => exportCsv(r)} title="CSV"><Download className="h-3 w-3" /></Button>
                           <Button size="sm" variant="outline" onClick={() => setEditTripsFor(r)} title="Editar KMs por viagem">KM</Button>
                           {['closed', 'sent'].includes(r.status) && !r.client_invoice_id && (
-                            <Button size="sm" variant="secondary" onClick={() => invoiceMut.mutate(r.id, { onSuccess: () => toast.success('Fatura gerada'), onError: (e: any) => toast.error(e.message) })}>
+                            <Button size="sm" variant="secondary" onClick={() => invoiceMut.mutate(r.id, { onSuccess: () => toast.success('Fatura gerada'), onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao gerar fatura')) })}>
                               <FileText className="h-3 w-3 mr-1" />Fatura
                             </Button>
                           )}
                           {['closed', 'invoiced'].includes(r.status) && (
                             <Button size="sm" variant="outline" onClick={() => sendMut.mutate({ id: r.id })}><Send className="h-3 w-3" /></Button>
                           )}
-                          {['closed', 'sent', 'invoiced', 'partially_paid'].includes(r.status) && (
-                            <Button size="sm" onClick={() => { setPayDlg(r); setPayForm({ amount: String(r.open_amount || r.total_amount), date: new Date().toISOString().slice(0, 10), method: 'pix', notes: '' }); }}>
+                          {['sent', 'invoiced', 'partially_paid'].includes(r.status) && r.receivable_id && (
+                            <Button size="sm" onClick={() => {
+                              setPayDlg(r);
+                              setPayForm({
+                                amount: String(r.open_amount || r.total_amount),
+                                bankAccountId: bankAccounts[0]?.id ?? '',
+                                date: new Date().toISOString().slice(0, 10),
+                                method: 'pix',
+                                notes: '',
+                              });
+                            }}>
                               <DollarSign className="h-3 w-3" />
                             </Button>
                           )}
                           {r.status !== 'cancelled' && r.status !== 'paid' && (
-                            <Button size="sm" variant="destructive" onClick={() => { const reason = prompt('Motivo do cancelamento:'); if (reason) cancelMut.mutate({ id: r.id, reason }); }}><X className="h-3 w-3" /></Button>
+                            <Button size="sm" variant="destructive" onClick={async () => {
+                              const reason = await promptAction('Informe por que este fechamento deve ser cancelado.', {
+                                title: 'Cancelar fechamento',
+                                label: 'Motivo do cancelamento',
+                              });
+                              if (reason) cancelMut.mutate({ id: r.id, reason });
+                            }}><X className="h-3 w-3" /></Button>
                           )}
                         </div>
                       </TableCell>
@@ -377,7 +440,7 @@ export default function ClosingReports() {
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">—</SelectItem>
-                    {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    {clients.map(client => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -386,7 +449,7 @@ export default function ClosingReports() {
                   <SelectTrigger><SelectValue placeholder="Igual ao remetente" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">—</SelectItem>
-                    {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    {clients.map(client => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -555,11 +618,43 @@ export default function ClosingReports() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="col-span-2"><Label>Conta bancária *</Label>
+              <Select value={payForm.bankAccountId || '__none__'} onValueChange={v => setPayForm({ ...payForm, bankAccountId: v === '__none__' ? '' : v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione a conta de entrada" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Selecione</SelectItem>
+                  {bankAccounts.map(account => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}{account.bank_name ? ` — ${account.bank_name}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {bankAccounts.length === 0 && <p className="text-xs text-destructive mt-1">Cadastre e ative uma conta bancária antes de registrar o pagamento.</p>}
+            </div>
             <div className="col-span-2"><Label>Notas</Label><Input value={payForm.notes} onChange={e => setPayForm({ ...payForm, notes: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayDlg(null)}>Cancelar</Button>
-            <Button onClick={() => { if (!payDlg) return; regPay.mutate({ id: payDlg.id, payment: { amount: Number(payForm.amount), payment_date: payForm.date, payment_method: payForm.method, notes: payForm.notes } }, { onSuccess: () => { toast.success('Pagamento registrado'); setPayDlg(null); } }); }}>Confirmar</Button>
+            <Button
+              disabled={regPay.isPending || Number(payForm.amount) <= 0 || !payForm.bankAccountId}
+              onClick={() => {
+                if (!payDlg || !payForm.bankAccountId) return;
+                regPay.mutate({
+                  id: payDlg.id,
+                  payment: {
+                    amount: Number(payForm.amount),
+                    bank_account_id: payForm.bankAccountId,
+                    payment_date: payForm.date,
+                    payment_method: payForm.method,
+                    notes: payForm.notes,
+                  },
+                }, {
+                  onSuccess: () => { toast.success('Pagamento registrado'); setPayDlg(null); },
+                  onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao registrar pagamento')),
+                });
+              }}
+            >Confirmar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -575,48 +670,76 @@ export default function ClosingReports() {
 }
 
 
-function TripEditorDialog({ report, onClose, onSaveItem }: { report: ClosingReportRow; onClose: () => void; onSaveItem: (itemId: string, patch: any) => Promise<void> | void }) {
-  const [rows, setRows] = useState<any[]>([]);
+type TripEditorBase = Pick<
+  Tables<'closing_report_items'>,
+  | 'id' | 'load_id' | 'load_number' | 'route_label' | 'route_complement'
+  | 'destination_city' | 'origin_city' | 'vehicle_plate' | 'driver_name'
+  | 'departure_at' | 'arrival_at_ts' | 'km_initial' | 'km_final' | 'km_driven'
+  | 'fuel_liters' | 'fuel_unit_price' | 'fuel_total' | 'consumption_km_l' | 'sort_order'
+>;
+type EditableTripNumber = number | string | null;
+type TripEditorRow = Omit<TripEditorBase, 'km_initial' | 'km_final' | 'fuel_liters' | 'fuel_unit_price'> & {
+  km_initial: EditableTripNumber;
+  km_final: EditableTripNumber;
+  fuel_liters: EditableTripNumber;
+  fuel_unit_price: EditableTripNumber;
+};
+
+function TripEditorDialog({ report, onClose, onSaveItem }: { report: ClosingReportRow; onClose: () => void; onSaveItem: (itemId: string, patch: ItemTripUpdate) => Promise<void> | void }) {
+  const { currentTenant } = useTenant();
+  const [rows, setRows] = useState<TripEditorRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
 
   React.useEffect(() => {
+    let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data } = await (supabase as any).from('closing_report_items')
-        .select('id, load_id, load_number, route_label, route_complement, destination_city, origin_city, vehicle_plate, driver_name, departure_at, arrival_at_ts, km_initial, km_final, km_driven, fuel_liters, fuel_unit_price, fuel_total, consumption_km_l, sort_order')
-        .eq('closing_report_id', report.id).order('sort_order');
-      // dedupe by load_id (keep first)
-      const seen = new Set<string>();
-      const uniq: any[] = [];
-      for (const r of (data ?? [])) {
-        const k = r.load_id || `nf-${r.id}`;
-        if (seen.has(k)) continue;
-        seen.add(k); uniq.push(r);
+      try {
+        const tenantId = currentTenant?.id;
+        if (!tenantId) throw new Error('Tenant ativo não encontrado.');
+        const { data, error } = await supabase.from('closing_report_items')
+          .select('id, load_id, load_number, route_label, route_complement, destination_city, origin_city, vehicle_plate, driver_name, departure_at, arrival_at_ts, km_initial, km_final, km_driven, fuel_liters, fuel_unit_price, fuel_total, consumption_km_l, sort_order')
+          .eq('closing_report_id', report.id)
+          .eq('tenant_id', tenantId)
+          .order('sort_order');
+        if (error) throw error;
+        const seen = new Set<string>();
+        const unique: TripEditorRow[] = [];
+        for (const row of data ?? []) {
+          const key = row.load_id || `nf-${row.id}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          unique.push(row);
+        }
+        if (!cancelled) setRows(unique);
+      } catch (error: unknown) {
+        if (!cancelled) toast.error(errorMessage(error, 'Falha ao carregar viagens'));
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setRows(uniq);
-      setLoading(false);
     })();
-  }, [report.id]);
+    return () => { cancelled = true; };
+  }, [currentTenant?.id, report.id]);
 
-  const setField = (id: string, field: string, value: any) => {
-    setRows(rs => rs.map(r => r.id === id ? { ...r, [field]: value } : r));
+  const setField = <K extends keyof TripEditorRow>(id: string, field: K, value: TripEditorRow[K]) => {
+    setRows(current => current.map(row => row.id === id ? { ...row, [field]: value } : row));
   };
 
-  const saveRow = async (r: any) => {
-    setSaving(r.id);
+  const saveRow = async (row: TripEditorRow) => {
+    setSaving(row.id);
     try {
-      await onSaveItem(r.id, {
-        km_initial: r.km_initial !== '' && r.km_initial != null ? Number(r.km_initial) : null,
-        km_final: r.km_final !== '' && r.km_final != null ? Number(r.km_final) : null,
-        fuel_liters: r.fuel_liters !== '' && r.fuel_liters != null ? Number(r.fuel_liters) : null,
-        fuel_unit_price: r.fuel_unit_price !== '' && r.fuel_unit_price != null ? Number(r.fuel_unit_price) : null,
-        vehicle_plate: r.vehicle_plate || null,
-        driver_name: r.driver_name || null,
-        departure_at: r.departure_at || null,
-        arrival_at_ts: r.arrival_at_ts || null,
-        route_label: r.route_label || null,
-        route_complement: r.route_complement || null,
+      await onSaveItem(row.id, {
+        km_initial: row.km_initial !== '' && row.km_initial != null ? Number(row.km_initial) : null,
+        km_final: row.km_final !== '' && row.km_final != null ? Number(row.km_final) : null,
+        fuel_liters: row.fuel_liters !== '' && row.fuel_liters != null ? Number(row.fuel_liters) : null,
+        fuel_unit_price: row.fuel_unit_price !== '' && row.fuel_unit_price != null ? Number(row.fuel_unit_price) : null,
+        vehicle_plate: row.vehicle_plate || null,
+        driver_name: row.driver_name || null,
+        departure_at: row.departure_at || null,
+        arrival_at_ts: row.arrival_at_ts || null,
+        route_label: row.route_label || null,
+        route_complement: row.route_complement || null,
       });
       toast.success('Viagem atualizada');
     } finally { setSaving(null); }
@@ -664,7 +787,7 @@ function TripEditorDialog({ report, onClose, onSaveItem }: { report: ClosingRepo
   );
 }
 
-function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
+function Kpi({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) {
   return (
     <Card><CardContent className="p-3">
       <div className="text-xs text-muted-foreground">{label}</div>

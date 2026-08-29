@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 export const EMPLOYEE_STATUSES = ['active', 'inactive', 'on_leave', 'terminated'] as const;
 export type EmployeeStatus = typeof EMPLOYEE_STATUSES[number];
@@ -9,47 +10,11 @@ export const EMPLOYEE_STATUS_LABELS: Record<EmployeeStatus, string> = {
   active: 'Ativo', inactive: 'Inativo', on_leave: 'Afastado', terminated: 'Desligado',
 };
 
-export interface Employee {
-  id: string;
-  tenant_id: string;
-  name: string;
-  doc_cpf: string | null;
-  doc_rg: string | null;
-  role_title: string | null;
-  department: string | null;
-  branch: string | null;
-  manager_id: string | null;
-  cost_center: string | null;
-  hire_date: string | null;
-  termination_date: string | null;
-  status: EmployeeStatus;
-  phone: string | null;
-  email: string | null;
-  cnh_number: string | null;
-  cnh_category: string | null;
-  cnh_expiry: string | null;
-  medical_exam_expiry: string | null;
-  driver_id: string | null;
-  user_id: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface EmployeeDocument {
-  id: string;
-  tenant_id: string;
-  employee_id: string;
-  document_type: string;
-  document_name: string;
-  document_number: string | null;
-  issue_date: string | null;
-  expiry_date: string | null;
-  status: string;
-  attachment_url: string | null;
-  notes: string | null;
-  created_at: string;
-}
+export type Employee = Omit<Tables<'employees'>, 'status'> & { status: EmployeeStatus };
+export type EmployeeDocument = Tables<'employee_documents'>;
+export type CreateEmployeeInput = Omit<TablesInsert<'employees'>, 'tenant_id' | 'created_by'>;
+export type UpdateEmployeeInput = TablesUpdate<'employees'> & { id: string };
+export type CreateEmployeeDocumentInput = Omit<TablesInsert<'employee_documents'>, 'tenant_id' | 'created_by'>;
 
 export function useEmployees() {
   const { currentTenant } = useTenant();
@@ -57,7 +22,7 @@ export function useEmployees() {
     queryKey: ['employees', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('employees').select('*')
         .eq('tenant_id', currentTenant.id)
         .order('name');
@@ -73,8 +38,8 @@ export function useCreateEmployee() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<Employee>) => {
-      const { data, error } = await (supabase as any).from('employees').insert({
+    mutationFn: async (values: CreateEmployeeInput) => {
+      const { data, error } = await supabase.from('employees').insert({
         ...values, tenant_id: currentTenant!.id, created_by: user?.id,
       }).select().single();
       if (error) throw error;
@@ -87,8 +52,8 @@ export function useCreateEmployee() {
 export function useUpdateEmployee() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<Employee> & { id: string }) => {
-      const { data, error } = await (supabase as any).from('employees')
+    mutationFn: async ({ id, ...values }: UpdateEmployeeInput) => {
+      const { data, error } = await supabase.from('employees')
         .update({ ...values, updated_at: new Date().toISOString() })
         .eq('id', id).select().single();
       if (error) throw error;
@@ -104,7 +69,7 @@ export function useEmployeeDocuments(employeeId?: string) {
     queryKey: ['employee_documents', employeeId],
     queryFn: async () => {
       if (!currentTenant || !employeeId) return [];
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('employee_documents').select('*')
         .eq('employee_id', employeeId)
         .order('expiry_date', { ascending: true });
@@ -120,8 +85,8 @@ export function useCreateEmployeeDocument() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<EmployeeDocument>) => {
-      const { data, error } = await (supabase as any).from('employee_documents').insert({
+    mutationFn: async (values: CreateEmployeeDocumentInput) => {
+      const { data, error } = await supabase.from('employee_documents').insert({
         ...values, tenant_id: currentTenant!.id, created_by: user?.id,
       }).select().single();
       if (error) throw error;

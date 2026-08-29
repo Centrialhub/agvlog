@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle, Clock, Loader2, CalendarIcon, Download } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -22,6 +22,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import type { Json, TablesInsert } from '@/integrations/supabase/types';
+import type { JsonObject } from '@/lib/jsonTypes';
+import { getErrorMessage } from '@/lib/errors';
 import {
   Dialog,
   DialogContent,
@@ -92,6 +95,10 @@ const CLEANUP_TABLE_LABELS: Record<string, string> = {
   freight_calculation_log: 'Logs de frete',
   route_planning_drafts: 'Rascunhos',
 };
+
+function jsonRecord(value: Json): JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
+}
 
 export default function BatchReimportDialog() {
   const { currentTenant } = useTenant();
@@ -197,25 +204,27 @@ export default function BatchReimportDialog() {
     setFileStatusFilter('all');
   };
 
-  const fetchErasePreview = async () => {
-    if (!currentTenant) return;
+  const tenantId = currentTenant?.id;
+  const fetchErasePreview = useCallback(async () => {
+    if (!tenantId) return;
     setPreviewLoading(true);
     try {
-      const { data, error } = await (supabase as any).rpc('preview_reimport_cleanup_counts', {
-        _tenant_id: currentTenant.id,
-        _start_date: toDateParam(startDate),
-        _end_date: toDateParam(endDate),
+      const { data, error } = await supabase.rpc('preview_reimport_cleanup_counts', {
+        _tenant_id: tenantId,
+        _start_date: toDateParam(startDate) ?? undefined,
+        _end_date: toDateParam(endDate) ?? undefined,
       });
       if (error) throw error;
-      setErasePreview(Object.fromEntries(Object.entries(CLEANUP_TABLE_LABELS).map(([key, label]) => [label, Number((data || {})[key] || 0)])));
+      const counts = jsonRecord(data);
+      setErasePreview(Object.fromEntries(Object.entries(CLEANUP_TABLE_LABELS).map(([key, label]) => [label, Number(counts[key] || 0)])));
     } finally {
       setPreviewLoading(false);
     }
-  };
+  }, [endDate, startDate, tenantId]);
 
   useEffect(() => {
     if (open && !dateRangeInvalid) fetchErasePreview();
-  }, [open, currentTenant?.id, startDate, endDate, dateRangeInvalid]);
+  }, [dateRangeInvalid, fetchErasePreview, open]);
 
   const reset = () => {
     setFiles(EMPTY_FILE_LIST);
@@ -263,13 +272,13 @@ export default function BatchReimportDialog() {
       const existingByAccessKey = new Map((existingDocs || []).filter(doc => doc.access_key).map(doc => [doc.access_key as string, doc as ExistingFiscalDocument]));
       const existingByInvoiceNumber = new Map((existingDocs || []).filter(doc => doc.invoice_number).map(doc => [doc.invoice_number as string, doc as ExistingFiscalDocument]));
 
-      const { data: cleaned, error: cleanError } = await (supabase as any).rpc('clear_reimport_batch_data', {
+      const { data: cleaned, error: cleanError } = await supabase.rpc('clear_reimport_batch_data', {
         _tenant_id: currentTenant.id,
         _start_date: toDateParam(startDate),
         _end_date: toDateParam(endDate),
       });
       if (cleanError) throw cleanError;
-      setClearSummary((cleaned || {}) as Record<string, number>);
+      setClearSummary(Object.fromEntries(Object.entries(jsonRecord(cleaned)).map(([key, value]) => [key, Number(value || 0)])));
 
       setPhase('importing');
       const indexes = buildValidationIndexes([], clients);
@@ -301,7 +310,7 @@ export default function BatchReimportDialog() {
             tenantId: currentTenant.id,
             accessKey: validated.source.accessKey,
             emitterCnpj: validated.source.emitterCnpj,
-            model: (validated.source as any).model || '55',
+            model: validated.source.model || '55',
             series: validated.source.series,
             invoiceNumber: validated.source.invoiceNumber,
           });
@@ -320,7 +329,7 @@ export default function BatchReimportDialog() {
           const nextDoc: ExistingFiscalDocument = {
             invoice_number: validated.source.invoiceNumber,
             invoice_series: validated.source.series || null,
-            fiscal_model: (validated.source as any).model || '55',
+            fiscal_model: validated.source.model || '55',
             remitter_cnpj: validated.source.emitterCnpj || null,
             access_key: validated.source.accessKey,
             remitter: validated.source.emitterName,
@@ -336,13 +345,14 @@ export default function BatchReimportDialog() {
             value: validated.source.totalValue,
           };
           const existingDoc = (nextDoc.access_key && existingByAccessKey.get(nextDoc.access_key)) || (nextDoc.invoice_number && existingByInvoiceNumber.get(nextDoc.invoice_number));
-          const { error } = await supabase.from('fiscal_documents').insert({
+          const payload: TablesInsert<'fiscal_documents'> = {
             tenant_id: currentTenant.id,
             created_by: user?.id,
             document_type: 'inbound',
             ...nextDoc,
             status: 'confirmed',
-          } as any);
+          };
+          const { error } = await supabase.from('fiscal_documents').insert(payload);
           if (error) {
             if (isUniqueViolation(error)) {
               throw new DuplicateFiscalDocumentError({
@@ -369,10 +379,14 @@ export default function BatchReimportDialog() {
             invoiceNumber: validated.source.invoiceNumber,
             message: `NF ${validated.source.invoiceNumber || 'sem número'} importada`,
           });
-        } catch (error: any) {
+        } catch (error: unknown) {
           const message = error instanceof DuplicateFiscalDocumentError
-            ? formatDuplicateFiscalDocumentMessage(error.existingDocument as any)
-            : (error?.message || 'Erro desconhecido ao importar');
+            ? formatDuplicateFiscalDocumentMessage(
+                typeof error.existingDocument === 'object' && error.existingDocument !== null
+                  ? error.existingDocument
+                  : undefined,
+              )
+            : getErrorMessage(error, 'Erro desconhecido ao importar');
           importErrors.push({ fileName: file.name, message });
           setErrors([...importErrors]);
           setFileStatus(file.name, { state: 'error', message });
@@ -389,9 +403,9 @@ export default function BatchReimportDialog() {
         description: `${successCount} nota(s) importada(s), ${importErrors.length} erro(s).`,
         variant: importErrors.length ? 'default' : undefined,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       setPhase('ready');
-      toast({ title: 'Erro na reimportação', description: error?.message, variant: 'destructive' });
+      toast({ title: 'Erro na reimportação', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 

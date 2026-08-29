@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/dialog';
 import { AlertTriangle, Eye, FileSearch, Search, X, Copy, Check } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
+import type { Json } from '@/integrations/supabase/types';
+import type { JsonObject } from '@/lib/jsonTypes';
 
 interface AuditDoc {
   id: string;
@@ -31,7 +33,7 @@ interface AuditDoc {
   issue_date: string | null;
   client_id: string | null;
   client_load_number: string | null;
-  client_load_source: any;
+  client_load_source: Json;
   load_id: string | null;
 }
 
@@ -41,6 +43,10 @@ interface ClientLite {
 }
 
 const SENTINEL_ALL = '__all__';
+
+function jsonObject(value: Json): JsonObject | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : null;
+}
 
 export default function LoadExtractionAudit() {
   const { currentTenant } = useTenant();
@@ -99,17 +105,14 @@ export default function LoadExtractionAudit() {
 
   const observationOf = (doc: AuditDoc | null): string => {
     if (!doc) return '';
-    const src = doc.client_load_source as any;
-    if (src && typeof src === 'object') {
-      return src.observationSnippet || src.observation || src.snippet || '';
-    }
-    return '';
+    const source = jsonObject(doc.client_load_source);
+    return String(source?.observationSnippet || source?.observation || source?.snippet || '');
   };
 
   const sourceLabel = (doc: AuditDoc): string => {
-    const src = doc.client_load_source as any;
-    if (src?.observationSnippet) return 'observação capturada';
-    if (src?.source === 'none') return 'sem padrão reconhecido';
+    const source = jsonObject(doc.client_load_source);
+    if (source?.observationSnippet) return 'observação capturada';
+    if (source?.source === 'none') return 'sem padrão reconhecido';
     return 'sem dados de origem';
   };
 

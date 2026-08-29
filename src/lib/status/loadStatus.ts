@@ -1,4 +1,3 @@
-import { LOAD_ACTIVE_STATUSES } from './index';
 /**
 
  * Canonical status helpers for loads and stops.
@@ -35,6 +34,16 @@ export const LOAD_STATUSES = [
 ] as const;
 
 export type LoadStatus = typeof LOAD_STATUSES[number];
+
+export const LOAD_ACTIVE_STATUSES = [
+  'ready',
+  'loading',
+  'loaded',
+  'in_transit',
+  'partial_delivery',
+] as const;
+
+export type LoadActiveStatus = (typeof LOAD_ACTIVE_STATUSES)[number];
 
 export const LOAD_STATUS_LABELS: Record<LoadStatus, string> = {
   planned: 'Planejada',
@@ -107,7 +116,6 @@ export const LOAD_KANBAN_COLUMNS = [
 
 export type LoadKanbanColumn = typeof LOAD_KANBAN_COLUMNS[number]['id'];
 
-export { LOAD_ACTIVE_STATUSES };
 /**
 
  * Map a load to a Kanban column. Hold overrides everything.

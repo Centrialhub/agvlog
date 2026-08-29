@@ -8,43 +8,25 @@ import {
   type ParsedRuralRow,
 } from '@/lib/ruralClients/ruralClientsSpreadsheetImport';
 import { normalizeText, ruralProfileDedupeKey } from '@/lib/ruralClients/ruralDeliveryMatcher';
+import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
-export interface RuralProfile {
-  id: string;
-  tenant_id: string;
-  client_id: string;
+export interface RuralProfile extends Tables<'client_rural_delivery_profiles'> {
   client_name?: string | null;
-  related_remitter_id: string | null;
   related_remitter_name?: string | null;
-  supplier_name_snapshot: string | null;
-  recipient_name_snapshot: string | null;
-  city: string | null;
-  state: string | null;
-  neighborhood: string | null;
-  locality: string | null;
-  origin_city: string | null;
-  origin_state: string | null;
-  round_trip_km: number | null;
-  access_type: string | null;
-  delivery_mode: string;
-  requires_contact_before_delivery: boolean;
-  contact_name: string | null;
-  contact_phone: string | null;
-  taxi_required: boolean;
-  taxi_contact_name: string | null;
-  taxi_contact_phone: string | null;
-  taxi_estimated_cost: number | null;
-  can_deliver_in_city: boolean;
-  city_delivery_instructions: string | null;
-  driver_instructions: string | null;
-  internal_notes: string | null;
-  source_type: string;
-  source_reference: string | null;
-  active: boolean;
-  last_used_at: string | null;
-  created_at: string;
-  updated_at: string;
 }
+
+type RuralProfileJoined = Tables<'client_rural_delivery_profiles'> & {
+  client: { company_name: string } | null;
+  remitter: { company_name: string } | null;
+};
+type RuralProfileCreate = Omit<
+  TablesInsert<'client_rural_delivery_profiles'>,
+  'tenant_id' | 'created_by' | 'updated_by'
+>;
+type RuralProfileUpdate = Omit<
+  TablesUpdate<'client_rural_delivery_profiles'>,
+  'id' | 'tenant_id' | 'created_by' | 'updated_by'
+>;
 
 export interface RuralClientsFilters {
   search?: string;
@@ -64,7 +46,7 @@ export function useRuralProfiles(filters: RuralClientsFilters = {}) {
     queryKey: ['rural_profiles', currentTenant?.id, filters],
     queryFn: async (): Promise<RuralProfile[]> => {
       if (!currentTenant) return [];
-      let q = (supabase.from as any)('client_rural_delivery_profiles')
+      let q = supabase.from('client_rural_delivery_profiles')
         .select('*, client:clients!client_rural_delivery_profiles_client_id_fkey(id, company_name), remitter:clients!client_rural_delivery_profiles_related_remitter_id_fkey(id, company_name)')
         .eq('tenant_id', currentTenant.id)
         .order('updated_at', { ascending: false })
@@ -80,7 +62,7 @@ export function useRuralProfiles(filters: RuralClientsFilters = {}) {
 
       const { data, error } = await q;
       if (error) throw error;
-      let rows: RuralProfile[] = ((data ?? []) as any[]).map((r) => ({
+      let rows: RuralProfile[] = ((data ?? []) as RuralProfileJoined[]).map((r) => ({
         ...r,
         client_name: r.client?.company_name || r.recipient_name_snapshot,
         related_remitter_name: r.remitter?.company_name || r.supplier_name_snapshot,
@@ -117,12 +99,12 @@ export function useRuralClientsSummary() {
       const list = data || [];
       return {
         total: list.length,
-        withInstructions: list.filter((c: any) => (c.rural_driver_instructions || '').trim().length > 0).length,
-        requireContact: list.filter((c: any) => c.rural_requires_contact).length,
-        withoutPhone: list.filter((c: any) => !(c.rural_contact_phone || '').trim()).length,
-        dirtRoad: list.filter((c: any) => c.rural_access_type === 'dirt_road').length,
-        withoutInstructions: list.filter((c: any) => !(c.rural_driver_instructions || '').trim()).length,
-        clients: list as any[],
+        withInstructions: list.filter((c) => (c.rural_driver_instructions || '').trim().length > 0).length,
+        requireContact: list.filter((c) => c.rural_requires_contact).length,
+        withoutPhone: list.filter((c) => !(c.rural_contact_phone || '').trim()).length,
+        dirtRoad: list.filter((c) => c.rural_access_type === 'dirt_road').length,
+        withoutInstructions: list.filter((c) => !(c.rural_driver_instructions || '').trim()).length,
+        clients: list,
       };
     },
     enabled: !!currentTenant,
@@ -134,10 +116,11 @@ export function useCreateRuralProfile() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<RuralProfile>) => {
-      const { data, error } = await (supabase.from as any)('client_rural_delivery_profiles').insert({
+    mutationFn: async (values: RuralProfileCreate) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { data, error } = await supabase.from('client_rural_delivery_profiles').insert({
         ...values,
-        tenant_id: currentTenant!.id,
+        tenant_id: currentTenant.id,
         created_by: user?.id,
         updated_by: user?.id,
       }).select().single();
@@ -149,13 +132,18 @@ export function useCreateRuralProfile() {
 }
 
 export function useUpdateRuralProfile() {
+  const { currentTenant } = useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<RuralProfile> & { id: string }) => {
-      const { data, error } = await (supabase.from as any)('client_rural_delivery_profiles')
+    mutationFn: async ({ id, ...values }: RuralProfileUpdate & { id: string }) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { data, error } = await supabase.from('client_rural_delivery_profiles')
         .update({ ...values, updated_by: user?.id })
-        .eq('id', id).select().single();
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id)
+        .select()
+        .single();
       if (error) throw error;
       return data;
     },
@@ -188,21 +176,23 @@ export async function buildRuralImportPreview(
   const parsed = parseRuralSpreadsheet(buffer, fileName);
   const deduped = dedupeRuralRows(parsed.rows);
 
-  const { data: clients } = await supabase
+  const { data: clients, error: clientsError } = await supabase
     .from('clients')
     .select('id, company_name, address_city')
     .eq('tenant_id', tenantId)
     .limit(5000);
+  if (clientsError) throw clientsError;
 
-  const clientIndex = new Map<string, any>();
+  const clientIndex = new Map<string, Pick<Tables<'clients'>, 'id' | 'company_name' | 'address_city'>>();
   for (const c of clients || []) {
     clientIndex.set(normalizeText(c.company_name), c);
   }
 
-  const { data: existing } = await (supabase.from as any)('client_rural_delivery_profiles')
+  const { data: existing, error: existingError } = await supabase.from('client_rural_delivery_profiles')
     .select('id, client_id, city, neighborhood, related_remitter_id')
     .eq('tenant_id', tenantId)
     .limit(5000);
+  if (existingError) throw existingError;
   const existingIndex = new Map<string, string>();
   for (const e of existing || []) {
     existingIndex.set(ruralProfileDedupeKey(e), e.id);
@@ -252,7 +242,7 @@ export function useCommitRuralImport() {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       const tenantId = currentTenant.id;
 
-      const { data: batchData, error: batchError } = await (supabase.from as any)('rural_delivery_import_batches')
+      const { data: batchData, error: batchError } = await supabase.from('rural_delivery_import_batches')
         .insert({
           tenant_id: tenantId,
           file_name: preview.fileName,
@@ -262,7 +252,7 @@ export function useCommitRuralImport() {
         }).select().single();
       if (batchError) throw batchError;
 
-      const errors: any[] = [];
+      const errors: Array<{ recipient: string | null; reason: string }> = [];
       let imported = 0, updated = 0, unmatched = 0;
 
       for (const r of preview.rows) {
@@ -296,33 +286,41 @@ export function useCommitRuralImport() {
         };
         try {
           if (r.existing_profile_id) {
-            const { error } = await (supabase.from as any)('client_rural_delivery_profiles')
-              .update(payload).eq('id', r.existing_profile_id);
+            const { error } = await supabase.from('client_rural_delivery_profiles')
+              .update(payload)
+              .eq('id', r.existing_profile_id)
+              .eq('tenant_id', tenantId);
             if (error) throw error;
             updated++;
           } else {
-            const { error } = await (supabase.from as any)('client_rural_delivery_profiles')
+            const { error } = await supabase.from('client_rural_delivery_profiles')
               .insert({ ...payload, created_by: user?.id });
             if (error) throw error;
             imported++;
           }
           // marca cliente como rural
-          await supabase.from('clients')
-            .update({ is_rural: true, rural_updated_at: new Date().toISOString() } as any)
-            .eq('id', r.matched_client_id);
-        } catch (e: any) {
-          errors.push({ recipient: r.recipient_name_snapshot, reason: e.message });
+          const { error: clientError } = await supabase.from('clients')
+            .update({ is_rural: true, rural_updated_at: new Date().toISOString() })
+            .eq('id', r.matched_client_id)
+            .eq('tenant_id', tenantId);
+          if (clientError) throw clientError;
+        } catch (error: unknown) {
+          errors.push({
+            recipient: r.recipient_name_snapshot,
+            reason: error instanceof Error ? error.message : 'Falha desconhecida ao importar perfil rural',
+          });
         }
       }
 
-      await (supabase.from as any)('rural_delivery_import_batches').update({
+      const { error: completionError } = await supabase.from('rural_delivery_import_batches').update({
         imported_count: imported,
         updated_count: updated,
         unmatched_count: unmatched,
         error_count: errors.length - unmatched,
         status: errors.length > 0 ? 'completed_with_errors' : 'completed',
-        errors,
-      }).eq('id', batchData.id);
+        errors: errors as Json,
+      }).eq('id', batchData.id).eq('tenant_id', tenantId);
+      if (completionError) throw completionError;
 
       qc.invalidateQueries({ queryKey: ['rural_profiles'] });
       qc.invalidateQueries({ queryKey: ['rural_clients_summary'] });
@@ -339,7 +337,7 @@ export function useRuralImportBatches() {
     queryKey: ['rural_import_batches', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await (supabase.from as any)('rural_delivery_import_batches')
+      const { data, error } = await supabase.from('rural_delivery_import_batches')
         .select('*')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })

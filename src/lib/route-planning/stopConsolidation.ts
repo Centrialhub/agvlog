@@ -42,12 +42,12 @@ export function consolidateLoadsIntoStops(loads: ConsolidationLoad[]): RouteStop
 
   loads.forEach((load) => {
     load.items.forEach((it) => {
-      const fd = it.fiscal_documents || ({} as any);
-      const recipient = fd.recipient || load.destination || load.load_number || '—';
-      const city = fd.recipient_city || null;
-      const neighborhood = fd.recipient_neighborhood || null;
-      const state = fd.recipient_state || null;
-      const clientId = (fd as any).client_id || null;
+      const fd = it.fiscal_documents;
+      const recipient = fd?.recipient || load.destination || load.load_number || '—';
+      const city = fd?.recipient_city || null;
+      const neighborhood = fd?.recipient_neighborhood || null;
+      const state = fd?.recipient_state || null;
+      const clientId = fd?.client_id || null;
 
       const key = [
         clientId ? `c:${clientId}` : `r:${norm(recipient)}`,
@@ -82,12 +82,12 @@ export function consolidateLoadsIntoStops(loads: ConsolidationLoad[]): RouteStop
       if (!stop.load_ids.includes(load.id)) stop.load_ids.push(load.id);
       if (it.fiscal_document_id && !stop.fiscal_document_ids.includes(it.fiscal_document_id)) {
         stop.fiscal_document_ids.push(it.fiscal_document_id);
-        if (fd.invoice_number) stop.invoice_numbers.push(fd.invoice_number);
+        if (fd?.invoice_number) stop.invoice_numbers.push(fd.invoice_number);
       }
-      stop.total_weight_kg += Number(it.weight_kg) || Number(fd.weight_kg) || 0;
+      stop.total_weight_kg += Number(it.weight_kg) || Number(fd?.weight_kg) || 0;
       stop.total_volume_m3 += Number(it.volume_m3) || 0;
       stop.total_pallet_count += Number(it.pallet_count) || 0;
-      stop.total_value += Number(fd.value) || 0;
+      stop.total_value += Number(fd?.value) || 0;
     });
   });
 

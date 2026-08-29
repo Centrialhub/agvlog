@@ -14,9 +14,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, Plus, Warehouse, Edit, ArrowDown, ArrowUp } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { format, parseISO } from 'date-fns';
+import { getErrorMessage } from '@/lib/errors';
 
 export default function Stock() {
-  const { data: items = [], isLoading } = useStockItems();
+  const { data: items = [] } = useStockItems();
   const { data: movements = [] } = useStockMovements();
   const { data: employees = [] } = useEmployees();
   const createItem = useCreateStockItem();
@@ -39,7 +40,9 @@ export default function Stock() {
     return list;
   }, [items, search, catFilter]);
 
-  const lowStock = useMemo(() => items.filter(i => i.current_quantity <= i.min_quantity && i.min_quantity > 0), [items]);
+  const lowStock = useMemo(() => items.filter(i =>
+    (i.current_quantity ?? 0) <= (i.min_quantity ?? 0) && (i.min_quantity ?? 0) > 0,
+  ), [items]);
 
   const openCreateItem = () => { setEditingItem(undefined); setItemForm({ code: '', name: '', category: 'general', unit: 'un', min_quantity: '', location: '', supplier: '', notes: '' }); setItemDialog(true); };
   const openEditItem = (i: StockItem) => {
@@ -49,14 +52,21 @@ export default function Stock() {
 
   const handleSaveItem = async () => {
     if (!itemForm.name.trim()) { toast.error('Nome obrigatório'); return; }
-    const payload: any = { ...itemForm, min_quantity: Number(itemForm.min_quantity) || 0 };
-    Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = null; });
-    payload.name = itemForm.name; payload.category = itemForm.category; payload.unit = itemForm.unit;
+    const payload = {
+      code: itemForm.code || null,
+      name: itemForm.name,
+      category: itemForm.category,
+      unit: itemForm.unit,
+      min_quantity: Number(itemForm.min_quantity) || 0,
+      location: itemForm.location || null,
+      supplier: itemForm.supplier || null,
+      notes: itemForm.notes || null,
+    };
     try {
       if (editingItem) await updateItem.mutateAsync({ id: editingItem.id, ...payload });
       else await createItem.mutateAsync(payload);
       setItemDialog(false); toast.success('Item salvo');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível salvar o item.')); }
   };
 
   const handleSaveMovement = async () => {
@@ -70,9 +80,9 @@ export default function Stock() {
         quantity: qty, unit_cost: unitCost, total_cost: qty * unitCost,
         reason: movForm.reason, justification: movForm.justification || null,
         responsible_employee_id: movForm.responsible_employee_id || null,
-      } as any);
+      });
       setMovDialog(false); toast.success('Movimentação registrada');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível registrar a movimentação.')); }
   };
 
   return (
@@ -114,7 +124,7 @@ export default function Stock() {
             </TableRow></TableHeader>
             <TableBody>
               {filteredItems.map(i => (
-                <TableRow key={i.id} className={i.current_quantity <= i.min_quantity && i.min_quantity > 0 ? 'bg-warning/5' : ''}>
+                <TableRow key={i.id} className={(i.current_quantity ?? 0) <= (i.min_quantity ?? 0) && (i.min_quantity ?? 0) > 0 ? 'bg-warning/5' : ''}>
                   <TableCell className="font-mono text-xs">{i.code || '—'}</TableCell>
                   <TableCell className="font-medium text-sm">{i.name}</TableCell>
                   <TableCell className="text-sm">{STOCK_CATEGORY_LABELS[i.category] || i.category}</TableCell>

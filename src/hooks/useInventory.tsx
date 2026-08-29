@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { TablesInsert } from '@/integrations/supabase/types';
 
 export const MOVEMENT_TYPES = ['inbound', 'outbound', 'transfer', 'adjustment'] as const;
 export type MovementType = typeof MOVEMENT_TYPES[number];
@@ -81,10 +82,12 @@ export function useCreateLocation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<InventoryLocation>) => {
-      const { data, error } = await supabase.from('inventory_locations').insert({
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const payload = {
         ...values,
-        tenant_id: currentTenant!.id,
-      } as any).select().single();
+        tenant_id: currentTenant.id,
+      } as TablesInsert<'inventory_locations'>;
+      const { data, error } = await supabase.from('inventory_locations').insert(payload).select().single();
       if (error) throw error;
       return data;
     },
@@ -117,11 +120,14 @@ export function useCreateMovement() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<InventoryMovement>) => {
-      const { data, error } = await supabase.from('inventory_movements').insert({
-        ...values,
-        tenant_id: currentTenant!.id,
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { clients: _clients, inventory_locations: _locations, ...recordValues } = values;
+      const payload = {
+        ...recordValues,
+        tenant_id: currentTenant.id,
         created_by: user?.id,
-      } as any).select().single();
+      } as TablesInsert<'inventory_movements'>;
+      const { data, error } = await supabase.from('inventory_movements').insert(payload).select().single();
       if (error) throw error;
       return data;
     },

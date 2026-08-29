@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow, ParsedNFe } from '@/lib/documentParsers';
 import {
-  validateNFe, validateOrderRows, generateLoadSuggestions, buildValidationIndexes,
+  validateNFe, validateOrderRows, buildValidationIndexes,
   ValidatedDocument, ValidatedOrder, LoadSuggestion,
 } from '@/lib/ingestionValidator';
 import { useFiscalDocuments, useCreateFiscalDocument } from '@/hooks/useFiscalDocuments';
@@ -10,7 +10,6 @@ import { useClients } from '@/hooks/useClients';
 import { useCreateOrder } from '@/hooks/useOrders';
 import { useCreateLoad, useLoads } from '@/hooks/useLoads';
 import { getNextLoadNumberFromExisting } from '@/hooks/useLoads';
-import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
 import { useToast } from '@/hooks/use-toast';
@@ -20,24 +19,112 @@ import { Button } from '@/components/ui/button';
 import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 import IngestionStepper from '@/components/ingestion/IngestionStepper';
 import UploadStep from '@/components/ingestion/UploadStep';
-import ORTReviewStep, { OrtReviewDocument } from '@/components/ingestion/ORTReviewStep';
+import ORTReviewStep from '@/components/ingestion/ORTReviewStep';
 import ValidationStep from '@/components/ingestion/ValidationStep';
 import RoutingStep from '@/components/ingestion/RoutingStep';
 import type { RouteGroup } from '@/components/ingestion/RoutingStep';
 import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
-import type { IngestionReport, ReviewItem } from '@/components/ingestion/ResultsStep';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
-import { applyOrtFallbacks, isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
+import type { FreightBreakdown } from '@/hooks/useFreightCalculator';
+import { applyOrtFallbacks } from '@/lib/ortFieldFallbacks';
 import { normalizeStateRegistration, normalizeIeIndicator, FISCAL_UNKNOWN } from '@/lib/fiscalNormalization';
-import { detectPaymentMethod, detectPaymentMethodDetailed } from '@/lib/paymentMethodDetection';
+import { detectPaymentMethodDetailed } from '@/lib/paymentMethodDetection';
 import PickupOrderPicker from '@/components/pickup/PickupOrderPicker';
 import type { PickupOrder } from '@/hooks/usePickupOrders';
+import type { IngestionReport, OrtAuditEntry, OrtReviewDocument, OrtReviewItem } from '@/lib/ingestion/types';
+import {
+  buildOrtAccessKey,
+  dedupeOrtReviewDocs,
+  fileToBase64,
+  getChangedOrtFields,
+  mapOrtItems,
+  toOrtAuditPayload,
+} from '@/lib/ingestion/ortUtils';
+import { buildIngestionReport, createIngestionBatchId } from '@/lib/ingestion/report';
+import { normalizeNfeAccessKey } from '@/lib/fiscalDocuments/nfeAccessKey';
 
 import { supabase } from '@/integrations/supabase/client';
+import type { Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/useTenant';
+import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { useAuth } from '@/hooks/useAuth';
+import type { RouteDestination } from '@/hooks/useOperationalRoutes';
+
+type PersistedValidatedDocument = ValidatedDocument & { _savedId?: string };
+
+interface EdgeFunctionErrorLike {
+  message?: unknown;
+  context?: {
+    clone?: () => { json: () => Promise<unknown> };
+    json?: () => Promise<unknown>;
+  };
+}
+
+interface OrtExtractionDocument extends Partial<Omit<OrtReviewDocument, 'documentKind' | 'fileName' | 'items'>> {
+  documentKind?: string;
+  sourceFileName?: string;
+  items?: Array<Partial<OrtReviewItem>>;
+}
+
+interface OrtExtractionResponse {
+  error?: string;
+  documents?: OrtExtractionDocument[];
+}
+
+interface SsxInsertPersonResponse {
+  error?: unknown;
+}
+
+interface IngestionFileBuffer {
+  file: File;
+  name: string;
+  kind: 'xml' | 'csv' | 'excel' | 'unknown' | 'error';
+  text: string;
+  buffer: ArrayBuffer | null;
+  error?: string;
+}
+
+function getErrorMessage(error: unknown, fallback = 'Erro inesperado'): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function getResponseMessage(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const candidate = body as { error?: unknown; message?: unknown };
+  if (typeof candidate.error === 'string' && candidate.error.trim()) return candidate.error;
+  if (typeof candidate.message === 'string' && candidate.message.trim()) return candidate.message;
+  return null;
+}
+
+function toJson(value: unknown): Json {
+  return JSON.parse(JSON.stringify(value)) as Json;
+}
+
+function getJsonNumber(value: Json, key: string): number | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = value[key];
+  const parsed = typeof candidate === 'number' ? candidate : Number(candidate);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function createInvalidParsedNFe(): ParsedNFe {
+  return {
+    invoiceNumber: '', series: '', model: '', accessKey: '', issueDate: '',
+    emitterName: '', emitterCnpj: '', recipientName: '', recipientCnpj: '',
+    recipientFantasyName: '', recipientStateRegistration: '', recipientMunicipalRegistration: '',
+    recipientIeIndicator: '', recipientPhone: '', recipientEmail: '', recipientCity: '',
+    recipientCityCode: '', recipientState: '', recipientAddress: '', recipientAddressNumber: '',
+    recipientAddressComplement: '', recipientNeighborhood: '', recipientZip: '', recipientCountry: '',
+    recipientCountryCode: '', items: [], totalValue: 0, totalWeight: 0, totalVolume: 0,
+    estimatedPallets: 0, clientLoadNumber: '', observation: '',
+  };
+}
+
+function getPersistedDocumentId(doc: ValidatedDocument): string | undefined {
+  return (doc as PersistedValidatedDocument)._savedId;
+}
 
 function useDrivers() {
   const { currentTenant } = useTenant();
@@ -57,21 +144,24 @@ function useDrivers() {
   });
 }
 
-async function getEdgeFunctionErrorMessage(error: any): Promise<string> {
-  const fallback = error?.message || 'Erro ao chamar a função de extração da ORT.';
-  const context = error?.context;
+async function getEdgeFunctionErrorMessage(error: unknown): Promise<string> {
+  const candidate = error && typeof error === 'object' ? error as EdgeFunctionErrorLike : {};
+  const fallback = typeof candidate.message === 'string' && candidate.message
+    ? candidate.message
+    : 'Erro ao chamar a função de extração da ORT.';
+  const context = candidate.context;
 
   try {
     if (context && typeof context.clone === 'function') {
       const cloned = context.clone();
-      const body = await cloned.json().catch(() => null);
-      if (typeof body?.error === 'string' && body.error.trim()) return body.error;
-      if (typeof body?.message === 'string' && body.message.trim()) return body.message;
+      const body = await cloned.json().catch((): null => null);
+      const message = getResponseMessage(body);
+      if (message) return message;
     }
     if (context && typeof context.json === 'function') {
-      const body = await context.json().catch(() => null);
-      if (typeof body?.error === 'string' && body.error.trim()) return body.error;
-      if (typeof body?.message === 'string' && body.message.trim()) return body.message;
+      const body = await context.json().catch((): null => null);
+      const message = getResponseMessage(body);
+      if (message) return message;
     }
   } catch {
     // Keep the original Supabase message when the response body is unavailable.
@@ -92,70 +182,38 @@ export default function Ingestion() {
   const { data: loads = [] } = useLoads();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
   const { currentTenant } = useTenant();
+  const { isEnabled } = useTenantCapabilities();
+  const ssxEnabled = isEnabled('ssx');
   const { user } = useAuth();
   const createDoc = useCreateFiscalDocument();
   const createOrder = useCreateOrder();
   const createLoad = useCreateLoad();
-  const createLoadItem = useCreateLoadItem();
   const updateRoute = useUpdateOperationalRoute();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  // Função para buscar dados da NF-e via chave de acesso no Hub Fiscal (Anti-erro de filial)
-  const enrichRecipientFromHub = async (accessKey: string) => {
-    if (!accessKey || accessKey.length !== 44) return null;
-    try {
-      const { data, error } = await supabase.functions.invoke('hub-fiscal-proxy', {
-        body: {
-          action: 'import',
-          type: 'nfe',
-          body: { accessKey }
-        }
-      });
-      if (error || !data?.success) return null;
-      
-      const nfe = data.hub?.document;
-      if (!nfe) return null;
-
-      return {
-        recipientCnpj: nfe.destinatario?.cpfCnpj || nfe.destinatario?.cnpj || nfe.destinatario?.cpf,
-        recipientName: nfe.destinatario?.nome || nfe.destinatario?.razaoSocial,
-        recipientCity: nfe.destinatario?.endereco?.municipio,
-        recipientState: nfe.destinatario?.endereco?.uf,
-        recipientZip: nfe.destinatario?.endereco?.cep,
-        recipientAddress: nfe.destinatario?.endereco?.logradouro,
-        recipientAddressNumber: nfe.destinatario?.endereco?.numero,
-      };
-    } catch (e) {
-      console.warn('[Ingestion] Falha ao enriquecer via Hub', e);
-      return null;
-    }
-  };
-
 
   // Learn city → persist to operational_routes destinations
   const handleLearnCity = useCallback((routeId: string, cityName: string) => {
     const route = operationalRoutes.find(r => r.id === routeId);
     if (!route) return;
-    const currentDests: any[] = Array.isArray(route.destinations) ? route.destinations : [];
+    const currentDests: RouteDestination[] = Array.isArray(route.destinations) ? route.destinations : [];
     const normalizedNew = cityName.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-    const alreadyExists = currentDests.some((d: any) => {
+    const alreadyExists = currentDests.some((d) => {
       const name = typeof d === 'string' ? d : d.name || '';
       return name.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() === normalizedNew;
     });
     if (alreadyExists) return;
     const newDests = [...currentDests, { name: cityName }];
-    updateRoute.mutate({ id: routeId, destinations: newDests } as any);
+    updateRoute.mutate({ id: routeId, destinations: newDests });
     toast({ title: 'Rota atualizada', description: `"${cityName}" adicionada à rota. Próxima vez será automático.` });
   }, [operationalRoutes, updateRoute, toast]);
 
   const [step, setStep] = useState(0);
   const [resumeOpen, setResumeOpen] = useState(false);
-  const [validatedDocs, setValidatedDocs] = useState<ValidatedDocument[]>([]);
+  const [validatedDocs, setValidatedDocs] = useState<PersistedValidatedDocument[]>([]);
   const [validatedOrders, setValidatedOrders] = useState<ValidatedOrder[]>([]);
   const [ortReviewDocs, setOrtReviewDocs] = useState<OrtReviewDocument[]>([]);
   const [suggestions, setSuggestions] = useState<LoadSuggestion[]>([]);
-  const [routeGroups, setRouteGroups] = useState<RouteGroup[]>([]);
   const [executing, setExecuting] = useState(false);
   const [savingDocsOnly, setSavingDocsOnly] = useState(false);
   const [ortProcessing, setOrtProcessing] = useState(false);
@@ -186,13 +244,17 @@ export default function Ingestion() {
     try {
       const v = Number(localStorage.getItem(REVIEW_THRESHOLD_KEY));
       if (Number.isFinite(v) && v > 0 && v <= 1) return v;
-    } catch {}
+    } catch {
+      // Usa o limite padrão quando o storage local está indisponível ou inválido.
+    }
     return 0.82;
   });
   const updateReviewThreshold = useCallback((v: number) => {
     const clamped = Math.max(0.5, Math.min(0.99, Number(v) || 0.82));
     setReviewThreshold(clamped);
-    try { localStorage.setItem(REVIEW_THRESHOLD_KEY, String(clamped)); } catch {}
+    try { localStorage.setItem(REVIEW_THRESHOLD_KEY, String(clamped)); } catch {
+      // A preferência permanece válida nesta sessão mesmo sem persistência local.
+    }
   }, []);
 
   // Conta SSX ativa do tenant (1ª disponível) para sincronizar clientes recém-criados
@@ -209,143 +271,18 @@ export default function Ingestion() {
         .maybeSingle();
       return data || null;
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && ssxEnabled,
   });
 
   const onlyDigits = (s: string | null | undefined) => String(s || '').replace(/\D/g, '');
-
-  // Builds a quality report after each ingestion execution.
-  const buildIngestionReport = useCallback((args: {
-    docs: ValidatedDocument[];
-    savedCount: number;
-    errorCount: number;
-    autoCreatedCount: number;
-    matchedCount: number;
-    sourceLabel?: string;
-  }): IngestionReport => {
-    const { docs, savedCount, errorCount, autoCreatedCount, matchedCount, sourceLabel } = args;
-    const total = docs.length;
-    const isFilled = (v: any) => {
-      if (v === null || v === undefined) return false;
-      const s = String(v).trim();
-      if (!s) return false;
-      return !/^(UNKNOWN|N\/?I|N\/?A)$/i.test(s);
-    };
-    const count = (pred: (s: any) => boolean) => docs.filter(d => pred(d.source as any)).length;
-
-    const fieldCoverage = [
-      { key: 'cnpj', label: 'CNPJ/CPF do destinatário', filled: count(s => isFilled(s.recipientCnpj)), total },
-      { key: 'ie', label: 'Inscrição Estadual (IE)', filled: count(s => isFilled(s.recipientStateRegistration)), total },
-      { key: 'im', label: 'Inscrição Municipal (IM)', filled: count(s => isFilled(s.recipientMunicipalRegistration)), total },
-      { key: 'email', label: 'E-mail', filled: count(s => isFilled(s.recipientEmail)), total },
-      { key: 'phone', label: 'Telefone', filled: count(s => isFilled(s.recipientPhone)), total },
-      { key: 'address', label: 'Endereço completo (rua/cidade/UF/CEP)', filled: count(s =>
-        isFilled(s.recipientAddress) && isFilled(s.recipientCity) && isFilled(s.recipientState) && isFilled(s.recipientZip)
-      ), total },
-      { key: 'ibge', label: 'Código IBGE do município', filled: count(s => onlyDigits(s.recipientCityCode).length === 7), total },
-    ];
-
-    const needsReviewDocs =
-      ortReviewDocs.filter(d => d.needsReview).length +
-      docs.filter(d => Number((d.source as any)?.confidence ?? 1) < reviewThreshold).length;
-
-    const unresolved = docs.filter(d => !d.matchedClientId).length;
-
-    // Audit metadata: tenant, batch_id and processing period (from doc issue dates).
-    const issueDates = docs
-      .map(d => (d.source as any)?.issueDate)
-      .filter(Boolean)
-      .map((s: string) => new Date(s))
-      .filter((d: Date) => !isNaN(d.getTime()));
-    const periodFrom = issueDates.length ? new Date(Math.min(...issueDates.map(d => d.getTime()))) : null;
-    const periodTo = issueDates.length ? new Date(Math.max(...issueDates.map(d => d.getTime()))) : null;
-    const generatedAt = new Date();
-    const batchId = `ING-${generatedAt.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;
-    const auditMeta = {
-      tenantId: currentTenant?.id || null,
-      tenantName: currentTenant?.name || null,
-      batchId,
-      sourceLabel: sourceLabel || null,
-      generatedAt: generatedAt.toISOString(),
-      periodFrom: periodFrom ? periodFrom.toISOString() : null,
-      periodTo: periodTo ? periodTo.toISOString() : null,
-      generatedByUserId: user?.id || null,
-    };
-
-    // Build per-document review list with reasons (ORT/OCR + low-confidence XML).
-    const reviewItems: ReviewItem[] = [];
-    const seenInvoices = new Set<string>();
-    const REVIEW_THRESHOLD = reviewThreshold;
-
-    for (const ort of ortReviewDocs) {
-      const reasons: string[] = [];
-      if (ort.confidence < REVIEW_THRESHOLD) {
-        reasons.push(`Baixa confiança OCR (${Math.round((ort.confidence || 0) * 100)}%)`);
-      }
-      if (ort.unknownFields && ort.unknownFields.length > 0) {
-        const sample = ort.unknownFields.slice(0, 4).join(', ');
-        const more = ort.unknownFields.length > 4 ? ` (+${ort.unknownFields.length - 4})` : '';
-        reasons.push(`Campos não mapeados: ${sample}${more}`);
-      }
-      if (ort.needsReview && reasons.length === 0) {
-        reasons.push('Marcado para revisão manual');
-      }
-      if (reasons.length === 0) continue;
-      seenInvoices.add(ort.invoiceNumber);
-      reviewItems.push({
-        invoiceNumber: ort.invoiceNumber,
-        fileName: (ort as any).fileName,
-        recipientName: ort.recipientName,
-        confidence: ort.confidence,
-        reasons,
-      });
-    }
-
-    for (const d of docs) {
-      const src: any = d.source;
-      const conf = Number(src?.confidence ?? 1);
-      const reasons: string[] = [];
-      if (conf < REVIEW_THRESHOLD) reasons.push(`Baixa confiança (${Math.round(conf * 100)}%)`);
-      const missing: string[] = [];
-      if (!isFilled(src.recipientCnpj)) missing.push('CNPJ');
-      if (!isFilled(src.recipientStateRegistration)) missing.push('IE');
-      if (!isFilled(src.recipientAddress) || !isFilled(src.recipientCity) || !isFilled(src.recipientZip)) missing.push('endereço');
-      if (!d.matchedClientId) missing.push('cliente');
-      if (missing.length > 0 && conf < REVIEW_THRESHOLD) {
-        reasons.push(`Mapeamento incompleto: ${missing.join(', ')}`);
-      }
-      if (reasons.length === 0) continue;
-      if (seenInvoices.has(src.invoiceNumber)) continue;
-      reviewItems.push({
-        invoiceNumber: src.invoiceNumber,
-        recipientName: src.recipientName,
-        confidence: conf,
-        reasons,
-      });
-    }
-
-    return {
-      totalDocs: total,
-      savedDocs: savedCount,
-      errorDocs: errorCount,
-      needsReviewDocs,
-      clientsAutoCreated: autoCreatedCount,
-      clientsMatched: matchedCount,
-      clientsUnresolved: Math.max(0, unresolved - autoCreatedCount),
-      fieldCoverage,
-      reviewItems,
-      reviewThreshold,
-      auditMeta,
-    };
-  }, [ortReviewDocs, reviewThreshold, currentTenant?.id, currentTenant?.name, user?.id]);
 
   // Persists the report snapshot to ingestion_reports for historical browsing.
   const persistIngestionReport = useCallback(async (report: IngestionReport, sourceLabel: string) => {
     if (!currentTenant || report.totalDocs === 0) return;
     const batchId = report.auditMeta?.batchId
-      || `ING-${new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;
+      || createIngestionBatchId();
     try {
-      await supabase.from('ingestion_reports' as any).insert({
+      const payload: TablesInsert<'ingestion_reports'> = {
         tenant_id: currentTenant.id,
         batch_id: batchId,
         source_label: sourceLabel,
@@ -356,11 +293,12 @@ export default function Ingestion() {
         clients_auto_created: report.clientsAutoCreated,
         clients_matched: report.clientsMatched,
         clients_unresolved: report.clientsUnresolved,
-        field_coverage: report.fieldCoverage as any,
-        review_items: (report.reviewItems || []) as any,
-        report: report as any,
+        field_coverage: toJson(report.fieldCoverage),
+        review_items: toJson(report.reviewItems || []),
+        report: toJson(report),
         created_by: user?.id || null,
-      });
+      };
+      await supabase.from('ingestion_reports').insert(payload);
     } catch (e) {
       console.error('persistIngestionReport failed', e);
     }
@@ -371,100 +309,32 @@ export default function Ingestion() {
     const expectedCnpj = onlyDigits(pickupOrder.remitter_cnpj);
     const expectedName = (pickupOrder.remitter_name || '').trim().toLowerCase();
     return validatedDocs.filter(d => {
-      const docCnpj = onlyDigits((d.source as any)?.emitterCnpj);
-      const docName = ((d.source as any)?.emitterName || '').trim().toLowerCase();
+      const docCnpj = onlyDigits(d.source.emitterCnpj);
+      const docName = (d.source.emitterName || '').trim().toLowerCase();
       if (expectedCnpj && docCnpj) return docCnpj !== expectedCnpj;
       if (expectedName && docName) return !docName.includes(expectedName) && !expectedName.includes(docName);
       return false;
     });
   }, [validatedDocs, pickupOrder, noPickup]);
 
-  const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
-    reader.onerror = () => reject(reader.error || new Error('Erro ao ler arquivo'));
-    reader.readAsDataURL(file);
-  });
-
-  const normalizeOrtKeyPart = (value: unknown) => String(value || '')
-    .toUpperCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Z0-9]/g, '')
-    .slice(0, 48);
-
-  const buildOrtAccessKey = (ort: Pick<OrtReviewDocument, 'invoiceNumber' | 'recipientCnpj' | 'recipientName' | 'recipientCity' | 'issueDate' | 'totalValue'>, fallback: string) => {
-    const recipient = normalizeOrtKeyPart(ort.recipientCnpj) || normalizeOrtKeyPart(ort.recipientName);
-    const city = normalizeOrtKeyPart(ort.recipientCity);
-    const value = Math.round((Number(ort.totalValue) || 0) * 100);
-    const parts = [normalizeOrtKeyPart(ort.invoiceNumber) || fallback, recipient, city, normalizeOrtKeyPart(ort.issueDate), value || '0'].filter(Boolean);
-    return `ORT-${parts.join('-')}`;
-  };
-
-  const toOrtAuditPayload = (ort: OrtReviewDocument) => ({
-    invoiceNumber: ort.invoiceNumber,
-    issueDate: ort.issueDate,
-    paymentTerms: ort.paymentTerms,
-    billing: ort.billing,
-    cargoDescription: ort.cargoDescription,
-    emitterName: ort.emitterName,
-    emitterCnpj: ort.emitterCnpj,
-    recipientName: ort.recipientName,
-    recipientCnpj: ort.recipientCnpj,
-    recipientPhone: ort.recipientPhone,
-    recipientCity: ort.recipientCity,
-    recipientState: ort.recipientState,
-    recipientAddress: ort.recipientAddress,
-    recipientAddressNumber: ort.recipientAddressNumber,
-    recipientZip: ort.recipientZip,
-    recipientNeighborhood: ort.recipientNeighborhood,
-    totalValue: ort.totalValue,
-    totalWeight: ort.totalWeight,
-    totalVolume: ort.totalVolume,
-    estimatedPallets: ort.estimatedPallets,
-    productSummary: ort.productSummary,
-    items: ort.items || [],
-    pageCount: ort.pageCount || 1,
-    sourcePages: ort.sourcePages || [ort.fileName],
-  });
-
-  const mapOrtItems = (ort: OrtReviewDocument) => {
-    const extractedItems = (ort.items || [])
-      .filter(item => item.description?.trim())
-      .map(item => ({
-        description: item.description.trim(),
-        quantity: Number(item.quantity) || 1,
-        unit: item.unit || 'UN',
-        unitPrice: Number(item.unitPrice) || (Number(item.totalPrice) || 0),
-        totalPrice: Number(item.totalPrice) || Number(item.unitPrice) || 0,
-        ncm: '',
-        cfop: '',
-      }));
-
-    return extractedItems.length > 0
-      ? extractedItems
-      : [{ description: ort.productSummary || 'Mercadoria ORT', quantity: 1, unit: 'UN', unitPrice: ort.totalValue || 0, totalPrice: ort.totalValue || 0, ncm: '', cfop: '' }];
-  };
-
-  const getChangedOrtFields = (ort: OrtReviewDocument) => {
-    const extracted = ort.extractedPayload || {};
-    const reviewed = toOrtAuditPayload(ort);
-    return Object.keys(reviewed).filter(key => String((extracted as any)[key] ?? '') !== String((reviewed as any)[key] ?? ''));
-  };
-
   const recordOrtAudit = async (doc: ValidatedDocument, fiscalDocumentId: string | null, status = 'saved') => {
     if (!currentTenant || !user || doc.source.series !== 'ORT') return;
-    const ort = ortReviewDocs.find((candidate, idx) => buildOrtAccessKey(candidate, `DOC${idx + 1}`) === doc.source.accessKey);
+    const ort = ortReviewDocs.find((candidate, idx) => {
+      const identity = candidate.documentKind === 'nfe'
+        ? normalizeNfeAccessKey(candidate.accessKey)
+        : buildOrtAccessKey(candidate, `DOC${idx + 1}`);
+      return identity === (doc.source.referenceNumber || doc.source.accessKey);
+    });
     if (!ort) return;
-    const { error } = await supabase.from('ort_extraction_audits' as any).insert({
+    const payload: TablesInsert<'ort_extraction_audits'> = {
       tenant_id: currentTenant.id,
       fiscal_document_id: fiscalDocumentId,
       source_file_name: ort.fileName,
       ort_number: ort.invoiceNumber || null,
       dedupe_key: doc.source.accessKey,
-      extracted_payload: ort.extractedPayload || toOrtAuditPayload(ort),
-      reviewed_payload: toOrtAuditPayload(ort),
-      field_confidences: ort.fieldConfidences || {},
+      extracted_payload: toJson(ort.extractedPayload || toOrtAuditPayload(ort)),
+      reviewed_payload: toJson(toOrtAuditPayload(ort)),
+      field_confidences: toJson(ort.fieldConfidences || {}),
       overall_confidence: Math.max(0, Math.min(1, Number(ort.confidence) || 0)),
       needs_review: Boolean(ort.needsReview) || Number(ort.confidence) < reviewThreshold,
       reviewed: true,
@@ -473,101 +343,9 @@ export default function Ingestion() {
       created_by: user.id,
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString(),
-    });
-    if (error) throw error;
-  };
-
-  const dedupeOrtReviewDocs = (docs: OrtReviewDocument[]) => {
-    const existingAccessKeys = new Set(existingDocs.map(d => d.access_key).filter(Boolean));
-    const existingInvoiceNumbers = new Set(existingDocs.map(d => d.invoice_number).filter(Boolean));
-
-    // Build a unified-doc key. Priority: ORT number, then CNPJ, then normalized name+address+city.
-    const unifiedKeyFor = (doc: OrtReviewDocument): string => {
-      const ortNum = normalizeOrtKeyPart(doc.invoiceNumber);
-      if (ortNum) return `ORT#${ortNum}`;
-      const cnpj = normalizeOrtKeyPart(doc.recipientCnpj);
-      const addr = normalizeOrtKeyPart(`${doc.recipientAddress}${doc.recipientAddressNumber}`);
-      const city = normalizeOrtKeyPart(doc.recipientCity);
-      const name = normalizeOrtKeyPart(doc.recipientName);
-      if (cnpj && (addr || city)) return `CNPJ#${cnpj}#${city}#${addr}`;
-      if (cnpj) return `CNPJ#${cnpj}`;
-      if (name && addr && city) return `NAME#${name}#${city}#${addr}`;
-      return `RAW#${doc.fileName}#${Math.random()}`;
     };
-
-    const merged = new Map<string, OrtReviewDocument>();
-    const batchDuplicates = 0;
-    let mergedScans = 0;
-
-    docs.forEach(doc => {
-      const key = unifiedKeyFor(doc);
-      const existing = merged.get(key);
-      if (!existing) {
-        merged.set(key, { ...doc, unifiedDocId: key, mergedFrom: 1 });
-        return;
-      }
-      // Merge: sum totals, dedupe items by description, append source pages
-      mergedScans += 1;
-      type ItemLite = NonNullable<OrtReviewDocument['items']>[number];
-      const itemMap = new Map<string, ItemLite>();
-      const pushItem = (it: ItemLite) => {
-        const k = (it.description || '').trim().toLowerCase();
-        if (!k) return;
-        const cur = itemMap.get(k);
-        if (cur) {
-          cur.quantity = (cur.quantity || 0) + (it.quantity || 0);
-          cur.totalPrice = (cur.totalPrice || 0) + (it.totalPrice || 0);
-          cur.weightKg = (cur.weightKg || 0) + (it.weightKg || 0);
-          cur.volumeM3 = (cur.volumeM3 || 0) + (it.volumeM3 || 0);
-        } else {
-          itemMap.set(k, { ...it });
-        }
-      };
-      (existing.items || []).forEach(pushItem);
-      (doc.items || []).forEach(pushItem);
-
-      const pages = Array.from(new Set([...(existing.sourcePages || []), ...(doc.sourcePages || [])]));
-      merged.set(key, {
-        ...existing,
-        // Prefer non-empty values from either side
-        invoiceNumber: existing.invoiceNumber || doc.invoiceNumber,
-        issueDate: existing.issueDate || doc.issueDate,
-        paymentTerms: existing.paymentTerms || doc.paymentTerms,
-        billing: existing.billing || doc.billing,
-        cargoDescription: existing.cargoDescription || doc.cargoDescription,
-        recipientPhone: existing.recipientPhone || doc.recipientPhone,
-        recipientAddress: existing.recipientAddress || doc.recipientAddress,
-        recipientAddressNumber: existing.recipientAddressNumber || doc.recipientAddressNumber,
-        recipientZip: existing.recipientZip || doc.recipientZip,
-        recipientNeighborhood: existing.recipientNeighborhood || doc.recipientNeighborhood,
-        totalValue: (existing.totalValue || 0) + (doc.totalValue || 0),
-        totalWeight: (existing.totalWeight || 0) + (doc.totalWeight || 0),
-        totalVolume: (existing.totalVolume || 0) + (doc.totalVolume || 0),
-        estimatedPallets: Math.max(1, (existing.estimatedPallets || 0) + (doc.estimatedPallets || 0)),
-        items: Array.from(itemMap.values()),
-        sourcePages: pages,
-        pageCount: pages.length || (existing.pageCount || 1) + (doc.pageCount || 1),
-        confidence: Math.min(existing.confidence || 0, doc.confidence || 0),
-        needsReview: existing.needsReview || doc.needsReview,
-        mergedFrom: (existing.mergedFrom || 1) + 1,
-      });
-    });
-
-    // Filter out documents already saved in DB (by access key or invoice number)
-    let existingDuplicates = 0;
-    const uniqueDocs: OrtReviewDocument[] = [];
-    Array.from(merged.values()).forEach((doc, index) => {
-      const key = buildOrtAccessKey(doc, `DOC${index + 1}`);
-      const legacyKey = `ORT-${doc.invoiceNumber || index + 1}`;
-      const invoiceNumber = doc.invoiceNumber || '';
-      if (existingAccessKeys.has(key) || existingAccessKeys.has(legacyKey) || (invoiceNumber && existingInvoiceNumbers.has(invoiceNumber))) {
-        existingDuplicates += 1;
-        return;
-      }
-      uniqueDocs.push({ ...doc, extractedPayload: toOrtAuditPayload(doc) });
-    });
-
-    return { uniqueDocs, batchDuplicates: mergedScans, existingDuplicates };
+    const { error } = await supabase.from('ort_extraction_audits').insert(payload);
+    if (error) throw error;
   };
 
   const handleFiles = useCallback(async (fileList: FileList) => {
@@ -576,7 +354,7 @@ export default function Ingestion() {
 
     // Read ALL files in parallel (I/O bound) — huge speedup vs sequential await
     const fileBuffers = await Promise.all(
-      files.map(async (file) => {
+      files.map(async (file): Promise<IngestionFileBuffer> => {
         const name = file.name.toLowerCase();
         try {
           if (name.endsWith('.xml') || name.endsWith('.csv') || name.endsWith('.txt')) {
@@ -586,8 +364,8 @@ export default function Ingestion() {
             return { file, name, kind: 'excel' as const, text: '', buffer: await file.arrayBuffer() };
           }
           return { file, name, kind: 'unknown' as const, text: '', buffer: null };
-        } catch (e: any) {
-          return { file, name, kind: 'error' as const, text: '', buffer: null, error: e?.message || 'Erro de leitura' };
+        } catch (e: unknown) {
+          return { file, name, kind: 'error' as const, text: '', buffer: null, error: getErrorMessage(e, 'Erro de leitura') };
         }
       })
     );
@@ -623,11 +401,11 @@ export default function Ingestion() {
           }
           
           docs.push(validated);
-        } catch (e: any) {
+        } catch (e: unknown) {
           docs.push({
-            source: { invoiceNumber: '', accessKey: '', items: [] } as any,
+            source: createInvalidParsedNFe(),
             fileName: fb.file.name,
-            validations: [{ field: 'parse', message: `Erro ao ler XML: ${e.message}`, severity: 'error' }],
+            validations: [{ field: 'parse', message: `Erro ao ler XML: ${getErrorMessage(e)}`, severity: 'error' }],
             hasErrors: true, hasWarnings: false,
             matchedClientId: null, matchedClientName: null, isDuplicate: false,
           });
@@ -638,9 +416,9 @@ export default function Ingestion() {
         orderRows.push(...parseCsvOrders(fb.text));
       } else if (fb.kind === 'error') {
         docs.push({
-          source: { invoiceNumber: '', accessKey: '', items: [] } as any,
+          source: createInvalidParsedNFe(),
           fileName: fb.file.name,
-          validations: [{ field: 'parse', message: `Erro ao ler arquivo: ${(fb as any).error}`, severity: 'error' }],
+          validations: [{ field: 'parse', message: `Erro ao ler arquivo: ${fb.error}`, severity: 'error' }],
           hasErrors: true, hasWarnings: false,
           matchedClientId: null, matchedClientName: null, isDuplicate: false,
         });
@@ -679,18 +457,22 @@ export default function Ingestion() {
         base64: await fileToBase64(file),
       })));
 
-      const { data, error } = await supabase.functions.invoke('extract-ort', { body: { files: payload } });
+      const { data, error } = await supabase.functions.invoke<OrtExtractionResponse>('extract-ort', {
+        body: { files: payload, tenantId: currentTenant?.id },
+      });
       if (error) throw new Error(await getEdgeFunctionErrorMessage(error));
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if (data?.error) throw new Error(data.error);
 
-      const docs: OrtReviewDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => {
+      const docs: OrtReviewDocument[] = (data?.documents || []).map((ort, idx) => {
         const reviewDoc: OrtReviewDocument = {
-          invoiceNumber: ort.invoiceNumber || `ORT-${Date.now()}-${idx + 1}`,
-          issueDate: ort.issueDate || new Date().toISOString().substring(0, 10),
+          documentKind: ort.documentKind === 'nfe' ? 'nfe' : 'ort',
+          accessKey: normalizeNfeAccessKey(ort.accessKey),
+          invoiceNumber: ort.invoiceNumber || '',
+          issueDate: ort.issueDate || '',
           paymentTerms: ort.paymentTerms || '',
           billing: ort.billing || '',
           cargoDescription: ort.cargoDescription || '',
-          emitterName: ort.emitterName || 'ORT',
+          emitterName: ort.emitterName || '',
           emitterCnpj: ort.emitterCnpj || '',
           recipientName: ort.recipientName || '',
           recipientCnpj: ort.recipientCnpj || '',
@@ -707,31 +489,31 @@ export default function Ingestion() {
           recipientIeIndicator: ort.recipientIeIndicator || '',
           recipientEmail: ort.recipientEmail || '',
           recipientAddressComplement: ort.recipientAddressComplement || '',
-          recipientCountry: ort.recipientCountry || 'BRASIL',
-          recipientCountryCode: ort.recipientCountryCode || '1058',
+          recipientCountry: ort.recipientCountry || '',
+          recipientCountryCode: ort.recipientCountryCode || '',
           recipientCityCode: ort.recipientCityCode || '',
           totalValue: Number(ort.totalValue) || 0,
           totalWeight: Number(ort.totalWeight) || 0,
           totalVolume: Number(ort.totalVolume) || 0,
-          estimatedPallets: Math.max(1, Number(ort.estimatedPallets) || Math.ceil((Number(ort.totalWeight) || 0) / 800) || 1),
-          productSummary: ort.productSummary || 'Mercadoria ORT',
-          items: Array.isArray(ort.items) ? ort.items.map((item: any) => ({
+          estimatedPallets: Number(ort.estimatedPallets) || 0,
+          productSummary: ort.productSummary || '',
+          items: Array.isArray(ort.items) ? ort.items.map((item) => ({
             description: item.description || '',
-            quantity: Number(item.quantity) || 1,
-            unit: item.unit || 'UN',
+            quantity: Number(item.quantity) || 0,
+            unit: item.unit || '',
             unitPrice: Number(item.unitPrice) || 0,
             totalPrice: Number(item.totalPrice) || 0,
             weightKg: Number(item.weightKg) || 0,
             volumeM3: Number(item.volumeM3) || 0,
             confidence: Number(item.confidence) || Number(ort.confidence) || 0,
-          })).filter((item: any) => item.description) : [],
+          })).filter((item) => item.description) : [],
           confidence: Number(ort.confidence) || 0,
           needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < reviewThreshold,
           fieldConfidences: ort.fieldConfidences || {},
-          fileName: ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`,
+          fileName: ort.sourceFileName || files[idx]?.name || `Scan ${idx + 1}`,
           sourcePages: Array.isArray(ort.sourcePages) && ort.sourcePages.length
             ? ort.sourcePages
-            : [ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`],
+            : [ort.sourceFileName || files[idx]?.name || `Scan ${idx + 1}`],
           pageCount: Number(ort.pageCount) || (Array.isArray(ort.sourcePages) ? ort.sourcePages.length : 1) || 1,
         };
         // Validate + UNKNOWN fallback for partially illegible fields
@@ -748,10 +530,10 @@ export default function Ingestion() {
         return { ...finalDoc, extractedPayload: toOrtAuditPayload(finalDoc) };
       });
 
-      const { uniqueDocs, batchDuplicates, existingDuplicates } = dedupeOrtReviewDocs(docs);
+      const { uniqueDocs, batchDuplicates, existingDuplicates } = dedupeOrtReviewDocs(docs, existingDocs);
 
       if (uniqueDocs.length === 0) {
-        toast({ title: 'Nenhuma ORT nova encontrada', description: 'Todas as ORTs enviadas já estavam duplicadas.', variant: 'destructive' });
+        toast({ title: 'Nenhum documento novo encontrado', description: 'Todas as NF-e/ORTs enviadas já estavam duplicadas.', variant: 'destructive' });
         return;
       }
 
@@ -762,16 +544,16 @@ export default function Ingestion() {
       if (batchDuplicates) parts.push(`${batchDuplicates} scan(s) unificado(s) ao mesmo cliente`);
       if (existingDuplicates) parts.push(`${existingDuplicates} já existente(s) no sistema ignorada(s)`);
       const dedupeText = parts.length ? ` ${parts.join('; ')}.` : '';
-      toast({ title: 'ORTs processadas', description: `${uniqueDocs.length} documento(s) NF-like pronto(s) para revisão.${dedupeText}` });
-    } catch (e: any) {
-      toast({ title: 'Erro ao ler ORT', description: e.message, variant: 'destructive' });
+      toast({ title: 'Scans processados', description: `${uniqueDocs.length} NF-e/ORT(s) pronta(s) para revisão.${dedupeText}` });
+    } catch (e: unknown) {
+      toast({ title: 'Erro ao ler NF-e/ORT', description: getErrorMessage(e), variant: 'destructive' });
     } finally {
       setOrtProcessing(false);
     }
-  }, [existingDocs, toast]);
+  }, [currentTenant?.id, existingDocs, reviewThreshold, toast]);
 
   const handleUpdateOrtReviewDoc = useCallback((index: number, updates: Partial<OrtReviewDocument>) => {
-    const TRACKED_FIELDS: Record<string, string> = {
+    const TRACKED_FIELDS: Partial<Record<keyof OrtReviewDocument, string>> = {
       issueDate: 'Emissão',
       paymentTerms: 'Prazo de pagamento',
       billing: 'Cobrança',
@@ -786,6 +568,7 @@ export default function Ingestion() {
       recipientCity: 'Cidade',
       recipientState: 'UF',
       invoiceNumber: 'Nº ORT',
+      accessKey: 'Chave NF-e',
       totalValue: 'Valor',
       totalWeight: 'Peso',
       estimatedPallets: 'Paletes',
@@ -794,11 +577,13 @@ export default function Ingestion() {
     const now = new Date().toISOString();
     setOrtReviewDocs(prev => prev.map((doc, i) => {
       if (i !== index) return doc;
-      const newEntries: any[] = [];
-      for (const [key, label] of Object.entries(TRACKED_FIELDS)) {
+      const newEntries: OrtAuditEntry[] = [];
+      for (const key of Object.keys(TRACKED_FIELDS) as Array<keyof OrtReviewDocument>) {
+        const label = TRACKED_FIELDS[key];
+        if (!label) continue;
         if (!(key in updates)) continue;
-        const prevVal = (doc as any)[key];
-        const nextVal = (updates as any)[key];
+        const prevVal = doc[key];
+        const nextVal = updates[key];
         const prevStr = prevVal == null ? '' : String(prevVal);
         const nextStr = nextVal == null ? '' : String(nextVal);
         if (prevStr !== nextStr) {
@@ -821,11 +606,13 @@ export default function Ingestion() {
     const indexes = buildValidationIndexes(existingDocs, clients);
     const seenReviewKeys = new Set<string>();
     const docs = ortReviewDocs.map((ort, idx) => {
-      const accessKey = buildOrtAccessKey(ort, `DOC${idx + 1}`);
+      const isNfe = ort.documentKind === 'nfe';
+      const referenceNumber = isNfe ? null : buildOrtAccessKey(ort, `DOC${idx + 1}`);
+      const accessKey = isNfe ? normalizeNfeAccessKey(ort.accessKey) : '';
       const parsed: ParsedNFe = {
         invoiceNumber: ort.invoiceNumber,
-        series: 'ORT',
-        model: '55',
+        series: isNfe ? '' : 'ORT',
+        model: isNfe ? '55' : 'ORT',
         accessKey,
         issueDate: ort.issueDate,
         emitterName: ort.emitterName,
@@ -846,23 +633,28 @@ export default function Ingestion() {
         recipientAddressComplement: ort.recipientAddressComplement || '',
         recipientNeighborhood: ort.recipientNeighborhood,
         recipientZip: ort.recipientZip || '',
-        recipientCountry: ort.recipientCountry || 'BRASIL',
-        recipientCountryCode: ort.recipientCountryCode || '1058',
+        recipientCountry: ort.recipientCountry || '',
+        recipientCountryCode: ort.recipientCountryCode || '',
         items: mapOrtItems(ort),
         totalValue: ort.totalValue || 0,
         totalWeight: ort.totalWeight || 0,
         totalVolume: ort.totalVolume || 0,
-        estimatedPallets: Math.max(1, ort.estimatedPallets || 1),
+        estimatedPallets: ort.estimatedPallets || 0,
         clientLoadNumber: '',
         observation: '',
+        sourceKind: isNfe ? 'scan_nfe' : 'scan_ort',
+        referenceNumber,
+        productSummary: ort.productSummary || null,
+        paymentTerms: ort.paymentTerms || '',
       };
-      const validated = validateNFe(parsed, `ORT ${ort.fileName}`, existingDocs, clients, indexes);
-      if (seenReviewKeys.has(accessKey)) {
-        validated.validations.push({ field: 'accessKey', message: 'ORT duplicada neste lote de importação', severity: 'error' });
+      const validated = validateNFe(parsed, `${isNfe ? 'NF-e' : 'ORT'} ${ort.fileName}`, existingDocs, clients, indexes);
+      const reviewIdentity = accessKey || referenceNumber || `SCAN-${idx}`;
+      if (seenReviewKeys.has(reviewIdentity)) {
+        validated.validations.push({ field: 'fiscalIdentity', message: 'Documento duplicado neste lote de importação', severity: 'error' });
         validated.hasErrors = true;
         validated.isDuplicate = true;
       }
-      seenReviewKeys.add(accessKey);
+      seenReviewKeys.add(reviewIdentity);
       if (ort.needsReview || ort.confidence < reviewThreshold) {
         validated.validations.push({ field: 'ortConfidence', message: 'ORT tinha campos de baixa confiança — revisão manual realizada', severity: 'info' });
       }
@@ -871,7 +663,7 @@ export default function Ingestion() {
     setValidatedDocs(docs);
     setValidatedOrders([]);
     setStep(2);
-  }, [clients, existingDocs, ortReviewDocs]);
+  }, [clients, existingDocs, ortReviewDocs, reviewThreshold]);
 
   // Inline editing callbacks
   const handleUpdateDoc = useCallback((index: number, updates: Partial<ValidatedDocument>) => {
@@ -912,31 +704,30 @@ export default function Ingestion() {
     let ieUpdatedCount = 0;
     const clientsToSyncSsx = new Set<string>(); // client_ids para sincronizar com SSX
 
-    const ensureClient = async (src: any, ortFields?: any): Promise<string | null> => {
+    const ensureClient = async (src: ParsedNFe): Promise<string | null> => {
       if (!currentTenant) return null;
-      const cnpjDigits = onlyDigits(src.recipientCnpj || ortFields?.recipientCnpj);
-      const nameKey = (src.recipientName || ortFields?.recipientName || '').trim().toLowerCase();
-      const ieRawForKey = src.recipientStateRegistration || ortFields?.recipientStateRegistration || '';
+      const cnpjDigits = onlyDigits(src.recipientCnpj);
+      const nameKey = (src.recipientName || '').trim().toLowerCase();
+      const ieRawForKey = src.recipientStateRegistration || '';
       const ieIsUnknownOrIsento = /^(UNKNOWN|ISENTO|ISENTA|IS|EX)$/i.test(String(ieRawForKey).trim());
       const ieDigits = ieIsUnknownOrIsento ? '' : onlyDigits(ieRawForKey);
-      const imDigits = onlyDigits(src.recipientMunicipalRegistration || ortFields?.recipientMunicipalRegistration);
-      const uf = (src.recipientState || ortFields?.recipientState || '').trim().toUpperCase();
-      const cityKey = (src.recipientCity || ortFields?.recipientCity || '').trim().toLowerCase();
+      const imDigits = onlyDigits(src.recipientMunicipalRegistration);
+      const uf = (src.recipientState || '').trim().toUpperCase();
+      const cityKey = (src.recipientCity || '').trim().toLowerCase();
       const ieKey = ieDigits ? `${uf}|${ieDigits}` : '';
       const imKey = imDigits ? `${cityKey}|${imDigits}` : '';
 
       // Cliente já cadastrado sem IE (ou com IE inválida/UNKNOWN): puxa a IE da
       // nota e atualiza o cadastro, evitando rejeição da SEFAZ na emissão do CT-e.
       const backfillIe = async (clientId: string) => {
-        const existing = clients.find(c => c.id === clientId) as any;
+        const existing = clients.find(c => c.id === clientId);
         const currentIe = String(existing?.state_registration || '').trim();
         const currentValid = currentIe && !/^(UNKNOWN|N\/?I|N\/?A|0+|-+|\?+)$/i.test(currentIe);
         if (currentValid) return;
-        const ieConf = (src.fieldConfidences || ortFields?.fieldConfidences || {}).recipientStateRegistration;
-        const norm = normalizeStateRegistration(ieRawForKey, uf, ieConf);
+        const norm = normalizeStateRegistration(ieRawForKey, uf);
         if (norm.unknown || !norm.value) return;
-        const ind = normalizeIeIndicator(src.recipientIeIndicator || ortFields?.recipientIeIndicator, norm);
-        const patch: any = { state_registration: norm.value, updated_by: user?.id };
+        const ind = normalizeIeIndicator(src.recipientIeIndicator, norm);
+        const patch: TablesUpdate<'clients'> = { state_registration: norm.value, updated_by: user?.id };
         if (ind.description) {
           patch.ie_indicator = ind.description;
           patch.tax_description = ind.description;
@@ -962,9 +753,9 @@ export default function Ingestion() {
       // Match por IE (com mesma UF quando disponível) — evita duplicar quando CNPJ não foi extraído
       if (ieDigits) {
         const existingByIe = clients.find(c => {
-          const cIe = onlyDigits((c as any).state_registration || '');
+          const cIe = onlyDigits(c.state_registration || '');
           if (!cIe || cIe !== ieDigits) return false;
-          const cUf = ((c as any).address_state || '').trim().toUpperCase();
+          const cUf = (c.address_state || '').trim().toUpperCase();
           return !uf || !cUf || cUf === uf;
         });
         if (existingByIe) return existingByIe.id;
@@ -973,9 +764,9 @@ export default function Ingestion() {
       // Match por IM (com mesma cidade quando disponível)
       if (imDigits) {
         const existingByIm = clients.find(c => {
-          const cIm = onlyDigits((c as any).municipal_registration || '');
+          const cIm = onlyDigits(c.municipal_registration || '');
           if (!cIm || cIm !== imDigits) return false;
-          const cCity = ((c as any).address_city || '').trim().toLowerCase();
+          const cCity = (c.address_city || '').trim().toLowerCase();
           return !cityKey || !cCity || cCity === cityKey;
         });
         if (existingByIm) { await backfillIe(existingByIm.id); return existingByIm.id; }
@@ -988,7 +779,7 @@ export default function Ingestion() {
       }
 
       // Sem dado mínimo, não cria
-      const recipientName = src.recipientName || ortFields?.recipientName;
+      const recipientName = src.recipientName;
       if (!recipientName && !cnpjDigits) return null;
 
       const taxId = cnpjDigits
@@ -999,7 +790,7 @@ export default function Ingestion() {
               : cnpjDigits)
         : null;
 
-      const zipDigits = onlyDigits(src.recipientZip || ortFields?.recipientZip);
+      const zipDigits = onlyDigits(src.recipientZip);
       const zip = zipDigits.length === 8 ? `${zipDigits.slice(0,5)}-${zipDigits.slice(5)}` : null;
 
       // Endereço completo do destinatário (XML/ORT) — preserva número 'S/N' quando aplicável,
@@ -1010,24 +801,23 @@ export default function Ingestion() {
         if (/^(UNKNOWN|N\/?I|N\/?A)$/i.test(t)) return null;
         return t.replace(/\s+/g, ' ');
       };
-      const rawNumber = (src.recipientAddressNumber || ortFields?.recipientAddressNumber || '').trim();
+      const rawNumber = (src.recipientAddressNumber || '').trim();
       const addressNumber = rawNumber
         ? (/^(s\/?n|sem n[úu]mero)$/i.test(rawNumber) ? 'S/N' : rawNumber)
         : null;
-      const ufRaw = (src.recipientState || ortFields?.recipientState || '').trim().toUpperCase();
+      const ufRaw = (src.recipientState || '').trim().toUpperCase();
       const addressState = /^[A-Z]{2}$/.test(ufRaw) ? ufRaw : (ufRaw || null);
-      const ibgeDigits = onlyDigits(src.recipientCityCode || ortFields?.recipientCityCode);
+      const ibgeDigits = onlyDigits(src.recipientCityCode);
       const ibgeCode = ibgeDigits.length === 7 ? ibgeDigits : null;
-      const countryCodeRaw = onlyDigits(src.recipientCountryCode || ortFields?.recipientCountryCode);
+      const countryCodeRaw = onlyDigits(src.recipientCountryCode);
       const countryCode = countryCodeRaw || '1058';
-      const countryName = sanitizeText(src.recipientCountry || ortFields?.recipientCountry) || 'BRASIL';
+      const countryName = sanitizeText(src.recipientCountry) || 'BRASIL';
 
       // Derivações fiscais a partir da nota
       const isCpf = cnpjDigits.length === 11;
-      const ieRaw = src.recipientStateRegistration || ortFields?.recipientStateRegistration || '';
-      const ieConfidence = (src.fieldConfidences || ortFields?.fieldConfidences || {}).recipientStateRegistration;
-      const ieNorm = normalizeStateRegistration(ieRaw, src.recipientState || ortFields?.recipientState, ieConfidence);
-      const indIeNorm = normalizeIeIndicator(src.recipientIeIndicator || ortFields?.recipientIeIndicator, ieNorm);
+      const ieRaw = src.recipientStateRegistration || '';
+      const ieNorm = normalizeStateRegistration(ieRaw, src.recipientState);
+      const indIeNorm = normalizeIeIndicator(src.recipientIeIndicator, ieNorm);
       const taxCode = indIeNorm.code === '1' ? 'C'
         : indIeNorm.code === '2' ? 'I0'
         : indIeNorm.code === '9' ? 'NC'
@@ -1035,13 +825,13 @@ export default function Ingestion() {
         : null;
       const taxDescription = indIeNorm.description;
       // CFOP do primeiro item indica natureza (5xxx/6xxx = venda → Comércio; 1xxx/2xxx = entrada)
-      const firstCfop = String(((src.items || ortFields?.items || [])[0] || {}).cfop || '').replace(/\D/g, '');
+      const firstCfop = String(src.items[0]?.cfop || '').replace(/\D/g, '');
       const cfopFirst = firstCfop ? firstCfop.charAt(0) : '';
       const cfopClientType = ['5','6','7'].includes(cfopFirst) ? 'Comércio'
         : ['1','2','3'].includes(cfopFirst) ? 'Comércio'
         : null;
 
-      const payload: any = {
+      const payload: TablesInsert<'clients'> = {
         tenant_id: currentTenant.id,
         company_name: recipientName || taxId || 'Sem nome',
         legal_name: recipientName || null,
@@ -1059,11 +849,11 @@ export default function Ingestion() {
         taxes_enabled: indIeNorm.taxesEnabled,
         cfop_client_type: cfopClientType,
         freight_calc_type: 'PESO',
-        address_street: sanitizeText(src.recipientAddress || ortFields?.recipientAddress),
+        address_street: sanitizeText(src.recipientAddress),
         address_number: addressNumber,
-        address_complement: sanitizeText(src.recipientAddressComplement || ortFields?.recipientAddressComplement),
-        address_neighborhood: sanitizeText(src.recipientNeighborhood || ortFields?.recipientNeighborhood),
-        address_city: sanitizeText(src.recipientCity || ortFields?.recipientCity),
+        address_complement: sanitizeText(src.recipientAddressComplement),
+        address_neighborhood: sanitizeText(src.recipientNeighborhood),
+        address_city: sanitizeText(src.recipientCity),
         address_state: addressState,
         address_zip: zip,
         address_city_ibge_code: ibgeCode,
@@ -1072,7 +862,7 @@ export default function Ingestion() {
         country_name: countryName,
         country_code: countryCode,
         email: src.recipientEmail || null,
-        phone: ortFields?.recipientPhone || null,
+        phone: src.recipientPhone || null,
         mobile: src.recipientPhone || null,
         contact_name: recipientName || null,
         active: true,
@@ -1081,9 +871,6 @@ export default function Ingestion() {
         notes: 'Cadastrado automaticamente via importação de XML/ORT',
         created_by: user?.id,
       };
-      // Limpa strings vazias
-      Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = null; });
-
       try {
         const { data, error } = await supabase.from('clients').insert(payload).select('id').single();
         if (error || !data) return null;
@@ -1102,12 +889,12 @@ export default function Ingestion() {
     const results: string[] = [];
     try {
       for (const doc of validatedDocs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable))) {
-        const savedId = (doc as any)._savedId || (doc.isOrphanReusable ? doc.existingDocumentId : null);
+        const savedId = doc._savedId || (doc.isOrphanReusable ? doc.existingDocumentId : null);
         try {
           if (savedId) {
             // Já salvo no upload — vincula à carga via RPC oficial.
             if (loadId && currentTenant) {
-              await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+              await supabase.rpc('assign_fiscal_documents_to_load_v2', {
                 _tenant_id: currentTenant.id,
                 _load_id: loadId,
                 _document_ids: [savedId],
@@ -1121,7 +908,7 @@ export default function Ingestion() {
               if (newId) doc.matchedClientId = newId;
             }
             let freightValue: number | null = null;
-            let freightBreakdown: any = {};
+            let freightBreakdown: FreightBreakdown | null = null;
             let freightTableId: string | null = null;
             if (currentTenant) {
               const freightResult = await calculateFreight({
@@ -1149,24 +936,26 @@ export default function Ingestion() {
               access_key: doc.source.accessKey,
               remitter: doc.source.emitterName,
               remitter_cnpj: doc.source.emitterCnpj || null,
-              remitter_state_registration: (doc.source as any).emitterStateRegistration || null,
+              remitter_state_registration: doc.source.emitterStateRegistration || null,
               recipient: doc.source.recipientName,
+              recipient_cnpj: doc.source.recipientCnpj || null,
               recipient_city: doc.source.recipientCity || null,
               recipient_state: doc.source.recipientState || null,
               recipient_neighborhood: doc.source.recipientNeighborhood || null,
               issue_date: doc.source.issueDate || null,
               client_id: doc.matchedClientId,
-              product_summary: doc.source.items.map(i => i.description).join(', ').substring(0, 500),
+              product_summary: (doc.source.productSummary || doc.source.items.map(i => i.description).join(', ')).substring(0, 500),
               pallet_count: doc.source.estimatedPallets,
               weight_kg: doc.source.totalWeight,
               value: doc.source.totalValue,
               freight_value: freightValue,
-              freight_breakdown: freightBreakdown,
+              freight_breakdown: freightBreakdown ? toJson(freightBreakdown) : null,
               freight_table_id: freightTableId,
               status: 'confirmed',
               load_id: loadId || null,
               pickup_order_id: pickupOrderId || null,
               client_load_number: doc.source.clientLoadNumber || null,
+              reference_number: doc.source.referenceNumber || null,
               client_load_source: doc.source.clientLoadNumber
                 ? {
                     source: doc.source.clientLoadSource || 'none',
@@ -1183,9 +972,11 @@ export default function Ingestion() {
                       }
                     : null),
                 delivery_meta: (() => {
-                  const src: any = doc.source;
+                  const src = doc.source;
+                  const sourceMeta = { ingestion_source: src.sourceKind || 'xml' };
                   if (src.paymentMethod) {
                     return {
+                      ...sourceMeta,
                       payment_method: src.paymentMethod,
                       payment_method_source: src.paymentMethodSource || 'tpag',
                       payment_method_code: src.paymentMethodCode || null,
@@ -1193,8 +984,8 @@ export default function Ingestion() {
                   }
                   const r = detectPaymentMethodDetailed(src.observation, src.paymentTerms);
                   return r.value
-                    ? { payment_method: r.value, payment_method_source: r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword' }
-                    : {};
+                    ? { ...sourceMeta, payment_method: r.value, payment_method_source: r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword' }
+                    : sourceMeta;
                 })(),
             });
 
@@ -1207,8 +998,8 @@ export default function Ingestion() {
             const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : '';
             results.push(`✅ NF ${doc.source.invoiceNumber} salva${freightLabel}`);
           }
-        } catch (e: any) {
-          results.push(`❌ NF ${doc.source.invoiceNumber}: ${e.message}`);
+        } catch (e: unknown) {
+          results.push(`❌ NF ${doc.source.invoiceNumber}: ${getErrorMessage(e)}`);
         }
       }
 
@@ -1227,11 +1018,15 @@ export default function Ingestion() {
       const saveLabel = `${baseSaveLabel}${reprocessSuffix}`;
       const reportSaveDocs = buildIngestionReport({
         docs: validDocsForReport,
+        ortReviewDocs,
         savedCount: successCount,
         errorCount,
         autoCreatedCount: autoCreatedCount,
         matchedCount: matchedExisting,
+        reviewThreshold,
         sourceLabel: saveLabel,
+        tenant: currentTenant,
+        generatedByUserId: user?.id,
       });
       setIngestionReport(reportSaveDocs);
       void persistIngestionReport(reportSaveDocs, saveLabel);
@@ -1252,15 +1047,15 @@ export default function Ingestion() {
       }
 
       // Sincronização opcional com SSX (InsertPerson) para os clientes recém-criados
-      if (syncSsxClients && ssxAccountForClients?.id && currentTenant && clientsToSyncSsx.size > 0) {
+      if (ssxEnabled && syncSsxClients && ssxAccountForClients?.id && currentTenant && clientsToSyncSsx.size > 0) {
         let okCount = 0;
         let errCount = 0;
         for (const cId of clientsToSyncSsx) {
           try {
-            const { data, error } = await supabase.functions.invoke('ssx-insert-person-client', {
+            const { data, error } = await supabase.functions.invoke<SsxInsertPersonResponse>('ssx-insert-person-client', {
               body: { tenant_id: currentTenant.id, client_id: cId, integration_account_id: ssxAccountForClients.id },
             });
-            if (error || (data as any)?.error) errCount++;
+            if (error || data?.error) errCount++;
             else okCount++;
           } catch {
             errCount++;
@@ -1279,8 +1074,8 @@ export default function Ingestion() {
           ? `${successCount} documentos vinculados à carga ${loadLabel}.`
           : `${successCount} documentos salvos. Agrupe em cargas quando quiser na página de Cargas.`,
       });
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      toast({ title: 'Erro', description: getErrorMessage(e), variant: 'destructive' });
     } finally {
       setSavingDocsOnly(false);
     }
@@ -1291,15 +1086,14 @@ export default function Ingestion() {
   };
 
   const handleRoutingNext = async (groups: RouteGroup[]) => {
-    setRouteGroups(groups);
 
     // ── Auto-save valid docs to DB at grouping step so nothing is lost ──
-    const validDocs = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate && !(d as any)._savedId);
+    const validDocs = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate && !d._savedId);
     let savedCount = 0;
     for (const doc of validDocs) {
       try {
         let freightValue: number | null = null;
-        let freightBreakdown: any = {};
+        let freightBreakdown: FreightBreakdown | null = null;
         let freightTableId: string | null = null;
         if (currentTenant) {
           const freightResult = await calculateFreight({
@@ -1327,22 +1121,25 @@ export default function Ingestion() {
           access_key: doc.source.accessKey,
           remitter: doc.source.emitterName,
           remitter_cnpj: doc.source.emitterCnpj || null,
-              remitter_state_registration: (doc.source as any).emitterStateRegistration || null,
+          remitter_state_registration: doc.source.emitterStateRegistration || null,
           recipient: doc.source.recipientName,
+          recipient_cnpj: doc.source.recipientCnpj || null,
           recipient_city: doc.source.recipientCity || null,
           recipient_state: doc.source.recipientState || null,
           recipient_neighborhood: doc.source.recipientNeighborhood || null,
           issue_date: doc.source.issueDate || null,
-          product_summary: doc.source.items.map(i => i.description).join(', ').substring(0, 500),
+          client_id: doc.matchedClientId,
+          product_summary: (doc.source.productSummary || doc.source.items.map(i => i.description).join(', ')).substring(0, 500),
           pallet_count: doc.source.estimatedPallets,
           weight_kg: doc.source.totalWeight,
           value: doc.source.totalValue,
           freight_value: freightValue,
-          freight_breakdown: freightBreakdown,
+          freight_breakdown: freightBreakdown ? toJson(freightBreakdown) : null,
           freight_table_id: freightTableId,
           status: 'confirmed',
           pickup_order_id: pickupOrderId || null,
           client_load_number: doc.source.clientLoadNumber || null,
+          reference_number: doc.source.referenceNumber || null,
           client_load_source: doc.source.clientLoadNumber
             ? {
                 source: doc.source.clientLoadSource || 'none',
@@ -1359,9 +1156,11 @@ export default function Ingestion() {
                   }
                 : null),
           delivery_meta: (() => {
-            const src: any = doc.source;
+            const src = doc.source;
+            const sourceMeta = { ingestion_source: src.sourceKind || 'xml' };
             if (src.paymentMethod) {
               return {
+                ...sourceMeta,
                 payment_method: src.paymentMethod,
                 payment_method_source: src.paymentMethodSource || 'tpag',
                 payment_method_code: src.paymentMethodCode || null,
@@ -1369,12 +1168,12 @@ export default function Ingestion() {
             }
             const r = detectPaymentMethodDetailed(src.observation, src.paymentTerms);
             return r.value
-              ? { payment_method: r.value, payment_method_source: r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword' }
-              : {};
+              ? { ...sourceMeta, payment_method: r.value, payment_method_source: r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword' }
+              : sourceMeta;
           })(),
         });
 
-        (doc as any)._savedId = created.id;
+        doc._savedId = created.id;
         // mantém forma de pagamento detectada disponível em delivery_meta também aqui
 
         if (freightValue && freightBreakdown?.tableId && currentTenant) {
@@ -1415,6 +1214,12 @@ export default function Ingestion() {
     setExecuting(true);
     const results: string[] = [];
 
+    if (!currentTenant) {
+      toast({ title: 'Empresa não selecionada', description: 'Selecione uma empresa antes de criar as cargas.', variant: 'destructive' });
+      setExecuting(false);
+      return;
+    }
+
     // Track created entities for linking
     const createdDocIds: Map<string, string> = new Map(); // fiscal identity/access key -> id
     const createdOrderIds: Map<string, string> = new Map(); // orderNumber -> id
@@ -1422,20 +1227,20 @@ export default function Ingestion() {
     try {
       // 1. Map fiscal documents (already saved on upload)
       for (const doc of validatedDocs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable))) {
-        const savedId = (doc as any)._savedId;
+        const savedId = doc._savedId;
         if (savedId) {
           createdDocIds.set(getValidatedDocKey(doc), savedId);
           results.push(`✅ NF ${doc.source.invoiceNumber} (já salva)`);
         } else if (doc.isOrphanReusable && doc.existingDocumentId) {
           // Retomada de importação: NF já existia no banco sem carga vinculada.
           createdDocIds.set(getValidatedDocKey(doc), doc.existingDocumentId);
-          (doc as any)._savedId = doc.existingDocumentId;
+          doc._savedId = doc.existingDocumentId;
           results.push(`✅ NF ${doc.source.invoiceNumber} reaproveitada (já existia sem carga)`);
         } else {
           // Fallback: save now if somehow not saved earlier
           try {
             let freightValue: number | null = null;
-            let freightBreakdown: any = {};
+            let freightBreakdown: FreightBreakdown | null = null;
             let freightTableId: string | null = null;
             if (currentTenant) {
               const freightResult = await calculateFreight({
@@ -1463,22 +1268,25 @@ export default function Ingestion() {
               access_key: doc.source.accessKey,
               remitter: doc.source.emitterName,
               remitter_cnpj: doc.source.emitterCnpj || null,
-              remitter_state_registration: (doc.source as any).emitterStateRegistration || null,
+              remitter_state_registration: doc.source.emitterStateRegistration || null,
               recipient: doc.source.recipientName,
+              recipient_cnpj: doc.source.recipientCnpj || null,
               recipient_city: doc.source.recipientCity || null,
               recipient_state: doc.source.recipientState || null,
               recipient_neighborhood: doc.source.recipientNeighborhood || null,
               issue_date: doc.source.issueDate || null,
-              product_summary: doc.source.items.map(i => i.description).join(', ').substring(0, 500),
+              client_id: doc.matchedClientId,
+              product_summary: (doc.source.productSummary || doc.source.items.map(i => i.description).join(', ')).substring(0, 500),
               pallet_count: doc.source.estimatedPallets,
               weight_kg: doc.source.totalWeight,
               value: doc.source.totalValue,
               freight_value: freightValue,
-              freight_breakdown: freightBreakdown,
+              freight_breakdown: freightBreakdown ? toJson(freightBreakdown) : null,
               freight_table_id: freightTableId,
               status: 'confirmed',
               pickup_order_id: pickupOrderId || null,
               client_load_number: doc.source.clientLoadNumber || null,
+              reference_number: doc.source.referenceNumber || null,
               client_load_source: doc.source.clientLoadNumber
                 ? {
                     source: doc.source.clientLoadSource || 'none',
@@ -1495,9 +1303,11 @@ export default function Ingestion() {
                       }
                     : null),
                 delivery_meta: (() => {
-                  const src: any = doc.source;
+                  const src = doc.source;
+                  const sourceMeta = { ingestion_source: src.sourceKind || 'xml' };
                   if (src.paymentMethod) {
                     return {
+                      ...sourceMeta,
                       payment_method: src.paymentMethod,
                       payment_method_source: src.paymentMethodSource || 'tpag',
                       payment_method_code: src.paymentMethodCode || null,
@@ -1505,8 +1315,8 @@ export default function Ingestion() {
                   }
                   const r = detectPaymentMethodDetailed(src.observation, src.paymentTerms);
                   return r.value
-                    ? { payment_method: r.value, payment_method_source: r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword' }
-                    : {};
+                    ? { ...sourceMeta, payment_method: r.value, payment_method_source: r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword' }
+                    : sourceMeta;
                 })(),
             });
             createdDocIds.set(getValidatedDocKey(doc), created.id);
@@ -1519,8 +1329,8 @@ export default function Ingestion() {
 
             const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : ' (sem tabela de frete)';
             results.push(`✅ NF ${doc.source.invoiceNumber} importada${freightLabel}`);
-          } catch (e: any) {
-            results.push(`❌ NF ${doc.source.invoiceNumber}: ${e.message}`);
+          } catch (e: unknown) {
+            results.push(`❌ NF ${doc.source.invoiceNumber}: ${getErrorMessage(e)}`);
           }
         }
       }
@@ -1537,11 +1347,11 @@ export default function Ingestion() {
             quantity: order.source.quantity,
             promised_date: order.source.promisedDate || null,
             status: 'received',
-          } as any);
+          });
           createdOrderIds.set(order.source.orderNumber, created.id);
           results.push(`✅ Pedido ${order.source.orderNumber} criado`);
-        } catch (e: any) {
-          results.push(`❌ Pedido ${order.source.orderNumber}: ${e.message}`);
+        } catch (e: unknown) {
+          results.push(`❌ Pedido ${order.source.orderNumber}: ${getErrorMessage(e)}`);
         }
       }
 
@@ -1558,7 +1368,7 @@ export default function Ingestion() {
           const loadNumber = String(nextLoadSeq);
           nextLoadSeq += 1;
           const docIds = suggestion.documents
-            .map(d => createdDocIds.get(getValidatedDocKey(d)) || (d.isOrphanReusable ? d.existingDocumentId : null) || (d as any)._savedId)
+            .map(d => createdDocIds.get(getValidatedDocKey(d)) || (d.isOrphanReusable ? d.existingDocumentId : null) || getPersistedDocumentId(d))
             .filter((id): id is string => !!id);
 
           if (suggestion.documents.length > 0 && docIds.length === 0) {
@@ -1576,19 +1386,19 @@ export default function Ingestion() {
             driver_id: assignment?.driverId || null,
             payment_method: (() => {
               const detectedMethods = suggestion.documents
-                .map((doc) => doc.source.paymentMethod || detectPaymentMethodDetailed(doc.source.observation, (doc.source as any).paymentTerms).value)
+                .map((doc) => doc.source.paymentMethod || detectPaymentMethodDetailed(doc.source.observation, doc.source.paymentTerms).value)
                 .filter(Boolean) as string[];
               return detectedMethods[0] || null;
             })(),
             status: 'planned',
-          } as any);
+          });
 
           const loadId = createdLoad.id;
           let itemsCreated = 0;
 
           // Vincula documentos à carga via RPC oficial (cria load_items + atualiza fiscal_documents + auditoria)
           if (docIds.length > 0 && currentTenant) {
-            const { data: assignResult, error: assignErr } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+            const { data: assignResult, error: assignErr } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
               _tenant_id: currentTenant.id,
               _load_id: loadId,
               _document_ids: docIds,
@@ -1596,7 +1406,7 @@ export default function Ingestion() {
             if (assignErr) {
               // Rollback: remove carga vazia para não deixar cargas sem notas
               try {
-                await (supabase as any).rpc('delete_load_safely', {
+                await supabase.rpc('delete_load_safely', {
                   _tenant_id: currentTenant.id,
                   _load_id: loadId,
                 });
@@ -1606,10 +1416,10 @@ export default function Ingestion() {
               throw new Error(`Falha ao vincular ${docIds.length} NF(s): ${assignErr.message || assignErr}`);
             }
 
-            const updatedCount = Number((assignResult as any)?.updated ?? docIds.length);
+            const updatedCount = getJsonNumber(assignResult, 'updated') ?? docIds.length;
             if (updatedCount !== docIds.length) {
               try {
-                await (supabase as any).rpc('delete_load_safely', {
+                await supabase.rpc('delete_load_safely', {
                   _tenant_id: currentTenant.id,
                   _load_id: loadId,
                 });
@@ -1622,8 +1432,8 @@ export default function Ingestion() {
           } else if (suggestion.documents.length > 0 && docIds.length === 0) {
             // Nenhuma das NFs da sugestão foi criada com sucesso (duplicadas ou erro de criação)
             try {
-              await (supabase as any).rpc('delete_load_safely', {
-                _tenant_id: currentTenant!.id,
+              await supabase.rpc('delete_load_safely', {
+                _tenant_id: currentTenant.id,
                 _load_id: loadId,
               });
             } catch {
@@ -1632,19 +1442,18 @@ export default function Ingestion() {
             throw new Error('Nenhuma NF pôde ser vinculada (todas duplicadas ou com erro na importação).');
           }
 
-          // Itens de pedidos não passam por NF — usa createLoadItem que agora exige fiscal_document_id,
-          // então mantemos insert direto apenas para items derivados de pedido (sem espelho em fiscal_documents).
+          // Itens derivados de pedidos também passam pela composição canônica e auditável.
           for (const order of suggestion.orders) {
             const orderId = createdOrderIds.get(order.source.orderNumber);
             try {
-              const { error: liErr } = await (supabase as any).from('load_items').insert({
-                tenant_id: currentTenant!.id,
-                load_id: loadId,
-                order_id: orderId || null,
-                item_description: `Pedido ${order.source.orderNumber} - ${order.source.clientName || 'Sem cliente'}`,
-                quantity: order.source.quantity || 0,
-                pallet_count: order.source.palletCount || Math.ceil((order.source.quantity || 0) / 50),
-                weight_kg: order.source.weightKg || 0,
+              const { error: liErr } = await supabase.rpc('upsert_load_item_v3', {
+                p_tenant_id: currentTenant.id,
+                p_load_id: loadId,
+                p_order_id: orderId || undefined,
+                p_item_description: `Pedido ${order.source.orderNumber} - ${order.source.clientName || 'Sem cliente'}`,
+                p_quantity: order.source.quantity || 0,
+                p_pallet_count: order.source.palletCount || Math.ceil((order.source.quantity || 0) / 50),
+                p_weight_kg: order.source.weightKg || 0,
               });
               if (!liErr) itemsCreated++;
             } catch {
@@ -1653,8 +1462,8 @@ export default function Ingestion() {
           }
 
           results.push(`✅ Carga ${loadNumber} → ${suggestion.region} (${itemsCreated} itens vinculados)`);
-        } catch (e: any) {
-          results.push(`❌ Carga ${suggestion.region}: ${e.message}`);
+        } catch (e: unknown) {
+          results.push(`❌ Carga ${suggestion.region}: ${getErrorMessage(e)}`);
         }
       }
 
@@ -1668,11 +1477,15 @@ export default function Ingestion() {
       const execLabel = `Execução completa de cargas${reprocessSuffix}`;
       const reportExec = buildIngestionReport({
         docs: validDocsForReport,
+        ortReviewDocs,
         savedCount: successCount,
         errorCount,
         autoCreatedCount: 0,
         matchedCount: matchedExisting,
+        reviewThreshold,
         sourceLabel: execLabel,
+        tenant: currentTenant,
+        generatedByUserId: user?.id,
       });
       setIngestionReport(reportExec);
       void persistIngestionReport(reportExec, execLabel);
@@ -1682,8 +1495,8 @@ export default function Ingestion() {
         description: `${successCount} sucesso${errorCount > 0 ? `, ${errorCount} erros` : ''}`,
         variant: errorCount > 0 ? 'destructive' : 'default',
       });
-    } catch (e: any) {
-      toast({ title: 'Erro na execução', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      toast({ title: 'Erro na execução', description: getErrorMessage(e), variant: 'destructive' });
     } finally {
       setExecuting(false);
     }
@@ -1695,7 +1508,6 @@ export default function Ingestion() {
     setValidatedOrders([]);
     setOrtReviewDocs([]);
     setSuggestions([]);
-    setRouteGroups([]);
     setExecutionResults([]);
     setIngestionReport(null);
   };
@@ -1868,7 +1680,7 @@ export default function Ingestion() {
       )}
       {step === 2 && (
         <>
-        {ssxAccountForClients?.id && (
+        {ssxEnabled && ssxAccountForClients?.id && (
           <div className="mb-3 flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
             <div className="flex items-center gap-2">
               <input
@@ -1913,7 +1725,7 @@ export default function Ingestion() {
               .map(r => ({
                 id: r.id,
                 name: r.name,
-                destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
+                destinations: Array.isArray(r.destinations) ? r.destinations.map((d) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
               }));
           })()}
           onBack={() => setStep(2)}
@@ -1924,8 +1736,8 @@ export default function Ingestion() {
       {step === 4 && (
         <GroupingStep
           suggestions={suggestions}
-          vehicles={vehicles as any}
-          drivers={drivers as any}
+          vehicles={vehicles}
+          drivers={drivers}
           routes={(() => {
             const seen = new Set<string>();
             return operationalRoutes
@@ -1934,7 +1746,7 @@ export default function Ingestion() {
               .map(r => ({
                 id: r.id,
                 name: r.name,
-                destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
+                destinations: Array.isArray(r.destinations) ? r.destinations.map((d) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
               }));
           })()}
           executing={executing}

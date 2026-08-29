@@ -2,12 +2,13 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { VEHICLE_SAFE_SELECT } from '@/integrations/supabase/selects';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicleHistory, PositionRaw } from '@/hooks/usePositions';
 import { useVehicleState, stateLabel, stateBadgeClasses, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker } from 'react-leaflet';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import '@/lib/maps/leaflet';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -20,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/sonner';
 import {
   ArrowLeft, MapPin, Clock, Gauge, Navigation, Activity, AlertTriangle, Info,
-  Route, StopCircle, Bell, Hexagon, Fuel, Zap, Moon, Save, Wrench,
+  Route, StopCircle, Bell, Hexagon, Fuel, Moon, Save, Wrench,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -28,13 +29,25 @@ import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 import MaintenanceTab from '@/components/fleet/MaintenanceTab';
 import FuelingTab from '@/components/fleet/FuelingTab';
 import OdometerTab from '@/components/fleet/OdometerTab';
+import type { Json, Tables } from '@/integrations/supabase/types';
+import type { JsonObject } from '@/lib/jsonTypes';
 
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
+type Trip = Tables<'trips'>;
+type ConsolidatedTrip = Trip & { _merged_count: number; max_speed_kmh: number };
+type TripStopWithPoi = Tables<'trip_stops'> & { pois?: { name: string } | null };
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : 'Erro inesperado';
+}
+
+function jsonRecord(value: Json | null | undefined): JsonObject | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function jsonScalar(record: JsonObject | null, key: string): string | number | null {
+  const value = record?.[key];
+  return typeof value === 'string' || typeof value === 'number' ? value : null;
+}
 
 export default function VehicleDetails() {
   const { vehicleId } = useParams<{ vehicleId: string }>();
@@ -45,7 +58,7 @@ export default function VehicleDetails() {
   const { data: vehicle } = useQuery({
     queryKey: ['vehicle', vehicleId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('vehicles').select('*').eq('id', vehicleId!).single();
+      const { data, error } = await supabase.from('vehicles').select(VEHICLE_SAFE_SELECT).eq('id', vehicleId!).single();
       if (error) throw error;
       return data;
     },
@@ -108,16 +121,26 @@ export default function VehicleDetails() {
     enabled: !!currentTenant && !!vehicleId,
   });
 
-  const { data: stops = [] } = useQuery({
+  const { data: stops = [] } = useQuery<TripStopWithPoi[]>({
     queryKey: ['vehicle_stops', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return [];
-      const { data, error } = await supabase.from('trip_stops').select('*, pois:poi_id(name)')
+      const { data, error } = await supabase.from('trip_stops').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
         .gte('start_at', `${historyDate}T00:00:00Z`).lte('start_at', `${historyDate}T23:59:59Z`)
         .order('start_at');
       if (error) throw error;
-      return data;
+      const poiIds = Array.from(new Set((data || []).map((stop) => stop.poi_id).filter((id): id is string => Boolean(id))));
+      const poiNames = new Map<string, string>();
+      if (poiIds.length > 0) {
+        const { data: poiRows, error: poiError } = await supabase.from('pois').select('id, name').in('id', poiIds);
+        if (poiError) throw poiError;
+        for (const poi of poiRows || []) poiNames.set(poi.id, poi.name ?? 'Ponto sem nome');
+      }
+      return (data || []).map((stop) => ({
+        ...stop,
+        pois: stop.poi_id && poiNames.has(stop.poi_id) ? { name: poiNames.get(stop.poi_id)! } : null,
+      }));
     },
     enabled: !!currentTenant && !!vehicleId,
   });
@@ -190,10 +213,8 @@ export default function VehicleDetails() {
   });
 
   const movementState = vehicleState?.movement_state || 'unknown';
-  const isOnline = movementState === 'moving' || movementState === 'stopped' || movementState === 'idle';
-  const isMoving = movementState === 'moving';
   const historyPath = useMemo(() => history.map((p: PositionRaw) => [p.lat, p.lng] as [number, number]), [history]);
-  const telemetry = positionLast?.telemetry_snapshot as Record<string, any> | null;
+  const telemetry = jsonRecord(positionLast?.telemetry_snapshot);
   const hasFuel = capabilities?.fuel === true;
   const hasSpeed = history.some(p => p.speed != null);
 
@@ -202,9 +223,21 @@ export default function VehicleDetails() {
   // Deduplicate & consolidate fragmented trips
   const consolidatedTrips = useMemo(() => {
     if (!trips.length) return [];
-    const sorted = [...(trips as any[])].sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
-    const merged: any[] = [];
-    let current = { ...sorted[0], _merged_count: 1 };
+    const createConsolidatedTrip = (trip: Trip): ConsolidatedTrip => {
+      const start = new Date(trip.start_at).getTime();
+      const end = trip.end_at ? new Date(trip.end_at).getTime() : start;
+      const maxSpeed = Math.max(0, ...history
+        .filter((point) => {
+          const captured = new Date(point.captured_at).getTime();
+          return captured >= start && captured <= end;
+        })
+        .map((point) => point.speed || 0));
+      return { ...trip, _merged_count: 1, max_speed_kmh: maxSpeed };
+    };
+    const sorted = trips.map(createConsolidatedTrip)
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+    const merged: ConsolidatedTrip[] = [];
+    let current: ConsolidatedTrip = sorted[0];
 
     for (let i = 1; i < sorted.length; i++) {
       const next = sorted[i];
@@ -226,17 +259,17 @@ export default function VehicleDetails() {
         };
       } else {
         merged.push(current);
-        current = { ...next, _merged_count: 1 };
+        current = next;
       }
     }
     merged.push(current);
     return merged;
-  }, [trips]);
+  }, [trips, history]);
 
-  const tripsTotalKm = consolidatedTrips.reduce((s: number, t: any) => s + (t.distance_km_estimated || 0), 0);
-  const tripsTotalMoving = consolidatedTrips.reduce((s: number, t: any) => s + (t.moving_time_seconds || 0), 0);
-  const tripsTotalStopped = consolidatedTrips.reduce((s: number, t: any) => s + (t.stopped_time_seconds || 0), 0);
-  const tripsMaxSpeed = Math.max(0, ...consolidatedTrips.map((t: any) => t.max_speed_kmh || 0));
+  const tripsTotalKm = consolidatedTrips.reduce((sum, trip) => sum + (trip.distance_km_estimated || 0), 0);
+  const tripsTotalMoving = consolidatedTrips.reduce((sum, trip) => sum + (trip.moving_time_seconds || 0), 0);
+  const tripsTotalStopped = consolidatedTrips.reduce((sum, trip) => sum + (trip.stopped_time_seconds || 0), 0);
+  const tripsMaxSpeed = Math.max(0, ...consolidatedTrips.map((trip) => trip.max_speed_kmh || 0));
 
   // Speed chart data
   const speedChartData = useMemo(() => {
@@ -251,9 +284,9 @@ export default function VehicleDetails() {
 
   // Fuel chart data
   const fuelChartData = useMemo(() => {
-    return (fuelReadings as any[]).map((r: any) => ({
-      time: format(new Date(r.captured_at), 'HH:mm'),
-      value: r.fuel_value,
+    return fuelReadings.map((reading) => ({
+      time: format(new Date(reading.captured_at), 'HH:mm'),
+      value: reading.fuel_value,
     }));
   }, [fuelReadings]);
 
@@ -268,7 +301,7 @@ export default function VehicleDetails() {
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['pois'] }); toast.success('POI salvo'); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(getErrorMessage(error)),
   });
 
   const linkPOIMutation = useMutation({
@@ -277,10 +310,10 @@ export default function VehicleDetails() {
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['vehicle_stops'] }); toast.success('POI vinculado'); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(getErrorMessage(error)),
   });
 
-  const [poiDialogStop, setPoiDialogStop] = useState<any>(null);
+  const [poiDialogStop, setPoiDialogStop] = useState<TripStopWithPoi | null>(null);
   const [poiName, setPoiName] = useState('');
   const [linkPoiId, setLinkPoiId] = useState('');
 
@@ -295,8 +328,8 @@ export default function VehicleDetails() {
           <div className="flex items-center gap-2 mt-0.5">
             {vehicleState ? (
               <>
-                <Badge variant="outline" className={stateBadgeClasses(movementState as any)}>
-                  {stateLabel(movementState as any)}
+                <Badge variant="outline" className={stateBadgeClasses(movementState)}>
+                  {stateLabel(movementState)}
                 </Badge>
                 {vehicleState.speed > 0 && (
                   <span className="text-xs text-muted-foreground">{Math.round(vehicleState.speed)} km/h</span>
@@ -346,7 +379,7 @@ export default function VehicleDetails() {
               <MiniKPI icon={<MapPin className="h-4 w-4" />} label="Viagens" value={String(todayMetrics.trips_count || 0)} />
               <MiniKPI icon={<StopCircle className="h-4 w-4" />} label="Paradas" value={String(todayMetrics.stops_count || 0)} />
               <MiniKPI icon={<Activity className="h-4 w-4" />} label="Em mov." value={fmtHours(todayMetrics.moving_time_seconds)} />
-              <MiniKPI icon={<Gauge className="h-4 w-4" />} label="Excesso vel." value={String(todayMetrics.overspeed_events || 0)} variant={todayMetrics.overspeed_events > 0 ? 'destructive' : undefined} />
+              <MiniKPI icon={<Gauge className="h-4 w-4" />} label="Excesso vel." value={String(todayMetrics.overspeed_events ?? 0)} variant={(todayMetrics.overspeed_events ?? 0) > 0 ? 'destructive' : undefined} />
             </div>
           )}
 
@@ -387,7 +420,7 @@ export default function VehicleDetails() {
               {historyPath.length > 1 && <Polyline positions={historyPath} color="hsl(215, 80%, 48%)" weight={3} opacity={0.8} />}
               {history.length > 0 && (<><Marker position={[history[0].lat, history[0].lng]}><Popup><strong>Início</strong><br />{format(new Date(history[0].captured_at), "HH:mm:ss")}</Popup></Marker><Marker position={[history[history.length - 1].lat, history[history.length - 1].lng]}><Popup><strong>Fim</strong><br />{format(new Date(history[history.length - 1].captured_at), "HH:mm:ss")}</Popup></Marker></>)}
               {/* Stop markers */}
-              {(stops as any[]).map((s: any) => (
+              {stops.map((s) => (
                 <CircleMarker key={s.id} center={[s.lat, s.lng]} radius={8} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.7 }}>
                   <Popup><strong>Parada</strong><br />{format(new Date(s.start_at), 'HH:mm')} — {s.duration_seconds ? fmtHours(s.duration_seconds) : '?'}<br />{s.pois?.name || s.stop_class}</Popup>
                 </CircleMarker>
@@ -444,7 +477,7 @@ export default function VehicleDetails() {
               <TableBody>
                 {consolidatedTrips.length === 0 ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma viagem detectada neste dia</TableCell></TableRow>
-                ) : consolidatedTrips.map((t: any) => {
+                ) : consolidatedTrips.map((t) => {
                   const startTime = new Date(t.start_at);
                   const endTime = t.end_at ? new Date(t.end_at) : null;
                   const durationSec = endTime ? (endTime.getTime() - startTime.getTime()) / 1000 : null;
@@ -494,7 +527,7 @@ export default function VehicleDetails() {
               <TableBody>
                 {stops.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma parada detectada</TableCell></TableRow>
-                ) : (stops as any[]).map((s: any) => (
+                ) : stops.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="text-xs">{format(new Date(s.start_at), 'HH:mm')}</TableCell>
                     <TableCell className="text-xs">{s.duration_seconds ? fmtHours(s.duration_seconds) : '—'}</TableCell>
@@ -536,7 +569,7 @@ export default function VehicleDetails() {
                   <Select value={linkPoiId} onValueChange={setLinkPoiId}>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
-                      {pois.map((p: any) => (
+                      {pois.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name || p.category}</SelectItem>
                       ))}
                     </SelectContent>
@@ -606,15 +639,20 @@ export default function VehicleDetails() {
                   <Table>
                     <TableHeader><TableRow><TableHead>Início</TableHead><TableHead>Fim</TableHead><TableHead>Máx</TableHead><TableHead>Média</TableHead><TableHead>Pontos</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {(overspeedEvents as any[]).map((ev: any) => {
-                        const p = ev.payload as any;
+                      {overspeedEvents.map((ev) => {
+                        const p = jsonRecord(ev.payload);
+                        const startAt = jsonScalar(p, 'start_at');
+                        const endAt = jsonScalar(p, 'end_at');
+                        const maxSpeed = jsonScalar(p, 'max_speed');
+                        const avgSpeed = jsonScalar(p, 'avg_speed');
+                        const pointCount = jsonScalar(p, 'count_points');
                         return (
                           <TableRow key={ev.id}>
-                            <TableCell className="text-xs">{p?.start_at ? format(new Date(p.start_at), 'HH:mm:ss') : '—'}</TableCell>
-                            <TableCell className="text-xs">{p?.end_at ? format(new Date(p.end_at), 'HH:mm:ss') : '—'}</TableCell>
-                            <TableCell className="font-medium">{p?.max_speed || '—'} km/h</TableCell>
-                            <TableCell>{p?.avg_speed || '—'} km/h</TableCell>
-                            <TableCell className="text-xs">{p?.count_points || '—'}</TableCell>
+                            <TableCell className="text-xs">{startAt ? format(new Date(startAt), 'HH:mm:ss') : '—'}</TableCell>
+                            <TableCell className="text-xs">{endAt ? format(new Date(endAt), 'HH:mm:ss') : '—'}</TableCell>
+                            <TableCell className="font-medium">{maxSpeed ?? '—'} km/h</TableCell>
+                            <TableCell>{avgSpeed ?? '—'} km/h</TableCell>
+                            <TableCell className="text-xs">{pointCount ?? '—'}</TableCell>
                           </TableRow>
                         );
                       })}
@@ -645,15 +683,15 @@ export default function VehicleDetails() {
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Início do dia</CardTitle></CardHeader>
-                      <CardContent><div className="text-2xl font-bold text-foreground">{(fuelReadings[0] as any).fuel_value?.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">{(fuelReadings[0] as any).fuel_unit === 'liters' ? 'L' : '%'}</span></div></CardContent>
+                      <CardContent><div className="text-2xl font-bold text-foreground">{fuelReadings[0].fuel_value?.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">{fuelReadings[0].fuel_unit === 'liters' ? 'L' : '%'}</span></div></CardContent>
                     </Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Fim do dia</CardTitle></CardHeader>
-                      <CardContent><div className="text-2xl font-bold text-foreground">{(fuelReadings[fuelReadings.length - 1] as any).fuel_value?.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">{(fuelReadings[0] as any).fuel_unit === 'liters' ? 'L' : '%'}</span></div></CardContent>
+                      <CardContent><div className="text-2xl font-bold text-foreground">{fuelReadings[fuelReadings.length - 1].fuel_value?.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">{fuelReadings[0].fuel_unit === 'liters' ? 'L' : '%'}</span></div></CardContent>
                     </Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Variação</CardTitle></CardHeader>
                       <CardContent>
                         {(() => {
-                          const delta = (fuelReadings[0] as any).fuel_value - (fuelReadings[fuelReadings.length - 1] as any).fuel_value;
+                          const delta = fuelReadings[0].fuel_value - fuelReadings[fuelReadings.length - 1].fuel_value;
                           return <div className={`text-2xl font-bold ${delta > 0 ? 'text-destructive' : 'text-success'}`}>{delta > 0 ? '-' : '+'}{Math.abs(delta).toFixed(1)}</div>;
                         })()}
                       </CardContent>
@@ -708,7 +746,7 @@ export default function VehicleDetails() {
               <TableBody>
                 {alerts.length === 0 ? (
                   <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground"><Bell className="h-6 w-6 mx-auto mb-1 text-muted-foreground/50" />Nenhum alerta</TableCell></TableRow>
-                ) : (alerts as any[]).map((a: any) => (
+                ) : alerts.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell><Badge variant="outline" className="text-xs">{a.alert_rules?.rule_type || '—'}</Badge></TableCell>
                     <TableCell><Badge variant={a.status === 'open' ? 'destructive' : 'secondary'} className="text-xs">{a.status}</Badge></TableCell>
@@ -729,7 +767,7 @@ export default function VehicleDetails() {
               <TableBody>
                 {geoEvents.length === 0 ? (
                   <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground"><Hexagon className="h-6 w-6 mx-auto mb-1 text-muted-foreground/50" />Nenhum evento</TableCell></TableRow>
-                ) : (geoEvents as any[]).map((ev: any) => (
+                ) : geoEvents.map((ev) => (
                   <TableRow key={ev.id}>
                     <TableCell className="font-medium">{ev.geofences?.name || '—'}</TableCell>
                     <TableCell><Badge variant={ev.direction === 'enter' ? 'default' : 'secondary'} className="text-xs">{ev.direction === 'enter' ? 'Entrada' : 'Saída'}</Badge></TableCell>

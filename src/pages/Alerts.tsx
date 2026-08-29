@@ -1,3 +1,4 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,16 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/sonner';
-import { Bell, CheckCircle2, Eye, EyeOff, Plus, AlertTriangle, Clock, X, Play } from 'lucide-react';
+import { Bell, Eye, Plus, AlertTriangle, X, Play } from 'lucide-react';
 import { addDays, differenceInCalendarDays, format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Falha inesperada';
+}
 
 function ProcessButton() {
   const { currentTenant } = useTenant();
@@ -35,8 +40,8 @@ function ProcessButton() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       toast.success(`Pipeline concluído: ${data.processed_vehicles || 0} veículos, ${data.total_inserted || 0} posições`);
-    } catch (e: any) {
-      toast.error(`Erro: ${e.message}`);
+    } catch (error: unknown) {
+      toast.error(`Erro: ${errorMessage(error)}`);
     }
     setRunning(false);
   };
@@ -49,9 +54,6 @@ function ProcessButton() {
 }
 
 export default function Alerts() {
-  const { currentTenant } = useTenant();
-  const isAdmin = useIsAdmin();
-
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
@@ -99,7 +101,9 @@ function AlertInstancesSection() {
 
   const ackMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('alert_instances').update({ status: 'ack' }).eq('id', id);
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { error } = await supabase.from('alert_instances').update({ status: 'ack' })
+        .eq('id', id).eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alert_instances'] }); toast.success('Alerta reconhecido'); },
@@ -107,13 +111,15 @@ function AlertInstancesSection() {
 
   const closeMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('alert_instances').update({ status: 'closed', closed_at: new Date().toISOString() }).eq('id', id);
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { error } = await supabase.from('alert_instances').update({ status: 'closed', closed_at: new Date().toISOString() })
+        .eq('id', id).eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alert_instances'] }); toast.success('Alerta fechado'); },
   });
 
-  const severityColor = (type: string) => {
+  const severityColor = (type: string | undefined): NonNullable<BadgeProps['variant']> => {
     if (type === 'overspeed') return 'destructive';
     if (type === 'offline') return 'secondary';
     return 'default';
@@ -153,7 +159,7 @@ function AlertInstancesSection() {
                   <Bell className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                   Nenhum alerta {statusFilter === 'open' ? 'aberto' : ''}
                 </TableCell></TableRow>
-              ) : instances.map((inst: any) => (
+              ) : instances.map((inst) => (
                 <TableRow key={inst.id}>
                   <TableCell>
                     <Badge variant={severityColor(inst.alert_rules?.rule_type)} className="text-xs">
@@ -245,7 +251,7 @@ function StaleFiscalDocsSection() {
               <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow>
             ) : docs.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Nenhuma nota com mais de 7 dias pendente de romaneio/saída.</TableCell></TableRow>
-            ) : docs.map((doc: any) => {
+            ) : docs.map((doc) => {
               const issueDate = doc.issue_date ? new Date(`${doc.issue_date}T12:00:00`) : null;
               const closingDate = issueDate ? addDays(issueDate, 7) : null;
               const overdueDays = closingDate ? Math.max(0, differenceInCalendarDays(new Date(), closingDate)) : 0;
@@ -294,7 +300,9 @@ function AlertRulesSection() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
-      const { error } = await supabase.from('alert_rules').update({ enabled }).eq('id', id);
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { error } = await supabase.from('alert_rules').update({ enabled })
+        .eq('id', id).eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['alert_rules'] }),
@@ -302,7 +310,9 @@ function AlertRulesSection() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('alert_rules').delete().eq('id', id);
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { error } = await supabase.from('alert_rules').delete()
+        .eq('id', id).eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alert_rules'] }); toast.success('Regra removida'); },
@@ -323,7 +333,7 @@ function AlertRulesSection() {
                 <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : rules.length === 0 ? (
                 <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhuma regra. Crie regras de alerta para monitorar offline, excesso de velocidade, etc.</TableCell></TableRow>
-              ) : rules.map((r: any) => (
+              ) : rules.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell><Badge variant="outline" className="text-xs">{r.rule_type}</Badge></TableCell>
                   <TableCell className="text-xs text-muted-foreground font-mono">{JSON.stringify(r.params)}</TableCell>
@@ -334,7 +344,7 @@ function AlertRulesSection() {
                       <Badge variant={r.enabled ? 'default' : 'secondary'}>{r.enabled ? 'Sim' : 'Não'}</Badge>
                     )}
                   </TableCell>
-                  <TableCell>{isAdmin && <Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover regra?')) deleteMutation.mutate(r.id); }}><X className="h-3 w-3 text-destructive" /></Button>}</TableCell>
+                  <TableCell>{isAdmin && <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover regra?', { title: 'Remover regra', confirmLabel: 'Remover' })) deleteMutation.mutate(r.id); }}><X className="h-3 w-3 text-destructive" /></Button>}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -356,7 +366,7 @@ function NewRuleDialog({ open, onOpenChange, tenantId }: { open: boolean; onOpen
     e.preventDefault();
     if (!tenantId) return;
     setLoading(true);
-    const params: any = {};
+    const params: Record<string, number> = {};
     if (ruleType === 'offline') params.threshold_minutes = parseInt(threshold);
     if (ruleType === 'overspeed') params.speed_limit_kmh = parseInt(threshold);
     if (ruleType === 'long_stop') params.threshold_minutes = parseInt(threshold);

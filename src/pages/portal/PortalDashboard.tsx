@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { usePortalSummary } from '@/hooks/portal/usePortalSummary';
 import { usePortalUpcomingDeliveries } from '@/hooks/portal/usePortalUpcomingDeliveries';
 import { usePortalAlerts } from '@/hooks/portal/usePortalAlerts';
@@ -19,9 +20,9 @@ const fmtDateTime = (d?: string | null) => (d ? new Date(d).toLocaleString('pt-B
 
 export default function PortalDashboard() {
   const { selectedClientId, clients } = usePortalClientScope();
-  const { data: summary, isLoading } = usePortalSummary({ clientId: selectedClientId });
-  const { data: upcoming = [], isLoading: loadingUpcoming } = usePortalUpcomingDeliveries({ clientId: selectedClientId });
-  const { data: alerts = [], isLoading: loadingAlerts } = usePortalAlerts({ clientId: selectedClientId });
+  const { data: summary, isLoading, error: summaryError, refetch: refetchSummary } = usePortalSummary({ clientId: selectedClientId });
+  const { data: upcoming = [], isLoading: loadingUpcoming, error: upcomingError, refetch: refetchUpcoming } = usePortalUpcomingDeliveries({ clientId: selectedClientId });
+  const { data: alerts = [], isLoading: loadingAlerts, error: alertsError, refetch: refetchAlerts } = usePortalAlerts({ clientId: selectedClientId });
 
   const contextDescription = clients.length > 0
     ? 'Acompanhe suas mercadorias e documentos em tempo real.'
@@ -30,7 +31,12 @@ export default function PortalDashboard() {
   return (
     <div className="space-y-6">
       <PortalSection title="Visão geral" description={contextDescription}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {summaryError ? (
+          <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/30 p-6 text-center text-sm text-destructive">
+            <span>Erro ao carregar os indicadores: {(summaryError as Error).message}</span>
+            <Button size="sm" variant="outline" onClick={() => refetchSummary()}>Tentar novamente</Button>
+          </div>
+        ) : <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <PortalKpiCard label="Em trânsito" value={summary?.in_transit ?? 0} icon={Truck} tone="text-sky-600" isLoading={isLoading} />
           <PortalKpiCard label="Entregues" value={summary?.delivered ?? 0} icon={CheckCircle2} tone="text-emerald-600" isLoading={isLoading} />
           <PortalKpiCard label="Atrasadas" value={summary?.delayed ?? 0} icon={AlertTriangle} tone="text-rose-600" isLoading={isLoading} />
@@ -42,12 +48,17 @@ export default function PortalDashboard() {
           <PortalKpiCard label="Entregas hoje" value={summary?.deliveries_today ?? 0} icon={CalendarClock} tone="text-sky-600" isLoading={isLoading} />
           <PortalKpiCard label="Entregas amanhã" value={summary?.deliveries_tomorrow ?? 0} icon={CalendarDays} tone="text-muted-foreground" isLoading={isLoading} />
           <PortalKpiCard label="Documentos (7 dias)" value={summary?.documents_last_7_days ?? 0} icon={FileText} tone="text-muted-foreground" isLoading={isLoading} />
-        </div>
+        </div>}
       </PortalSection>
 
       <PortalSection title="Próximas entregas" description="Documentos com previsão de chegada nas próximas horas.">
         {loadingUpcoming ? (
           <p className="text-sm text-muted-foreground">Carregando...</p>
+        ) : upcomingError ? (
+          <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/30 p-6 text-center text-sm text-destructive">
+            <span>Erro ao carregar entregas: {(upcomingError as Error).message}</span>
+            <Button size="sm" variant="outline" onClick={() => refetchUpcoming()}>Tentar novamente</Button>
+          </div>
         ) : upcoming.length === 0 ? (
           <PortalEmptyState title="Sem entregas programadas" description="Nenhum documento em rota no momento." />
         ) : (
@@ -88,7 +99,12 @@ export default function PortalDashboard() {
       </PortalSection>
 
       <PortalSection title="Alertas" description="Atrasos, ocorrências e pendências que exigem atenção.">
-        <PortalAlertList alerts={alerts} isLoading={loadingAlerts} />
+        {alertsError ? (
+          <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/30 p-6 text-center text-sm text-destructive">
+            <span>Erro ao carregar alertas: {(alertsError as Error).message}</span>
+            <Button size="sm" variant="outline" onClick={() => refetchAlerts()}>Tentar novamente</Button>
+          </div>
+        ) : <PortalAlertList alerts={alerts} isLoading={loadingAlerts} />}
       </PortalSection>
     </div>
   );

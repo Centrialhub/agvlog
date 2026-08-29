@@ -11,6 +11,7 @@ import { PortalShipmentTimeline } from '@/components/portal/PortalShipmentTimeli
 import { useDownloadPortalPod } from '@/hooks/portal/usePortalPods';
 import { useToast } from '@/hooks/use-toast';
 import type { PublicShipmentStatus } from '@/lib/portal/portalStatus';
+import { portalErrorMessage } from '@/lib/portal/portalErrors';
 
 const fmt = (d?: string | null) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
 const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
@@ -57,15 +58,15 @@ export default function PortalShipmentDetail() {
       : doc.status === 'delivered' ? 'pod_pending'
       : 'received');
 
-  const firstPod = data.proofs?.find((p: any) => p.has_file);
+  const firstPod = data.proofs?.find((proof) => proof.has_file);
 
   const handleDownloadPod = async () => {
     if (!firstPod) return;
     try {
       const url = await download.mutateAsync(firstPod.id);
       window.open(url, '_blank');
-    } catch (e: any) {
-      toast({ title: 'Erro ao baixar', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao baixar', description: portalErrorMessage(error, 'Não foi possível baixar o canhoto.'), variant: 'destructive' });
     }
   };
 
@@ -192,7 +193,7 @@ export default function PortalShipmentDetail() {
               {(data.proofs?.length ?? 0) === 0 ? (
                 <p className="text-muted-foreground">Nenhum canhoto anexado ainda.</p>
               ) : (
-                data.proofs.map((p: any) => (
+                data.proofs.map((p) => (
                   <div key={p.id} className="flex items-center justify-between border rounded-md p-2">
                     <div>
                       <p className="font-medium capitalize">{p.proof_type}</p>
@@ -223,7 +224,7 @@ export default function PortalShipmentDetail() {
               {(data.occurrences?.length ?? 0) === 0 ? (
                 <p className="text-muted-foreground">Sem ocorrências registradas.</p>
               ) : (
-                data.occurrences.map((o: any) => (
+                data.occurrences.map((o) => (
                   <div key={o.id} className="border rounded-md p-2 space-y-1">
                     <div className="flex items-center justify-between">
                       <p className="font-medium">{o.event_type || 'Ocorrência'}</p>

@@ -11,12 +11,17 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Loader2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { portalErrorMessage } from '@/lib/portal/portalErrors';
 
 const STATUS_TONE: Record<string, string> = {
   pendente: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
@@ -35,6 +40,7 @@ export default function PortalPickups() {
     status: statusFilter === 'all' ? undefined : statusFilter,
   });
   const [open, setOpen] = useState(false);
+  const [cancelPickupId, setCancelPickupId] = useState<string | null>(null);
   const [form, setForm] = useState({ client_id: '', pickup_at: '', recipient_name: '', notes: '' });
   // Pré-selecionar cliente quando escopo estiver reduzido a um único cliente
   useEffect(() => {
@@ -48,13 +54,14 @@ export default function PortalPickups() {
   const cancelMut = useCancelPortalPickup();
   const { toast } = useToast();
 
-  const handleCancel = async (id: string) => {
-    if (!window.confirm('Deseja cancelar esta coleta?')) return;
+  const handleCancel = async () => {
+    if (!cancelPickupId) return;
     try {
-      await cancelMut.mutateAsync(id);
+      await cancelMut.mutateAsync(cancelPickupId);
       toast({ title: 'Coleta cancelada' });
-    } catch (e: any) {
-      toast({ title: 'Erro ao cancelar', description: e.message, variant: 'destructive' });
+      setCancelPickupId(null);
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao cancelar', description: portalErrorMessage(error, 'Não foi possível cancelar a coleta.'), variant: 'destructive' });
     }
   };
 
@@ -73,8 +80,8 @@ export default function PortalPickups() {
       toast({ title: 'Coleta solicitada' });
       setOpen(false);
       setForm({ client_id: '', pickup_at: '', recipient_name: '', notes: '' });
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: portalErrorMessage(error, 'Não foi possível solicitar a coleta.'), variant: 'destructive' });
     }
   };
 
@@ -178,9 +185,10 @@ export default function PortalPickups() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleCancel(p.id)}
+                          onClick={() => setCancelPickupId(p.id)}
                           disabled={cancelMut.isPending}
                           title="Cancelar coleta"
+                          aria-label={`Cancelar coleta ${p.pickup_number}`}
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -193,6 +201,22 @@ export default function PortalPickups() {
           )}
         </CardContent>
       </Card>
+      <AlertDialog open={!!cancelPickupId} onOpenChange={(nextOpen) => { if (!nextOpen) setCancelPickupId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar coleta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A solicitação será marcada como cancelada. Esta ação não altera coletas já finalizadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancel} disabled={cancelMut.isPending}>
+              {cancelMut.isPending ? 'Cancelando…' : 'Confirmar cancelamento'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PortalSection>
   );
 }

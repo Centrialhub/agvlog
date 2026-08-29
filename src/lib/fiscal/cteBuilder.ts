@@ -297,6 +297,23 @@ function serializeParty(p: CteParty | null | undefined) {
   };
 }
 
+function mergePartyOverride(
+  party: CteParty | null | undefined,
+  override: Partial<CteParty> | null | undefined,
+): CteParty | null | undefined {
+  if (!override) return party;
+  const name = override.name ?? party?.name;
+  if (!name) return party;
+  return {
+    ...party,
+    ...override,
+    name,
+    address: override.address || party?.address
+      ? { ...party?.address, ...override.address }
+      : null,
+  };
+}
+
 
 const TAKER_INDEX: Record<CteTakerRole, number> = {
   remetente: 0,
@@ -534,6 +551,9 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         Object.entries(input.freightComposition).filter(([, v]) => v != null),
       )
     : undefined;
+  const cbsIbs = input.cbsIbs
+    ? Object.fromEntries(Object.entries(input.cbsIbs).filter(([, value]) => value != null))
+    : undefined;
 
   // FRETE PESO (frete cru) é a base do cálculo. Prevalece o componente
   // explícito quando informado; senão usa o valor de frete calculado.
@@ -638,18 +658,19 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     (inicio as { uf?: string } | undefined)?.uf || input.emitter?.address?.state || '',
   ).toUpperCase();
   const ufFim = String((fim as { uf?: string } | undefined)?.uf || '').toUpperCase();
-  const trajectoryKnown = !!ufIni && !!ufFim;
-  const interstate = trajectoryKnown && ufIni !== ufFim;
   const rawCfop = digits(input.cfop || '');
+  const hasKnownRoute = !!ufIni && !!ufFim;
+  const interstate = hasKnownRoute && ufIni !== ufFim;
+  // Sem as duas UFs não existe informação suficiente para trocar 5↔6.
+  // Nesse caso preservamos o prefixo de um CFOP válido informado pelo operador.
+  const cfopPrefix = hasKnownRoute
+    ? (interstate ? '6' : '5')
+    : (/^[56]/.test(rawCfop) ? rawCfop[0] : '5');
   const isTransportCfop = (c: string) =>
     /^[56](3(5[1-9]|60)|932)$/.test(c);
-  // Só o trajeto completo autoriza a troca 5↔6. Com trajeto incompleto,
-  // preserva-se o prefixo informado pelo operador (preservação fiscal).
-  const informedPrefix = isTransportCfop(rawCfop) ? rawCfop[0] : '';
-  const cfopPrefix = trajectoryKnown ? (interstate ? '6' : '5') : (informedPrefix || '5');
   let cfop = rawCfop;
   if (cfop && isTransportCfop(cfop)) {
-    if (cfop[0] !== cfopPrefix) {
+    if (hasKnownRoute && cfop[0] !== cfopPrefix) {
       const fixed = `${cfopPrefix}${cfop.slice(1)}`;
       warnings.push(`CFOP ${cfop} ajustado para ${fixed} (prestação ${interstate ? 'interestadual' : 'interna'}: ${ufIni} → ${ufFim}).`);
       cfop = fixed;
@@ -662,15 +683,13 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     cfop = fallback;
   }
 
-  // Grupo único do valor da prestação, exposto como vPrest e valorPrestacao.
-  const valorPrestacaoGrupo = {
+  const valorPrestacao = {
     vTPrest: totalServico,
     vRec: totalServico,
     Comp: componentes
       .filter((component) => component.soma)
       .map((component) => ({ xNome: component.nome, vComp: component.valor })),
   };
-
 
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter?.cnpj) || undefined,
@@ -714,37 +733,17 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
             }
           : null,
       ),
-      remetente: serializeParty(
-        input.overrides?.remitter
-          ? { 
-              ...input.remitter!, 
-              name: input.overrides.remitter.name ?? input.remitter?.name,
-              cnpj: input.overrides.remitter.cnpj ?? input.remitter?.cnpj,
-              ie: input.overrides.remitter.ie ?? input.remitter?.ie,
-              address: { ...input.remitter?.address, ...input.overrides.remitter.address } 
-            }
-          : input.remitter
-      ),
-      destinatario: serializeParty(
-        input.overrides?.recipient
-          ? { 
-              ...input.recipient!, 
-              name: input.overrides.recipient.name ?? input.recipient?.name,
-              cnpj: input.overrides.recipient.cnpj ?? input.recipient?.cnpj,
-              ie: input.overrides.recipient.ie ?? input.recipient?.ie,
-              address: { ...input.recipient?.address, ...input.overrides.recipient.address } 
-            }
-          : input.recipient
-      ),
+      remetente: serializeParty(mergePartyOverride(input.remitter, input.overrides?.remitter)),
+      destinatario: serializeParty(mergePartyOverride(input.recipient, input.overrides?.recipient)),
 
       expedidor: serializeParty(input.expedidor),
       recebedor: serializeParty(input.recebedor),
 
       seguro: seguroCarga,
-      // Aliases compatíveis com versões diferentes do Hub Fiscal.
+      // Aliases mantidos porque versões diferentes do Hub e o snapshot local
+      // reconhecem formatos distintos para o mesmo bloco de seguro.
       seguradora: seguroCarga,
       seguros: seguroCarga ? [seguroCarga] : undefined,
-
       tomador: {
         tipo: TAKER_INDEX[input.takerRole],
         role: input.takerRole,
@@ -791,9 +790,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         cbs: input.totals.cbs_value ?? undefined,
       },
       composicaoFrete: freightComposition,
-      // Reforma tributária (CBS/IBS) — informado pela prévia de emissão.
-      cbsIbs: input.cbsIbs || undefined,
-
+      cbsIbs,
       // Componentes do valor da prestação (DACTE) — FRETE PESO / SEGURO / ICMS em destaque.
       // `soma: false` (ICMS por fora) = destaque impresso sem somar ao valor a receber.
       componentes: componentes.map((c) => ({ nome: c.nome, valor: c.valor, soma: c.soma })),
@@ -809,10 +806,8 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         natOp: input.nature,
         CFOP: cfop,
       },
-      vPrest: valorPrestacaoGrupo,
-      // Alias compatível com versões do Hub que leem `valorPrestacao`.
-      valorPrestacao: valorPrestacaoGrupo,
-
+      vPrest: valorPrestacao,
+      valorPrestacao,
       imp: icmsBlock
         ? {
             ICMS: {

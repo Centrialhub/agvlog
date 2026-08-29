@@ -17,7 +17,7 @@ export interface ParsedSpreadsheet {
 }
 
 /** Locate the header row inside a sheet by looking for expected column names. */
-function locateHeader(rows: any[][], keywords: string[]): number {
+function locateHeader(rows: unknown[][], keywords: string[]): number {
   for (let i = 0; i < Math.min(rows.length, 40); i++) {
     const line = (rows[i] || []).map(c => String(c ?? '').toUpperCase().trim());
     const hit = keywords.every(k => line.some(cell => cell.includes(k)));
@@ -45,7 +45,7 @@ function indexOfHeader(header: string[], keywords: string[]): number {
  * Parse "RESUMO CARGAS RECEBIDAS" spreadsheet.
  * Header contains: DATA DA CARGA / DATA CHEGADA / CARGA / VALOR FATURADO / VALOR FRETE / CTE / STATUS.
  */
-export function parseSummarySheet(rows: any[][]): { rows: NormalizedSummaryRow[]; errors: Array<{ row: number; message: string }> } {
+export function parseSummarySheet(rows: unknown[][]): { rows: NormalizedSummaryRow[]; errors: Array<{ row: number; message: string }> } {
   const errors: Array<{ row: number; message: string }> = [];
   const out: NormalizedSummaryRow[] = [];
   const headerIdx = locateHeader(rows, ['CARGA', 'VALOR FATURADO', 'VALOR FRETE']);
@@ -88,7 +88,7 @@ export function parseSummarySheet(rows: any[][]): { rows: NormalizedSummaryRow[]
  * Parse "PLANILHA DA CARGAS" (detail per NF).
  * Header: NFiscal / CARGA / Fornecedor / Data de Emissão / Destinatário / Destino / % frete / Peso / Valor NF / Valor frete / Frete total.
  */
-export function parseDetailSheet(rows: any[][]): { rows: NormalizedDetailRow[]; errors: Array<{ row: number; message: string }> } {
+export function parseDetailSheet(rows: unknown[][]): { rows: NormalizedDetailRow[]; errors: Array<{ row: number; message: string }> } {
   const errors: Array<{ row: number; message: string }> = [];
   const out: NormalizedDetailRow[] = [];
   const headerIdx = locateHeader(rows, ['NFISCAL', 'CARGA', 'VALOR NF']);
@@ -132,7 +132,7 @@ export function parseDetailSheet(rows: any[][]): { rows: NormalizedDetailRow[]; 
  * Parse "PLANILHA DE DESCARGA" (per-NF unloading charges).
  * Header: NOTA FISCAL / CLIENTE / FORNECEDOR / CIDADE / DATA / VALOR.
  */
-export function parseUnloadingSheet(rows: any[][]): { rows: NormalizedUnloadingRow[]; errors: Array<{ row: number; message: string }> } {
+export function parseUnloadingSheet(rows: unknown[][]): { rows: NormalizedUnloadingRow[]; errors: Array<{ row: number; message: string }> } {
   const errors: Array<{ row: number; message: string }> = [];
   const out: NormalizedUnloadingRow[] = [];
   const headerIdx = locateHeader(rows, ['NOTA FISCAL', 'CLIENTE']);
@@ -164,7 +164,7 @@ export function parseUnloadingSheet(rows: any[][]): { rows: NormalizedUnloadingR
 }
 
 /** Detect the spreadsheet flavour based on the sheet header signature. */
-export function detectSpreadsheetKind(rows: any[][]): SpreadsheetKind {
+export function detectSpreadsheetKind(rows: unknown[][]): SpreadsheetKind {
   if (locateHeader(rows, ['NFISCAL', 'CARGA', 'VALOR NF']) >= 0) return 'detail';
   if (locateHeader(rows, ['NOTA FISCAL', 'CLIENTE', 'CIDADE', 'VALOR']) >= 0) return 'unloading';
   if (locateHeader(rows, ['CARGA', 'VALOR FATURADO', 'VALOR FRETE']) >= 0) return 'summary';
@@ -176,7 +176,7 @@ export function parseLoadSpreadsheet(buf: ArrayBuffer): ParsedSpreadsheet[] {
   const wb = XLSX.read(buf, { type: 'array', cellDates: true });
   const out: ParsedSpreadsheet[] = [];
   for (const name of wb.SheetNames) {
-    const rows = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[name], { header: 1, defval: null, raw: true });
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: null, raw: true });
     const kind = detectSpreadsheetKind(rows);
     if (kind === 'unknown') continue;
     if (kind === 'detail') {

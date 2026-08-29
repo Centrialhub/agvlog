@@ -4,6 +4,15 @@
  */
 import type { FiscalDocument } from '@/hooks/useFiscalDocuments';
 
+type GroupableFiscalDocument = FiscalDocument & {
+  numref?: string | null;
+  order_id?: string | null;
+  liv_cli?: string | null;
+  cfop?: string | null;
+  vehicle_plate?: string | null;
+  pickup_point?: string | null;
+};
+
 export interface GroupingMode {
   id: number;
   label: string;
@@ -12,7 +21,7 @@ export interface GroupingMode {
   /** Campos que compõem a chave de agrupamento (apenas referência informativa para a UI). */
   keys: string[];
   /** Função que gera a chave para agrupar um documento fiscal. */
-  keyFn: (d: FiscalDocument) => string;
+  keyFn: (d: GroupableFiscalDocument) => string;
 }
 
 const k = (...parts: (string | number | null | undefined)[]) =>
@@ -33,7 +42,7 @@ export const GROUPING_MODES: GroupingMode[] = [
     shortLabel: 'Rem + Dest + Rom.For + Numref',
     description: 'Agrupa por remetente, destinatário, romaneio do fornecedor e número de referência.',
     keys: ['Remetente', 'Destinatário', 'Rom.For', 'Numref'],
-    keyFn: (d) => k(d.remitter, d.recipient, d.client_load_number, (d as any).numref),
+    keyFn: (d) => k(d.remitter, d.recipient, d.client_load_number, d.numref),
   },
   {
     id: 3,
@@ -49,7 +58,7 @@ export const GROUPING_MODES: GroupingMode[] = [
     shortLabel: 'Rem + Dest + OS',
     description: 'Agrupa por remetente, destinatário e ordem de serviço.',
     keys: ['Remetente', 'Destinatário', 'OS'],
-    keyFn: (d) => k(d.remitter, d.recipient, (d as any).order_id),
+    keyFn: (d) => k(d.remitter, d.recipient, d.order_id),
   },
   {
     id: 5,
@@ -57,7 +66,7 @@ export const GROUPING_MODES: GroupingMode[] = [
     shortLabel: 'Rem + Dest + Liv.cli + Numref',
     description: 'Agrupa por remetente, destinatário, livro do cliente e número de referência.',
     keys: ['Remetente', 'Destinatário', 'Liv.cli', 'Numref'],
-    keyFn: (d) => k(d.remitter, d.recipient, (d as any).liv_cli, (d as any).numref),
+    keyFn: (d) => k(d.remitter, d.recipient, d.liv_cli, d.numref),
   },
   {
     id: 6,
@@ -65,7 +74,7 @@ export const GROUPING_MODES: GroupingMode[] = [
     shortLabel: 'Rem + Dest + CFOP',
     description: 'Agrupa por remetente, destinatário e CFOP da operação.',
     keys: ['Remetente', 'Destinatário', 'CFOP'],
-    keyFn: (d) => k(d.remitter, d.recipient, (d as any).cfop),
+    keyFn: (d) => k(d.remitter, d.recipient, d.cfop),
   },
   {
     id: 7,
@@ -97,7 +106,7 @@ export const GROUPING_MODES: GroupingMode[] = [
     shortLabel: 'Rem + Placa',
     description: 'Agrupa por remetente e placa do veículo.',
     keys: ['Remetente', 'Placa'],
-    keyFn: (d) => k(d.remitter, (d as any).vehicle_plate),
+    keyFn: (d) => k(d.remitter, d.vehicle_plate),
   },
   {
     id: 11,
@@ -105,7 +114,7 @@ export const GROUPING_MODES: GroupingMode[] = [
     shortLabel: 'Rem + Placa + Dest',
     description: 'Agrupa por remetente, placa e destinatário.',
     keys: ['Remetente', 'Placa', 'Destinatário'],
-    keyFn: (d) => k(d.remitter, (d as any).vehicle_plate, d.recipient),
+    keyFn: (d) => k(d.remitter, d.vehicle_plate, d.recipient),
   },
   {
     id: 12,
@@ -121,7 +130,7 @@ export const GROUPING_MODES: GroupingMode[] = [
     shortLabel: 'Rem CADGER + Numref',
     description: 'Agrupa por remetente cadastrado em CADGER e número de referência.',
     keys: ['Remetente CADGER', 'Numref'],
-    keyFn: (d) => k(d.remitter, (d as any).numref),
+    keyFn: (d) => k(d.remitter, d.numref),
   },
   {
     id: 14,
@@ -129,7 +138,7 @@ export const GROUPING_MODES: GroupingMode[] = [
     shortLabel: 'Rem + Dest + Coleta',
     description: 'Agrupa por remetente, destinatário e ponto de coleta.',
     keys: ['Remetente', 'Destinatário', 'Coleta'],
-    keyFn: (d) => k(d.remitter, d.recipient, (d as any).pickup_point),
+    keyFn: (d) => k(d.remitter, d.recipient, d.pickup_point),
   },
 ];
 

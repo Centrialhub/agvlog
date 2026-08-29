@@ -7,14 +7,15 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Navigation, CheckCircle, Clock, ArrowRight, Package } from 'lucide-react';
+import { MapPin, Navigation, CheckCircle, Clock, ArrowRight, AlertTriangle } from 'lucide-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { isStopTerminal, STOP_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status';
+import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
+import { DRIVER_TRIP_SELECT, normalizeDriverTrip } from '@/lib/driverTrip';
 
 
-const STATUS_LABELS: Record<string, string> = STOP_STATUS_LABELS as any;
+const STATUS_LABELS: Record<string, string> = STOP_STATUS_LABELS;
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground',
@@ -36,28 +37,30 @@ export default function DriverStops() {
   const [searchParams] = useSearchParams();
   const tripIdParam = searchParams.get('trip');
   const { data: driver } = useCurrentDriver();
-  const { data: autoTrip } = useActiveTrip(driver?.id);
+  const autoTripQuery = useActiveTrip(driver?.id);
+  const { data: autoTrip } = autoTripQuery;
 
   // If tripId is in URL use it, otherwise use auto-detected active trip
-  const { data: trip } = useQuery({
+  const specificTripQuery = useQuery({
     queryKey: ['driver_trip_specific', tripIdParam],
     queryFn: async () => {
       if (!tripIdParam || !currentTenant) return null;
       const { data, error } = await supabase
         .from('dispatch_trips')
-        .select('*, loads(load_number, origin, destination)')
+        .select(DRIVER_TRIP_SELECT)
         .eq('id', tripIdParam)
         .eq('tenant_id', currentTenant.id)
         .maybeSingle();
       if (error) throw error;
-      return data;
+      return data ? normalizeDriverTrip(data) : null;
     },
     enabled: !!tripIdParam && !!currentTenant,
   });
+  const { data: trip } = specificTripQuery;
 
   const activeTrip = tripIdParam ? trip : autoTrip;
 
-  const { data: stops = [] } = useQuery({
+  const stopsQuery = useQuery({
     queryKey: ['driver_stops', activeTrip?.id],
     queryFn: async () => {
       if (!activeTrip) return [];
@@ -71,10 +74,11 @@ export default function DriverStops() {
     },
     enabled: !!activeTrip?.id,
   });
+  const { data: stops = [] } = stopsQuery;
 
   // Realtime: refresh stops when operator marks arrival/departure or updates status.
   useEffect(() => {
-    if (!activeTrip?.id) return;
+    if (!activeTrip?.id) return undefined;
     const channel = supabase
       .channel(`driver_stops_${activeTrip.id}`)
       .on(
@@ -102,13 +106,13 @@ export default function DriverStops() {
         // "Registrar saída" — apenas marca actual_departure_at e gera evento de departure.
         // A conclusão real da entrega acontece em DriverDeliveries via driver_finalize_delivery.
         const { error } = await supabase.rpc('driver_register_departure', {
-          _stop_id: stopId, _notes: null,
-        } as any);
+          _stop_id: stopId, _notes: undefined,
+        });
         if (error) throw error;
         return;
       }
       const { error } = await supabase.rpc('driver_update_stop_status', {
-        _stop_id: stopId, _new_status: action, _reason: reason || null,
+        _stop_id: stopId, _new_status: action, _reason: reason || undefined,
       });
       if (error) throw error;
     },
@@ -116,7 +120,11 @@ export default function DriverStops() {
       qc.invalidateQueries({ queryKey: ['driver_stops'] });
       toast({ title: 'Parada atualizada' });
     },
-    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+    onError: (error: unknown) => toast({
+      title: 'Erro',
+      description: error instanceof Error ? error.message : 'Não foi possível atualizar a parada.',
+      variant: 'destructive',
+    }),
   });
 
   const handleArrival = (stopId: string) => {
@@ -131,8 +139,13 @@ export default function DriverStops() {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`, '_blank');
   };
 
-  const effectiveTrip: any = activeTrip;
-  const effectiveStops: any[] = activeTrip ? (stops as any[]) : [];
+  const effectiveTrip = activeTrip;
+  const effectiveStops = activeTrip ? stops : [];
+  const tripResolutionQuery = tripIdParam ? specificTripQuery : autoTripQuery;
+  const pageError = tripResolutionQuery.error ?? stopsQuery.error;
+  const pageErrorMessage = pageError instanceof Error
+    ? pageError.message
+    : 'Não foi possível carregar a viagem e suas paradas.';
 
   return (
     <div className="space-y-4">
@@ -144,7 +157,33 @@ export default function DriverStops() {
       </div>
 
 
-      {!effectiveTrip?.id ? (
+      {tripResolutionQuery.isLoading || (activeTrip?.id && stopsQuery.isLoading) ? (
+        <div className="space-y-3" aria-label="Carregando viagem">
+          {[1, 2, 3].map((item) => (
+            <div key={item} className="h-28 w-full animate-pulse rounded-xl bg-muted" />
+          ))}
+        </div>
+      ) : tripResolutionQuery.isError || stopsQuery.isError ? (
+        <Card className="border-destructive/50">
+          <CardContent className="py-10 text-center space-y-4">
+            <AlertTriangle className="h-10 w-10 text-destructive mx-auto opacity-80" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Falha ao carregar a viagem</p>
+              <p className="text-xs text-muted-foreground">{pageErrorMessage}</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void tripResolutionQuery.refetch();
+                if (activeTrip?.id) void stopsQuery.refetch();
+              }}
+            >
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      ) : !effectiveTrip?.id ? (
         <Card>
           <CardContent className="py-12 text-center space-y-4">
             <MapPin className="h-12 w-12 text-muted-foreground mx-auto opacity-20" />
@@ -168,7 +207,7 @@ export default function DriverStops() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {effectiveStops.map((stop: any, idx: number) => (
+          {effectiveStops.map((stop, idx) => (
             <Card key={stop.id} className={stop.status === 'arrived' ? 'border-primary' : ''}>
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-start justify-between">
@@ -206,7 +245,7 @@ export default function DriverStops() {
 
                 <div className="flex gap-2">
                   {stop.destination && (
-                    <Button variant="outline" size="sm" className="text-xs" onClick={() => openNavigation(stop.destination)}>
+                    <Button variant="outline" size="sm" className="text-xs" onClick={() => stop.destination && openNavigation(stop.destination)}>
                       <Navigation className="h-3 w-3 mr-1" /> Navegar
                     </Button>
                   )}

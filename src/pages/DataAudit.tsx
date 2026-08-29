@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw, AlertTriangle, AlertCircle } from 'lucide-react';
+import { DataPagination } from '@/components/ui/data-pagination';
+import { usePagination } from '@/hooks/usePagination';
 
 type Row = {
   severity: 'critical' | 'warning' | 'info' | 'success';
@@ -39,6 +41,7 @@ export default function DataAudit() {
   const infos = data.filter(d => d.severity === 'info' || d.severity === 'success');
   const domains = Array.from(new Set(data.map(d => d.domain))).sort();
   const filtered = domainFilter === 'all' ? data : data.filter(d => d.domain === domainFilter);
+  const pagination = usePagination(filtered, { pageSize: 50, resetKey: domainFilter });
 
   return (
     <div className="space-y-6 p-6">
@@ -107,7 +110,7 @@ export default function DataAudit() {
             <p className="text-sm text-success">Nenhuma inconsistência detectada.</p>
           ) : (
             <div className="space-y-2">
-              {filtered.map((r, i) => (
+              {pagination.items.map((r, i) => (
                 <div key={`${r.entity_id}-${i}`} className="flex items-start gap-3 rounded border p-3">
                   <Badge variant={
                     r.severity === 'critical' ? 'destructive' : 
@@ -130,6 +133,7 @@ export default function DataAudit() {
             </div>
           )}
         </CardContent>
+        <DataPagination {...pagination} onPageChange={pagination.setPage} />
       </Card>
     </div>
   );

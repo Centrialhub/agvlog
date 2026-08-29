@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from '@/components/ui/sonner';
-import { ArrowLeft, Download, Printer, FileText, Upload, XCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileText, XCircle, RefreshCw } from 'lucide-react';
 import {
   useReturnSheetsForOccurrence,
   useGenerateReturnSheet,
@@ -28,6 +28,11 @@ import { OccurrenceReturnSheetPreview } from '@/components/occurrences/Occurrenc
 import { downloadReturnSheetPdf, openReturnSheetPdfPrint } from '@/lib/occurrences/occurrenceReturnSheetPdf';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
+
+const sheetCompanyName = (sheet: ReturnSheet): string | undefined => {
+  const name = sheet.company_snapshot.name;
+  return typeof name === 'string' ? name : undefined;
+};
 
 export default function OccurrenceReturnSheetPage() {
   const { id: occurrenceId } = useParams<{ id: string }>();
@@ -171,10 +176,10 @@ export default function OccurrenceReturnSheetPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => downloadReturnSheetPdf(activeSheet, (activeSheet.company_snapshot as any)?.name, companyInfo)}>
+                <Button size="sm" variant="outline" onClick={() => downloadReturnSheetPdf(activeSheet, sheetCompanyName(activeSheet), companyInfo)}>
                   <Download className="w-4 h-4 mr-1" /> Baixar PDF
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => openReturnSheetPdfPrint(activeSheet, (activeSheet.company_snapshot as any)?.name, companyInfo)}>
+                <Button size="sm" variant="outline" onClick={() => openReturnSheetPdfPrint(activeSheet, sheetCompanyName(activeSheet), companyInfo)}>
                   <Printer className="w-4 h-4 mr-1" /> Imprimir
                 </Button>
                 {activeSheet.status !== 'printed' && activeSheet.status !== 'signed' && (
@@ -246,7 +251,7 @@ export default function OccurrenceReturnSheetPage() {
             <Card>
               <CardHeader><CardTitle className="text-base">Histórico</CardTitle></CardHeader>
               <CardContent className="text-xs space-y-1">
-                {(historyQuery.data ?? []).map((h: any) => (
+                {(historyQuery.data ?? []).map((h) => (
                   <div key={h.id} className="flex justify-between border-b py-1">
                     <span>{h.action}{h.reason ? ` — ${h.reason}` : ''}</span>
                     <span className="text-muted-foreground">{new Date(h.created_at).toLocaleString('pt-BR')}</span>
@@ -265,7 +270,7 @@ export default function OccurrenceReturnSheetPage() {
             {(sheetsQuery.data ?? []).slice(1).map((s) => (
               <div key={s.id} className="flex justify-between border-b py-1">
                 <span>v{s.version} · {s.sheet_number} · {s.status}</span>
-                <Button size="sm" variant="ghost" onClick={() => downloadReturnSheetPdf(s, (s.company_snapshot as any)?.name, companyInfo)}>
+                <Button size="sm" variant="ghost" onClick={() => downloadReturnSheetPdf(s, sheetCompanyName(s), companyInfo)}>
                   <Download className="w-3 h-3 mr-1" /> PDF
                 </Button>
               </div>

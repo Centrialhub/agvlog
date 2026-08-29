@@ -11,7 +11,12 @@ export interface ExcelInput {
   divergences?: Divergence[];
 }
 
-function autoWidth(rows: any[][]) {
+type SpreadsheetRow = unknown[];
+type WorksheetWithFreeze = XLSX.WorkSheet & {
+  '!freeze'?: { xSplit: number; ySplit: number };
+};
+
+function autoWidth(rows: SpreadsheetRow[]) {
   const widths: number[] = [];
   for (const r of rows) r.forEach((c, i) => {
     const l = c == null ? 0 : String(c).length;
@@ -37,7 +42,7 @@ export function buildWorkbook({ title, clientName, periodStart, periodEnd, items
   const wb = XLSX.utils.book_new();
 
   // Resumo
-  const resumoRows: any[][] = [
+  const resumoRows: SpreadsheetRow[] = [
     [title],
     [`Cliente: ${clientName ?? '—'}`],
     [`Período: ${periodStart} a ${periodEnd}`],
@@ -53,7 +58,7 @@ export function buildWorkbook({ title, clientName, periodStart, periodEnd, items
 
   // Detalhado
   const detHeader = ['Origem', 'Remetente', 'Destinatário', 'Destino', 'Emissão', 'Nº Nota', 'CT-e', 'Valor Nota', 'Peso (kg)', 'Frete', 'Data Entrega', 'Observação'];
-  const detRows: any[][] = [detHeader];
+  const detRows: SpreadsheetRow[] = [detHeader];
   items.forEach(i => detRows.push([
     i.origin_city ?? '', i.remitter_name ?? '', i.recipient_name ?? '', i.destination_city ?? '',
     i.issue_date ?? '', i.invoice_number ?? '', i.cte_number ?? '',
@@ -67,7 +72,7 @@ export function buildWorkbook({ title, clientName, periodStart, periodEnd, items
   detRows.push(totalRow);
   const detWs = XLSX.utils.aoa_to_sheet(detRows);
   detWs['!cols'] = autoWidth(detRows);
-  detWs['!freeze'] = { xSplit: 0, ySplit: 1 } as any;
+  (detWs as WorksheetWithFreeze)['!freeze'] = { xSplit: 0, ySplit: 1 };
   detWs['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { c: 0, r: 0 }, e: { c: detHeader.length - 1, r: 0 } }) };
   XLSX.utils.book_append_sheet(wb, detWs, 'Detalhado');
 
@@ -78,14 +83,14 @@ export function buildWorkbook({ title, clientName, periodStart, periodEnd, items
     'NR. DIAS', 'KM INICIAL', 'KM FINAL', 'KM RODADO',
     'QUANTIDADE LITROS', 'PREÇO LITRO', 'VR. TOTAL COMBUSTÍVEL', 'CONSUMO POR LITRO',
   ];
-  const tripKey = (i: any) => i.load_id || `nf-${i.fiscal_document_id}`;
-  const tripMap = new Map<string, any>();
+  const tripKey = (item: BuiltItem) => item.load_id || `nf-${item.fiscal_document_id}`;
+  const tripMap = new Map<string, BuiltItem>();
   const order: string[] = [];
-  for (const i of items as any[]) {
+  for (const i of items) {
     const k = tripKey(i);
     if (!tripMap.has(k)) { tripMap.set(k, i); order.push(k); }
   }
-  const tripRows: any[][] = [
+  const tripRows: SpreadsheetRow[] = [
     [`CONTROLE DE VIAGENS — ${clientName ?? ''}`],
     [`Período: ${fmtDateBR(periodStart)} a ${fmtDateBR(periodEnd)}`],
     [],
@@ -93,7 +98,8 @@ export function buildWorkbook({ title, clientName, periodStart, periodEnd, items
   ];
   const tot = { km: 0, l: 0, val: 0 };
   for (const k of order) {
-    const i: any = tripMap.get(k);
+    const i = tripMap.get(k);
+    if (!i) continue;
     const km = Number(i.km_driven || 0);
     const lt = Number(i.fuel_liters || 0);
     const vl = Number(i.fuel_total || 0);
@@ -124,18 +130,18 @@ export function buildWorkbook({ title, clientName, periodStart, periodEnd, items
   ]);
   const tripWs = XLSX.utils.aoa_to_sheet(tripRows);
   tripWs['!cols'] = autoWidth(tripRows);
-  tripWs['!freeze'] = { xSplit: 0, ySplit: 4 } as any;
+  (tripWs as WorksheetWithFreeze)['!freeze'] = { xSplit: 0, ySplit: 4 };
   XLSX.utils.book_append_sheet(wb, tripWs, 'Controle de Viagens');
 
   if (divergences && divergences.length > 0) {
-    const divRows: any[][] = [['Severidade', 'Código', 'Descrição', 'NF', 'CT-e', 'Carga']];
+    const divRows: SpreadsheetRow[] = [['Severidade', 'Código', 'Descrição', 'NF', 'CT-e', 'Carga']];
     divergences.forEach(d => divRows.push([d.severity, d.code, d.description, d.invoice_number ?? '', d.cte_document_id ?? '', d.load_id ?? '']));
     const divWs = XLSX.utils.aoa_to_sheet(divRows);
     divWs['!cols'] = autoWidth(divRows);
     XLSX.utils.book_append_sheet(wb, divWs, 'Divergências');
   }
 
-  const metaRows: any[][] = [
+  const metaRows: SpreadsheetRow[] = [
     ['Título', title],
     ['Cliente', clientName ?? ''],
     ['Período', `${periodStart} a ${periodEnd}`],

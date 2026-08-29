@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
+import { readCtePayloadRecipient } from '@/lib/fiscal/ctePayload';
 import { useTenant } from './useTenant';
 
 export const SEFAZ_STATUSES = [
@@ -188,7 +190,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       const { data: outboundData, error: outErr } = await supabase
         .from('fiscal_documents')
         .select(
-          'id, invoice_number, invoice_numbers, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
+          'id, invoice_number, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
         )
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
@@ -196,23 +198,23 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .eq('document_type', 'outbound');
       
       if (outErr) throw outErr;
-      const outbound = (outboundData || []) as any[];
+      const outbound = outboundData || [];
 
 
       const usedHubIds = new Set<string>();
-      const draftRows = (data || []).map((r: any) => {
+      const draftRows: CteMonitorRow[] = (data || []).map((r) => {
         // Tenta encontrar o vínculo real em fiscal_documents via access_key
-        const match = r.access_key ? outbound.find((o: any) => o.access_key === r.access_key) : null;
+        const match = r.access_key ? outbound.find((o) => o.access_key === r.access_key) : null;
         if (match) usedHubIds.add(match.id);
         
         return {
           ...r,
           id: match?.id ?? r.id,
           issued_at: r.issued_at || r.created_at,
-          source: (match ? 'hub' : 'draft') as any,
-          hub_document_id: match?.hub_document_id ?? r.hub_document_id,
-          emission_id: match?.emission_id ?? r.emission_id,
-          invoice_numbers: match?.invoice_numbers ?? r.invoice_numbers,
+          source: match ? 'hub' : 'draft',
+          hub_document_id: match?.hub_document_id ?? null,
+          emission_id: match?.emission_id ?? null,
+          invoice_numbers: match?.invoice_number ?? r.invoice_numbers,
           sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status, match.hub_document_id) : r.sefaz_status,
           sefaz_status_reason: match?.sefaz_message ?? r.sefaz_status_reason,
         } as CteMonitorRow;
@@ -220,16 +222,18 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 
 
 
-      const hubRows: CteMonitorRow[] = (outbound || [])
-        .filter((d: any) => !usedHubIds.has(d.id))
-        .map((d: any) => ({
+      const hubRows: CteMonitorRow[] = outbound
+        .filter((d) => !usedHubIds.has(d.id))
+        .map((d): CteMonitorRow => {
+          const payloadRecipient = readCtePayloadRecipient(d.cte_payload);
+          return {
           id: d.id,
           tenant_id: currentTenant.id,
           cte_number: d.invoice_number ?? null,
           cte_series: null,
           access_key: d.access_key ?? null,
           protocol_number: d.sefaz_protocol ?? null,
-          sefaz_status: mapOutboundStatus(d.status, d.sefaz_status, d.hub_document_id as string),
+          sefaz_status: mapOutboundStatus(d.status, d.sefaz_status, d.hub_document_id),
           sefaz_status_reason: d.sefaz_message ?? null,
           sefaz_status_code: d.sefaz_status_code ?? null,
           sefaz_status_at: d.created_at ?? null,
@@ -250,9 +254,9 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           payer_group: null,
           driver_name: null,
           vehicle_plate: null,
-          recipient: (d.cte_payload?.payload?.destinatario?.nome || d.recipient) ?? null,
-          recipient_city: (d.cte_payload?.payload?.fim?.municipio || d.cte_payload?.payload?.destinatario?.endereco?.municipio || d.recipient_city) ?? null,
-          recipient_state: (d.cte_payload?.payload?.fim?.uf || d.cte_payload?.payload?.destinatario?.endereco?.uf || d.recipient_state) ?? null,
+          recipient: payloadRecipient.name ?? d.recipient ?? null,
+          recipient_city: payloadRecipient.city ?? d.recipient_city ?? null,
+          recipient_state: payloadRecipient.state ?? d.recipient_state ?? null,
           remitter: d.remitter ?? null,
           freight_value: Number(d.freight_value ?? d.value ?? 0),
           cargo_value: Number(d.value ?? 0),
@@ -262,8 +266,9 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           source: 'hub',
           hub_document_id: d.hub_document_id ?? null,
           emission_id: d.emission_id ?? null,
-          invoice_numbers: d.invoice_numbers ?? null,
-        }));
+          invoice_numbers: d.invoice_number ?? null,
+          };
+        });
 
 
 
@@ -318,22 +323,24 @@ export interface CteSefazEvent {
   status_code: string | null;
   reason: string | null;
   protocol_number: string | null;
-  payload: any;
+  payload: Database['public']['Tables']['cte_sefaz_events']['Row']['payload'];
   source: string | null;
   occurred_at: string;
   created_at: string;
 }
 
 export function useCteSefazEvents(cteDocumentId: string | null) {
+  const { currentTenant } = useTenant();
   return useQuery({
-    queryKey: ['cte_sefaz_events', cteDocumentId],
-    enabled: !!cteDocumentId,
+    queryKey: ['cte_sefaz_events', currentTenant?.id, cteDocumentId],
+    enabled: !!cteDocumentId && !!currentTenant,
     queryFn: async () => {
-      if (!cteDocumentId) return [];
+      if (!cteDocumentId || !currentTenant) return [];
       const { data, error } = await supabase
         .from('cte_sefaz_events')
         .select('*')
         .eq('cte_document_id', cteDocumentId)
+        .eq('tenant_id', currentTenant.id)
         .order('occurred_at', { ascending: false });
       if (error) throw error;
       return (data || []) as unknown as CteSefazEvent[];
@@ -343,17 +350,20 @@ export function useCteSefazEvents(cteDocumentId: string | null) {
 
 /** Marca CT-e para reenvio (status volta a 'pending') — integração fiscal real consome essa fila. */
 export function useResendCte() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const { error } = await supabase
         .from('cte_documents')
         .update({
           sefaz_status: 'pending',
           sefaz_status_reason: null,
           sefaz_status_at: new Date().toISOString(),
-        } as any)
-        .eq('id', id);
+        })
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => {

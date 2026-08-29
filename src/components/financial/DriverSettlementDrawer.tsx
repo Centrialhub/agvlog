@@ -1,3 +1,4 @@
+import { confirmAction, promptAction } from '@/hooks/useAlertStore';
 import { useEffect, useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -25,11 +26,31 @@ import AttachLoadsDialog from './AttachLoadsDialog';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
+import type { Json } from '@/integrations/supabase/types';
+import type { JsonObject } from '@/lib/jsonTypes';
 
 const fmtMoney = (v: number | null | undefined) =>
   (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtNum = (v: number | null | undefined, d = 2) => (v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtDate = (v?: string | null) => (v ? format(new Date(v), 'dd/MM/yyyy HH:mm') : '—');
+
+function metadataRecord(metadata: Json): JsonObject {
+  return metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {};
+}
+
+function metadataText(metadata: Json, key: string, fallback = '—'): string {
+  const value = metadataRecord(metadata)[key];
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback;
+}
+
+function metadataNumber(metadata: Json, key: string): number {
+  return Number(metadataRecord(metadata)[key] ?? 0);
+}
+
+function metadataBoolean(metadata: Json, key: string): boolean | null {
+  const value = metadataRecord(metadata)[key];
+  return typeof value === 'boolean' ? value : null;
+}
 
 interface Props { settlementId: string | null; open: boolean; onOpenChange: (o: boolean) => void; }
 
@@ -71,12 +92,12 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
       setKmStatus(s.km_review_status ?? 'pending');
       setKmNotes(s.km_review_notes ?? '');
     }
-  }, [s?.id]);
+  }, [s]);
 
-  const loadItems = items.filter((i: any) => i.item_type === 'load');
-  const docItems = items.filter((i: any) => i.item_type === 'fiscal_document');
-  const expItems = items.filter((i: any) => i.item_type === 'expense');
-  const adjItems = items.filter((i: any) => i.item_type === 'adjustment');
+  const loadItems = items.filter(i => i.item_type === 'load');
+  const docItems = items.filter(i => i.item_type === 'fiscal_document');
+  const expItems = items.filter(i => i.item_type === 'expense');
+  const adjItems = items.filter(i => i.item_type === 'adjustment');
   const hasPendingExpenses = (s?.pending_expenses_total ?? 0) > 0;
   const noFreight = (s?.total_freight_value ?? 0) === 0;
   const locked = s ? isLocked(s.status as DriverSettlementStatus) : false;
@@ -180,8 +201,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Resumo</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div><div className="text-muted-foreground text-xs">Motorista</div><div>{(s as any).drivers?.name ?? '—'}</div></div>
-                <div><div className="text-muted-foreground text-xs">Veículo</div><div>{(s as any).vehicles?.plate ?? '—'}</div></div>
+                <div><div className="text-muted-foreground text-xs">Motorista</div><div>{s.drivers?.name ?? '—'}</div></div>
+                <div><div className="text-muted-foreground text-xs">Veículo</div><div>{s.vehicles?.plate ?? '—'}</div></div>
                 <div><div className="text-muted-foreground text-xs">Início</div><div>{fmtDate(s.trip_started_at)}</div></div>
                 <div><div className="text-muted-foreground text-xs">Fim</div><div>{fmtDate(s.trip_completed_at)}</div></div>
                 <div><div className="text-muted-foreground text-xs">KM estimado</div><div>{fmtNum(s.estimated_km, 1)} km</div></div>
@@ -221,7 +242,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
 
             <div className="flex flex-wrap gap-2">
               {!s.is_manual && (
-                <Button size="sm" variant="outline" onClick={() => regen.mutate(s.dispatch_trip_id)} disabled={locked || regen.isPending}>
+                <Button size="sm" variant="outline" onClick={() => s.dispatch_trip_id && regen.mutate(s.dispatch_trip_id)} disabled={locked || regen.isPending || !s.dispatch_trip_id}>
                   <RefreshCw className="h-4 w-4 mr-1" /> Recalcular
                 </Button>
               )}
@@ -295,13 +316,13 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   <Table>
                     <TableHeader><TableRow><TableHead>Romaneio</TableHead><TableHead>Origem</TableHead><TableHead>Destino</TableHead><TableHead>Peso</TableHead><TableHead>Status</TableHead>{s.is_manual && !locked && <TableHead className="w-10" />}</TableRow></TableHeader>
                     <TableBody>
-                      {loadItems.map((i: any) => (
+                      {loadItems.map(i => (
                         <TableRow key={i.id}>
                           <TableCell>{i.description}</TableCell>
-                          <TableCell>{i.metadata?.origin ?? '—'}</TableCell>
-                          <TableCell>{i.metadata?.destination ?? '—'}</TableCell>
+                          <TableCell>{metadataText(i.metadata, 'origin')}</TableCell>
+                          <TableCell>{metadataText(i.metadata, 'destination')}</TableCell>
                           <TableCell>{i.quantity ? `${fmtNum(i.quantity, 0)} kg` : '—'}</TableCell>
-                          <TableCell><Badge variant="outline">{i.metadata?.status ?? '—'}</Badge></TableCell>
+                          <TableCell><Badge variant="outline">{metadataText(i.metadata, 'status')}</Badge></TableCell>
                           {s.is_manual && !locked && (
                             <TableCell>
                               <Button
@@ -309,8 +330,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                                 variant="ghost"
                                 title="Remover romaneio"
                                 disabled={detachLoad.isPending || !i.source_id}
-                                onClick={() => {
-                                  if (i.source_id && confirm('Remover este romaneio do acerto?')) {
+                                onClick={async () => {
+                                  if (i.source_id && await confirmAction('Remover este romaneio do acerto?', { title: 'Remover romaneio', confirmLabel: 'Remover' })) {
                                     detachLoad.mutate({ settlement_id: s.id, load_id: i.source_id });
                                   }
                                 }}
@@ -332,15 +353,15 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   <Table>
                     <TableHeader><TableRow><TableHead>Doc</TableHead><TableHead>Tipo</TableHead><TableHead>Destinatário</TableHead><TableHead>Cidade/UF</TableHead><TableHead>Valor</TableHead><TableHead>Peso</TableHead><TableHead>Frete</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {docItems.map((i: any) => (
+                      {docItems.map(i => (
                         <TableRow key={i.id}>
                           <TableCell>{i.description}</TableCell>
-                          <TableCell><Badge variant="outline" className="text-[10px] uppercase">{i.metadata?.document_type ?? 'nfe'}</Badge></TableCell>
-                          <TableCell>{i.metadata?.recipient ?? '—'}</TableCell>
-                          <TableCell>{[i.metadata?.recipient_city, i.metadata?.recipient_state].filter(Boolean).join('/') || '—'}</TableCell>
+                          <TableCell><Badge variant="outline" className="text-[10px] uppercase">{metadataText(i.metadata, 'document_type', 'nfe')}</Badge></TableCell>
+                          <TableCell>{metadataText(i.metadata, 'recipient')}</TableCell>
+                          <TableCell>{[metadataText(i.metadata, 'recipient_city', ''), metadataText(i.metadata, 'recipient_state', '')].filter(Boolean).join('/') || '—'}</TableCell>
                           <TableCell>{fmtMoney(Number(i.amount))}</TableCell>
                           <TableCell>{i.quantity ? `${fmtNum(i.quantity, 0)} kg` : '—'}</TableCell>
-                          <TableCell>{fmtMoney(Number(i.metadata?.freight_value ?? 0))}</TableCell>
+                          <TableCell>{fmtMoney(metadataNumber(i.metadata, 'freight_value'))}</TableCell>
                         </TableRow>
                       ))}
                       {docItems.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Sem documentos</TableCell></TableRow>}
@@ -435,17 +456,21 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     <Table>
                       <TableHeader><TableRow><TableHead>Categoria</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead><TableHead>Reembolso</TableHead><TableHead>Fonte</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {expItems.map((i: any) => (
+                      {expItems.map(i => {
+                        const approvalStatus = metadataText(i.metadata, 'approval_status');
+                        const receiptUrl = metadataText(i.metadata, 'receipt_url', '');
+                        return (
                         <TableRow key={i.id}>
                           <TableCell>{i.description}</TableCell>
                           <TableCell>{fmtMoney(Number(i.amount))}</TableCell>
-                          <TableCell>{fmtDate(i.metadata?.expense_at)}</TableCell>
-                          <TableCell><Badge variant={i.metadata?.approval_status === 'approved' ? 'default' : i.metadata?.approval_status === 'rejected' ? 'destructive' : 'secondary'}>{i.metadata?.approval_status ?? '—'}</Badge></TableCell>
-                          <TableCell>{i.metadata?.reimbursable === false ? <Badge variant="outline" className="text-[10px]">Não</Badge> : <Badge variant="secondary" className="text-[10px]">Sim</Badge>}</TableCell>
-                          <TableCell className="text-xs">{i.metadata?.payment_source ?? 'driver'}</TableCell>
-                          <TableCell>{i.metadata?.receipt_url ? <a className="text-primary inline-flex items-center gap-1" href={i.metadata.receipt_url} target="_blank" rel="noreferrer"><FileText className="h-3 w-3" /> abrir</a> : '—'}</TableCell>
+                          <TableCell>{fmtDate(metadataText(i.metadata, 'expense_at', ''))}</TableCell>
+                          <TableCell><Badge variant={approvalStatus === 'approved' ? 'default' : approvalStatus === 'rejected' ? 'destructive' : 'secondary'}>{approvalStatus}</Badge></TableCell>
+                          <TableCell>{metadataBoolean(i.metadata, 'reimbursable') === false ? <Badge variant="outline" className="text-[10px]">Não</Badge> : <Badge variant="secondary" className="text-[10px]">Sim</Badge>}</TableCell>
+                          <TableCell className="text-xs">{metadataText(i.metadata, 'payment_source', 'driver')}</TableCell>
+                          <TableCell>{receiptUrl ? <a className="text-primary inline-flex items-center gap-1" href={receiptUrl} target="_blank" rel="noreferrer"><FileText className="h-3 w-3" /> abrir</a> : '—'}</TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                       {expItems.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Sem despesas</TableCell></TableRow>}
                     </TableBody>
                     </Table>
@@ -508,7 +533,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   </div>
                   <div>
                     <Label>Status</Label>
-                    <Select value={kmStatus} onValueChange={(v: any) => setKmStatus(v)} disabled={locked}>
+                    <Select value={kmStatus} onValueChange={value => setKmStatus(value as 'pending' | 'reviewed' | 'disputed')} disabled={locked}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pending">Pendente</SelectItem>
@@ -551,7 +576,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                       <div className="space-y-3">
                         <div>
                           <Label>Tipo</Label>
-                          <Select value={adjNature} onValueChange={(v: any) => setAdjNature(v)}>
+                          <Select value={adjNature} onValueChange={value => setAdjNature(value as 'credit' | 'debit')}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="credit">Crédito (aumenta valor ao motorista)</SelectItem>
@@ -589,17 +614,20 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   <Table>
                     <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Descrição</TableHead><TableHead>Motivo</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Data</TableHead><TableHead></TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {adjItems.map((i: any) => (
+                      {adjItems.map(i => (
                         <TableRow key={i.id}>
                           <TableCell><Badge variant={i.nature === 'credit' ? 'default' : 'destructive'}>{i.nature === 'credit' ? 'Crédito' : 'Débito'}</Badge></TableCell>
                           <TableCell>{i.description ?? '—'}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{i.metadata?.reason ?? '—'}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{metadataText(i.metadata, 'reason')}</TableCell>
                           <TableCell className="text-right">{fmtMoney(Number(i.amount))}</TableCell>
                           <TableCell>{fmtDate(i.created_at)}</TableCell>
                           <TableCell>
                             <Button size="icon" variant="ghost" disabled={locked || removeAdj.isPending}
-                              onClick={() => {
-                                const reason = window.prompt('Motivo da remoção:');
+                              onClick={async () => {
+                                const reason = await promptAction('Informe por que este ajuste deve ser removido.', {
+                                  title: 'Remover ajuste',
+                                  label: 'Motivo da remoção',
+                                });
                                 if (reason) removeAdj.mutate({ settlement_id: s.id, item_id: i.id, reason });
                               }}><Trash2 className="h-4 w-4" /></Button>
                           </TableCell>
@@ -621,7 +649,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   <Table>
                     <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Método</TableHead><TableHead>Conta/origem</TableHead><TableHead>Referência</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Notas</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {payments.map((p: any) => (
+                      {payments.map(p => (
                         <TableRow key={p.id}>
                           <TableCell>{fmtDate(p.paid_at)}</TableCell>
                           <TableCell>{p.payment_method ?? '—'}</TableCell>
@@ -643,25 +671,31 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   <Table>
                     <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Evento</TableHead><TableHead>De</TableHead><TableHead>Para</TableHead><TableHead>Motivo</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {events.map((ev: any) => (
+                      {events.map(ev => {
+                        const paymentAccount = metadataText(ev.payload, 'payment_account', '');
+                        const paymentMethod = metadataText(ev.payload, 'payment_method', '');
+                        const paymentReference = metadataText(ev.payload, 'payment_reference', '');
+                        const paymentAmount = metadataRecord(ev.payload).amount;
+                        return (
                         <TableRow key={ev.id}>
                           <TableCell>{fmtDate(ev.created_at)}</TableCell>
                           <TableCell><Badge variant="outline" className="text-[10px]">{ev.event_type}</Badge></TableCell>
                           <TableCell>{ev.from_status ?? '—'}</TableCell>
                           <TableCell>{ev.to_status ?? '—'}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {ev.event_type === 'payment_registered' && ev.payload ? (
+                            {ev.event_type === 'payment_registered' ? (
                               <div className="space-y-0.5">
-                                {ev.payload.payment_account && <div>Conta/origem: <span className="font-medium">{ev.payload.payment_account}</span></div>}
-                                {ev.payload.amount != null && <div>Valor: {fmtMoney(Number(ev.payload.amount))}</div>}
-                                {ev.payload.payment_method && <div>Método: {ev.payload.payment_method}</div>}
-                                {ev.payload.payment_reference && <div>Ref.: {ev.payload.payment_reference}</div>}
+                                {paymentAccount && <div>Conta/origem: <span className="font-medium">{paymentAccount}</span></div>}
+                                {paymentAmount != null && <div>Valor: {fmtMoney(Number(paymentAmount))}</div>}
+                                {paymentMethod && <div>Método: {paymentMethod}</div>}
+                                {paymentReference && <div>Ref.: {paymentReference}</div>}
                                 {ev.reason && <div className="text-muted-foreground">Obs.: {ev.reason}</div>}
                               </div>
                             ) : (ev.reason ?? '—')}
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                       {events.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Sem eventos</TableCell></TableRow>}
                     </TableBody>
                   </Table>

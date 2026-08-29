@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { generateDoccob } from '../doccobGenerator';
 import { parseDoccobFile, trailerTotalReais } from '../doccobParser';
+import type { DoccobBuildInput } from '../doccobTypes';
 
-const input: any = {
+const input: DoccobBuildInput = {
   carrier: { cnpj: '12345678000190', name: 'AGV TRANSPORTES' },
   profile: { destinationName: 'CLARA', layoutVersion: 'SIAT_CTMS_DOCCOB_SAMPLE_2026' },
   generatedAt: new Date(Date.UTC(2026, 6, 2, 9, 27)),

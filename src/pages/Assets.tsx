@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Search, Plus, Package, Edit } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
+import { getErrorMessage } from '@/lib/errors';
 
 export default function Assets() {
   const { data: assets = [], isLoading } = useAssets();
@@ -60,16 +61,30 @@ export default function Assets() {
 
   const handleSave = async () => {
     if (!form.asset_code.trim() || !form.name.trim()) { toast.error('Código e nome obrigatórios'); return; }
-    const payload: any = { ...form, acquisition_cost: form.acquisition_cost ? Number(form.acquisition_cost) : 0 };
-    ['responsible_employee_id','acquisition_date'].forEach(k => { if (!payload[k]) payload[k] = null; });
-    Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = null; });
-    payload.asset_code = form.asset_code; payload.name = form.name; payload.category = form.category; payload.status = form.status;
+    const payload = {
+      asset_code: form.asset_code,
+      name: form.name,
+      category: form.category,
+      status: form.status,
+      serial_number: form.serial_number || null,
+      plate: form.plate || null,
+      brand: form.brand || null,
+      model: form.model || null,
+      responsible_employee_id: form.responsible_employee_id || null,
+      current_location: form.current_location || null,
+      branch: form.branch || null,
+      cost_center: form.cost_center || null,
+      supplier: form.supplier || null,
+      acquisition_date: form.acquisition_date || null,
+      acquisition_cost: form.acquisition_cost ? Number(form.acquisition_cost) : 0,
+      notes: form.notes || null,
+    };
     try {
       if (editing) await updateAsset.mutateAsync({ id: editing.id, ...payload });
       else await createAsset.mutateAsync(payload);
       setDialogOpen(false);
       toast.success(editing ? 'Ativo atualizado' : 'Ativo cadastrado');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível salvar o ativo.')); }
   };
 
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
@@ -121,7 +136,7 @@ export default function Assets() {
               <TableCell className="text-sm">{ASSET_CATEGORY_LABELS[a.category] || a.category}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{a.employees?.name || '—'}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{a.current_location || a.branch || '—'}</TableCell>
-              <TableCell className="text-sm">{fmt(a.acquisition_cost)}</TableCell>
+              <TableCell className="text-sm">{fmt(a.acquisition_cost ?? 0)}</TableCell>
               <TableCell><Badge variant="outline" className="text-[10px]">{ASSET_STATUS_LABELS[a.status]}</Badge></TableCell>
               <TableCell><Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Edit className="h-4 w-4" /></Button></TableCell>
             </TableRow>

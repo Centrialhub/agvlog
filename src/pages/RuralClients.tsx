@@ -23,6 +23,8 @@ import { generateRuralClientsPdf } from '@/lib/ruralClients/ruralDeliveryPdf';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Falha inesperada';
+
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = name; a.click();
@@ -55,8 +57,8 @@ export default function RuralClients() {
       const p = await buildRuralImportPreview(buf, f.name, currentTenant.id);
       setPreview(p);
       toast({ title: 'Prévia gerada', description: `${p.rows.length} linhas • ${p.toCreate} criar, ${p.toUpdate} atualizar, ${p.unmatched} sem cliente.` });
-    } catch (e: any) {
-      toast({ title: 'Erro ao ler planilha', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao ler planilha', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -67,8 +69,8 @@ export default function RuralClients() {
       const res = await commitImport.mutateAsync(preview);
       toast({ title: 'Importação concluída', description: `${res.imported} criados, ${res.updated} atualizados, ${res.unmatched} sem cliente.` });
       setPreview(null);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: errorMessage(error), variant: 'destructive' });
     } finally {
       setImporting(false);
     }
@@ -245,7 +247,7 @@ export default function RuralClients() {
               <TableBody>
                 {batches.length === 0 ? (
                   <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-4">Nenhuma importação ainda.</TableCell></TableRow>
-                ) : batches.map((b: any) => (
+                ) : batches.map((b) => (
                   <TableRow key={b.id}>
                     <TableCell className="text-xs">{new Date(b.created_at).toLocaleString('pt-BR')}</TableCell>
                     <TableCell className="text-xs">{b.file_name}</TableCell>

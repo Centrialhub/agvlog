@@ -9,7 +9,18 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Receipt, CheckCircle, XCircle, Clock, ExternalLink, ImageIcon, AlertTriangle, Wallet, Building2 } from 'lucide-react';
+import { Receipt, CheckCircle, XCircle, Clock, ImageIcon, AlertTriangle, Wallet, Building2 } from 'lucide-react';
+import type { Tables } from '@/integrations/supabase/types';
+
+type ExpenseApprovalRow = Tables<'driver_expenses'> & {
+  drivers: Pick<Tables<'drivers'>, 'name'> | null;
+};
+
+type ApprovalStatus = 'approved' | 'rejected';
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Não foi possível atualizar a despesa.';
+}
 
 const CATEGORIES: Record<string, string> = {
   fuel: 'Combustível',
@@ -36,7 +47,7 @@ export default function ExpenseApproval() {
   const [receiptDialog, setReceiptDialog] = useState<string | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
 
-  const { data: expenses = [], isLoading } = useQuery({
+  const { data: expenses = [] } = useQuery({
     queryKey: ['expense_approval', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -62,7 +73,8 @@ export default function ExpenseApproval() {
   }, [receiptDialog]);
 
   const updateExpense = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({ id, status }: { id: string; status: ApprovalStatus }) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const { error } = await supabase
         .from('driver_expenses')
         .update({
@@ -71,7 +83,8 @@ export default function ExpenseApproval() {
           approved_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -79,13 +92,13 @@ export default function ExpenseApproval() {
       qc.invalidateQueries({ queryKey: ['expense_approval'] });
       qc.invalidateQueries({ queryKey: ['ops_expenses_count'] });
     },
-    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+    onError: (error: unknown) => toast({ title: 'Erro', description: errorMessage(error), variant: 'destructive' }),
   });
 
-  const pending = expenses.filter((e: any) => e.approval_status === 'pending');
-  const reviewed = expenses.filter((e: any) => e.approval_status !== 'pending');
+  const pending = expenses.filter((expense) => expense.approval_status === 'pending');
+  const reviewed = expenses.filter((expense) => expense.approval_status !== 'pending');
 
-  const ExpenseCard = ({ exp, showActions }: { exp: any; showActions: boolean }) => (
+  const ExpenseCard = ({ exp, showActions }: { exp: ExpenseApprovalRow; showActions: boolean }) => (
     <Card key={exp.id}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
@@ -111,7 +124,7 @@ export default function ExpenseApproval() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {(exp as any).drivers?.name || 'Motorista'} · {new Date(exp.expense_at).toLocaleDateString('pt-BR')}
+              {exp.drivers?.name || 'Motorista'} · {new Date(exp.expense_at).toLocaleDateString('pt-BR')}
               {(exp.city || exp.state) && ` · ${[exp.city, exp.state].filter(Boolean).join('/')}`}
             </p>
             {(exp.supplier_name || exp.document_number) && (
@@ -183,7 +196,7 @@ export default function ExpenseApproval() {
               </CardContent>
             </Card>
           ) : (
-            pending.map((exp: any) => <ExpenseCard key={exp.id} exp={exp} showActions />)
+            pending.map((exp) => <ExpenseCard key={exp.id} exp={exp} showActions />)
           )}
         </TabsContent>
 
@@ -195,7 +208,7 @@ export default function ExpenseApproval() {
               </CardContent>
             </Card>
           ) : (
-            reviewed.map((exp: any) => <ExpenseCard key={exp.id} exp={exp} showActions={false} />)
+            reviewed.map((exp) => <ExpenseCard key={exp.id} exp={exp} showActions={false} />)
           )}
         </TabsContent>
       </Tabs>

@@ -1,11 +1,10 @@
+import { promptAction } from '@/hooks/useAlertStore';
 import { useMemo, useState } from 'react';
-import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -199,8 +198,7 @@ export default function MerchandiseShortages() {
   };
 
   return (
-    <AppLayout>
-      <div className="p-6 space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Falta de Mercadoria</h1>
@@ -400,7 +398,10 @@ export default function MerchandiseShortages() {
                             const errs = validateFinalize(v, { responsible_party_type: c.responsible_party_type });
                             if (errs.length && v === 'closed') { toast.error(errs[0].message); return; }
                             if (v === 'cancelled') {
-                              const reason = window.prompt('Motivo do cancelamento:');
+                              const reason = await promptAction('Informe por que esta ocorrência deve ser cancelada.', {
+                                title: 'Cancelar ocorrência',
+                                label: 'Motivo do cancelamento',
+                              });
                               if (!reason) return;
                               await updateStatus.mutateAsync({ case_id: c.id, status: v, payload: { cancellation_reason: reason } });
                             } else {
@@ -527,7 +528,6 @@ export default function MerchandiseShortages() {
           </TabsContent>
         </Tabs>
       </div>
-    </AppLayout>
   );
 }
 

@@ -1,3 +1,4 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import {
   useEmitters, useSaveEmitter, useDeleteEmitter, useMakeDefaultEmitter,
@@ -71,7 +72,7 @@ export default function EmittersSettings() {
                   </div>
                   <div className="flex gap-1">
                     {!e.is_default && (
-                      <Button size="sm" variant="ghost" onClick={() => makeDefault.mutate(e.id)}>
+                      <Button size="sm" variant="ghost" onClick={() => makeDefault.mutate(e.id)} disabled={!e.active || makeDefault.isPending}>
                         <Star className="h-3 w-3" />
                       </Button>
                     )}
@@ -82,7 +83,7 @@ export default function EmittersSettings() {
                       <Pencil className="h-3 w-3" />
                     </Button>
                     <Button size="sm" variant="ghost"
-                      onClick={() => { if (confirm('Remover este emitente?')) del.mutate(e.id); }}
+                      onClick={async () => { if (await confirmAction('Remover este emitente?', { title: 'Remover emitente', confirmLabel: 'Remover' })) del.mutate(e.id); }}
                       disabled={e.is_default}>
                       <Trash2 className="h-3 w-3 text-destructive" />
                     </Button>
@@ -112,12 +113,27 @@ function formatCnpj(cnpj: string) {
   return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12,14)}`;
 }
 
+type EmitterForm = {
+  branch_code: string;
+  cnpj: string;
+  razao_social: string;
+  nome_fantasia: string;
+  ie: string;
+  im: string;
+  regime_tributario: string;
+  city_code: string;
+  logo_url: string;
+  active: boolean;
+  is_default: boolean;
+  endereco: TenantEmitter['endereco'];
+};
+
 function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitter>; onClose: () => void }) {
   const save = useSaveEmitter();
   const saveToken = useSaveHubCredentialToken();
   const saveMeta = useSaveHubCredential();
   const { data: existingCreds = [] } = useHubCredentials(initial.id);
-  const [f, setF] = useState<any>({
+  const [f, setF] = useState<EmitterForm>({
     branch_code: initial.branch_code || 'MATRIZ',
     cnpj: initial.cnpj || '',
     razao_social: initial.razao_social || '',
@@ -143,16 +159,18 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
   const editing = !!savedId;
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<null | { ok: boolean; source?: string; scope?: string | null; message?: string }>(null);
-  const set = (k: string, v: any) => setF((s: any) => ({ ...s, [k]: v }));
-  const setEnd = (k: string, v: any) => setF((s: any) => ({ ...s, endereco: { ...(s.endereco || {}), [k]: v } }));
+  const set = <K extends Exclude<keyof EmitterForm, 'endereco'>>(key: K, value: EmitterForm[K]) =>
+    setF((current) => ({ ...current, [key]: value }));
+  const setEnd = <K extends keyof TenantEmitter['endereco']>(key: K, value: TenantEmitter['endereco'][K]) =>
+    setF((current) => ({ ...current, endereco: { ...current.endereco, [key]: value } }));
 
   const handleSave = async () => {
-    if (!f.cnpj || String(f.cnpj).replace(/\D/g, '').length !== 14) return alert('CNPJ inválido');
-    if (!f.razao_social) return alert('Razão social é obrigatória');
+    if (!f.cnpj || String(f.cnpj).replace(/\D/g, '').length !== 14) { toast.error('CNPJ inválido'); return; }
+    if (!f.razao_social) { toast.error('Razão social é obrigatória'); return; }
     setSaving(true);
     try {
       const payload = { ...f, id: savedId };
-      const saved = await save.mutateAsync(payload as any);
+      const saved = await save.mutateAsync(payload);
       setSavedId(saved.id);
       if (cred.mode === 'token' && cred.token.trim().length >= 8) {
         await saveToken.mutateAsync({
@@ -172,7 +190,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
         });
       }
       onClose();
-    } catch (e) {
+    } catch {
       // mutation hooks already show toast; keep dialog open on emitter error
     } finally {
       setSaving(false);
@@ -184,7 +202,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
     setTesting(true);
     setTestResult(null);
     try {
-      const res: any = await hubFiscal.ping(savedId, cred.doc_scope === 'all' ? 'all' as any : (cred.doc_scope as any));
+      const res = await hubFiscal.ping(savedId, cred.doc_scope);
       if (res?.success) {
         setTestResult({
           ok: true,
@@ -197,8 +215,8 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
       } else {
         setTestResult({ ok: false, message: res?.error?.message || 'Falha ao resolver credencial.' });
       }
-    } catch (e: any) {
-      setTestResult({ ok: false, message: e?.message || 'Erro ao chamar o proxy.' });
+    } catch (error: unknown) {
+      setTestResult({ ok: false, message: error instanceof Error ? error.message : 'Erro ao chamar o proxy.' });
     } finally {
       setTesting(false);
     }
@@ -276,7 +294,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
 
           <div className="col-span-2">
             <Label>Escopo</Label>
-            <Select value={cred.doc_scope} onValueChange={v => setCred(s => ({ ...s, doc_scope: v as any }))}>
+            <Select value={cred.doc_scope} onValueChange={v => setCred(s => ({ ...s, doc_scope: v as typeof s.doc_scope }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
@@ -290,7 +308,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
           </div>
           <div className="col-span-2">
             <Label>Ambiente</Label>
-            <Select value={cred.environment} onValueChange={v => setCred(s => ({ ...s, environment: v as any }))}>
+            <Select value={cred.environment} onValueChange={v => setCred(s => ({ ...s, environment: v as typeof s.environment }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="production">Produção</SelectItem>
@@ -300,7 +318,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
           </div>
           <div className="col-span-2">
             <Label>Modo</Label>
-            <Select value={cred.mode} onValueChange={v => setCred(s => ({ ...s, mode: v as any }))}>
+            <Select value={cred.mode} onValueChange={v => setCred(s => ({ ...s, mode: v as typeof s.mode }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="token">Colar token</SelectItem>
@@ -458,7 +476,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
           <div className="grid grid-cols-4 gap-3">
             <div>
               <Label>Escopo</Label>
-              <Select value={form.doc_scope} onValueChange={v => setForm(s => ({ ...s, doc_scope: v as any }))}>
+              <Select value={form.doc_scope} onValueChange={v => setForm(s => ({ ...s, doc_scope: v as typeof s.doc_scope }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
@@ -472,7 +490,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
             </div>
             <div>
               <Label>Ambiente</Label>
-              <Select value={form.environment} onValueChange={v => setForm(s => ({ ...s, environment: v as any }))}>
+              <Select value={form.environment} onValueChange={v => setForm(s => ({ ...s, environment: v as typeof s.environment }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="production">Produção</SelectItem>
@@ -482,7 +500,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
             </div>
             <div className="col-span-2">
               <Label>Modo</Label>
-              <Select value={form.mode} onValueChange={v => setForm(s => ({ ...s, mode: v as any }))}>
+              <Select value={form.mode} onValueChange={v => setForm(s => ({ ...s, mode: v as typeof s.mode }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="token">Colar token (criptografado no banco)</SelectItem>

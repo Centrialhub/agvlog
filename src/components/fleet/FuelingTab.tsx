@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useCreateFueling, useConsumptionHistory } from '@/hooks/useFleetManagement';
-import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getAutoTableFinalY } from '@/lib/pdf/autoTable';
 import type { LoadControlRow, UnloadingChargeRow } from '@/hooks/useLoadControl';
 import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
@@ -95,7 +96,7 @@ export function downloadLoadControlPdf(opts: LoadReportOptions, filename = 'cont
     acc.received += Number(r.received_amount || 0);
     return acc;
   }, { billed: 0, freight: 0, received: 0 });
-  const finalY = (doc as any).lastAutoTable?.finalY || 30;
+  const finalY = getAutoTableFinalY(doc, 30);
   doc.setFontSize(9); doc.setFont('helvetica', 'bold');
   doc.text(
     `Cargas: ${opts.rows.length}   Faturado: ${money(tot.billed)}   Frete: ${money(tot.freight)}   Recebido: ${money(tot.received)}   Saldo: ${money(tot.freight - tot.received)}`,

@@ -6,29 +6,33 @@ import {
   Home,
   MapPin,
   Package,
-  Receipt,
+  PackageCheck,
   MoreHorizontal,
   LogOut,
   Truck,
   MessageSquare,
+  WifiOff,
 } from 'lucide-react';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 const driverNav: { label: string; href: string; icon: typeof Home; match?: string[] }[] = [
   { label: 'Início', href: '/driver', icon: Home },
   { label: 'Cargas', href: '/driver/loads', icon: Package },
   { label: 'Paradas', href: '/driver/stops', icon: MapPin },
+  { label: 'Entregas', href: '/driver/deliveries', icon: PackageCheck },
   { label: 'Chat', href: '/driver/chat', icon: MessageSquare },
   {
     label: 'Mais',
     href: '/driver/journey',
     icon: MoreHorizontal,
-    match: ['/driver/journey', '/driver/checklist', '/driver/issues', '/driver/expenses'],
+    match: ['/driver/journey', '/driver/checklist', '/driver/issues', '/driver/expenses', '/driver/events'],
   },
 ];
 
 export default function DriverLayout({ children }: { children: ReactNode }) {
   const { signOut } = useAuth();
   const location = useLocation();
+  const isOnline = useOnlineStatus();
 
   const isActive = (href: string, match?: string[]) => {
     if (match && match.some((m) => location.pathname.startsWith(m))) return true;
@@ -59,6 +63,16 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
           Sair
         </button>
       </header>
+
+      {!isOnline && (
+        <div
+          role="status"
+          className="flex items-center justify-center gap-2 bg-warning/15 px-4 py-2 text-center text-xs text-warning-foreground"
+        >
+          <WifiOff className="h-4 w-4 shrink-0" />
+          Sem conexão. Mantenha os dados na tela e tente enviar novamente quando a rede voltar.
+        </div>
+      )}
 
       {/* Content area */}
       <main className="flex-1 overflow-y-auto overscroll-contain">

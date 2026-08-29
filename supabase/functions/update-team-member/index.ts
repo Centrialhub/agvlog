@@ -1,10 +1,5 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { createClient } from "@supabase/supabase-js";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -45,6 +40,13 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (password !== undefined) {
+      return new Response(
+        JSON.stringify({ error: "Administrators cannot set another user's password" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     // Verify caller is admin of this tenant
@@ -82,13 +84,6 @@ Deno.serve(async (req) => {
     // Build update payload for auth user
     const authUpdate: Record<string, any> = {};
     if (email && email.trim()) authUpdate.email = email.trim();
-    if (password && password.length >= 6) authUpdate.password = password;
-    if (password && password.length > 0 && password.length < 6) {
-      return new Response(
-        JSON.stringify({ error: "Password must be at least 6 characters" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     // Update auth user if needed
     if (Object.keys(authUpdate).length > 0) {

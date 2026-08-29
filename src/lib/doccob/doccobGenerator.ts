@@ -44,7 +44,7 @@ export function generateRecord000(input: DoccobBuildInput, generatedAt: Date): s
   return line.padEnd(DOCCOB_LINE_LENGTHS['000'], ' ').slice(0, DOCCOB_LINE_LENGTHS['000']);
 }
 
-export function generateRecord350(input: DoccobBuildInput, generatedAt: Date, sequence = 1): string {
+export function generateRecord350(_input: DoccobBuildInput, generatedAt: Date, sequence = 1): string {
   const line = buildFixedLine([
     { kind: 'raw', value: '350', length: 3 },
     { kind: 'text', value: 'COBRA', length: 10 },

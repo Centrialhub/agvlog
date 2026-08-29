@@ -17,6 +17,7 @@ import { Loader2, Plus, AlertTriangle, CheckCircle2, MessageSquare, Send } from 
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { portalErrorMessage } from '@/lib/portal/portalErrors';
 
 const SEVERITY_TONE: Record<string, string> = {
   low: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
@@ -59,8 +60,8 @@ export default function PortalOccurrences() {
       toast({ title: 'Ocorrência registrada' });
       setOpen(false);
       setForm({ client_id: '', event_type: '', severity: 'medium', description: '' });
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: portalErrorMessage(error, 'Não foi possível registrar a ocorrência.'), variant: 'destructive' });
     }
   };
 
@@ -210,8 +211,8 @@ function OccurrenceThreadDialog({
     try {
       await replyMut.mutateAsync({ occurrence_id: occurrenceId, message: text.trim() });
       setText('');
-    } catch (e: any) {
-      toast({ title: 'Erro ao enviar', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao enviar', description: portalErrorMessage(error, 'Não foi possível enviar a mensagem.'), variant: 'destructive' });
     }
   };
 

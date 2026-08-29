@@ -1,3 +1,4 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -12,10 +13,12 @@ import {
   usePayablePayments, useReversePayablePayment,
   uploadPaymentAttachment,
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
+  type PaymentMethod,
 } from '@/hooks/useFinancialPayments';
 import { useTenant } from '@/hooks/useTenant';
 import type { Payable } from '@/hooks/usePayables';
 import { Trash2 } from 'lucide-react';
+import { getErrorMessage } from '@/lib/errors';
 
 interface Props {
   payable: Payable | null;
@@ -34,11 +37,11 @@ export default function PayablePaymentDialog({ payable, open, onOpenChange }: Pr
   const [amount, setAmount] = useState('');
   const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [bankAccountId, setBankAccountId] = useState('');
-  const [method, setMethod] = useState<string>('pix');
+  const [method, setMethod] = useState<PaymentMethod>('pix');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
-  const remaining = payable ? Number(payable.amount) - Number((payable as any).paid_amount || 0) : 0;
+  const remaining = payable ? Number(payable.amount) - Number(payable.paid_amount || 0) : 0;
 
   useEffect(() => {
     if (open && payable) {
@@ -53,8 +56,8 @@ export default function PayablePaymentDialog({ payable, open, onOpenChange }: Pr
   const handleSubmit = async () => {
     if (!payable || !currentTenant) return;
     const val = Number(amount);
-    if (!val || val <= 0) return toast.error('Informe um valor válido');
-    if (!bankAccountId) return toast.error('Selecione a conta bancária');
+    if (!val || val <= 0) { toast.error('Informe um valor válido'); return; }
+    if (!bankAccountId) { toast.error('Selecione a conta bancária'); return; }
     try {
       let attachment_url: string | null = null;
       if (file) attachment_url = await uploadPaymentAttachment(currentTenant.id, 'payable', file);
@@ -63,24 +66,24 @@ export default function PayablePaymentDialog({ payable, open, onOpenChange }: Pr
         amount: val,
         paid_at: new Date(paidAt + 'T12:00:00').toISOString(),
         bank_account_id: bankAccountId,
-        method: method as any,
+        method,
         notes: notes || null,
         attachment_url,
       });
       toast.success('Baixa registrada');
       setAmount(''); setNotes(''); setFile(null);
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível registrar a baixa.'));
     }
   };
 
   const handleReverse = async (id: string) => {
-    if (!confirm('Estornar esta baixa? A transação bancária vinculada também será removida.')) return;
+    if (!await confirmAction('Estornar esta baixa? A transação bancária vinculada também será removida.')) return;
     try {
       await reverse.mutateAsync(id);
       toast.success('Baixa estornada');
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível estornar a baixa.'));
     }
   };
 
@@ -100,7 +103,7 @@ export default function PayablePaymentDialog({ payable, open, onOpenChange }: Pr
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Já pago</p>
-            <p className="font-semibold text-green-600">{fmt(Number((payable as any).paid_amount || 0))}</p>
+            <p className="font-semibold text-green-600">{fmt(Number(payable.paid_amount || 0))}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Saldo</p>
@@ -128,7 +131,7 @@ export default function PayablePaymentDialog({ payable, open, onOpenChange }: Pr
                 <Select value={bankAccountId} onValueChange={setBankAccountId}>
                   <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   <SelectContent>
-                    {accounts.map((a: any) => (
+                    {accounts.map(a => (
                       <SelectItem key={a.id} value={a.id}>{a.name}{a.bank_name ? ` — ${a.bank_name}` : ''}</SelectItem>
                     ))}
                   </SelectContent>
@@ -136,7 +139,7 @@ export default function PayablePaymentDialog({ payable, open, onOpenChange }: Pr
               </div>
               <div>
                 <Label>Forma</Label>
-                <Select value={method} onValueChange={setMethod}>
+                <Select value={method} onValueChange={value => setMethod(value as PaymentMethod)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</SelectItem>)}
@@ -163,7 +166,7 @@ export default function PayablePaymentDialog({ payable, open, onOpenChange }: Pr
         {history.length > 0 && (
           <div className="border rounded-md p-3 space-y-2 max-h-64 overflow-y-auto">
             <p className="text-sm font-medium">Histórico de baixas</p>
-            {history.map((h: any) => (
+            {history.map(h => (
               <div key={h.id} className="flex items-center justify-between text-sm border-b last:border-b-0 pb-2 last:pb-0">
                 <div>
                   <p className="font-medium">{fmt(Number(h.amount))} <Badge variant="secondary" className="ml-2 text-[10px]">{PAYMENT_METHOD_LABELS[h.method as PaymentMethodKey] || h.method}</Badge></p>

@@ -1,0 +1,135 @@
+name: Quality gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify frozen lockfile and package-manager policy
+        run: npm run lockfile:check
+
+      - name: Security audit
+        run: npm audit --audit-level=high
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint errors
+        run: npm run lint:errors
+
+      - name: Critical type-safety baseline
+        run: npm run lint:critical-types
+
+      - name: Structural quality baseline
+        run: npm run quality:baseline
+
+      - name: Edge Function syntax
+        run: npm run edge:syntax
+
+      - name: Unit and integration coverage
+        run: npm run test:coverage
+
+      - name: Production build and bundle budget
+        run: npm run build:check
+
+      - name: Upload unit coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  database-and-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start isolated Supabase stack
+        run: ./node_modules/.bin/supabase start
+
+      - name: Reset migrations and deterministic E2E seed
+        shell: bash
+        run: |
+          ./node_modules/.bin/supabase db reset --local
+          ./node_modules/.bin/supabase status -o env > /tmp/agvlog-supabase.env
+          source /tmp/agvlog-supabase.env
+          {
+            echo "VITE_SUPABASE_URL=$API_URL"
+            echo "VITE_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY"
+            echo "VITE_SUPABASE_PROJECT_ID=local"
+          } >> "$GITHUB_ENV"
+          echo "AGVLOG_LOCAL_DB_URL=$DB_URL" >> "$GITHUB_ENV"
+          E2E_PASSWORD="$(openssl rand -base64 24 | tr -d '\n' | tr '/+' '_-')Aa1"
+          echo "::add-mask::$E2E_PASSWORD"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -v e2e_password="$E2E_PASSWORD" -c "UPDATE auth.users SET encrypted_password = crypt(:'e2e_password', gen_salt('bf')) WHERE email LIKE '%@agvlog-e2e.invalid';"
+          echo "E2E_PASSWORD=$E2E_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Database lint
+        run: ./node_modules/.bin/supabase db lint --local --level error
+
+      - name: Baseline and migration verification
+        run: psql "$AGVLOG_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -f supabase/verify/baseline_contract.sql
+
+      - name: pgTAP security and RLS contracts
+        run: ./node_modules/.bin/supabase test db
+
+      - name: Install Playwright Chromium
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Desktop, tablet and mobile E2E
+        run: npm run e2e
+
+      - name: Critical journeys three consecutive times
+        run: npm run e2e:critical:3
+
+      - name: Upload E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-evidence
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stop isolated Supabase stack
+        if: always()
+        run: ./node_modules/.bin/supabase stop --no-backup

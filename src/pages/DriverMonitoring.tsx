@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -27,11 +27,13 @@ import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 const dt = (v?: string | null) => (v ? v.slice(0, 10).split('-').reverse().join('/') : '—');
 
-const STATUS_VARIANT: Record<string, any> = {
+const STATUS_VARIANT: Record<string, NonNullable<BadgeProps['variant']>> = {
   on_time: 'default', delayed: 'destructive', no_update: 'secondary',
   returning: 'default', arrived: 'default', completed: 'default',
   waiting_load: 'outline', cancelled: 'outline', active: 'secondary', issue: 'destructive',
 };
+
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Falha inesperada';
 
 export default function DriverMonitoring() {
   const [filters, setFilters] = useState<DriverMonitoringFilters>({});
@@ -114,8 +116,8 @@ export default function DriverMonitoring() {
       const p = parseDriverMonitoringWorkbook(buf);
       setParsed(p);
       toast.success(`Prévia: ${p.monitors.length} motoristas, ${p.forecasts.length} previsões`);
-    } catch (err: any) {
-      toast.error('Erro ao ler planilha: ' + err.message);
+    } catch (error: unknown) {
+      toast.error('Erro ao ler planilha: ' + errorMessage(error));
     }
   }
 
@@ -126,8 +128,8 @@ export default function DriverMonitoring() {
       toast.success(`Importação: ${r.importedMonitors} motoristas, ${r.importedUpdates} atualizações, ${r.importedForecasts} previsões${r.errors.length ? ` (${r.errors.length} avisos)` : ''}`);
       setParsed(null);
       setImportFile(null);
-    } catch (err: any) {
-      toast.error('Erro ao importar: ' + err.message);
+    } catch (error: unknown) {
+      toast.error('Erro ao importar: ' + errorMessage(error));
     }
   }
 
@@ -294,7 +296,7 @@ export default function DriverMonitoring() {
                 return_deadline_days: createForm.deadline || null,
                 expected_return_date: exp,
                 planned_route_text: createForm.planned_route,
-                planned_cities: createForm.planned_route ? createForm.planned_route.split(/[,\n;\/]/).map((s) => s.trim()).filter(Boolean) : [],
+                planned_cities: createForm.planned_route ? createForm.planned_route.split(/[,\n;/]/).map((s) => s.trim()).filter(Boolean) : [],
                 notes: createForm.notes,
               });
               toast.success('Monitoramento criado');

@@ -59,9 +59,9 @@ export function generateReturnedNotesPdf(opts: ReturnedPdfOptions): jsPDF {
     const items = opts.rows.filter((r) => r.section === section);
     if (!items.length) continue;
     doc.setFontSize(10);
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.text(sectionLabels[section], 14, cursorY);
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     autoTable(doc, {
       startY: cursorY + 2,
       head: [['Cliente', 'Cidade', 'Nº Ocorrência', 'NF', 'Tipo', 'Valor', 'Motivo', 'QTD', 'Descrição', 'Senha']],

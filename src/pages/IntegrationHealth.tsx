@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { INTEGRATION_ACCOUNT_SAFE_SELECT } from '@/integrations/supabase/selects';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
+import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Activity, CheckCircle, XCircle, AlertTriangle, Clock, Truck, Radio, Database } from 'lucide-react';
 import { summarizeTelemetryFreshness } from '@/lib/telemetryFreshness';
+import { IntegrationUnavailable } from '@/components/integrations/IntegrationUnavailable';
 
 function formatTime(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -16,6 +19,8 @@ function formatTime(iso: string | null | undefined): string {
 export default function IntegrationHealth() {
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
+  const { isEnabled, isLoading: capabilitiesLoading, error: capabilitiesError, refetch: refetchCapabilities } = useTenantCapabilities();
+  const ssxEnabled = isEnabled('ssx');
 
   const { data: tenant } = useQuery({
     queryKey: ['tenant_health_detail', currentTenant?.id],
@@ -24,20 +29,20 @@ export default function IntegrationHealth() {
       const { data } = await supabase.from('tenants').select('settings').eq('id', currentTenant.id).single();
       return (data?.settings as any)?.pipeline_health || null;
     },
-    enabled: !!currentTenant && isAdmin,
+    enabled: !!currentTenant && isAdmin && ssxEnabled,
     refetchInterval: 30000,
   });
 
-  const { data: accounts = [] } = useQuery({
+  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
     queryKey: ['integration_accounts_health', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data } = await supabase.from('integration_accounts')
-        .select('id, username, status, last_login_at, last_error, settings, token_expires_at, hashauth')
+        .select(INTEGRATION_ACCOUNT_SAFE_SELECT)
         .eq('tenant_id', currentTenant.id);
       return data || [];
     },
-    enabled: !!currentTenant && isAdmin,
+    enabled: !!currentTenant && isAdmin && ssxEnabled,
   });
 
   const { data: positionStats } = useQuery({
@@ -58,7 +63,7 @@ export default function IntegrationHealth() {
         (vehiclesResult.data || []).map((vehicle) => timestampByVehicle.get(vehicle.id) ?? null),
       );
     },
-    enabled: !!currentTenant && isAdmin,
+    enabled: !!currentTenant && isAdmin && ssxEnabled,
     refetchInterval: 30000,
   });
 
@@ -79,18 +84,31 @@ export default function IntegrationHealth() {
       const meta = latest.metadata as any;
       return meta?.conflict_details || [];
     },
-    enabled: !!currentTenant && isAdmin,
+    enabled: !!currentTenant && isAdmin && ssxEnabled,
   });
 
   if (!isAdmin) {
     return <div className="p-6 text-muted-foreground">Acesso restrito a administradores.</div>;
   }
+  if (capabilitiesError) {
+    return <IntegrationUnavailable capability="ssx" degraded onRetry={() => { void refetchCapabilities(); }} />;
+  }
+  if (!capabilitiesLoading && !ssxEnabled) return <IntegrationUnavailable capability="ssx" />;
+
+  const operationalStatus = accountsLoading
+    ? 'loading'
+    : accounts.length === 0
+      ? 'not_configured'
+      : accounts.some((account) => ['degraded', 'invalid_credentials'].includes(account.status))
+        ? 'degraded'
+        : 'healthy';
 
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
         <Activity className="h-6 w-6 text-primary" />
         Saúde da Integração SSX
+        <Badge variant={operationalStatus === 'healthy' ? 'default' : 'secondary'}>{operationalStatus}</Badge>
       </h1>
 
       {/* Pipeline Overview */}
@@ -262,11 +280,10 @@ function ReadinessGates({ tenant, positionStats, mappingConflicts, accounts }: {
   mappingConflicts: any[];
   accounts?: any[];
 }) {
-  const hasHashAuth = accounts?.some((a: any) => a.settings && (a.settings as any)?.hashauth);
   const gates = [
     {
-      label: 'HashAuth configurado para tracking',
-      met: !accounts || accounts.length === 0 || accounts.some((a: any) => !!(a as any).hashauth),
+      label: 'Integração SSX autenticada',
+      met: !accounts || accounts.length === 0 || accounts.some((a: any) => ['ok', 'degraded'].includes(a.status)),
     },
     {
       label: 'Pipeline automático rodando há 24h+',

@@ -1,3 +1,4 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -17,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2, CheckSquare, FileSpreadsheet } from 'lucide-react';
+import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2, FileSpreadsheet } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { downloadImportedNotesSummaryPdf, type SummaryReportType } from '@/lib/importedNotesSummaryPdf';
 import { downloadImportedNotesXlsx } from '@/lib/importedNotesXlsx';
@@ -37,11 +38,13 @@ import {
 
 import { Checkbox } from "@/components/ui/checkbox";
 
-const dt = (s?: any) => s ? new Date(String(s).length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '—';
-const brl = (n: any) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const num3 = (n: any) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const dt = (value?: string | null) => value
+  ? new Date(value.length <= 10 ? `${value}T00:00:00` : value).toLocaleDateString('pt-BR')
+  : '—';
+const brl = (value?: number | null) => `R$ ${Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const num3 = (value?: number | null) => Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
-const STATUS_VARIANT: Record<string, any> = {
+const STATUS_VARIANT: Record<NoteOperationalStatus, React.ComponentProps<typeof Badge>['variant']> = {
   delivered: 'default', in_transit: 'secondary', processed: 'secondary',
   not_delivered: 'destructive', not_processed: 'outline', not_processed_redispatch: 'outline',
   transferred: 'secondary', not_transferred: 'destructive',
@@ -73,23 +76,26 @@ export default function ImportedNotesSummary() {
   const [bulkActionDlg, setBulkActionDlg] = useState<{ open: boolean; type: 'audit' | 'delete' | null }>({ open: false, type: null });
 
   const totals = useMemo(() => getImportedNoteSummaryTotals(rows), [rows]);
-  const set = (k: keyof ImportedNoteFilters, v: any) => setFilters(f => ({ ...f, [k]: v === '' ? null : v }));
+  const set = <K extends keyof ImportedNoteFilters>(key: K, value: ImportedNoteFilters[K]) =>
+    setFilters((previous) => ({ ...previous, [key]: value === '' ? null : value }));
 
   const doSearch = () => setApplied(filters);
   const doClear = () => { setFilters(emptyFilters); setApplied(emptyFilters); };
 
   const handleAudit = async (row: ImportedNoteRow) => {
     try {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const { error } = await supabase
         .from('fiscal_documents')
         .update({ imported_note_status: 'processed' })
-        .eq('id', row.id);
+        .eq('id', row.id)
+        .eq('tenant_id', currentTenant.id);
       
       if (error) throw error;
       toast.success(`Nota ${row.invoice_number} auditada com sucesso.`);
       refetch();
-    } catch (e: any) {
-      toast.error(e.message || 'Falha ao auditar nota');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao auditar nota');
     }
   };
 
@@ -110,8 +116,8 @@ export default function ImportedNotesSummary() {
       toast.success('Nota excluída com sucesso (arquivada para histórico).');
       setDetailRow(null);
       refetch();
-    } catch (e: any) {
-      toast.error(e.message || 'Falha ao excluir nota');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao excluir nota');
     } finally {
       setIsDeleting(false);
       setDeleteId(null);
@@ -138,18 +144,20 @@ export default function ImportedNotesSummary() {
   const handleBulkAudit = async () => {
     if (selectedIds.size === 0) return;
     try {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const { error } = await supabase
         .from('fiscal_documents')
         .update({ imported_note_status: 'processed' })
-        .in('id', Array.from(selectedIds));
+        .in('id', Array.from(selectedIds))
+        .eq('tenant_id', currentTenant.id);
       
       if (error) throw error;
       toast.success(`${selectedIds.size} notas auditadas com sucesso.`);
       setSelectedIds(new Set());
       setBulkActionDlg({ open: false, type: null });
       refetch();
-    } catch (e: any) {
-      toast.error(e.message || 'Falha ao auditar notas em massa');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao auditar notas em massa');
     }
   };
 
@@ -179,8 +187,8 @@ export default function ImportedNotesSummary() {
       setSelectedIds(new Set());
       setBulkActionDlg({ open: false, type: null });
       refetch();
-    } catch (e: any) {
-      toast.error(e.message || 'Falha ao excluir notas em massa');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao excluir notas em massa');
     } finally {
       setIsDeleting(false);
     }
@@ -189,7 +197,9 @@ export default function ImportedNotesSummary() {
   const handlePrint = async () => {
     if (rows.length === 0) { toast.error('Nenhum resultado para imprimir.'); return; }
     if (rows.length > 1000) {
-      if (!window.confirm(`Relatório contém ${rows.length} registros. Continuar?`)) return;
+      if (!await confirmAction(`Relatório contém ${rows.length} registros. Continuar?`, {
+        title: 'Gerar relatório extenso',
+      })) return;
     }
     try {
       downloadImportedNotesSummaryPdf({
@@ -212,8 +222,8 @@ export default function ImportedNotesSummary() {
       await createSummaryReportSnapshot(currentTenant!.id, reportType, reportType !== 'raw_list', applied, rows);
       toast.success('Relatório gerado');
       setPrintDlgOpen(false);
-    } catch (e: any) {
-      toast.error(e.message || 'Falha ao gerar PDF');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao gerar PDF');
     }
   };
 
@@ -233,8 +243,8 @@ export default function ImportedNotesSummary() {
     try {
       downloadImportedNotesXlsx(rows);
       toast.success('Planilha gerada — pronta para enviar ao cliente.');
-    } catch (e: any) {
-      toast.error(e?.message || 'Falha ao gerar a planilha.');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao gerar a planilha.');
     }
   };
 
@@ -284,7 +294,7 @@ export default function ImportedNotesSummary() {
           <div><Label>Município Destino</Label><Input value={filters.destinationCity || ''} onChange={e => set('destinationCity', e.target.value)} /></div>
           <div>
             <Label>Situação NFS</Label>
-            <Select value={filters.status || 'all'} onValueChange={(v) => set('status', v as any)}>
+            <Select value={filters.status || 'all'} onValueChange={(value) => set('status', value as NoteOperationalStatus | 'all')}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
@@ -460,7 +470,7 @@ export default function ImportedNotesSummary() {
               <DetailRow label="Volume" value={num3(detailRow.volume_count ?? detailRow.pallet_count)} />
               <DetailRow label="Situação" value={NOTE_STATUS_LABELS[detailRow.operational_status]} />
               <DetailRow label="Data emissão" value={dt(detailRow.issue_date)} />
-              <DetailRow label="Data importação" value={dt(detailRow.imported_at || detailRow['created_at' as any])} />
+              <DetailRow label="Data importação" value={dt(detailRow.imported_at || detailRow.created_at)} />
               <div className="flex flex-wrap gap-2 pt-2">
                 <Button 
                   size="sm" 
@@ -544,7 +554,8 @@ export default function ImportedNotesSummary() {
             <AlertDialogAction 
               onClick={(e) => { 
                 e.preventDefault(); 
-                bulkActionDlg.type === 'audit' ? handleBulkAudit() : handleBulkDelete(); 
+                if (bulkActionDlg.type === 'audit') handleBulkAudit();
+                else handleBulkDelete();
               }}
               className={bulkActionDlg.type === 'delete' ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
               disabled={isDeleting}

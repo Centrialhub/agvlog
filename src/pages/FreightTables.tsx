@@ -1,6 +1,8 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -94,13 +96,14 @@ export default function FreightTables() {
     queryKey: ['suppliers_for_freight', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('clients')
         .select('id, company_name')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
         .eq('is_supplier', true)
         .order('company_name');
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
@@ -110,17 +113,22 @@ export default function FreightTables() {
     queryKey: ['client_regions_catalog', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('client_regions')
         .select('region_name, payer_group, state_code')
         .eq('tenant_id', currentTenant.id);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
   });
 
-  const uniqueRegions = Array.from(new Set(regionsCatalog.map((r: any) => r.region_name).filter(Boolean))).sort();
-  const uniquePayerGroups = Array.from(new Set(regionsCatalog.map((r: any) => r.payer_group).filter(Boolean))).sort();
+  const uniqueRegions = Array.from(new Set(
+    regionsCatalog.map((region) => region.region_name).filter((value): value is string => Boolean(value)),
+  )).sort();
+  const uniquePayerGroups = Array.from(new Set(
+    regionsCatalog.map((region) => region.payer_group).filter((value): value is string => Boolean(value)),
+  )).sort();
 
   const upsertMutation = useMutation({
     mutationFn: async (values: typeof form & { id?: string }) => {
@@ -136,7 +144,7 @@ export default function FreightTables() {
       if (!values.blocked && !hasContext) {
         throw new Error('Informe pelo menos um contexto: cliente, origem, destino ou tipo de veículo (ou marque como bloqueada).');
       }
-      const record: any = {
+      const record: TablesInsert<'freight_tables'> = {
         tenant_id: currentTenant.id,
         table_name: values.table_name,
         client_id: values.client_id || null,
@@ -170,7 +178,9 @@ export default function FreightTables() {
         insurance_percent: values.insurance_percent ? parseFloat(values.insurance_percent) : 0,
       };
       if (values.id) {
-        const { error } = await supabase.from('freight_tables').update(record).eq('id', values.id);
+        const { error } = await supabase.from('freight_tables').update(record)
+          .eq('id', values.id)
+          .eq('tenant_id', currentTenant.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from('freight_tables').insert(record);
@@ -182,19 +192,22 @@ export default function FreightTables() {
       toast.success(editingId ? 'Tabela atualizada' : 'Tabela cadastrada');
       resetForm();
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : String(error)),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('freight_tables').delete().eq('id', id);
+      if (!currentTenant) throw new Error('Sem tenant');
+      const { error } = await supabase.from('freight_tables').delete()
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['freight_tables'] });
       toast.success('Tabela removida');
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : String(error)),
   });
 
   function resetForm() {
@@ -203,7 +216,7 @@ export default function FreightTables() {
     setDialogOpen(false);
   }
 
-  function openEdit(r: any) {
+  function openEdit(r: (typeof rows)[number]) {
     setEditingId(r.id);
     setForm({
       table_name: r.table_name || '',
@@ -240,7 +253,7 @@ export default function FreightTables() {
     setDialogOpen(true);
   }
 
-  const filtered = rows.filter((r: any) => {
+  const filtered = rows.filter((r) => {
     if (fGroup && !(r.payer_group || '').toLowerCase().includes(fGroup.toLowerCase())) return false;
     if (fName && !r.table_name.toLowerCase().includes(fName.toLowerCase())) return false;
     if (fClient && r.client_id !== fClient) return false;
@@ -287,8 +300,8 @@ export default function FreightTables() {
                     <SelectTrigger><SelectValue placeholder="Nenhum (genérica)" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">— Nenhum (todos os fornecedores)</SelectItem>
-                      {clientsList.map((c: any) => (
-                        <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      {clientsList.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -513,8 +526,8 @@ export default function FreightTables() {
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  {clientsList.map((c: any) => (
-                    <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                  {clientsList.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -561,7 +574,7 @@ export default function FreightTables() {
             </div>
             <div>
               <Label className="text-xs">Bloqueado</Label>
-              <Select value={fBlocked} onValueChange={(v: any) => setFBlocked(v)}>
+              <Select value={fBlocked} onValueChange={(value) => setFBlocked(value as typeof fBlocked)}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="no">Não</SelectItem>
@@ -619,7 +632,7 @@ export default function FreightTables() {
                     <TableCell colSpan={18} className="text-center py-8 text-muted-foreground">Nenhuma tabela encontrada</TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((r: any) => (
+                  filtered.map((r) => (
                     <TableRow key={r.id} className={r.blocked ? 'opacity-50' : ''}>
                       <TableCell className="text-xs font-mono">{r.table_code}</TableCell>
                       <TableCell className="text-xs">{r.clients?.company_name || '*'}</TableCell>
@@ -650,7 +663,7 @@ export default function FreightTables() {
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                            onClick={() => { if (confirm('Remover esta tabela?')) deleteMutation.mutate(r.id); }}>
+                            onClick={async () => { if (await confirmAction('Remover esta tabela?', { title: 'Remover tabela', confirmLabel: 'Remover' })) deleteMutation.mutate(r.id); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>

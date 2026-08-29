@@ -4,17 +4,30 @@
 // grava a resposta completa (para conferência posterior) e atualiza o status
 // local quando o provedor sai de "processando".
 
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
+import { createClient } from '@supabase/supabase-js';
+import { requireIntegrationCapability } from '../_shared/capabilities.ts';
+import { isCronRequest } from '../_shared/cron-auth.ts';
+import {
+  classifyFiscalProviderStatus,
+  getHubFiscalDocument,
+  resolveHubFiscalToken,
+  safeProviderSnapshot,
+  shouldDeadLetter,
+  terminalizeFiscalPoll,
+} from '../_shared/fiscal-poll.ts';
 
-const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') ||
-  'https://rvgcsmuyvesusbxsqevr.supabase.co/functions/v1').replace(/\/$/, '');
+const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') || '').trim().replace(/\/$/, '');
 const DEFAULT_HUB_KEY = Deno.env.get('HUB_FISCAL_API_KEY') || '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const ENC_KEY = Deno.env.get('AGVLOG_ENCRYPTION_KEY') || '';
 
-const PENDING = ['processing', 'queued', 'submitted', 'pending', 'authorized', 'transmitting', 'processed_error', 'sent_error'];
+// Somente estados realmente transitórios entram no polling automático.
+// Estados autorizados, rejeitados ou com erro exigem ação explícita e não
+// devem consumir chamadas ao provedor a cada minuto indefinidamente.
+const PENDING = ['processing', 'queued', 'submitted', 'pending', 'transmitting'];
 const MAX_DOCS = 50;
 
 function json(status: number, payload: unknown) {
@@ -24,91 +37,79 @@ function json(status: number, payload: unknown) {
   });
 }
 
-function hexToBytes(hex: string): Uint8Array {
-  const b = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < b.length; i++) b[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return b;
-}
-
-async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
-  const parts = encrypted.split(':');
-  if (parts.length !== 4) throw new Error('Invalid encrypted format');
-  const keyBytes = hexToBytes(keyHex.padEnd(64, '0').slice(0, 64));
-  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
-  const pt = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: hexToBytes(parts[2]) },
-    key,
-    hexToBytes(parts[3]),
-  );
-  return new TextDecoder().decode(pt);
-}
-
-// deno-lint-ignore no-explicit-any
-async function resolveToken(admin: any, emitterId: string | null, environment?: string | null) {
-  if (!emitterId) return DEFAULT_HUB_KEY;
-  const { data: creds } = await admin.from('hub_fiscal_credentials')
-    .select('doc_scope, environment, secret_name, secret_ciphertext')
-    .eq('emitter_id', emitterId).eq('enabled', true);
-  const list = (creds || []) as Array<Record<string, string>>;
-  const pick = (fn: (c: Record<string, string>) => boolean) => list.find(fn);
-  const match =
-    (environment && pick(c => c.doc_scope === 'cte' && c.environment === environment)) ||
-    pick(c => c.doc_scope === 'cte') ||
-    (environment && pick(c => c.doc_scope === 'all' && c.environment === environment)) ||
-    pick(c => c.doc_scope === 'all');
-  if (!match) return DEFAULT_HUB_KEY;
-  if (match.secret_ciphertext && ENC_KEY) {
-    try { return await decryptAesGcm(match.secret_ciphertext, ENC_KEY); } catch { /* cai no fallback */ }
-  }
-  if (match.secret_name) return Deno.env.get(match.secret_name) || DEFAULT_HUB_KEY;
-  return DEFAULT_HUB_KEY;
-}
-
-async function hubGet(hubDocumentId: string, token: string) {
-  const url = new URL(`${HUB_BASE}/hub_documents_get`);
-  url.searchParams.set('id', hubDocumentId);
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-  });
-  const text = await res.text();
-  // deno-lint-ignore no-explicit-any
-  let data: any;
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-  return { status: res.status, data };
-}
-
-function classify(raw: string): 'issued' | 'rejected' | 'cancelled' | null {
-  const s = raw.toLowerCase();
-  if (['authorized', 'autorizado', 'concluido', 'concluído', 'issued', 'emitida'].includes(s)) return 'issued';
-  if (['rejected', 'rejeitado', 'rejeitada', 'erro', 'error', 'denied', 'denegado'].includes(s)) return 'rejected';
-  if (['cancelled', 'canceled', 'cancelado', 'cancelada'].includes(s)) return 'cancelled';
-  return null;
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return json(405, { success: false, error: { code: 'METHOD_NOT_ALLOWED' } });
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const body = await req.json().catch(() => ({})) as { document_id?: string; tenant_id?: string };
 
   try {
+    const isCron = await isCronRequest(req, SUPABASE_URL, SERVICE_KEY);
+    let callerId: string | null = null;
+
+    if (!isCron) {
+      const authHeader = req.headers.get('Authorization') || '';
+      if (!authHeader.startsWith('Bearer ')) return json(401, { success: false, error: { code: 'UNAUTHENTICATED' } });
+      const authClient = createClient(SUPABASE_URL, ANON_KEY, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: userData, error: userError } = await authClient.auth.getUser();
+      if (userError || !userData?.user) return json(401, { success: false, error: { code: 'UNAUTHENTICATED' } });
+      callerId = userData.user.id;
+    }
+
+    let effectiveTenantId = body.tenant_id || null;
+    if (body.document_id) {
+      const { data: target } = await admin.from('fiscal_documents')
+        .select('tenant_id').eq('id', body.document_id).maybeSingle();
+      if (!target) return json(404, { success: false, error: { code: 'NOT_FOUND', message: 'CT-e não encontrado' } });
+      if (effectiveTenantId && effectiveTenantId !== target.tenant_id) {
+        return json(400, { success: false, error: { code: 'TENANT_MISMATCH', message: 'CT-e não pertence ao tenant informado' } });
+      }
+      effectiveTenantId = target.tenant_id;
+    }
+
+    if (!isCron) {
+      if (!effectiveTenantId) {
+        return json(400, { success: false, error: { code: 'TENANT_REQUIRED', message: 'tenant_id ou document_id é obrigatório' } });
+      }
+      const { data: membership } = await admin.from('tenant_memberships')
+        .select('role').eq('tenant_id', effectiveTenantId).eq('user_id', callerId!)
+        .eq('active', true).maybeSingle();
+      if (!membership || !['owner', 'admin', 'operator'].includes(String(membership.role))) {
+        return json(403, { success: false, error: { code: 'FORBIDDEN' } });
+      }
+
+      const capabilityResponse = await requireIntegrationCapability(admin, effectiveTenantId, 'fiscal');
+      if (capabilityResponse) return capabilityResponse;
+    }
+
     let q = admin.from('fiscal_documents')
-      .select('id, tenant_id, emitter_id, status, invoice_number, status_check_attempts')
+      .select('id, tenant_id, emitter_id, status, invoice_number, status_check_attempts, created_at')
       .in('status', PENDING)
       .order('last_status_check_at', { ascending: true, nullsFirst: true })
       .limit(MAX_DOCS);
     if (body.document_id) q = admin.from('fiscal_documents')
-      .select('id, tenant_id, emitter_id, status, invoice_number, status_check_attempts')
+      .select('id, tenant_id, emitter_id, status, invoice_number, status_check_attempts, created_at')
       .eq('id', body.document_id);
-    else if (body.tenant_id) q = q.eq('tenant_id', body.tenant_id);
+    else if (effectiveTenantId) q = q.eq('tenant_id', effectiveTenantId);
 
     const { data: docs, error } = await q;
     if (error) return json(400, { success: false, error: { code: 'QUERY_FAILED', message: error.message } });
 
     const results: Array<Record<string, unknown>> = [];
+    let stoppedReason: 'rate_limited' | 'provider_unavailable' | null = null;
 
     for (const doc of (docs || [])) {
+      if (isCron) {
+        const capabilityResponse = await requireIntegrationCapability(admin, doc.tenant_id, 'fiscal');
+        if (capabilityResponse) {
+          results.push({ id: doc.id, outcome: 'disabled' });
+          continue;
+        }
+      }
+
       const { data: emission } = await admin.from('hub_fiscal_emissions')
         .select('id, hub_document_id, environment, emitter_id')
         .eq('fiscal_document_id', doc.id)
@@ -116,24 +117,78 @@ Deno.serve(async (req) => {
         .limit(1).maybeSingle();
 
       if (!emission?.hub_document_id) {
-        await admin.from('fiscal_documents').update({
-          last_status_check_at: new Date().toISOString(),
-          status_check_attempts: (doc.status_check_attempts || 0) + 1,
-          last_status_response: { skipped: 'sem emissão no Hub Fiscal' },
-        }).eq('id', doc.id);
-        results.push({ id: doc.id, skipped: 'no_hub_document' });
+        const snapshot = safeProviderSnapshot(424, {
+          error: { code: 'MISSING_PROVIDER_REFERENCE', message: 'Emissão sem identificador no provedor' },
+        });
+        const terminal = shouldDeadLetter(doc, false);
+        const attemptCount = (doc.status_check_attempts || 0) + 1;
+        if (terminal) {
+          await terminalizeFiscalPoll(admin, {
+            tenantId: doc.tenant_id,
+            documentKind: 'cte',
+            documentId: doc.id,
+            documentNumber: doc.invoice_number,
+            reasonCode: 'missing_provider_reference',
+            attemptCount,
+            firstSeenAt: doc.created_at,
+            context: snapshot,
+          });
+        } else {
+          await admin.from('fiscal_documents').update({
+            last_status_check_at: new Date().toISOString(),
+            status_check_attempts: attemptCount,
+            last_status_response: snapshot,
+          }).eq('id', doc.id);
+        }
+        results.push({ id: doc.id, outcome: terminal ? 'dead_letter' : 'no_hub_document' });
         continue;
       }
 
-      const token = await resolveToken(admin, emission.emitter_id || doc.emitter_id || null, emission.environment);
-      const { status, data } = await hubGet(emission.hub_document_id, token);
+      const token = await resolveHubFiscalToken(admin, {
+        emitterId: emission.emitter_id || doc.emitter_id || null,
+        environment: emission.environment,
+        scope: 'cte',
+        defaultToken: DEFAULT_HUB_KEY,
+        encryptionKey: ENC_KEY,
+        getSecret: name => Deno.env.get(name),
+      });
+      const { status, data } = await getHubFiscalDocument({
+        baseUrl: HUB_BASE,
+        hubDocumentId: emission.hub_document_id,
+        token,
+      });
+      const safeSnapshot = safeProviderSnapshot(status, data);
       // deno-lint-ignore no-explicit-any
       const d = ((data as any)?.document || {}) as Record<string, any>;
       const rawStatus = String(d.status || d.plugnotasStatus || '');
-      const outcome = status < 400 ? classify(rawStatus) : null;
-      const message =
-        d?.raw_response_json?.error?.message || d?.raw_response_json?.message ||
-        d.message || (data as Record<string, any>)?.error?.message || null;
+      const outcome = status < 400 ? classifyFiscalProviderStatus(rawStatus) : null;
+      const safeMessage = typeof safeSnapshot.message === 'string' ? safeSnapshot.message : null;
+
+      if (status === 429 || status >= 500) {
+        stoppedReason = status === 429 ? 'rate_limited' : 'provider_unavailable';
+        const terminal = shouldDeadLetter(doc, true);
+        const attemptCount = (doc.status_check_attempts || 0) + 1;
+        if (terminal) {
+          await terminalizeFiscalPoll(admin, {
+            tenantId: doc.tenant_id,
+            documentKind: 'cte',
+            documentId: doc.id,
+            documentNumber: doc.invoice_number,
+            reasonCode: status === 429 ? 'provider_rate_limited' : 'provider_unavailable',
+            attemptCount,
+            firstSeenAt: doc.created_at,
+            context: safeSnapshot,
+          });
+        } else {
+          await admin.from('fiscal_documents').update({
+            last_status_check_at: new Date().toISOString(),
+            status_check_attempts: attemptCount,
+            last_status_response: safeSnapshot,
+          }).eq('id', doc.id);
+        }
+        results.push({ id: doc.id, outcome: stoppedReason, message: safeMessage });
+        break;
+      }
 
       // Histórico: guarda a resposta bruta para conferência posterior.
       await admin.from('hub_fiscal_emissions').update({
@@ -144,29 +199,26 @@ Deno.serve(async (req) => {
         number: d.number || undefined,
         series: d.series || undefined,
         c_stat: d.cStat ?? undefined,
-        message: message || undefined,
-        last_response: data,
+        message: safeMessage || undefined,
+        last_response: safeSnapshot,
         last_synced_at: new Date().toISOString(),
       }).eq('id', emission.id);
 
       const patch: Record<string, unknown> = {
         last_status_check_at: new Date().toISOString(),
         status_check_attempts: (doc.status_check_attempts || 0) + 1,
-        last_status_response: data,
+        last_status_response: safeSnapshot,
       };
       if (outcome === 'issued') {
         patch.status = 'authorized';
         patch.sefaz_status = 'authorized';
         patch.access_key = d.accessKey || null;
         patch.sefaz_protocol = d.authorizationProtocol || d.plugnotasProtocol || null;
-        patch.pdf_url = d.pdfUrl || null;
-        patch.xml_url = d.xmlUrl || null;
-        patch.authorization_date = new Date().toISOString();
-        patch.rejection_messages = null;
+        patch.sefaz_message = safeMessage;
       } else if (outcome === 'rejected') {
         patch.status = 'rejected';
         patch.sefaz_status = 'rejected';
-        patch.rejection_messages = { message: message || rawStatus || 'Rejeitada pelo provedor' };
+        patch.sefaz_message = safeMessage || rawStatus || 'Rejeitada pelo provedor';
         // Rejeição não gera documento fiscal válido: devolve imediatamente as
         // NFs vinculadas ao pool do CT-e Hub para permitir uma nova emissão.
         await admin
@@ -174,13 +226,27 @@ Deno.serve(async (req) => {
           .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
           .eq('cte_emitted_outbound_id', doc.id);
       } else if (outcome === 'cancelled') {
-        patch.cancelled = true;
-        patch.cancellation_date = new Date().toISOString();
+        patch.status = 'cancelled';
+        patch.sefaz_status = 'cancelled';
+        patch.sefaz_message = safeMessage;
         // Libera as NFs vinculadas — voltam a aparecer para novo faturamento
         await admin
           .from('fiscal_documents')
           .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
           .eq('cte_emitted_outbound_id', doc.id);
+      } else if (shouldDeadLetter(doc, true)) {
+        await terminalizeFiscalPoll(admin, {
+          tenantId: doc.tenant_id,
+          documentKind: 'cte',
+          documentId: doc.id,
+          documentNumber: doc.invoice_number,
+          reasonCode: 'status_timeout',
+          attemptCount: (doc.status_check_attempts || 0) + 1,
+          firstSeenAt: doc.created_at,
+          context: safeSnapshot,
+        });
+        results.push({ id: doc.id, rps: doc.invoice_number, hub_status: rawStatus, outcome: 'dead_letter' });
+        continue;
       }
 
       await admin.from('fiscal_documents').update(patch).eq('id', doc.id);
@@ -192,15 +258,21 @@ Deno.serve(async (req) => {
           event_type: outcome === 'issued' ? 'authorized' : outcome,
           message: outcome === 'issued'
             ? `Autorizada na consulta automática — nº ${d.number || '(sem número)'}`
-            : `Consulta automática: ${rawStatus || outcome}${message ? ` — ${message}` : ''}`,
-          payload: { source: 'cte-status-poll', hub: data },
+            : `Consulta automática: ${rawStatus || outcome}${safeMessage ? ` — ${safeMessage}` : ''}`,
+          payload: { source: 'cte-status-poll', provider: safeSnapshot },
         });
       }
 
       results.push({ id: doc.id, rps: doc.invoice_number, hub_status: rawStatus, outcome: outcome || 'pending' });
     }
 
-    return json(200, { success: true, checked: results.length, results });
+    return json(200, {
+      success: true,
+      checked: results.length,
+      partial: stoppedReason !== null,
+      stopped_reason: stoppedReason,
+      results,
+    });
   } catch (e) {
     console.error('[cte-status-poll] error', e);
     return json(500, { success: false, error: { code: 'POLL_FAILED', message: (e as Error).message } });

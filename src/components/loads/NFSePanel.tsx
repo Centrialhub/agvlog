@@ -65,7 +65,7 @@ export default function NFSePanel({ loadId, loadNumber, destination, defaultClie
             description: `Prestação de serviço de transporte — Carga ${loadNumber}${destination ? ` para ${destination}` : ''}`,
             valor_servicos: freightTotal || 0,
             load_id: loadId,
-          } as any}
+          }}
         />
       </CardContent>
     </Card>

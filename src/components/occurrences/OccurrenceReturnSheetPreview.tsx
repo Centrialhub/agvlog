@@ -11,10 +11,20 @@ function fmtDate(v: unknown): string {
   return fmtDateSafe(v);
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function display(value: unknown): string {
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : '—';
+}
+
 export function OccurrenceReturnSheetPreview({ sheet }: Props) {
-  const occ = (sheet.occurrence_snapshot ?? {}) as Record<string, any>;
-  const load = ((sheet.company_snapshot as any)?.load ?? {}) as Record<string, any>;
-  const company = sheet.company_snapshot as Record<string, any>;
+  const occ = sheet.occurrence_snapshot ?? {};
+  const company = sheet.company_snapshot ?? {};
+  const load = asRecord(company.load);
   const invoices = sheet.invoice_snapshot ?? [];
   const products = sheet.product_snapshot ?? [];
 
@@ -24,7 +34,7 @@ export function OccurrenceReturnSheetPreview({ sheet }: Props) {
         <div className="flex items-center justify-between border-b pb-3">
           <div>
             <div className="text-base font-bold">
-              {company?.name || 'AGV DISTRIBUIÇÃO E LOGÍSTICA LTDA'}
+              {display(company.name) === '—' ? 'AGV DISTRIBUIÇÃO E LOGÍSTICA LTDA' : display(company.name)}
             </div>
             <div className="text-xs text-muted-foreground">Folha de Devolução — SAC {sheet.sac_number || sheet.sheet_number}</div>
           </div>
@@ -33,11 +43,11 @@ export function OccurrenceReturnSheetPreview({ sheet }: Props) {
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-1">
           <div><b>Data Abertura:</b> {fmtDate(occ.occurrence_date)}</div>
-          <div><b>Motorista:</b> {load.driver_name || '—'}</div>
+          <div><b>Motorista:</b> {display(load.driver_name)}</div>
           <div><b>Data Encerramento:</b> {fmtDate(occ.closed_at || occ.resolved_at)}</div>
-          <div><b>Placa:</b> {load.vehicle_plate || load.trailer_plate || '—'}</div>
-          <div><b>Romaneio:</b> {load.load_number || '—'}</div>
-          <div><b>Senha:</b> {occ.password_or_authorization || '—'}</div>
+          <div><b>Placa:</b> {display(load.vehicle_plate) !== '—' ? display(load.vehicle_plate) : display(load.trailer_plate)}</div>
+          <div><b>Romaneio:</b> {display(load.load_number)}</div>
+          <div><b>Senha:</b> {display(occ.password_or_authorization)}</div>
         </div>
 
         <div className="border rounded p-3 space-y-1">
@@ -45,7 +55,7 @@ export function OccurrenceReturnSheetPreview({ sheet }: Props) {
           <div><b>Assunto:</b> {String(occ.occurrence_type || '—').toUpperCase()}</div>
           <div><b>Ocorrência:</b> {String(occ.occurrence_reason || '—').toUpperCase()}</div>
           <div><b>Solução:</b> {String(occ.resolution_type || '—').toUpperCase()}</div>
-          <div><b>Observação:</b> {occ.resolution_notes || occ.occurrence_description || '—'}</div>
+          <div><b>Observação:</b> {display(occ.resolution_notes) !== '—' ? display(occ.resolution_notes) : display(occ.occurrence_description)}</div>
         </div>
 
         <div>
@@ -55,11 +65,11 @@ export function OccurrenceReturnSheetPreview({ sheet }: Props) {
               <tr><th className="p-1 text-left">Nº Nota</th><th className="p-1 text-left">Fornecedor</th><th className="p-1 text-left">Cliente</th><th className="p-1 text-left">Data Emissão</th></tr>
             </thead>
             <tbody>
-              {invoices.map((inv: any, i) => (
+              {invoices.map((inv, i) => (
                 <tr key={i} className="border-t">
-                  <td className="p-1">{inv.invoice_number || '—'}</td>
-                  <td className="p-1">{inv.remitter || '—'}</td>
-                  <td className="p-1">{inv.recipient || '—'}</td>
+                  <td className="p-1">{display(inv.invoice_number)}</td>
+                  <td className="p-1">{display(inv.remitter)}</td>
+                  <td className="p-1">{display(inv.recipient)}</td>
                   <td className="p-1">{fmtDate(inv.issue_date)}</td>
                 </tr>
               ))}
@@ -80,17 +90,17 @@ export function OccurrenceReturnSheetPreview({ sheet }: Props) {
               </tr>
             </thead>
             <tbody>
-              {products.map((p: any, i) => (
+              {products.map((p, i) => (
                 <tr key={i} className="border-t">
-                  <td className="p-1">{p.invoice_number || '—'}</td>
+                  <td className="p-1">{display(p.invoice_number)}</td>
                   <td className="p-1">{i + 1}</td>
-                  <td className="p-1">{p.product_code || '—'}</td>
-                  <td className="p-1">{p.product_description || '—'}</td>
-                  <td className="p-1">{p.unit || '—'}</td>
-                  <td className="p-1">{p.quantity ?? p.quantity_text ?? '—'}</td>
-                  <td className="p-1">{p.quantity_problem ?? p.quantity ?? '—'}</td>
-                  <td className="p-1">{p.return_type || '—'}</td>
-                  <td className="p-1">{p.notes || '—'}</td>
+                  <td className="p-1">{display(p.product_code)}</td>
+                  <td className="p-1">{display(p.product_description)}</td>
+                  <td className="p-1">{display(p.unit)}</td>
+                  <td className="p-1">{display(p.quantity ?? p.quantity_text)}</td>
+                  <td className="p-1">{display(p.quantity_problem ?? p.quantity)}</td>
+                  <td className="p-1">{display(p.return_type)}</td>
+                  <td className="p-1">{display(p.notes)}</td>
                 </tr>
               ))}
             </tbody>

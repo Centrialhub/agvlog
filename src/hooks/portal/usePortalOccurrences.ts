@@ -26,16 +26,16 @@ export function usePortalOccurrences(filters?: { severity?: string; resolved?: b
     queryKey: ['portal_occurrences', currentTenant?.id, selectedClientId, filters],
     queryFn: async (): Promise<PortalOccurrence[]> => {
       if (!currentTenant) return [];
-      const { data, error } = await (supabase as any).rpc('list_client_occurrences_v2', {
+      const { data, error } = await supabase.rpc('list_client_occurrences_v2', {
         _tenant_id: currentTenant.id,
-        _client_id: selectedClientId,
-        _severity: filters?.severity || null,
-        _resolved: filters?.resolved ?? null,
+        _client_id: selectedClientId ?? undefined,
+        _severity: filters?.severity || undefined,
+        _resolved: filters?.resolved,
         _limit: 200,
         _offset: 0,
       });
       if (error) throw error;
-      return (data as any[]) as PortalOccurrence[];
+      return data as PortalOccurrence[];
     },
     enabled: !!currentTenant,
   });
@@ -60,8 +60,8 @@ export function useCreatePortalOccurrence() {
         _event_type: args.event_type,
         _description: args.description,
         _severity: args.severity || 'medium',
-        _load_id: args.load_id || null,
-        _order_id: args.order_id || null,
+        _load_id: args.load_id || undefined,
+        _order_id: args.order_id || undefined,
       });
       if (error) throw error;
       return data as string;

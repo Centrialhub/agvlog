@@ -464,7 +464,8 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
                         onCheckedChange={v => {
                           setSelectedDocs(prev => {
                             const n = new Set(prev);
-                            v ? n.add(key) : n.delete(key);
+                            if (v) n.add(key);
+                            else n.delete(key);
                             return n;
                           });
                         }}
@@ -503,7 +504,8 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
                         onCheckedChange={v => {
                           setSelectedOrders(prev => {
                             const n = new Set(prev);
-                            v ? n.add(m.order.rowIndex) : n.delete(m.order.rowIndex);
+                            if (v) n.add(m.order.rowIndex);
+                            else n.delete(m.order.rowIndex);
                             return n;
                           });
                         }}

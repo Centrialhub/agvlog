@@ -128,7 +128,7 @@ export function getTemplateFields(eventType: string): OccurrenceField[] {
 }
 
 /** Gera o texto padronizado pronto para copiar e enviar ao fornecedor. */
-export function formatOccurrenceReport(eventType: string, details: Record<string, any> | null | undefined): string | null {
+export function formatOccurrenceReport(eventType: string, details: Record<string, unknown> | null | undefined): string | null {
   const tpl = OCCURRENCE_TEMPLATES[eventType];
   if (!tpl) return null;
   const d = details || {};
@@ -140,7 +140,7 @@ export function formatOccurrenceReport(eventType: string, details: Record<string
     if (v === undefined || v === null || v === '') continue;
     let display = String(v);
     if (f.type === 'date') {
-      try { display = new Date(v).toLocaleDateString('pt-BR'); } catch { /* keep */ }
+      try { display = new Date(String(v)).toLocaleDateString('pt-BR'); } catch { /* keep */ }
     }
     lines.push(`${f.label}: ${display}`);
   }

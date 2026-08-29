@@ -18,10 +18,10 @@ import { toast } from '@/components/ui/sonner';
 import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
 import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
 import ManualExpenseDialog from '@/components/financial/ManualExpenseDialog';
-import { supabase } from '@/integrations/supabase/client';
-import { validateUpload } from '@/lib/uploadPolicy';
 import { useTenant } from '@/hooks/useTenant';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
+import { getErrorMessage } from '@/lib/errors';
+import { uploadSecureFile } from '@/lib/secureUpload';
 
 const emptyForm = {
   supplier_name: '',
@@ -68,7 +68,7 @@ export default function Payables() {
         else if (statusFilter !== 'overdue' && p.status !== statusFilter) return false;
       }
       if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
-      if (sourceFilter !== 'all' && ((p as any).source || 'system') !== sourceFilter) return false;
+      if (sourceFilter !== 'all' && (p.source || 'system') !== sourceFilter) return false;
       return true;
     });
   }, [payables, search, statusFilter, categoryFilter, sourceFilter]);
@@ -126,11 +126,13 @@ export default function Payables() {
 
   const uploadReceipt = async (file: File): Promise<string | null> => {
     if (!currentTenant) return null;
-    const { contentType, safeName } = validateUpload(file, 'financial');
-    const path = `${currentTenant.id}/payables/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-    const { error } = await supabase.storage.from('receipts').upload(path, file, { contentType });
-    if (error) throw error;
-    return path;
+    return uploadSecureFile({
+      tenantId: currentTenant.id,
+      bucket: 'receipts',
+      folder: 'payables',
+      file,
+      kind: 'financial',
+    });
   };
 
   const handleSave = async () => {
@@ -146,9 +148,9 @@ export default function Payables() {
       let receiptPath: string | undefined;
       if (pendingReceipt) {
         try { receiptPath = (await uploadReceipt(pendingReceipt)) || undefined; }
-        catch (e: any) { toast.error('Falha ao anexar XML: ' + e.message); }
+        catch (error) { toast.error('Falha ao anexar XML: ' + getErrorMessage(error)); }
       }
-      const values: any = {
+      const values = {
         supplier_name: form.supplier_name.trim(),
         category: form.category,
         description: form.description || null,
@@ -158,8 +160,8 @@ export default function Payables() {
         document_number: form.document_number || null,
         status: form.status,
         notes: form.notes || null,
+        receipt_url: receiptPath,
       };
-      if (receiptPath) values.receipt_url = receiptPath;
       if (editingId) {
         await updateMut.mutateAsync({ id: editingId, ...values });
         toast.success('Conta atualizada');
@@ -168,8 +170,8 @@ export default function Payables() {
         toast.success('Conta criada');
       }
       resetForm();
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível salvar a conta.'));
     }
   };
 
@@ -177,8 +179,8 @@ export default function Payables() {
     try {
       await updateMut.mutateAsync({ id: p.id, status });
       toast.success('Conta atualizada');
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível atualizar a conta.'));
     }
   };
 
@@ -317,9 +319,9 @@ export default function Payables() {
                   <TableCell className="text-sm text-muted-foreground">{p.document_number || '—'}</TableCell>
                   <TableCell className="text-sm text-right font-medium">{fmt(Number(p.amount || 0))}</TableCell>
                   <TableCell className="text-sm text-right">
-                    <span className="text-green-600">{fmt(Number((p as any).paid_amount || 0))}</span>
+                    <span className="text-green-600">{fmt(Number(p.paid_amount || 0))}</span>
                     {' / '}
-                    <span className="text-warning">{fmt(Math.max(0, Number(p.amount || 0) - Number((p as any).paid_amount || 0)))}</span>
+                    <span className="text-warning">{fmt(Math.max(0, Number(p.amount || 0) - Number(p.paid_amount || 0)))}</span>
                   </TableCell>
                   <TableCell className="text-sm">
                     {p.due_date ? new Date(p.due_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}

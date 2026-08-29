@@ -1,24 +1,39 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveNoteStatus, getImportedNoteSummaryTotals, groupNotesBy,
-  exportImportedNotesCsv,
+  exportImportedNotesCsv, type ImportedNoteRow,
 } from '@/hooks/useImportedNotesSummary';
 
-const mk = (over: any = {}): any => ({
-  id: over.id || 'x',
+const mk = (over: Partial<ImportedNoteRow> = {}): ImportedNoteRow => ({
+  id: over.id ?? 'x',
   invoice_number: '1',
+  access_key: null,
+  import_batch_id: null,
+  control_lot: null,
+  dynamic_lot: null,
+  created_at: '2026-06-01T10:00:00Z',
   imported_at: '2026-06-01T10:00:00Z',
   issue_date: '2026-05-30',
   remitter: 'ACME', recipient: 'CLIENT',
   origin_city: 'BELO HORIZONTE', origin_state: 'MG',
   recipient_city: 'SAO PAULO', recipient_state: 'SP',
-  value: 1000, weight_kg: 10, volume_count: 1,
+  value: 1000, weight_kg: 10, volume_count: 1, pallet_count: null,
   freight_value: 50, freight_cif_value: 50, freight_fob_value: 0,
   imported_note_status: null, status: null, delivery_meta: null,
   load_id: null, client_id: null, document_type: 'inbound',
   loads: null, cte_id: null, cte_number: null,
   operational_status: 'not_processed',
   ...over,
+});
+
+const load = (status: string): NonNullable<ImportedNoteRow['loads']> => ({
+  id: 'l1',
+  load_number: '1',
+  status,
+  origin: null,
+  destination: null,
+  vehicle_id: null,
+  driver_id: null,
 });
 
 describe('resolveNoteStatus', () => {
@@ -29,16 +44,16 @@ describe('resolveNoteStatus', () => {
     expect(resolveNoteStatus(mk({ cte_id: 'c1' }))).toBe('processed');
   });
   it('em trânsito quando load.status = in_transit', () => {
-    expect(resolveNoteStatus(mk({ load_id: 'l1', loads: { status: 'in_transit' } }))).toBe('in_transit');
+    expect(resolveNoteStatus(mk({ load_id: 'l1', loads: load('in_transit') }))).toBe('in_transit');
   });
   it('entregue por delivery_meta.delivered', () => {
     expect(resolveNoteStatus(mk({ delivery_meta: { delivered: true } }))).toBe('delivered');
   });
   it('entregue quando load.status = delivered', () => {
-    expect(resolveNoteStatus(mk({ load_id: 'l1', loads: { status: 'delivered' } }))).toBe('delivered');
+    expect(resolveNoteStatus(mk({ load_id: 'l1', loads: load('delivered') }))).toBe('delivered');
   });
   it('prioriza imported_note_status quando preenchido', () => {
-    expect(resolveNoteStatus(mk({ imported_note_status: 'transferred', load_id: 'l1', loads: { status: 'in_transit' } }))).toBe('transferred');
+    expect(resolveNoteStatus(mk({ imported_note_status: 'transferred', load_id: 'l1', loads: load('in_transit') }))).toBe('transferred');
   });
 });
 
@@ -59,7 +74,7 @@ describe('groupNotesBy + totals', () => {
   });
   it('totais gerais somam sem duplicar quando CT-e existe', () => {
     const withCte = rows.map(r => ({ ...r, cte_id: 'shared', cte_number: '99' }));
-    const t = getImportedNoteSummaryTotals(withCte as any);
+    const t = getImportedNoteSummaryTotals(withCte);
     expect(t.totalValue).toBe(600);
     expect(t.rowCount).toBe(3);
   });
@@ -71,12 +86,11 @@ describe('groupNotesBy + totals', () => {
 
 describe('exportImportedNotesCsv', () => {
   it('gera CSV com BOM, ; separador e mesmas linhas', () => {
-    const csv = exportImportedNotesCsv([mk()] as any);
+    const csv = exportImportedNotesCsv([mk()]);
     expect(csv.startsWith('\ufeff')).toBe(true);
     const lines = csv.split('\r\n');
     expect(lines[0]).toContain('Nº Nota');
     expect(lines).toHaveLength(2);
-    expect(lines[1].split(';').length).toBe(lines[0].split(';').length);
-
+    expect(lines[1].split(';')).toHaveLength(lines[0].split(';').length);
   });
 });

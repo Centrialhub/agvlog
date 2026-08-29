@@ -1,6 +1,6 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
-import { haversineMeters, pointToLineDistanceMeters } from '../_shared/osrm.ts';
+import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '../_shared/cors.ts';
+import { haversineMeters, pointToLineDistanceMeters } from '../_shared/geo.ts';
 
 type State =
   | 'normal' | 'arriving' | 'at_stop' | 'stopped'
@@ -22,11 +22,30 @@ Deno.serve(async (req) => {
     if (!tenant_id) return json({ error: 'tenant_id required' }, 400);
 
     const auth = req.headers.get('Authorization') ?? '';
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    if (!auth.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const anon = createClient(
+      supabaseUrl,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: auth } } },
     );
+    const { data: userData, error: userError } = await anon.auth.getUser();
+    if (userError || !userData?.user) return json({ error: 'Unauthorized' }, 401);
+
+    const supabase = createClient(
+      supabaseUrl,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+
+    const { data: membership } = await supabase
+      .from('tenant_memberships')
+      .select('role')
+      .eq('tenant_id', tenant_id)
+      .eq('user_id', userData.user.id)
+      .eq('active', true)
+      .in('role', ['owner', 'admin', 'operator'])
+      .maybeSingle();
+    if (!membership) return json({ error: 'Forbidden' }, 403);
 
     const { data: trips, error: tripsErr } = await supabase
       .from('dispatch_trips')
@@ -165,8 +184,39 @@ async function processTrip(supabase: any, trip: any, now: Date) {
 
     // Parado fora de uma parada
     if (speed < 3) {
-      // tempo parado é estimado pela idade do sinal — placeholder simples sem histórico
-      stoppedMinutes = Math.min(Math.round(ageMin), 120);
+      const positionTime = new Date(pos.captured_at).getTime();
+      const historyStart = new Date(positionTime - 2 * 60 * 60 * 1000).toISOString();
+      const { data: lastMoving } = await supabase
+        .from('positions_raw')
+        .select('captured_at')
+        .eq('tenant_id', trip.tenant_id)
+        .eq('vehicle_id', trip.vehicle_id)
+        .gte('speed', 3)
+        .lte('captured_at', pos.captured_at)
+        .gte('captured_at', historyStart)
+        .order('captured_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let stoppedSince = lastMoving?.captured_at || null;
+      if (!stoppedSince) {
+        const { data: oldestStationary } = await supabase
+          .from('positions_raw')
+          .select('captured_at')
+          .eq('tenant_id', trip.tenant_id)
+          .eq('vehicle_id', trip.vehicle_id)
+          .lt('speed', 3)
+          .gte('captured_at', historyStart)
+          .lte('captured_at', pos.captured_at)
+          .order('captured_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        stoppedSince = oldestStationary?.captured_at || null;
+      }
+
+      stoppedMinutes = stoppedSince
+        ? Math.min(Math.max(0, Math.floor((positionTime - new Date(stoppedSince).getTime()) / 60_000)), 120)
+        : 0;
       if (stoppedMinutes >= STOPPED_MIN && state !== 'at_stop' && state !== 'arriving') {
         state = 'stopped';
         severity = 'warning';

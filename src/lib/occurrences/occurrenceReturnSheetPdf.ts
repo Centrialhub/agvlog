@@ -2,7 +2,30 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { ReturnSheet } from '@/hooks/useOccurrenceReturnSheet';
 import type { CompanyPdfInfo } from '@/lib/pdf/companyHeader';
+import { getAutoTableFinalY } from '@/lib/pdf/autoTable';
 import { fmtDateSafe, fmtDateTimeSafe } from '@/lib/utils/formatDate';
+
+interface ReturnInvoiceSnapshot {
+  invoice_number?: unknown;
+  remitter?: unknown;
+  recipient?: unknown;
+  issue_date?: unknown;
+}
+
+interface ReturnProductSnapshot {
+  invoice_number?: unknown;
+  product_code?: unknown;
+  product_description?: unknown;
+  unit?: unknown;
+  quantity?: unknown;
+  quantity_text?: unknown;
+  item_value?: unknown;
+  quantity_problem?: unknown;
+  return_type?: unknown;
+  nfd_number?: unknown;
+  occurrence_value?: unknown;
+  notes?: unknown;
+}
 
 function fmtDate(v: unknown): string {
   return fmtDateSafe(v);
@@ -28,9 +51,13 @@ export interface BuildReturnSheetPdfOptions {
 
 export function buildReturnSheetPdf({ sheet, companyName, company: companyInfo }: BuildReturnSheetPdfOptions): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-  const occ = (sheet.occurrence_snapshot ?? {}) as Record<string, any>;
-  const load = ((sheet.company_snapshot as any)?.load ?? {}) as Record<string, any>;
-  const company = (sheet.company_snapshot ?? {}) as Record<string, any>;
+  const occ = (sheet.occurrence_snapshot ?? {}) as Record<string, unknown>;
+  const company = (sheet.company_snapshot ?? {}) as Record<string, unknown>;
+  const load = (
+    typeof company.load === 'object' && company.load !== null ? company.load : {}
+  ) as Record<string, unknown>;
+  const invoices = (sheet.invoice_snapshot ?? []) as unknown as ReturnInvoiceSnapshot[];
+  const products = (sheet.product_snapshot ?? []) as unknown as ReturnProductSnapshot[];
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 10;
 
@@ -122,7 +149,7 @@ export function buildReturnSheetPdf({ sheet, companyName, company: companyInfo }
   autoTable(doc, {
     startY: y,
     head: [['Nº Nota', 'Fornecedor', 'Cliente', 'Data Emissão']],
-    body: (sheet.invoice_snapshot ?? []).map((inv: any) => [
+    body: invoices.map((inv) => [
       s(inv.invoice_number),
       s(inv.remitter),
       s(inv.recipient),
@@ -136,14 +163,14 @@ export function buildReturnSheetPdf({ sheet, companyName, company: companyInfo }
   });
 
   // Produtos com problema
-  const yProducts = (doc as any).lastAutoTable.finalY + 3;
+  const yProducts = getAutoTableFinalY(doc, y) + 3;
   autoTable(doc, {
     startY: yProducts,
     head: [[
       'Nº Nota', 'Ite', 'Código', 'Descrição', 'UM',
       'Qtd.', 'Valor', 'Qt.Prob.', 'Tipo', 'Nº NFD', 'Vlr.Oco', 'Observação',
     ]],
-    body: (sheet.product_snapshot ?? []).map((p: any, idx: number) => [
+    body: products.map((p, idx) => [
       s(p.invoice_number),
       String(idx + 1),
       s(p.product_code),
@@ -153,7 +180,7 @@ export function buildReturnSheetPdf({ sheet, companyName, company: companyInfo }
       fmtBRL(p.item_value),
       s(p.quantity_problem ?? p.quantity),
       s(p.return_type),
-      s((p as any).nfd_number, ''),
+      s(p.nfd_number, ''),
       fmtBRL(p.occurrence_value ?? p.item_value),
       s(p.notes),
     ]),
@@ -170,7 +197,7 @@ export function buildReturnSheetPdf({ sheet, companyName, company: companyInfo }
     didDrawPage: () => drawHeader(),
   });
 
-  const yEnd = (doc as any).lastAutoTable.finalY + 12;
+  const yEnd = getAutoTableFinalY(doc, yProducts) + 12;
   const pageH = doc.internal.pageSize.getHeight();
   const footY = Math.min(Math.max(yEnd, pageH - 40), pageH - 30);
 
@@ -183,7 +210,7 @@ export function buildReturnSheetPdf({ sheet, companyName, company: companyInfo }
     doc.text(`Recebedor: ${sheet.receiver_name}`, margin + 10, footY + 10);
   }
 
-  const pageCount = (doc as any).internal.getNumberOfPages();
+  const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8);

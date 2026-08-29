@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import type { FiscalDocument } from './useFiscalDocuments';
-import { cteConsumesInvoices, isBillableNfse } from '@/lib/fiscal/documentStatus';
 
 /**
  * Filtros server-side para o Faturamento (CT-e).
@@ -129,7 +128,7 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
 
       const emittedIds = new Set<string>();
       
-      const processRow = (row: any) => {
+      const processRow = (row: { fiscal_document_ids: unknown }) => {
         const rawIds = row.fiscal_document_ids;
         if (!rawIds) return;
         let ids: string[] = [];

@@ -14,6 +14,7 @@ import { Loader2, Download, Search, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { portalErrorMessage } from '@/lib/portal/portalErrors';
 
 const STATUS_TONE: Record<string, string> = {
   pending: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
@@ -58,8 +59,8 @@ export default function PortalPods() {
     try {
       const url = await download.mutateAsync(id);
       window.open(url, '_blank');
-    } catch (e: any) {
-      toast({ title: 'Erro ao baixar', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao baixar', description: portalErrorMessage(error, 'Não foi possível baixar o canhoto.'), variant: 'destructive' });
     }
   };
 

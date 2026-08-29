@@ -9,7 +9,9 @@
  * - Per-unit discovery preserved ONLY for manual/debug runs
  */
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
+import { isCronRequest } from "../_shared/cron-auth.ts";
+import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import {
   corsHeaders,
   buildPositionHistoryUrlCandidates,
@@ -36,9 +38,7 @@ Deno.serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     let callerId: string | null = null;
-    const cronSecret = req.headers.get("x-agvlog-cron-secret");
-    const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
-    const isCron = !!(cronSecret && expectedCronSecret && cronSecret === expectedCronSecret);
+    const isCron = await isCronRequest(req, supabaseUrl, supabaseServiceKey);
 
     if (!isCron) {
       const authHeader = req.headers.get("Authorization");
@@ -81,6 +81,9 @@ Deno.serve(async (req) => {
         return jsonResp({ error: "Forbidden: admin role required" }, 403);
       }
     }
+
+    const capabilityResponse = await requireIntegrationCapability(supabase, account.tenant_id, "ssx");
+    if (capabilityResponse) return capabilityResponse;
 
     const config = readAccountConfig(account);
 
@@ -799,7 +802,7 @@ async function pollSingleUnit(params: {
   integration_account_id: string;
 }): Promise<PollUnitResult> {
   const { unit, mapping, identifierCandidates, timeProps, positionUrls, config, supabase,
-    timeStart, now, cursorMemo, scoutHint, isDebugMode, discoverySpacingMs, manual_run, integration_account_id } = params;
+    timeStart, cursorMemo, scoutHint, isDebugMode, discoverySpacingMs, integration_account_id } = params;
 
   const attempts: PollingAttemptLog[] = [];
   let attemptCount = 0;
@@ -960,7 +963,7 @@ async function processPositions(
   combo: { property: string; value_source: string; url: string; format: string; timeProp: string },
   comboSource: string,
   attempts: PollingAttemptLog[], attemptCount: number,
-  integration_account_id: string,
+  _integration_account_id: string,
 ): Promise<PollUnitResult> {
   let inserted = 0;
   let duplicates = 0;

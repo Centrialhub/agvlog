@@ -1,57 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
+import type { Database, Tables, TablesInsert } from '@/integrations/supabase/types';
 
 export type EdiStatus = 'not_generated' | 'generated' | 'downloaded' | 'sent' | 'error';
 export type ExportStatus = 'draft' | 'generated' | 'downloaded' | 'sent' | 'cancelled' | 'error';
 
-export interface EdiProfile {
-  id: string;
-  tenant_id: string;
-  client_id: string | null;
+export type EdiProfile = Tables<'billing_edi_profiles'>;
+export type EdiProfileDraft = Partial<Omit<TablesInsert<'billing_edi_profiles'>, 'name' | 'tenant_id'>> & {
   name: string;
-  format: string;
-  enabled: boolean;
-  company_code: string | null;
-  branch_code: string | null;
-  document_type: string | null;
-  destination_name: string | null;
-  bank_name: string | null;
-  bank_agency: string | null;
-  bank_account: string | null;
-  api_integration_id: string | null;
-  file_name_pattern: string | null;
-  layout_version: string | null;
-  metadata: Record<string, any>;
-}
+};
 
-export interface EdiExport {
-  id: string;
-  tenant_id: string;
-  profile_id: string | null;
-  client_id: string | null;
-  format: string;
-  file_name: string;
-  file_date: string;
-  status: ExportStatus;
-  invoice_count: number;
-  charge_count: number;
-  detail_count: number;
-  record_count: number;
-  total_amount: number;
-  content_hash: string | null;
-  generated_content: string | null;
-  generated_at: string;
-  generated_by: string | null;
-  downloaded_at: string | null;
-  sent_at: string | null;
-  sent_channel: string | null;
-  sent_to: string | null;
-  error_message: string | null;
-  reprocess_reason: string | null;
-  cancelled_at: string | null;
-  cancellation_reason: string | null;
-}
+export type EdiExport = Omit<Tables<'billing_edi_exports'>, 'status'> & { status: ExportStatus };
 
 export interface EligibleInvoice {
   id: string;
@@ -72,7 +32,7 @@ export function useEdiProfiles() {
     enabled: !!currentTenant,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('billing_edi_profiles' as any)
+        .from('billing_edi_profiles')
         .select('*')
         .eq('tenant_id', currentTenant!.id)
         .order('name');
@@ -89,7 +49,7 @@ export function useEdiExports() {
     enabled: !!currentTenant,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('billing_edi_exports' as any)
+        .from('billing_edi_exports')
         .select('*')
         .eq('tenant_id', currentTenant!.id)
         .order('generated_at', { ascending: false })
@@ -172,7 +132,7 @@ export function useRegisterEdiExport() {
       detailCount: number;
       reprocessReason?: string | null;
     }) => {
-      const { data, error } = await supabase.rpc('register_doccob_export' as any, {
+      const rpcArgs = {
         _tenant_id: currentTenant!.id,
         _profile_id: payload.profileId,
         _client_id: payload.clientId,
@@ -186,9 +146,10 @@ export function useRegisterEdiExport() {
         _charge_count: payload.chargeCount,
         _detail_count: payload.detailCount,
         _reprocess_reason: payload.reprocessReason ?? null,
-      });
+      } as unknown as Database['public']['Functions']['register_doccob_export']['Args'];
+      const { data, error } = await supabase.rpc('register_doccob_export', rpcArgs);
       if (error) throw error;
-      return data as any;
+      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['edi_exports'] });
@@ -203,11 +164,11 @@ export function useMarkEdiSent() {
   const { currentTenant } = useTenant();
   return useMutation({
     mutationFn: async (input: { exportId: string; channel?: string; sentTo?: string }) => {
-      const { error } = await supabase.rpc('mark_doccob_sent' as any, {
+      const { error } = await supabase.rpc('mark_doccob_sent', {
         _tenant_id: currentTenant!.id,
         _export_id: input.exportId,
         _channel: input.channel ?? 'manual',
-        _sent_to: input.sentTo ?? null,
+        _sent_to: input.sentTo,
       });
       if (error) throw error;
     },
@@ -220,7 +181,7 @@ export function useMarkEdiDownloaded() {
   const { currentTenant } = useTenant();
   return useMutation({
     mutationFn: async (exportId: string) => {
-      const { error } = await supabase.rpc('mark_doccob_downloaded' as any, {
+      const { error } = await supabase.rpc('mark_doccob_downloaded', {
         _tenant_id: currentTenant!.id,
         _export_id: exportId,
       });
@@ -235,7 +196,7 @@ export function useCancelEdiExport() {
   const { currentTenant } = useTenant();
   return useMutation({
     mutationFn: async (input: { exportId: string; reason: string }) => {
-      const { error } = await supabase.rpc('cancel_doccob_export' as any, {
+      const { error } = await supabase.rpc('cancel_doccob_export', {
         _tenant_id: currentTenant!.id,
         _export_id: input.exportId,
         _reason: input.reason,
@@ -254,11 +215,11 @@ export function useSaveEdiProfile() {
   const qc = useQueryClient();
   const { currentTenant } = useTenant();
   return useMutation({
-    mutationFn: async (payload: Partial<EdiProfile> & { name: string; client_id?: string | null }) => {
+    mutationFn: async (payload: EdiProfileDraft) => {
       const row = { ...payload, tenant_id: currentTenant!.id };
       const { data, error } = await supabase
-        .from('billing_edi_profiles' as any)
-        .upsert(row as any)
+        .from('billing_edi_profiles')
+        .upsert(row)
         .select()
         .maybeSingle();
       if (error) throw error;

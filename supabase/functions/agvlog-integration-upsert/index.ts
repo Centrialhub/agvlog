@@ -1,10 +1,11 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+type JsonObject = Record<string, unknown>;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -24,6 +25,13 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const encryptionKey = Deno.env.get("AGVLOG_ENCRYPTION_KEY");
+
+    if (!encryptionKey) {
+      return new Response(JSON.stringify({ error: "AGVLOG_ENCRYPTION_KEY is required" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const anonClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -64,21 +72,56 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    // New credentials must never be persisted as plaintext.
+    const encryptedPassword = await encrypt(password, encryptionKey);
 
-    // Encrypt password with AES-GCM if key available
-    let encryptedPassword = password;
-    if (encryptionKey) {
-      encryptedPassword = await encrypt(password, encryptionKey);
+    let settings: JsonObject = {};
+    let currentHashauth: string | null = null;
+    let currentHashcode: string | null = null;
+    if (id) {
+      const { data: current, error: currentError } = await supabase
+        .from("integration_accounts")
+        .select("settings, hashauth, hashcode")
+        .eq("id", id)
+        .eq("tenant_id", tenant_id)
+        .maybeSingle();
+      if (currentError) throw currentError;
+      settings = (current?.settings && typeof current.settings === "object")
+        ? { ...(current.settings as JsonObject) }
+        : {};
+      currentHashauth = current?.hashauth || null;
+      currentHashcode = current?.hashcode || null;
     }
 
-    const record: any = {
+    // A credential replacement starts a clean authentication lifecycle. Keeping
+    // a stale token or an old backoff here made a valid replacement look broken.
+    for (const key of [
+      "credential_reentry_required",
+      "ssx_login_backoff_count",
+      "ssx_login_backoff_until",
+      "sync_units_backoff_count",
+      "sync_units_backoff_until",
+      "skip_admin_until",
+      "last_admin_error",
+      "admin_token_cache",
+      "admin_token_expires_at",
+    ]) {
+      delete settings[key];
+    }
+
+    const record = {
       tenant_id,
       base_url: base_url || "https://integration.systemsatx.com.br",
       username,
       password_encrypted: encryptedPassword,
-      hashauth: hashauth || null,
-      hashcode: hashcode || null,
+      hashauth: hashauth || currentHashauth,
+      hashcode: hashcode || currentHashcode,
       status: "pending",
+      token_cache: null,
+      token_expires_at: null,
+      last_error: null,
+      last_login_at: null,
+      settings,
     };
 
     let result;
@@ -106,10 +149,10 @@ Deno.serve(async (req) => {
       JSON.stringify({ success: true, id: result.id }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("agvlog-integration-upsert error:", err);
     return new Response(
-      JSON.stringify({ error: "Internal error", details: err.message }),
+      JSON.stringify({ error: "Internal error", details: errorMessage(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

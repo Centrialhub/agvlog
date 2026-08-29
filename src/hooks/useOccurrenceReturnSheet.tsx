@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { validateUpload } from '@/lib/uploadPolicy';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import { uploadSecureFile } from '@/lib/secureUpload';
 
 export type ReturnSheetStatus = 'generated' | 'printed' | 'signed' | 'cancelled' | 'superseded';
 
@@ -116,7 +116,7 @@ export function useGenerateReturnSheet() {
       const { data, error } = await supabase.rpc('generate_occurrence_return_sheet', {
         _occurrence_id: params.occurrenceId,
         _regenerate: params.regenerate ?? false,
-        _regeneration_reason: params.reason ?? null,
+        _regeneration_reason: params.reason ?? undefined,
       });
       if (error) throw error;
       return data as { return_sheet_id: string; sheet_number: string };
@@ -174,12 +174,13 @@ export function useUploadSignedProof() {
       receiverDocument?: string | null;
     }) => {
       if (!currentTenant?.id) throw new Error('tenant');
-      const { contentType, safeName } = validateUpload(params.file, 'proof');
-      const path = `${currentTenant.id}/${params.returnSheetId}-${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-      const up = await supabase.storage
-        .from('occurrence-return-proofs')
-        .upload(path, params.file, { upsert: true, contentType });
-      if (up.error) throw up.error;
+      const path = await uploadSecureFile({
+        tenantId: currentTenant.id,
+        bucket: 'occurrence-return-proofs',
+        folder: `return-sheets/${params.returnSheetId}`,
+        file: params.file,
+        kind: 'proof',
+      });
       const { error } = await supabase
         .from('occurrence_return_sheets')
         .update({

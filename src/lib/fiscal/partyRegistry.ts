@@ -20,9 +20,9 @@ export interface RegistryClient {
   address_complement?: string | null;
   address_neighborhood?: string | null;
   address_city?: string | null;
+  address_city_ibge_code?: string | null;
   address_state?: string | null;
   address_zip?: string | null;
-  [k: string]: any;
 }
 
 export interface PartyAddress {
@@ -148,6 +148,7 @@ export function resolveParty(
     neighborhood?: string | null;
     zip?: string | null;
     city_ibge?: string | null;
+    codigoMunicipio?: string | null;
   } | null,
 ): ResolvedParty | null {
   const c = findRegistryClient(index, party);
@@ -163,7 +164,7 @@ export function resolveParty(
         complement: null,
         neighborhood: fallbackAddress.neighborhood || null,
         city: fallbackAddress.city || null,
-        city_ibge: (fallbackAddress as any).city_ibge || (fallbackAddress as any).codigoMunicipio || null,
+        city_ibge: fallbackAddress.city_ibge || fallbackAddress.codigoMunicipio || null,
         state: fallbackAddress.state || null,
         zip: fallbackAddress.zip || null,
       }
@@ -203,26 +204,28 @@ export function fillPartyFieldsFromRegistry<T extends PartyFields>(
   index: ClientIndex,
 ): { item: T; changed: boolean } {
   const rem = findRegistryClient(index, {
-    cnpj: (item as any).remitterCnpj,
-    name: (item as any).remitterName,
+    cnpj: item.remitterCnpj,
+    name: item.remitterName,
   });
   const rec = findRegistryClient(index, {
-    id: (item as any).clientId,
-    cnpj: (item as any).recipientCnpj,
-    name: (item as any).recipientName,
+    id: item.clientId,
+    cnpj: item.recipientCnpj,
+    name: item.recipientName,
   });
   const next: T = { ...item };
+  const mutable = next as unknown as Record<string, unknown>;
   let changed = false;
   const set = (key: string, value?: string | null) => {
-    const v = (value ?? '') === null ? '' : String(value ?? '').trim();
-    if (!v) return;
-    // Não cria propriedades que o formato recebido não declara.
+    // O helper é genérico: só completa campos que fazem parte do formato
+    // recebido, evitando criar propriedades invisíveis para o chamador.
     if (!(key in next)) return;
-    if (((next as any)[key] || '').trim()) return;
-    (next as any)[key] = v;
+    const v = String(value ?? '').trim();
+    if (!v) return;
+    const current = mutable[key];
+    if (typeof current === 'string' && current.trim()) return;
+    mutable[key] = v;
     changed = true;
   };
-
   if (rem) {
     set('remitterName', rem.company_name || rem.legal_name);
     set('remitterCnpj', digitsOnly(rem.tax_id));
@@ -246,11 +249,12 @@ export function fillPartyFieldsFromRegistry<T extends PartyFields>(
   }
   // Limpa marcadores inválidos ('UNKNOWN') que possam ter vindo do cadastro/RPC.
   for (const key of ['remitterIe', 'recipientIe'] as const) {
-    const current = ((next[key as keyof T] as unknown as string) || '').trim();
+    const currentValue = mutable[key];
+    const current = typeof currentValue === 'string' ? currentValue.trim() : '';
     if (!current) continue;
     const clean = sanitizeIe(current) || '';
     if (clean !== current) {
-      (next[key as keyof T] as unknown as string) = clean;
+      mutable[key] = clean;
       changed = true;
     }
   }

@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Eye, AlertTriangle, XCircle, CheckCircle, ChevronRight, Package, Hash, Calendar, Building2, MapPin, FileText } from 'lucide-react';
+import { Eye, AlertTriangle, XCircle, CheckCircle, ChevronRight, Package, Hash, Calendar, Building2, FileText } from 'lucide-react';
 import { ValidatedDocument, ValidatedOrder } from '@/lib/ingestionValidator';
 
 interface IngestionPreviewDialogProps {

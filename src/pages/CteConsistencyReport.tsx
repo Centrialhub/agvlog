@@ -18,11 +18,14 @@ export default function CteConsistencyReport() {
   const { data: violations = [], isLoading, refetch } = useQuery({
     queryKey: ['cte_consistency_violations', currentTenant?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('monitor_simples_nacional_icms_violations');
+      if (!currentTenant?.id) return [];
+      const { data, error } = await supabase.rpc('monitor_simples_nacional_icms_violations', {
+        _tenant_id: currentTenant.id,
+      });
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant?.id,
   });
 
   const filteredViolations = violations.filter((v: any) => 

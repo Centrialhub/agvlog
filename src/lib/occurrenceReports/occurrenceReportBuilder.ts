@@ -105,7 +105,7 @@ export function validateFinalize(payload: FinalizePayload): ValidationError[] {
 export function splitInvoiceNumbers(raw: string | number | null | undefined): string[] {
   if (raw == null) return [];
   return String(raw)
-    .split(/[\/;,\n]+/)
+    .split(/[/;,\n]+/)
     .map((s) => s.trim())
     .filter(Boolean);
 }

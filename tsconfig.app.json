@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
@@ -12,10 +14,15 @@
     "moduleDetection": "force",
     "moduleResolution": "bundler",
     "noEmit": true,
-    "noFallthroughCasesInSwitch": false,
-    "noImplicitAny": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUncheckedSideEffectImports": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "paths": {
       "@/*": [
         "./src/*"
@@ -23,11 +30,16 @@
     },
     "skipLibCheck": true,
     "strict": false,
+    "strictNullChecks": true,
+    "strictBindCallApply": true,
+    "strictBuiltinIteratorReturn": true,
+    "strictFunctionTypes": true,
     "target": "ES2020",
     "types": [
       "vitest/globals"
     ],
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "useUnknownInCatchVariables": true
   },
   "include": [
     "src"

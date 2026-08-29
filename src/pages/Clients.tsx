@@ -1,64 +1,77 @@
-import { useState, useMemo } from 'react';
-import { useClients, useCreateClient, useUpdateClient, Client } from '@/hooks/useClients';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  useClientCounts,
+  useClientsPage,
+  useCreateClient,
+  useUpdateClient,
+  type Client,
+  type ClientKindFilter,
+  type CreateClientInput,
+} from '@/hooks/useClients';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Plus, Building2, Edit, Check, X, Lock } from 'lucide-react';
+import { Search, Plus, Building2, Edit, Check, X, Lock, RefreshCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ClientFormDialog } from '@/components/clients/ClientFormDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DataPagination } from '@/components/ui/data-pagination';
 
-type KindFilter = 'all' | 'client' | 'supplier' | 'both';
+const PAGE_SIZE = 50;
+const CLIENT_KINDS: readonly ClientKindFilter[] = ['all', 'client', 'supplier', 'both'];
 
 export default function Clients() {
-  const { data: clients = [], isLoading } = useClients();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialKind = searchParams.get('kind');
+  const [search, setSearch] = useState(searchParams.get('q') || '');
+  const [kind, setKind] = useState<ClientKindFilter>(
+    CLIENT_KINDS.includes(initialKind as ClientKindFilter) ? initialKind as ClientKindFilter : 'all',
+  );
+  const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page')) || 1));
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const {
+    data: clientPage,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useClientsPage({ page, pageSize: PAGE_SIZE, search: debouncedSearch, kind });
+  const clients = clientPage?.rows || [];
+  const totalCount = clientPage?.totalCount || 0;
+  const { data: counts = { clients: 0, suppliers: 0, both: 0, total: 0 } } = useClientCounts();
   const createClient = useCreateClient();
   const updateClient = useUpdateClient();
-  const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [kind, setKind] = useState<KindFilter>('all');
   const [defaultNewKind, setDefaultNewKind] = useState<'client' | 'supplier'>('client');
   const { toast } = useToast();
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const byKind = clients.filter(c => {
-      const isC = c.is_client !== false;
-      const isS = c.is_supplier === true;
-      if (kind === 'client') return isC && !isS;
-      if (kind === 'supplier') return isS && !isC;
-      if (kind === 'both') return isC && isS;
-      return true;
-    });
-    if (!q) return byKind;
-    return byKind.filter(c =>
-      c.company_name.toLowerCase().includes(q) ||
-      (c.legal_name || '').toLowerCase().includes(q) ||
-      (c.trade_name || '').toLowerCase().includes(q) ||
-      (c.tax_id || '').toLowerCase().includes(q) ||
-      (c.internal_code || '').toLowerCase().includes(q) ||
-      (c.sigla || '').toLowerCase().includes(q) ||
-      (c.payer_group || '').toLowerCase().includes(q) ||
-      (c.address_city || '').toLowerCase().includes(q)
-    );
-  }, [clients, search, kind]);
+  const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageStart = totalCount === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(safePage * PAGE_SIZE, totalCount);
 
-  const counts = useMemo(() => {
-    let c = 0, s = 0, b = 0;
-    for (const x of clients) {
-      const isC = x.is_client !== false;
-      const isS = x.is_supplier === true;
-      if (isC && isS) b++;
-      else if (isC) c++;
-      else if (isS) s++;
-    }
-    return { clients: c, suppliers: s, both: b, total: clients.length };
-  }, [clients]);
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, kind]);
 
-  const handleSave = async (values: any) => {
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (debouncedSearch) next.set('q', debouncedSearch);
+    if (kind !== 'all') next.set('kind', kind);
+    if (page > 1) next.set('page', String(page));
+    setSearchParams(next, { replace: true });
+  }, [debouncedSearch, kind, page, setSearchParams]);
+
+  const handleSave = async (values: CreateClientInput) => {
     try {
       if (editingClient) {
         await updateClient.mutateAsync({ id: editingClient.id, ...values });
@@ -69,13 +82,14 @@ export default function Clients() {
       }
       setDialogOpen(false);
       setEditingClient(null);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      const description = error instanceof Error ? error.message : 'Não foi possível salvar o cadastro.';
+      toast({ title: 'Erro', description, variant: 'destructive' });
     }
   };
 
   const handleToggleActive = async (c: Client) => {
-    await updateClient.mutateAsync({ id: c.id, active: !c.active } as any);
+    await updateClient.mutateAsync({ id: c.id, active: !c.active });
     toast({ title: c.active ? 'Cadastro inativado' : 'Cadastro reativado' });
   };
 
@@ -106,7 +120,7 @@ export default function Clients() {
         </div>
       </div>
 
-      <Tabs value={kind} onValueChange={(v) => setKind(v as KindFilter)}>
+      <Tabs value={kind} onValueChange={(v) => setKind(v as ClientKindFilter)}>
         <TabsList>
           <TabsTrigger value="all">Todos ({counts.total})</TabsTrigger>
           <TabsTrigger value="client">Clientes ({counts.clients})</TabsTrigger>
@@ -144,10 +158,21 @@ export default function Clients() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-8 text-center">
+                    <div role="alert" className="flex flex-col items-center gap-3 text-destructive">
+                      <span>Não foi possível carregar os cadastros: {error instanceof Error ? error.message : 'erro inesperado'}.</span>
+                      <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
+                        <RefreshCcw className="mr-2 h-4 w-4" /> Tentar novamente
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : clients.length === 0 ? (
                 <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhum cadastro encontrado</TableCell></TableRow>
-              ) : filtered.map(c => (
-                <TableRow key={c.id} className="cursor-pointer" onClick={() => { setEditingClient(c); setDialogOpen(true); }}>
+              ) : clients.map(c => (
+                <TableRow key={c.id}>
                   <TableCell className="text-xs text-muted-foreground">{c.internal_code || '—'}</TableCell>
                   <TableCell className="font-medium">
                     {c.blocked ? <Lock className="inline h-3 w-3 mr-1 text-destructive" /> : null}
@@ -166,23 +191,41 @@ export default function Clients() {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{c.payer_group || '—'}</TableCell>
                   <TableCell>
-                    <Badge
-                      variant={c.active ? 'default' : 'secondary'}
-                      className="cursor-pointer"
-                      onClick={(e) => { e.stopPropagation(); handleToggleActive(c); }}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`${c.active ? 'Inativar' : 'Reativar'} ${c.company_name}`}
+                      className="h-auto p-0"
+                      onClick={() => handleToggleActive(c)}
                     >
-                      {c.active ? <><Check className="h-3 w-3 mr-1" /> Ativo</> : <><X className="h-3 w-3 mr-1" /> Inativo</>}
-                    </Badge>
+                      <Badge variant={c.active ? 'default' : 'secondary'}>
+                        {c.active ? <><Check className="h-3 w-3 mr-1" /> Ativo</> : <><X className="h-3 w-3 mr-1" /> Inativo</>}
+                      </Badge>
+                    </Button>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingClient(c); setDialogOpen(true); }}>
-                      <Edit className="h-4 w-4" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Editar ${c.company_name}`}
+                      onClick={() => { setEditingClient(c); setDialogOpen(true); }}
+                    >
+                      <Edit className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          <DataPagination
+            page={safePage}
+            pageCount={pageCount}
+            totalCount={totalCount}
+            start={pageStart}
+            end={pageEnd}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
 

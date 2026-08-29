@@ -23,7 +23,7 @@ export function useDriverMessages(driverId: string | null | undefined) {
     queryKey: ['driver_messages', driverId],
     queryFn: async () => {
       if (!driverId) return [];
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('driver_direct_messages')
         .select('*')
         .eq('driver_id', driverId)
@@ -35,7 +35,7 @@ export function useDriverMessages(driverId: string | null | undefined) {
   });
 
   useEffect(() => {
-    if (!driverId) return;
+    if (!driverId) return undefined;
     const channel = supabase
       .channel(`driver_msg_${driverId}`)
       .on(
@@ -60,8 +60,9 @@ export function useSendDriverMessage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ driverId, message, role, name }: { driverId: string; message: string; role?: string; name?: string }) => {
-      const { error } = await (supabase as any).from('driver_direct_messages').insert({
-        tenant_id: currentTenant!.id,
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { error } = await supabase.from('driver_direct_messages').insert({
+        tenant_id: currentTenant.id,
         driver_id: driverId,
         sender_id: user?.id || null,
         sender_role: role || 'operator',

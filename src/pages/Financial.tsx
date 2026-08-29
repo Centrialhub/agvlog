@@ -1,28 +1,27 @@
-import { useState, useMemo } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useReceivables } from '@/hooks/useReceivables';
+import { useReceivables, type Receivable } from '@/hooks/useReceivables';
 import { useClients } from '@/hooks/useClients';
 import { useCostCenters } from '@/hooks/useCostCenters';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
-  DollarSign, TrendingUp, TrendingDown, ArrowRight, Receipt,
-  Search, Filter, FileText, AlertTriangle, CheckCircle, Clock,
+  DollarSign, TrendingUp, ArrowRight, Receipt,
+  FileText, AlertTriangle, CheckCircle,
   BarChart3, PieChart as PieChartIcon, Wallet, CreditCard,
-  ArrowUpRight, ArrowDownRight, Calendar, Download, ChevronDown, X, SlidersHorizontal,
+  ArrowUpRight, ArrowDownRight, ChevronDown, X, SlidersHorizontal,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, CartesianGrid, Area, AreaChart, Legend,
+  PieChart, Pie, Cell, CartesianGrid, Legend,
 } from 'recharts';
-import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { isBillableFiscalDoc, fiscalDocRevenue, isBillableNfse, nfseRevenue, isVoidFiscalStatus, isConfirmedFiscalDoc, isConfirmedNfse } from '@/lib/fiscal/documentStatus';
@@ -31,6 +30,10 @@ const COLORS = [
   'hsl(215, 80%, 48%)', 'hsl(142, 64%, 38%)', 'hsl(38, 92%, 50%)',
   'hsl(0, 72%, 51%)', 'hsl(270, 60%, 55%)', 'hsl(180, 60%, 40%)',
 ];
+
+function isOpenReceivable(receivable: Receivable): boolean {
+  return ['pending', 'invoiced', 'partial'].includes(receivable.status);
+}
 
 export default function Financial() {
   const { currentTenant } = useTenant();
@@ -95,22 +98,6 @@ export default function Financial() {
     enabled: !!currentTenant,
   });
 
-  // ── Freight Calculation Logs ──
-  const { data: freightLogs = [] } = useQuery({
-    queryKey: ['fin_freight_logs', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data } = await supabase
-        .from('freight_calculation_log')
-        .select('id, final_value, entity_type, created_at, freight_table_name')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false })
-        .limit(500);
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
-
   // ── Maintenance Orders (costs) ──
   const { data: maintenanceCosts = [] } = useQuery({
     queryKey: ['fin_maintenance', currentTenant?.id],
@@ -130,29 +117,29 @@ export default function Financial() {
   const { data: costCenters = [] } = useCostCenters();
 
   // Documentos válidos (cancelados/rejeitados nunca entram em faturamento)
-  const billableDocs = useMemo(() => fiscalDocs.filter((d: any) => isBillableFiscalDoc(d)), [fiscalDocs]);
-  const voidDocs = useMemo(() => fiscalDocs.filter((d: any) => !isBillableFiscalDoc(d)), [fiscalDocs]);
+  const billableDocs = useMemo(() => fiscalDocs.filter(isBillableFiscalDoc), [fiscalDocs]);
+  const voidDocs = useMemo(() => fiscalDocs.filter(doc => !isBillableFiscalDoc(doc)), [fiscalDocs]);
 
   // NFS-e válidas (emitidas/em processamento) e canceladas/rejeitadas
-  const billableNfse = useMemo(() => nfseDocs.filter((d: any) => isBillableNfse(d)), [nfseDocs]);
+  const billableNfse = useMemo(() => nfseDocs.filter(isBillableNfse), [nfseDocs]);
   const voidNfse = useMemo(
-    () => nfseDocs.filter((d: any) => isVoidFiscalStatus((d as any).status)),
+    () => nfseDocs.filter(doc => isVoidFiscalStatus(doc.status)),
     [nfseDocs],
   );
 
   // Partes envolvidas: NF-e de entrada aponta para fornecedor, CT-e para cliente.
   const partyOptions = useMemo(() => {
     return clients
-      .filter((c: any) => c.active !== false)
-      .map((c: any) => ({
-        id: c.id,
-        label: c.company_name + (c.is_supplier && !c.is_client ? ' · Fornecedor' : c.is_supplier && c.is_client ? ' · Cliente/Fornecedor' : ' · Cliente'),
+      .filter(client => client.active !== false)
+      .map(client => ({
+        id: client.id,
+        label: client.company_name + (client.is_supplier && !client.is_client ? ' · Fornecedor' : client.is_supplier && client.is_client ? ' · Cliente/Fornecedor' : ' · Cliente'),
       }));
   }, [clients]);
 
   // ── Unique expense categories ──
   const expenseCategories = useMemo(() => {
-    const cats = new Set(expenses.map((e: any) => e.category).filter(Boolean));
+    const cats = new Set(expenses.map(expense => expense.category).filter(Boolean));
     return Array.from(cats).sort();
   }, [expenses]);
 
@@ -191,61 +178,60 @@ export default function Financial() {
     return new Date();
   }, [dateTo]);
 
-  const filterByPeriod = (dateStr: string | null) => {
+  const filterByPeriod = useCallback((dateStr: string | null) => {
     if (!dateStr) return false;
     const d = new Date(dateStr);
     return d >= periodStart && d <= periodEnd;
-  };
+  }, [periodEnd, periodStart]);
 
   // ── Computed KPIs ──
   const kpis = useMemo(() => {
-    let filteredDocs = billableDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
-    if (selectedClient !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.client_id === selectedClient);
-    if (docType !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.document_type === docType);
-    if (selectedCostCenter !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.cost_center === selectedCostCenter);
+    let filteredDocs = billableDocs.filter(doc => filterByPeriod(doc.issue_date || doc.created_at));
+    if (selectedClient !== 'all') filteredDocs = filteredDocs.filter(doc => doc.client_id === selectedClient);
+    if (docType !== 'all') filteredDocs = filteredDocs.filter(doc => doc.document_type === docType);
+    if (selectedCostCenter !== 'all') filteredDocs = filteredDocs.filter(doc => doc.cost_center === selectedCostCenter);
 
-    const nfes = filteredDocs.filter((d: any) => d.document_type === 'inbound');
+    const nfes = filteredDocs.filter(doc => doc.document_type === 'inbound');
     // Receita só de CT-e confirmado: rascunho/transmitindo ainda pode rejeitar.
-    const ctes = filteredDocs.filter((d: any) => d.document_type === 'outbound' && isConfirmedFiscalDoc(d));
+    const ctes = filteredDocs.filter(doc => doc.document_type === 'outbound' && isConfirmedFiscalDoc(doc));
 
-    let filteredNfse = billableNfse.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
-    if (selectedClient !== 'all') filteredNfse = filteredNfse.filter((d: any) => d.cliente_id === selectedClient);
+    let filteredNfse = billableNfse.filter(doc => filterByPeriod(doc.issue_date || doc.created_at));
+    if (selectedClient !== 'all') filteredNfse = filteredNfse.filter(doc => doc.cliente_id === selectedClient);
     if (docType !== 'all' && docType !== 'nfse') filteredNfse = [];
     const totalNfseValue = filteredNfse
-      .filter((d: any) => isConfirmedNfse(d))
-      .reduce((s: number, d: any) => s + nfseRevenue(d), 0);
+      .filter(isConfirmedNfse)
+      .reduce((sum, doc) => sum + nfseRevenue(doc), 0);
 
-    const totalNfeValue = nfes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
+    const totalNfeValue = nfes.reduce((sum, doc) => sum + (Number(doc.value) || 0), 0);
     // `value` do CT-e espelha o frete: usamos um único valor por documento
-    const totalFreight = ctes.reduce((s: number, d: any) => s + fiscalDocRevenue(d), 0);
+    const totalFreight = ctes.reduce((sum, doc) => sum + fiscalDocRevenue(doc), 0);
     const totalCteValue = totalFreight;
     const voidCount =
-      voidDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at)).length +
-      voidNfse.filter((d: any) => filterByPeriod(d.issue_date || d.created_at)).length;
+      voidDocs.filter(doc => filterByPeriod(doc.issue_date || doc.created_at)).length +
+      voidNfse.filter(doc => filterByPeriod(doc.issue_date || doc.created_at)).length;
 
-    let filteredExpenses = expenses.filter((e: any) => filterByPeriod(e.expense_at));
-    if (expenseCategory !== 'all') filteredExpenses = filteredExpenses.filter((e: any) => e.category === expenseCategory);
-    if (selectedCostCenter !== 'all') filteredExpenses = filteredExpenses.filter((e: any) => e.cost_center === selectedCostCenter);
-    const totalExpenses = filteredExpenses.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0);
-    const pendingExpenses = filteredExpenses.filter((e: any) => e.approval_status === 'pending');
+    let filteredExpenses = expenses.filter(expense => filterByPeriod(expense.expense_at));
+    if (expenseCategory !== 'all') filteredExpenses = filteredExpenses.filter(expense => expense.category === expenseCategory);
+    if (selectedCostCenter !== 'all') filteredExpenses = filteredExpenses.filter(expense => expense.cost_center === selectedCostCenter);
+    const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0);
+    const pendingExpenses = filteredExpenses.filter(expense => expense.approval_status === 'pending');
 
-    let filteredReceivables = receivables.filter((r: any) => filterByPeriod(r.created_at));
-    if (selectedClient !== 'all') filteredReceivables = filteredReceivables.filter((r: any) => r.client_id === selectedClient);
-    filteredReceivables = filteredReceivables.filter((r: any) => r.status !== 'cancelled');
+    let filteredReceivables = receivables.filter(receivable => filterByPeriod(receivable.created_at));
+    if (selectedClient !== 'all') filteredReceivables = filteredReceivables.filter(receivable => receivable.client_id === selectedClient);
+    filteredReceivables = filteredReceivables.filter(receivable => receivable.status !== 'cancelled');
     const today = new Date().toISOString().slice(0, 10);
-    const isOpen = (r: any) => r.status === 'pending' || r.status === 'invoiced' || r.status === 'partial';
-    const totalReceivable = filteredReceivables.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
-    const pendingReceivable = filteredReceivables.filter(isOpen).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+    const totalReceivable = filteredReceivables.reduce((sum, receivable) => sum + (Number(receivable.amount) || 0), 0);
+    const pendingReceivable = filteredReceivables.filter(isOpenReceivable).reduce((sum, receivable) => sum + (Number(receivable.amount) || 0), 0);
     const paidReceivable = filteredReceivables
-      .filter((r: any) => r.status === 'received')
-      .reduce((s: number, r: any) => s + (Number(r.received_amount ?? r.amount) || 0), 0);
+      .filter(receivable => receivable.status === 'received')
+      .reduce((sum, receivable) => sum + (Number(receivable.received_amount ?? receivable.amount) || 0), 0);
     const overdueReceivable = filteredReceivables
-      .filter((r: any) => isOpen(r) && r.due_date && r.due_date < today)
-      .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+      .filter(receivable => isOpenReceivable(receivable) && receivable.due_date && receivable.due_date < today)
+      .reduce((sum, receivable) => sum + (Number(receivable.amount) || 0), 0);
 
-    let filteredMaint = maintenanceCosts.filter((m: any) => filterByPeriod(m.created_at));
-    if (selectedCostCenter !== 'all') filteredMaint = filteredMaint.filter((m: any) => m.cost_center === selectedCostCenter);
-    const totalMaintenance = filteredMaint.reduce((s: number, m: any) => s + (Number(m.total_cost) || 0), 0);
+    let filteredMaint = maintenanceCosts.filter(order => filterByPeriod(order.created_at));
+    if (selectedCostCenter !== 'all') filteredMaint = filteredMaint.filter(order => order.cost_center === selectedCostCenter);
+    const totalMaintenance = filteredMaint.reduce((sum, order) => sum + (Number(order.total_cost) || 0), 0);
 
     const revenue = totalFreight + totalNfseValue;
     const outflow = totalExpenses + totalMaintenance;
@@ -262,56 +248,56 @@ export default function Financial() {
       revenue, outflow, balance,
       receivablesCount: filteredReceivables.length,
     };
-  }, [billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory, selectedCostCenter]);
+  }, [billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, maintenanceCosts, filterByPeriod, selectedClient, docType, expenseCategory, selectedCostCenter]);
 
   // ── Chart: Revenue vs Expenses by day ──
   const revenueExpenseChart = useMemo(() => {
     const days: Record<string, { day: string; receita: number; despesa: number }> = {};
 
-    billableDocs.filter((d: any) => d.document_type === 'outbound' && isConfirmedFiscalDoc(d) && filterByPeriod(d.issue_date || d.created_at)).forEach((d: any) => {
-      const day = (d.issue_date || d.created_at?.slice(0, 10)) || '';
+    billableDocs.filter(doc => doc.document_type === 'outbound' && isConfirmedFiscalDoc(doc) && filterByPeriod(doc.issue_date || doc.created_at)).forEach(doc => {
+      const day = (doc.issue_date || doc.created_at?.slice(0, 10)) || '';
       if (!days[day]) days[day] = { day, receita: 0, despesa: 0 };
-      days[day].receita += fiscalDocRevenue(d);
+      days[day].receita += fiscalDocRevenue(doc);
     });
 
-    billableNfse.filter((d: any) => isConfirmedNfse(d) && filterByPeriod(d.issue_date || d.created_at)).forEach((d: any) => {
-      const day = (d.issue_date || d.created_at?.slice(0, 10)) || '';
+    billableNfse.filter(doc => isConfirmedNfse(doc) && filterByPeriod(doc.issue_date || doc.created_at)).forEach(doc => {
+      const day = (doc.issue_date || doc.created_at?.slice(0, 10)) || '';
       if (!days[day]) days[day] = { day, receita: 0, despesa: 0 };
-      days[day].receita += nfseRevenue(d);
+      days[day].receita += nfseRevenue(doc);
     });
 
-    expenses.filter((e: any) => filterByPeriod(e.expense_at)).forEach((e: any) => {
-      const day = e.expense_at?.slice(0, 10) || '';
+    expenses.filter(expense => filterByPeriod(expense.expense_at)).forEach(expense => {
+      const day = expense.expense_at?.slice(0, 10) || '';
       if (!days[day]) days[day] = { day, receita: 0, despesa: 0 };
-      days[day].despesa += Number(e.amount) || 0;
+      days[day].despesa += Number(expense.amount) || 0;
     });
 
     return Object.values(days)
       .sort((a, b) => a.day.localeCompare(b.day))
       .map(d => ({ ...d, day: d.day.length >= 10 ? format(new Date(d.day + 'T12:00:00'), 'dd/MM') : d.day }));
-  }, [billableDocs, billableNfse, expenses, periodStart]);
+  }, [billableDocs, billableNfse, expenses, filterByPeriod]);
 
   // ── Chart: Expense breakdown by category ──
   const expenseByCategoryChart = useMemo(() => {
     const cats: Record<string, number> = {};
-    expenses.filter((e: any) => filterByPeriod(e.expense_at)).forEach((e: any) => {
-      const cat = e.category || 'outros';
-      cats[cat] = (cats[cat] || 0) + (Number(e.amount) || 0);
+    expenses.filter(expense => filterByPeriod(expense.expense_at)).forEach(expense => {
+      const cat = expense.category || 'outros';
+      cats[cat] = (cats[cat] || 0) + (Number(expense.amount) || 0);
     });
     return Object.entries(cats).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [expenses, periodStart]);
+  }, [expenses, filterByPeriod]);
 
   // ── Chart: Receivables status ──
   const receivablesChart = useMemo(() => {
     const statuses: Record<string, number> = {};
-    receivables.filter((r: any) => filterByPeriod(r.created_at)).forEach((r: any) => {
-      const s = r.status || 'pending';
-      const amount = s === 'received' ? Number(r.received_amount ?? r.amount) || 0 : Number(r.amount) || 0;
+    receivables.filter(receivable => filterByPeriod(receivable.created_at)).forEach(receivable => {
+      const s = receivable.status || 'pending';
+      const amount = s === 'received' ? Number(receivable.received_amount ?? receivable.amount) || 0 : Number(receivable.amount) || 0;
       statuses[s] = (statuses[s] || 0) + amount;
     });
     const labels: Record<string, string> = { pending: 'Pendente', invoiced: 'Faturado', received: 'Recebido', partial: 'Parcial', cancelled: 'Cancelado' };
     return Object.entries(statuses).map(([status, value]) => ({ name: labels[status] || status, value }));
-  }, [receivables, periodStart]);
+  }, [receivables, filterByPeriod]);
 
   const fmtCurrency = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtCurrencyShort = (v: number) => {
@@ -571,7 +557,7 @@ export default function Financial() {
           { icon: Receipt, label: 'CT-es', value: kpis.cteCount, sub: fmtCurrencyShort(kpis.totalCteValue), color: 'text-emerald-500' },
           { icon: DollarSign, label: 'Frete Total', value: fmtCurrencyShort(kpis.totalFreight), sub: 'CT-e', color: 'text-green-600' },
           { icon: FileText, label: 'NFS-e', value: kpis.nfseCount, sub: fmtCurrencyShort(kpis.totalNfseValue), color: 'text-purple-500' },
-          { icon: Receipt, label: 'Despesas Op.', value: fmtCurrencyShort(kpis.totalExpenses), sub: `${expenses.filter((e: any) => filterByPeriod(e.expense_at)).length} lançamentos`, color: 'text-red-500' },
+          { icon: Receipt, label: 'Despesas Op.', value: fmtCurrencyShort(kpis.totalExpenses), sub: `${expenses.filter(expense => filterByPeriod(expense.expense_at)).length} lançamentos`, color: 'text-red-500' },
           { icon: Wallet, label: 'Manutenção', value: fmtCurrencyShort(kpis.totalMaintenance), sub: 'custos', color: 'text-orange-500' },
           { icon: CheckCircle, label: 'Recebidos', value: fmtCurrencyShort(kpis.paidReceivable), sub: 'liquidados', color: 'text-teal-500' },
         ].map(({ icon: Icon, label, value, sub, color }) => (
@@ -711,7 +697,7 @@ export default function Financial() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
-              {expenses.slice(0, 6).map((exp: any) => (
+              {expenses.slice(0, 6).map(exp => (
                 <div key={exp.id} className="flex items-center justify-between py-2.5 px-4">
                   <div className="min-w-0">
                     <p className="text-xs font-medium">{exp.category}</p>
@@ -748,7 +734,7 @@ export default function Financial() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
-              {billableDocs.filter((d: any) => d.document_type === 'outbound').slice(0, 6).map((doc: any) => (
+              {billableDocs.filter(doc => doc.document_type === 'outbound').slice(0, 6).map(doc => (
                 <div key={doc.id} className="flex items-center justify-between py-2.5 px-4">
                   <div className="min-w-0">
                     <p className="text-xs font-medium">CT-e {doc.invoice_number || '—'}</p>
@@ -759,7 +745,7 @@ export default function Financial() {
                   <span className="text-xs font-semibold text-emerald-600">+{fmtCurrency(fiscalDocRevenue(doc))}</span>
                 </div>
               ))}
-              {billableDocs.filter((d: any) => d.document_type === 'outbound').length === 0 && (
+              {billableDocs.filter(doc => doc.document_type === 'outbound').length === 0 && (
                 <p className="text-xs text-muted-foreground text-center py-6">Nenhum CT-e emitido</p>
               )}
             </div>

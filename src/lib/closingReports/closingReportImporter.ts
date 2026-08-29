@@ -39,7 +39,7 @@ export interface LegacyImport {
   };
 }
 
-function numeric(v: any): number {
+function numeric(v: unknown): number {
   if (v == null || v === '') return 0;
   if (typeof v === 'number') return v;
   const s = String(v).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
@@ -47,12 +47,12 @@ function numeric(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function toIsoDate(v: any): string | null {
+function toIsoDate(v: unknown): string | null {
   if (v == null || v === '') return null;
   if (typeof v === 'number') return excelSerialToIso(v);
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   const s = String(v).trim();
-  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  const m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (m) {
     const dd = m[1].padStart(2, '0');
     const mm = m[2].padStart(2, '0');
@@ -65,7 +65,7 @@ function toIsoDate(v: any): string | null {
 }
 
 export function detectModel(sheet: XLSX.WorkSheet): LegacyModel {
-  const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: '' });
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
   const text = JSON.stringify(rows).toUpperCase();
   if (text.includes('CARGAS RECEBIDAS') || text.includes('PESO MANIDESTO') || text.includes('PESO MANIFESTO')) return 'summary';
   if (text.includes('RELATÓRIO DA') || text.includes('RELATORIO DA') || text.includes('DEZENA') || text.includes('QUINZENA')) return 'detailed';
@@ -76,11 +76,11 @@ export function parseLegacyWorkbook(buffer: ArrayBuffer): LegacyImport {
   const wb = XLSX.read(buffer, { type: 'array' });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const model = detectModel(sheet);
-  const raw = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: '' });
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
 
   let title = '';
   for (const row of raw.slice(0, 6)) {
-    const line = row.map((c: any) => String(c ?? '')).join(' ').trim();
+    const line = row.map((cell) => String(cell ?? '')).join(' ').trim();
     if (line.length > 5 && !/^R\$|^DATA|^ORIGEM|^N.\s*NOTA/i.test(line)) { title = line; break; }
   }
 
@@ -92,14 +92,14 @@ export function parseLegacyWorkbook(buffer: ArrayBuffer): LegacyImport {
     // Detecta cabeçalho: DATA CHEGADA | FATURAMENTO | PESO MANIFESTO/MANIDESTO | R$ VALOR FATURADO
     let headerIdx = -1;
     for (let i = 0; i < raw.length; i++) {
-      const cells = raw[i].map((c: any) => String(c ?? '').toUpperCase());
+      const cells = raw[i].map((cell) => String(cell ?? '').toUpperCase());
       if (cells.some(c => c.includes('DATA') && c.includes('CHEGADA')) &&
           cells.some(c => c.includes('PESO'))) { headerIdx = i; break; }
     }
     if (headerIdx >= 0) {
       for (let i = headerIdx + 1; i < raw.length; i++) {
         const r = raw[i];
-        if (!r || r.every((c: any) => c === '' || c == null)) continue;
+        if (!r || r.every((cell) => cell === '' || cell == null)) continue;
         const arrival = toIsoDate(r[0]);
         const period = r[1] ? String(r[1]) : null;
         const weight = numeric(r[2]);
@@ -115,11 +115,11 @@ export function parseLegacyWorkbook(buffer: ArrayBuffer): LegacyImport {
   if (model === 'detailed' || model === 'unknown') {
     let headerIdx = -1;
     for (let i = 0; i < raw.length; i++) {
-      const cells = raw[i].map((c: any) => String(c ?? '').toUpperCase());
+      const cells = raw[i].map((cell) => String(cell ?? '').toUpperCase());
       if (cells.some(c => c.includes('ORIGEM')) && cells.some(c => c.includes('NOTA'))) { headerIdx = i; break; }
     }
     if (headerIdx >= 0) {
-      const header = raw[headerIdx].map((c: any) => String(c ?? '').toUpperCase());
+      const header = raw[headerIdx].map((cell) => String(cell ?? '').toUpperCase());
       const col = (needle: string) => header.findIndex((h: string) => h.includes(needle));
       const iOrigin = col('ORIGEM');
       const iRem = col('REMETENTE');
@@ -136,7 +136,7 @@ export function parseLegacyWorkbook(buffer: ArrayBuffer): LegacyImport {
 
       for (let i = headerIdx + 1; i < raw.length; i++) {
         const r = raw[i];
-        if (!r || r.every((c: any) => c === '' || c == null)) continue;
+        if (!r || r.every((cell) => cell === '' || cell == null)) continue;
         const row: LegacyDetailedRow = {
           origin: iOrigin >= 0 ? String(r[iOrigin] ?? '') || null : null,
           remitter: iRem >= 0 ? String(r[iRem] ?? '') || null : null,
@@ -165,7 +165,7 @@ export function parseLegacyWorkbook(buffer: ArrayBuffer): LegacyImport {
 }
 
 export function legacyDetailedToItems(rows: LegacyDetailedRow[]): BuiltItem[] {
-  return rows.map((r, idx) => ({
+  return rows.map((r, idx): BuiltItem => ({
     fiscal_document_id: null,
     cte_document_id: null,
     load_id: null,

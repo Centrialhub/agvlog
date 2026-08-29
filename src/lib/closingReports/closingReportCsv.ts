@@ -3,7 +3,7 @@ import type { BuiltItem } from './closingReportBuilder';
 const brl = (n: number) => Number(n || 0).toFixed(2).replace('.', ',');
 const kg = (n: number) => Number(n || 0).toFixed(3).replace('.', ',');
 const dt = (v?: string | null) => (v ? v.slice(0, 10).split('-').reverse().join('/') : '');
-const esc = (v: any) => {
+const esc = (v: unknown) => {
   const s = v == null ? '' : String(v);
   if (/[";\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;

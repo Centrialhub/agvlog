@@ -1,3 +1,8 @@
+import { isCronRequest } from "./cron-auth.ts";
+import { corsHeaders } from "./cors.ts";
+
+export { corsHeaders };
+
 /**
  * SSX Integration Shared Utilities
  * 
@@ -15,14 +20,6 @@
  *   We try admin token first, then regular token as fallback.
  * - Secrets (token, password, hash) are NEVER logged in plaintext.
  */
-
-// ======================== CORS ========================
-
-export const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-agvlog-cron-secret",
-};
 
 // ======================== URL Builder ========================
 
@@ -171,13 +168,14 @@ export async function getAdminToken(
   let password = config.passwordEncrypted;
   if (password.startsWith("enc:v1:")) {
     const encryptionKey = Deno.env.get("AGVLOG_ENCRYPTION_KEY");
-    if (encryptionKey) {
-      try {
-        password = await decryptAesGcm(password, encryptionKey);
-      } catch (e: any) {
-        console.error("[SSX:admin-token] Decryption failed:", e.message);
-        return { token: null, error: `Decryption failed: ${e.message}` };
-      }
+    if (!encryptionKey) {
+      return { token: null, error: "AGVLOG_ENCRYPTION_KEY is required" };
+    }
+    try {
+      password = await decryptAesGcm(password, encryptionKey);
+    } catch (e: any) {
+      console.error("[SSX:admin-token] Decryption failed:", e.message);
+      return { token: null, error: `Decryption failed: ${e.message}` };
     }
   }
 
@@ -196,10 +194,10 @@ export async function getAdminToken(
     });
     const text = await resp.text();
     const duration = Date.now() - startTime;
-    console.log(`[SSX:admin-token] POST ${loginUrl} (no HashAuth) | status=${resp.status} | ${duration}ms | response=${text.substring(0, 150)}`);
+    console.log(`[SSX:admin-token] POST ${loginUrl} (no HashAuth) | status=${resp.status} | ${duration}ms`);
 
     if (!resp.ok) {
-      return { token: null, error: `Login without HashAuth failed: HTTP ${resp.status}: ${text.substring(0, 200)}` };
+      return { token: null, error: `Login without HashAuth failed: HTTP ${resp.status}` };
     }
 
     let token: string;
@@ -676,7 +674,6 @@ function deriveErrorFromAttempts(attempts: AttemptLog[], fallbackEndpoint: strin
   }
 
   const classes = new Set(attempts.map(a => a.errorClass));
-  const statuses = attempts.map(a => a.statusCode);
   const lastAttempt = attempts[attempts.length - 1];
 
   // Check if ALL were empty_response (200 but no items)
@@ -742,7 +739,7 @@ export interface IntegrationLogEntry {
   success: boolean;
   error_message?: string;
   duration_ms?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export async function logIntegration(supabase: any, log: IntegrationLogEntry): Promise<void> {
@@ -767,33 +764,7 @@ export function logSsxCall(params: {
   fallbackReason?: string;
   errorClass?: SsxErrorClass;
 }): void {
-  const sanitizedPayload = params.payloadPreview ? sanitize(params.payloadPreview) : null;
-  console.log(`[SSX:${params.routine}] ${params.method} ${params.endpoint} | v=${params.apiVersion} | type=${params.attemptType} | status=${params.statusCode} | ${params.durationMs}ms | result=${params.result}${params.errorClass ? ` (${params.errorClass})` : ""}${params.fallbackReason ? ` | fallback: ${params.fallbackReason}` : ""} | payload=${JSON.stringify(sanitizedPayload)} | response=${params.responsePreview.substring(0, 150)}`);
-}
-
-// ======================== Sanitizer ========================
-
-export function sanitize(obj: any): any {
-  if (obj == null) return obj;
-  if (typeof obj === "string") return obj;
-  if (Array.isArray(obj)) return obj.map(sanitize);
-  if (typeof obj !== "object") return obj;
-
-  const sensitiveKeys = new Set([
-    "token", "Token", "token_cache", "password", "Password", "password_encrypted",
-    "secret", "Secret", "hash", "Hash", "hashauth", "hashcode",
-    "Authorization", "authorization", "AccessToken", "access_token",
-    "admin_token_cache",
-  ]);
-  const result: Record<string, any> = {};
-  for (const [key, val] of Object.entries(obj)) {
-    if (sensitiveKeys.has(key)) {
-      result[key] = typeof val === "string" ? `***${val.slice(-4)}` : "***";
-    } else {
-      result[key] = sanitize(val);
-    }
-  }
-  return result;
+  console.log(`[SSX:${params.routine}] ${params.method} ${params.endpoint} | v=${params.apiVersion} | type=${params.attemptType} | status=${params.statusCode} | ${params.durationMs}ms | result=${params.result}${params.errorClass ? ` (${params.errorClass})` : ""}${params.fallbackReason ? ` | fallback: ${params.fallbackReason}` : ""}`);
 }
 
 // ======================== Auth Helpers ========================
@@ -816,11 +787,9 @@ export async function authenticateCaller(req: Request, supabaseUrl: string, supa
   isCron: boolean;
   error?: Response;
 }> {
-  const { createClient } = await import("npm:@supabase/supabase-js@2");
+  const { createClient } = await import("@supabase/supabase-js");
 
-  const cronSecret = req.headers.get("x-agvlog-cron-secret");
-  const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
-  const isCron = !!(cronSecret && expectedCronSecret && cronSecret === expectedCronSecret);
+  const isCron = await isCronRequest(req, supabaseUrl, supabaseServiceKey);
 
   if (isCron) return { callerId: null, isCron: true };
 

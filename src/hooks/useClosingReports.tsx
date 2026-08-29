@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
 import {
   buildPreview,
   computeClosingPaymentStatus,
@@ -10,10 +11,11 @@ import {
   type FreightAllocation,
   type ReportType,
   type ReportModel,
+  type RawCte,
+  type RawFiscalDoc,
+  type RawLoad,
   type SummaryLine,
 } from '@/lib/closingReports/closingReportBuilder';
-
-const sb: any = supabase;
 
 export interface ClosingReportRow {
   id: string;
@@ -55,6 +57,18 @@ export interface ClosingReportRow {
   client?: { id: string; name: string } | null;
 }
 
+export interface ClosingReportDetail {
+  header: ClosingReportRow | null;
+  items: Tables<'closing_report_items'>[];
+  summary: Tables<'closing_report_summary_lines'>[];
+  payments: Tables<'closing_report_payments'>[];
+}
+
+const deliveryMeta = (value: Json): RawFiscalDoc['delivery_meta'] => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return { delivered_at: typeof value.delivered_at === 'string' ? value.delivered_at : null };
+};
+
 export interface ClosingFilters {
   clientId?: string | null;
   payerId?: string | null;
@@ -86,9 +100,11 @@ export function useClosingReportsList(filters: ClosingFilters = {}) {
     queryKey: ['closing-reports', currentTenant?.id, filters],
     enabled: !!currentTenant?.id,
     queryFn: async () => {
-      let q = sb.from('closing_reports')
-        .select('*, client:client_id(id,name)')
-        .eq('tenant_id', currentTenant!.id)
+      const tenantId = currentTenant?.id;
+      if (!tenantId) return [];
+      let q = supabase.from('closing_reports')
+        .select('*, client:clients!closing_reports_client_id_fkey(id, name:company_name)')
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
       if (filters.clientId) q = q.eq('client_id', filters.clientId);
       if (filters.payerId) q = q.eq('payer_client_id', filters.payerId);
@@ -110,17 +126,19 @@ export function useClosingReportsList(filters: ClosingFilters = {}) {
 export function useClosingReport(id: string | null) {
   const { currentTenant } = useTenant();
   return useQuery({
-    queryKey: ['closing-report', id],
+    queryKey: ['closing-report', currentTenant?.id, id],
     enabled: !!id && !!currentTenant?.id,
-    queryFn: async () => {
+    queryFn: async (): Promise<ClosingReportDetail> => {
+      const tenantId = currentTenant?.id;
+      if (!id || !tenantId) return { header: null, items: [], summary: [], payments: [] };
       const [{ data: header, error: e1 }, { data: items, error: e2 }, { data: summary, error: e3 }, { data: payments, error: e4 }] = await Promise.all([
-        sb.from('closing_reports').select('*, client:client_id(id,name), payer:payer_client_id(id,name)').eq('id', id).maybeSingle(),
-        sb.from('closing_report_items').select('*').eq('closing_report_id', id).order('sort_order'),
-        sb.from('closing_report_summary_lines').select('*').eq('closing_report_id', id).order('sort_order'),
-        sb.from('closing_report_payments').select('*').eq('closing_report_id', id).order('payment_date', { ascending: false }),
+        supabase.from('closing_reports').select('*, client:clients!closing_reports_client_id_fkey(id, name:company_name), payer:clients!closing_reports_payer_client_id_fkey(id, name:company_name)').eq('id', id).eq('tenant_id', tenantId).maybeSingle(),
+        supabase.from('closing_report_items').select('*').eq('closing_report_id', id).eq('tenant_id', tenantId).order('sort_order'),
+        supabase.from('closing_report_summary_lines').select('*').eq('closing_report_id', id).eq('tenant_id', tenantId).order('sort_order'),
+        supabase.from('closing_report_payments').select('*').eq('closing_report_id', id).eq('tenant_id', tenantId).order('payment_date', { ascending: false }),
       ]);
       if (e1 || e2 || e3 || e4) throw (e1 || e2 || e3 || e4);
-      return { header: header as ClosingReportRow, items: (items ?? []) as any[], summary: (summary ?? []) as any[], payments: (payments ?? []) as any[] };
+      return { header: header as ClosingReportRow | null, items: items ?? [], summary: summary ?? [], payments: payments ?? [] };
     },
   });
 }
@@ -142,7 +160,7 @@ export function useBuildPreview() {
   return useMutation({
     mutationFn: async (inp: PreviewInputs): Promise<BuiltPreview> => {
       if (!currentTenant?.id) throw new Error('tenant');
-      let fq = sb.from('fiscal_documents')
+      let fq = supabase.from('fiscal_documents')
         .select('id, invoice_number, access_key, issue_date, origin_city, origin_state, remitter, remitter_cnpj, recipient, recipient_cnpj, recipient_city, recipient_state, value, weight_kg, volume_count, freight_value, freight_cif_value, freight_fob_value, load_id, client_id, imported_note_status, delivery_meta')
         .eq('tenant_id', currentTenant.id)
         .gte('issue_date', inp.periodStart)
@@ -151,25 +169,37 @@ export function useBuildPreview() {
       const { data: fiscalDocs, error: fe } = await fq;
       if (fe) throw fe;
 
-      const loadIds = Array.from(new Set((fiscalDocs ?? []).map((d: any) => d.load_id).filter(Boolean)));
+      const rawFiscalDocs: RawFiscalDoc[] = (fiscalDocs ?? []).map(document => ({
+        ...document,
+        delivery_meta: deliveryMeta(document.delivery_meta),
+      }));
+      const loadIds = Array.from(new Set(
+        rawFiscalDocs.map(document => document.load_id).filter((loadId): loadId is string => !!loadId),
+      ));
       const [{ data: ctes, error: ce }, { data: loads, error: le }] = await Promise.all([
-        loadIds.length ? sb.from('cte_documents')
+        loadIds.length ? supabase.from('cte_documents')
           .select('id, cte_number, access_key, freight_value, weight_kg, fiscal_document_ids, issued_at')
           .eq('tenant_id', currentTenant.id)
           .overlaps('load_ids', loadIds) : Promise.resolve({ data: [], error: null }),
-        loadIds.length ? sb.from('loads').select('id, load_number, external_load_number, arrival_date, load_date, gate_departure_at, arrival_at, vehicle_id, driver_id, vehicle:vehicle_id(plate), driver:driver_id(name)').in('id', loadIds) : Promise.resolve({ data: [], error: null }),
+        loadIds.length ? supabase.from('loads')
+          .select('id, load_number, external_load_number, arrival_date, load_date, gate_departure_at, arrival_at, vehicle_id, driver_id, vehicle:vehicles!loads_vehicle_id_fkey(plate), driver:drivers!loads_driver_id_fkey(name)')
+          .eq('tenant_id', currentTenant.id)
+          .in('id', loadIds) : Promise.resolve({ data: [], error: null }),
       ]);
       if (ce || le) throw (ce || le);
 
-      let filtered = (fiscalDocs ?? []) as any[];
+      const rawCtes: RawCte[] = ctes ?? [];
+      let filtered = rawFiscalDocs;
       if (inp.onlyWithCte) {
         const linkedIds = new Set<string>();
-        for (const c of (ctes ?? []) as any[]) (c.fiscal_document_ids ?? []).forEach((x: string) => linkedIds.add(x));
-        filtered = filtered.filter(d => linkedIds.has(d.id));
+        for (const cte of rawCtes) {
+          for (const documentId of cte.fiscal_document_ids ?? []) linkedIds.add(documentId);
+        }
+        filtered = filtered.filter(document => linkedIds.has(document.id));
       }
-      if (inp.onlyDelivered) filtered = filtered.filter(d => d.delivery_meta?.delivered_at);
+      if (inp.onlyDelivered) filtered = filtered.filter(document => document.delivery_meta?.delivered_at);
 
-      let filteredLoads = (loads ?? []) as any[];
+      let filteredLoads = (loads ?? []) as unknown as RawLoad[];
       if (inp.vehicleId) filteredLoads = filteredLoads.filter(l => l.vehicle_id === inp.vehicleId);
       if (inp.driverId) filteredLoads = filteredLoads.filter(l => l.driver_id === inp.driverId);
       if (inp.vehicleId || inp.driverId) {
@@ -177,7 +207,7 @@ export function useBuildPreview() {
         filtered = filtered.filter(d => d.load_id && okLoadIds.has(d.load_id));
       }
 
-      const input: BuilderInput = { fiscalDocs: filtered, ctes: (ctes ?? []) as any[], loads: filteredLoads, freightAllocation: inp.freightAllocation };
+      const input: BuilderInput = { fiscalDocs: filtered, ctes: rawCtes, loads: filteredLoads, freightAllocation: inp.freightAllocation };
       return buildPreview(input);
     },
   });
@@ -197,7 +227,7 @@ export interface CreatePayload {
   expectedPaymentDate?: string | null;
   notes?: string | null;
   preview: BuiltPreview;
-  filtersSnapshot?: any;
+  filtersSnapshot?: Json;
   itemsOverride?: BuiltItem[];
   summariesOverride?: SummaryLine[];
 }
@@ -208,7 +238,7 @@ export function useCreateClosingReport() {
   return useMutation({
     mutationFn: async (p: CreatePayload) => {
       if (!currentTenant?.id) throw new Error('tenant');
-      const { data: numData, error: numErr } = await sb.rpc('next_closing_report_number', { _tenant_id: currentTenant.id, _date: p.periodEnd });
+      const { data: numData, error: numErr } = await supabase.rpc('next_closing_report_number', { _tenant_id: currentTenant.id, _date: p.periodEnd });
       if (numErr) throw numErr;
       const number = numData as string;
       const items = p.itemsOverride ?? p.preview.items;
@@ -226,7 +256,7 @@ export function useCreateClosingReport() {
       const totalFuelCost = items.reduce((s, i) => s + Number(i.fuel_total || 0), 0);
       const avgConsumption = totalLiters > 0 ? totalKm / totalLiters : 0;
 
-      const { data: header, error: hErr } = await sb.from('closing_reports').insert({
+      const headerPayload: TablesInsert<'closing_reports'> = {
         tenant_id: currentTenant.id,
         client_id: p.clientId ?? null,
         payer_client_id: p.payerClientId ?? null,
@@ -251,7 +281,7 @@ export function useCreateClosingReport() {
         total_amount: totalAmount,
         open_amount: totalAmount,
         filters_snapshot: p.filtersSnapshot ?? {},
-        totals_snapshot: p.preview.totals,
+        totals_snapshot: p.preview.totals as unknown as Json,
         status: 'draft',
         payment_status: computeClosingPaymentStatus({ totalAmount, receivedAmount: 0, expectedPaymentDate: p.expectedPaymentDate }),
         vehicle_plates_snapshot: plates,
@@ -260,22 +290,34 @@ export function useCreateClosingReport() {
         total_liters: totalLiters,
         total_fuel_cost: totalFuelCost,
         avg_consumption_km_l: avgConsumption,
-      }).select('*').single();
+      };
+      const { data: header, error: hErr } = await supabase.from('closing_reports').insert(headerPayload).select('*').single();
       if (hErr) throw hErr;
 
       if (items.length) {
-        const rows = items.map(it => ({ ...it, tenant_id: currentTenant.id, closing_report_id: header.id }));
-        const { error: iErr } = await sb.from('closing_report_items').insert(rows);
+        const rows: TablesInsert<'closing_report_items'>[] = items.map(item => ({
+          ...item,
+          tenant_id: currentTenant.id,
+          closing_report_id: header.id,
+        }));
+        const { error: iErr } = await supabase.from('closing_report_items').insert(rows);
         if (iErr) throw iErr;
       }
 
       const summaries = p.summariesOverride ?? [...p.preview.summaryByArrival, ...p.preview.summaryByDestination];
       if (summaries.length) {
-        const rows = summaries.map((s, idx) => ({ ...s, tenant_id: currentTenant.id, closing_report_id: header.id, sort_order: idx }));
-        await sb.from('closing_report_summary_lines').insert(rows);
+        const rows: TablesInsert<'closing_report_summary_lines'>[] = summaries.map((summary, index) => ({
+          ...summary,
+          tenant_id: currentTenant.id,
+          closing_report_id: header.id,
+          sort_order: index,
+        }));
+        const { error: summaryError } = await supabase.from('closing_report_summary_lines').insert(rows);
+        if (summaryError) throw summaryError;
       }
 
-      await sb.from('closing_report_history').insert({ tenant_id: currentTenant.id, closing_report_id: header.id, action: 'created' });
+      const { error: historyError } = await supabase.from('closing_report_history').insert({ tenant_id: currentTenant.id, closing_report_id: header.id, action: 'created' });
+      if (historyError) throw historyError;
       return header as ClosingReportRow;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['closing-reports'] }),
@@ -286,39 +328,42 @@ export function useCreateClosingReport() {
 export function useCloseClosingReport() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => { const { error } = await sb.rpc('close_closing_report', { _closing_report_id: id }); if (error) throw error; },
+    mutationFn: async (id: string) => { const { error } = await supabase.rpc('close_closing_report', { _closing_report_id: id }); if (error) throw error; },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['closing-reports'] }),
   });
 }
 export function useCancelClosingReport() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason: string }) => { const { error } = await sb.rpc('cancel_closing_report', { _closing_report_id: id, _reason: reason }); if (error) throw error; },
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => { const { error } = await supabase.rpc('cancel_closing_report', { _closing_report_id: id, _reason: reason }); if (error) throw error; },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['closing-reports'] }),
   });
 }
 export function useReopenClosingReport() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason: string }) => { const { error } = await sb.rpc('reopen_closing_report', { _closing_report_id: id, _reason: reason }); if (error) throw error; },
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => { const { error } = await supabase.rpc('reopen_closing_report', { _closing_report_id: id, _reason: reason }); if (error) throw error; },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['closing-reports'] }),
   });
 }
 export function useRegisterClosingPayment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, payment }: { id: string; payment: { amount: number; payment_date?: string; payment_method?: string; notes?: string } }) => {
-      const { error } = await sb.rpc('register_closing_report_payment', { _closing_report_id: id, _payment: payment });
+    mutationFn: async ({ id, payment }: { id: string; payment: { amount: number; bank_account_id: string; payment_date?: string; payment_method?: string; notes?: string } }) => {
+      const { error } = await supabase.rpc('register_closing_report_payment', { _closing_report_id: id, _payment: payment as unknown as Json });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['closing-reports'] }),
   });
 }
 export function useMarkClosingSent() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, sent_to, channel }: { id: string; sent_to?: string; channel?: string }) => {
-      const { error } = await sb.from('closing_reports').update({ status: 'sent', sent_at: new Date().toISOString(), sent_to, sent_channel: channel }).eq('id', id);
+      const tenantId = currentTenant?.id;
+      if (!tenantId) throw new Error('Tenant ativo não encontrado.');
+      const { error } = await supabase.from('closing_reports').update({ status: 'sent', sent_at: new Date().toISOString(), sent_to, sent_channel: channel }).eq('id', id).eq('tenant_id', tenantId);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['closing-reports'] }),
@@ -327,32 +372,13 @@ export function useMarkClosingSent() {
 
 export function useGenerateInvoiceFromClosing() {
   const qc = useQueryClient();
-  const { currentTenant } = useTenant();
   return useMutation({
     mutationFn: async (closingReportId: string) => {
-      const { data: r, error } = await sb.from('closing_reports').select('*').eq('id', closingReportId).single();
+      const { data: invoiceId, error } = await supabase.rpc('generate_client_invoice_from_closing', {
+        _closing_report_id: closingReportId,
+      });
       if (error) throw error;
-      if (!r.client_id) throw new Error('Fechamento sem cliente vinculado');
-      if (r.client_invoice_id) throw new Error('Fechamento já possui fatura vinculada');
-      if (r.status === 'cancelled') throw new Error('Fechamento cancelado não gera fatura');
-
-      const invNumber = `FCH-${r.closing_number}`;
-      const { data: inv, error: iErr } = await sb.from('client_invoices').insert({
-        tenant_id: currentTenant!.id,
-        client_id: r.client_id,
-        invoice_number: invNumber,
-        issue_date: new Date().toISOString().slice(0, 10),
-        due_date: r.expected_payment_date,
-        gross_amount: r.total_freight_value,
-        total_amount: r.total_amount,
-        status: 'draft',
-        notes: `Gerada a partir do fechamento ${r.closing_number}`,
-      }).select('*').single();
-      if (iErr) throw iErr;
-
-      await sb.from('closing_reports').update({ client_invoice_id: inv.id, invoice_status: 'invoiced', status: 'invoiced', updated_at: new Date().toISOString() }).eq('id', r.id);
-      await sb.from('closing_report_history').insert({ tenant_id: currentTenant!.id, closing_report_id: r.id, action: 'invoice_generated', new_value: invNumber });
-      return inv;
+      return invoiceId;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['closing-reports'] }),
   });
@@ -392,25 +418,29 @@ function computeTripDerived(u: ItemTripUpdate) {
 }
 
 export function useUpdateClosingReportItem() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ itemId, closingReportId, patch }: { itemId: string; closingReportId: string; patch: ItemTripUpdate }) => {
+      const tenantId = currentTenant?.id;
+      if (!tenantId) throw new Error('Tenant ativo não encontrado.');
       const derived = computeTripDerived(patch);
-      const { error } = await sb.from('closing_report_items').update({ ...patch, ...derived }).eq('id', itemId);
+      const { error } = await supabase.from('closing_report_items').update({ ...patch, ...derived }).eq('id', itemId).eq('tenant_id', tenantId).eq('closing_report_id', closingReportId);
       if (error) throw error;
 
       // Recalc header aggregates from items
-      const { data: items, error: e2 } = await sb.from('closing_report_items')
+      const { data: items, error: e2 } = await supabase.from('closing_report_items')
         .select('vehicle_plate, driver_name, km_driven, fuel_liters, fuel_total')
-        .eq('closing_report_id', closingReportId);
+        .eq('closing_report_id', closingReportId)
+        .eq('tenant_id', tenantId);
       if (e2) throw e2;
-      const plates = Array.from(new Set((items ?? []).map((i: any) => (i.vehicle_plate || '').toUpperCase()).filter(Boolean)));
-      const driverNames = Array.from(new Set((items ?? []).map((i: any) => (i.driver_name || '').toUpperCase()).filter(Boolean)));
-      const totalKm = (items ?? []).reduce((s: number, i: any) => s + Number(i.km_driven || 0), 0);
-      const totalLiters = (items ?? []).reduce((s: number, i: any) => s + Number(i.fuel_liters || 0), 0);
-      const totalFuelCost = (items ?? []).reduce((s: number, i: any) => s + Number(i.fuel_total || 0), 0);
+      const plates = Array.from(new Set((items ?? []).map(item => (item.vehicle_plate || '').toUpperCase()).filter(Boolean)));
+      const driverNames = Array.from(new Set((items ?? []).map(item => (item.driver_name || '').toUpperCase()).filter(Boolean)));
+      const totalKm = (items ?? []).reduce((sum, item) => sum + Number(item.km_driven || 0), 0);
+      const totalLiters = (items ?? []).reduce((sum, item) => sum + Number(item.fuel_liters || 0), 0);
+      const totalFuelCost = (items ?? []).reduce((sum, item) => sum + Number(item.fuel_total || 0), 0);
       const avg = totalLiters > 0 ? totalKm / totalLiters : 0;
-      await sb.from('closing_reports').update({
+      const { error: reportError } = await supabase.from('closing_reports').update({
         vehicle_plates_snapshot: plates,
         driver_names_snapshot: driverNames,
         total_km_driven: totalKm,
@@ -418,7 +448,8 @@ export function useUpdateClosingReportItem() {
         total_fuel_cost: totalFuelCost,
         avg_consumption_km_l: avg,
         updated_at: new Date().toISOString(),
-      }).eq('id', closingReportId);
+      }).eq('id', closingReportId).eq('tenant_id', tenantId);
+      if (reportError) throw reportError;
     },
     onSuccess: (_r, v) => {
       qc.invalidateQueries({ queryKey: ['closing-reports'] });

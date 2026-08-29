@@ -1,11 +1,13 @@
-import { useState, useMemo, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import { useState, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useFleetPositions, PositionLast } from '@/hooks/usePositions';
-import { useVehicles, Vehicle } from '@/hooks/useVehicles';
+import { MapAutoFit } from '@/components/maps/MapAutoFit';
+import { createTruckMarkerIcon, DEFAULT_BRAZIL_MAP_CENTER } from '@/lib/maps/leaflet';
+import { useFleetPositions } from '@/hooks/usePositions';
+import { useVehicles } from '@/hooks/useVehicles';
 import { useFleetState, VehicleState, MovementState, stateLabel, stateColor, stateBadgeClasses, stateDotClass, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
+import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,39 +18,13 @@ import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
-// Fix Leaflet default icon issue
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
-
 function createVehicleIcon(state: MovementState) {
   const color = stateColor(state);
-  const opacity = state === 'offline' || state === 'unknown' ? '0.6' : '1';
-  return L.divIcon({
+  return createTruckMarkerIcon({
+    color,
+    opacity: state === 'offline' || state === 'unknown' ? 0.6 : 1,
     className: 'custom-vehicle-marker',
-    html: `<div style="
-      width: 32px; height: 32px; border-radius: 50%;
-      background: ${color}; border: 3px solid white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      display: flex; align-items: center; justify-content: center;
-      opacity: ${opacity};
-    "><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
   });
-}
-
-function FitBounds({ positions }: { positions: { lat: number; lng: number }[] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (positions.length === 0) return;
-    const bounds = L.latLngBounds(positions.map(p => [p.lat, p.lng]));
-    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-  }, [positions.length]);
-  return null;
 }
 
 /** Pipeline health summary component */
@@ -105,6 +81,8 @@ function PipelineHealthBanner({ tenantId }: { tenantId: string }) {
 
 export default function FleetMap() {
   const { currentTenant } = useTenant();
+  const { isEnabled } = useTenantCapabilities();
+  const ssxEnabled = isEnabled('ssx');
   const { data: positions = [], isLoading: posLoading, refetch } = useFleetPositions();
   const { data: vehicles = [] } = useVehicles();
   const { data: vehicleStates = [] } = useFleetState();
@@ -121,11 +99,12 @@ export default function FleetMap() {
       const { data } = await supabase.from('integration_accounts').select('id, status').eq('tenant_id', currentTenant.id);
       return data || [];
     },
-    enabled: !!currentTenant && isAdmin,
+    enabled: !!currentTenant && isAdmin && ssxEnabled,
   });
 
   const pollMutation = useMutation({
     mutationFn: async () => {
+      if (!ssxEnabled) throw new Error('Integração SSX em implantação');
       for (const acc of accounts) {
         await supabase.functions.invoke('agvlog-pipeline-run', {
           body: {
@@ -154,12 +133,6 @@ export default function FleetMap() {
     for (const s of vehicleStates) map[s.vehicle_id] = s;
     return map;
   }, [vehicleStates]);
-
-  const vehicleMap = useMemo(() => {
-    const map: Record<string, Vehicle> = {};
-    for (const v of vehicles) map[v.id] = v;
-    return map;
-  }, [vehicles]);
 
   // Enrich vehicles: combine vehicle info + state + position
   const enriched = useMemo(() => {
@@ -191,6 +164,10 @@ export default function FleetMap() {
   }, [enriched, search, statusFilter]);
 
   const withPosition = useMemo(() => filtered.filter(e => e.lat != null && e.lng != null), [filtered]);
+  const mapPoints = useMemo<[number, number][]>(
+    () => withPosition.map((entry) => [entry.lat as number, entry.lng as number]),
+    [withPosition],
+  );
 
   const stats = useMemo(() => {
     const online = enriched.filter(e => e.state === 'moving' || e.state === 'stopped' || e.state === 'idle').length;
@@ -242,7 +219,7 @@ export default function FleetMap() {
           <Button variant="outline" size="sm" className="w-full" onClick={() => { refetch(); queryClient.invalidateQueries({ queryKey: ['vehicles_state'] }); }}>
             <RefreshCw className="h-4 w-4 mr-2" /> Recarregar
           </Button>
-          {isAdmin && accounts.length > 0 && (
+          {isAdmin && ssxEnabled && accounts.length > 0 && (
             <Button variant="secondary" size="sm" className="w-full" onClick={() => pollMutation.mutate()} disabled={pollMutation.isPending}>
               <Radio className={`h-4 w-4 mr-2 ${pollMutation.isPending ? 'animate-spin' : ''}`} />
               {pollMutation.isPending ? 'Coletando...' : 'Diagnóstico SSX (manual)'}
@@ -250,7 +227,7 @@ export default function FleetMap() {
           )}
         </div>
 
-        {currentTenant && isAdmin && <PipelineHealthBanner tenantId={currentTenant.id} />}
+        {currentTenant && isAdmin && ssxEnabled && <PipelineHealthBanner tenantId={currentTenant.id} />}
 
         {/* Vehicle list */}
         <div className="flex-1 overflow-y-auto">
@@ -307,7 +284,7 @@ export default function FleetMap() {
       {/* Map */}
       <div className="flex-1 relative">
         <MapContainer
-          center={[-14.235, -51.925]}
+          center={mapPoints[0] ?? DEFAULT_BRAZIL_MAP_CENTER}
           zoom={4}
           className="h-full w-full z-0"
           zoomControl={true}
@@ -316,7 +293,7 @@ export default function FleetMap() {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <FitBounds positions={withPosition as any} />
+          <MapAutoFit points={mapPoints} padding={50} maxZoom={14} />
           {withPosition.map(e => (
             <Marker
               key={e.vehicle.id}

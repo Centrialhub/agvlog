@@ -189,7 +189,7 @@ describe('RLS: driver load visibility (_driver_load_ids)', () => {
   });
 
   it('anonymous user (no auth.uid) sees nothing', () => {
-    const f = { ...makeFixture(), authUid: null };
+    const f: Fixture = { ...makeFixture(), authUid: null };
     expect(driverLoadIds(f).size).toBe(0);
   });
 

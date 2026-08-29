@@ -33,7 +33,7 @@ export function isBillableFiscalDoc(doc: { status?: string | null; sefaz_status?
  * Receita de um CT-e sem dupla contagem: `value` do CT-e espelha o frete,
  * então nunca somamos os dois campos.
  */
-export function fiscalDocRevenue(doc: { freight_value?: any; value?: any } | null | undefined): number {
+export function fiscalDocRevenue(doc: { freight_value?: unknown; value?: unknown } | null | undefined): number {
   if (!doc) return 0;
   const freight = Number(doc.freight_value) || 0;
   if (freight > 0) return freight;
@@ -101,7 +101,7 @@ export function isConfirmedNfse(doc: { status?: string | null } | null | undefin
 }
 
 /** Receita de uma NFS-e (valor bruto dos serviços). */
-export function nfseRevenue(doc: { valor_servicos?: any; valor_liquido?: any } | null | undefined): number {
+export function nfseRevenue(doc: { valor_servicos?: unknown; valor_liquido?: unknown } | null | undefined): number {
   if (!doc) return 0;
   const servicos = Number(doc.valor_servicos) || 0;
   if (servicos > 0) return servicos;

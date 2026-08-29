@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useUpdateLoad, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
+import { useTransitionLoadStatus, LOAD_STATUS_LABELS, Load, type LoadStatus } from '@/hooks/useLoads';
 import { useLoadItems } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useGenerateCTe } from '@/hooks/useGenerateCTe';
@@ -12,20 +12,20 @@ import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 import { getNextStatuses } from '@/lib/statusPipeline';
 import { useToast } from '@/hooks/use-toast';
 import LoadRomaneioTabs from '@/components/loads/LoadRomaneioTabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  PackageCheck, ArrowLeft, ArrowRight, FileText, Truck, User,
-  MapPin, Calendar, AlertTriangle, CheckCircle, Clock, Send, Route as RouteIcon,
+  ArrowLeft, ArrowRight, FileText, Truck, User,
+  MapPin, Calendar, AlertTriangle, Send, Route as RouteIcon,
 } from 'lucide-react';
+import { getErrorMessage } from '@/lib/errors';
 
 function useLoad(id: string | undefined) {
   const { currentTenant } = useTenant();
@@ -53,7 +53,7 @@ function useLoadDocuments(loadId: string | undefined) {
       if (!loadId) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, reference_number, document_type, status, remitter, remitter_cnpj, recipient, recipient_cnpj, recipient_city, recipient_state, recipient_neighborhood, pallet_count, weight_kg, value, issue_date, freight_value, freight_value_original, freight_breakdown, freight_overridden, freight_override_reason, freight_confirmed_at, delivery_meta, client_load_source, load_id')
+        .select('id, invoice_number, reference_number, document_type, status, remitter, remitter_cnpj, recipient, recipient_cnpj, recipient_city, recipient_state, recipient_neighborhood, pallet_count, weight_kg, value, issue_date, freight_value, freight_value_original, freight_breakdown, freight_overridden, freight_override_reason, freight_confirmed_at, delivery_meta, client_load_source, load_id, deleted_at')
         .eq('load_id', loadId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -82,7 +82,7 @@ export default function LoadDetail() {
   const { data: items = [] } = useLoadItems(id);
   const { data: documents = [] } = useLoadDocuments(id);
   const { data: vehicles = [] } = useVehicles();
-  const updateLoad = useUpdateLoad();
+  const transitionLoadStatus = useTransitionLoadStatus();
   const generateCTe = useGenerateCTe();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -121,16 +121,11 @@ export default function LoadDetail() {
       setDispatchStops([{ destination: load?.destination || '', client_id: '' }]);
       return;
     }
-    // Group items by destination (from orders) — deduplicate
-    const seen = new Set<string>();
+    // A carga expõe hoje um único destino consolidado, independentemente da
+    // quantidade de itens. O operador pode refinar as paradas no planejamento.
     const stops: { destination: string; client_id: string }[] = [];
-    for (const item of items) {
-      const key = (item as any).orders?.destination || load?.destination || '';
-      if (key && !seen.has(key)) {
-        seen.add(key);
-        stops.push({ destination: key, client_id: '' });
-      }
-    }
+    const destination = load?.destination || '';
+    if (destination) stops.push({ destination, client_id: '' });
     if (stops.length === 0) {
       stops.push({ destination: load?.destination || '', client_id: '' });
     }
@@ -152,7 +147,7 @@ export default function LoadDetail() {
 
       // Distribui todos os documentos fiscais da carga na primeira parada por padrão;
       // o operador refina pela tela de planejamento de rotas se quiser separar.
-      const fdIds = items.map(i => (i as any).fiscal_document_id).filter(Boolean);
+      const fdIds = items.map(item => item.fiscal_document_id).filter((documentId): documentId is string => Boolean(documentId));
       const stopsPayload = validStops.map((s, idx) => ({
         destination: s.destination,
         client_id: s.client_id || null,
@@ -160,7 +155,7 @@ export default function LoadDetail() {
         fiscal_document_ids: idx === 0 ? fdIds : [],
       }));
 
-      const { data: tripId, error } = await (supabase as any).rpc('dispatch_planned_route', {
+      const { data: tripId, error } = await supabase.rpc('dispatch_planned_route', {
         _payload: {
           tenant_id: currentTenant.id,
           vehicle_id: dispatchForm.vehicle_id || load.vehicle_id,
@@ -180,12 +175,12 @@ export default function LoadDetail() {
       refetch();
       qc.invalidateQueries({ queryKey: ['loads'] });
     },
-    onError: (e: any) => toast({ title: 'Erro ao despachar', description: e.message, variant: 'destructive' }),
+    onError: (error: Error) => toast({ title: 'Erro ao despachar', description: error.message, variant: 'destructive' }),
   });
 
   const vehicle = useMemo(() => {
     if (!load?.vehicle_id) return null;
-    return vehicles.find((v: any) => v.id === load.vehicle_id) as any;
+    return vehicles.find(vehicle => vehicle.id === load.vehicle_id) ?? null;
   }, [load?.vehicle_id, vehicles]);
 
   // Compute totals from items (source of truth)
@@ -218,12 +213,12 @@ export default function LoadDetail() {
 
   const handleStatusChange = async (nextStatus: string) => {
     try {
-      await updateLoad.mutateAsync({ id: load.id, status: nextStatus } as any);
+      await transitionLoadStatus.mutateAsync({ id: load.id, status: nextStatus as LoadStatus });
       toast({ title: `Status → ${LOAD_STATUS_LABELS[nextStatus as keyof typeof LOAD_STATUS_LABELS] || nextStatus}` });
 
       if (nextStatus === 'loaded') {
         try {
-          const result: any = await generateCTe.mutateAsync(load);
+          const result = await generateCTe.mutateAsync(load);
           const diag = result?._diagnostics;
           if (diag?.warnings?.length) {
             toast({
@@ -234,21 +229,22 @@ export default function LoadDetail() {
           } else {
             toast({ title: 'CT-e gerado automaticamente' });
           }
-        } catch (e: any) {
-          if (!e.message.includes('já existe')) {
-            toast({ title: 'Erro CT-e', description: e.message, variant: 'destructive' });
+        } catch (error: unknown) {
+          const message = getErrorMessage(error);
+          if (!message.includes('já existe')) {
+            toast({ title: 'Erro CT-e', description: message, variant: 'destructive' });
           }
         }
       }
       refetch();
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
   const handleGenerateCTe = async () => {
     try {
-      const result: any = await generateCTe.mutateAsync(load);
+      const result = await generateCTe.mutateAsync(load);
       const diag = result?._diagnostics;
       if (diag?.warnings?.length) {
         toast({
@@ -261,8 +257,8 @@ export default function LoadDetail() {
       }
       setPreviewOpen(false);
       setPreviewResult(null);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -280,9 +276,9 @@ export default function LoadDetail() {
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound');
 
-      const nfeTotalValue = (nfeDocs || []).reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
-      const refDoc: any = (nfeDocs || []).find((d: any) => d.client_id) || (nfeDocs || [])[0] || {};
-      const clientId: string | null = refDoc.client_id || null;
+      const nfeTotalValue = (nfeDocs || []).reduce((sum, document) => sum + (Number(document.value) || 0), 0);
+      const refDoc = (nfeDocs || []).find(document => document.client_id) ?? nfeDocs?.[0];
+      const clientId = refDoc?.client_id ?? null;
 
       let payerGroup: string | null = null;
       if (clientId) {
@@ -291,28 +287,28 @@ export default function LoadDetail() {
           .select('payer_group')
           .eq('id', clientId)
           .maybeSingle();
-        payerGroup = (cli as any)?.payer_group || null;
+        payerGroup = cli?.payer_group || null;
       }
 
-      const totalPallets = items.reduce((s: number, li: any) => s + (li.pallet_count || 0), 0)
+      const totalPallets = items.reduce((sum, item) => sum + (item.pallet_count || 0), 0)
         || load.total_pallet_count || 0;
-      const totalWeight = items.reduce((s: number, li: any) => s + (Number(li.weight_kg) || 0), 0)
+      const totalWeight = items.reduce((sum, item) => sum + (Number(item.weight_kg) || 0), 0)
         || load.total_weight_kg || 0;
 
       const r = await calculateFreight({
         tenantId: currentTenant.id,
         clientId,
         payerGroup,
-        destination: load.destination || refDoc.recipient_city || null,
-        destinationState: refDoc.recipient_state || null,
-        destinationMunicipality: refDoc.recipient_city || null,
+        destination: load.destination || refDoc?.recipient_city || null,
+        destinationState: refDoc?.recipient_state || null,
+        destinationMunicipality: refDoc?.recipient_city || null,
         totalValue: nfeTotalValue,
         totalWeight,
         totalPallets,
       });
       setPreviewResult(r);
-    } catch (e: any) {
-      toast({ title: 'Erro na prévia', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro na prévia', description: getErrorMessage(error), variant: 'destructive' });
     } finally {
       setPreviewLoading(false);
     }
@@ -354,7 +350,7 @@ export default function LoadDetail() {
             <RouteIcon className="h-3.5 w-3.5 mr-1" /> Roteirização
           </Button>
           {nextStatuses.map(ns => (
-            <Button key={ns} size="sm" variant={ns === 'in_transit' ? 'default' : 'outline'} onClick={() => handleStatusChange(ns)} disabled={updateLoad.isPending}>
+            <Button key={ns} size="sm" variant={ns === 'in_transit' ? 'default' : 'outline'} onClick={() => handleStatusChange(ns)} disabled={transitionLoadStatus.isPending}>
               <ArrowRight className="h-3 w-3 mr-1" />
               {LOAD_STATUS_LABELS[ns as keyof typeof LOAD_STATUS_LABELS] || ns}
             </Button>
@@ -387,8 +383,8 @@ export default function LoadDetail() {
                     >
                       <SelectTrigger className="h-9"><SelectValue placeholder="Selecionar motorista" /></SelectTrigger>
                       <SelectContent>
-                        {drivers.map((d: any) => (
-                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        {drivers.map((driver) => (
+                          <SelectItem key={driver.id} value={driver.id}>{driver.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -401,8 +397,8 @@ export default function LoadDetail() {
                     >
                       <SelectTrigger className="h-9"><SelectValue placeholder="Selecionar veículo" /></SelectTrigger>
                       <SelectContent>
-                        {vehicles.map((v: any) => (
-                          <SelectItem key={v.id} value={v.id}>{v.plate}{v.nickname ? ` (${v.nickname})` : ''}</SelectItem>
+                        {vehicles.map((vehicleOption) => (
+                          <SelectItem key={vehicleOption.id} value={vehicleOption.id}>{vehicleOption.plate}{vehicleOption.nickname ? ` (${vehicleOption.nickname})` : ''}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -506,8 +502,8 @@ export default function LoadDetail() {
       {/* Cabeçalho com abas (Romaneio de Expedição) */}
       <LoadRomaneioTabs
         load={load}
-        documents={documents as any}
-        items={items as any}
+        documents={documents}
+        items={items}
         onSaved={() => { refetch(); qc.invalidateQueries({ queryKey: ['load_documents', load.id] }); }}
       />
 

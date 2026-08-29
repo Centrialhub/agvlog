@@ -4,13 +4,12 @@
  * Preserves real error classification in logs.
  */
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
+import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import {
   corsHeaders,
   buildSsxUrlCandidates,
   readAccountConfig,
-  extractResponseItems,
-  ssxPost,
   tryEndpointWithFallback,
   logIntegration,
   logSsxCall,
@@ -59,6 +58,9 @@ Deno.serve(async (req) => {
     if (!memberRole || !["owner", "admin"].includes(memberRole)) {
       return jsonResp({ error: "Forbidden: admin role required" }, 403);
     }
+
+    const capabilityResponse = await requireIntegrationCapability(supabase, account.tenant_id, "ssx");
+    if (capabilityResponse) return capabilityResponse;
 
     const config = readAccountConfig(account);
 

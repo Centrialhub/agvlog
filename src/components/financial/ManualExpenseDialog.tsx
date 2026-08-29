@@ -14,6 +14,7 @@ import {
 import { PAYABLE_CATEGORIES, PAYABLE_CATEGORY_LABELS } from '@/hooks/usePayables';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
+import { getErrorMessage } from '@/lib/errors';
 
 interface Props {
   open: boolean;
@@ -43,7 +44,7 @@ export default function ManualExpenseDialog({ open, onOpenChange }: Props) {
   const [method, setMethod] = useState('pix');
   const [file, setFile] = useState<File | null>(null);
 
-  const suppliers = clients.filter((c: any) => c.is_supplier);
+  const suppliers = clients.filter(c => c.is_supplier);
 
   useEffect(() => {
     if (open) {
@@ -58,15 +59,15 @@ export default function ManualExpenseDialog({ open, onOpenChange }: Props) {
   const handleSave = async () => {
     if (!currentTenant) return;
     const val = Number(amount);
-    if (!description.trim()) return toast.error('Informe a descrição');
-    if (!val || val <= 0) return toast.error('Informe um valor válido');
-    if (payNow && !bankAccountId) return toast.error('Selecione a conta bancária para pagamento imediato');
+    if (!description.trim()) { toast.error('Informe a descrição'); return; }
+    if (!val || val <= 0) { toast.error('Informe um valor válido'); return; }
+    if (payNow && !bankAccountId) { toast.error('Selecione a conta bancária para pagamento imediato'); return; }
 
     try {
       let attachment_url: string | null = null;
       if (file) attachment_url = await uploadPaymentAttachment(currentTenant.id, 'payable', file);
       const resolvedSupplier = supplierId !== NONE
-        ? (suppliers.find((s: any) => s.id === supplierId)?.company_name || 'Fornecedor')
+        ? (suppliers.find(s => s.id === supplierId)?.company_name || 'Fornecedor')
         : (supplierName.trim() || 'Despesa avulsa');
 
       await create.mutateAsync({
@@ -87,8 +88,8 @@ export default function ManualExpenseDialog({ open, onOpenChange }: Props) {
       });
       toast.success(payNow ? 'Despesa lançada e paga' : 'Despesa lançada');
       onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível lançar a despesa.'));
     }
   };
 
@@ -117,7 +118,7 @@ export default function ManualExpenseDialog({ open, onOpenChange }: Props) {
                 <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>Sem fornecedor / Digitar</SelectItem>
-                  {suppliers.map((s: any) => (
+                  {suppliers.map(s => (
                     <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -169,7 +170,7 @@ export default function ManualExpenseDialog({ open, onOpenChange }: Props) {
                   <Select value={bankAccountId} onValueChange={setBankAccountId}>
                     <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                     <SelectContent>
-                      {accounts.map((a: any) => (
+                      {accounts.map(a => (
                         <SelectItem key={a.id} value={a.id}>{a.name}{a.bank_name ? ` — ${a.bank_name}` : ''}</SelectItem>
                       ))}
                     </SelectContent>

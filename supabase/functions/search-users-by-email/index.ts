@@ -1,10 +1,5 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { createClient } from "@supabase/supabase-js";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -31,7 +26,9 @@ Deno.serve(async (req) => {
     const tenant_id: string | undefined = body.tenant_id;
     const query: string = (body.query || "").toString().trim().toLowerCase();
     if (!tenant_id) return json({ error: "tenant_id required" }, 400);
-    if (query.length < 2) return json({ users: [] });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query)) {
+      return json({ error: "Informe o e-mail completo do usuário" }, 400);
+    }
 
     const admin = createClient(url, service);
 
@@ -46,24 +43,48 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!membership) return json({ error: "Forbidden" }, 403);
 
-    // Paginação simples nos usuários do Supabase Auth (limite operacional).
+    // Exact-email lookup prevents broad enumeration. A matched account is only
+    // disclosed when it is not attached to any tenant yet or already belongs to
+    // the requested tenant. This blocks cross-tenant identity disclosure.
     const matches: Array<{ id: string; email: string | null; full_name: string | null }> = [];
     const perPage = 100;
     const maxPages = 10;
-    for (let page = 1; page <= maxPages && matches.length < 25; page++) {
+    for (let page = 1; page <= maxPages && matches.length === 0; page++) {
       const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
       if (error) break;
       for (const u of data.users) {
         const email = u.email?.toLowerCase() ?? "";
-        const meta = (u.user_metadata as any) || {};
-        const name = String(meta.full_name || meta.name || "").toLowerCase();
-        if (email.includes(query) || name.includes(query)) {
-          matches.push({
-            id: u.id,
-            email: u.email ?? null,
-            full_name: (meta.full_name || meta.name) ?? null,
-          });
-          if (matches.length >= 25) break;
+        if (email === query) {
+          const [{ data: memberships }, { data: portalAccess }] = await Promise.all([
+            admin
+              .from("tenant_memberships")
+              .select("tenant_id")
+              .eq("user_id", u.id)
+              .eq("active", true),
+            admin
+              .from("client_portal_access")
+              .select("tenant_id")
+              .eq("user_id", u.id)
+              .eq("active", true),
+          ]);
+          const relatedTenantIds = new Set([
+            ...(memberships ?? []).map((row) => String(row.tenant_id)),
+            ...(portalAccess ?? []).map((row) => String(row.tenant_id)),
+          ]);
+          if (relatedTenantIds.size === 0 || relatedTenantIds.has(tenant_id)) {
+            const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
+            const fullName = typeof meta.full_name === "string"
+              ? meta.full_name
+              : typeof meta.name === "string"
+              ? meta.name
+              : null;
+            matches.push({
+              id: u.id,
+              email: u.email ?? null,
+              full_name: fullName,
+            });
+          }
+          break;
         }
       }
       if (data.users.length < perPage) break;

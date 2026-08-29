@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,13 +15,15 @@ import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normal
 import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
 import { useClients } from '@/hooks/useClients';
 import { useEmitters } from '@/hooks/useEmitters';
-import { useCreateNFSe, useIssueNFSe } from '@/hooks/useNFSe';
+import { useCreateNFSe, useIssueNFSe, type NFSeDoc } from '@/hooks/useNFSe';
+import type { FiscalDocument } from '@/hooks/useFiscalDocuments';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
 import { formatCnpj, validateInsurance } from '@/lib/fiscal/insuranceValidation';
 import { hasInsuranceData } from '@/lib/fiscal/insuranceText';
 import { hasInsuranceProfile } from '@/lib/fiscal/insuranceProfile';
 import { Calculator, Save } from 'lucide-react';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
+import { fiscalDocumentText } from '@/lib/fiscal/fiscalDocumentContact';
 
 interface Props {
   open: boolean;
@@ -30,8 +32,40 @@ interface Props {
 
 const SENTINEL_NONE = '__none__';
 
-function num(v: any) { return Number(v ?? 0) || 0; }
-function onlyDigits(v: any) { return String(v ?? '').replace(/\D/g, ''); }
+interface TomadorData {
+  nome: string;
+  cnpj: string;
+  ie: string;
+  im: string;
+  endereco: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  email: string;
+  telefone: string;
+  municipio: string;
+  municipio_cod: string;
+  uf: string;
+  cep: string;
+  cliente_id: string | null;
+}
+
+function num(value: unknown) { return Number(value ?? 0) || 0; }
+function onlyDigits(value: unknown) { return String(value ?? '').replace(/\D/g, ''); }
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message
+    ? error.message
+    : 'Falha ao processar emissão(ões)';
+}
+
+function partyName(document: FiscalDocument, mode: 'remetente' | 'destinatario'): string {
+  return (mode === 'remetente' ? document.remitter : document.recipient) || '';
+}
+
+function partyCnpj(document: FiscalDocument, mode: 'remetente' | 'destinatario'): string {
+  return (mode === 'remetente' ? document.remitter_cnpj : document.recipient_cnpj) || '';
+}
 
 export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const { data: clients = [] } = useClients();
@@ -81,12 +115,12 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [insuredAmount, setInsuredAmount] = useState<number>(0);
   const [insurancePremium, setInsurancePremium] = useState<number>(0);
   const [observacoes, setObservacoes] = useState('');
-  const [manualTomador, setManualTomador] = useState<any>(null);
+  const [manualTomador, setManualTomador] = useState<TomadorData | null>(null);
   const [isEditingTomador, setIsEditingTomador] = useState(false);
   const [agrupar, setAgrupar] = useState(false);
 
-  const suppliers = useMemo(() => clients.filter((c: any) => c.is_supplier), [clients]);
-  const clientList = useMemo(() => clients.filter((c: any) => c.is_client !== false), [clients]);
+  const suppliers = useMemo(() => clients.filter((client) => client.is_supplier), [clients]);
+  const clientList = useMemo(() => clients.filter((client) => client.is_client !== false), [clients]);
 
   useEffect(() => {
     if (!open) return;
@@ -116,18 +150,18 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const { data: docs = [], isLoading } = useBillingDocuments(filters);
 
   const selectedDocs = useMemo(
-    () => docs.filter((d: any) => selected[d.id]),
+    () => docs.filter((document) => selected[document.id]),
     [docs, selected],
   );
 
-  const valorPorDoc = (d: any) => {
-    const override = serviceValues[d.id];
+  const valorPorDoc = useCallback((document: FiscalDocument) => {
+    const override = serviceValues[document.id];
     if (override !== undefined) return num(override);
-    return num(d.freight_value ?? d.value ?? d.total_value ?? 0);
-  };
+    return num(document.freight_value ?? document.value ?? 0);
+  }, [serviceValues]);
   const totalServicos = useMemo(
-    () => selectedDocs.reduce((a: number, d: any) => a + valorPorDoc(d), 0),
-    [selectedDocs, serviceValues],
+    () => selectedDocs.reduce((total, document) => total + valorPorDoc(document), 0),
+    [selectedDocs, valorPorDoc],
   );
   const baseCalculo = +(Math.max(0, totalServicos - num(valorDeducoes))).toFixed(2);
   const valorIss = +(baseCalculo * num(aliquotaIss) / 100).toFixed(2);
@@ -141,11 +175,11 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   ).toFixed(2);
   const valorLiquido = +(totalServicos - num(valorDeducoes) - totalRetencoes).toFixed(2);
 
-  const missingFreight = selectedDocs.filter((d: any) => num(d.freight_value) <= 0).length;
+  const missingFreight = selectedDocs.filter((document) => num(document.freight_value) <= 0).length;
 
   // Pré-preenche o seguro a partir das NFs selecionadas (snapshot da emissão fiscal)
   useEffect(() => {
-    const src = selectedDocs.find((d: any) => d.insurer_policy || d.insurer_name || d.insurer_cnpj) as any;
+    const src = selectedDocs.find((document) => document.insurer_policy || document.insurer_name || document.insurer_cnpj);
     if (!src) return;
     setInsurerName((v) => v || src.insurer_name || '');
     setInsurerCnpj((v) => v || formatCnpj(src.insurer_cnpj || ''));
@@ -175,7 +209,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [manualRecalcing, setManualRecalcing] = useState(false);
 
   async function handleRecalc() {
-    const ids = selectedDocs.map((d: any) => d.id);
+    const ids = selectedDocs.map((document) => document.id);
     if (!ids.length) { toast.error('Selecione ao menos uma NF para recalcular'); return; }
     setManualRecalcing(true);
     try {
@@ -192,45 +226,43 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
   const toggleAll = (v: boolean) => {
     const next: Record<string, boolean> = {};
-    if (v) docs.forEach((d: any) => { next[d.id] = true; });
+    if (v) docs.forEach((document) => { next[document.id] = true; });
     setSelected(next);
   };
 
   // Deriva tomador a partir das NFs selecionadas
   const tomador = useMemo(() => {
     if (!selectedDocs.length) return null;
-    const key = tomadorMode === 'remetente' ? 'remitter' : 'recipient_name';
-    const cnpjKey = tomadorMode === 'remetente' ? 'remitter_cnpj' : 'recipient_cnpj';
-    const first = selectedDocs[0] as any;
+    const first = selectedDocs[0];
     
     // Tenta casar com um cliente cadastrado pelo CNPJ para pegar endereço/IE
-    const cnpjDigits = onlyDigits(first[cnpjKey]);
-    const match = clients.find((c: any) => onlyDigits(c.tax_id) === cnpjDigits);
+    const cnpjDigits = onlyDigits(partyCnpj(first, tomadorMode));
+    const match = clients.find((client) => onlyDigits(client.tax_id) === cnpjDigits);
     
     // Fallback para os dados da própria NF (OCR/XML) quando o cadastro está incompleto
-    const municipio = (match?.address_city || (first as any).recipient_city || (first as any).remitter_city || '').trim();
-    const uf = (match?.address_state || (first as any).recipient_state || (first as any).remitter_state || '').trim();
-    const zip = (match?.address_zip || (first as any).recipient_zip || (first as any).remitter_zip || (first as any).recipient_address_zip || (first as any).zip || '').trim();
+    const municipio = (match?.address_city || first.recipient_city || fiscalDocumentText(first, 'remitter_city')).trim();
+    const uf = (match?.address_state || first.recipient_state || fiscalDocumentText(first, 'remitter_state')).trim();
+    const zip = (match?.address_zip || fiscalDocumentText(first, 'recipient_zip', 'remitter_zip', 'recipient_address_zip', 'zip')).trim();
     // CEP só é enviado quando realmente existe: "00000000" faz a prefeitura
     // rejeitar a nota por CEP inexistente / fora do município.
     const cepNorm = normalizeCep(zip);
     const municipioCod =
-      normalizeIbgeCity((match as any)?.address_city_ibge_code) ||
-      normalizeIbgeCity((first as any).recipient_cod_municipio) ||
-      normalizeIbgeCity((first as any).remitter_cod_municipio) ||
-      normalizeIbgeCity(municipio);
+      normalizeIbgeCity(match?.address_city_ibge_code) ||
+      normalizeIbgeCity(fiscalDocumentText(first, 'recipient_cod_municipio')) ||
+      normalizeIbgeCity(fiscalDocumentText(first, 'remitter_cod_municipio')) ||
+      normalizeIbgeCity(municipio) || '';
 
     return {
-      nome: (match?.company_name || first[key] || '') as string,
+      nome: match?.company_name || partyName(first, tomadorMode),
       cnpj: cnpjDigits,
       ie: sanitizeIe(match?.state_registration) || '',
-      im: (match as any)?.municipal_registration || '',
-      endereco: (match?.address_street || (first as any).recipient_address || (first as any).remitter_address || '') as string,
-      numero: ((match as any)?.address_number || (first as any).recipient_number || (first as any).remitter_number || '') as string,
-      complemento: ((match as any)?.address_complement || (first as any).recipient_complement || (first as any).remitter_complement || '') as string,
-      bairro: (match?.address_neighborhood || (first as any).recipient_neighborhood || (first as any).remitter_neighborhood || '') as string,
-      email: ((match as any)?.email || (first as any).recipient_email || (first as any).remitter_email || '') as string,
-      telefone: normalizePhone((match as any)?.phone || (first as any).recipient_phone || (first as any).remitter_phone) || '',
+      im: match?.municipal_registration || '',
+      endereco: match?.address_street || fiscalDocumentText(first, 'recipient_address', 'remitter_address'),
+      numero: match?.address_number || fiscalDocumentText(first, 'recipient_number', 'remitter_number'),
+      complemento: match?.address_complement || fiscalDocumentText(first, 'recipient_complement', 'remitter_complement'),
+      bairro: match?.address_neighborhood || first.recipient_neighborhood || fiscalDocumentText(first, 'remitter_neighborhood'),
+      email: match?.email || fiscalDocumentText(first, 'recipient_email', 'remitter_email'),
+      telefone: normalizePhone(match?.phone || fiscalDocumentText(first, 'recipient_phone', 'remitter_phone')) || '',
       municipio: normalizeCityName(municipio) || '',
       municipio_cod: municipioCod,
       uf: normalizeUf(uf) || '',
@@ -246,16 +278,15 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     }
   }, [tomador, isEditingTomador]);
 
-  const setManualField = (k: string, v: any) => {
+  const setManualField = <K extends keyof TomadorData>(key: K, value: TomadorData[K]) => {
     setIsEditingTomador(true);
-    setManualTomador((f: any) => ({ ...f, [k]: v }));
+    setManualTomador((current) => current ? { ...current, [key]: value } : current);
   };
 
   const allSameTomador = useMemo(() => {
     if (selectedDocs.length < 2) return true;
-    const key = tomadorMode === 'remetente' ? 'remitter_cnpj' : 'recipient_cnpj';
-    const first = onlyDigits((selectedDocs[0] as any)[key]);
-    return selectedDocs.every((d: any) => onlyDigits(d[key]) === first);
+    const first = onlyDigits(partyCnpj(selectedDocs[0], tomadorMode));
+    return selectedDocs.every((document) => onlyDigits(partyCnpj(document, tomadorMode)) === first);
   }, [selectedDocs, tomadorMode]);
 
   const canAdvance = selectedDocs.length > 0 && (agrupar ? allSameTomador : true);
@@ -270,13 +301,13 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         const currentTomador = manualTomador || tomador;
         if (!currentTomador?.cnpj) { throw new Error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); }
         
-        const fdIds = selectedDocs.map((d: any) => d.id);
+        const fdIds = selectedDocs.map((document) => document.id);
         const description = (descricao?.trim() ||
           `Prestacao de servico de transporte referente a ${fdIds.length} NF(s): ` +
-          selectedDocs.map((d: any) => `NF ${d.invoice_number || d.access_key?.slice(-9)}`).join(', '))
+          selectedDocs.map((document) => `NF ${document.invoice_number || document.access_key?.slice(-9)}`).join(', '))
           .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-        const created = await create.mutateAsync({
+        const payload: Partial<NFSeDoc> = {
           emitter_id: emitterId,
           regime_tributario: regimeTributario,
           issue_date: issueDate,
@@ -319,50 +350,49 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
           insurer_endorsement: insurerEndorsement.trim() || null,
           insured_amount: num(insuredAmount) || null,
           insurance_premium: num(insurancePremium) || null,
-          items: selectedDocs.map((d: any) => ({
-            description: `NF ${d.invoice_number || ''} — ${d.remitter || ''}`.trim(),
+          items: selectedDocs.map((document) => ({
+            description: `NF ${document.invoice_number || ''} — ${document.remitter || ''}`.trim(),
             quantity: 1,
-            unit_value: valorPorDoc(d),
-            total: valorPorDoc(d),
-            fiscal_document_id: d.id,
-            access_key: d.access_key,
+            unit_value: valorPorDoc(document),
+            total: valorPorDoc(document),
+            fiscal_document_id: document.id,
+            access_key: document.access_key,
           })),
           fiscal_document_ids: fdIds,
           notes: observacoes.trim() || undefined,
-        } as any);
+        };
+        const created = await create.mutateAsync(payload);
 
         await issue.mutateAsync(created.id);
       } else {
         // Emissão individual
         toast.info(`Iniciando emissão individual de ${selectedDocs.length} nota(s)...`);
         
-        for (const d of selectedDocs as any[]) {
+        for (const d of selectedDocs) {
           // Precisamos derivar o tomador para CADA nota
-          const key = tomadorMode === 'remetente' ? 'remitter' : 'recipient_name';
-          const cnpjKey = tomadorMode === 'remetente' ? 'remitter_cnpj' : 'recipient_cnpj';
-          const cnpjDigits = onlyDigits(d[cnpjKey]);
-          const match = clients.find((c: any) => onlyDigits(c.tax_id) === cnpjDigits);
+          const cnpjDigits = onlyDigits(partyCnpj(d, tomadorMode));
+          const match = clients.find((client) => onlyDigits(client.tax_id) === cnpjDigits);
           
-          const municipio = (match?.address_city || d.recipient_city || (d as any).remitter_city || '').trim();
-          const uf = (match?.address_state || d.recipient_state || (d as any).remitter_state || '').trim();
-          const zip = (match?.address_zip || (d as any).recipient_zip || (d as any).remitter_zip || (d as any).recipient_address_zip || (d as any).zip || '').trim();
+          const municipio = (match?.address_city || d.recipient_city || fiscalDocumentText(d, 'remitter_city')).trim();
+          const uf = (match?.address_state || d.recipient_state || fiscalDocumentText(d, 'remitter_state')).trim();
+          const zip = (match?.address_zip || fiscalDocumentText(d, 'recipient_zip', 'remitter_zip', 'recipient_address_zip', 'zip')).trim();
           const municipioCod =
-            normalizeIbgeCity((match as any)?.address_city_ibge_code) ||
-            normalizeIbgeCity((d as any).recipient_cod_municipio) ||
-            normalizeIbgeCity((d as any).remitter_cod_municipio) ||
+            normalizeIbgeCity(match?.address_city_ibge_code) ||
+            normalizeIbgeCity(fiscalDocumentText(d, 'recipient_cod_municipio')) ||
+            normalizeIbgeCity(fiscalDocumentText(d, 'remitter_cod_municipio')) ||
             normalizeIbgeCity(municipio);
 
           const docTomador = {
-            nome: (match?.company_name || d[key] || '') as string,
+            nome: match?.company_name || partyName(d, tomadorMode),
             cnpj: cnpjDigits,
             ie: sanitizeIe(match?.state_registration) || '',
-            im: (match as any)?.municipal_registration || '',
-            endereco: (match?.address_street || (d as any).recipient_address || (d as any).remitter_address || '') as string,
-            numero: ((match as any)?.address_number || (d as any).recipient_number || (d as any).remitter_number || '') as string,
-            complemento: ((match as any)?.address_complement || (d as any).recipient_complement || (d as any).remitter_complement || '') as string,
-            bairro: (match?.address_neighborhood || (d as any).recipient_neighborhood || (d as any).remitter_neighborhood || '') as string,
-            email: ((match as any)?.email || (d as any).recipient_email || (d as any).remitter_email || '') as string,
-            telefone: normalizePhone((match as any)?.phone || (d as any).recipient_phone || (d as any).remitter_phone) || '',
+            im: match?.municipal_registration || '',
+            endereco: match?.address_street || fiscalDocumentText(d, 'recipient_address', 'remitter_address'),
+            numero: match?.address_number || fiscalDocumentText(d, 'recipient_number', 'remitter_number'),
+            complemento: match?.address_complement || fiscalDocumentText(d, 'recipient_complement', 'remitter_complement'),
+            bairro: match?.address_neighborhood || d.recipient_neighborhood || fiscalDocumentText(d, 'remitter_neighborhood'),
+            email: match?.email || fiscalDocumentText(d, 'recipient_email', 'remitter_email'),
+            telefone: normalizePhone(match?.phone || fiscalDocumentText(d, 'recipient_phone', 'remitter_phone')) || '',
             municipio: normalizeCityName(municipio) || '',
             municipio_cod: municipioCod,
             uf: normalizeUf(uf) || '',
@@ -389,7 +419,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
           const description = `Prestacao de servico de transporte referente a NF ${d.invoice_number || d.access_key?.slice(-9)}`
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-          const created = await create.mutateAsync({
+          const payload: Partial<NFSeDoc> = {
             emitter_id: emitterId,
             regime_tributario: regimeTributario,
             issue_date: issueDate,
@@ -442,14 +472,15 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             }],
             fiscal_document_ids: [d.id],
             notes: observacoes.trim() || undefined,
-          } as any);
+          };
+          const created = await create.mutateAsync(payload);
 
           await issue.mutateAsync(created.id);
         }
       }
       onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e?.message || 'Falha ao processar emissão(ões)');
+    } catch (error: unknown) {
+      toast.error(errorMessage(error));
     } finally {
       setIssuing(false);
     }
@@ -474,7 +505,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={SENTINEL_NONE}>Todos</SelectItem>
-                    {suppliers.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                    {suppliers.map((client) => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -484,7 +515,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={SENTINEL_NONE}>Todos</SelectItem>
-                    {clientList.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                    {clientList.map((client) => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -529,7 +560,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   {!isLoading && docs.length === 0 && (
                     <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Nenhuma NF disponível</TableCell></TableRow>
                   )}
-                  {docs.map((d: any) => (
+                  {docs.map((d) => (
                     <TableRow key={d.id} className={selected[d.id] ? 'bg-muted/40' : ''}>
                       <TableCell>
                         <Checkbox
@@ -540,9 +571,9 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                       <TableCell className="font-mono text-xs">{d.invoice_number || d.access_key?.slice(-9) || '—'}</TableCell>
                       <TableCell className="text-xs">{d.issue_date}</TableCell>
                       <TableCell className="max-w-[220px] truncate">{d.remitter || '—'}</TableCell>
-                      <TableCell className="max-w-[220px] truncate">{d.recipient || d.recipient_name || '—'}</TableCell>
+                      <TableCell className="max-w-[220px] truncate">{d.recipient || '—'}</TableCell>
                       <TableCell className="text-xs">{d.recipient_city ? `${d.recipient_city}${d.recipient_state ? `/${d.recipient_state}` : ''}` : '—'}</TableCell>
-                      <TableCell className="text-right tabular-nums">R$ {num(d.value ?? d.total_value).toFixed(2)}</TableCell>
+                      <TableCell className="text-right tabular-nums">R$ {num(d.value).toFixed(2)}</TableCell>
                       <TableCell className="text-right tabular-nums">R$ {num(d.freight_value).toFixed(2)}</TableCell>
                     </TableRow>
                   ))}
@@ -591,7 +622,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs">Tomador é:</Label>
-                  <Select value={tomadorMode} onValueChange={(v: any) => setTomadorMode(v)}>
+                  <Select value={tomadorMode} onValueChange={(value) => setTomadorMode(value as 'remetente' | 'destinatario')}>
                     <SelectTrigger className="w-40 h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="remetente">Remetente</SelectItem>
@@ -604,16 +635,16 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                     // Pré-preenche valor de serviço com o frete atual de cada NF selecionada
                     setServiceValues(prev => {
                       const next = { ...prev };
-                      selectedDocs.forEach((d: any) => {
+                      selectedDocs.forEach((d) => {
                         if (next[d.id] === undefined) {
-                          next[d.id] = num(d.freight_value ?? d.value ?? d.total_value ?? 0);
+                          next[d.id] = num(d.freight_value ?? d.value ?? 0);
                         }
                       });
                       return next;
                     });
                     setStep(2);
                     // Preenche observações automaticamente ao avançar
-                    const nfList = selectedDocs.map((d: any) => d.invoice_number || d.access_key?.slice(-9)).join(', ');
+                    const nfList = selectedDocs.map((d) => d.invoice_number || d.access_key?.slice(-9)).join(', ');
                     setObservacoes(`NFS-e referente a(s) NF ${nfList}`);
                   }}
                   disabled={!canAdvance}
@@ -642,14 +673,14 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedDocs.map((d: any) => {
+                  {selectedDocs.map((d) => {
                     const freteCalc = num(d.freight_value ?? 0);
                     const val = serviceValues[d.id] ?? freteCalc;
                     return (
                       <tr key={d.id} className="border-t">
                         <td className="p-2 font-mono">{d.invoice_number || d.access_key?.slice(-9)}</td>
                         <td className="p-2">{d.remitter || '—'}</td>
-                        <td className="p-2">{d.recipient || d.recipient_name || '—'}</td>
+                        <td className="p-2">{d.recipient || '—'}</td>
                         <td className="p-2 text-right tabular-nums text-muted-foreground">R$ {freteCalc.toFixed(2)}</td>
                         <td className="p-2 text-right">
                           <Input
@@ -901,8 +932,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                         policy: insurerPolicy,
                       });
                       toast.success('Seguradora salva como padrão');
-                    } catch (e: any) {
-                      toast.error('Falha ao salvar seguradora', { description: e?.message });
+                    } catch (error: unknown) {
+                      toast.error('Falha ao salvar seguradora', { description: errorMessage(error) });
                     }
                   }}
                 >

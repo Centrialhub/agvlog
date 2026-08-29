@@ -1,7 +1,9 @@
-import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { DataPagination } from '@/components/ui/data-pagination';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
-  useFiscalDocuments,
+  useFiscalDocumentSummary,
+  useFiscalDocumentsPage,
   useCreateFiscalDocument,
   useUpdateFiscalDocument,
   DOC_TYPES,
@@ -9,50 +11,49 @@ import {
   DOC_STATUSES,
   DOC_STATUS_LABELS,
   FiscalDocument,
+  type CreateFiscalDocumentInput,
+  type UpdateFiscalDocumentInput,
   DocType,
   DocStatus,
+  type FiscalDocumentSummary,
 } from '@/hooks/useFiscalDocuments';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useClients } from '@/hooks/useClients';
+import type { Client } from '@/hooks/useClients';
 import { useOrders } from '@/hooks/useOrders';
+import type { Order } from '@/hooks/useOrders';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Search, Plus, FileText, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   PackageCheck, Clock, XCircle, ExternalLink, ChevronDown, ChevronRight,
-  DollarSign, Weight, Layers,
+  DollarSign, Weight, Layers, RefreshCcw,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { isBillableFiscalDoc, fiscalDocRevenue } from '@/lib/fiscal/documentStatus';
+
+const PAGE_SIZE = 50;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Falha inesperada no documento fiscal';
+}
 
 /* ─── Summary Cards ─── */
-function SummaryCards({ docs }: { docs: FiscalDocument[] }) {
-  // Documentos anulados (cancelados/rejeitados) não entram em nenhum total.
-  const valid = docs.filter(d => isBillableFiscalDoc(d as any));
-  const inbound = valid.filter(d => d.document_type === 'inbound');
-  const outbound = valid.filter(d => d.document_type === 'outbound');
-  const pending = docs.filter(d => d.status === 'pending');
-  const totalValue =
-    inbound.reduce((s, d) => s + (Number(d.value) || 0), 0) +
-    outbound.reduce((s, d) => s + fiscalDocRevenue(d as any), 0);
-  const totalWeight = valid.reduce((s, d) => s + (d.weight_kg || 0), 0);
-  const totalPallets = valid.reduce((s, d) => s + (d.pallet_count || 0), 0);
-
+function SummaryCards({ summary }: { summary: FiscalDocumentSummary }) {
   const cards = [
-    { label: 'NF-e Entrada', value: inbound.length, icon: ArrowDownToLine, color: 'text-emerald-500' },
-    { label: 'CT-e / Saída', value: outbound.length, icon: ArrowUpFromLine, color: 'text-blue-500' },
-    { label: 'Pendentes', value: pending.length, icon: Clock, color: 'text-amber-500' },
-    { label: 'Valor Total', value: totalValue > 0 ? `R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—', icon: DollarSign, color: 'text-primary' },
-    { label: 'Peso Total', value: totalWeight > 0 ? `${totalWeight.toLocaleString('pt-BR')} kg` : '—', icon: Weight, color: 'text-muted-foreground' },
-    { label: 'Paletes', value: totalPallets, icon: Layers, color: 'text-muted-foreground' },
+    { label: 'NF-e Entrada', value: summary.inboundCount, icon: ArrowDownToLine, color: 'text-emerald-500' },
+    { label: 'CT-e / Saída', value: summary.outboundCount, icon: ArrowUpFromLine, color: 'text-blue-500' },
+    { label: 'Pendentes', value: summary.pendingCount, icon: Clock, color: 'text-amber-500' },
+    { label: 'Valor Total', value: summary.totalValue > 0 ? `R$ ${summary.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—', icon: DollarSign, color: 'text-primary' },
+    { label: 'Peso Total', value: summary.totalWeight > 0 ? `${summary.totalWeight.toLocaleString('pt-BR')} kg` : '—', icon: Weight, color: 'text-muted-foreground' },
+    { label: 'Paletes', value: summary.totalPallets, icon: Layers, color: 'text-muted-foreground' },
   ];
 
   return (
@@ -73,9 +74,29 @@ function SummaryCards({ docs }: { docs: FiscalDocument[] }) {
 }
 
 /* ─── Form ─── */
-function DocForm({ clients, orders, onSave, onCancel }: { clients: any[]; orders: any[]; onSave: (v: any) => void; onCancel: () => void }) {
-  const [form, setForm] = useState({
-    document_type: 'inbound' as string,
+interface FiscalDocumentFormState {
+  document_type: DocType;
+  invoice_number: string;
+  access_key: string;
+  client_id: string;
+  remitter: string;
+  recipient: string;
+  issue_date: string;
+  order_id: string;
+  product_summary: string;
+  pallet_count: number;
+  weight_kg: string;
+  value: string;
+}
+
+function DocForm({ clients, orders, onSave, onCancel }: {
+  clients: Client[];
+  orders: Order[];
+  onSave: (value: CreateFiscalDocumentInput) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState<FiscalDocumentFormState>({
+    document_type: 'inbound',
     invoice_number: '',
     access_key: '',
     client_id: '',
@@ -94,7 +115,7 @@ function DocForm({ clients, orders, onSave, onCancel }: { clients: any[]; orders
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label>Tipo *</Label>
-          <Select value={form.document_type} onValueChange={v => setForm(f => ({ ...f, document_type: v }))}>
+          <Select value={form.document_type} onValueChange={value => setForm(formState => ({ ...formState, document_type: value as DocType }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {DOC_TYPES.map(t => <SelectItem key={t} value={t}>{DOC_TYPE_LABELS[t]}</SelectItem>)}
@@ -181,7 +202,7 @@ const typeColor = (t: string) => {
 };
 
 /* ─── Expandable Row ─── */
-function DocRow({ doc, onStatusChange }: { doc: FiscalDocument; onStatusChange: (id: string, status: string) => void }) {
+function DocRow({ doc, onStatusChange }: { doc: FiscalDocument; onStatusChange: (id: string, status: DocStatus) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -281,52 +302,83 @@ function DocRow({ doc, onStatusChange }: { doc: FiscalDocument; onStatusChange: 
 
 /* ─── Main Page ─── */
 export default function FiscalDocuments() {
-  const { data: docs = [], isLoading } = useFiscalDocuments();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: clients = [] } = useClients();
   const { data: orders = [] } = useOrders();
   const createDoc = useCreateFiscalDocument();
   const updateDoc = useUpdateFiscalDocument();
-  const initialQ = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('q') || '' : '';
-  const [search, setSearch] = useState(initialQ);
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [loadFilter, setLoadFilter] = useState<string>('all');
+  const [search, setSearch] = useState(searchParams.get('q') || '');
+  const [typeFilter, setTypeFilter] = useState(searchParams.get('type') || 'all');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
+  const [loadFilter, setLoadFilter] = useState(searchParams.get('load') || 'all');
+  const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page')) || 1));
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const {
+    data: documentPage,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useFiscalDocumentsPage({
+    page,
+    pageSize: PAGE_SIZE,
+    search: debouncedSearch,
+    typeFilter,
+    statusFilter,
+    loadFilter,
+  });
+  const docs = documentPage?.rows || [];
+  const totalCount = documentPage?.totalCount || 0;
+  const {
+    data: summary = {
+      totalCount: 0, inboundCount: 0, outboundCount: 0, pendingCount: 0,
+      totalValue: 0, totalWeight: 0, totalPallets: 0,
+    },
+    isError: summaryFailed,
+  } = useFiscalDocumentSummary();
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return docs.filter(d => {
-      if (q && !(d.invoice_number || '').toLowerCase().includes(q)
-        && !(d.clients?.company_name || '').toLowerCase().includes(q)
-        && !(d.remitter || '').toLowerCase().includes(q)
-        && !(d.recipient || '').toLowerCase().includes(q)
-        && !(d.access_key || '').toLowerCase().includes(q)
-      ) return false;
-      if (typeFilter !== 'all' && d.document_type !== typeFilter) return false;
-      if (statusFilter !== 'all' && d.status !== statusFilter) return false;
-      if (loadFilter === 'no_load' && d.load_id) return false;
-      if (loadFilter === 'with_load' && !d.load_id) return false;
-      return true;
-    });
-  }, [docs, search, typeFilter, statusFilter, loadFilter]);
+  const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageStart = totalCount === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(safePage * PAGE_SIZE, totalCount);
 
-  const handleSave = async (values: any) => {
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, typeFilter, statusFilter, loadFilter]);
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (debouncedSearch) next.set('q', debouncedSearch);
+    if (typeFilter !== 'all') next.set('type', typeFilter);
+    if (statusFilter !== 'all') next.set('status', statusFilter);
+    if (loadFilter !== 'all') next.set('load', loadFilter);
+    if (page > 1) next.set('page', String(page));
+    setSearchParams(next, { replace: true });
+  }, [debouncedSearch, loadFilter, page, setSearchParams, statusFilter, typeFilter]);
+
+  const handleSave = async (values: CreateFiscalDocumentInput) => {
     try {
       await createDoc.mutateAsync(values);
       toast({ title: 'Documento fiscal criado com sucesso' });
       setDialogOpen(false);
-    } catch (e: any) {
-      toast({ title: 'Erro ao criar documento', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao criar documento', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
-  const handleStatusChange = async (id: string, status: string) => {
+  const handleStatusChange = async (id: string, status: DocStatus) => {
     try {
-      await updateDoc.mutateAsync({ id, status } as any);
-      toast({ title: `Status alterado para ${DOC_STATUS_LABELS[status as DocStatus] || status}` });
-    } catch (e: any) {
-      toast({ title: 'Erro ao atualizar', description: e.message, variant: 'destructive' });
+      const update: UpdateFiscalDocumentInput = { id, status };
+      await updateDoc.mutateAsync(update);
+      toast({ title: `Status alterado para ${DOC_STATUS_LABELS[status]}` });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao atualizar', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -339,7 +391,7 @@ export default function FiscalDocuments() {
             <FileText className="h-6 w-6 text-primary" /> Controle Fiscal
           </h1>
           <p className="text-sm text-muted-foreground">
-            {docs.length} documentos • {filtered.length} exibidos
+            {summary.totalCount} documentos • {totalCount} correspondem aos filtros
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -347,14 +399,21 @@ export default function FiscalDocuments() {
             <Button><Plus className="h-4 w-4 mr-2" /> Novo Documento</Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
-            <DialogHeader><DialogTitle>Novo Documento Fiscal</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Novo Documento Fiscal</DialogTitle>
+              <DialogDescription>Cadastre a identificação, o vínculo e os totais do documento.</DialogDescription>
+            </DialogHeader>
             <DocForm clients={clients} orders={orders} onSave={handleSave} onCancel={() => setDialogOpen(false)} />
           </DialogContent>
         </Dialog>
       </div>
 
       {/* KPI Cards */}
-      <SummaryCards docs={docs} />
+      {summaryFailed ? (
+        <p role="alert" className="text-sm text-destructive">Não foi possível carregar o resumo fiscal.</p>
+      ) : (
+        <SummaryCards summary={summary} />
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
@@ -407,13 +466,32 @@ export default function FiscalDocuments() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-12">Carregando...</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="py-12 text-center">
+                    <div role="alert" className="flex flex-col items-center gap-3 text-destructive">
+                      <span>Não foi possível carregar os documentos: {errorMessage(error)}.</span>
+                      <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
+                        <RefreshCcw className="mr-2 h-4 w-4" /> Tentar novamente
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : docs.length === 0 ? (
                 <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-12">Nenhum documento encontrado</TableCell></TableRow>
-              ) : filtered.map(d => (
+              ) : docs.map(d => (
                 <DocRow key={d.id} doc={d} onStatusChange={handleStatusChange} />
               ))}
             </TableBody>
           </Table>
+          <DataPagination
+            page={safePage}
+            pageCount={pageCount}
+            totalCount={totalCount}
+            start={pageStart}
+            end={pageEnd}
+            onPageChange={setPage}
+          />
         </CardContent>
       </Card>
     </div>

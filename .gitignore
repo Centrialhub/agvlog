@@ -9,8 +9,21 @@ lerna-debug.log*
 
 node_modules
 dist
+coverage
+playwright-report
+test-results
 dist-ssr
 *.local
+coverage
+.codex-build-audit/
+.pnpm-store/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.supabase
+supabase/.temp/
+supabase/migration_history/*.zip
 
 # Editor directories and files
 .vscode/*

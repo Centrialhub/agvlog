@@ -52,17 +52,17 @@ export function usePortalShipments(filters: ShipmentFilters = {}) {
     queryKey: ['portal_shipments', currentTenant?.id, selectedClientId, filters],
     queryFn: async (): Promise<{ rows: ShipmentRow[]; total: number }> => {
       if (!currentTenant) return { rows: [], total: 0 };
-      const { data, error } = await (supabase as any).rpc('search_client_portal_shipments_v2', {
+      const { data, error } = await supabase.rpc('search_client_portal_shipments_v2', {
         _tenant_id: currentTenant.id,
-        _client_id: selectedClientId,
-        _search: filters.search ?? null,
-        _status: filters.status ?? null,
-        _start_date: filters.startDate ?? null,
-        _end_date: filters.endDate ?? null,
-        _city: filters.city ?? null,
-        _state: filters.state ?? null,
-        _has_pod: filters.hasPod ?? null,
-        _has_occurrence: filters.hasOccurrence ?? null,
+        _client_id: selectedClientId ?? undefined,
+        _search: filters.search,
+        _status: filters.status,
+        _start_date: filters.startDate,
+        _end_date: filters.endDate,
+        _city: filters.city,
+        _state: filters.state,
+        _has_pod: filters.hasPod,
+        _has_occurrence: filters.hasOccurrence,
         _limit: filters.limit ?? 50,
         _offset: filters.offset ?? 0,
       });

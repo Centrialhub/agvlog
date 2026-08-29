@@ -8,48 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, CheckCircle2, AlertTriangle, FileText, ChevronRight, Clock, MapPin } from 'lucide-react';
-
-
-export type DriverEventView = {
-  id: string;
-  type: 'finalizador' | 'informativo';
-  code: string;
-  label: string;
-  stopName: string;
-  invoice?: string;
-  receiver?: string;
-  document?: string;
-  observation?: string;
-  occurredAt: string;
-  hasPhoto?: boolean;
-  hasSignature?: boolean;
-};
-
-
-// Event types that finalize a delivery (recusa/entregue/etc.) vs informativos.
-const FINAL_EVENT_TYPES = new Set([
-  'delivered', 'refused', 'returned', 'partial_delivery', 'damaged', 'missing_goods',
-  'delivery_completed', 'delivery_failed',
-]);
-
-function mapRowToEvent(row: any): DriverEventView {
-  const type: DriverEventView['type'] = FINAL_EVENT_TYPES.has(row.event_type) ? 'finalizador' : 'informativo';
-  const details: any = row.report_details || {};
-  return {
-    id: row.id,
-    type,
-    code: (row.event_type || '').toUpperCase().slice(0, 4),
-    label: details.label || row.event_type || 'Evento',
-    stopName: details.stop_name || details.client_name || '—',
-    invoice: details.invoice || details.nf || undefined,
-    receiver: details.receiver_name || undefined,
-    document: details.receiver_document || undefined,
-    observation: row.description || undefined,
-    occurredAt: row.created_at,
-    hasPhoto: !!details.has_photo,
-    hasSignature: !!details.has_signature,
-  };
-}
+import {
+  mapOperationalEventToDriverEvent,
+  type DriverEventView,
+} from '@/lib/driver/driverEventView';
 
 export default function DriverEvents() {
   const navigate = useNavigate();
@@ -73,13 +35,13 @@ export default function DriverEvents() {
       if (trip?.id) q = q.eq('dispatch_trip_id', trip.id);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []).map(mapRowToEvent);
+      return (data || []).map(mapOperationalEventToDriverEvent);
     },
     enabled: !!driver?.id,
   });
 
   useEffect(() => {
-    if (!driver?.id) return;
+    if (!driver?.id) return undefined;
     const channel = supabase
       .channel(`driver_events_${driver.id}`)
       .on(
@@ -128,7 +90,9 @@ export default function DriverEvents() {
         />
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+      <Tabs value={tab} onValueChange={(value) => {
+        if (value === 'all' || value === 'finalizador' || value === 'informativo') setTab(value);
+      }}>
         <TabsList className="w-full grid grid-cols-3">
           <TabsTrigger value="all" className="text-xs">Todos ({events.length})</TabsTrigger>
           <TabsTrigger value="finalizador" className="text-xs">
@@ -159,7 +123,15 @@ export default function DriverEvents() {
               <Card
                 key={evt.id}
                 className="cursor-pointer hover:bg-accent/40 transition-colors active:bg-accent"
+                role="button"
+                tabIndex={0}
                 onClick={() => navigate(`/driver/events/${evt.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/driver/events/${evt.id}`);
+                  }
+                }}
               >
                 <CardContent className="p-3 flex items-center gap-3">
                   <div

@@ -47,7 +47,7 @@ export default function UploadStep({ onFiles, onOrtFiles, ortProcessing }: Uploa
         <Tabs defaultValue="files" className="space-y-4">
           <TabsList className="grid w-full max-w-md grid-cols-2 mx-auto">
             <TabsTrigger value="files">XML / planilhas</TabsTrigger>
-            <TabsTrigger value="ort">ORT</TabsTrigger>
+            <TabsTrigger value="ort">Scan NF-e / ORT</TabsTrigger>
           </TabsList>
 
           <TabsContent value="files">
@@ -70,15 +70,15 @@ export default function UploadStep({ onFiles, onOrtFiles, ortProcessing }: Uploa
               {ortProcessing ? (
                 <div className="py-8 text-muted-foreground">
                   <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
-                  <h3 className="text-lg font-medium mb-2 text-foreground">Lendo ORT...</h3>
-                  <p className="text-sm">Extraindo dados para seguir no mesmo fluxo do XML.</p>
+                  <h3 className="text-lg font-medium mb-2 text-foreground">Lendo NF-e / ORT...</h3>
+                  <p className="text-sm">Extraindo os dados sem alterar a identidade fiscal do documento.</p>
                 </div>
               ) : (
                 <>
                   <ScanLine className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">Capturar ORT</h3>
+                  <h3 className="text-lg font-medium mb-2">Capturar NF-e ou ORT</h3>
                   <p className="text-sm text-muted-foreground mb-5">
-                    Use foto da câmera ou envie imagem/PDF escaneado para gerar um documento no fluxo de validação, roteirização e financeiro.
+                    Use uma foto ou PDF legível. Campos não reconhecidos ficam pendentes para revisão; o sistema não completa dados fiscais por suposição.
                   </p>
                   <div className="flex flex-wrap justify-center gap-3">
                     <Button type="button" onClick={() => handleOrtFile(true)} className="gap-2">

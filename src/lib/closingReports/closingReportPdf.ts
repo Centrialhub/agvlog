@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { BuiltItem, SummaryLine } from './closingReportBuilder';
 import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
+import { getAutoTableFinalY } from '@/lib/pdf/autoTable';
 
 const brl = (n: number) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kg = (n: number) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -18,7 +19,7 @@ const tm = (v?: string | null) => {
   if (s.includes('T') && s.length >= 16) return s.slice(11, 16);
   return '';
 };
-const n2 = (n: any) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const n2 = (n: unknown) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export interface PdfOptions {
   title: string;
@@ -82,15 +83,15 @@ export function generateClosingReportPdf(opts: PdfOptions): jsPDF {
     if (model === 'trips') {
       // Deduplicate by load_id (one row per viagem)
       const seen = new Set<string>();
-      const trips: any[] = [];
-      for (const i of opts.items as any[]) {
+      const trips: BuiltItem[] = [];
+      for (const i of opts.items) {
         const k = i.load_id || `nf-${i.fiscal_document_id}`;
         if (seen.has(k)) continue;
         seen.add(k);
         trips.push(i);
       }
       const tot = { km: 0, l: 0, val: 0 };
-      const body = trips.map((i: any) => {
+      const body = trips.map((i) => {
         const km = Number(i.km_driven || 0);
         const l = Number(i.fuel_liters || 0);
         const v = Number(i.fuel_total || 0);
@@ -165,7 +166,7 @@ export function generateClosingReportPdf(opts: PdfOptions): jsPDF {
   }
 
   if (opts.notes) {
-    const y = (doc as any).lastAutoTable?.finalY ?? 40;
+    const y = getAutoTableFinalY(doc, 40);
     doc.setFontSize(8);
     doc.text('Observações: ' + opts.notes, 14, y + 6);
   }

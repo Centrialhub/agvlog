@@ -3,9 +3,9 @@ import {
   useVehicleMaintenanceList,
   useCreateMaintenance,
   useUpdateMaintenance,
-  VehicleMaintenance,
+  UpdateVehicleMaintenanceInput,
 } from '@/hooks/useFleetManagement';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, Wrench, AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { format, isPast, addDays } from 'date-fns';
+import { getErrorMessage } from '@/lib/errors';
 
 const MAINT_TYPES = [
   { value: 'preventive', label: 'Preventiva' },
@@ -91,23 +92,23 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
         cost: form.cost ? Number(form.cost) : null,
         vendor: form.vendor || null,
         notes: form.notes || null,
-      } as any);
+      });
       toast.success('Manutenção registrada');
       setDialogOpen(false);
       setForm({ maintenance_type: 'preventive', category: 'general', description: '', scheduled_date: '', odometer_at_service: '', next_odometer: '', next_date: '', cost: '', vendor: '', notes: '' });
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível registrar a manutenção.'));
     }
   };
 
   const handleStatusChange = async (id: string, status: string) => {
     try {
-      const updates: any = { status };
+      const updates: UpdateVehicleMaintenanceInput = { id, status };
       if (status === 'completed') updates.completed_date = new Date().toISOString().slice(0, 10);
-      await updateMut.mutateAsync({ id, ...updates });
+      await updateMut.mutateAsync(updates);
       toast.success('Status atualizado');
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível atualizar a manutenção.'));
     }
   };
 

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useLoads, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
+import { useLoads } from '@/hooks/useLoads';
 import { useOperationalEvents } from '@/hooks/useOperationalEvents';
 import { useClients } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Users, AlertTriangle, Truck, Target } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, Truck } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -93,8 +93,8 @@ export default function ProductivityReports() {
   const totalDivergent = loads.filter(l => l.status === 'divergent').length;
   const overallSuccess = totalDelivered + totalDivergent > 0 ? Math.round((totalDelivered / (totalDelivered + totalDivergent)) * 100) : 100;
   const totalFinancialImpact = events.reduce((s, e) => s + (e.financial_impact || 0), 0);
-  const avgPalletsPerTrip = loads.filter(l => l.total_pallet_count > 0).length > 0
-    ? Math.round(loads.reduce((s, l) => s + (l.total_pallet_count || 0), 0) / loads.filter(l => l.total_pallet_count > 0).length)
+  const avgPalletsPerTrip = loads.filter(l => (l.total_pallet_count ?? 0) > 0).length > 0
+    ? Math.round(loads.reduce((s, l) => s + (l.total_pallet_count ?? 0), 0) / loads.filter(l => (l.total_pallet_count ?? 0) > 0).length)
     : 0;
 
   return (

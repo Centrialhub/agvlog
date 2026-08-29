@@ -19,8 +19,32 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/no-unused-vars": "off",
+      // These are stable, intentional co-exports from UI primitives/providers.
+      // Domain utilities live in dedicated lib modules instead of this allowlist.
+      "react-refresh/only-export-components": ["warn", {
+        allowConstantExport: true,
+        allowExportNames: [
+          "badgeVariants",
+          "buttonVariants",
+          "navigationMenuTriggerStyle",
+          "toast",
+          "toggleVariants",
+          "useAuth",
+          "useFormField",
+          "useIsAdmin",
+          "usePortalClientScope",
+          "useSidebar",
+          "useTenant",
+        ],
+      }],
+      // Existing occurrences are visible as warnings and governed by the
+      // decreasing baseline. `lint:critical-types --max-warnings 0` turns the
+      // same rule into a hard gate for release-critical files.
+      "@typescript-eslint/no-unused-vars": ["error", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+      }],
       // Legacy debt across Supabase hooks and edge functions — kept as warn to
       // avoid a risky mass refactor while still surfacing new occurrences.
       "@typescript-eslint/no-explicit-any": "warn",
@@ -32,6 +56,13 @@ export default tseslint.config(
       "no-constant-binary-expression": "warn",
       "no-prototype-builtins": "warn",
       "prefer-const": "warn",
+    },
+  },
+  {
+    files: ["src/hooks/**/*.{ts,tsx}"],
+    rules: {
+      // Hook-only modules are not React component refresh boundaries.
+      "react-refresh/only-export-components": "off",
     },
   },
 );

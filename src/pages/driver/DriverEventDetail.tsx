@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,11 +20,7 @@ import {
 } from 'lucide-react';
 
 import { useCurrentDriver } from '@/hooks/useCurrentDriver';
-
-const FINAL_EVENT_TYPES = new Set([
-  'delivered', 'refused', 'returned', 'partial_delivery', 'damaged', 'missing_goods',
-  'delivery_completed', 'delivery_failed',
-]);
+import { mapOperationalEventToDriverEvent } from '@/lib/driver/driverEventView';
 
 export default function DriverEventDetail() {
   const { id } = useParams<{ id: string }>();
@@ -49,26 +44,7 @@ export default function DriverEventDetail() {
     enabled: !!id && !!driver?.id,
   });
 
-  const event = realRow
-      ? (() => {
-          const details: any = realRow.report_details || {};
-          const type: 'finalizador' | 'informativo' = FINAL_EVENT_TYPES.has(realRow.event_type) ? 'finalizador' : 'informativo';
-          return {
-            id: realRow.id,
-            type,
-            code: (realRow.event_type || '').toUpperCase().slice(0, 4),
-            label: details.label || realRow.event_type || 'Evento',
-            stopName: details.stop_name || details.client_name || '—',
-            invoice: details.invoice || details.nf,
-            receiver: details.receiver_name,
-            document: details.receiver_document,
-            observation: realRow.description,
-            occurredAt: realRow.created_at,
-            hasPhoto: !!details.has_photo,
-            hasSignature: !!details.has_signature,
-          };
-        })()
-      : undefined;
+  const event = realRow ? mapOperationalEventToDriverEvent(realRow) : undefined;
 
   if (!event) {
     return (

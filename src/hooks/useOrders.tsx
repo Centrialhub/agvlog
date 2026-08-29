@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 export const ORDER_STATUSES = [
   'received', 'waiting_stock', 'picking', 'ready_for_loading',
@@ -101,11 +102,12 @@ export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<Order>) => {
-      const { data, error } = await supabase.from('orders').insert({
+      const payload = {
         ...values,
         tenant_id: currentTenant!.id,
         created_by: user?.id,
-      } as any).select().single();
+      } as unknown as TablesInsert<'orders'>;
+      const { data, error } = await supabase.from('orders').insert(payload).select().single();
       if (error) throw error;
       return data;
     },
@@ -115,14 +117,21 @@ export function useCreateOrder() {
 
 export function useUpdateOrder() {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<Order> & { id: string }) => {
-      const { data, error } = await supabase.from('orders').update({
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const payload = {
         ...values,
         updated_by: user?.id,
         updated_at: new Date().toISOString(),
-      } as any).eq('id', id).select().single();
+      } as unknown as TablesUpdate<'orders'>;
+      const { data, error } = await supabase.from('orders').update(payload)
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id)
+        .select()
+        .single();
       if (error) throw error;
       return data;
     },

@@ -1,1 +1,0 @@
-UPDATE public.loads SET trip_id = NULL WHERE id = '0b988ce7-6be8-485c-bf1a-40cbb927bcea' AND load_number = '1004'; DELETE FROM public.dispatch_trips WHERE id = '69383db8-43a5-46ae-8479-229a70f5a045' AND NOT EXISTS (SELECT 1 FROM public.dispatch_trip_loads dtl WHERE dtl.dispatch_trip_id = '69383db8-43a5-46ae-8479-229a70f5a045');

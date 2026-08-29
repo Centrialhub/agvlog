@@ -5,7 +5,9 @@ import {
 } from '@/lib/merchandiseShortages/shortageCalculator';
 import { parseShortageWorkbook } from '@/lib/merchandiseShortages/shortageLegacyImport';
 import { shortageReportToCsv } from '@/lib/merchandiseShortages/shortageReportCsv';
-import { driverBreakdown, companyBreakdown, totalOf } from '@/lib/merchandiseShortages/shortageReportBuilder';
+import {
+  driverBreakdown, companyBreakdown, totalOf, type ShortageReportRow,
+} from '@/lib/merchandiseShortages/shortageReportBuilder';
 import * as XLSX from 'xlsx';
 
 describe('parseQuantity', () => {
@@ -91,7 +93,7 @@ describe('shortageReportToCsv', () => {
 });
 
 describe('breakdowns', () => {
-  const rows = [
+  const rows: ShortageReportRow[] = [
     { occurrence_date: '2024-02-10', company_name: 'AGV', driver_name: 'A', invoice_number: '1', city: null, customer_name: null, product_description: 'x', quantity_text: null, quantity: 1, unit: null, unit_cost: 5, total_amount: 5, observation: null, status: null, responsible_party_type: null },
     { occurrence_date: '2024-02-10', company_name: 'AGV', driver_name: 'B', invoice_number: '2', city: null, customer_name: null, product_description: 'y', quantity_text: null, quantity: 1, unit: null, unit_cost: 3, total_amount: 3, observation: null, status: null, responsible_party_type: null },
   ];

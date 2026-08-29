@@ -1,10 +1,5 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -32,53 +27,48 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'tenant_id and pod_id required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const admin = createClient(url, serviceKey);
+    const userClient = authClient;
 
-    // 1) fetch POD + fiscal doc
-    const { data: pod, error: podErr } = await admin
-      .from('proof_of_delivery')
-      .select('id, tenant_id, fiscal_document_id, storage_bucket, storage_path')
-      .eq('id', pod_id)
-      .eq('tenant_id', tenant_id)
-      .maybeSingle();
-    if (podErr || !pod || !pod.storage_path) {
+    // 1) Authorize first. The SECURITY DEFINER RPC returns Storage metadata
+    // only when this portal user can download the linked fiscal document.
+    const { data: metadataRows, error: metadataErr } = await userClient.rpc(
+      'get_client_pod_metadata',
+      { _tenant_id: tenant_id, _pod_id: pod_id },
+    );
+    const metadata = Array.isArray(metadataRows) ? metadataRows[0] : metadataRows;
+    if (metadataErr || !metadata?.storage_path) {
       return new Response(JSON.stringify({ error: 'POD not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // 2) Single check: same client_portal_access row that grants document access must also have can_download_documents=true
-    const userClient = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: canDownload, error: accessErr } = await userClient.rpc('portal_user_can_download_fiscal_document', {
-      _tenant_id: tenant_id,
-      _fiscal_document_id: pod.fiscal_document_id,
-    });
-    if (accessErr || !canDownload) {
-      await userClient.rpc('log_pod_access', {
-        _tenant_id: tenant_id,
-        _pod_id: pod.id,
-        _fiscal_document_id: pod.fiscal_document_id,
-        _success: false,
-      }).catch(() => undefined);
-      return new Response(JSON.stringify({ error: 'Download not allowed' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const admin = createClient(url, serviceKey);
+    const { data: pod, error: podErr } = await admin
+      .from('proof_of_delivery')
+      .select('id, fiscal_document_id')
+      .eq('id', pod_id)
+      .eq('tenant_id', tenant_id)
+      .maybeSingle();
+    if (podErr || !pod) {
+      return new Response(JSON.stringify({ error: 'POD not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    void userId;
-
     const { data: signed, error: signErr } = await admin.storage
-      .from(pod.storage_bucket || 'receipts')
-      .createSignedUrl(pod.storage_path, 300);
+      .from(metadata.storage_bucket || 'receipts')
+      .createSignedUrl(metadata.storage_path, 300);
     if (signErr || !signed?.signedUrl) {
-      await userClient.rpc('log_pod_access', {
+      await admin.rpc('log_pod_access_v2', {
         _tenant_id: tenant_id,
         _pod_id: pod.id,
         _fiscal_document_id: pod.fiscal_document_id,
+        _actor_user_id: userId,
         _success: false,
       }).catch(() => undefined);
       return new Response(JSON.stringify({ error: 'Could not sign URL' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    await userClient.rpc('log_pod_access', {
+    await admin.rpc('log_pod_access_v2', {
       _tenant_id: tenant_id,
       _pod_id: pod.id,
       _fiscal_document_id: pod.fiscal_document_id,
+      _actor_user_id: userId,
       _success: true,
     }).catch(() => undefined);
 

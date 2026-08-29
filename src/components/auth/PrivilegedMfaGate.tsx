@@ -1,229 +1,181 @@
-import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from "react";
+import { KeyRound, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 
-type GateState = 'loading' | 'enroll' | 'challenge' | 'verified' | 'error';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
+import { supabase } from "@/integrations/supabase/client";
 
-interface EnrollData {
-  factorId: string;
-  qrCode: string;
-  secret: string;
-}
+type GatePhase = "loading" | "enroll" | "challenge" | "ready" | "error";
 
-export default function PrivilegedMfaGate({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<GateState>('loading');
+export function PrivilegedMfaGate({ children }: PropsWithChildren) {
+  const { currentRole, currentTenant } = useTenant();
+  const { user, signOut } = useAuth();
+  const [phase, setPhase] = useState<GatePhase>("loading");
+  const [factorId, setFactorId] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [secret, setSecret] = useState<string | null>(null);
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [enrollData, setEnrollData] = useState<EnrollData | null>(null);
-  const [verifiedFactorId, setVerifiedFactorId] = useState<string | null>(null);
-  const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const initializedFor = useRef<string | null>(null);
+  const privileged = currentRole === "owner" || currentRole === "admin";
 
-  const startEnrollment = useCallback(async () => {
-    // Limpa fatores TOTP não verificados para evitar acúmulo
-    const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
-    if (factorsError) throw factorsError;
-    const unverified = (factors?.all ?? []).filter(
-      (f) => f.factor_type === 'totp' && f.status !== 'verified',
-    );
-    for (const f of unverified) {
-      const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId: f.id });
-      if (unenrollError) throw unenrollError;
-    }
-
-    const { data, error: enrollError } = await supabase.auth.mfa.enroll({
-      factorType: 'totp',
-      friendlyName: 'AGVLog',
-    });
-    if (enrollError || !data) {
-      setError(enrollError?.message ?? 'Não foi possível iniciar o cadastro do autenticador.');
-      setState('error');
+  const initialize = useCallback(async () => {
+    if (!privileged) {
+      setPhase("ready");
       return;
     }
-    setEnrollData({
-      factorId: data.id,
-      qrCode: data.totp.qr_code,
-      secret: data.totp.secret,
-    });
-    setState('enroll');
-  }, []);
 
-  const evaluate = useCallback(async () => {
-    setState('loading');
     setError(null);
-    try {
-      const { data: aal, error: aalError } =
-        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aalError) throw aalError;
-      if (aal?.currentLevel === 'aal2') {
-        setState('verified');
-        return;
-      }
-
-      const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
-      if (factorsError) throw factorsError;
-      const verified = (factors?.totp ?? []).find((f) => f.status === 'verified');
-      if (verified) {
-        setVerifiedFactorId(verified.id);
-        setCode('');
-        setState('challenge');
-        return;
-      }
-
-      await startEnrollment();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao verificar a autenticação em dois fatores.');
-      setState('error');
+    setPhase("loading");
+    const assurance = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (assurance.error) throw assurance.error;
+    if (assurance.data.currentLevel === "aal2") {
+      setPhase("ready");
+      return;
     }
-  }, [startEnrollment]);
+
+    const factors = await supabase.auth.mfa.listFactors();
+    if (factors.error) throw factors.error;
+    const verifiedFactor = factors.data.totp.find((factor) => factor.status === "verified");
+    if (verifiedFactor) {
+      setFactorId(verifiedFactor.id);
+      setPhase("challenge");
+      return;
+    }
+
+    const enrollment = await supabase.auth.mfa.enroll({
+      factorType: "totp",
+      friendlyName: `AGVLog ${new Date().toISOString()}`,
+    });
+    if (enrollment.error) throw enrollment.error;
+    setFactorId(enrollment.data.id);
+    setQrCode(enrollment.data.totp.qr_code);
+    setSecret(enrollment.data.totp.secret);
+    setPhase("enroll");
+  }, [privileged]);
 
   useEffect(() => {
-    void evaluate();
-  }, [evaluate]);
+    const contextKey = `${currentTenant?.id ?? "none"}:${currentRole ?? "none"}`;
+    if (initializedFor.current === contextKey) return;
+    initializedFor.current = contextKey;
+    initialize().catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : "Não foi possível iniciar o MFA.");
+      setPhase("error");
+    });
+  }, [currentRole, currentTenant?.id, initialize]);
 
-  const submitCode = async (factorId: string) => {
-    if (!/^\d{6}$/.test(code)) {
-      setError('Informe o código numérico de 6 dígitos.');
-      return;
-    }
+  const verify = async () => {
+    if (!factorId || code.trim().length < 6) return;
     setSubmitting(true);
     setError(null);
     try {
-      const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
+      const challenge = await supabase.auth.mfa.challenge({ factorId });
+      if (challenge.error) throw challenge.error;
+      const verification = await supabase.auth.mfa.verify({
         factorId,
-        code,
+        challengeId: challenge.data.id,
+        code: code.trim(),
       });
-      if (verifyError) throw verifyError;
-
-      const { data: aal, error: aalError } =
-        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aalError) throw aalError;
-      if (aal?.currentLevel === 'aal2') {
-        setState('verified');
-      } else {
-        setError('A verificação não elevou o nível de segurança. Tente novamente.');
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Código inválido ou expirado.');
+      if (verification.error) throw verification.error;
+      setCode("");
+      setPhase("ready");
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "Código inválido ou expirado.");
     } finally {
       setSubmitting(false);
-      setCode('');
     }
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const retryInitialization = () => {
+    void initialize().catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : "Não foi possível iniciar o MFA.");
+      setPhase("error");
+    });
   };
 
-  if (state === 'verified') return <>{children}</>;
-
-  if (state === 'loading') {
-    return (
-      <div className="flex h-screen items-center justify-center gap-2 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Verificando autenticação...
-      </div>
-    );
-  }
+  if (!privileged || phase === "ready") return <>{children}</>;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" />
-            Verificação em dois fatores
-          </CardTitle>
+          <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ShieldCheck className="h-6 w-6" />
+          </div>
+          <CardTitle>Verificação em duas etapas</CardTitle>
           <CardDescription>
-            {state === 'enroll'
-              ? 'Cadastre um aplicativo autenticador para acessar funções privilegiadas.'
-              : state === 'challenge'
-                ? 'Digite o código do seu aplicativo autenticador.'
-                : 'Não foi possível concluir a verificação.'}
+            Contas owner e admin precisam confirmar um segundo fator antes de acessar dados do tenant.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {state === 'enroll' && enrollData && (
-            <div className="space-y-4">
-              <div className="flex justify-center rounded-md border bg-card p-3">
-                <img src={enrollData.qrCode} alt="QR Code do autenticador" className="h-44 w-44" />
-              </div>
-              <div className="space-y-1">
-                <Label>Chave manual</Label>
-                <code className="block break-all rounded bg-muted p-2 text-xs">
-                  {enrollData.secret}
-                </code>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="mfa-enroll-code">Código de 6 dígitos</Label>
-                <Input
-                  id="mfa-enroll-code"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                />
-              </div>
-              <Button
-                className="w-full"
-                disabled={submitting || code.length !== 6}
-                onClick={() => submitCode(enrollData.factorId)}
-              >
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Ativar autenticador
-              </Button>
+          {phase === "loading" ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin" /> Verificando sua sessão…
             </div>
-          )}
+          ) : null}
 
-          {state === 'challenge' && verifiedFactorId && (
-            <div className="space-y-4">
-              <div className="space-y-1">
+          {phase === "enroll" ? (
+            <div className="space-y-3">
+              <p className="text-sm">Escaneie o QR code no seu aplicativo autenticador e informe o código gerado.</p>
+              {qrCode ? <img src={qrCode} alt="QR code para configurar o autenticador" className="mx-auto h-52 w-52 rounded bg-white p-2" /> : null}
+              {secret ? (
+                <p className="break-all rounded bg-muted p-2 font-mono text-xs">
+                  Chave manual: {secret}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {phase === "challenge" ? (
+            <p className="text-sm text-muted-foreground">
+              Abra seu aplicativo autenticador e informe o código atual.
+            </p>
+          ) : null}
+
+          {(phase === "enroll" || phase === "challenge") ? (
+            <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void verify(); }}>
+              <div className="space-y-1.5">
                 <Label htmlFor="mfa-code">Código de 6 dígitos</Label>
                 <Input
                   id="mfa-code"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 8))}
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
+                  autoFocus
                 />
               </div>
-              <Button
-                className="w-full"
-                disabled={submitting || code.length !== 6}
-                onClick={() => submitCode(verifiedFactorId)}
-              >
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Verificar
+              <Button type="submit" className="w-full" disabled={submitting || code.length < 6}>
+                <KeyRound className="mr-2 h-4 w-4" />
+                {submitting ? "Verificando…" : "Confirmar código"}
               </Button>
-            </div>
-          )}
+            </form>
+          ) : null}
 
-          {state === 'error' && (
-            <Button className="w-full" variant="secondary" onClick={() => void evaluate()}>
+          {error ? (
+            <Alert variant="destructive">
+              <AlertTitle>Não foi possível validar o MFA</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {phase === "error" ? (
+            <Button type="button" variant="outline" className="w-full" onClick={retryInitialization}>
               Tentar novamente
             </Button>
-          )}
+          ) : null}
 
-          <Button variant="ghost" className="w-full" onClick={() => void signOut()}>
-            Sair
+          <Button type="button" variant="ghost" className="w-full" onClick={() => { void signOut(); }}>
+            <LogOut className="mr-2 h-4 w-4" /> Sair de {user?.email ?? "esta conta"}
           </Button>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useToast } from '@/hooks/use-toast';
 import { useHoldLoad, useUnholdLoad, type Load } from '@/hooks/useLoads';
 import { LOAD_STATUS_LABELS, LOAD_KANBAN_COLUMNS, loadKanbanColumn, type LoadKanbanColumn } from '@/lib/status/loadStatus';
+import { getErrorMessage } from '@/lib/errors';
 
 interface Props {
   loads: Load[];
@@ -38,7 +39,7 @@ export default function LoadsKanban({ loads }: Props) {
       hold: [], backlog: [], prep: [], ready: [], in_route: [], done: [],
     };
     loads.forEach(l => {
-      map[loadKanbanColumn(l as any)].push(l);
+      map[loadKanbanColumn(l)].push(l);
     });
     return map;
   }, [loads]);
@@ -50,8 +51,8 @@ export default function LoadsKanban({ loads }: Props) {
       toast({ title: 'Carga colocada em espera' });
       setHoldTarget(null);
       setHoldReason('');
-    } catch (e: any) {
-      toast({ title: 'Erro ao pausar', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao pausar', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -59,8 +60,8 @@ export default function LoadsKanban({ loads }: Props) {
     try {
       await unholdMut.mutateAsync(l.id);
       toast({ title: 'Carga retomada' });
-    } catch (e: any) {
-      toast({ title: 'Erro ao retomar', description: e.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Erro ao retomar', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 

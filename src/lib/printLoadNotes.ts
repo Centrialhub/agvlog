@@ -24,23 +24,55 @@ const fmtDateTime = (iso?: string | null) => {
   return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 };
 
-const esc = (s: any) =>
+const esc = (s: unknown) =>
   String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-export function printLoadNotesReport(load: any, documents: any[]) {
-  const docs = (documents || []).filter((d: any) => d.document_type === 'inbound');
-  const total = docs.reduce((s: number, d: any) => s + Number(d.value || 0), 0);
-  const delivered = docs.filter((d: any) => d.status === 'delivered').length;
+interface PrintableLoad {
+  load_number?: string | null;
+  status?: string | null;
+  driver_name?: string | null;
+  vehicle_plate?: string | null;
+}
+
+interface DeliveryMetadata {
+  ne?: boolean;
+  rec_canhoto?: boolean;
+  payment_method?: string | null;
+  delivery_at?: string | null;
+  ne_at?: string | null;
+  ne_reason?: string | null;
+  oco_01?: string | null;
+  oco_02?: string | null;
+  resp_oco?: string | null;
+}
+
+interface PrintableLoadDocument {
+  document_type?: string | null;
+  value?: number | null;
+  status?: string | null;
+  delivery_meta?: DeliveryMetadata | null;
+  invoice_number?: string | null;
+  reference_number?: string | null;
+  remitter?: string | null;
+  recipient?: string | null;
+  recipient_city?: string | null;
+  recipient_state?: string | null;
+}
+
+export function printLoadNotesReport(load: PrintableLoad, documents: PrintableLoadDocument[]) {
+  const docs = (documents || []).filter((document) => document.document_type === 'inbound');
+  const total = docs.reduce((sum, document) => sum + Number(document.value || 0), 0);
+  const delivered = docs.filter((document) => document.status === 'delivered').length;
   const notDelivered = docs.filter(
-    (d: any) => d.status === 'not_delivered' || d.delivery_meta?.ne,
+    (document) => document.status === 'not_delivered' || document.delivery_meta?.ne,
   ).length;
   const pending = docs.length - delivered - notDelivered;
 
   const rows = docs
-    .map((d: any) => {
+    .map((d) => {
       const m = d.delivery_meta || {};
       const isDelivered = d.status === 'delivered';
       const isNotDelivered = d.status === 'not_delivered' || m.ne;

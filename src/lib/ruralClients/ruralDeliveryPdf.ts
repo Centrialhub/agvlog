@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getAutoTableFinalY } from '@/lib/pdf/autoTable';
 import type { RuralProfile } from '@/hooks/useRuralClients';
 import { accessTypeLabel, deliveryModeLabel } from './ruralDeliveryReports';
 import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
@@ -67,7 +68,7 @@ export function generateRuralClientsPdf(rows: RuralProfile[], options: RuralRepo
         doc.text(`Página ${data.pageNumber} de ${pg}`, 275, 200);
       },
     });
-    startY = (doc as any).lastAutoTable.finalY + 8;
+    startY = getAutoTableFinalY(doc, startY) + 8;
     if (startY > 190) { doc.addPage(); startY = 14; }
   }
 

@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLoads, Load } from '@/hooks/useLoads';
-import { useLoadItems, LoadItem, useUpdateLoadItem } from '@/hooks/useLoadItems';
-import { useVehicles } from '@/hooks/useVehicles';
+import { useLoadItems, LoadItem } from '@/hooks/useLoadItems';
+import { useVehicles, type Vehicle } from '@/hooks/useVehicles';
 import { useUpdateLoad, useDeleteLoad } from '@/hooks/useLoads';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,35 +15,30 @@ import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { mergeDestinations } from '@/lib/loads/mergeDestinations';
 import { normalizeCity } from '@/lib/utils/normalizeCity';
+import type { Json } from '@/integrations/supabase/types';
+import type { JsonObject } from '@/lib/jsonTypes';
+import { getErrorMessage } from '@/lib/errors';
 
 type FilterField = 'all' | 'remitter' | 'recipient' | 'city' | 'invoice';
 
-// Merge destination strings preserving uniqueness, e.g.
-// "PAI PEDRO" + "PIRAPORA - JAIBA" -> "PAI PEDRO - PIRAPORA - JAIBA"
-export function mergeDestinations(target?: string | null, source?: string | null): string | null {
-  const split = (s?: string | null) =>
-    (s || '')
-      .split(/[-,/|]+/)
-      .map(t => t.trim())
-      .filter(Boolean);
-  const tokens: string[] = [];
-  const seen = new Set<string>();
-  for (const t of [...split(target), ...split(source)]) {
-    const key = normalizeCity(t);
-    if (!seen.has(key)) {
-      seen.add(key);
-      tokens.push(t);
-    }
-  }
-  return tokens.length ? tokens.join(' - ') : (target || null);
+type FiscalDetails = NonNullable<LoadItem['fiscal_documents']>;
+
+function fiscalDetails(value: unknown): FiscalDetails | null {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return typeof candidate === 'object' && candidate !== null ? candidate as FiscalDetails : null;
+}
+
+function jsonObject(value: Json): JsonObject | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : null;
 }
 
 function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleItem, onSelectMany, isTarget }: {
   load: Load;
   items: LoadItem[];
   isLoading: boolean;
-  vehicles: any[];
+  vehicles: Vehicle[];
   selectedItems: Set<string>;
   onToggleItem: (id: string) => void;
   onSelectMany?: (ids: string[], checked: boolean) => void;
@@ -66,7 +61,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter(i => {
-      const fd: any = Array.isArray(i.fiscal_documents) ? i.fiscal_documents[0] : (i.fiscal_documents || {});
+      const fd = fiscalDetails(i.fiscal_documents);
       const desc = (i.item_description || '').toLowerCase();
       const remitter = (fd?.remitter || '').toLowerCase();
       const recipient = (fd?.recipient || '').toLowerCase();
@@ -102,7 +97,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
     const cities = new Map<string, { label: string; count: number }>();
     const remitters = new Map<string, { label: string; count: number }>();
     for (const i of items) {
-      const fd: any = Array.isArray(i.fiscal_documents) ? i.fiscal_documents[0] : (i.fiscal_documents || {});
+      const fd = fiscalDetails(i.fiscal_documents);
       const rec = (fd?.recipient || '').trim();
       const city = (fd?.recipient_city || '').trim();
       const state = (fd?.recipient_state || '').trim();
@@ -318,18 +313,18 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
           (() => {
             // Agrupar por nota fiscal (invoice_number)
             const grouped = filteredItems.reduce((acc, item) => {
-              const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
+              const fd = fiscalDetails(item.fiscal_documents);
               const invoice = fd?.invoice_number;
               const orderNum = item.orders?.order_number;
               const key = invoice ? `INV-${invoice}` : (orderNum ? `ORD-${orderNum}` : `ID-${item.id}`);
               
-              if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice };
+              if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice ?? null };
               acc[key].items.push(item);
               acc[key].totalValue += (fd?.value || 0);
               return acc;
             }, {} as Record<string, { items: LoadItem[], totalValue: number, invoice: string | null }>);
 
-            return Object.entries(grouped).map(([key, group]: [string, any]) => {
+            return Object.entries(grouped).map(([key, group]) => {
               const allSelected = group.items.every(i => selectedItems.has(i.id));
 
               return (
@@ -358,7 +353,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                   <div className="space-y-1">
                     {group.items.map(item => {
                       const selected = selectedItems.has(item.id);
-                      const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
+                      const fd = fiscalDetails(item.fiscal_documents);
                       return (
                         <button
                           key={item.id}
@@ -417,7 +412,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
 }
 
 export default function LoadReallocation() {
-  const { data: loads = [], isLoading } = useLoads();
+  const { data: loads = [] } = useLoads();
   const { data: vehicles = [] } = useVehicles();
   const updateLoad = useUpdateLoad();
   const deleteLoad = useDeleteLoad();
@@ -452,12 +447,12 @@ export default function LoadReallocation() {
     queryKey: ['reallocation_load_meta', activeLoadIds.join(',')],
     enabled: activeLoadIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('load_items')
         .select('load_id, order_id, orders(order_number), fiscal_documents(remitter, recipient, recipient_city, recipient_state, invoice_number)')
         .in('load_id', activeLoadIds);
       if (error) throw error;
-      return (data || []) as any[];
+      return data || [];
     },
   });
 
@@ -492,7 +487,6 @@ export default function LoadReallocation() {
   }, [allActiveItems]);
 
   // Hierarchical tree: Client → City → Route (destination) → loads
-  type GroupNode = { label: string; loads: Load[] };
   const groupedLoads = useMemo(() => {
     const tree = new Map<string, Map<string, Map<string, Load[]>>>();
     for (const l of activeLoads) {
@@ -566,19 +560,20 @@ export default function LoadReallocation() {
       if (item) movedItems.push({ desc: item.item_description, pallets: item.pallet_count || 0, weight: item.weight_kg || 0 });
     }
     try {
-      const tenantId = (sourceLoad as any)?.tenant_id || (targetLoad as any)?.tenant_id;
+      const tenantId = sourceLoad?.tenant_id || targetLoad?.tenant_id;
       if (!tenantId) throw new Error('Tenant ID não encontrado');
-      const { data, error } = await (supabase as any).rpc('move_load_items_between_loads', {
+      const { data, error } = await supabase.rpc('move_load_items_between_loads', {
         _tenant_id: tenantId,
         _source_load_id: sourceLoadId,
         _target_load_id: targetLoadId,
         _item_ids: itemIds,
       });
       if (error) throw error;
-      moved = (data && (data as any).moved) ?? itemIds.length;
-    } catch (e: any) {
+      const result = jsonObject(data);
+      moved = typeof result?.moved === 'number' ? result.moved : itemIds.length;
+    } catch (error: unknown) {
       errors = itemIds.length;
-      toast.error(e?.message || 'Falha ao mover itens');
+      toast.error(getErrorMessage(error, 'Falha ao mover itens'));
     }
 
     qc.invalidateQueries({ queryKey: ['load_items'] });
@@ -594,7 +589,7 @@ export default function LoadReallocation() {
     let sourceRemoved = false;
     if (errors === 0 && sourceLoadId) {
       try {
-        const { count } = await (supabase as any)
+        const { count } = await supabase
           .from('load_items')
           .select('id', { count: 'exact', head: true })
           .eq('load_id', sourceLoadId);
@@ -614,7 +609,7 @@ export default function LoadReallocation() {
       const merged = mergeDestinations(targetLoad.destination, sourceLoad.destination);
       if (merged && merged !== targetLoad.destination) {
         try {
-          await updateLoad.mutateAsync({ id: targetLoad.id, destination: merged } as any);
+          await updateLoad.mutateAsync({ id: targetLoad.id, destination: merged });
         } catch {
           // non-critical
         }
@@ -644,35 +639,6 @@ export default function LoadReallocation() {
           ? `${moved} item(ns) realocado(s) para ${toLabel}. Carga ${fromLabel} ficou vazia e foi removida.`
           : `${moved} item(ns) realocado(s) para ${toLabel}`,
       );
-    }
-  };
-
-  const handleSwapVehicles = async () => {
-    if (!sourceLoad || !targetLoad) return;
-    try {
-      const srcVehicle = sourceLoad.vehicle_id;
-      const tgtVehicle = targetLoad.vehicle_id;
-      const srcDriver = sourceLoad.driver_id;
-      const tgtDriver = targetLoad.driver_id;
-      const srcPlate = (vehicles as any[]).find(v => v.id === srcVehicle)?.plate || '—';
-      const tgtPlate = (vehicles as any[]).find(v => v.id === tgtVehicle)?.plate || '—';
-
-      await updateLoad.mutateAsync({ id: sourceLoad.id, vehicle_id: tgtVehicle, driver_id: tgtDriver } as any);
-      await updateLoad.mutateAsync({ id: targetLoad.id, vehicle_id: srcVehicle, driver_id: srcDriver } as any);
-
-      setHistory(prev => [{
-        id: crypto.randomUUID(),
-        at: new Date(),
-        kind: 'swap' as const,
-        fromLabel: sourceLoad.load_number,
-        toLabel: targetLoad.load_number,
-        vehicleSwap: { fromPlate: srcPlate, toPlate: tgtPlate },
-        success: true,
-      }, ...prev].slice(0, 20));
-
-      toast.success('Veículos trocados entre as cargas');
-    } catch (e: any) {
-      toast.error(e.message);
     }
   };
 
@@ -853,7 +819,7 @@ export default function LoadReallocation() {
                 load={sourceLoad}
                 items={sourceItems}
                 isLoading={loadingSource}
-                vehicles={vehicles as any[]}
+                vehicles={vehicles}
                 selectedItems={selectedItems}
                 onToggleItem={toggleItem}
                 onSelectMany={(ids, checked) => {
@@ -880,7 +846,7 @@ export default function LoadReallocation() {
                 load={targetLoad}
                 items={targetItems}
                 isLoading={loadingTarget}
-                vehicles={vehicles as any[]}
+                vehicles={vehicles}
                 selectedItems={new Set()}
                 onToggleItem={() => {}}
                 isTarget

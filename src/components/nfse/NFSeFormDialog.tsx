@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Trash2, Search, Loader2, UserSearch, FileText, Calculator, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, Search, Loader2, UserSearch } from 'lucide-react';
 import { useCreateNFSe, useUpdateNFSe, type NFSeDoc } from '@/hooks/useNFSe';
 import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { useEmitters } from '@/hooks/useEmitters';
@@ -22,12 +22,63 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
+import { fiscalDocumentText } from '@/lib/fiscal/fiscalDocumentContact';
 
 interface NFSeItem {
   description: string;
   quantity: number;
   unit_value: number;
   total: number;
+}
+
+interface NFSeFormState {
+  branch_code: string;
+  emitter_id: string | null;
+  regime_tributario: string;
+  series: string;
+  doc_type: string;
+  situacao_doc: string;
+  is_preview: boolean;
+  issue_date: string;
+  cond_pagamento: string;
+  tipo_ctrc: string;
+  reference_number: string;
+  pedido: string;
+  cnae: string;
+  cod_servico: string;
+  nat_operacao: string;
+  cod_trib_municipal: string;
+  cod_municipio_prestacao: string;
+  cliente_nome: string;
+  cliente_cnpj: string;
+  cliente_ie: string;
+  cliente_endereco: string;
+  cliente_bairro: string;
+  cliente_municipio: string;
+  cliente_uf: string;
+  cliente_numero: string;
+  cliente_complemento: string;
+  cliente_cep: string;
+  cliente_cod_municipio: string;
+  cliente_im: string;
+  cliente_email: string;
+  cliente_telefone: string;
+  pagador_nome: string;
+  pagador_cnpj: string;
+  description: string;
+  aliquota_iss: number;
+  iss_retido: boolean;
+  valor_servicos: number;
+  valor_deducoes: number;
+  valor_pis: number;
+  valor_cofins: number;
+  valor_inss: number;
+  valor_ir: number;
+  valor_csll: number;
+  outras_retencoes: number;
+  notes: string;
+  load_id: string | null;
+  related_cte_ids: string[];
 }
 
 interface Props {
@@ -38,7 +89,26 @@ interface Props {
   onSaved?: (doc: NFSeDoc) => void;
 }
 
-function num(v: any) { return Number(v ?? 0) || 0; }
+function num(value: unknown) { return Number(value ?? 0) || 0; }
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : 'Falha ao salvar';
+}
+
+const EMPTY_FORM: NFSeFormState = {
+  branch_code: 'MATRIZ', emitter_id: null, regime_tributario: '3', series: '1',
+  doc_type: 'NFS', situacao_doc: '00', is_preview: false,
+  issue_date: new Date().toISOString().slice(0, 10), cond_pagamento: '', tipo_ctrc: '',
+  reference_number: '', pedido: '', cnae: '', cod_servico: '', nat_operacao: '',
+  cod_trib_municipal: '', cod_municipio_prestacao: '', cliente_nome: '', cliente_cnpj: '',
+  cliente_ie: '', cliente_endereco: '', cliente_bairro: '', cliente_municipio: '',
+  cliente_uf: '', cliente_numero: '', cliente_complemento: '', cliente_cep: '',
+  cliente_cod_municipio: '', cliente_im: '', cliente_email: '', cliente_telefone: '',
+  pagador_nome: '', pagador_cnpj: '', description: '', aliquota_iss: 5, iss_retido: false,
+  valor_servicos: 0, valor_deducoes: 0, valor_pis: 0, valor_cofins: 0, valor_inss: 0,
+  valor_ir: 0, valor_csll: 0, outras_retencoes: 0, notes: '', load_id: null,
+  related_cte_ids: [],
+};
 
 export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, onSaved }: Props) {
   const create = useCreateNFSe();
@@ -47,9 +117,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const { data: emitters = [] } = useEmitters();
   const { data: clients = [] } = useClients();
 
-  const [form, setForm] = useState<any>({
-    regime_tributario: '3', // 3 = Normal, 1 = Simples Nacional
-  });
+  const [form, setForm] = useState<NFSeFormState>(EMPTY_FORM);
   const [items, setItems] = useState<NFSeItem[]>([]);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -115,13 +183,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
         cliente_municipio: first.recipient_city || f.cliente_municipio,
         cliente_uf: first.recipient_state || f.cliente_uf,
         cliente_bairro: first.recipient_neighborhood || f.cliente_bairro,
-        cliente_endereco: (first as any).recipient_address || (first as any).address || f.cliente_endereco,
-        cliente_numero: (first as any).recipient_number || (first as any).number || f.cliente_numero,
-        cliente_complemento: (first as any).recipient_complement || (first as any).complement || f.cliente_complemento,
-        cliente_cep: normalizeCep((first as any).recipient_zip || (first as any).zip) || f.cliente_cep,
-        cliente_cod_municipio: normalizeIbgeCity((first as any).recipient_cod_municipio || (first as any).city_ibge_code) || f.cliente_cod_municipio,
-        cliente_email: (first as any).recipient_email || (first as any).email || f.cliente_email,
-        cliente_telefone: normalizePhone((first as any).recipient_phone || (first as any).phone) || f.cliente_telefone,
+        cliente_endereco: fiscalDocumentText(first, 'recipient_address', 'address') || f.cliente_endereco,
+        cliente_numero: fiscalDocumentText(first, 'recipient_number', 'number') || f.cliente_numero,
+        cliente_complemento: fiscalDocumentText(first, 'recipient_complement', 'complement') || f.cliente_complemento,
+        cliente_cep: normalizeCep(fiscalDocumentText(first, 'recipient_zip', 'zip')) || f.cliente_cep,
+        cliente_cod_municipio: normalizeIbgeCity(fiscalDocumentText(first, 'recipient_cod_municipio', 'city_ibge_code')) || f.cliente_cod_municipio,
+        cliente_email: fiscalDocumentText(first, 'recipient_email', 'email') || f.cliente_email,
+        cliente_telefone: normalizePhone(fiscalDocumentText(first, 'recipient_phone', 'phone')) || f.cliente_telefone,
       }));
     }
   }, [selectedIds, loadDocuments]);
@@ -142,8 +210,8 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     if (!open) return;
     setForm({
       branch_code: initial?.branch_code || 'MATRIZ',
-      emitter_id: (initial as any)?.emitter_id ?? null,
-      regime_tributario: (initial as any)?.regime_tributario || '3',
+      emitter_id: initial?.emitter_id ?? null,
+      regime_tributario: initial?.regime_tributario || '3',
       series: initial?.series || '1',
       doc_type: initial?.doc_type || 'NFS',
       situacao_doc: initial?.situacao_doc || '00',
@@ -153,43 +221,50 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       tipo_ctrc: initial?.tipo_ctrc || '',
       reference_number: initial?.reference_number || '',
       pedido: initial?.pedido || '',
-      cnae: (initial as any)?.cnae || '',
-      cod_servico: (initial as any)?.cod_servico || '',
-      nat_operacao: (initial as any)?.nat_operacao || '',
-      cod_trib_municipal: (initial as any)?.cod_trib_municipal || '',
-      cod_municipio_prestacao: (initial as any)?.cod_municipio_prestacao || '',
+      cnae: initial?.cnae || '',
+      cod_servico: initial?.cod_servico || '',
+      nat_operacao: initial?.nat_operacao || '',
+      cod_trib_municipal: initial?.cod_trib_municipal || '',
+      cod_municipio_prestacao: initial?.cod_municipio_prestacao || '',
       cliente_nome: initial?.cliente_nome || '',
       cliente_cnpj: initial?.cliente_cnpj || '',
-      cliente_ie: (initial as any)?.cliente_ie || '',
-      cliente_endereco: (initial as any)?.cliente_endereco || '',
-      cliente_bairro: (initial as any)?.cliente_bairro || '',
-      cliente_municipio: (initial as any)?.cliente_municipio || '',
-      cliente_uf: (initial as any)?.cliente_uf || '',
-      cliente_numero: (initial as any)?.cliente_numero || '',
-      cliente_complemento: (initial as any)?.cliente_complemento || '',
-      cliente_cep: (initial as any)?.cliente_cep || '',
-      cliente_cod_municipio: (initial as any)?.cliente_cod_municipio || '',
-      cliente_im: (initial as any)?.cliente_im || '',
-      cliente_email: (initial as any)?.cliente_email || '',
-      cliente_telefone: (initial as any)?.cliente_telefone || '',
+      cliente_ie: initial?.cliente_ie || '',
+      cliente_endereco: initial?.cliente_endereco || '',
+      cliente_bairro: initial?.cliente_bairro || '',
+      cliente_municipio: initial?.cliente_municipio || '',
+      cliente_uf: initial?.cliente_uf || '',
+      cliente_numero: initial?.cliente_numero || '',
+      cliente_complemento: initial?.cliente_complemento || '',
+      cliente_cep: initial?.cliente_cep || '',
+      cliente_cod_municipio: initial?.cliente_cod_municipio || '',
+      cliente_im: initial?.cliente_im || '',
+      cliente_email: initial?.cliente_email || '',
+      cliente_telefone: initial?.cliente_telefone || '',
       pagador_nome: initial?.pagador_nome || '',
       pagador_cnpj: initial?.pagador_cnpj || '',
       description: initial?.description || '',
       aliquota_iss: num(initial?.aliquota_iss) || 5,
-      iss_retido: (initial as any)?.iss_retido ?? false,
+      iss_retido: initial?.iss_retido ?? false,
       valor_servicos: num(initial?.valor_servicos),
-      valor_deducoes: num((initial as any)?.valor_deducoes),
-      valor_pis: num((initial as any)?.valor_pis),
-      valor_cofins: num((initial as any)?.valor_cofins),
-      valor_inss: num((initial as any)?.valor_inss),
-      valor_ir: num((initial as any)?.valor_ir),
-      valor_csll: num((initial as any)?.valor_csll),
-      outras_retencoes: num((initial as any)?.outras_retencoes),
+      valor_deducoes: num(initial?.valor_deducoes),
+      valor_pis: num(initial?.valor_pis),
+      valor_cofins: num(initial?.valor_cofins),
+      valor_inss: num(initial?.valor_inss),
+      valor_ir: num(initial?.valor_ir),
+      valor_csll: num(initial?.valor_csll),
+      outras_retencoes: num(initial?.outras_retencoes),
       notes: initial?.notes || '',
       load_id: loadId ?? initial?.load_id ?? null,
       related_cte_ids: initial?.related_cte_ids || [],
     });
-    setItems(Array.isArray(initial?.items) && initial!.items!.length ? initial!.items! as any : []);
+    setItems(
+      initial?.items?.map((item) => ({
+        description: item.description || '',
+        quantity: num(item.quantity),
+        unit_value: num(item.unit_value),
+        total: num(item.total),
+      })) ?? [],
+    );
   }, [open, initial, loadId]);
 
   const totalServicos = items.length > 0
@@ -202,7 +277,8 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     - num(form.valor_pis) - num(form.valor_cofins) - num(form.valor_inss)
     - num(form.valor_ir) - num(form.valor_csll) - num(form.outras_retencoes)).toFixed(2);
 
-  const setField = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+  const setField = <K extends keyof NFSeFormState>(key: K, value: NFSeFormState[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
 
   const addItem = () => setItems(arr => [...arr, { description: '', quantity: 1, unit_value: 0, total: 0 }]);
   const updateItem = (i: number, patch: Partial<NFSeItem>) => {
@@ -243,13 +319,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
         cliente_municipio: doc.recipient_city || prev.cliente_municipio,
         cliente_uf: doc.recipient_state || prev.cliente_uf,
         cliente_bairro: doc.recipient_neighborhood || prev.cliente_bairro,
-        cliente_endereco: (doc as any).recipient_address || (doc as any).address || prev.cliente_endereco,
-        cliente_numero: (doc as any).recipient_number || (doc as any).number || prev.cliente_number,
-        cliente_complemento: (doc as any).recipient_complement || (doc as any).complement || prev.cliente_complemento,
-        cliente_cep: normalizeCep((doc as any).recipient_zip || (doc as any).zip) || prev.cliente_cep,
-        cliente_cod_municipio: normalizeIbgeCity((doc as any).recipient_cod_municipio || (doc as any).city_ibge_code) || prev.cliente_cod_municipio,
-        cliente_email: (doc as any).recipient_email || (doc as any).email || prev.cliente_email,
-        cliente_telefone: normalizePhone((doc as any).recipient_phone || (doc as any).phone) || prev.cliente_telefone,
+        cliente_endereco: fiscalDocumentText(doc, 'recipient_address', 'address') || prev.cliente_endereco,
+        cliente_numero: fiscalDocumentText(doc, 'recipient_number', 'number') || prev.cliente_numero,
+        cliente_complemento: fiscalDocumentText(doc, 'recipient_complement', 'complement') || prev.cliente_complemento,
+        cliente_cep: normalizeCep(fiscalDocumentText(doc, 'recipient_zip', 'zip')) || prev.cliente_cep,
+        cliente_cod_municipio: normalizeIbgeCity(fiscalDocumentText(doc, 'recipient_cod_municipio', 'city_ibge_code')) || prev.cliente_cod_municipio,
+        cliente_email: fiscalDocumentText(doc, 'recipient_email', 'email') || prev.cliente_email,
+        cliente_telefone: normalizePhone(fiscalDocumentText(doc, 'recipient_phone', 'phone')) || prev.cliente_telefone,
         reference_number: doc.invoice_number || prev.reference_number,
         valor_servicos: num(doc.freight_value || doc.value || 0),
         description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
@@ -266,7 +342,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       }
 
       toast.success('Dados importados da NF');
-    } catch (err) {
+    } catch {
       toast.error('Erro ao buscar dados da NF');
     } finally {
       setLoadingInvoice(false);
@@ -282,17 +358,17 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       cliente_nome: client.company_name,
       cliente_cnpj: client.tax_id || '',
       cliente_ie: sanitizeIe(client.state_registration) || '',
-      cliente_im: (client as any).municipal_registration || '',
+      cliente_im: client.municipal_registration || '',
       cliente_endereco: client.address_street || '',
-      cliente_numero: (client as any).address_number || '',
-      cliente_complemento: (client as any).address_complement || '',
+      cliente_numero: client.address_number || '',
+      cliente_complemento: client.address_complement || '',
       cliente_bairro: client.address_neighborhood || '',
       cliente_municipio: normalizeCityName(client.address_city) || '',
-      cliente_cod_municipio: normalizeIbgeCity((client as any).address_city_ibge_code) || '',
+      cliente_cod_municipio: normalizeIbgeCity(client.address_city_ibge_code) || '',
       cliente_uf: normalizeUf(client.address_state) || '',
-      cliente_cep: normalizeCep((client as any).address_zip) || '',
-      cliente_email: (client as any).email || '',
-      cliente_telefone: normalizePhone((client as any).phone) || '',
+      cliente_cep: normalizeCep(client.address_zip) || '',
+      cliente_email: client.email || '',
+      cliente_telefone: normalizePhone(client.phone) || '',
     }));
     setClientSearchOpen(false);
     toast.info('Dados do tomador preenchidos');
@@ -308,7 +384,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     if (!normalizeCep(form.cliente_cep)) { toast.warning('CEP do tomador inválido ou ausente.'); }
     if (!normalizeUf(form.cliente_uf)) { toast.warning('UF do tomador inválida ou ausente.'); }
     if (totalServicos <= 0) { toast.warning('Valor de serviços é zero.'); }
-    const payload: any = {
+    const payload: Partial<NFSeDoc> = {
       ...form,
       cliente_cep: normalizeCep(form.cliente_cep),
       cliente_cod_municipio: normalizedCityCode,
@@ -324,10 +400,10 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
         ? await update.mutateAsync({ id: initial!.id!, patch: payload })
         : await create.mutateAsync(payload);
       toast.success(editing ? 'NFS-e atualizada' : `RPS ${saved.rps_number} criado`);
-      onSaved?.(saved as any);
+      onSaved?.(saved);
       onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e?.message || 'Falha ao salvar');
+    } catch (error: unknown) {
+      toast.error(errorMessage(error));
     }
   };
 

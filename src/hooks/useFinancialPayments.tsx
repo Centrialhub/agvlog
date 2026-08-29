@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { validateUpload } from '@/lib/uploadPolicy';
 import { useTenant } from './useTenant';
+import { uploadSecureFile } from '@/lib/secureUpload';
 
 export const PAYMENT_METHODS = ['pix','boleto','ted','doc','dinheiro','cartao','debito_automatico','other'] as const;
 export type PaymentMethod = typeof PAYMENT_METHODS[number];
@@ -10,6 +10,23 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   dinheiro: 'Dinheiro', cartao: 'Cartão',
   debito_automatico: 'Débito automático', other: 'Outro',
 };
+
+export interface ManualExpensePayload {
+  supplier_name: string;
+  supplier_id: string | null;
+  category: string;
+  description: string;
+  amount: number;
+  due_date: string | null;
+  competence_date: string | null;
+  document_number: string | null;
+  notes: string | null;
+  pay_now: boolean;
+  paid_at: string | null;
+  bank_account_id: string | null;
+  method: string;
+  attachment_url: string | null;
+}
 
 export function useBankAccounts() {
   const { currentTenant } = useTenant();
@@ -78,8 +95,8 @@ export function useRegisterPayablePayment() {
         _paid_at: args.paid_at,
         _bank_account_id: args.bank_account_id,
         _method: args.method,
-        _notes: args.notes ?? null,
-        _attachment_url: args.attachment_url ?? null,
+        _notes: args.notes ?? undefined,
+        _attachment_url: args.attachment_url ?? undefined,
       });
       if (error) throw error;
       return data as string;
@@ -121,8 +138,8 @@ export function useRegisterReceivablePayment() {
         _received_at: args.received_at,
         _bank_account_id: args.bank_account_id,
         _method: args.method,
-        _notes: args.notes ?? null,
-        _attachment_url: args.attachment_url ?? null,
+        _notes: args.notes ?? undefined,
+        _attachment_url: args.attachment_url ?? undefined,
       });
       if (error) throw error;
       return data as string;
@@ -154,7 +171,7 @@ export function useCreateManualExpense() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: Record<string, any>) => {
+    mutationFn: async (payload: ManualExpensePayload) => {
       const { data, error } = await supabase.rpc('create_manual_expense', {
         _payload: { ...payload, tenant_id: currentTenant!.id },
       });
@@ -169,9 +186,11 @@ export function useCreateManualExpense() {
 }
 
 export async function uploadPaymentAttachment(tenantId: string, kind: 'payable'|'receivable', file: File): Promise<string | null> {
-  const { contentType, safeName } = validateUpload(file, 'financial');
-  const path = `${tenantId}/${kind}-payments/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-  const { error } = await supabase.storage.from('receipts').upload(path, file, { contentType });
-  if (error) throw error;
-  return path;
+  return uploadSecureFile({
+    tenantId,
+    bucket: 'receipts',
+    folder: `${kind}-payments`,
+    file,
+    kind: 'financial',
+  });
 }

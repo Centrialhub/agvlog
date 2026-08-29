@@ -2,6 +2,7 @@
 import * as XLSX from 'xlsx';
 import { detectPaymentMethodDetailed } from './paymentMethodDetection';
 import { normalizeIbgeCity, normalizeCep, normalizeUf, normalizePhone, normalizeCpfCnpj } from './fiscal/fiscalAddress';
+import { normalizeNfeAccessKey } from './fiscalDocuments/nfeAccessKey';
 
 
 /**
@@ -18,21 +19,21 @@ import { normalizeIbgeCity, normalizeCep, normalizeUf, normalizePhone, normalize
  */
 export const CLIENT_LOAD_OBSERVATION_RULES: Array<{ id: string; label: string; pattern: RegExp }> = [
   // "Pedido de Carga: 12345" / "Ped. Carga 12345"
-  { id: 'pedido_carga',  label: 'Pedido de Carga',     pattern: /(?:pedido|ped\.?)\s*(?:de\s*)?carga[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  { id: 'pedido_carga',  label: 'Pedido de Carga',     pattern: /(?:pedido|ped\.?)\s*(?:de\s*)?carga[:\s#nº°.-]*([A-Za-z0-9][A-Za-z0-9/-]{0,30})/i },
   // "Nº Carga 12345" / "Carga: 12345" / "CARGA Nº 12345"
-  { id: 'carga',         label: 'Carga (genérico)',    pattern: /(?:n[ºo°.]?\s*)?carga[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  { id: 'carga',         label: 'Carga (genérico)',    pattern: /(?:n[ºo°.]?\s*)?carga[:\s#nº°.-]*([A-Za-z0-9][A-Za-z0-9/-]{0,30})/i },
   // "OC 12345" / "OC: 12345" / "Ordem de Coleta 12345"
-  { id: 'oc',            label: 'Ordem de Coleta (OC)',pattern: /\b(?:oc|ordem\s+de\s+coleta)[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  { id: 'oc',            label: 'Ordem de Coleta (OC)',pattern: /\b(?:oc|ordem\s+de\s+coleta)[:\s#nº°.-]*([A-Za-z0-9][A-Za-z0-9/-]{0,30})/i },
   // "OS 12345" / "Ordem de Serviço 12345"
-  { id: 'os',            label: 'Ordem de Serviço (OS)', pattern: /\b(?:os|ordem\s+de\s+servi[çc]o)[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  { id: 'os',            label: 'Ordem de Serviço (OS)', pattern: /\b(?:os|ordem\s+de\s+servi[çc]o)[:\s#nº°.-]*([A-Za-z0-9][A-Za-z0-9/-]{0,30})/i },
   // "Romaneio: 12345" / "Romaneio Nº 12345"
-  { id: 'romaneio',      label: 'Romaneio',            pattern: /\bromaneio[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  { id: 'romaneio',      label: 'Romaneio',            pattern: /\bromaneio[:\s#nº°.-]*([A-Za-z0-9][A-Za-z0-9/-]{0,30})/i },
   // "Manifesto: 12345"
-  { id: 'manifesto',     label: 'Manifesto',           pattern: /\bmanifesto[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  { id: 'manifesto',     label: 'Manifesto',           pattern: /\bmanifesto[:\s#nº°.-]*([A-Za-z0-9][A-Za-z0-9/-]{0,30})/i },
   // "Lote 12345" / "Lote: 12345"
-  { id: 'lote',          label: 'Lote',                pattern: /\blote[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  { id: 'lote',          label: 'Lote',                pattern: /\blote[:\s#nº°.-]*([A-Za-z0-9][A-Za-z0-9/-]{0,30})/i },
   // "Pedido 12345" (último — só se nada mais casar)
-  { id: 'pedido',        label: 'Pedido (genérico)',   pattern: /\b(?:pedido|ped\.?)[:\s\-#nº°.]*([0-9][A-Za-z0-9\-\/]{0,30})/i },
+  { id: 'pedido',        label: 'Pedido (genérico)',   pattern: /\b(?:pedido|ped\.?)[:\s#nº°.-]*([0-9][A-Za-z0-9/-]{0,30})/i },
 ];
 
 export type ClientLoadExtraction = {
@@ -116,6 +117,14 @@ export interface ParsedNFe {
   averageDueDays?: number | null;
   /** Descrição amigável da forma de pagamento (ex.: "Boleto a prazo (3 parcelas)"). */
   paymentDescription?: string | null;
+  /** Texto livre de prazo/cobrança preservado de documentos digitalizados (ORT). */
+  paymentTerms?: string;
+  /** Origem auditável; ORT escaneada não deve se passar por NF-e. */
+  sourceKind?: 'xml' | 'scan_nfe' | 'scan_ort';
+  /** Identidade operacional estável para documentos sem chave fiscal (ex.: ORT). */
+  referenceNumber?: string | null;
+  /** Resumo lido do documento quando não há itens estruturados. */
+  productSummary?: string | null;
 }
 
 function getTagText(parent: Element, tagName: string): string {
@@ -165,7 +174,7 @@ function extractRecipient(infNFe: Element): RecipientFields {
   const addr = enderDest || infNFe;
   return {
     recipientName: getTagText(ctx, 'xNome'),
-    recipientCnpj: normalizeCpfCnpj(getTagText(ctx, 'CNPJ') || getTagText(ctx, 'CPF')),
+    recipientCnpj: normalizeCpfCnpj(getTagText(ctx, 'CNPJ') || getTagText(ctx, 'CPF')) ?? '',
     recipientFantasyName: getTagText(ctx, 'xFant'),
     recipientStateRegistration: getTagText(ctx, 'IE'),
     recipientMunicipalRegistration: getTagText(ctx, 'IM'),
@@ -173,7 +182,7 @@ function extractRecipient(infNFe: Element): RecipientFields {
     recipientEmail: getTagText(ctx, 'email'),
     recipientPhone: normalizePhone(getTagText(addr, 'fone') || getTagText(ctx, 'fone')) || '',
     recipientCity: getTagText(addr, 'xMun'),
-    recipientCityCode: normalizeIbgeCity(getTagText(addr, 'cMun')),
+    recipientCityCode: normalizeIbgeCity(getTagText(addr, 'cMun')) ?? '',
     recipientState: normalizeUf(getTagText(addr, 'UF')) || getTagText(addr, 'UF'),
     recipientNeighborhood: getTagText(addr, 'xBairro'),
     recipientAddress: getTagText(addr, 'xLgr'),
@@ -362,7 +371,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   const infNFe = doc.getElementsByTagName('infNFe')[0] || doc.getElementsByTagName('nfe:infNFe')[0];
   if (!infNFe) throw new Error('Estrutura de NF-e não encontrada no XML');
 
-  const accessKey = (infNFe.getAttribute('Id') || '').replace(/^NFe/, '');
+  const accessKey = normalizeNfeAccessKey((infNFe.getAttribute('Id') || '').replace(/^NFe/, ''));
   const ide = infNFe.getElementsByTagName('ide')[0];
   const invoiceNumber = getTagText(ide || infNFe, 'nNF');
   const series = getTagText(ide || infNFe, 'serie');
@@ -385,7 +394,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   const total = infNFe.getElementsByTagName('ICMSTot')[0];
   const totalValue = parseFloat(getTagText(total || infNFe, 'vNF')) || 0;
   const { totalWeight, totalVolume } = extractTransportTotals(infNFe);
-  const estimatedPallets = Math.max(1, Math.ceil(totalWeight / 800));
+  const estimatedPallets = totalWeight > 0 ? Math.ceil(totalWeight / 800) : 0;
 
   const payment = extractPayment(infNFe, ide, observation, issueDate);
 
@@ -395,6 +404,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     ...recipient,
     items, totalValue, totalWeight, totalVolume, estimatedPallets,
     observation,
+    sourceKind: 'xml',
     ...clientLoad,
     ...payment,
   };

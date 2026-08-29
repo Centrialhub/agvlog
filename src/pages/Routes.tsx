@@ -1,3 +1,4 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,16 +8,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/sonner';
-import { Plus, Route, Trash2, Edit, MapPin, Fuel, Moon, UtensilsCrossed } from 'lucide-react';
+import { Plus, Route, Trash2, Edit } from 'lucide-react';
 import { RouteDialog } from '@/components/routes/RouteDialog';
-import { getTypeConfig } from '@/components/routes/WaypointEditor';
+import { getWaypointTypeConfig } from '@/lib/routes/waypoints';
+import type { Tables } from '@/integrations/supabase/types';
+
+type RouteTemplateView = Tables<'route_templates'> & { geofences: { name: string } | null };
 
 export default function Routes() {
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editRoute, setEditRoute] = useState<any>(null);
+  const [editRoute, setEditRoute] = useState<RouteTemplateView | null>(null);
 
   const { data: routes = [], isLoading } = useQuery({
     queryKey: ['route_templates', currentTenant?.id],
@@ -82,7 +86,7 @@ export default function Routes() {
       queryClient.invalidateQueries({ queryKey: ['route_waypoints_all'] });
       toast.success('Rota removida');
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (error: Error) => toast.error(error.message),
   });
 
   const { data: routeRuns = [] } = useQuery({
@@ -99,28 +103,28 @@ export default function Routes() {
   });
 
   const getRouteStats = (routeId: string) => {
-    const runs = routeRuns.filter((r: any) => r.route_id === routeId);
-    const ok = runs.filter((r: any) => r.status === 'ok').length;
-    const deviated = runs.filter((r: any) => r.status === 'deviated').length;
+    const runs = routeRuns.filter(run => run.route_id === routeId);
+    const ok = runs.filter(run => run.status === 'ok').length;
+    const deviated = runs.filter(run => run.status === 'deviated').length;
     return { total: runs.length, ok, deviated };
   };
 
   const getRouteWaypoints = (routeId: string) =>
-    allWaypoints.filter((w: any) => w.route_id === routeId);
+    allWaypoints.filter(waypoint => waypoint.route_id === routeId);
 
   const renderWaypointSummary = (routeId: string) => {
     const wps = getRouteWaypoints(routeId);
     if (wps.length === 0) return <span className="text-muted-foreground">—</span>;
 
     const typeCounts: Record<string, number> = {};
-    wps.forEach((w: any) => {
+    wps.forEach((w) => {
       typeCounts[w.waypoint_type] = (typeCounts[w.waypoint_type] || 0) + 1;
     });
 
     return (
       <div className="flex items-center gap-1 flex-wrap">
         {Object.entries(typeCounts).map(([type, count]) => {
-          const config = getTypeConfig(type);
+          const config = getWaypointTypeConfig(type);
           const Icon = config.icon;
           return (
             <span key={type} className="inline-flex items-center gap-0.5" title={config.label}>
@@ -172,7 +176,7 @@ export default function Routes() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {routes.map((r: any) => {
+                {routes.map((r) => {
                   const stats = getRouteStats(r.id);
                   return (
                     <TableRow key={r.id}>
@@ -196,7 +200,7 @@ export default function Routes() {
                             <Button size="sm" variant="ghost" onClick={() => { setEditRoute(r); setDialogOpen(true); }}>
                               <Edit className="h-3 w-3" />
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover rota?')) deleteMutation.mutate(r.id); }}>
+                            <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover rota?', { title: 'Remover rota', confirmLabel: 'Remover' })) deleteMutation.mutate(r.id); }}>
                               <Trash2 className="h-3 w-3 text-destructive" />
                             </Button>
                           </>

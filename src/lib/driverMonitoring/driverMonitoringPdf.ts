@@ -25,8 +25,7 @@ function baseDoc({ title, companyName = 'AGVLog', company, filters, landscape = 
   doc.setFontSize(8);
   doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, 14, y + 10);
   if (filters) doc.text(filters, 14, y + 14);
-  (doc as any).__headerBottom = y + (filters ? 18 : 14);
-  return doc;
+  return { doc, tableStartY: y + (filters ? 18 : 14) };
 }
 
 function footerPagination(doc: jsPDF) {
@@ -39,9 +38,9 @@ function footerPagination(doc: jsPDF) {
 }
 
 export function driversInRoutePdf(rows: DriverMonitorRow[], filters?: string, company?: CompanyPdfInfo) {
-  const doc = baseDoc({ title: 'Relatório de Motoristas em Rota', filters, company });
+  const { doc, tableStartY } = baseDoc({ title: 'Relatório de Motoristas em Rota', filters, company });
   autoTable(doc, {
-    startY: (doc as any).__headerBottom,
+    startY: tableStartY,
     head: [['Motorista', 'Placa', 'Carga', 'Total', 'Real.', 'Falt.', '%', 'Cidade Atual', 'Próxima', 'Prazo', 'Status']],
     body: rows.map((r) => [
       r.driver_name_snapshot || '—',
@@ -65,9 +64,9 @@ export function driversInRoutePdf(rows: DriverMonitorRow[], filters?: string, co
 }
 
 export function deliveriesByDriverPdf(rows: ProgressUpdateRow[], filters?: string, company?: CompanyPdfInfo) {
-  const doc = baseDoc({ title: 'Relatório de Entregas por Motorista', filters, company });
+  const { doc, tableStartY } = baseDoc({ title: 'Relatório de Entregas por Motorista', filters, company });
   autoTable(doc, {
-    startY: (doc as any).__headerBottom,
+    startY: tableStartY,
     head: [['Data', 'Motorista', 'Cidade', 'Entregas', 'Próxima cidade', 'Qtd próx.', 'H. término', 'Status']],
     body: rows.map((r) => [
       dt(r.update_date), r.driver_name || '—', r.city || '—',
@@ -83,9 +82,9 @@ export function deliveriesByDriverPdf(rows: ProgressUpdateRow[], filters?: strin
 }
 
 export function arrivalForecastsPdf(rows: ForecastRow[], filters?: string, company?: CompanyPdfInfo) {
-  const doc = baseDoc({ title: 'Relatório de Chegada de Veículos', filters, company });
+  const { doc, tableStartY } = baseDoc({ title: 'Relatório de Chegada de Veículos', filters, company });
   autoTable(doc, {
-    startY: (doc as any).__headerBottom,
+    startY: tableStartY,
     head: [['Data', 'Hora', 'Motorista', 'Cidade Atual', 'Previsão Montes Claros', 'Cidades Restantes', 'Status']],
     body: rows.map((r) => [
       dt(r.forecast_date), tm(r.forecast_time), r.driver_name || '—',
@@ -102,9 +101,9 @@ export function arrivalForecastsPdf(rows: ForecastRow[], filters?: string, compa
 
 export function delaysPdf(rows: DriverMonitorRow[], filters?: string, company?: CompanyPdfInfo) {
   const now = Date.now();
-  const doc = baseDoc({ title: 'Relatório de Atrasos', filters, company });
+  const { doc, tableStartY } = baseDoc({ title: 'Relatório de Atrasos', filters, company });
   autoTable(doc, {
-    startY: (doc as any).__headerBottom,
+    startY: tableStartY,
     head: [['Motorista', 'Carga', 'Cidade Atual', 'Total', 'Falt.', 'Prazo Retorno', 'Dias Atraso', 'Últ. Atualização']],
     body: rows.map((r) => {
       const daysLate = r.expected_return_date ? Math.max(0, Math.floor((now - new Date(r.expected_return_date + 'T23:59:59').getTime()) / 86400000)) : 0;
@@ -122,7 +121,7 @@ export function delaysPdf(rows: DriverMonitorRow[], filters?: string, company?: 
 }
 
 export function productivityPdf(rows: DriverMonitorRow[], filters?: string, company?: CompanyPdfInfo) {
-  const doc = baseDoc({ title: 'Relatório de Produtividade', filters, company });
+  const { doc, tableStartY } = baseDoc({ title: 'Relatório de Produtividade', filters, company });
   const byDriver = new Map<string, { total: number; completed: number; routes: number; delays: number }>();
   for (const r of rows) {
     const key = r.driver_name_snapshot || 'Sem motorista';
@@ -134,7 +133,7 @@ export function productivityPdf(rows: DriverMonitorRow[], filters?: string, comp
     byDriver.set(key, cur);
   }
   autoTable(doc, {
-    startY: (doc as any).__headerBottom,
+    startY: tableStartY,
     head: [['Motorista', 'Previstas', 'Realizadas', 'Rotas', 'Atrasos', '% No prazo']],
     body: [...byDriver.entries()].map(([driver, v]) => [
       driver, v.total, v.completed, v.routes, v.delays,

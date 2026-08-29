@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import {
   useOperationalChecklists, useCreateChecklist,
   useChecklistExecutions, useCreateChecklistExecution,
-  OperationalChecklist, ChecklistExecution,
+  OperationalChecklist,
   CHECKLIST_TYPES, CHECKLIST_TYPE_LABELS,
   EXECUTION_STATUS_LABELS,
 } from '@/hooks/useOperationalChecklists';
@@ -18,7 +18,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, ClipboardCheck, Play, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { format, parseISO } from 'date-fns';
@@ -44,7 +43,7 @@ const DEFAULT_ITEMS: Record<string, { key: string; label: string; required: bool
 };
 
 export default function Checklists() {
-  const { data: checklists = [], isLoading: loadingChecklists } = useOperationalChecklists();
+  const { data: checklists = [] } = useOperationalChecklists();
   const { data: executions = [] } = useChecklistExecutions();
   const { data: vehicles = [] } = useVehicles();
   const { data: employees = [] } = useEmployees();
@@ -74,17 +73,21 @@ export default function Checklists() {
       await createChecklist.mutateAsync({
         name: templateForm.name,
         checklist_type: templateForm.checklist_type,
-        items: items as any,
+        items,
         active: true,
       });
       setTemplateDialog(false);
       toast.success('Checklist criado');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error: unknown) { toast.error(error instanceof Error ? error.message : String(error)); }
   };
 
   const startExecution = (cl: OperationalChecklist) => {
     setSelectedChecklist(cl);
-    const items = (cl.items as any[] || []).map((i: any) => ({ key: i.key, label: i.label, status: 'ok' as const }));
+    const items = (cl.items || []).map((item) => ({
+      key: item.key,
+      label: item.label,
+      status: 'ok' as const,
+    }));
     setExecItems(items);
     setExecForm({ vehicle_id: '', employee_id: '', notes: '', blocked_operation: false });
     setExecDialog(true);
@@ -94,7 +97,7 @@ export default function Checklists() {
     setExecItems(prev => prev.map((item, i) => {
       if (i !== idx) return item;
       const next = item.status === 'ok' ? 'nok' : item.status === 'nok' ? 'na' : 'ok';
-      return { ...item, status: next as any };
+      return { ...item, status: next };
     }));
   };
 
@@ -106,14 +109,14 @@ export default function Checklists() {
         checklist_id: selectedChecklist.id,
         vehicle_id: execForm.vehicle_id || null,
         employee_id: execForm.employee_id || null,
-        checked_items: execItems as any,
+        checked_items: execItems,
         notes: execForm.notes || null,
         blocked_operation: failed > 0,
         execution_type: selectedChecklist.checklist_type,
       });
       setExecDialog(false);
       toast.success(failed > 0 ? `Checklist executado com ${failed} item(ns) reprovado(s)` : 'Checklist aprovado');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error: unknown) { toast.error(error instanceof Error ? error.message : String(error)); }
   };
 
   return (
@@ -149,7 +152,7 @@ export default function Checklists() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground mb-3">{(cl.items as any[])?.length || 0} itens de verificação</p>
+                  <p className="text-xs text-muted-foreground mb-3">{cl.items.length} itens de verificação</p>
                   <Button size="sm" className="w-full" onClick={() => startExecution(cl)}>
                     <Play className="h-3.5 w-3.5 mr-1" /> Executar
                   </Button>

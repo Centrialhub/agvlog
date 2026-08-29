@@ -108,9 +108,17 @@ function TrackingCard({
   onSelect: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
       onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
       className={cn(
         'w-full text-left rounded-md border border-border bg-card p-3 transition-colors',
         selected ? 'border-primary ring-1 ring-primary/40' : 'hover:bg-muted/40',
@@ -165,6 +173,7 @@ function TrackingCard({
               href={`tel:${item.driver_phone}`}
               className="ml-auto inline-flex items-center gap-1 text-primary"
               onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
             >
               <Phone className="h-3 w-3" />
               {item.driver_phone}
@@ -190,6 +199,7 @@ function TrackingCard({
               key={d.fiscal_document_id}
               to={`/portal/shipments/${d.fiscal_document_id}`}
               onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
               className="block text-xs rounded-sm px-1.5 py-1 hover:bg-muted/60"
             >
               <div className="flex items-center gap-1 min-w-0">
@@ -225,6 +235,6 @@ function TrackingCard({
           )}
         </div>
       )}
-    </button>
+    </div>
   );
 }

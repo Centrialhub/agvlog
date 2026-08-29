@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 export const EVENT_TYPES = [
   'missing_goods', 'missing_goods_fractional', 'wrong_quantity', 'client_refused', 'no_order',
@@ -36,28 +37,16 @@ export const SEVERITY_LABELS: Record<string, string> = {
   critical: 'Crítica',
 };
 
-export interface OperationalEvent {
-  id: string;
-  tenant_id: string;
-  load_id: string | null;
-  order_id: string | null;
-  vehicle_id: string | null;
-  driver_id: string | null;
-  client_id: string | null;
+export type OperationalEvent = Omit<Tables<'operational_events'>, 'event_type'> & {
   event_type: OperationalEventType;
-  severity: string;
-  description: string | null;
-  financial_impact: number;
-  resolution: string | null;
-  resolved_at: string | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-  report_details?: Record<string, any> | null;
   loads?: { load_number: string } | null;
-  drivers?: { name: string } | null;
+  drivers?: { id?: string; name: string } | null;
   clients?: { company_name: string } | null;
-}
+  vehicles?: { plate: string } | null;
+};
+
+export type OperationalEventCreate = Omit<TablesInsert<'operational_events'>, 'tenant_id' | 'created_by'>;
+export type OperationalEventUpdate = Omit<TablesUpdate<'operational_events'>, 'id'> & { id: string };
 
 export function useOperationalEvents() {
   const { currentTenant } = useTenant();
@@ -65,13 +54,13 @@ export function useOperationalEvents() {
     queryKey: ['operational_events', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('operational_events')
-        .select('*, loads(load_number), drivers(name), clients(company_name)')
+        .select('*, loads(load_number), drivers(id, name), clients(company_name), vehicles(plate)')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data || []) as OperationalEvent[];
+      return (data || []) as unknown as OperationalEvent[];
     },
     enabled: !!currentTenant,
   });
@@ -120,9 +109,9 @@ export function useOperationalEventsFiltered(filters: OperationalEventsFilters) 
     ],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = (supabase as any)
+      let q = supabase
         .from('operational_events')
-        .select('*, loads(load_number), drivers(name), clients(company_name)')
+        .select('*, loads(load_number), drivers(id, name), clients(company_name), vehicles(plate)')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(2000);
@@ -153,7 +142,7 @@ export function useOperationalEventsFiltered(filters: OperationalEventsFilters) 
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as OperationalEvent[];
+      return (data || []) as unknown as OperationalEvent[];
     },
     enabled: !!currentTenant,
     placeholderData: (prev) => prev,
@@ -165,12 +154,13 @@ export function useCreateOperationalEvent() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<OperationalEvent>) => {
-      const { data, error } = await (supabase as any).from('operational_events').insert({
+    mutationFn: async (values: OperationalEventCreate) => {
+      const payload: TablesInsert<'operational_events'> = {
         ...values,
         tenant_id: currentTenant!.id,
         created_by: user?.id,
-      }).select().single();
+      };
+      const { data, error } = await supabase.from('operational_events').insert(payload).select().single();
       if (error) throw error;
       return data;
     },
@@ -181,11 +171,12 @@ export function useCreateOperationalEvent() {
 export function useUpdateOperationalEvent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<OperationalEvent> & { id: string }) => {
-      const { data, error } = await (supabase as any).from('operational_events').update({
+    mutationFn: async ({ id, ...values }: OperationalEventUpdate) => {
+      const payload: TablesUpdate<'operational_events'> = {
         ...values,
         updated_at: new Date().toISOString(),
-      }).eq('id', id).select().single();
+      };
+      const { data, error } = await supabase.from('operational_events').update(payload).eq('id', id).select().single();
       if (error) throw error;
       return data;
     },

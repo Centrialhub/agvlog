@@ -6,6 +6,7 @@ import {
   INCIDENT_CATEGORIES, INCIDENT_CATEGORY_LABELS,
   INCIDENT_ACTION_TYPES, INCIDENT_ACTION_LABELS,
   useIncidentActions, useAddEmployeeIncidentAction,
+  type CreateIncidentInput,
 } from '@/hooks/useIncidents';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -21,8 +22,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Plus, AlertOctagon, Edit } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
-import { format, parseISO } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Falha inesperada na ocorrência';
+}
 
 export default function Incidents() {
   const { data: incidents = [], isLoading } = useIncidents();
@@ -87,10 +91,19 @@ export default function Incidents() {
       toast.error('Ocorrências críticas precisam de conclusão/parecer final para encerrar');
       return;
     }
-    const payload: any = { ...form, estimated_cost: form.estimated_cost ? Number(form.estimated_cost) : 0 };
-    ['employee_id','vehicle_id','client_id'].forEach(k => { if (!payload[k]) payload[k] = null; });
-    if (['resolved','closed'].includes(form.status) && !editing?.resolved_at) payload.resolved_at = new Date().toISOString();
-    if (form.status === 'closed' && !editing?.closed_at) payload.closed_at = new Date().toISOString();
+    const payload: CreateIncidentInput = {
+      ...form,
+      employee_id: form.employee_id || null,
+      vehicle_id: form.vehicle_id || null,
+      client_id: form.client_id || null,
+      estimated_cost: form.estimated_cost ? Number(form.estimated_cost) : 0,
+      resolved_at: ['resolved', 'closed'].includes(form.status) && !editing?.resolved_at
+        ? new Date().toISOString()
+        : editing?.resolved_at,
+      closed_at: form.status === 'closed' && !editing?.closed_at
+        ? new Date().toISOString()
+        : editing?.closed_at,
+    };
     try {
       if (editing) await updateIncident.mutateAsync({ id: editing.id, ...payload });
       else {
@@ -99,8 +112,8 @@ export default function Incidents() {
         // Para ocorrências de RH, manter o modal aberto para permitir cadastrar
         // ações de RH imediatamente sem reabrir a tela.
         if (form.category === 'hr' && created) {
-          setEditing(created as Incident);
-          setForm(f => ({ ...f, status: (created as Incident).status || f.status }));
+          setEditing(created);
+          setForm(f => ({ ...f, status: created.status || f.status }));
           return;
         }
         setDialogOpen(false);
@@ -108,7 +121,7 @@ export default function Incidents() {
       }
       setDialogOpen(false);
       toast.success('Ocorrência atualizada');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error: unknown) { toast.error(errorMessage(error)); }
   };
 
   const severityColor = (s: string) => {
@@ -291,7 +304,7 @@ function HrActionsSection({ incidentId, defaultEmployeeId, savedEmployeeId }: { 
       });
       toast.success('Ação de RH registrada');
       setDescription(''); setAmount(''); setEffectiveDate(''); setActionType('note');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error: unknown) { toast.error(errorMessage(error)); }
   };
 
   return (

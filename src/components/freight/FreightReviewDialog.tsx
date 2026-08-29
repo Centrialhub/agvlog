@@ -10,13 +10,16 @@ import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
 import FreightBreakdownPanel from './FreightBreakdownPanel';
 import { useOverrideFreightValue, useConfirmFreightValue } from '@/hooks/useOverrideFreightValue';
+import { freightBreakdownFromJson } from '@/hooks/useFreightCalculator';
+import { useTenant } from '@/hooks/useTenant';
+import type { Json, Tables } from '@/integrations/supabase/types';
 
 interface Doc {
   id: string;
   invoice_number?: string | null;
   freight_value?: number | null;
   freight_value_original?: number | null;
-  freight_breakdown?: any;
+  freight_breakdown?: Json | null;
   freight_overridden?: boolean | null;
   freight_override_reason?: string | null;
   freight_confirmed_at?: string | null;
@@ -31,29 +34,45 @@ interface Props {
 const fmtBRL = (n: number) =>
   Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function FreightReviewDialog({ open, onOpenChange, doc }: Props) {
   const [newValue, setNewValue] = useState<string>('');
   const [reason, setReason] = useState('');
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<Tables<'freight_override_log'>[]>([]);
   const override = useOverrideFreightValue();
   const confirm = useConfirmFreightValue();
+  const { currentTenant } = useTenant();
 
   const original = Number(doc?.freight_value_original ?? doc?.freight_value ?? 0);
   const current = Number(doc?.freight_value ?? 0);
+  const parsedBreakdown = freightBreakdownFromJson(doc?.freight_breakdown);
 
   useEffect(() => {
-    if (open && doc) {
+    let active = true;
+    if (open && doc && currentTenant) {
       setNewValue(String(current.toFixed(2)));
       setReason('');
       // Load audit history
       supabase
-        .from('freight_override_log' as any)
+        .from('freight_override_log')
         .select('*')
         .eq('fiscal_document_id', doc.id)
+        .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
-        .then(({ data }) => setHistory((data as any[]) || []));
+        .then(({ data, error }) => {
+          if (!active) return;
+          if (error) {
+            setHistory([]);
+            return;
+          }
+          setHistory(data || []);
+        });
     }
-  }, [open, doc?.id]);
+    return () => { active = false; };
+  }, [current, currentTenant, doc, open]);
 
   if (!doc) return null;
 
@@ -67,12 +86,12 @@ export default function FreightReviewDialog({ open, onOpenChange, doc }: Props) 
         newValue: parsedNew,
         reason,
         previousValue: current,
-        freightBreakdown: doc.freight_breakdown,
+        freightBreakdown: doc.freight_breakdown ?? null,
       });
       toast.success('Valor do frete atualizado com auditoria registrada');
       onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e.message || 'Falha ao atualizar valor');
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, 'Falha ao atualizar valor'));
     }
   };
 
@@ -81,8 +100,8 @@ export default function FreightReviewDialog({ open, onOpenChange, doc }: Props) 
       await confirm.mutateAsync(doc.id);
       toast.success('Valor confirmado');
       onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e.message || 'Falha ao confirmar');
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, 'Falha ao confirmar'));
     }
   };
 
@@ -117,11 +136,11 @@ export default function FreightReviewDialog({ open, onOpenChange, doc }: Props) 
             </div>
           </div>
 
-          {doc.freight_breakdown && (
+          {parsedBreakdown && (
             <div>
               <div className="text-sm font-medium mb-2">Breakdown da regra original</div>
               <FreightBreakdownPanel
-                breakdown={doc.freight_breakdown}
+                breakdown={parsedBreakdown}
                 finalValue={original}
               />
             </div>

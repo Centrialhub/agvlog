@@ -1,15 +1,10 @@
-import { Fragment, useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
-import L, { type LatLngExpression } from 'leaflet';
+import { Fragment, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
+import type { LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { STATE_COLORS, type ActiveTripLive } from '@/lib/controlTower/types';
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
+import { MapAutoFit } from '@/components/maps/MapAutoFit';
+import { DEFAULT_BRAZIL_MAP_CENTER, L } from '@/lib/maps/leaflet';
 
 function vehicleIcon(trip: ActiveTripLive) {
   const color = STATE_COLORS[trip.state] ?? '#2563eb';
@@ -41,16 +36,6 @@ function stopIcon(seq: number, done: boolean) {
   });
 }
 
-function FitBounds({ points }: { points: [number, number][] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!points.length) return;
-    const bounds = L.latLngBounds(points);
-    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 12 });
-  }, [points.length]);
-  return null;
-}
-
 export default function ControlTowerMap({
   trips,
   onSelectTrip,
@@ -71,7 +56,7 @@ export default function ControlTowerMap({
     return p;
   }, [trips]);
 
-  const center: [number, number] = allPoints[0] ?? [-14.235, -51.925];
+  const center: [number, number] = allPoints[0] ?? DEFAULT_BRAZIL_MAP_CENTER;
 
   return (
     <div className="h-full w-full rounded-lg overflow-hidden border border-border">
@@ -80,7 +65,7 @@ export default function ControlTowerMap({
           attribution='&copy; OpenStreetMap'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <FitBounds points={allPoints} />
+        <MapAutoFit points={allPoints} padding={60} maxZoom={12} />
 
         {trips.map((t) => {
           const color = STATE_COLORS[t.state] ?? '#2563eb';

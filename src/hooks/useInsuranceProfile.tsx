@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import type { Json } from '@/integrations/supabase/types';
 
 export interface InsuranceProfile {
   /** Razão social da seguradora. */
@@ -9,6 +10,22 @@ export interface InsuranceProfile {
   cnpj?: string;
   /** Nº da apólice — fixo por transportadora. */
   policy?: string;
+}
+
+type JsonObject = { [key: string]: Json | undefined };
+
+function jsonObject(value: Json | null | undefined): JsonObject | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function readInsurance(settings: Json | null | undefined): InsuranceProfile {
+  const insurance = jsonObject(jsonObject(settings)?.insurance);
+  if (!insurance) return {};
+  return {
+    name: typeof insurance.name === 'string' ? insurance.name : undefined,
+    cnpj: typeof insurance.cnpj === 'string' ? insurance.cnpj : undefined,
+    policy: typeof insurance.policy === 'string' ? insurance.policy : undefined,
+  };
 }
 
 /**
@@ -27,8 +44,7 @@ export function useInsuranceProfile() {
       const { data, error } = await supabase
         .from('tenants').select('settings').eq('id', currentTenant.id).maybeSingle();
       if (error) throw error;
-      const s = (data?.settings as any) || {};
-      return (s.insurance as InsuranceProfile) || {};
+      return readInsurance(data?.settings);
     },
   });
 }
@@ -42,8 +58,11 @@ export function useUpdateInsuranceProfile() {
       const { data: cur, error: e1 } = await supabase
         .from('tenants').select('settings').eq('id', currentTenant.id).maybeSingle();
       if (e1) throw e1;
-      const settings = { ...((cur?.settings as any) || {}) };
-      settings.insurance = { ...(settings.insurance || {}), ...patch };
+      const currentSettings = jsonObject(cur?.settings) ?? {};
+      const settings: Json = {
+        ...currentSettings,
+        insurance: { ...readInsurance(cur?.settings), ...patch },
+      };
       const { data: updated, error } = await supabase
         .from('tenants')
         .update({ settings })
@@ -54,7 +73,7 @@ export function useUpdateInsuranceProfile() {
       if (!updated) {
         throw new Error('Sem permissão para salvar a seguradora padrão (apenas admin/owner).');
       }
-      return (((updated.settings as any) || {}).insurance || {}) as InsuranceProfile;
+      return readInsurance(updated.settings);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['insurance_profile'] });

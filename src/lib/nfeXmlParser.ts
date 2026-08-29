@@ -41,7 +41,7 @@ function normalizeDate(v: string | null): string | null {
 
 function toNumber(v: string | null): number | null {
   if (!v) return null;
-  const clean = v.replace(/\./g, '').replace(',', '.').replace(/[^0-9.\-]/g, '');
+  const clean = v.replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '');
   const n = parseFloat(clean);
   return isNaN(n) ? null : n;
 }
@@ -101,9 +101,9 @@ function parseNfse(doc: Document): ParsedFiscalXml {
   const emitterCnpj = cleanTaxId(text(prestador, 'Cnpj') || text(prestador, 'CpfCnpj'));
   const recipientCnpj = cleanTaxId(text(tomador, 'Cnpj') || text(tomador, 'CpfCnpj'));
 
-  const amount = toNumber(text(valores as any, 'ValorLiquidoNfse'))
-              ?? toNumber(text(valores as any, 'ValorServicos'))
-              ?? toNumber(text(valores as any, 'ValorTotal'));
+  const amount = toNumber(text(valores, 'ValorLiquidoNfse'))
+              ?? toNumber(text(valores, 'ValorServicos'))
+              ?? toNumber(text(valores, 'ValorTotal'));
 
   const numero = text(infNfse, 'Numero') || text(infRps, 'Numero');
   const serie  = text(infNfse, 'Serie')  || text(infRps, 'Serie');

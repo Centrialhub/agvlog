@@ -29,3 +29,12 @@ export function suggestIcmsAliquota(originUf?: string | null, destUf?: string | 
 export function icmsIsentoByCst(cst?: string | null): boolean {
   return cst === '40' || cst === '41' || cst === '51';
 }
+
+export function shouldApplyIcmsAutoSuggestion(
+  itemIndex: number,
+  activeIndex: number,
+  bulkEditFiscal: boolean,
+  manuallyLocked: boolean,
+): boolean {
+  return itemIndex === activeIndex || (bulkEditFiscal && !manuallyLocked);
+}

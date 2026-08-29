@@ -31,6 +31,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/sonner';
 import { useSortableData } from '@/hooks/useSortableData';
+import { usePagination } from '@/hooks/usePagination';
+import { DataPagination } from '@/components/ui/data-pagination';
 import { format } from 'date-fns';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { normalizeCity } from '@/lib/utils/normalizeCity';
@@ -253,7 +255,7 @@ export default function Billing() {
           if (actualLoadStart && act < actualLoadStart) return false;
           if (actualLoadEnd && act > actualLoadEnd) return false;
         }
-        if (!matchesOperation(load?.operation_type ?? (d as any).operation_type, allOps, opTypes)) return false;
+        if (!matchesOperation(load?.operation_type ?? d.operation_type, allOps, opTypes)) return false;
 
         // Cidade do destinatário (já filtrada server-side se selecionada, mas mantida para consistência no client)
         if (recipientCity !== SENTINEL_NONE && normalizeCity(d.recipient_city) !== recipientCity) return false;
@@ -272,6 +274,15 @@ export default function Billing() {
     ])
   );
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const documentsPagination = usePagination(filteredDocs, {
+    pageSize: 50,
+    resetKey: [
+      tab, periodStart, periodEnd, invoiceNumber, accessKey, supplier, supplierCnpj,
+      recipientCity, osNumber, collectOrder, issueDateStart, issueDateEnd,
+      importDateStart, importDateEnd, loadStatus, plate,
+      [...selectedLoadIds].sort().join(','), [...opTypes].sort().join(','), String(allOps),
+    ].join('|'),
+  });
 
   // ===== Hidrata estado a partir da preferência salva (uma única vez) =====
   const hydratedRef = useRef(false);
@@ -313,7 +324,7 @@ export default function Billing() {
 
   // ===== Auto-save (debounced) sempre que estado muda =====
   useEffect(() => {
-    if (!isLoaded || !hydratedRef.current) return;
+    if (!isLoaded || !hydratedRef.current) return undefined;
     const t = setTimeout(() => {
       savePreference({
         tab,
@@ -366,7 +377,8 @@ export default function Billing() {
     setAllOps(false);
     setOpTypes(prev => {
       const next = new Set(prev);
-      next.has(op) ? next.delete(op) : next.add(op);
+      if (next.has(op)) next.delete(op);
+      else next.add(op);
       return next;
     });
   };
@@ -388,7 +400,7 @@ export default function Billing() {
   // Cidades de destino disponíveis nas notas elegíveis (chave normalizada -> rótulo exibido)
   const recipientCityOptions = useMemo(() => {
     const m = new Map<string, { key: string; label: string; count: number }>();
-    for (const d of docs as any[]) {
+    for (const d of docs) {
       const key = normalizeCity(d.recipient_city);
       if (!key) continue;
       const label = `${d.recipient_city}${d.recipient_state ? `/${d.recipient_state}` : ''}`;
@@ -417,12 +429,13 @@ export default function Billing() {
       else changed = true;
     });
     if (changed) setSelectedDocIds(next);
-  }, [filteredDocs, docsLoading]);
+  }, [filteredDocs, docsLoading, selectedDocIds]);
 
   const toggleDoc = (id: string) => {
     setSelectedDocIds(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -449,7 +462,8 @@ export default function Billing() {
   const toggleLoad = (id: string) => {
     setSelectedLoadIds(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -711,9 +725,9 @@ export default function Billing() {
                   ? filteredDocs.filter(d => selectedDocIds.has(d.id))
                   : filteredDocs;
 
-                const escape = (str: any) => {
-                  if (str === null || str === undefined) return '';
-                  return String(str)
+                const escape = (value: unknown) => {
+                  if (value === null || value === undefined) return '';
+                  return String(value)
                     .replace(/&/g, '&amp;')
                     .replace(/</g, '&lt;')
                     .replace(/>/g, '&gt;')
@@ -737,7 +751,7 @@ export default function Billing() {
                   xml += `    <Emissao>${escape(formatDate(d.issue_date))}</Emissao>\n`;
                   xml += `    <Remetente>${escape(d.remitter)}</Remetente>\n`;
                   xml += `    <Destinatario>${escape(d.recipient || d.clients?.company_name)}</Destinatario>\n`;
-                  xml += `    <CidadeDestino>${escape((d as any).recipient_city)}${(d as any).recipient_state ? `/${escape((d as any).recipient_state)}` : ''}</CidadeDestino>\n`;
+                  xml += `    <CidadeDestino>${escape(d.recipient_city)}${d.recipient_state ? `/${escape(d.recipient_state)}` : ''}</CidadeDestino>\n`;
                   xml += `    <Pallets>${escape(d.pallet_count)}</Pallets>\n`;
                   xml += `    <Peso>${escape(Number(d.weight_kg || 0).toLocaleString('pt-BR'))}</Peso>\n`;
                   xml += `    <Valor>${escape(Number(d.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }))}</Valor>\n`;
@@ -829,7 +843,7 @@ export default function Billing() {
                   <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
                 ) : filteredDocs.length === 0 ? (
                   <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Nenhuma nota disponível com os filtros atuais.</TableCell></TableRow>
-                ) : filteredDocs.map(d => (
+                ) : documentsPagination.items.map(d => (
                   <TableRow key={d.id} className="cursor-pointer" onClick={() => toggleDoc(d.id)}>
                     <TableCell><Checkbox checked={selectedDocIds.has(d.id)} /></TableCell>
                     <TableCell className="font-mono text-xs">{d.invoice_number || '—'}</TableCell>
@@ -837,8 +851,8 @@ export default function Billing() {
                     <TableCell className="text-sm truncate max-w-[220px]">{d.remitter || '—'}</TableCell>
                     <TableCell className="text-sm truncate max-w-[220px]">{d.recipient || d.clients?.company_name || '—'}</TableCell>
                     <TableCell className="text-sm">
-                      {(d as any).recipient_city
-                        ? `${(d as any).recipient_city}${(d as any).recipient_state ? `/${(d as any).recipient_state}` : ''}`
+                      {d.recipient_city
+                        ? `${d.recipient_city}${d.recipient_state ? `/${d.recipient_state}` : ''}`
                         : '—'}
                     </TableCell>
                     <TableCell className="text-right text-sm">{d.pallet_count || 0}</TableCell>
@@ -854,6 +868,7 @@ export default function Billing() {
               </TableBody>
             </Table>
           </div>
+          <DataPagination {...documentsPagination} onPageChange={documentsPagination.setPage} />
         </CardContent>
       </Card>
 
@@ -1145,8 +1160,11 @@ function IssuedCtesTable() {
       }
       setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
       toast.success(`${label} ${view ? 'aberto' : 'baixado'}`, { id: toastId });
-    } catch (e: any) {
-      toast.error(`Falha ao obter ${label}`, { id: toastId, description: e?.message });
+    } catch (error: unknown) {
+      toast.error(`Falha ao obter ${label}`, {
+        id: toastId,
+        description: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -1352,7 +1370,9 @@ function IssuedCtesTable() {
                   setDeleteTarget(null);
                   setDeleteConfirm('');
                 },
-                onError: (err: any) => toast.error(err?.message || 'Falha ao excluir CT-e'),
+                onError: (error: unknown) => toast.error(
+                  error instanceof Error ? error.message : 'Falha ao excluir CT-e',
+                ),
               });
             }}
           >

@@ -15,7 +15,7 @@ export default function SignaturePad({ onChange, height = 180 }: SignaturePadPro
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return undefined;
     const setup = () => {
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
@@ -70,7 +70,7 @@ export default function SignaturePad({ onChange, height = 180 }: SignaturePadPro
     if (!hasInk) setHasInk(true);
   };
 
-  const end = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const end = () => {
     const wasDrawing = drawingRef.current;
     drawingRef.current = false;
     lastPointRef.current = null;

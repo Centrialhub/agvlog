@@ -1,20 +1,21 @@
+import { promptAction } from '@/hooks/useAlertStore';
 import { useEffect, useMemo, useState } from 'react';
 import { isBillableFiscalDoc } from '@/lib/fiscal/documentStatus';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useUpdateLoad } from '@/hooks/useLoads';
+import { useUpdateLoad, type Load } from '@/hooks/useLoads';
+import type { LoadItem } from '@/hooks/useLoadItems';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/components/ui/sonner';
@@ -29,14 +30,38 @@ import {
   Unlock, Database, Network, DollarSign as DollarIcon, Bot, Search,
   X as XIcon, Lock, ClipboardCheck, AlertTriangle, Pencil, FileSearch,
   FilePlus, Key,
+  type LucideIcon,
 } from 'lucide-react';
+import type { Tables } from '@/integrations/supabase/types';
+import { getErrorMessage } from '@/lib/errors';
+
+export type LoadRomaneioDocument = Pick<Tables<'fiscal_documents'>,
+  'id' | 'invoice_number' | 'reference_number' | 'document_type' | 'status' |
+  'remitter' | 'remitter_cnpj' | 'recipient' | 'recipient_cnpj' | 'recipient_city' |
+  'recipient_state' | 'recipient_neighborhood' | 'pallet_count' | 'weight_kg' |
+  'value' | 'issue_date' | 'freight_value' | 'freight_value_original' |
+  'freight_breakdown' | 'freight_overridden' | 'freight_override_reason' |
+  'freight_confirmed_at' | 'delivery_meta' | 'client_load_source' | 'load_id' | 'deleted_at'
+>;
 
 interface Props {
-  load: any;
-  documents: any[];
-  items: any[];
+  load: Load;
+  documents: LoadRomaneioDocument[];
+  items: LoadItem[];
   onSaved?: () => void;
 }
+
+type ActionButton =
+  | { sep: true }
+  | {
+      sep?: false;
+      icon: LucideIcon;
+      label: string;
+      color: string;
+      primary?: boolean;
+      onClick: () => void;
+      disabled?: boolean;
+    };
 
 const OP_TYPES = [
   { value: '__none__', label: '— Selecionar —' },
@@ -59,7 +84,7 @@ const fromLocalDT = (v: string) => (v ? new Date(v).toISOString() : null);
 const fmtMoney = (n?: number | null) =>
   n == null ? 'R$ 0,00' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Props) {
+export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
   const { currentTenant } = useTenant();
   const { data: vehicles = [] } = useVehicles();
   const updateLoad = useUpdateLoad();
@@ -109,20 +134,20 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
 
   useEffect(() => {
     setForm(f => ({ ...f, driver_id: load.driver_id || '__none__', vehicle_id: load.vehicle_id || '__none__' }));
-  }, [load.id]);
+  }, [load.id, load.driver_id, load.vehicle_id]);
 
-  const vehicle = useMemo(() => vehicles.find((v: any) => v.id === load.vehicle_id) as any, [vehicles, load.vehicle_id]);
+  const vehicle = useMemo(() => vehicles.find(candidate => candidate.id === load.vehicle_id), [vehicles, load.vehicle_id]);
 
   // Totais NF e CT-e
   const nfeTotal = useMemo(() => documents
-    .filter((d: any) => d.document_type === 'inbound' && isBillableFiscalDoc(d))
-    .reduce((s: number, d: any) => s + Number(d.value || 0), 0), [documents]);
-  const nfeQty = useMemo(() => documents.filter((d: any) => d.document_type === 'inbound' && isBillableFiscalDoc(d)).length, [documents]);
+    .filter(document => document.document_type === 'inbound' && isBillableFiscalDoc(document))
+    .reduce((sum, document) => sum + Number(document.value || 0), 0), [documents]);
+  const nfeQty = useMemo(() => documents.filter(document => document.document_type === 'inbound' && isBillableFiscalDoc(document)).length, [documents]);
   const deliveriesQty = useMemo(() => {
     const recipients = new Set(
       documents
-        .filter((d: any) => d.document_type === 'inbound')
-        .map((d: any) => (d.recipient_name || d.recipient || d.destination || '').trim().toUpperCase())
+        .filter(document => document.document_type === 'inbound')
+        .map(document => (document.recipient || '').trim().toUpperCase())
         .filter(Boolean)
     );
     return recipients.size;
@@ -139,8 +164,8 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
     },
   });
   const cteTotal = useMemo(() => ctes
-    .filter((c: any) => !c.is_voided && isBillableFiscalDoc(c))
-    .reduce((s: number, c: any) => s + Number(c.freight_value || 0), 0), [ctes]);
+    .filter(document => !document.is_voided && isBillableFiscalDoc(document))
+    .reduce((sum, document) => sum + Number(document.freight_value || 0), 0), [ctes]);
 
   // Despesas (via dispatch_trips)
   const { data: tripIds = [] } = useQuery({
@@ -150,7 +175,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
         .from('dispatch_trips')
         .select('id')
         .eq('load_id', load.id);
-      return (data || []).map((t: any) => t.id);
+      return (data || []).map(trip => trip.id);
     },
   });
 
@@ -165,10 +190,10 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
       return data || [];
     },
   });
-  const totalExpenses = expenses.reduce((s: number, e: any) => s + Number(e.amount || 0), 0);
-  const advances = expenses.filter((e: any) => /adiant/i.test(e.category || ''));
-  const totalAdvances = advances.reduce((s: number, e: any) => s + Number(e.amount || 0), 0);
-  const otherExpenses = expenses.filter((e: any) => !/adiant/i.test(e.category || ''));
+  const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const advances = expenses.filter(expense => /adiant/i.test(expense.category || ''));
+  const totalAdvances = advances.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const otherExpenses = expenses.filter(expense => !/adiant/i.test(expense.category || ''));
 
   // Stops
   const { data: stops = [] } = useQuery({
@@ -177,7 +202,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
     queryFn: async () => {
       const { data } = await supabase
         .from('dispatch_stops')
-        .select('id, stop_order, destination, status, planned_at, arrival_at, clients(name)')
+        .select('id, stop_order, destination, status, planned_arrival_at, actual_arrival_at, clients(company_name)')
         .in('dispatch_trip_id', tripIds)
         .order('stop_order');
       return data || [];
@@ -204,7 +229,9 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
         driver_id: form.driver_id !== '__none__' ? form.driver_id : null,
         vehicle_id: form.vehicle_id !== '__none__' ? form.vehicle_id : null,
         trailer_plate: form.trailer_plate || null,
-        operation_type: form.operation_type !== '__none__' ? form.operation_type as any : null,
+        operation_type: form.operation_type !== '__none__'
+          ? form.operation_type as NonNullable<Load["operation_type"]>
+          : null,
         origin: form.origin || null,
         destination: form.destination || null,
         actual_load_at: fromLocalDT(form.actual_load_at),
@@ -225,11 +252,41 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
         notes: form.notes || null,
         distribution_manifest: form.distribution_manifest || null,
         shipment_manifest: form.shipment_manifest || null,
-      } as any);
+      });
       toast.success('Cabeçalho do romaneio salvo');
       onSaved?.();
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const handleHold = async () => {
+    const reason = await promptAction('Descreva o motivo do bloqueio operacional.', {
+      title: 'Bloquear carga',
+      label: 'Motivo do bloqueio',
+    });
+    if (!reason) return;
+    try {
+      const { error } = await supabase.rpc('hold_load', {
+        _load_id: load.id,
+        _reason: reason,
+      });
+      if (error) throw error;
+      toast.success('Carga bloqueada operacionalmente');
+      onSaved?.();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Não foi possível bloquear a carga'));
+    }
+  };
+
+  const handleUnhold = async () => {
+    try {
+      const { error } = await supabase.rpc('unhold_load', { _load_id: load.id });
+      if (error) throw error;
+      toast.success('Carga liberada para operação');
+      onSaved?.();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Não foi possível liberar a carga'));
     }
   };
 
@@ -240,9 +297,9 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
         {([
           // OPERAÇÃO
           { icon: Unlock, label: 'Liberar Travas', color: 'text-amber-600',
-            onClick: () => toast.info('Liberar travas operacionais — confirme com supervisor (em breve).') },
+            onClick: handleUnhold, disabled: !load.on_hold },
           { icon: Lock, label: 'Bloquear', color: 'text-slate-600',
-            onClick: () => toast.info('Bloquear edição da carga — em breve.') },
+            onClick: handleHold, disabled: !!load.on_hold },
           { icon: Pencil, label: 'Editar', color: 'text-sky-600',
             onClick: () => { const el = document.getElementById('romaneio-form-top'); el?.scrollIntoView({ behavior: 'smooth' }); toast.info('Edite os campos abaixo e clique em Salvar.'); } },
           { icon: Save, label: 'Salvar', color: 'text-white', primary: true, onClick: handleSave },
@@ -282,7 +339,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
             onClick: () => toast.warning('Use o menu Status (acima) para cancelar a carga.') },
           { icon: FileText, label: 'Imprimir', color: 'text-zinc-600',
             onClick: () => window.print() },
-        ] as Array<any>).map((b, i) => {
+        ] satisfies ActionButton[]).map((b, i) => {
           if (b.sep) return <div key={`sep-${i}`} className="h-6 w-px bg-border mx-1" />;
           const Icon = b.icon;
           return (
@@ -292,6 +349,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
               variant={b.primary ? 'default' : 'outline'}
               className={`h-8 px-2 text-xs gap-1 ${b.primary ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm' : 'bg-background hover:bg-muted'}`}
               onClick={b.onClick}
+              disabled={b.disabled}
               title={b.label}
             >
               <Icon className={`h-3.5 w-3.5 ${b.primary ? '' : b.color}`} />
@@ -325,7 +383,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
                 <SearchableSelect
                   value={form.driver_id}
                   onChange={v => {
-                    const drv: any = drivers.find((d: any) => d.id === v);
+                    const drv = drivers.find(driver => driver.id === v);
                     setForm(f => ({
                       ...f,
                       driver_id: v,
@@ -338,7 +396,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
                   }}
                   options={[
                     { value: '__none__', label: '— Nenhum —' },
-                    ...drivers.map((d: any) => ({ value: d.id, label: d.name })),
+                    ...drivers.map(driver => ({ value: driver.id, label: driver.name })),
                   ]}
                   placeholder="Selecionar motorista"
                   searchPlaceholder="Digite o nome..."
@@ -352,10 +410,10 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
                     onChange={v => setForm({ ...form, vehicle_id: v })}
                     options={[
                       { value: '__none__', label: '— Nenhum —' },
-                      ...vehicles.map((v: any) => ({
-                        value: v.id,
-                        label: v.plate,
-                        hint: v.nickname || undefined,
+                      ...vehicles.map(vehicleOption => ({
+                        value: vehicleOption.id,
+                        label: vehicleOption.plate,
+                        hint: vehicleOption.nickname || undefined,
                       })),
                     ]}
                     placeholder="Placa"
@@ -503,14 +561,14 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
               <TableBody>
                 {stops.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-4">Nenhuma parada — despache a carga para gerar o roteiro.</TableCell></TableRow>
-                ) : stops.map((s: any) => (
+                ) : stops.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="text-xs font-semibold">{s.stop_order}</TableCell>
                     <TableCell className="text-xs">{s.destination}</TableCell>
-                    <TableCell className="text-xs">{s.clients?.name || '—'}</TableCell>
+                    <TableCell className="text-xs">{s.clients?.company_name || '—'}</TableCell>
                     <TableCell className="text-xs"><Badge variant="outline" className="text-[10px]">{s.status}</Badge></TableCell>
-                    <TableCell className="text-xs">{s.planned_at ? new Date(s.planned_at).toLocaleString('pt-BR') : '—'}</TableCell>
-                    <TableCell className="text-xs">{s.arrival_at ? new Date(s.arrival_at).toLocaleString('pt-BR') : '—'}</TableCell>
+                    <TableCell className="text-xs">{s.planned_arrival_at ? new Date(s.planned_arrival_at).toLocaleString('pt-BR') : '—'}</TableCell>
+                    <TableCell className="text-xs">{s.actual_arrival_at ? new Date(s.actual_arrival_at).toLocaleString('pt-BR') : '—'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -551,7 +609,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
             <TableBody>
               {otherExpenses.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-6">Sem despesas registradas para esta carga.</TableCell></TableRow>
-              ) : otherExpenses.map((e: any) => (
+              ) : otherExpenses.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="text-xs">{new Date(e.expense_at).toLocaleDateString('pt-BR')}</TableCell>
                   <TableCell className="text-xs">{e.category}</TableCell>
@@ -589,7 +647,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
           <ManifestPanel
             loadId={load.id}
             loadNumber={load.load_number}
-            origin={(load as any).origin}
+            origin={load.origin}
             destination={load.destination}
           />
         </TabsContent>
@@ -611,7 +669,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
             <TableBody>
               {advances.length === 0 ? (
                 <TableRow><TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-6">Sem adiantamentos registrados.</TableCell></TableRow>
-              ) : advances.map((e: any) => (
+              ) : advances.map((e) => (
                 <TableRow key={e.id}>
                   <TableCell className="text-xs">{new Date(e.expense_at).toLocaleDateString('pt-BR')}</TableCell>
                   <TableCell className="text-xs">{e.category}</TableCell>
@@ -646,14 +704,14 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
 
         {/* ===================== DOCUMENTOS ===================== */}
         <TabsContent value="docs" className="p-4 m-0 space-y-4">
-          <CTeWorkbench loadId={load.id} loadNumber={load.load_number} destination={load.destination} documents={documents as any} />
+          <CTeWorkbench loadId={load.id} loadNumber={load.load_number} destination={load.destination} documents={documents} />
           <NFSePanel
             loadId={load.id}
             loadNumber={load.load_number}
             destination={load.destination}
-            defaultClientName={(documents as any)?.[0]?.recipient ?? null}
-            defaultClientCnpj={(documents as any)?.[0]?.recipient_cnpj ?? null}
-            freightTotal={(documents as any)?.reduce((s: number, d: any) => s + Number(d.freight_value || 0), 0) ?? 0}
+            defaultClientName={documents[0]?.recipient ?? null}
+            defaultClientCnpj={documents[0]?.recipient_cnpj ?? null}
+            freightTotal={documents.reduce((sum, document) => sum + Number(document.freight_value || 0), 0)}
           />
         </TabsContent>
 

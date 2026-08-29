@@ -1,6 +1,8 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import type { RowInput } from 'jspdf-autotable';
 import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
+import { getAutoTableFinalY } from '@/lib/pdf/autoTable';
 
 export interface InvoiceDetail {
   emission_date?: string | null;
@@ -160,7 +162,7 @@ export function generateClientInvoicePdf(payload: InvoicePayload): jsPDF {
   // CTRC / CT-e section
   if (ctes.length) {
     sectionHeader('CTRC / CT-e');
-    const rows: any[] = [];
+    const rows: RowInput[] = [];
     for (const c of ctes) {
       if (c.details && c.details.length) {
         c.details.forEach((d, idx) => {
@@ -190,13 +192,13 @@ export function generateClientInvoicePdf(payload: InvoicePayload): jsPDF {
       foot: [['', '', '', '', '', 'SUBTOTAL', '', 'R$ ' + currency(ctes.reduce((s, c) => s + Number(c.gross_amount), 0))]],
       footStyles: { fillColor: [241, 245, 249], textColor: 0, fontStyle: 'bold' },
     });
-    y = (doc as any).lastAutoTable.finalY + 4;
+    y = getAutoTableFinalY(doc, y) + 4;
   }
 
   // NFS-e / ORT
   if (nfses.length) {
     sectionHeader('NFS-e / ORT');
-    const rows: any[] = [];
+    const rows: RowInput[] = [];
     for (const c of nfses) {
       if (c.details && c.details.length) {
         c.details.forEach((d, idx) => {
@@ -225,7 +227,7 @@ export function generateClientInvoicePdf(payload: InvoicePayload): jsPDF {
       foot: [['', '', '', '', '', 'SUBTOTAL', 'R$ ' + currency(nfses.reduce((s, c) => s + Number(c.gross_amount), 0))]],
       footStyles: { fillColor: [241, 245, 249], textColor: 0, fontStyle: 'bold' },
     });
-    y = (doc as any).lastAutoTable.finalY + 4;
+    y = getAutoTableFinalY(doc, y) + 4;
   }
 
   // Manual services
@@ -248,7 +250,7 @@ export function generateClientInvoicePdf(payload: InvoicePayload): jsPDF {
       foot: [['', '', 'SUBTOTAL', 'R$ ' + currency(manuals.reduce((s, c) => s + Number(c.gross_amount), 0))]],
       footStyles: { fillColor: [241, 245, 249], textColor: 0, fontStyle: 'bold' },
     });
-    y = (doc as any).lastAutoTable.finalY + 4;
+    y = getAutoTableFinalY(doc, y) + 4;
   }
 
   // Final totals

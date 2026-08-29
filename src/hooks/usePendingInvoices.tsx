@@ -1,13 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { isBillableNfse, cteConsumesInvoices } from '@/lib/fiscal/documentStatus';
 
 export interface PendingInvoiceSummary {
   count: number;
   totalValue: number;
   invoiceIds: string[];
   oldestIssueDate: string | null;
+}
+
+function parseDocumentIds(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((id): id is string => typeof id === 'string');
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -38,7 +48,7 @@ export function usePendingInvoices() {
         .limit(5000);
       if (e1) throw e1;
 
-      const allIds = new Set<string>((docs || []).map((d: any) => d.id));
+      const allIds = new Set<string>((docs || []).map((document) => document.id));
       if (allIds.size === 0) return { count: 0, totalValue: 0, invoiceIds: [], oldestIssueDate: null };
 
       // CT-e não anulados que já consumiram NF (mesmo critério de useBillingDocuments).
@@ -51,18 +61,10 @@ export function usePendingInvoices() {
       if (e2) throw e2;
 
       const used = new Set<string>();
-      for (const c of (ctes || []) as any[]) {
-        const rawIds = c.fiscal_document_ids;
+      for (const cte of ctes || []) {
+        const rawIds = cte.fiscal_document_ids;
         if (!rawIds) continue;
-        
-        let ids: string[] = [];
-        try {
-          ids = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds) : []);
-        } catch { /* ignore parse error */ }
-        
-        if (Array.isArray(ids)) {
-          for (const id of ids) used.add(id);
-        }
+        for (const id of parseDocumentIds(rawIds)) used.add(id);
       }
 
       const { data: nfse, error: e3 } = await supabase
@@ -71,25 +73,17 @@ export function usePendingInvoices() {
         .eq('tenant_id', currentTenant.id)
         .not('status', 'in', '("cancelled","rejected","error","failed","sefaz_error")');
       if (e3) throw e3;
-      for (const n of (nfse || []) as any[]) {
-        const rawIds = n.fiscal_document_ids;
+      for (const document of nfse || []) {
+        const rawIds = document.fiscal_document_ids;
         if (!rawIds) continue;
-        
-        let ids: string[] = [];
-        try {
-          ids = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds) : []);
-        } catch { /* ignore parse error */ }
-        
-        if (Array.isArray(ids)) {
-          for (const id of ids) used.add(id);
-        }
+        for (const id of parseDocumentIds(rawIds)) used.add(id);
       }
 
       let count = 0;
       let totalValue = 0;
       let oldest: string | null = null;
       const pendingIds: string[] = [];
-      for (const d of (docs || []) as any[]) {
+      for (const d of docs || []) {
         if (used.has(d.id)) continue;
         count++;
         totalValue += Number(d.value ?? 0);

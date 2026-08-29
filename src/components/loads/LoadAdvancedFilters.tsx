@@ -9,55 +9,11 @@ import { Label } from '@/components/ui/label';
 import { ChevronDown, Filter, RotateCcw } from 'lucide-react';
 import PlateInput from './PlateInput';
 import { OPERATION_TYPE_OPTIONS } from '@/lib/operationTypeMapping';
-
-export type TriState = 'all' | 'yes' | 'no';
-
-export interface LoadAdvancedFiltersValue {
-  loadNumber: string;
-  plate: string;
-  trailerPlate: string;
-  driverId: string;
-  cargoType: string;
-  monitorResponsible: string;
-  driverType: string;
-  emissionFrom: string;
-  emissionTo: string;
-  loadingFrom: string;
-  loadingTo: string;
-  arrivalEstFrom: string;
-  arrivalEstTo: string;
-  departureFrom: string;
-  departureTo: string;
-  arrivalFrom: string;
-  arrivalTo: string;
-  romexpTypes: string[];
-  monitored: TriState;
-  manifest: TriState;
-  ciot: TriState;
-  dedicated: TriState;
-  valueMin: string;
-  valueMax: string;
-  statuses: string[];
-  romaneioTypes: string[];
-  smManager: string;
-  smRelease: string;
-  remitter: string;
-  client: string;
-  city: string;
-  supplier: string;
-}
-
-export const EMPTY_LOAD_ADVANCED_FILTERS: LoadAdvancedFiltersValue = {
-  loadNumber: '', plate: '', trailerPlate: '', driverId: 'all',
-  cargoType: '', monitorResponsible: '', driverType: '',
-  emissionFrom: '', emissionTo: '', loadingFrom: '', loadingTo: '',
-  arrivalEstFrom: '', arrivalEstTo: '', departureFrom: '', departureTo: '',
-  arrivalFrom: '', arrivalTo: '',
-  romexpTypes: [], monitored: 'all', manifest: 'all', ciot: 'all', dedicated: 'all',
-  valueMin: '', valueMax: '', statuses: [], romaneioTypes: [],
-  smManager: '', smRelease: '',
-  remitter: '', client: '', city: '', supplier: '',
-};
+import {
+  EMPTY_LOAD_ADVANCED_FILTERS,
+  type LoadAdvancedFiltersValue,
+  type LoadFilterTriState,
+} from '@/lib/loads/loadAdvancedFilters';
 
 const ROMEXP_TYPES = ['Normal', 'Devolução', 'Transferência', 'Redespacho', 'Subcontratação'];
 const ROMANEIO_TYPES = ['Entrega', 'Viagem', 'Retira', 'Transferência', 'Devolução', 'Redespacho'];
@@ -111,11 +67,11 @@ interface Props {
   trailerPlateSuggestions?: string[];
 }
 
-const TriStateGroup = ({ label, value, onChange }: { label: string; value: TriState; onChange: (v: TriState) => void }) => (
+const TriStateGroup = ({ label, value, onChange }: { label: string; value: LoadFilterTriState; onChange: (v: LoadFilterTriState) => void }) => (
   <div className="flex items-center gap-2">
     <Label className="text-xs text-muted-foreground w-32 shrink-0">{label}:</Label>
     <div className="flex rounded-md border border-border overflow-hidden">
-      {(['yes', 'no', 'all'] as TriState[]).map(opt => (
+      {(['yes', 'no', 'all'] as LoadFilterTriState[]).map(opt => (
         <button
           key={opt}
           type="button"

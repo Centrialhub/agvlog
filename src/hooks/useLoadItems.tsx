@@ -57,7 +57,7 @@ export function useLoadItems(loadId: string | undefined) {
     queryKey: ['load_items', loadId],
     queryFn: async () => {
       if (!loadId) return [];
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('load_items')
         .select('*, orders(order_number, clients(company_name)), fiscal_documents(invoice_number, value, remitter, remitter_cnpj, recipient, recipient_city, recipient_state)')
         .eq('load_id', loadId)
@@ -73,11 +73,10 @@ export function useCreateLoadItem() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<LoadItem>) => {
-      if (!values.load_id) throw new Error('load_id obrigatório');
+    mutationFn: async (values: Partial<LoadItem> & Pick<LoadItem, 'load_id'>) => {
       // Vínculo com NF é exclusivamente via RPC oficial (sincroniza fiscal_documents.load_id + auditoria).
       if (values.fiscal_document_id) {
-        const { data, error } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+        const { data, error } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
           _tenant_id: currentTenant!.id,
           _load_id: values.load_id,
           _document_ids: [values.fiscal_document_id],
@@ -85,15 +84,22 @@ export function useCreateLoadItem() {
         if (error) throw error;
         return data;
       }
-      // Itens manuais (sem NF) podem ser inseridos diretamente — não afetam composição fiscal.
-      const { data, error } = await (supabase as any).from('load_items').insert({
-        ...values,
-        tenant_id: currentTenant!.id,
-      }).select().single();
+      const { data, error } = await supabase.rpc('upsert_load_item_v3', {
+        p_tenant_id: currentTenant!.id,
+        p_load_id: values.load_id,
+        p_order_id: values.order_id ?? undefined,
+        p_item_description: values.item_description ?? undefined,
+        p_quantity: values.quantity ?? undefined,
+        p_pallet_count: values.pallet_count ?? undefined,
+        p_weight_kg: values.weight_kg ?? undefined,
+        p_volume_m3: values.volume_m3 ?? undefined,
+        p_status: values.status ?? undefined,
+        p_notes: values.notes ?? undefined,
+      });
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['load_items'] });
       qc.invalidateQueries({ queryKey: ['loads'] });
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
@@ -102,6 +108,7 @@ export function useCreateLoadItem() {
 }
 
 export function useUpdateLoadItem() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<LoadItem> & { id: string }) => {
@@ -113,10 +120,19 @@ export function useUpdateLoadItem() {
       if ('fiscal_document_id' in values) {
         throw new Error('Mudança de fiscal_document_id não é permitida por update direto.');
       }
-      const { data, error } = await (supabase as any).from('load_items').update({
-        ...values,
-        updated_at: new Date().toISOString(),
-      }).eq('id', id).select().single();
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { data, error } = await supabase.rpc('upsert_load_item_v3', {
+        p_tenant_id: currentTenant.id,
+        p_item_id: id,
+        p_order_id: values.order_id ?? undefined,
+        p_item_description: values.item_description ?? undefined,
+        p_quantity: values.quantity ?? undefined,
+        p_pallet_count: values.pallet_count ?? undefined,
+        p_weight_kg: values.weight_kg ?? undefined,
+        p_volume_m3: values.volume_m3 ?? undefined,
+        p_status: values.status ?? undefined,
+        p_notes: values.notes ?? undefined,
+      });
       if (error) throw error;
       return data;
     },
@@ -132,7 +148,7 @@ export function useDeleteLoadItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { data: item, error: fetchErr } = await (supabase as any)
+      const { data: item, error: fetchErr } = await supabase
         .from('load_items')
         .select('id, load_id, fiscal_document_id')
         .eq('id', id)
@@ -140,7 +156,7 @@ export function useDeleteLoadItem() {
       if (fetchErr) throw fetchErr;
       if (!item) return;
       if (item.fiscal_document_id) {
-        const { error } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
+        const { error } = await supabase.rpc('remove_fiscal_documents_from_load_v2', {
           _tenant_id: currentTenant!.id,
           _load_id: item.load_id,
           _document_ids: [item.fiscal_document_id],
@@ -148,8 +164,10 @@ export function useDeleteLoadItem() {
         if (error) throw error;
         return;
       }
-      // Sem documento vinculado — item manual; libera delete direto.
-      const { error } = await (supabase as any).from('load_items').delete().eq('id', id);
+      const { error } = await supabase.rpc('delete_load_item_v3', {
+        p_tenant_id: currentTenant!.id,
+        p_item_id: id,
+      });
       if (error) throw error;
     },
     onSuccess: () => {

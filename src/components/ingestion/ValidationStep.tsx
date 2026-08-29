@@ -1,14 +1,13 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { ValidatedDocument, ValidatedOrder } from '@/lib/ingestionValidator';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  FileText, CheckCircle, AlertTriangle, XCircle, ArrowRight, ArrowLeft, Package, Info, Trash2, Pencil,
+  FileText, AlertTriangle, XCircle, ArrowRight, ArrowLeft, Package, Info, Trash2,
   Weight, DollarSign, Boxes, LayoutGrid, Link2, Settings2, Eye,
 } from 'lucide-react';
 import { Client } from '@/hooks/useClients';
@@ -45,8 +44,6 @@ export default function ValidationStep({
   onUpdateDoc, onUpdateOrder, onRemoveDoc, onRemoveOrder,
 }: ValidationStepProps) {
   const [filter, setFilter] = useState<FilterMode>('all');
-  const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
-  const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -61,7 +58,9 @@ export default function ValidationStep({
   const updateThreshold = (v: number) => {
     const clamped = Math.max(0, Math.min(100, Math.round(v)));
     setMissingThreshold(clamped);
-    try { window.localStorage.setItem(MISSING_THRESHOLD_KEY, String(clamped)); } catch {}
+    try { window.localStorage.setItem(MISSING_THRESHOLD_KEY, String(clamped)); } catch {
+      // Mantém a preferência em memória quando o storage do navegador está indisponível.
+    }
   };
 
   const missingStats = useMemo(() => {
@@ -376,9 +375,8 @@ export default function ValidationStep({
         <TabsContent value="docs" className="space-y-2">
           {filterDocs(docs).length === 0 ? (
             <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Nenhum documento neste filtro</CardContent></Card>
-          ) : filterDocs(docs).map((doc, rawIdx) => {
+          ) : filterDocs(docs).map((doc) => {
             const i = docs.indexOf(doc);
-            const isEditing = editingDocIdx === i;
             return (
               <Card key={i} className={doc.hasErrors ? 'border-destructive/30' : doc.isDuplicate && !doc.isOrphanReusable ? 'border-destructive/20 opacity-60' : doc.isOrphanReusable ? 'border-success/30' : doc.hasWarnings ? 'border-warning/30' : ''}>
                 <CardContent className="py-3 px-4">
@@ -452,7 +450,7 @@ export default function ValidationStep({
         <TabsContent value="orders" className="space-y-2">
           {filterOrders(orders).length === 0 ? (
             <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Nenhum pedido neste filtro</CardContent></Card>
-          ) : filterOrders(orders).map((order, rawIdx) => {
+          ) : filterOrders(orders).map((order) => {
             const i = orders.indexOf(order);
             return (
               <Card key={i} className={order.hasErrors ? 'border-destructive/30' : order.hasWarnings ? 'border-warning/30' : ''}>

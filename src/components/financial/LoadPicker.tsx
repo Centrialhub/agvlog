@@ -34,7 +34,7 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
   // Notify parent when list changes
   useEffect(() => {
     if (onLoadsChange && loads.length > 0) {
-      onLoadsChange(loads.map((l: any) => ({ id: l.id, driver_id: l.driver_id ?? null, driver_name: l.driver_name ?? null })));
+      onLoadsChange(loads.map(l => ({ id: l.id, driver_id: l.driver_id ?? null, driver_name: l.driver_name ?? null })));
     }
   }, [loads, onLoadsChange]);
   const toggle = (id: string) => {

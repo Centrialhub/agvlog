@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -700,24 +700,24 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "billing_edi_export_items_client_invoice_id_fkey"
-            columns: ["client_invoice_id"]
+            columns: ["tenant_id", "client_invoice_id"]
             isOneToOne: false
             referencedRelation: "client_invoices"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "billing_edi_export_items_export_id_fkey"
-            columns: ["export_id"]
+            columns: ["tenant_id", "export_id"]
             isOneToOne: false
             referencedRelation: "billing_edi_exports"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "billing_edi_export_items_receivable_id_fkey"
-            columns: ["receivable_id"]
+            columns: ["tenant_id", "receivable_id"]
             isOneToOne: false
             referencedRelation: "receivables"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -815,17 +815,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "billing_edi_exports_client_id_fkey"
-            columns: ["client_id"]
+            columns: ["tenant_id", "client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "billing_edi_exports_profile_id_fkey"
-            columns: ["profile_id"]
+            columns: ["tenant_id", "profile_id"]
             isOneToOne: false
             referencedRelation: "billing_edi_profiles"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -905,10 +905,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "billing_edi_profiles_client_id_fkey"
-            columns: ["client_id"]
+            columns: ["tenant_id", "client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -1080,11 +1080,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "client_invoice_charges_invoice_id_fkey"
-            columns: ["invoice_id"]
+            foreignKeyName: "client_invoice_charges_tenant_invoice_fkey"
+            columns: ["tenant_id", "invoice_id"]
             isOneToOne: false
             referencedRelation: "client_invoices"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -1157,18 +1157,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "client_invoice_details_charge_id_fkey"
-            columns: ["charge_id"]
+            foreignKeyName: "client_invoice_details_tenant_charge_invoice_fkey"
+            columns: ["tenant_id", "charge_id", "invoice_id"]
             isOneToOne: false
             referencedRelation: "client_invoice_charges"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id", "invoice_id"]
           },
           {
-            foreignKeyName: "client_invoice_details_invoice_id_fkey"
-            columns: ["invoice_id"]
+            foreignKeyName: "client_invoice_details_tenant_invoice_fkey"
+            columns: ["tenant_id", "invoice_id"]
             isOneToOne: false
             referencedRelation: "client_invoices"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -1295,11 +1295,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "client_invoices_client_id_fkey"
-            columns: ["client_id"]
+            foreignKeyName: "client_invoices_tenant_client_fkey"
+            columns: ["tenant_id", "client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -1409,11 +1409,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "client_portal_access_client_id_fkey"
-            columns: ["client_id"]
+            foreignKeyName: "client_portal_access_tenant_client_fkey"
+            columns: ["tenant_id", "client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "client_portal_access_tenant_id_fkey"
@@ -1461,10 +1461,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_regions_client_id_fkey"
-            columns: ["client_id"]
+            columns: ["tenant_id", "client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "client_regions_tenant_id_fkey"
@@ -1644,17 +1644,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_rural_delivery_profiles_client_id_fkey"
-            columns: ["client_id"]
+            columns: ["tenant_id", "client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "client_rural_delivery_profiles_related_remitter_id_fkey"
-            columns: ["related_remitter_id"]
+            columns: ["tenant_id", "related_remitter_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -1938,10 +1938,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "closing_report_history_closing_report_id_fkey"
-            columns: ["closing_report_id"]
+            columns: ["tenant_id", "closing_report_id"]
             isOneToOne: false
             referencedRelation: "closing_reports"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -2114,38 +2114,52 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "closing_report_items_closing_report_id_fkey"
-            columns: ["closing_report_id"]
+            columns: ["tenant_id", "closing_report_id"]
             isOneToOne: false
             referencedRelation: "closing_reports"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "closing_report_items_cte_document_id_fkey"
-            columns: ["cte_document_id"]
+            columns: ["tenant_id", "cte_document_id"]
             isOneToOne: false
             referencedRelation: "cte_documents"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "closing_report_items_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
+            columns: ["tenant_id", "fiscal_document_id"]
             isOneToOne: false
             referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "closing_report_items_load_id_fkey"
-            columns: ["load_id"]
+            columns: ["tenant_id", "load_id"]
             isOneToOne: false
             referencedRelation: "loads"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "closing_report_items_load_id_fkey"
-            columns: ["load_id"]
+            columns: ["tenant_id", "load_id"]
             isOneToOne: false
             referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "closing_report_items_tenant_driver_fkey"
+            columns: ["tenant_id", "driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "closing_report_items_tenant_vehicle_fkey"
+            columns: ["tenant_id", "vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -2192,17 +2206,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "closing_report_payments_closing_report_id_fkey"
-            columns: ["closing_report_id"]
+            columns: ["tenant_id", "closing_report_id"]
             isOneToOne: false
             referencedRelation: "closing_reports"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "closing_report_payments_receivable_id_fkey"
-            columns: ["receivable_id"]
+            columns: ["tenant_id", "receivable_id"]
             isOneToOne: false
             referencedRelation: "receivables"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -2288,10 +2302,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "closing_report_summary_lines_closing_report_id_fkey"
-            columns: ["closing_report_id"]
+            columns: ["tenant_id", "closing_report_id"]
             isOneToOne: false
             referencedRelation: "closing_reports"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -2491,17 +2505,31 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "closing_reports_client_id_fkey"
-            columns: ["client_id"]
+            columns: ["tenant_id", "client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "closing_reports_payer_client_id_fkey"
-            columns: ["payer_client_id"]
+            columns: ["tenant_id", "payer_client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "closing_reports_tenant_client_invoice_fkey"
+            columns: ["tenant_id", "client_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "client_invoices"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "closing_reports_tenant_receivable_fkey"
+            columns: ["tenant_id", "receivable_id"]
+            isOneToOne: false
+            referencedRelation: "receivables"
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -2973,10 +3001,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "cte_sefaz_events_cte_document_id_fkey"
-            columns: ["cte_document_id"]
+            foreignKeyName: "cte_sefaz_events_cte_document_tenant_fk"
+            columns: ["tenant_id", "cte_document_id"]
             isOneToOne: false
             referencedRelation: "cte_documents"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "cte_sefaz_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -3921,17 +3956,24 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "driver_arrival_forecasts_driver_id_fkey"
-            columns: ["driver_id"]
+            foreignKeyName: "driver_arrival_forecasts_driver_tenant_fk"
+            columns: ["tenant_id", "driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "driver_arrival_forecasts_monitor_id_fkey"
-            columns: ["monitor_id"]
+            foreignKeyName: "driver_arrival_forecasts_monitor_tenant_fk"
+            columns: ["tenant_id", "monitor_id"]
             isOneToOne: false
             referencedRelation: "driver_route_monitors"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "driver_arrival_forecasts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -4127,10 +4169,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "driver_monitoring_history_monitor_id_fkey"
-            columns: ["monitor_id"]
+            foreignKeyName: "driver_monitoring_history_monitor_tenant_fk"
+            columns: ["tenant_id", "monitor_id"]
             isOneToOne: false
             referencedRelation: "driver_route_monitors"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "driver_monitoring_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -4184,7 +4233,15 @@ export type Database = {
           status?: string
           tenant_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "driver_monitoring_import_batches_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       driver_route_monitors: {
         Row: {
@@ -4297,32 +4354,46 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "driver_route_monitors_driver_id_fkey"
-            columns: ["driver_id"]
+            foreignKeyName: "driver_route_monitors_driver_tenant_fk"
+            columns: ["tenant_id", "driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "driver_route_monitors_load_id_fkey"
-            columns: ["load_id"]
+            foreignKeyName: "driver_route_monitors_import_batch_tenant_fk"
+            columns: ["tenant_id", "import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "driver_monitoring_import_batches"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "driver_route_monitors_load_tenant_fk"
+            columns: ["tenant_id", "load_id"]
             isOneToOne: false
             referencedRelation: "loads"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "driver_route_monitors_load_id_fkey"
-            columns: ["load_id"]
+            foreignKeyName: "driver_route_monitors_load_tenant_fk"
+            columns: ["tenant_id", "load_id"]
             isOneToOne: false
             referencedRelation: "vw_load_control"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "driver_route_monitors_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "driver_route_monitors_vehicle_id_fkey"
-            columns: ["vehicle_id"]
+            foreignKeyName: "driver_route_monitors_vehicle_tenant_fk"
+            columns: ["tenant_id", "vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -4404,31 +4475,38 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "driver_route_progress_updates_driver_id_fkey"
-            columns: ["driver_id"]
+            foreignKeyName: "driver_route_progress_updates_driver_tenant_fk"
+            columns: ["tenant_id", "driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "driver_route_progress_updates_load_id_fkey"
-            columns: ["load_id"]
+            foreignKeyName: "driver_route_progress_updates_load_tenant_fk"
+            columns: ["tenant_id", "load_id"]
             isOneToOne: false
             referencedRelation: "loads"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "driver_route_progress_updates_load_id_fkey"
-            columns: ["load_id"]
+            foreignKeyName: "driver_route_progress_updates_load_tenant_fk"
+            columns: ["tenant_id", "load_id"]
             isOneToOne: false
             referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "driver_route_progress_updates_monitor_id_fkey"
-            columns: ["monitor_id"]
+            foreignKeyName: "driver_route_progress_updates_monitor_tenant_fk"
+            columns: ["tenant_id", "monitor_id"]
             isOneToOne: false
             referencedRelation: "driver_route_monitors"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "driver_route_progress_updates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -5167,11 +5245,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "drivers_current_vehicle_id_fkey"
-            columns: ["current_vehicle_id"]
+            foreignKeyName: "drivers_tenant_current_vehicle_fkey"
+            columns: ["tenant_id", "current_vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "drivers_tenant_id_fkey"
@@ -5490,25 +5568,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "employee_incident_actions_employee_id_fkey"
-            columns: ["employee_id"]
+            foreignKeyName: "employee_incident_actions_employee_tenant_fk"
+            columns: ["tenant_id", "employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "employee_incident_actions_incident_id_fkey"
-            columns: ["incident_id"]
+            foreignKeyName: "employee_incident_actions_incident_tenant_fk"
+            columns: ["tenant_id", "incident_id"]
             isOneToOne: false
             referencedRelation: "incidents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "employee_incident_actions_incident_id_fkey"
-            columns: ["incident_id"]
-            isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["incident_id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "employee_incident_actions_tenant_id_fkey"
@@ -5966,6 +6037,7 @@ export type Database = {
           client_load_number: string | null
           client_load_source: Json | null
           control_lot: string | null
+          cost_center: string | null
           created_at: string
           created_by: string | null
           cte_consignee_client_id: string | null
@@ -6014,6 +6086,8 @@ export type Database = {
           invoice_series: string | null
           is_duplicate: boolean
           issue_date: string | null
+          last_status_check_at: string | null
+          last_status_response: Json | null
           load_id: string | null
           nfse_emitted_at: string | null
           nfse_emitted_document_id: string | null
@@ -6039,6 +6113,7 @@ export type Database = {
           sefaz_status: string | null
           sefaz_status_code: string | null
           status: string
+          status_check_attempts: number
           supplier_id: string | null
           tenant_id: string
           updated_at: string
@@ -6055,6 +6130,7 @@ export type Database = {
           client_load_number?: string | null
           client_load_source?: Json | null
           control_lot?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           cte_consignee_client_id?: string | null
@@ -6103,6 +6179,8 @@ export type Database = {
           invoice_series?: string | null
           is_duplicate?: boolean
           issue_date?: string | null
+          last_status_check_at?: string | null
+          last_status_response?: Json | null
           load_id?: string | null
           nfse_emitted_at?: string | null
           nfse_emitted_document_id?: string | null
@@ -6128,6 +6206,7 @@ export type Database = {
           sefaz_status?: string | null
           sefaz_status_code?: string | null
           status?: string
+          status_check_attempts?: number
           supplier_id?: string | null
           tenant_id: string
           updated_at?: string
@@ -6144,6 +6223,7 @@ export type Database = {
           client_load_number?: string | null
           client_load_source?: Json | null
           control_lot?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           cte_consignee_client_id?: string | null
@@ -6192,6 +6272,8 @@ export type Database = {
           invoice_series?: string | null
           is_duplicate?: boolean
           issue_date?: string | null
+          last_status_check_at?: string | null
+          last_status_response?: Json | null
           load_id?: string | null
           nfse_emitted_at?: string | null
           nfse_emitted_document_id?: string | null
@@ -6217,6 +6299,7 @@ export type Database = {
           sefaz_status?: string | null
           sefaz_status_code?: string | null
           status?: string
+          status_check_attempts?: number
           supplier_id?: string | null
           tenant_id?: string
           updated_at?: string
@@ -6283,10 +6366,75 @@ export type Database = {
           },
         ]
       }
+      fiscal_poll_dead_letters: {
+        Row: {
+          attempt_count: number
+          context: Json
+          created_at: string
+          document_id: string
+          document_kind: string
+          document_number: string | null
+          first_seen_at: string
+          id: string
+          last_attempt_at: string
+          reason_code: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          context?: Json
+          created_at?: string
+          document_id: string
+          document_kind: string
+          document_number?: string | null
+          first_seen_at: string
+          id?: string
+          last_attempt_at?: string
+          reason_code: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          context?: Json
+          created_at?: string
+          document_id?: string
+          document_kind?: string
+          document_number?: string | null
+          first_seen_at?: string
+          id?: string
+          last_attempt_at?: string
+          reason_code?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_poll_dead_letters_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fiscal_webhook_inbox: {
         Row: {
-          attempt_count: number | null
-          created_at: string | null
+          attempt_count: number
+          created_at: string
           delivery_id: string
           emission_id: string | null
           event_timestamp: string
@@ -6298,11 +6446,11 @@ export type Database = {
           raw_payload: Json
           status: string
           tenant_id: string | null
-          updated_at: string | null
+          updated_at: string
         }
         Insert: {
-          attempt_count?: number | null
-          created_at?: string | null
+          attempt_count?: number
+          created_at?: string
           delivery_id: string
           emission_id?: string | null
           event_timestamp: string
@@ -6314,11 +6462,11 @@ export type Database = {
           raw_payload: Json
           status?: string
           tenant_id?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Update: {
-          attempt_count?: number | null
-          created_at?: string | null
+          attempt_count?: number
+          created_at?: string
           delivery_id?: string
           emission_id?: string | null
           event_timestamp?: string
@@ -6330,7 +6478,7 @@ export type Database = {
           raw_payload?: Json
           status?: string
           tenant_id?: string | null
-          updated_at?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -6674,10 +6822,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "freight_tables_client_id_fkey"
-            columns: ["client_id"]
+            columns: ["tenant_id", "client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "freight_tables_tenant_id_fkey"
@@ -6972,10 +7120,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "hub_fiscal_credentials_emitter_id_fkey"
-            columns: ["emitter_id"]
+            columns: ["tenant_id", "emitter_id"]
             isOneToOne: false
             referencedRelation: "tenant_emitters"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "hub_fiscal_credentials_tenant_id_fkey"
@@ -7321,25 +7469,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "incident_responsible_employee_id_fkey"
-            columns: ["employee_id"]
+            foreignKeyName: "incident_responsible_employee_tenant_fk"
+            columns: ["tenant_id", "employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "incident_responsible_incident_id_fkey"
-            columns: ["incident_id"]
+            foreignKeyName: "incident_responsible_incident_tenant_fk"
+            columns: ["tenant_id", "incident_id"]
             isOneToOne: false
             referencedRelation: "incidents"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "incident_responsible_incident_id_fkey"
-            columns: ["incident_id"]
+            foreignKeyName: "incident_responsible_tenant_id_fkey"
+            columns: ["tenant_id"]
             isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["incident_id"]
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -7478,32 +7626,102 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "incidents_asset_id_fkey"
-            columns: ["asset_id"]
+            foreignKeyName: "incidents_asset_tenant_fk"
+            columns: ["tenant_id", "asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "incidents_employee_id_fkey"
-            columns: ["employee_id"]
+            foreignKeyName: "incidents_client_tenant_fk"
+            columns: ["tenant_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "incidents_dispatch_trip_tenant_fk"
+            columns: ["tenant_id", "dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "incidents_dispatch_trip_tenant_fk"
+            columns: ["tenant_id", "dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["tenant_id", "trip_id"]
+          },
+          {
+            foreignKeyName: "incidents_driver_tenant_fk"
+            columns: ["tenant_id", "driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "incidents_employee_tenant_fk"
+            columns: ["tenant_id", "employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
-            foreignKeyName: "incidents_operational_event_id_fkey"
-            columns: ["operational_event_id"]
+            foreignKeyName: "incidents_fiscal_document_tenant_fk"
+            columns: ["tenant_id", "fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "incidents_load_tenant_fk"
+            columns: ["tenant_id", "load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "incidents_load_tenant_fk"
+            columns: ["tenant_id", "load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "incidents_operational_event_tenant_fk"
+            columns: ["tenant_id", "operational_event_id"]
             isOneToOne: false
             referencedRelation: "operational_events"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "incidents_operational_event_tenant_fk"
+            columns: ["tenant_id", "operational_event_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["tenant_id", "event_id"]
+          },
+          {
+            foreignKeyName: "incidents_order_tenant_fk"
+            columns: ["tenant_id", "order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "incidents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "incidents_operational_event_id_fkey"
-            columns: ["operational_event_id"]
+            foreignKeyName: "incidents_vehicle_tenant_fk"
+            columns: ["tenant_id", "vehicle_id"]
             isOneToOne: false
-            referencedRelation: "vw_unified_logistics_timeline"
-            referencedColumns: ["event_id"]
+            referencedRelation: "vehicles"
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -9005,6 +9223,13 @@ export type Database = {
             columns: ["schedule_id"]
             isOneToOne: false
             referencedRelation: "maintenance_schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_orders_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
@@ -11324,10 +11549,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "orders_client_id_fkey"
-            columns: ["client_id"]
+            columns: ["tenant_id", "client_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "orders_tenant_id_fkey"
@@ -11462,10 +11687,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "pallet_return_history_protocol_id_fkey"
-            columns: ["protocol_id"]
+            columns: ["tenant_id", "protocol_id"]
             isOneToOne: false
             referencedRelation: "pallet_return_protocols"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -11560,17 +11785,17 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "pallet_return_items_pallet_type_id_fkey"
-            columns: ["pallet_type_id"]
+            columns: ["tenant_id", "pallet_type_id"]
             isOneToOne: false
             referencedRelation: "pallet_types"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "pallet_return_items_protocol_id_fkey"
-            columns: ["protocol_id"]
+            columns: ["tenant_id", "protocol_id"]
             isOneToOne: false
             referencedRelation: "pallet_return_protocols"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -11680,38 +11905,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "pallet_return_protocols_driver_id_fkey"
-            columns: ["driver_id"]
+            columns: ["tenant_id", "driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "pallet_return_protocols_load_id_fkey"
-            columns: ["load_id"]
+            columns: ["tenant_id", "load_id"]
             isOneToOne: false
             referencedRelation: "loads"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "pallet_return_protocols_load_id_fkey"
-            columns: ["load_id"]
+            columns: ["tenant_id", "load_id"]
             isOneToOne: false
             referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "pallet_return_protocols_supplier_id_fkey"
-            columns: ["supplier_id"]
+            columns: ["tenant_id", "supplier_id"]
             isOneToOne: false
             referencedRelation: "clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "pallet_return_protocols_vehicle_id_fkey"
-            columns: ["vehicle_id"]
+            columns: ["tenant_id", "vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
         ]
       }
@@ -12845,6 +13070,7 @@ export type Database = {
           cost_center: string | null
           created_at: string
           created_by: string | null
+          cte_document_id: string | null
           description: string | null
           due_date: string | null
           fiscal_document_id: string | null
@@ -12868,6 +13094,7 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           created_by?: string | null
+          cte_document_id?: string | null
           description?: string | null
           due_date?: string | null
           fiscal_document_id?: string | null
@@ -12891,6 +13118,7 @@ export type Database = {
           cost_center?: string | null
           created_at?: string
           created_by?: string | null
+          cte_document_id?: string | null
           description?: string | null
           due_date?: string | null
           fiscal_document_id?: string | null
@@ -12906,7 +13134,71 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "receivables_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivables_client_invoice_id_fkey"
+            columns: ["client_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "client_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivables_closing_report_id_fkey"
+            columns: ["closing_report_id"]
+            isOneToOne: false
+            referencedRelation: "closing_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivables_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivables_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivables_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivables_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivables_tenant_cte_document_fkey"
+            columns: ["tenant_id", "cte_document_id"]
+            isOneToOne: false
+            referencedRelation: "cte_documents"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "receivables_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       receivables_payments: {
         Row: {
@@ -15062,11 +15354,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "vehicles_current_driver_id_fkey"
-            columns: ["current_driver_id"]
+            foreignKeyName: "vehicles_tenant_current_driver_fkey"
+            columns: ["tenant_id", "current_driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["id"]
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "vehicles_tenant_id_fkey"
@@ -15373,12 +15665,6 @@ export type Database = {
         Args: { _settlement_id: string }
         Returns: string
       }
-      _driver_client_ids: { Args: never; Returns: string[] }
-      _driver_fiscal_document_ids: { Args: never; Returns: string[] }
-      _driver_load_ids: { Args: never; Returns: string[] }
-      _driver_order_ids: { Args: never; Returns: string[] }
-      _driver_pickup_order_ids: { Args: never; Returns: string[] }
-      _driver_trip_ids: { Args: never; Returns: string[] }
       _load_available_for_settlement: {
         Args: {
           _allow_settlement_id?: string
@@ -15488,6 +15774,10 @@ export type Database = {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
       }
+      assign_fiscal_documents_to_load_v2: {
+        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
+        Returns: Json
+      }
       attach_loads_to_driver_settlement: {
         Args: { _load_ids: string[]; _settlement_id: string }
         Returns: undefined
@@ -15552,6 +15842,10 @@ export type Database = {
         Args: { _end_at: string; _start_at: string; _vehicle_id: string }
         Returns: Json
       }
+      cancel_auth_invite: {
+        Args: { _email: string; _nonce: string }
+        Returns: undefined
+      }
       cancel_client_invoice: {
         Args: { _invoice_id: string; _reason: string }
         Returns: undefined
@@ -15588,6 +15882,21 @@ export type Database = {
         Args: { p_tenant_id: string }
         Returns: undefined
       }
+      claim_fiscal_webhook_delivery_v1: {
+        Args: {
+          p_delivery_id: string
+          p_event_timestamp?: string
+          p_event_type: string
+          p_payload_hash?: string
+          p_raw_payload: Json
+        }
+        Returns: {
+          claimed: boolean
+          inbox_id: string
+          inbox_status: string
+          retry_after_seconds: number
+        }[]
+      }
       clear_reimport_batch_data:
         | { Args: { _tenant_id: string }; Returns: Json }
         | {
@@ -15619,6 +15928,16 @@ export type Database = {
           p_tenant_id: string
         }
         Returns: Json
+      }
+      complete_fiscal_webhook_delivery_v1: {
+        Args: {
+          p_emission_id?: string
+          p_error?: string
+          p_inbox_id: string
+          p_success: boolean
+          p_tenant_id?: string
+        }
+        Returns: boolean
       }
       count_points_in_geofence: {
         Args: { _geofence_id: string; _points: Json }
@@ -15812,6 +16131,10 @@ export type Database = {
         Args: { p_item_id: string; p_tenant_id: string }
         Returns: boolean
       }
+      delete_load_item_v3: {
+        Args: { p_item_id: string; p_tenant_id: string }
+        Returns: boolean
+      }
       delete_load_safely: {
         Args: { _load_id: string; _tenant_id: string }
         Returns: Json
@@ -15849,10 +16172,6 @@ export type Database = {
         }[]
       }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
-      driver_can_access_vehicle: {
-        Args: { _vehicle_id: string }
-        Returns: boolean
-      }
       driver_create_event: {
         Args: {
           _event_type: string
@@ -15908,7 +16227,6 @@ export type Database = {
         Returns: Json
       }
       driver_mark_arrival: { Args: { _stop_id: string }; Returns: string }
-      driver_owns_stop: { Args: { _stop_id: string }; Returns: boolean }
       driver_owns_trip: { Args: { _trip_id: string }; Returns: boolean }
       driver_register_departure: {
         Args: { _notes?: string; _stop_id: string }
@@ -15930,6 +16248,7 @@ export type Database = {
         Args: { _kind: string; _payload: Json; _trip_id: string }
         Returns: string
       }
+      driver_start_trip: { Args: { _trip_id: string }; Returns: Json }
       driver_update_stop_status: {
         Args: { _new_status: string; _reason?: string; _stop_id: string }
         Returns: Json
@@ -15953,6 +16272,10 @@ export type Database = {
           _stop_id: string
         }
         Returns: Json
+      }
+      generate_client_invoice_from_closing: {
+        Args: { _closing_report_id: string }
+        Returns: string
       }
       generate_driver_settlement: {
         Args: { _dispatch_trip_id: string; _tenant_id: string }
@@ -16050,6 +16373,28 @@ export type Database = {
       get_client_portal_upcoming_deliveries_v2: {
         Args: { _client_id: string; _limit?: number; _tenant_id: string }
         Returns: Json
+      }
+      get_fiscal_document_summary_v1: {
+        Args: { _tenant_id: string }
+        Returns: {
+          inbound_count: number
+          outbound_count: number
+          pending_count: number
+          total_count: number
+          total_pallets: number
+          total_value: number
+          total_weight: number
+        }[]
+      }
+      get_current_memberships_v1: {
+        Args: never
+        Returns: {
+          plan_key: string
+          role: Database["public"]["Enums"]["app_role"]
+          tenant_id: string
+          tenant_name: string
+          timezone: string
+        }[]
       }
       get_driver_workspace_v1: {
         Args: { p_driver_id: string; p_tenant_id: string }
@@ -16154,6 +16499,7 @@ export type Database = {
         }
         Returns: Json
       }
+      increment_hfe_sync: { Args: { p_id: string }; Returns: undefined }
       is_point_in_geofence: {
         Args: { _geofence_id: string; _lat: number; _lng: number }
         Returns: boolean
@@ -16473,6 +16819,19 @@ export type Database = {
           total_count: number
         }[]
       }
+      list_loads_page_v1: {
+        Args: {
+          _filters?: Json
+          _limit?: number
+          _offset?: number
+          _tenant_id: string
+        }
+        Returns: {
+          items: Json
+          status_counts: Json
+          total_count: number
+        }[]
+      }
       list_loads_v1: {
         Args: {
           p_cursor?: string
@@ -16514,6 +16873,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      log_pod_access_v2: {
+        Args: {
+          _actor_user_id: string
+          _fiscal_document_id: string
+          _pod_id: string
+          _source?: string
+          _success: boolean
+          _tenant_id: string
+        }
+        Returns: undefined
+      }
       mark_doccob_downloaded: {
         Args: { _export_id: string; _tenant_id: string }
         Returns: undefined
@@ -16531,29 +16901,18 @@ export type Database = {
         Args: { _dispatch_trip_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
       }
-      monitor_simples_nacional_icms_violations:
-        | {
-            Args: never
-            Returns: {
-              created_at: string
-              cte_number: string
-              emitter_name: string
-              fiscal_document_id: string
-              icms_aliquota: number
-              icms_base: number
-              icms_valor: number
-            }[]
-          }
-        | {
-            Args: { _tenant_id: string }
-            Returns: {
-              cst: string
-              cte_number: string
-              document_id: string
-              emitter_name: string
-              icms_value: number
-            }[]
-          }
+      monitor_simples_nacional_icms_violations: {
+        Args: { _tenant_id: string }
+        Returns: {
+          created_at: string
+          cte_number: string
+          emitter_name: string
+          fiscal_document_id: string
+          icms_aliquota: number
+          icms_base: number
+          icms_valor: number
+        }[]
+      }
       move_load_items_between_loads: {
         Args: {
           _item_ids: string[]
@@ -16687,6 +17046,15 @@ export type Database = {
       portal_user_can_view_financial: {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: boolean
+      }
+      prepare_auth_invite: {
+        Args: {
+          _email: string
+          _invited_by: string
+          _nonce: string
+          _tenant_id: string
+        }
+        Returns: undefined
       }
       preview_reimport_cleanup_counts: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
@@ -16842,6 +17210,10 @@ export type Database = {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
       }
+      remove_fiscal_documents_from_load_v2: {
+        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
+        Returns: Json
+      }
       reopen_closing_report: {
         Args: { _closing_report_id: string; _reason: string }
         Returns: undefined
@@ -16930,12 +17302,14 @@ export type Database = {
         }
         Returns: Json
       }
+      set_default_tenant_emitter: {
+        Args: { _emitter_id: string; _tenant_id: string }
+        Returns: string
+      }
       settle_zero_driver_settlement: {
         Args: { _reason: string; _settlement_id: string }
         Returns: Json
       }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
       soft_delete_fiscal_document: {
         Args: { doc_id: string; user_id: string }
         Returns: undefined
@@ -16943,6 +17317,28 @@ export type Database = {
       stop_terminal_statuses: { Args: never; Returns: string[] }
       sync_financial_obligations: {
         Args: { _date_from?: string; _date_to?: string; _tenant_id: string }
+        Returns: Json
+      }
+      terminalize_fiscal_poll_v1: {
+        Args: {
+          p_attempt_count: number
+          p_context?: Json
+          p_document_id: string
+          p_document_kind: string
+          p_document_number: string
+          p_first_seen_at: string
+          p_reason_code: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      transition_load_status_v1: {
+        Args: {
+          p_load_id: string
+          p_reason?: string
+          p_tenant_id: string
+          p_to_status: string
+        }
         Returns: Json
       }
       transition_stop_status_v1: {
@@ -16969,7 +17365,6 @@ export type Database = {
         }
         Returns: string
       }
-      unaccent: { Args: { "": string }; Returns: string }
       unhold_load: { Args: { _load_id: string }; Returns: undefined }
       unlink_fiscal_documents_from_load_v1: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
@@ -17215,7 +17610,28 @@ export type Database = {
         }
         Returns: string
       }
+      upsert_load_item_v3: {
+        Args: {
+          p_fiscal_document_id?: string
+          p_item_description?: string
+          p_item_id?: string
+          p_load_id?: string
+          p_notes?: string
+          p_order_id?: string
+          p_pallet_count?: number
+          p_quantity?: number
+          p_status?: string
+          p_tenant_id: string
+          p_volume_m3?: number
+          p_weight_kg?: number
+        }
+        Returns: string
+      }
       user_has_client_access: { Args: { _client_id: string }; Returns: boolean }
+      verify_agvlog_cron_secret: {
+        Args: { p_secret: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "owner" | "admin" | "operator" | "client" | "driver"

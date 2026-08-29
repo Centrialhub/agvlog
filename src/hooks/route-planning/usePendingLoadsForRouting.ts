@@ -43,7 +43,7 @@ export function usePendingLoadsForRouting() {
     queryKey: ['pending_loads_for_routing', currentTenant?.id],
     queryFn: async (): Promise<RoutingLoad[]> => {
       if (!currentTenant) return [];
-      const { data: loads, error } = await (supabase.from('loads') as any)
+      const { data: loads, error } = await supabase.from('loads')
         .select('*')
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'planned')
@@ -53,7 +53,7 @@ export function usePendingLoadsForRouting() {
       if (error) throw error;
       if (!loads || loads.length === 0) return [];
 
-      const loadIds = loads.map((l: any) => l.id);
+      const loadIds = loads.map(load => load.id);
       const { data: items, error: itemsErr } = await supabase
         .from('load_items')
         .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, client_id, value, weight_kg, issue_date)')
@@ -62,10 +62,15 @@ export function usePendingLoadsForRouting() {
       if (itemsErr) throw itemsErr;
 
       const byLoad: Record<string, RoutingLoadItem[]> = {};
-      (items || []).forEach((it: any) => {
-        (byLoad[it.load_id] ||= []).push(it);
+      (items || []).forEach((it) => {
+        (byLoad[it.load_id] ||= []).push({
+          ...it,
+          pallet_count: it.pallet_count ?? 0,
+          weight_kg: it.weight_kg ?? 0,
+          volume_m3: it.volume_m3 ?? 0,
+        });
       });
-      return loads.map((l: any) => ({ ...l, items: byLoad[l.id] || [] })) as RoutingLoad[];
+      return loads.map(load => ({ ...load, items: byLoad[load.id] || [] })) as RoutingLoad[];
     },
     enabled: !!currentTenant,
   });

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import { calculateFreight, logFreightCalculation } from './useFreightCalculator';
+import type { Json, TablesUpdate } from '@/integrations/supabase/types';
 
 /**
  * Recalculates the freight for a single CT-e (outbound fiscal_document) using
@@ -30,47 +31,49 @@ export function useRecalculateCTeFreight() {
       if (!cte || cte.document_type !== 'outbound') {
         throw new Error('Documento não é um CT-e');
       }
-      if ((cte as any).freight_overridden) {
+      if (cte.freight_overridden) {
         return { skipped: true, reason: 'Frete possui override manual — recalculo ignorado' };
       }
 
       // Pull NF-e context (client / payer group / value) from the same load
-      let clientId: string | null = (cte as any).client_id || null;
+      let clientId = cte.client_id || null;
       let nfeTotalValue = 0;
-      if ((cte as any).load_id) {
-        const { data: nfeDocs } = await supabase
+      if (cte.load_id) {
+        const { data: nfeDocs, error: nfeDocsError } = await supabase
           .from('fiscal_documents')
           .select('client_id, value')
-          .eq('load_id', (cte as any).load_id)
+          .eq('load_id', cte.load_id)
           .eq('tenant_id', currentTenant.id)
           .eq('document_type', 'inbound');
-        nfeTotalValue = (nfeDocs || []).reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
+        if (nfeDocsError) throw nfeDocsError;
+        nfeTotalValue = (nfeDocs || []).reduce((sum, document) => sum + (Number(document.value) || 0), 0);
         if (!clientId) {
-          const ref = (nfeDocs || []).find((d: any) => d.client_id);
-          clientId = ref ? (ref as any).client_id : null;
+          const referenceDocument = (nfeDocs || []).find((document) => document.client_id);
+          clientId = referenceDocument?.client_id || null;
         }
       }
 
       let payerGroup: string | null = null;
       if (clientId) {
-        const { data: cli } = await supabase
+        const { data: client, error: clientError } = await supabase
           .from('clients')
           .select('payer_group')
           .eq('id', clientId)
           .maybeSingle();
-        payerGroup = (cli as any)?.payer_group || null;
+        if (clientError) throw clientError;
+        payerGroup = client?.payer_group || null;
       }
 
       const result = await calculateFreight({
         tenantId: currentTenant.id,
         clientId,
         payerGroup,
-        destination: (cte as any).recipient || (cte as any).recipient_city,
-        destinationState: (cte as any).recipient_state,
-        destinationMunicipality: (cte as any).recipient_city,
+        destination: cte.recipient || cte.recipient_city,
+        destinationState: cte.recipient_state,
+        destinationMunicipality: cte.recipient_city,
         totalValue: nfeTotalValue,
-        totalWeight: Number((cte as any).weight_kg) || 0,
-        totalPallets: Number((cte as any).pallet_count) || 0,
+        totalWeight: Number(cte.weight_kg) || 0,
+        totalPallets: Number(cte.pallet_count) || 0,
       });
 
       if (!result.success || !result.breakdown) {
@@ -81,22 +84,23 @@ export function useRecalculateCTeFreight() {
       const cbsRate = 0.90;
       const ibsRate = 0.10;
 
+      const updatePayload: TablesUpdate<'fiscal_documents'> = {
+        freight_value: newValue,
+        freight_value_original: newValue,
+        value: newValue,
+        freight_table_id: result.breakdown.tableId || null,
+        freight_breakdown: result.breakdown as unknown as Json,
+        cbs_base: newValue,
+        cbs_rate: cbsRate,
+        cbs_value: newValue * cbsRate / 100,
+        ibs_base: newValue,
+        ibs_rate: ibsRate,
+        ibs_value: newValue * ibsRate / 100,
+        updated_at: new Date().toISOString(),
+      };
       const { error: upErr } = await supabase
         .from('fiscal_documents')
-        .update({
-          freight_value: newValue,
-          freight_value_original: newValue,
-          value: newValue,
-          freight_table_id: result.breakdown.tableId || null,
-          freight_breakdown: result.breakdown as any,
-          cbs_base: newValue,
-          cbs_rate: cbsRate,
-          cbs_value: newValue * cbsRate / 100,
-          ibs_base: newValue,
-          ibs_rate: ibsRate,
-          ibs_value: newValue * ibsRate / 100,
-          updated_at: new Date().toISOString(),
-        } as any)
+        .update(updatePayload)
         .eq('id', cteId)
         .eq('tenant_id', currentTenant.id);
       if (upErr) throw upErr;

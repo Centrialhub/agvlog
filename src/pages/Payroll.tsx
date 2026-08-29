@@ -1,3 +1,4 @@
+import { confirmAction, promptAction } from '@/hooks/useAlertStore';
 import { useMemo, useState } from 'react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import {
@@ -5,6 +6,7 @@ import {
   useGeneratePayrollPeriod, useApprovePayrollPeriod, useClosePayrollPeriod,
   useRecalculatePayrollEntry, useAddPayrollManualItem, useDeletePayrollItem,
   PayrollPeriod, PayrollEntry, PayrollEntryItem,
+  type PayrollPeriodStatus,
   PAYROLL_PERIOD_STATUS_LABELS, PAYROLL_PAYMENT_STATUS_LABELS, PAYROLL_ITEM_TYPE_LABELS,
   useEmployeeAdvances, useRegisterEmployeeAdvance, useUpdateAdvanceStatus, ADVANCE_STATUS_LABELS,
 } from '@/hooks/usePayroll';
@@ -22,6 +24,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Wallet, Plus, RefreshCw, CheckCircle2, Lock, Trash2, HandCoins } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
+import { getErrorMessage } from '@/lib/errors';
 
 const fmtBRL = (n: number) => (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -129,14 +132,22 @@ function PeriodEntries({ period, onOpenEntry }: { period: PayrollPeriod; onOpenE
   const locked = period.status === 'approved' || period.status === 'closed' || period.status === 'cancelled';
 
   const handleApprove = async () => {
-    if (!confirm('Aprovar folha? Itens serão travados e contas a pagar serão geradas para os saldos.')) return;
+    if (!await confirmAction(
+      'Aprovar folha? Itens serão travados e contas a pagar serão geradas para os saldos.',
+      { title: 'Aprovar folha', confirmLabel: 'Aprovar' },
+    )) return;
     try { await approve.mutateAsync(period.id); toast.success('Folha aprovada'); }
-    catch (e: any) { toast.error(e.message); }
+    catch (error) { toast.error(getErrorMessage(error, 'Não foi possível aprovar a folha.')); }
   };
   const handleClose = async () => {
-    const reason = prompt('Motivo do fechamento (obrigatório se houver saldo em aberto):') ?? undefined;
+    const reason = await promptAction('Informe o motivo do fechamento da folha.', {
+      title: 'Fechar folha',
+      label: 'Motivo do fechamento',
+      required: false,
+    }) ?? undefined;
+    if (reason === undefined) return;
     try { await close.mutateAsync({ period_id: period.id, reason }); toast.success('Folha fechada'); }
-    catch (e: any) { toast.error(e.message); }
+    catch (error) { toast.error(getErrorMessage(error, 'Não foi possível fechar a folha.')); }
   };
   const handleRegen = async () => {
     try {
@@ -146,7 +157,7 @@ function PeriodEntries({ period, onOpenEntry }: { period: PayrollPeriod; onOpenE
         include_drivers: period.include_drivers, include_non_drivers: period.include_non_drivers,
       });
       toast.success('Folha recalculada');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível recalcular a folha.')); }
   };
 
   return (
@@ -206,14 +217,14 @@ function PeriodEntries({ period, onOpenEntry }: { period: PayrollPeriod; onOpenE
             {isLoading ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
             : entries.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-sm text-muted-foreground">Sem entradas</TableCell></TableRow>
             : entries.map(e => (
-              <TableRow key={e.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onOpenEntry(e as any)}>
-                <TableCell className="text-sm font-medium">{(e as any).employees?.name ?? e.employee_id.slice(0,8)}</TableCell>
+              <TableRow key={e.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onOpenEntry(e)}>
+                <TableCell className="text-sm font-medium">{e.employees?.name ?? e.employee_id.slice(0,8)}</TableCell>
                 <TableCell><Badge variant="outline" className="text-[10px]">{e.entry_type === 'driver' ? 'Motorista' : 'Funcionário'}</Badge></TableCell>
                 <TableCell className="text-right text-sm">{fmtBRL(Number(e.gross_amount))}</TableCell>
                 <TableCell className="text-right text-sm text-red-600">{fmtBRL(Number(e.discount_amount))}</TableCell>
                 <TableCell className="text-right text-sm">{fmtBRL(Number(e.already_paid_amount))}</TableCell>
                 <TableCell className="text-right text-sm font-bold">{fmtBRL(Number(e.amount_to_pay))}</TableCell>
-                <TableCell><Badge variant="outline" className="text-[10px]">{PAYROLL_PERIOD_STATUS_LABELS[e.status as any] ?? e.status}</Badge></TableCell>
+                <TableCell><Badge variant="outline" className="text-[10px]">{PAYROLL_PERIOD_STATUS_LABELS[e.status as PayrollPeriodStatus] ?? e.status}</Badge></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -245,16 +256,19 @@ function EntryDrawer({ entry, period, onClose }: { entry: PayrollEntry | null; p
       await addItem.mutateAsync({ entry, nature: manualNature, description: manualDesc, amount: amt, reason: manualReason });
       setManualDesc(''); setManualAmt(''); setManualReason('');
       toast.success('Ajuste adicionado');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível adicionar o ajuste.')); }
   };
 
   const handleDelete = async (item: PayrollEntryItem) => {
-    const reason = prompt('Motivo da exclusão (obrigatório):');
-    if (!reason || !reason.trim()) { toast.error('Motivo obrigatório'); return; }
+    const reason = await promptAction('Informe por que este item deve ser removido.', {
+      title: 'Excluir item da folha',
+      label: 'Motivo da exclusão',
+    });
+    if (!reason) return;
     try {
       await delItem.mutateAsync({ item, reason });
       toast.success('Item removido');
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível remover o item.')); }
   };
 
   return (
@@ -302,7 +316,7 @@ function EntryDrawer({ entry, period, onClose }: { entry: PayrollEntry | null; p
               <Card><CardContent className="py-3 space-y-2">
                 <p className="text-sm font-medium">Adicionar ajuste manual</p>
                 <div className="grid grid-cols-4 gap-2">
-                  <Select value={manualNature} onValueChange={(v: any) => setManualNature(v)}>
+                  <Select value={manualNature} onValueChange={value => setManualNature(value as 'credit' | 'debit')}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="credit">Crédito</SelectItem>
@@ -346,7 +360,7 @@ function GeneratePeriodDialog({ open, onOpenChange, onGenerated }: { open: boole
       toast.success('Folha gerada');
       onGenerated(id);
       onOpenChange(false);
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível gerar a folha.')); }
   };
 
   return (
@@ -386,7 +400,7 @@ function AdvancesTable() {
           {advances.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">Nenhum adiantamento</TableCell></TableRow>
           : advances.map(a => (
             <TableRow key={a.id}>
-              <TableCell className="text-sm font-medium">{(a as any).employees?.name ?? a.employee_id.slice(0,8)}</TableCell>
+              <TableCell className="text-sm font-medium">{a.employees?.name ?? a.employee_id.slice(0,8)}</TableCell>
               <TableCell className="text-sm">{format(new Date(a.advance_date), 'dd/MM/yyyy')}</TableCell>
               <TableCell className="text-right text-sm">{fmtBRL(Number(a.amount))}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{a.reason ?? '—'}</TableCell>
@@ -429,7 +443,7 @@ function RegisterAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       toast.success('Adiantamento registrado');
       onOpenChange(false);
       setEmployeeId(''); setAmount(''); setReason(''); setRef(''); setCreatePayable(false); setMarkPaid(false);
-    } catch (e: any) { toast.error(e.message); }
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível registrar o adiantamento.')); }
   };
 
   return (

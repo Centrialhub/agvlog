@@ -3,6 +3,7 @@ import { ParsedOrderRow } from '@/lib/documentParsers';
 import { FiscalDocument } from '@/hooks/useFiscalDocuments';
 import { Client } from '@/hooks/useClients';
 import { normalizeFiscalNumber, normalizeTaxId } from '@/lib/fiscalDocuments/fiscalIdentity';
+import { isValidNfeAccessKey } from '@/lib/fiscalDocuments/nfeAccessKey';
 
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 
@@ -170,6 +171,15 @@ export function validateNFe(
 
   if (!nfe.invoiceNumber) {
     validations.push({ field: 'invoiceNumber', message: 'Número da NF não encontrado', severity: 'error' });
+  }
+  if (nfe.sourceKind !== 'scan_ort' && !isValidNfeAccessKey(nfe.accessKey)) {
+    validations.push({
+      field: 'accessKey',
+      message: nfe.accessKey
+        ? 'Chave de acesso da NF-e inválida (deve ter 44 dígitos e dígito verificador correto)'
+        : 'Chave de acesso da NF-e não encontrada',
+      severity: 'error',
+    });
   }
   if (!nfe.recipientName && !nfe.recipientCnpj) {
     validations.push({ field: 'recipient', message: 'Destinatário não identificado', severity: 'error' });
@@ -355,9 +365,7 @@ export function validateOrderRows(
     if (row.clientName) {
       const city = (row.destination || '').toUpperCase().trim();
       const normName = row.clientName.toLowerCase().trim();
-      const nameKey = `${normName}|${city}`;
-      
-      // buildValidationIndexes já indexa clients por company_name.toLowerCase() | city
+    // buildValidationIndexes já indexa clients por company_name.toLowerCase() | city
       const matched = clients.find(c => {
         const cName = (c.company_name || '').toLowerCase().trim();
         const cCity = (c.address_city || '').toUpperCase().trim();

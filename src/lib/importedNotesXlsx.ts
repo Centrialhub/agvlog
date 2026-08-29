@@ -4,9 +4,12 @@ import {
   type ImportedNoteRow,
 } from '@/hooks/useImportedNotesSummary';
 
-const dt = (s: any) => (s ? new Date(String(s).length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '');
-const n2 = (v: any) => (v == null ? 0 : Math.round(Number(v) * 100) / 100);
-const n3 = (v: any) => (v == null ? 0 : Math.round(Number(v) * 1000) / 1000);
+const dt = (value: unknown) => (value
+  ? new Date(String(value).length <= 10 ? `${String(value)}T00:00:00` : String(value)).toLocaleDateString('pt-BR')
+  : '');
+const n2 = (value: unknown) => (value == null ? 0 : Math.round(Number(value) * 100) / 100);
+const n3 = (value: unknown) => (value == null ? 0 : Math.round(Number(value) * 1000) / 1000);
+const sumFormula = (formula: string): XLSX.CellObject => ({ t: 'n', f: formula });
 
 /** Tipo de documento emitido para a nota (MOC = NFS-e, demais = CT-e). */
 export function docTypeOf(r: ImportedNoteRow): 'NFS-e' | 'CT-e' | 'PENDENTE' {
@@ -59,10 +62,10 @@ export function buildImportedNotesWorkbook(rows: ImportedNoteRow[]) {
   const totalRowIdx = rows.length + 2; // 1-based, após header + linhas
   XLSX.utils.sheet_add_aoa(main, [[
     'TOTAL', '', '', '', '', '', '', '', '', '', '',
-    { f: `SUM(L2:L${rows.length + 1})` } as any,
-    { f: `SUM(M2:M${rows.length + 1})` } as any,
-    { f: `SUM(N2:N${rows.length + 1})` } as any,
-    { f: `SUM(O2:O${rows.length + 1})` } as any,
+    sumFormula(`SUM(L2:L${rows.length + 1})`),
+    sumFormula(`SUM(M2:M${rows.length + 1})`),
+    sumFormula(`SUM(N2:N${rows.length + 1})`),
+    sumFormula(`SUM(O2:O${rows.length + 1})`),
     `${t.rowCount} notas`,
   ]], { origin: `A${totalRowIdx}` });
   main['!cols'] = [

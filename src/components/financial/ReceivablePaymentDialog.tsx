@@ -1,3 +1,4 @@
+import { confirmAction } from '@/hooks/useAlertStore';
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -12,10 +13,12 @@ import {
   useReceivablePayments, useReverseReceivablePayment,
   uploadPaymentAttachment,
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
+  type PaymentMethod,
 } from '@/hooks/useFinancialPayments';
 import { useTenant } from '@/hooks/useTenant';
 import type { Receivable } from '@/hooks/useReceivables';
 import { Trash2 } from 'lucide-react';
+import { getErrorMessage } from '@/lib/errors';
 
 interface Props {
   receivable: Receivable | null;
@@ -34,11 +37,11 @@ export default function ReceivablePaymentDialog({ receivable, open, onOpenChange
   const [amount, setAmount] = useState('');
   const [receivedAt, setReceivedAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [bankAccountId, setBankAccountId] = useState('');
-  const [method, setMethod] = useState<string>('pix');
+  const [method, setMethod] = useState<PaymentMethod>('pix');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
-  const remaining = receivable ? Number(receivable.amount) - Number((receivable as any).received_amount || 0) : 0;
+  const remaining = receivable ? Number(receivable.amount) - Number(receivable.received_amount || 0) : 0;
 
   useEffect(() => {
     if (open && receivable) {
@@ -53,8 +56,8 @@ export default function ReceivablePaymentDialog({ receivable, open, onOpenChange
   const handleSubmit = async () => {
     if (!receivable || !currentTenant) return;
     const val = Number(amount);
-    if (!val || val <= 0) return toast.error('Informe um valor válido');
-    if (!bankAccountId) return toast.error('Selecione a conta bancária');
+    if (!val || val <= 0) { toast.error('Informe um valor válido'); return; }
+    if (!bankAccountId) { toast.error('Selecione a conta bancária'); return; }
     try {
       let attachment_url: string | null = null;
       if (file) attachment_url = await uploadPaymentAttachment(currentTenant.id, 'receivable', file);
@@ -63,24 +66,24 @@ export default function ReceivablePaymentDialog({ receivable, open, onOpenChange
         amount: val,
         received_at: new Date(receivedAt + 'T12:00:00').toISOString(),
         bank_account_id: bankAccountId,
-        method: method as any,
+        method,
         notes: notes || null,
         attachment_url,
       });
       toast.success('Recebimento registrado');
       setAmount(''); setNotes(''); setFile(null);
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível registrar o recebimento.'));
     }
   };
 
   const handleReverse = async (id: string) => {
-    if (!confirm('Estornar este recebimento? A transação bancária vinculada também será removida.')) return;
+    if (!await confirmAction('Estornar este recebimento? A transação bancária vinculada também será removida.')) return;
     try {
       await reverse.mutateAsync(id);
       toast.success('Recebimento estornado');
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível estornar o recebimento.'));
     }
   };
 
@@ -100,7 +103,7 @@ export default function ReceivablePaymentDialog({ receivable, open, onOpenChange
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Já recebido</p>
-            <p className="font-semibold text-green-600">{fmt(Number((receivable as any).received_amount || 0))}</p>
+            <p className="font-semibold text-green-600">{fmt(Number(receivable.received_amount || 0))}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Em aberto</p>
@@ -128,7 +131,7 @@ export default function ReceivablePaymentDialog({ receivable, open, onOpenChange
                 <Select value={bankAccountId} onValueChange={setBankAccountId}>
                   <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   <SelectContent>
-                    {accounts.map((a: any) => (
+                    {accounts.map(a => (
                       <SelectItem key={a.id} value={a.id}>{a.name}{a.bank_name ? ` — ${a.bank_name}` : ''}</SelectItem>
                     ))}
                   </SelectContent>
@@ -136,7 +139,7 @@ export default function ReceivablePaymentDialog({ receivable, open, onOpenChange
               </div>
               <div>
                 <Label>Forma</Label>
-                <Select value={method} onValueChange={setMethod}>
+                <Select value={method} onValueChange={value => setMethod(value as PaymentMethod)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</SelectItem>)}
@@ -163,10 +166,10 @@ export default function ReceivablePaymentDialog({ receivable, open, onOpenChange
         {history.length > 0 && (
           <div className="border rounded-md p-3 space-y-2 max-h-64 overflow-y-auto">
             <p className="text-sm font-medium">Histórico</p>
-            {history.map((h: any) => (
+            {history.map(h => (
               <div key={h.id} className="flex items-center justify-between text-sm border-b last:border-b-0 pb-2 last:pb-0">
                 <div>
-                  <p className="font-medium">{fmt(Number(h.amount))} <Badge variant="secondary" className="ml-2 text-[10px]">{(PAYMENT_METHOD_LABELS as any)[h.method] || h.method}</Badge></p>
+                  <p className="font-medium">{fmt(Number(h.amount))} <Badge variant="secondary" className="ml-2 text-[10px]">{PAYMENT_METHOD_LABELS[h.method as PaymentMethod] || h.method}</Badge></p>
                   <p className="text-xs text-muted-foreground">
                     {new Date(h.received_at).toLocaleDateString('pt-BR')} · {h.bank_accounts?.name || '—'}
                     {h.notes ? ` · ${h.notes}` : ''}
