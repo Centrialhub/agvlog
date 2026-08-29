@@ -59,9 +59,9 @@ Deno.serve(async (req) => {
     if (!token || typeof token !== 'string' || token.trim().length < 8) {
       return json(400, { error: 'Token inválido' });
     }
-    const validScopes = ['all', 'nfse', 'cte', 'nfe', 'nfce', 'mdfe'];
+    const validScopes = ['all', 'nfse', 'cte', 'nfe', 'nfce', 'mdfe', 'nfcom'];
     if (!validScopes.includes(doc_scope)) return json(400, { error: 'doc_scope inválido' });
-    if (!['production', 'sandbox'].includes(environment)) return json(400, { error: 'environment inválido' });
+    if (!['production', 'homologation', 'sandbox'].includes(environment)) return json(400, { error: 'environment inválido' });
 
     // Authorize: user must be admin/owner in the tenant that owns this emitter
     const { data: em, error: emErr } = await admin
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
 
     const { data, error } = await admin
       .from('hub_fiscal_credentials')
-      .upsert(payload, { onConflict: 'emitter_id,doc_scope' })
+      .upsert(payload, { onConflict: 'emitter_id,doc_scope,environment' })
       .select('id, doc_scope, environment, enabled, secret_hint, updated_at')
       .single();
     if (error) return json(400, { error: error.message });
@@ -119,3 +119,4 @@ Deno.serve(async (req) => {
     return json(500, { error: e?.message || 'INTERNAL_ERROR' });
   }
 });
+
