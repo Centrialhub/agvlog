@@ -7390,19 +7390,31 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          idempotency_key: string | null
           key_value: string
+          operation: string | null
+          payload_hash: string | null
+          result_id: string | null
           tenant_id: string
         }
         Insert: {
           created_at?: string | null
           id?: string
+          idempotency_key?: string | null
           key_value: string
+          operation?: string | null
+          payload_hash?: string | null
+          result_id?: string | null
           tenant_id: string
         }
         Update: {
           created_at?: string | null
           id?: string
+          idempotency_key?: string | null
           key_value?: string
+          operation?: string | null
+          payload_hash?: string | null
+          result_id?: string | null
           tenant_id?: string
         }
         Relationships: [
