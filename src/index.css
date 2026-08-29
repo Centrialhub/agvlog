@@ -15,14 +15,14 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 25% 10%;
 
-    --primary: 215 80% 36%;
+    --primary: 215 85% 25%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 210 18% 93%;
     --secondary-foreground: 220 25% 20%;
 
     --muted: 210 15% 95%;
-    --muted-foreground: 215 16% 32%;
+    --muted-foreground: 215 20% 25%;
 
     --accent: 210 18% 93%;
     --accent-foreground: 220 25% 10%;
@@ -110,5 +110,11 @@
 @layer utilities {
   .text-gradient {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-[hsl(var(--chart-4))];
+  }
+
+  .leaflet-control-attribution a {
+    color: #004c6d;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 }
