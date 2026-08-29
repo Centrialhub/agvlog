@@ -7,7 +7,7 @@ const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 
 describe("tenant integration capabilities", () => {
-  const migration = read("supabase/migrations/20260828205532_tenant_integration_capabilities.sql");
+  const migration = read("supabase/migrations/20260829142707_restore_production_integration_capabilities.sql");
 
   it("creates fail-closed SSX/fiscal flags and independent kill switches", () => {
     for (const key of ["ssx_enabled", "fiscal_enabled", "ssx_kill_switch", "fiscal_kill_switch"]) {
@@ -18,8 +18,9 @@ describe("tenant integration capabilities", () => {
     expect(migration).toContain("message = 'integration_capability_disabled'");
   });
 
-  it("keeps capability mutation tenant-scoped with USING and WITH CHECK", () => {
-    expect(migration).toMatch(/for update to authenticated[\s\S]*?using \(public\.is_tenant_admin\(tenant_id\)\)[\s\S]*?with check \(public\.is_tenant_admin\(tenant_id\)\)/i);
+  it("keeps capability reads tenant-scoped and backend assertions private", () => {
+    expect(migration).toContain("auth.uid() is null or not public.is_tenant_member(_tenant_id)");
+    expect(migration).toContain("Existing production RLS policies are already consolidated as agvlog_*");
     expect(migration).toContain("grant execute on function public.assert_tenant_integration_capability_v1(uuid, text) to service_role");
     expect(migration).toContain("revoke all on function public.assert_tenant_integration_capability_v1(uuid, text) from public, anon, authenticated");
   });
