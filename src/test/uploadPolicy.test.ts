@@ -47,8 +47,8 @@ describe('política de uploads privados', () => {
   });
 
   it('bloqueia escrita direta nos buckets e exige scanner no gateway', () => {
-    const migration = readFileSync(join(process.cwd(), 'supabase/migrations/20260828213911_enforce_secure_upload_gateway.sql'), 'utf8');
-    const rateLimitMigration = readFileSync(join(process.cwd(), 'supabase/migrations/20260828215951_secure_upload_rate_limits.sql'), 'utf8');
+    const migration = readFileSync(join(process.cwd(), 'supabase/migrations/20260829144103_enforce_secure_upload_gateway_policies.sql'), 'utf8');
+    const rateLimitMigration = readFileSync(join(process.cwd(), 'supabase/migrations/20260829144001_add_production_secure_upload_rate_limits.sql'), 'utf8');
     const gateway = readFileSync(join(process.cwd(), 'supabase/functions/secure-upload/index.ts'), 'utf8');
     const secureClient = readFileSync(join(process.cwd(), 'src/lib/secureUpload.ts'), 'utf8');
 
