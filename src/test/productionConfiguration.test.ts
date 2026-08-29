@@ -387,7 +387,7 @@ describe("production configuration contract", () => {
     const migration = read(
       "supabase",
       "migrations",
-      "20260828223000_server_pagination_support.sql",
+      "20260829142719_restore_production_frontend_pagination_contracts.sql",
     );
     const clientsHook = read("src", "hooks", "useClients.tsx");
     const fiscalHook = read("src", "hooks", "useFiscalDocuments.tsx");
