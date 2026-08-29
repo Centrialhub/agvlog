@@ -225,7 +225,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <nav aria-label="Navegação principal" className="h-[calc(100vh-3.25rem)] overflow-y-auto px-2 py-3">
             {navSections.map(section => (
               <div key={section.label} className="mb-4">
-                <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/70">
                   {section.label}
                 </p>
                 <div className="space-y-0.5">
@@ -240,7 +240,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                           key={item.href}
                           aria-disabled="true"
                           title="Integração em implantação"
-                          className="flex min-h-10 items-center gap-2.5 rounded-md px-3 py-2 text-sm text-sidebar-foreground/40"
+                          className="flex min-h-10 items-center gap-2.5 rounded-md px-3 py-2 text-sm text-sidebar-foreground/70"
                         >
                           {item.icon}
                           <span>{item.label}</span>
@@ -311,7 +311,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 {!collapsed && (
                   <button
                     onClick={() => toggleSection(section.label)}
-                    className="flex w-full items-center justify-between px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 hover:text-sidebar-foreground/60 transition-colors"
+                    className="flex w-full items-center justify-between px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/70 hover:text-sidebar-foreground/60 transition-colors"
                   >
                     {section.label}
                     <ChevronDown className={cn("h-3 w-3 transition-transform", sectionCollapsed && "-rotate-90")} />
@@ -331,7 +331,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                               key={entry.href}
                               aria-disabled="true"
                               title="Integração em implantação"
-                              className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-sidebar-foreground/35"
+                              className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-sidebar-foreground/60"
                             >
                               {entry.icon}
                               {!collapsed && <span>{entry.label} · Em implantação</span>}
@@ -372,7 +372,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                                     key={item.href}
                                     aria-disabled="true"
                                     title={`${entry.label} • ${item.label} • Em implantação`}
-                                    className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-sidebar-foreground/35"
+                                    className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-sidebar-foreground/60"
                                   >
                                     {item.icon}
                                   </div>
@@ -425,7 +425,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                                       key={item.href}
                                       aria-disabled="true"
                                       title="Integração em implantação"
-                                      className="flex items-center gap-2.5 rounded-md px-2 py-1 text-xs text-sidebar-foreground/35"
+                                      className="flex items-center gap-2.5 rounded-md px-2 py-1 text-xs text-sidebar-foreground/60"
                                     >
                                       {item.icon}
                                       <span>{item.label} · Em implantação</span>
