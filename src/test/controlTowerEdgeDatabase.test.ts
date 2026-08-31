@@ -4,12 +4,13 @@ import {afterAll,afterEach,beforeAll,beforeEach,describe,expect,it,vi} from 'vit
 import type {PGlite} from '@electric-sql/pglite';
 import {controlTowerDatabase,seedTower,towerActor,towerFunction,towerIds as i,towerRead} from './helpers/controlTowerDatabase';
 import {towerEdgeClient} from './helpers/controlTowerEdgeDatabase';
+import {installPasswordSessionFixture} from './helpers/passwordSessionDatabase';
 const state=vi.hoisted(()=>({client:vi.fn(),handlers:[] as ((r:Request)=>Promise<Response>)[],route:vi.fn()}));
 vi.mock('@supabase/supabase-js',()=>({createClient:(...args:unknown[])=>state.client(...args)}));
 vi.mock('../../supabase/functions/_shared/osrm.ts',()=>({calculateOsrmRoute:(...args:unknown[])=>state.route(...args)}));
 let db:PGlite;
 beforeAll(async()=>{
- db=await controlTowerDatabase();await seedTower(db);
+ db=await controlTowerDatabase();await installPasswordSessionFixture(db);await seedTower(db);
  await db.exec(`grant select on tenant_memberships to authenticated;
    alter table tenant_memberships enable row level security;`);
  const baseline=readFileSync('supabase/migrations/20260824224152_baseline.sql','utf8');
@@ -35,7 +36,7 @@ describe('actual Edge handlers with caller-role SQL, no provider traffic',()=>{
  it('blocks SSX-disabled reevaluation before writing telemetry status',async()=>{
   expect((await request()).status).toBe(403);expect((await db.query('select * from trip_live_status')).rows).toEqual([]);expect(fetch).not.toHaveBeenCalled();
  });
- it.each(['driver','client','admin','owner'])('denies %s at AAL1',async role=>{
+ it.each(['driver','client'])('denies %s at AAL1',async role=>{
   await db.query('update tenant_memberships set role=$1',[role]);await db.exec('update tenant_feature_policy set enabled=true');
   expect((await request()).status).toBe(403);expect((await db.query('select * from trip_live_status')).rows).toEqual([]);
   expect([403,404]).toContain((await request(1,{trip_id:i.trip})).status);expect(state.route).not.toHaveBeenCalled();
@@ -64,8 +65,8 @@ describe('actual Edge handlers with caller-role SQL, no provider traffic',()=>{
   expect((await db.query('select * from trip_live_status')).rows).toEqual([]);
   expect((await db.query('select * from trip_alerts')).rows).toEqual([]);
  });
- it('allows AAL2 admin evaluation but obeys the kill switch',async()=>{
-  await db.exec("update tenant_memberships set role='admin';update tenant_feature_policy set enabled=true");await towerActor(db,'aal2');
+ it.each(['owner','admin'])('allows password-only %s evaluation but obeys the kill switch',async role=>{
+  await db.query('update tenant_memberships set role=$1',[role]);await db.exec('update tenant_feature_policy set enabled=true');await towerActor(db,'aal1');
   expect((await request()).status).toBe(200);
   await db.query("insert into tenant_feature_policy(tenant_id,feature_key,enabled) values($1,'ssx_kill_switch',true)",[i.tenant]);expect((await request()).status).toBe(403);
  });

@@ -101,6 +101,6 @@ describe('real settlement drawer with SQL, recovery and financial readers',{time
   expect((await db.query<{n:number}>('select count(*)::int n from driver_settlement_adjustments')).rows[0].n).toBe(1);expect(pendingSettlementAdjustment(localStorage,i.tenant,i.operator)).toBeNull();
  });
  it('requires MFA even when the form was opened before promotion',async()=>{
-  render(<Story source={await manualSettlement(db)}/>);await draft();await expenseMfaRole(db,'admin');fireEvent.click(screen.getByRole('button',{name:'Confirmar inclusão do ajuste'}));await screen.findByText('Confirme a autenticação de dois fatores para ajustar este acerto.');expect((await db.query<Record<string,unknown>>('select count(*)::int n from driver_settlement_adjustments')).rows[0].n).toBe(0);
+  render(<Story source={await manualSettlement(db)}/>);await draft();await expenseMfaRole(db,'admin');fireEvent.click(screen.getByRole('button',{name:'Confirmar inclusão do ajuste'}));await screen.findByText('A política de acesso do servidor está desatualizada. Contate o administrador.');expect((await db.query<Record<string,unknown>>('select count(*)::int n from driver_settlement_adjustments')).rows[0].n).toBe(0);
  });
 });

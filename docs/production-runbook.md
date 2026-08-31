@@ -17,17 +17,21 @@ são controles independentes e nunca devem ser usados para simular sucesso.
    gerados. Nunca faça `db push` cego em banco populado.
 5. No Auth hospedado, confirme `disable_signup=true`, senha mínima 12 com
    maiúscula/minúscula/número, proteção contra senha vazada quando contratada,
-   sessão de 8 h/30 min, TOTP habilitado e redirect HTTPS exato para
+   sessão de 8 h/30 min, cadastro/verificação TOTP desabilitados e redirect HTTPS exato para
    `/set-password`.
-6. Teste convite expirado, nonce reutilizado, definição de senha e MFA AAL2 de
-   owner/admin. Operadores, motoristas e clientes continuam em AAL1, sempre com
-   RLS por tenant/papel.
+6. Teste convite expirado, nonce reutilizado e definição de senha. Todos os perfis,
+   incluindo owner/admin, entram com e-mail e senha, sem código autenticador,
+   sempre com RLS por tenant/papel. Teste também contas com fator TOTP já cadastrado.
 7. Confirme que staging e produção usam secrets diferentes. Nenhum service role,
    token fiscal, senha SSX ou payload sensível pertence ao frontend ou ao log.
 8. Configure `MALWARE_SCANNER_URL` HTTPS e `MALWARE_SCANNER_TOKEN` no cofre das
    Edge Functions. O gateway falha fechado, não grava arquivos sem scan limpo
    e limita uploads a 10/min e limpezas a 30/min por ator, de forma atômica.
 9. Confirme backup/PITR, retenção e o último ensaio de restauração aprovado.
+
+A política de login por senha foi explicitamente confirmada em 31/08/2026.
+Não reaplique helpers ou procedimentos históricos que reintroduzam a exigência
+AAL2. Consulte [a nota de alteração](qa/PASSWORD-LOGIN-2026-08-31.md).
 
 ## Ordem de publicação
 
@@ -43,8 +47,8 @@ são controles independentes e nunca devem ser usados para simular sucesso.
 ## Smoke pós-deploy
 
 - Signup público retorna rejeição e não cria usuário.
-- Owner/admin chega ao MFA; operador, motorista e cliente chegam apenas ao seu
-  workspace.
+- Todos os perfis entram sem código autenticador e chegam apenas ao workspace
+  permitido. Owner/admin não recebem desafio TOTP nem bloqueio AAL2 nas operações.
 - IDs conhecidos de tenant B não retornam linhas nem aceitam mutação por A.
 - Carga, itens, rota, viagem e auditoria preservam os totais canônicos.
 - Motorista abre viagem/paradas, registra evento e persiste após nova sessão.

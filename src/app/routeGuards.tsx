@@ -8,7 +8,6 @@ import { TenantProvider, useTenant } from "@/hooks/useTenant";
 import { useTenantCapabilities, type IntegrationCapability } from "@/hooks/useTenantCapabilities";
 import Auth from "@/pages/Auth";
 import { IntegrationUnavailable } from "@/components/integrations/IntegrationUnavailable";
-import { PrivilegedMfaGate } from "@/components/auth/PrivilegedMfaGate";
 
 const OperationsCenter = lazy(() => import("@/pages/OperationsCenter"));
 
@@ -118,11 +117,9 @@ function ProtectedContent({ children, gate }: Required<ProtectedRouteProps>) {
   );
 
   return (
-    <PrivilegedMfaGate>
-      <Layout>
-        {content}
-      </Layout>
-    </PrivilegedMfaGate>
+    <Layout>
+      {content}
+    </Layout>
   );
 }
 

@@ -141,28 +141,22 @@ describe("production configuration contract", () => {
     expect(migration).toContain("Tenant provisioning is restricted to the platform backend");
   });
 
-  it("requires TOTP MFA for privileged roles", () => {
+  it("allows password login without authenticator enrollment for every role", () => {
     const config = read("supabase", "config.toml");
     const routeGuards = read("src", "app", "routeGuards.tsx");
-    const mfaGate = read("src", "components", "auth", "PrivilegedMfaGate.tsx");
-    const mfaFlow = read("src", "hooks", "usePrivilegedMfa.ts");
 
     expect(config).toContain("[auth.mfa]");
     expect(config).toContain("[auth.mfa.totp]");
-    expect(config).toContain("enroll_enabled = true");
-    expect(config).toContain("verify_enabled = true");
+    expect(config).toContain("enroll_enabled = false");
+    expect(config).toContain("verify_enabled = false");
     expect(config).toContain('additional_redirect_urls = ["https://agvlog.lovable.app/set-password"]');
-    expect(routeGuards).toContain("PrivilegedMfaGate");
-    expect(mfaGate).toContain('currentRole !== "owner" && currentRole !== "admin"');
-    expect(mfaGate).toContain("usePrivilegedMfa(actor, token, expiresAt)");
-    expect(mfaFlow).toContain("getAuthenticatorAssuranceLevel(token)");
-    expect(mfaFlow).toContain("supabase.auth.mfa.enroll");
-    expect(mfaFlow).toContain("supabase.auth.mfa.verify");
+    expect(routeGuards).not.toContain('PrivilegedMfaGate');
+    expect(routeGuards).not.toContain('auth.mfa');
     expect(routeGuards).toContain("<RequireInternalRole>{children}</RequireInternalRole>");
     expect(routeGuards).toContain("if (!user) return <Navigate to=\"/auth\" replace />");
   });
 
-  it("tracks service credentials explicitly and keeps Control Tower writes on caller JWT/MFA", () => {
+  it("tracks service credentials explicitly and keeps Control Tower writes on caller JWT and tenant roles", () => {
     const functionsRoot = join(root, "supabase", "functions");
     const serviceRoleHandlers = readdirSync(functionsRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
@@ -173,7 +167,7 @@ describe("production configuration contract", () => {
       .filter(({ source }) => source.includes("SUPABASE_SERVICE_ROLE_KEY"));
 
     // Inventory is not an authorization audit. Remaining handlers need their
-    // own role/tenant/MFA review; do not require the absence of MFA protections.
+    // own role/tenant review; absence of MFA must not remove authorization.
     expect(serviceRoleHandlers.map(handler => handler.name).sort()).toEqual([
       "agvlog-aggregate-daily", "agvlog-compute-state", "agvlog-integration-upsert",
       "agvlog-pipeline-run", "agvlog-process-vehicle", "agvlog-run-queue",
@@ -193,8 +187,7 @@ describe("production configuration contract", () => {
     expect(read("supabase","functions","calculate-trip-route","index.ts")).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
     expect(read("supabase","functions","update-trip-live-status","index.ts")).toContain("requireIntegrationCapability(capabilityClient,tenant_id,'ssx')");
     const guard=read("supabase","functions","_shared","control-tower-auth.ts");
-    expect(guard).toContain("getAuthenticatorAssuranceLevel()");
-    expect(guard).toContain("currentLevel!=='aal2'");
+    expect(guard).not.toMatch(/getAuthenticatorAssuranceLevel|aal2/);
     expect(guard).toContain("rpc('is_tenant_operator_or_admin'");
   });
 

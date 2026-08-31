@@ -39,7 +39,7 @@ export function parseCreationResult(value:unknown,p:ExpenseCreationCommand){
 export function creationError(cause:unknown){
  if(cause instanceof z.ZodError)return cause.issues.map(issue=>issue.message).join(' · ');
  const message=cause instanceof Error?cause.message:isRecord(cause)?String(cause.message??''):'';
- if(/expense_creation_mfa_required/.test(message))return 'Confirme a autenticação em duas etapas para continuar. Preserve o pedido e recupere a mesma despesa após confirmar.';
+ if(/expense_creation_mfa_required/.test(message))return 'A política de acesso do servidor está desatualizada. Contate o administrador e preserve este pedido.';
  if(/expense_creation_suspended|expense_creation_release_busy|permission denied for function (create_driver_expense_command|inspect_expense_receipt_upload|recalculate_manual_expense_settlement)/.test(message))return 'Registro de despesas temporariamente suspenso. Preserve o pedido e o comprovante para recuperar após a liberação.';
  if(/context_changed|concurrent_change/.test(message))return 'A viagem ou o acerto mudou ou está em uso. Atualize o contexto antes de registrar.';
  if(/not_authorized|permission denied/.test(message))return 'Sua sessão não tem permissão para registrar esta despesa.';

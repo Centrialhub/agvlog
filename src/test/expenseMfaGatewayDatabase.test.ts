@@ -5,10 +5,11 @@ import type {PGlite} from '@electric-sql/pglite';
 import {afterAll,afterEach,beforeAll,beforeEach,describe,expect,it,vi} from 'vitest';
 import {expenseReceiptUpload} from '../../supabase/functions/secure-upload/expense-receipt';
 import {expenseMfaDatabase,expenseMfaActor,expenseMfaRole} from './helpers/expenseMfaDatabase';
+import {installPasswordSessionFixture} from './helpers/passwordSessionDatabase';
 import {manualSettlement} from './helpers/expenseCreationDatabase';
 import {operationIds as i,operationRpc} from './helpers/operationOutcomeDatabase';
 let db:PGlite;
-beforeAll(async()=>{({db}=await expenseMfaDatabase());},30000);
+beforeAll(async()=>{({db}=await expenseMfaDatabase());await installPasswordSessionFixture(db);},30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{await db.exec('begin');await expenseMfaActor(db);});
 afterEach(async()=>{await db.exec('rollback');});
@@ -24,20 +25,19 @@ async function setup(){
  const upload=vi.fn(async(path:string,_bytes:Uint8Array,options:{metadata:Record<string,unknown>})=>{await db.query("insert into storage.objects(bucket_id,name,user_metadata) values('receipts',$1,$2::jsonb)",[path,JSON.stringify(options.metadata)]);return {error:null};});
  return {context,deps:{inspect,scan,upload}};
 }
-describe('receipt gateway with actual MFA SQL; no external requests',()=>{
- it('rejects an AAL1 administrator before scan or upload',async()=>{
-  await expenseMfaRole(db,'admin');const s=await setup();expect((await expenseReceiptUpload(s.context,s.deps)).status).toBe(403);
-  expect(s.deps.scan).not.toHaveBeenCalled();expect(s.deps.upload).not.toHaveBeenCalled();
+describe('receipt gateway with actual password-session authorization SQL; no external requests',()=>{
+ it.each(['owner','admin'])('accepts a password-only %s without skipping scan or upload authorization',async role=>{
+  await expenseMfaRole(db,role);const s=await setup();expect((await expenseReceiptUpload(s.context,s.deps)).status).toBe(200);
+  expect(s.deps.scan).toHaveBeenCalledOnce();expect(s.deps.upload).toHaveBeenCalledOnce();
  });
- it('stops an AAL1 operator promoted to admin during scanning',async()=>{
-  const s=await setup();s.deps.scan.mockImplementation(async()=>{await expenseMfaRole(db,'admin');return {available:true,clean:true};});
+ it('stops a user whose membership is revoked during scanning',async()=>{
+  const s=await setup();s.deps.scan.mockImplementation(async()=>{await db.query('update tenant_memberships set active=false where user_id=$1',[i.operator]);return {available:true,clean:true};});
   expect((await expenseReceiptUpload(s.context,s.deps)).status).toBe(403);expect(s.deps.inspect).toHaveBeenCalledTimes(2);expect(s.deps.upload).not.toHaveBeenCalled();
  });
- it('accepts AAL2 once, denies recovery after downgrade and recovers without a second upload',async()=>{
+ it('recovers an existing upload after switching from AAL2 to a password-only session',async()=>{
   await expenseMfaRole(db,'admin');await expenseMfaActor(db,i.operator,'aal2');const s=await setup();
   const confirmed=await expenseReceiptUpload(s.context,s.deps);expect(confirmed.status).toBe(200);
-  await expenseMfaActor(db);expect((await expenseReceiptUpload(s.context,s.deps)).status).toBe(403);
-  await expenseMfaActor(db,i.operator,'aal2');expect(await expenseReceiptUpload(s.context,s.deps)).toEqual(confirmed);
+  await expenseMfaActor(db);expect(await expenseReceiptUpload(s.context,s.deps)).toEqual(confirmed);
   expect(s.deps.scan).toHaveBeenCalledTimes(1);expect(s.deps.upload).toHaveBeenCalledTimes(1);
   expect((await db.query<{n:number}>('select count(*)::int n from driver_expenses')).rows[0].n).toBe(0);
  });

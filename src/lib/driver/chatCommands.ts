@@ -32,7 +32,7 @@ export function parseChatAck(value:unknown,p:ChatCommand){
 export function chatError(cause:unknown){
  if(cause instanceof z.ZodError)return 'Dados do chat incompatíveis. Atualize a conversa antes de enviar.';
  const message=cause instanceof Error?cause.message:typeof cause==='object'&&cause!==null&&'message' in cause?String(cause.message):'';
- if(/mfa_required/.test(message))return 'Confirme a autenticação em duas etapas para acessar o chat.';
+ if(/mfa_required/.test(message))return 'A política de acesso do servidor está desatualizada. Contate o administrador.';
  if(/not_authorized|permission denied/.test(message))return 'Sua sessão não tem acesso a esta conversa.';
  if(/context_changed|concurrent_change/.test(message))return 'A conversa mudou ou está em uso. Atualize o contexto antes de enviar.';
  if(/event_chat_invalid_binding/.test(message))return 'Os vínculos da ocorrência precisam ser conferidos pela operação antes de enviar.';

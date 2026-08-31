@@ -14,7 +14,7 @@ let sequence=0;
 export function mfaSdkDatabaseGateway(db:PGlite){
  const tokens=new Map<string,Claims>(),factors=new Map<string,Factor[]>();
  const requests:Array<{path:string;method:string;actor?:string;aal?:string}>=[];
- const faults={denyUser:false,invalidCode:false,passwordActor:i.user,beforeVerify:undefined as (()=>Promise<void>)|undefined};
+ const faults={denyUser:false,rejectPassword:false,invalidCode:false,passwordActor:i.user,beforeVerify:undefined as (()=>Promise<void>)|undefined};
  let transport:Promise<unknown>=Promise.resolve();
  const getUser=(actor:string):User=>({id:actor,aud:'authenticated',role:'authenticated',email:'qa@example.invalid',created_at:'2026-08-30T00:00:00Z',app_metadata:{},user_metadata:{aal:'aal2',role:'owner'},factors:factors.get(actor)??[]});
  const issue=(actor:string,aal:string)=>{
@@ -30,7 +30,7 @@ export function mfaSdkDatabaseGateway(db:PGlite){
   const token=new Headers(init?.headers).get('authorization')?.replace(/^Bearer /,'')??'',claims=tokens.get(token);
   requests.push({path,method,actor:claims?.sub,aal:claims?.aal});
   if(init?.signal?.aborted)throw new DOMException('Aborted','AbortError');
-  if(path==='/auth/v1/token'&&url.searchParams.get('grant_type')==='password')return json(issue(faults.passwordActor,'aal1'));
+  if(path==='/auth/v1/token'&&url.searchParams.get('grant_type')==='password')return faults.rejectPassword?json({code:'invalid_credentials',message:'Credenciais inválidas'},400):json(issue(faults.passwordActor,'aal1'));
   if(!claims||claims.exp*1000<=Date.now())return json({code:'bad_jwt',message:'Invalid synthetic token'},401);
   const body=init?.body?JSON.parse(String(init.body)) as Record<string,unknown>:{};
   if(path==='/auth/v1/user'&&method==='GET')return faults.denyUser?json({code:'bad_jwt',message:'User validation refused'},401):json(getUser(claims.sub));

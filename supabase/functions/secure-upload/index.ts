@@ -99,7 +99,6 @@ async function scannerAccepts(file: File, correlationId: string) {
 
 async function authorizeUpload(
   adminClient: SupabaseClient,
-  callerClient: SupabaseClient,
   userId: string,
   tenantId: string,
   bucket: string,
@@ -112,10 +111,6 @@ async function authorizeUpload(
     .eq("active", true)
     .maybeSingle();
   if (!membership || !BUCKET_ROLES[bucket]?.includes(String(membership.role))) return false;
-  if (["owner", "admin"].includes(String(membership.role))) {
-    const assurance = await callerClient.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (assurance.error || assurance.data.currentLevel !== "aal2") return false;
-  }
   return true;
 }
 
@@ -158,7 +153,7 @@ Deno.serve(async (request) => {
       if (bucket === "receipts" && paths.some(path => path.split("/")[1] === "expense-receipts")) {
         return response(403, { error: "expense_receipt_retention_required" });
       }
-      if (!await authorizeUpload(adminClient, callerClient, user.id, tenantId, bucket)) {
+      if (!await authorizeUpload(adminClient, user.id, tenantId, bucket)) {
         return response(403, { error: "tenant_or_role_denied" });
       }
       if (!await consumeQuota(adminClient, fingerprint, "cleanup")) {
@@ -190,7 +185,7 @@ Deno.serve(async (request) => {
       return response(400, { error: "expense_receipt_reserved_folder" });
     }
 
-    if (!await authorizeUpload(adminClient, callerClient, user.id, tenantId, bucket)) {
+    if (!await authorizeUpload(adminClient, user.id, tenantId, bucket)) {
       return response(403, { error: "tenant_or_role_denied" });
     }
     if (!await consumeQuota(adminClient, fingerprint, "upload")) {

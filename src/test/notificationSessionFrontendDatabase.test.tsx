@@ -11,7 +11,7 @@ import {Toaster as Sonner} from '@/components/ui/sonner';
 import {useSonnerToast} from '@/hooks/useSonnerToast';
 import {toast as rawSonner} from 'sonner';
 import {GlobalAlert} from '@/components/GlobalAlert';
-import {PrivilegedMfaGate} from '@/components/auth/PrivilegedMfaGate';
+import {installPasswordSessionFixture} from './helpers/passwordSessionDatabase';
 import {saveTenantSelection} from '@/lib/tenantMemberships';
 import {cancelPendingAlert} from '@/hooks/useAlertStore';
 import {sessionReadersDatabase} from './helpers/sessionReadersDatabase';
@@ -27,7 +27,7 @@ function deferred(){let resolve!:()=>void;const promise=new Promise<void>(r=>{re
 type Kind='shadcn'|'sonner-success'|'sonner-error';
 let db:PGlite,query:QueryClient,gateway:ReturnType<typeof mfaSdkDatabaseGateway>,locks:ReturnType<typeof installTestWebLocks>;
 let ready:ReturnType<typeof deferred>,response:ReturnType<typeof deferred>;
-beforeAll(async()=>{({db}=await sessionReadersDatabase());},30000);
+beforeAll(async()=>{({db}=await sessionReadersDatabase());await installPasswordSessionFixture(db);},30000);
 afterAll(async()=>{await db?.close();vi.unstubAllGlobals();});
 beforeEach(async()=>{
  locks=installTestWebLocks();localStorage.clear();await db.exec('begin');await manualSettlement(db);await expenseMfaRole(db,'operator');
@@ -47,8 +47,8 @@ function Notices({kind}:{kind:Kind}){
  return <><output aria-label="actor notice">{user?.id??'none'}</output><output aria-label="tenant notice">{currentTenant?.id??'none'}</output>
   <button onClick={()=>notify('Aviso privado da conta A')}>Avisar QA</button><button onClick={()=>void readThenNotify()}>Ler e avisar QA</button><button onClick={()=>dismiss()}>Limpar QA</button><button onClick={()=>setCurrentTenantId(i.otherTenant)}>Trocar empresa QA</button></>;
 }
-const story=(kind:Kind,mfa=false)=><QueryClientProvider client={query}><Toaster/><Sonner/><GlobalAlert/><AuthProvider><TenantProvider>{mfa?<PrivilegedMfaGate><Notices kind={kind}/></PrivilegedMfaGate>:<Notices kind={kind}/>}</TenantProvider></AuthProvider></QueryClientProvider>;
-async function open(kind:Kind,mfa=false){render(story(kind,mfa));await waitFor(()=>expect(screen.getByLabelText('tenant notice')).toHaveTextContent(i.tenant));}
+const story=(kind:Kind)=><QueryClientProvider client={query}><Toaster/><Sonner/><GlobalAlert/><AuthProvider><TenantProvider><Notices kind={kind}/></TenantProvider></AuthProvider></QueryClientProvider>;
+async function open(kind:Kind){render(story(kind));await waitFor(()=>expect(screen.getByLabelText('tenant notice')).toHaveTextContent(i.tenant));}
 async function changeAccount(){await act(async()=>{await gateway.signIn(i.user);});await waitFor(()=>expect(screen.getByLabelText('actor notice')).toHaveTextContent(i.user));expect((await gateway.client.rpc('list_driver_settlements',{_tenant_id:i.tenant})).error?.message).toContain('forbidden');}
 describe('notification privacy with actual session providers, SDK and financial SQL',()=>{
  it.each<Kind>(['shadcn','sonner-success','sonner-error'])('removes an existing %s notification before another account uses the page',async kind=>{
@@ -77,10 +77,11 @@ describe('notification privacy with actual session providers, SDK and financial 
   await waitFor(()=>expect(screen.getByLabelText('tenant notice')).toHaveTextContent(i.otherTenant));expect((await gateway.client.rpc('list_driver_settlements',{_tenant_id:i.otherTenant})).data).toHaveProperty('total_count',0);
   await act(async()=>{response.resolve();await new Promise(resolve=>setTimeout(resolve,30));});expect(screen.queryAllByText('Acerto privado da conta A — '+kind)).toHaveLength(0);
  });
- it.each<Kind>(['shadcn','sonner-success','sonner-error'])('clears visible and pending %s notices when the same owner loses MFA',async kind=>{
-  await expenseMfaRole(db,'owner');await gateway.signIn(i.operator,'aal2');await open(kind,true);
+ it.each<Kind>(['shadcn','sonner-success','sonner-error'])('clears visible and pending %s notices when the same owner loses membership',async kind=>{
+  await expenseMfaRole(db,'owner');await gateway.signIn(i.operator,'aal1');await open(kind);
   fireEvent.click(screen.getByText('Ler e avisar QA'));await act(async()=>{await ready.promise;});fireEvent.click(screen.getByText('Avisar QA'));await screen.findAllByText('Aviso privado da conta A — '+kind);
-  await act(async()=>{await gateway.signIn(i.operator,'aal1');});await screen.findByText('Verificação em duas etapas');
+  await db.query('update tenant_memberships set active=false where user_id=$1',[i.operator]);
+  await act(async()=>{await gateway.signIn(i.operator,'aal1');});await waitFor(()=>expect(screen.getByLabelText('tenant notice')).toHaveTextContent('none'));
   await act(async()=>{response.resolve();await new Promise(resolve=>setTimeout(resolve,30));});expect(screen.queryAllByText('Aviso privado da conta A — '+kind)).toHaveLength(0);expect(screen.queryAllByText('Acerto privado da conta A — '+kind)).toHaveLength(0);
   expect((await gateway.client.rpc('list_driver_settlements',{_tenant_id:i.tenant})).error?.message).toContain('forbidden');
  });

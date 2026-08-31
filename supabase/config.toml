@@ -32,8 +32,9 @@ otp_expiry = 3600
 max_enrolled_factors = 5
 
 [auth.mfa.totp]
-enroll_enabled = true
-verify_enabled = true
+# Login uses email and password; authenticator enrollment is disabled.
+enroll_enabled = false
+verify_enabled = false
 
 [db]
 major_version = 17

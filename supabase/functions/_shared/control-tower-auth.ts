@@ -5,10 +5,6 @@ export async function canManageControlTower(client: SupabaseClient, tenant: stri
   const {data:membership,error} = await client.from('tenant_memberships').select('role')
     .eq('tenant_id',tenant).eq('user_id',actor).eq('active',true).maybeSingle();
   if(error || !membership || !['owner','admin','operator'].includes(membership.role)) return false;
-  if(['owner','admin'].includes(membership.role)) {
-    const assurance=await client.auth.mfa.getAuthenticatorAssuranceLevel();
-    if(assurance.error || assurance.data?.currentLevel!=='aal2') return false;
-  }
   const permission=await client.rpc('is_tenant_operator_or_admin',{_tenant_id:tenant});
   return !permission.error && permission.data===true;
 }

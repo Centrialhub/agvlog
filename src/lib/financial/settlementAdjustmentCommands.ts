@@ -24,7 +24,7 @@ export function parseSettlementAdjustmentResult(value:unknown,payload:Settlement
 export function adjustmentAmountCents(value:string){if(!/^\d{1,12}(?:[.,]\d{1,2})?$/.test(value.trim()))return null;
  const [whole,fraction='']=value.trim().replace(',','.').split('.');const amount=Number(whole)*100+Number(fraction.padEnd(2,'0'));return amount>0&&amount<=99999999999999?amount:null;}
 export function settlementAdjustmentError(cause:unknown){const message=cause instanceof Error?cause.message:isRecord(cause)?String(cause.message??''):'';
- if(/mfa_required/.test(message))return 'Confirme a autenticação de dois fatores para ajustar este acerto.';
+ if(/mfa_required/.test(message))return 'A política de acesso do servidor está desatualizada. Contate o administrador.';
  if(/not_authorized|permission denied/.test(message))return 'Sua sessão não tem permissão para ajustar este acerto.';
  if(/context_changed|could not obtain lock|lock timeout|deadlock/.test(message))return 'O acerto ou seus dados mudaram ou estão em uso. Atualize a conferência antes de confirmar.';
  if(/requires_reconciliation|source_scope|manual_expense_link/.test(message))return 'O acerto exige conciliação dos dados de origem antes deste ajuste.';

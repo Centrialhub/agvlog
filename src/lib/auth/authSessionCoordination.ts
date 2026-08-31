@@ -6,8 +6,8 @@ class AuthLockTimeout extends Error { readonly isAcquireTimeout = true; }
 const queues = new Map<string, Promise<unknown>>();
 
 // Never steal a held lock: its callback (and an Auth session write) can still run.
-// The in-process fallback keeps reads/logout usable. AAL1 MFA is disabled by the
-// gate without Web Locks, because this fallback cannot coordinate browser tabs.
+// The in-process fallback keeps login, session reads and logout usable in
+// browsers without Web Locks; shared locks still coordinate supported tabs.
 export async function authSessionLock<T>(name:string,timeout:number,work:()=>Promise<T>):Promise<T>{
   if(hasSharedAuthLock()){
     const controller=new AbortController();

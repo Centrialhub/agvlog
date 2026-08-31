@@ -60,7 +60,7 @@ describe('MFA expense frontend connected to real SQL',{timeout:15000},()=>{
  it('blocks AAL1 admin creation and resumes after MFA without losing the draft',async()=>{
   const source=await manualSettlement(db);await expenseMfaRole(db,'admin');mock.actor=i.operator;
   render(<Story source={source} type="settlement"/>);
-  await screen.findByText(/Confirme a autenticação em duas etapas/);
+  await screen.findByText(/A política de acesso do servidor está desatualizada/);
   fireEvent.change(screen.getByLabelText('Valor (R$)'),{target:{value:'25,50'}});
   expect(screen.getByRole('button',{name:'Registrar despesa'})).toBeDisabled();expect(calls()).toHaveLength(0);
   mock.aal='aal2';fireEvent.click(screen.getByRole('button',{name:'Atualizar contexto da despesa'}));
@@ -71,14 +71,14 @@ describe('MFA expense frontend connected to real SQL',{timeout:15000},()=>{
  it('disables stale context after revalidation denies MFA and keeps typed fields',async()=>{
   const source=await manualSettlement(db);await expenseMfaRole(db,'admin');mock.actor=i.operator;mock.aal='aal2';
   render(<Story source={source} type="settlement"/>);await fill();mock.aal='aal1';
-  fireEvent.click(screen.getByRole('button',{name:'Atualizar contexto da despesa'}));await screen.findByText(/Confirme a autenticação em duas etapas/);
+  fireEvent.click(screen.getByRole('button',{name:'Atualizar contexto da despesa'}));await screen.findByText(/A política de acesso do servidor está desatualizada/);
   expect(screen.getByRole('button',{name:'Registrar despesa'})).toBeDisabled();expect(screen.getByLabelText('Valor (R$)')).toHaveValue('25,50');
   expect(screen.queryByText(/Motorista:/)).not.toBeInTheDocument();expect(calls()).toHaveLength(0);
  });
  it('rejects a downgrade between form preparation and submission without a partial expense',async()=>{
   const source=await manualSettlement(db);await expenseMfaRole(db,'admin');mock.actor=i.operator;mock.aal='aal2';
   render(<Story source={source} type="settlement"/>);await fill();fireEvent.change(screen.getByLabelText('Centro de custo'),{target:{value:'operation'}});mock.aal='aal1';
-  fireEvent.click(screen.getByRole('button',{name:'Registrar despesa'}));await screen.findByText(/Confirme a autenticação em duas etapas/);
+  fireEvent.click(screen.getByRole('button',{name:'Registrar despesa'}));await screen.findByText(/A política de acesso do servidor está desatualizada/);
   expect(screen.queryByText('Despesa registrada e aguardando aprovação.')).not.toBeInTheDocument();
   expect((await db.query<{n:number}>('select count(*)::int n from driver_expenses')).rows[0].n).toBe(0);
   expect(screen.getByLabelText('Valor (R$)')).toHaveValue('25,50');
@@ -89,7 +89,7 @@ describe('MFA expense frontend connected to real SQL',{timeout:15000},()=>{
   fireEvent.click(screen.getByRole('button',{name:'Registrar despesa'}));await screen.findByText('Resposta perdida após registro no banco');
   const original=pendingExpenseCreation(localStorage,i.tenant,i.operator)!.payload;view.unmount();client.clear();await transport;
   mock.aal='aal1';render(<Story form={false}/>);fireEvent.click(screen.getByRole('button',{name:'Recuperar despesa'}));
-  await screen.findByText(/Confirme a autenticação em duas etapas/);expect(pendingExpenseCreation(localStorage,i.tenant,i.operator)!.payload).toEqual(original);
+  await screen.findByText(/A política de acesso do servidor está desatualizada/);expect(pendingExpenseCreation(localStorage,i.tenant,i.operator)!.payload).toEqual(original);
   mock.aal='aal2';fireEvent.click(screen.getByRole('button',{name:'Recuperar despesa'}));await screen.findByText('Despesa recuperada e confirmada pelo banco.');
   expect(calls()).toHaveLength(3);expect(calls().every(([,args])=>JSON.stringify(args._payload)===JSON.stringify(original))).toBe(true);
   expect((await db.query<{n:number}>('select count(*)::int n from driver_expenses')).rows[0].n).toBe(1);
@@ -97,7 +97,7 @@ describe('MFA expense frontend connected to real SQL',{timeout:15000},()=>{
  it('replaces cached driver history with an error after promotion without MFA',async()=>{
   await creationCommand(db,await creationPayload(db,trip));render(<Story page/>);await screen.findByText('1 despesas · página 1');
   await transport;await expenseMfaRole(db,'admin',i.user);await client.invalidateQueries();
-  await screen.findByText(/Falha ao consultar despesas: Confirme a autenticação/);expect(screen.queryByText('1 despesas · página 1')).not.toBeInTheDocument();
+  await screen.findByText(/Falha ao consultar despesas: A política de acesso do servidor/);expect(screen.queryByText('1 despesas · página 1')).not.toBeInTheDocument();
  });
  it('shows an AAL2 operation expense reviewed by the same admin in driver history',async()=>{
   const source=await manualSettlement(db);await expenseMfaRole(db,'admin');mock.actor=i.operator;mock.aal='aal2';
