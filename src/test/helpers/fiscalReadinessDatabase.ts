@@ -12,10 +12,17 @@ export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof
   if(!present){await db.exec(declaration);await db.exec('alter table public.'+table+' add primary key(id)');}
   for(const match of baseline.matchAll(new RegExp('ALTER TABLE ONLY public\\.'+table+'\\n    ALTER COLUMN[\\s\\S]*?;','g')))await db.exec(match[0]);
  }
+ for(const table of ['cte_batches','cte_documents']){
+  const block=baseline.match(new RegExp('ALTER TABLE ONLY public\\.'+table+'\\n    ADD CONSTRAINT[\\s\\S]*?;'))?.[0];
+  if(!block)throw new Error('Missing fiscal catalog constraints '+table);
+  const checks=block.split('\n').filter(line=>line.includes(' CHECK ')).map(line=>line.trim().replace(/[,;]$/,''));
+  await db.exec('alter table public.'+table+' '+checks.join(',')+';');
+ }
  await db.exec('grant all on all tables in schema public to service_role');
  await db.exec(readFileSync('supabase/migrations/'+fiscalMigration,'utf8'));
  await db.exec(readFileSync('supabase/migrations/20260831153911_reconcile_unsent_fiscal_dispatch.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260831160035_reconcile_provider_rejections.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20260831160938_reconcile_authorized_cte_catalog.sql','utf8'));
  if(options.invoiceGate!==false) await db.exec(readFileSync('supabase/migrations/'+fiscalInvoiceGateMigration,'utf8'));
  const emitter='fa100000-0000-4000-8000-000000000001';
  await db.query("insert into tenant_emitters(id,tenant_id,cnpj,razao_social,active) values($1,$2,'11222333000181','Emitente QA',true)",[emitter,i.tenant]);
