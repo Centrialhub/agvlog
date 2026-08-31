@@ -194,13 +194,14 @@ Deno.serve(withFiscalCors(async (req) => {
 
       if(emission.dispatch_key) {
         const confirmation=await admin.rpc('complete_hub_fiscal_emission',{
-          _tenant:doc.tenant_id,_emission:emission.id,_response:{document:{...d,id:d.id||emission.hub_document_id}},_http_status:status,
+          _tenant:doc.tenant_id,_emission:emission.id,_response:{...(data as Record<string,unknown>),document:{...d,id:d.id||emission.hub_document_id}},_http_status:status,
         });
         if(confirmation.error||confirmation.data?.confirmed!==true){results.push({id:doc.id,outcome:'reconciliation_required'});continue;}
+        const committedOutcome=classifyFiscalProviderStatus(confirmation.data.status);
         const checked=await admin.from('nfse_documents').update({last_status_check_at:new Date().toISOString(),status_check_attempts:(doc.status_check_attempts||0)+1,last_status_response:safeSnapshot}).eq('id',doc.id).eq('tenant_id',doc.tenant_id);
         if(checked.error)throw checked.error;
-        if(!outcome && shouldDeadLetter(doc,true))await terminalizeFiscalPoll(admin,{tenantId:doc.tenant_id,documentKind:'nfse',documentId:doc.id,documentNumber:doc.rps_number,reasonCode:'status_timeout',attemptCount:(doc.status_check_attempts||0)+1,firstSeenAt:doc.created_at,context:safeSnapshot});
-        results.push({id:doc.id,outcome:outcome||'pending'});continue;
+        if(!committedOutcome && shouldDeadLetter(doc,true))await terminalizeFiscalPoll(admin,{tenantId:doc.tenant_id,documentKind:'nfse',documentId:doc.id,documentNumber:doc.rps_number,reasonCode:'status_timeout',attemptCount:(doc.status_check_attempts||0)+1,firstSeenAt:doc.created_at,context:safeSnapshot});
+        results.push({id:doc.id,outcome:committedOutcome||'pending'});continue;
       }
 
       // Histórico: guarda a resposta bruta para conferência posterior.

@@ -407,7 +407,12 @@ Deno.serve(withFiscalCors(async (req) => {
         _response:{...response,document:{...doc,id:doc.id||found.data.hub_document_id}},
       });
       if(completed.error||completed.data?.confirmed!==true)return json(409,{success:false,error:{code:'FISCAL_RECONCILIATION_REQUIRED',message:'Não foi possível confirmar o estado fiscal. Consulte a operação existente; não reemita.'}});
-      return json(status,{success:status<400,hub:{...response,document:{...doc,status:completed.data.status}}});
+      const current=await admin.from('hub_fiscal_emissions').select('*').eq('tenant_id',tenantId).eq('id',found.data.id).single();
+      if(current.error||!current.data)throw new Error('Falha ao ler o resultado fiscal confirmado.');
+      const e=current.data;
+      return json(200,{success:true,hub:{document:{...doc,id:e.hub_document_id,status:e.status,
+        accessKey:e.access_key,authorizationProtocol:e.authorization_protocol,number:e.number,series:e.series,
+        message:e.message,pdfUrl:e.pdf_url,xmlUrl:e.xml_url}}});
     }
 
     switch (action) {

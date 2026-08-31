@@ -379,6 +379,10 @@ export function useIssueNFSe(selectedEnvironment: HubEnvironment) {
       else if (data?.status === 'rejected') toast.error(`Rejeitada: ${data?.message ?? ''}`);
     },
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao emitir NFS-e')),
+    onSettled: () => {
+      // A rejection/timeout may have committed a reservation or its release.
+      for (const key of ['nfse','billing_documents','fiscal_documents']) qc.invalidateQueries({queryKey:[key]});
+    },
   });
 }
 

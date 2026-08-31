@@ -31,14 +31,12 @@ export async function dispatchFiscalEmission(input: DispatchInput) {
  if(claim.dispatch===true){
   try {result=await call('POST','/hub_documents_emit',{type},emission.request_payload);}
   catch {
-   await admin.rpc('complete_hub_fiscal_emission',{_tenant:tenant,_emission:emission.id,
-    _response:{error:{code:'TRANSPORT_UNCERTAIN'}},_http_status:503});
-   return uncertain(emission.id);
+   result={status:503,data:{error:{code:'TRANSPORT_UNCERTAIN'}}};
   }
  } else if(emission.hub_document_id){
   // GET only: refresh provider state, then repair all local mirrors in one transaction.
   try { result=await call('GET','/hub_documents_get',{id:emission.hub_document_id}); }
-  catch {return uncertain(emission.id);}
+  catch {result={status:503,data:{error:{code:'TRANSPORT_UNCERTAIN'}}};}
  } else {
   return uncertain(emission.id);
  }
@@ -50,7 +48,7 @@ export async function dispatchFiscalEmission(input: DispatchInput) {
  const receiptMatches = record(receipt).idIntegracao===emission.request_payload.idIntegracao
   && record(receipt).environment===environment && record(receipt).emitterCnpj===emission.request_payload.emitterCnpj;
  if((result.status<400 || receiptMatches) && typeof record(receipt).id==='string' && record(receipt).id) {
-  const received=await admin.from('hub_fiscal_emissions').update({hub_document_id:record(receipt).id,last_response:record(result.data)})
+  const received=await admin.from('hub_fiscal_emissions').update({hub_document_id:record(receipt).id})
    .eq('id',emission.id).eq('tenant_id',tenant).select('id').single();
   if(received.error||!received.data)return uncertain(emission.id);
  }

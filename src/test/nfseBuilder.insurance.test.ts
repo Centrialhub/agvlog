@@ -79,3 +79,5 @@ describe('NFS-e — ambiente fiscal obrigatório e consistente', () => {
     expect(()=>buildNFSeEmitPayload({doc:baseDoc,emitter:{...emitter,im:null},environment:'homologation'})).toThrow(/inscrição municipal/);
   });
 });
+
+it.each(['123','XX', '123456789012345'])('blocks malformed payer identifier %s before dispatch',cliente_cnpj=>{expect(()=>buildNFSeEmitPayload({doc:{...baseDoc,cliente_cnpj},emitter,environment:'production'})).toThrow('CNPJ/CPF');});

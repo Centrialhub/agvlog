@@ -18,11 +18,14 @@ export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof
   const checks=block.split('\n').filter(line=>line.includes(' CHECK ')).map(line=>line.trim().replace(/[,;]$/,''));
   await db.exec('alter table public.'+table+' '+checks.join(',')+';');
  }
+ const deadLetters=readFileSync('supabase/migrations/20260826143000_fiscal_poll_dead_letters.sql','utf8');
+ await db.exec(deadLetters.slice(0,deadLetters.indexOf('alter table public.fiscal_poll_dead_letters enable row level security')));
  await db.exec('grant all on all tables in schema public to service_role');
  await db.exec(readFileSync('supabase/migrations/'+fiscalMigration,'utf8'));
  await db.exec(readFileSync('supabase/migrations/20260831153911_reconcile_unsent_fiscal_dispatch.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260831160035_reconcile_provider_rejections.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260831160938_reconcile_authorized_cte_catalog.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20260831161743_preserve_terminal_fiscal_receipts.sql','utf8'));
  if(options.invoiceGate!==false) await db.exec(readFileSync('supabase/migrations/'+fiscalInvoiceGateMigration,'utf8'));
  const emitter='fa100000-0000-4000-8000-000000000001';
  await db.query("insert into tenant_emitters(id,tenant_id,cnpj,razao_social,active) values($1,$2,'11222333000181','Emitente QA',true)",[emitter,i.tenant]);

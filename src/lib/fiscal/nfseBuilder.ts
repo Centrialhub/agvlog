@@ -151,7 +151,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl }:
   const missing: string[] = [];
 
   const tomadorDoc = normalizeCpfCnpj(doc?.cliente_cnpj);
-  if (!doc?.cliente_cnpj) missing.push('CNPJ/CPF do tomador');
+  if (!tomadorDoc) missing.push('CNPJ/CPF válido do tomador');
   const tomadorNome = fiscalText(doc?.cliente_nome, 150);
   if (!tomadorNome) missing.push('razão social do tomador');
 

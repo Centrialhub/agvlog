@@ -11,8 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Send, ArrowRight, ArrowLeft, FileText } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
-import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normalizePhone } from '@/lib/fiscal/fiscalAddress';
-import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
+import { normalizeCep, normalizeIbgeCity } from '@/lib/fiscal/fiscalAddress';
+import { resolveNFSeTomador, type TomadorData } from '@/lib/fiscal/nfseTomador';
 import { useClients } from '@/hooks/useClients';
 import { useEmitters } from '@/hooks/useEmitters';
 import { useCreateNFSe, useIssueNFSe, type NFSeDoc } from '@/hooks/useNFSe';
@@ -23,7 +23,6 @@ import { hasInsuranceData } from '@/lib/fiscal/insuranceText';
 import { hasInsuranceProfile } from '@/lib/fiscal/insuranceProfile';
 import { Calculator, Save } from 'lucide-react';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
-import { fiscalDocumentText } from '@/lib/fiscal/fiscalDocumentContact';
 import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
 import type { HubEnvironment } from '@/lib/fiscal/hubFiscalClient';
 
@@ -34,24 +33,6 @@ interface Props {
 
 const SENTINEL_NONE = '__none__';
 
-interface TomadorData {
-  nome: string;
-  cnpj: string;
-  ie: string;
-  im: string;
-  endereco: string;
-  numero: string;
-  complemento: string;
-  bairro: string;
-  email: string;
-  telefone: string;
-  municipio: string;
-  municipio_cod: string;
-  uf: string;
-  cep: string;
-  cliente_id: string | null;
-}
-
 function num(value: unknown) { return Number(value ?? 0) || 0; }
 function onlyDigits(value: unknown) { return String(value ?? '').replace(/\D/g, ''); }
 
@@ -59,10 +40,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error && error.message
     ? error.message
     : 'Falha ao processar emissão(ões)';
-}
-
-function partyName(document: FiscalDocument, mode: 'remetente' | 'destinatario'): string {
-  return (mode === 'remetente' ? document.remitter : document.recipient) || '';
 }
 
 function partyCnpj(document: FiscalDocument, mode: 'remetente' | 'destinatario'): string {
@@ -248,42 +225,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   // Deriva tomador a partir das NFs selecionadas
   const tomador = useMemo(() => {
     if (!selectedDocs.length) return null;
-    const first = selectedDocs[0];
-    
-    // Tenta casar com um cliente cadastrado pelo CNPJ para pegar endereço/IE
-    const cnpjDigits = onlyDigits(partyCnpj(first, tomadorMode));
-    const match = clients.find((client) => onlyDigits(client.tax_id) === cnpjDigits);
-    
-    // Fallback para os dados da própria NF (OCR/XML) quando o cadastro está incompleto
-    const municipio = (match?.address_city || first.recipient_city || fiscalDocumentText(first, 'remitter_city')).trim();
-    const uf = (match?.address_state || first.recipient_state || fiscalDocumentText(first, 'remitter_state')).trim();
-    const zip = (match?.address_zip || fiscalDocumentText(first, 'recipient_zip', 'remitter_zip', 'recipient_address_zip', 'zip')).trim();
-    // CEP só é enviado quando realmente existe: "00000000" faz a prefeitura
-    // rejeitar a nota por CEP inexistente / fora do município.
-    const cepNorm = normalizeCep(zip);
-    const municipioCod =
-      normalizeIbgeCity(match?.address_city_ibge_code) ||
-      normalizeIbgeCity(fiscalDocumentText(first, 'recipient_cod_municipio')) ||
-      normalizeIbgeCity(fiscalDocumentText(first, 'remitter_cod_municipio')) ||
-      normalizeIbgeCity(municipio) || '';
-
-    return {
-      nome: match?.company_name || partyName(first, tomadorMode),
-      cnpj: cnpjDigits,
-      ie: sanitizeIe(match?.state_registration) || '',
-      im: match?.municipal_registration || '',
-      endereco: match?.address_street || fiscalDocumentText(first, 'recipient_address', 'remitter_address'),
-      numero: match?.address_number || fiscalDocumentText(first, 'recipient_number', 'remitter_number'),
-      complemento: match?.address_complement || fiscalDocumentText(first, 'recipient_complement', 'remitter_complement'),
-      bairro: match?.address_neighborhood || first.recipient_neighborhood || fiscalDocumentText(first, 'remitter_neighborhood'),
-      email: match?.email || fiscalDocumentText(first, 'recipient_email', 'remitter_email'),
-      telefone: normalizePhone(match?.phone || fiscalDocumentText(first, 'recipient_phone', 'remitter_phone')) || '',
-      municipio: normalizeCityName(municipio) || '',
-      municipio_cod: municipioCod,
-      uf: normalizeUf(uf) || '',
-      cep: cepNorm || '',
-      cliente_id: match?.id || null,
-    };
+    return resolveNFSeTomador(selectedDocs[0],tomadorMode,clients);
   }, [selectedDocs, tomadorMode, clients]);
 
   // Sincroniza o manualTomador quando o tomador derivado muda e o usuário NÃO está editando manualmente
@@ -384,38 +326,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         toast.info(`Iniciando emissão individual de ${selectedDocs.length} nota(s)...`);
         
         for (const d of selectedDocs) {
-          // Precisamos derivar o tomador para CADA nota
-          const cnpjDigits = onlyDigits(partyCnpj(d, tomadorMode));
-          const match = clients.find((client) => onlyDigits(client.tax_id) === cnpjDigits);
-          
-          const municipio = (match?.address_city || d.recipient_city || fiscalDocumentText(d, 'remitter_city')).trim();
-          const uf = (match?.address_state || d.recipient_state || fiscalDocumentText(d, 'remitter_state')).trim();
-          const zip = (match?.address_zip || fiscalDocumentText(d, 'recipient_zip', 'remitter_zip', 'recipient_address_zip', 'zip')).trim();
-          const municipioCod =
-            normalizeIbgeCity(match?.address_city_ibge_code) ||
-            normalizeIbgeCity(fiscalDocumentText(d, 'recipient_cod_municipio')) ||
-            normalizeIbgeCity(fiscalDocumentText(d, 'remitter_cod_municipio')) ||
-            normalizeIbgeCity(municipio);
-
-          const docTomador = {
-            nome: match?.company_name || partyName(d, tomadorMode),
-            cnpj: cnpjDigits,
-            ie: sanitizeIe(match?.state_registration) || '',
-            im: match?.municipal_registration || '',
-            endereco: match?.address_street || fiscalDocumentText(d, 'recipient_address', 'remitter_address'),
-            numero: match?.address_number || fiscalDocumentText(d, 'recipient_number', 'remitter_number'),
-            complemento: match?.address_complement || fiscalDocumentText(d, 'recipient_complement', 'remitter_complement'),
-            bairro: match?.address_neighborhood || d.recipient_neighborhood || fiscalDocumentText(d, 'remitter_neighborhood'),
-            email: match?.email || fiscalDocumentText(d, 'recipient_email', 'remitter_email'),
-            telefone: normalizePhone(match?.phone || fiscalDocumentText(d, 'recipient_phone', 'remitter_phone')) || '',
-            municipio: normalizeCityName(municipio) || '',
-            municipio_cod: municipioCod,
-            uf: normalizeUf(uf) || '',
-            cep: normalizeCep(zip) || '',
-            cliente_id: match?.id || null,
-          };
-
-          if (!docTomador.cnpj) continue;
+          const docTomador = selectedDocs.length===1 && manualTomador ? manualTomador : resolveNFSeTomador(d,tomadorMode,clients);
+          if (!docTomador.cnpj) throw new Error('Tomador sem CNPJ/CPF na NF '+d.invoice_number);
 
           const docValue = valorPorDoc(d);
           const docBase = +(Math.max(0, docValue - (num(valorDeducoes) / selectedDocs.length))).toFixed(2);

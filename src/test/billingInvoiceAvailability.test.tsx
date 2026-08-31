@@ -229,3 +229,15 @@ it('renders precisely the 11 local NFS-e sources and restores them after clearin
   const restoredCells = new Set(Array.from(document.querySelectorAll('td')).map(cell => cell.textContent?.trim()));
   for (const row of local) expect(restoredCells.has(String(row.invoice_number))).toBe(true);
 });
+
+it.each(['cte','nfse'] as const)('removes an authorized %s source from every list, including explicit searches',async type=>{
+ state.rows.fiscal_documents=[invoice('447165',{recipient_city:type==='cte'?'Coracao de Jesus':'Montes Claros'})];
+ const {result}=renderHook(()=>({cte:useBillingDocuments({onlySpecificInvoices:['447165']},'cte'),nfse:useBillingDocuments({},'nfse'),summary:usePendingInvoices()}),{wrapper:Wrapper});
+ await waitFor(()=>expect(result.current[type].data).toHaveLength(1));
+ state.rows.fiscal_documents[0][type+'_emitted_at']='2026-08-31T16:12:48Z';state.rows[type+'_documents']=[emission('270','447165',{status:type==='cte'?'authorized':'issued'})];
+ await act(async()=>{await client.invalidateQueries({queryKey:['billing_documents']});});
+ await waitFor(()=>{expect(result.current.cte.data).toHaveLength(0);expect(result.current.nfse.data).toHaveLength(0);expect(result.current.summary.data.count).toBe(0);});
+ state.rows.fiscal_documents[0][type+'_emitted_at']=null;
+ await act(async()=>{await client.invalidateQueries({queryKey:['billing_documents']});});
+ expect(result.current[type].data).toHaveLength(0);
+});

@@ -19,8 +19,8 @@ export function fiscalServiceAdapter(db:Db,options:{failConfirmation?:boolean}={
   const filters:Record<string,unknown>={};let update:Record<string,unknown>|null=null;
   const builder={select:()=>builder,eq:(k:string,v:unknown)=>{filters[k]=v;return builder;},update:(v:Record<string,unknown>)=>{update=v;return builder;},
    single:async()=>{
-    try{const result=update?await serviceFiscal(db,'update hub_fiscal_emissions set hub_document_id=$3,last_response=$4::jsonb where id=$1 and tenant_id=$2 returning *',
-     [filters.id,filters.tenant_id,update.hub_document_id,JSON.stringify(update.last_response)]):await serviceFiscal(db,'select * from hub_fiscal_emissions where id=$1 and tenant_id=$2',[filters.id,filters.tenant_id]);
+    try{const result=update?await serviceFiscal(db,'update hub_fiscal_emissions set hub_document_id=$3,last_response=case when $4::jsonb is null then last_response else $4::jsonb end where id=$1 and tenant_id=$2 returning *',
+     [filters.id,filters.tenant_id,update.hub_document_id,update.last_response===undefined?null:JSON.stringify(update.last_response)]):await serviceFiscal(db,'select * from hub_fiscal_emissions where id=$1 and tenant_id=$2',[filters.id,filters.tenant_id]);
      return {data:result.rows[0],error:null};
     }catch(error){return {data:null,error:{message:String(error)}};}
    }};
