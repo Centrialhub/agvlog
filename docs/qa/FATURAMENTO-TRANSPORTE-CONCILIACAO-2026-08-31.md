@@ -42,3 +42,15 @@ findRegistryClient priorizava client_id sobre CNPJ e resolveParty preservava o C
 A operação enviada continua preservada sem nova autorização de retomada. Não substituir seu snapshot nem reenviar automaticamente. O erro genérico do Hub não fornece cStat numérico para encerramento automático da conciliação; falta confirmar o estado definitivo no provedor antes de corrigir/reemitir essa operação. O cadastro local corrigido pela seleção não substitui consulta oficial da situação estadual.
 
 Consulta GET final (pg_net 41074): HTTP 200, success=true, exatamente um documento para a referência, id 8783b677-625d-41dd-bd25-cff720e0b444, status error, ambiente production. O AGV preserva hasProviderReference=true e não concede outro POST.
+
+## Correção da conciliação de rejeição — 16:02 UTC
+
+Após o polling, o Hub ainda devolvia status error com raw_response_json.managersaas.parsed.exceptionClass=EspdManCTeRejeicaoEnvioException, mas complete_hub_fiscal_emission convertia qualquer estado desconhecido em processing. Isso fez o AGV apresentar transmitting e voltar a marcar a NF como consumida, apesar da rejeição conhecida.
+
+A migration 20260831160035_reconcile_provider_rejections substitui esse fallback: rejeições CT-e com essa classe explícita tornam-se rejected; apenas estados transitórios conhecidos tornam-se processing. Erros genéricos/estados desconhecidos ficam pendentes de conciliação. Uma rejeição tipada recebida com HTTP de erro exige correspondência de referência, ambiente e CNPJ emitente. Respostas tardias não rebaixam autorização já registrada. Permissões service_role e SECURITY INVOKER foram preservadas.
+
+Validação real via polling autenticado existente (pg_net 41096): HTTP 200, checked=1, outcome=rejected. Ledger status=rejected/dispatch_state=recorded; fiscal_documents.status=rejected e sefaz_status=rejected, com o motivo de IE mantido. NF 447165 com cte_emitted_at, cte_emitted_outbound_id e nfse_emitted_document_id nulos. Mesmo hub_document_id 8783b677-625d-41dd-bd25-cff720e0b444; nenhum novo POST de emissão.
+
+Seis testes de banco novos cobrem o caso real, erro HTTP com identidade vinculada, erro genérico/estado desconhecido, referência alheia, rejeição tardia após autorização e preparação após rejeição sem emissão automática. Testes fiscais direcionados: 36/36 passaram. Advisor sem apontamentos para complete_hub_fiscal_emission.
+
+Verificação final: TypeScript e lint passaram. Na suíte de 2.730 testes, 2.729 passaram e a checagem estática de diálogos identificou o nome do helper de teste confirm como possível diálogo nativo. O helper foi renomeado para reconcileResponse; a checagem de diálogos e os seis testes de rejeição passaram novamente (9/9). Nenhuma lógica de produção foi modificada nessa correção do teste. Verificação remota final: um único registro de emissão, status rejected, dispatch_state recorded, fora da fila automática de polling; papéis anon/authenticated sem EXECUTE e service_role com EXECUTE.
