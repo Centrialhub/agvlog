@@ -46,6 +46,7 @@ import {
   fillPartyFieldsFromRegistry,
   resolveParty,
 } from '@/lib/fiscal/partyRegistry';
+import { consultOfficialTaxRegistry, validateOfficialParty } from '@/lib/fiscal/taxRegistryClient';
 
 /** Recalcula base/valor do ICMS respeitando o regime embutido (por dentro). */
 function recalcIcms(
@@ -953,7 +954,54 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     }
   }
 
-  function handleTransmitClick() {
+
+  async function validateOfficialRegistryBeforeTransmit(): Promise<string[]> {
+    if (activeEnvironment !== 'production') return [];
+    const errors: string[] = [];
+    const checked = new Map<string, Awaited<ReturnType<typeof consultOfficialTaxRegistry>>>();
+    const clientByCnpj = new Map(clients.map(client => [onlyDigits(client.tax_id || ''), client]));
+
+    for (const item of items) {
+      const emitter = selectActiveEmitterById(emitters, item.emitterId);
+      // Existing tenants opt in when their own official profile is applied.
+      if (!emitter?.registry_verified_at) continue;
+      const parties = [
+        {
+          role: 'destinatário', cnpj: item.recipientCnpj, ie: item.recipientIe,
+          uf: item.recipientState,
+        },
+        {
+          role: 'remetente', cnpj: item.remitterCnpj, ie: item.remitterIe,
+          uf: clientByCnpj.get(onlyDigits(item.remitterCnpj))?.address_state || '',
+        },
+      ];
+      for (const party of parties) {
+        const cnpj = onlyDigits(party.cnpj);
+        const uf = String(party.uf || '').toUpperCase();
+        if (cnpj.length !== 14 || !uf) continue;
+        const key = `${item.emitterId}:${uf}:${cnpj}`;
+        try {
+          let result = checked.get(key);
+          if (!result) {
+            result = await consultOfficialTaxRegistry({
+              emitterId: item.emitterId, uf, lookupValue: cnpj,
+            });
+            checked.set(key, result);
+          }
+          const problem = validateOfficialParty({ cnpj, stateRegistration: party.ie }, result.profiles);
+          if (problem) {
+            const notes = item.invoices.map(invoice => invoice.number).filter(Boolean).join(', ');
+            errors.push(`NF ${notes || 'sem número'} · ${party.role}: ${problem}`);
+          }
+        } catch (error) {
+          errors.push(`${party.role} ${cnpj}: ${error instanceof Error ? error.message : 'falha na consulta oficial'}`);
+        }
+      }
+    }
+    return [...new Set(errors)];
+  }
+
+  async function handleTransmitClick() {
     const localDestinations = items.filter((item) => {
       const emitter = selectActiveEmitterById(emitters, item.emitterId);
       return emitter && isSameFiscalMunicipality(
@@ -972,7 +1020,19 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       });
       return;
     }
-    void transmit();
+    setTransmitting(true);
+    try {
+      const registryErrors = await validateOfficialRegistryBeforeTransmit();
+      if (registryErrors.length > 0) {
+        toast.error('Cadastro fiscal oficial divergente — transmissão bloqueada.', {
+          description: registryErrors.slice(0, 4).join(' • '), duration: 12000,
+        });
+        return;
+      }
+      await transmit();
+    } finally {
+      setTransmitting(false);
+    }
   }
 
   if (!open || items.length === 0) {

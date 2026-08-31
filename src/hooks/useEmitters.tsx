@@ -38,6 +38,10 @@ export interface TenantEmitter {
   active: boolean;
   created_at: string;
   updated_at: string;
+  registry_verified_at?: string | null;
+  registry_source?: string | null;
+  registry_status?: string | null;
+  registry_profile_id?: string | null;
 }
 
 export type HubFiscalDocumentScope = 'all' | 'nfse' | 'cte' | 'nfe' | 'nfce' | 'mdfe' | 'nfcom';

@@ -11,9 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Loader2, DollarSign, AlertCircle, RefreshCcw } from 'lucide-react';
+import { Search, Loader2, DollarSign, AlertCircle, RefreshCcw, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { useDefaultEmitter } from '@/hooks/useEmitters';
+import { applyOfficialTaxProfile, consultOfficialTaxRegistry } from '@/lib/fiscal/taxRegistryClient';
 
 const UF_OPTIONS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
 
@@ -71,6 +73,7 @@ export function ClientFormDialog({
   const [lookupLoading, setLookupLoading] = useState(false);
   const { toast } = useToast();
   const { currentTenant } = useTenant();
+  const { data: defaultEmitter } = useDefaultEmitter();
 
   useEffect(() => {
     const base = clientToForm(client);
@@ -109,6 +112,63 @@ export function ClientFormDialog({
     },
     enabled: open && !!currentTenant && (!!client?.id || !!form.payer_group),
   });
+
+
+  const lookupOfficialRegistry = async () => {
+    const cnpj = onlyDigits(form.tax_id);
+    const uf = String(form.address_state || '').trim().toUpperCase();
+    if (cnpj.length !== 14) {
+      toast({ title: 'CNPJ inválido', description: 'Informe os 14 dígitos do estabelecimento.', variant: 'destructive' });
+      return;
+    }
+    if (!uf) {
+      toast({ title: 'UF obrigatória', description: 'Informe a UF do endereço para consultar a SEFAZ.', variant: 'destructive' });
+      return;
+    }
+    if (!defaultEmitter) {
+      toast({ title: 'Emitente fiscal ausente', description: 'Cadastre um emitente ativo com certificado A1.', variant: 'destructive' });
+      return;
+    }
+    setLookupLoading(true);
+    try {
+      const result = await consultOfficialTaxRegistry({
+        emitterId: defaultEmitter.id, uf, lookupValue: cnpj, forceRefresh: true,
+      });
+      const profile = result.profiles.find(item => onlyDigits(item.cnpj) === cnpj);
+      if (!profile) throw new Error(result.reason || 'Estabelecimento não localizado no cadastro oficial');
+      if (client?.id) {
+        await applyOfficialTaxProfile({
+          emitterId: defaultEmitter.id, queryId: result.query_id, registryId: profile.id,
+          targetTable: 'clients', targetId: client.id,
+        });
+      }
+      const address = profile.official_address;
+      setForm(previous => ({
+        ...previous,
+        company_name: profile.trade_name || profile.legal_name || previous.company_name,
+        legal_name: profile.legal_name || previous.legal_name,
+        trade_name: profile.trade_name || previous.trade_name,
+        state_registration: profile.state_registration || previous.state_registration,
+        ie_indicator: profile.registry_status === 'active' ? 'Contribuinte ICMS' : previous.ie_indicator,
+        address_street: address.street || previous.address_street,
+        address_number: address.number || previous.address_number,
+        address_complement: address.complement || previous.address_complement,
+        address_neighborhood: address.neighborhood || previous.address_neighborhood,
+        address_city: address.city || previous.address_city,
+        address_state: address.state || previous.address_state,
+        address_zip: address.zip || previous.address_zip,
+        address_city_ibge_code: address.cityCode || previous.address_city_ibge_code,
+      }));
+      toast({
+        title: client?.id ? 'Cadastro oficial aplicado' : 'Dados oficiais preenchidos',
+        description: `${profile.legal_name || profile.trade_name} · IE ${profile.state_registration || 'não informada'}`,
+      });
+    } catch (error) {
+      toast({ title: 'Falha na consulta oficial', description: error instanceof Error ? error.message : 'Erro desconhecido', variant: 'destructive' });
+    } finally {
+      setLookupLoading(false);
+    }
+  };
 
   // Busca CNPJ na BrasilAPI (cruza dados e preenche campos)
   const lookupCnpj = async () => {
@@ -221,6 +281,9 @@ export function ClientFormDialog({
                   <Input value={form.tax_id} onChange={e => set('tax_id', e.target.value)} placeholder="00.000.000/0000-00" />
                   <Button type="button" variant="outline" size="icon" onClick={lookupCnpj} disabled={lookupLoading} title="Consultar CNPJ na Receita">
                     {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                  <Button type="button" variant="outline" size="icon" onClick={lookupOfficialRegistry} disabled={lookupLoading} title="Consultar cadastro oficial na SEFAZ">
+                    <ShieldCheck className="h-4 w-4" />
                   </Button>
                 </div>
               </div>

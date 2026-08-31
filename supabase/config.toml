@@ -97,6 +97,12 @@ verify_jwt = false
 [functions.hub-fiscal-credential-save]
 verify_jwt = true
 
+[functions.fiscal-certificate-manage]
+verify_jwt = true
+
+[functions.tax-registry-consult]
+verify_jwt = true
+
 [functions.create-team-member]
 verify_jwt = true
 

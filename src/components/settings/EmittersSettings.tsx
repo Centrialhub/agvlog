@@ -1,5 +1,5 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   useEmitters, useSaveEmitter, useDeleteEmitter, useMakeDefaultEmitter,
   useHubCredentials, useSaveHubCredential, useSaveHubCredentialToken, useDeleteHubCredential,
@@ -14,9 +14,13 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Trash2, Star, Key, Building2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Star, Key, Building2, ShieldCheck, Upload, Loader2 } from 'lucide-react';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
+import {
+  applyOfficialTaxProfile, consultOfficialTaxRegistry, listFiscalCertificates, uploadFiscalCertificate,
+  type FiscalCertificateSummary, type OfficialTaxProfile, type TaxRegistryResult,
+} from '@/lib/fiscal/taxRegistryClient';
 
 export default function EmittersSettings() {
   const { confirmAction } = useScopedAlerts();
@@ -24,6 +28,7 @@ export default function EmittersSettings() {
   const { data: emitters = [], isLoading } = useEmitters();
   const [editing, setEditing] = useState<Partial<TenantEmitter> | null>(null);
   const [credsFor, setCredsFor] = useState<TenantEmitter | null>(null);
+  const [certificateFor, setCertificateFor] = useState<TenantEmitter | null>(null);
   const makeDefault = useMakeDefaultEmitter();
   const del = useDeleteEmitter();
 
@@ -77,7 +82,10 @@ export default function EmittersSettings() {
                         <Star className="h-3 w-3" />
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => setCredsFor(e)}>
+                    <Button size="sm" variant="ghost" onClick={() => setCertificateFor(e)} title="Certificado A1 e consulta oficial">
+                      <ShieldCheck className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setCredsFor(e)} title="Credencial do Hub Fiscal">
                       <Key className="h-3 w-3" />
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>
@@ -104,6 +112,9 @@ export default function EmittersSettings() {
       )}
       {credsFor && (
         <CredentialsDialog emitter={credsFor} onClose={() => setCredsFor(null)} />
+      )}
+      {certificateFor && (
+        <FiscalCertificateDialog emitter={certificateFor} onClose={() => setCertificateFor(null)} />
       )}
     </div>
   );
@@ -554,6 +565,118 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Fechar</Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FiscalCertificateDialog({ emitter, onClose }: { emitter: TenantEmitter; onClose: () => void }) {
+  const toast = useSonnerToast();
+  const [certificates, setCertificates] = useState<FiscalCertificateSummary[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [consulting, setConsulting] = useState(false);
+  const [result, setResult] = useState<TaxRegistryResult | null>(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try { setCertificates(await listFiscalCertificates(emitter.id)); }
+    catch (error) { toast.error(error instanceof Error ? error.message : 'Falha ao listar certificados'); }
+    finally { setLoading(false); }
+  }, [emitter.id, toast]);
+
+  useEffect(() => { void reload(); }, [reload]);
+
+  const upload = async () => {
+    if (!file) return;
+    setSaving(true);
+    try {
+      await uploadFiscalCertificate({ emitterId: emitter.id, file, password });
+      setFile(null);
+      setPassword('');
+      toast.success('Certificado A1 validado e ativado');
+      await reload();
+    } catch (error) {
+      toast.error('Falha ao salvar certificado', { description: error instanceof Error ? error.message : undefined });
+    } finally { setSaving(false); }
+  };
+
+  const consult = async (forceRefresh = false) => {
+    const uf = String(emitter.endereco?.uf || '').toUpperCase();
+    if (!uf) { toast.error('Informe a UF do emitente antes da consulta'); return; }
+    setConsulting(true);
+    try {
+      const response = await consultOfficialTaxRegistry({
+        emitterId: emitter.id, uf, lookupValue: emitter.cnpj, forceRefresh,
+      });
+      setResult(response);
+      if (!response.profiles.length) toast.warning(response.reason || 'Cadastro oficial não localizado');
+    } catch (error) {
+      toast.error('Falha na consulta oficial', { description: error instanceof Error ? error.message : undefined });
+    } finally { setConsulting(false); }
+  };
+
+  const apply = async (profile: OfficialTaxProfile) => {
+    if (!result) return;
+    setSaving(true);
+    try {
+      await applyOfficialTaxProfile({
+        emitterId: emitter.id, queryId: result.query_id, registryId: profile.id,
+        targetTable: 'tenant_emitters', targetId: emitter.id,
+      });
+      toast.success('Dados oficiais aplicados ao emitente');
+      onClose();
+    } catch (error) {
+      toast.error('Falha ao aplicar dados oficiais', { description: error instanceof Error ? error.message : undefined });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Certificado e cadastro oficial — {emitter.razao_social}</DialogTitle></DialogHeader>
+        <div className="rounded-md bg-muted/40 p-3 text-xs">
+          O certificado A1 é aberto somente no backend. A chave privada é criptografada e nunca retorna ao navegador.
+        </div>
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold">Certificados</h4>
+          {loading ? <p className="text-sm text-muted-foreground">Carregando…</p> : certificates.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum certificado A1 cadastrado.</p>
+          ) : certificates.map(certificate => (
+            <div key={certificate.id} className="flex items-center justify-between rounded border p-3 text-xs">
+              <div>
+                <div className="font-medium">{certificate.label} · CNPJ {certificate.certificate_cnpj || 'não identificado'}</div>
+                <div className="text-muted-foreground">Válido até {new Date(certificate.valid_to).toLocaleDateString('pt-BR')} · série {certificate.serial_number || '—'}</div>
+              </div>
+              <Badge variant={certificate.status === 'active' ? 'default' : 'secondary'}>{certificate.status}</Badge>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3 border-t pt-3">
+          <div><Label>Arquivo A1 (.pfx ou .p12)</Label><Input type="file" accept=".pfx,.p12" onChange={event => setFile(event.target.files?.[0] || null)} /></div>
+          <div><Label>Senha do certificado</Label><Input type="password" autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} /></div>
+          <div className="col-span-2"><Button onClick={upload} disabled={!file || saving}><Upload className="mr-2 h-4 w-4" />{saving ? 'Validando…' : 'Validar e ativar certificado'}</Button></div>
+        </div>
+        <div className="space-y-3 border-t pt-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold">Cadastro oficial ICMS</h4>
+            <Button variant="outline" onClick={() => consult(Boolean(result))} disabled={consulting || !certificates.some(item => item.status === 'active')}>
+              {consulting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+              Consultar SEFAZ
+            </Button>
+          </div>
+          {result?.profiles.map(profile => (
+            <div key={profile.id} className="rounded border p-3 text-sm space-y-1">
+              <div className="font-medium">{profile.legal_name || profile.trade_name} <Badge variant={profile.registry_status === 'active' ? 'default' : 'destructive'}>{profile.registry_status}</Badge></div>
+              <div>IE: {profile.state_registration || 'não informada'} · CNPJ: {profile.cnpj}</div>
+              <div>{profile.official_address.street}, {profile.official_address.number} — {profile.official_address.city}/{profile.official_address.state} · IBGE {profile.official_address.cityCode}</div>
+              <Button size="sm" className="mt-2" onClick={() => apply(profile)} disabled={saving}>Aplicar dados oficiais ao emitente</Button>
+            </div>
+          ))}
+        </div>
+        <DialogFooter><Button variant="outline" onClick={onClose}>Fechar</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );
