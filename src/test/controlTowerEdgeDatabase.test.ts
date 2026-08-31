@@ -15,7 +15,7 @@ beforeAll(async()=>{
  const baseline=readFileSync('supabase/migrations/20260824224152_baseline.sql','utf8');
  const membershipPolicy=baseline.match(/CREATE POLICY "Members can view memberships of their tenants"[\s\S]*?;/)?.[0];
  if(!membershipPolicy)throw new Error('Missing actual membership policy');await db.exec(membershipPolicy);
- const capability=readFileSync('supabase/migrations/20260828205532_tenant_integration_capabilities.sql','utf8');
+ const capability=readFileSync('supabase/migrations/20260829142707_restore_production_integration_capabilities.sql','utf8');
  await db.exec(towerFunction(capability,'assert_tenant_integration_capability_v1'));
  await db.exec('revoke all on function assert_tenant_integration_capability_v1(uuid,text) from public,anon,authenticated;grant execute on function assert_tenant_integration_capability_v1(uuid,text) to service_role');
  vi.stubGlobal('Deno',{env:{get:(k:string)=>({SUPABASE_URL:'https://db.example.test',SUPABASE_ANON_KEY:'anon-test',SUPABASE_SERVICE_ROLE_KEY:'service-test'}[k])},serve:(h:(r:Request)=>Promise<Response>)=>state.handlers.push(h)});
