@@ -14,6 +14,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      fiscal_source_reservations: {
+        Row: { tenant_id: string; environment: string; source_id: string; outbound_id: string | null; nfse_id: string | null }
+        Insert: { tenant_id: string; environment: string; source_id: string; outbound_id?: string | null; nfse_id?: string | null }
+        Update: { tenant_id?: string; environment?: string; source_id?: string; outbound_id?: string | null; nfse_id?: string | null }
+        Relationships: []
+      }
       alert_instances: {
         Row: {
           closed_at: string | null
@@ -7229,6 +7235,8 @@ export type Database = {
       }
       hub_fiscal_emissions: {
         Row: {
+          dispatch_key: string | null
+          dispatch_state: string
           access_key: string | null
           authorization_protocol: string | null
           c_stat: number | null
@@ -7270,6 +7278,8 @@ export type Database = {
           xml_url: string | null
         }
         Insert: {
+          dispatch_key?: string | null
+          dispatch_state?: string
           access_key?: string | null
           authorization_protocol?: string | null
           c_stat?: number | null
@@ -7311,6 +7321,8 @@ export type Database = {
           xml_url?: string | null
         }
         Update: {
+          dispatch_key?: string | null
+          dispatch_state?: string
           access_key?: string | null
           authorization_protocol?: string | null
           c_stat?: number | null

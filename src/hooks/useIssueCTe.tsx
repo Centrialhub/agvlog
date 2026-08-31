@@ -124,7 +124,7 @@ export function useIssueCTe() {
         throw new Error(hubResponse.hub?.document?.message||'Documento fiscal recusado. Corrija os dados antes de uma nova emissão.');
       return {fiscal_document_id:parsed.id,hub:hubResponse};
     },
-    onSuccess: () => {
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['cte_search'] });
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
@@ -150,7 +150,7 @@ export function useSyncCTe() {
     if(res.success!==true)throw new Error(res.error?.message||'Não foi possível confirmar o estado fiscal.');
     // The server commits the status. A delayed browser response must not overwrite a newer callback.
     return {success:true,hub:res};
-  },onSuccess:()=>{for(const key of ['fiscal_documents','cte_search','cte_monitor','cte_documents','eligible_ctes'])qc.invalidateQueries({queryKey:[key]});}});
+  },onSuccess:()=>{for(const key of ['fiscal_documents','cte_search','cte_monitor','cte_documents','eligible_ctes','billing_documents'])qc.invalidateQueries({queryKey:[key]});}});
 }
 
 export function useCancelCTe() {

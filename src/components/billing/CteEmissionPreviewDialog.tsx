@@ -873,14 +873,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     const credsCache: Record<string, { env: 'sandbox' | 'homologation' | 'production' }> = {};
 
     try {
-      // Processamento em lote com limite de concorrência (5)
-      const CONCURRENCY_LIMIT = 5;
-      const executing = new Set<Promise<void>>();
+      // The provider allocates the CT-e number: finish one request before starting another.
       
       for (let i = 0; i < itemsToTransmit.length; i++) {
         const it = itemsToTransmit[i];
         
-        const task = (async () => {
+        await (async () => {
           try {
             const em = selectActiveEmitterById(emitters, it.emitterId);
             
@@ -933,19 +931,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           }
         })();
 
-        executing.add(task);
-        task.finally(() => executing.delete(task));
-
-        if (executing.size >= CONCURRENCY_LIMIT) {
-          await Promise.race(executing);
-        }
+        // Stop the batch on uncertainty/rejection so remaining sources are not dispatched blindly.
+        if (errors.length > 0) break;
       }
-      
-      // Aguarda as últimas tarefas
-      await Promise.all(executing);
 
       if (okCount === 0) {
-        toast.error('Nenhum CT-e chegou ao Hub Fiscal', {
+        toast.error('Emissão não concluída — consulte o resultado fiscal', {
           description: errors.slice(0, 3).join(' • ') || 'Verifique credenciais do emitente.',
           duration: 10000,
         });

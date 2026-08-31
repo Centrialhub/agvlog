@@ -50,6 +50,7 @@ vi.mock('@/integrations/supabase/client', async () => {
       if (['select', 'order', 'offset', 'limit'].includes(field)) continue;
       rows = rows.filter(row => {
         const value = row[field];
+        if (expression === 'not.is.null') return value != null;
         if (expression === 'is.null') return value == null;
         if (expression.startsWith('eq.')) return String(value) === expression.slice(3);
         if (expression.startsWith('neq.')) return value != null && String(value) !== expression.slice(4);
@@ -148,7 +149,7 @@ it('paginates invoices and both emission sources beyond the API row cap', async 
   expect(result.current.data?.some(d => ['1199','1200'].includes(d.id))).toBe(false);
 });
 
-it.each(['fiscal_documents', 'cte_documents', 'nfse_documents'])('reports %s failures instead of returning an empty successful list', async table => {
+it.each(['fiscal_documents', 'cte_documents', 'nfse_documents', 'fiscal_source_reservations', 'hub_fiscal_emissions'])('reports %s failures instead of returning an empty successful list', async table => {
   state.failTable = table;
   const {result} = renderHook(() => useBillingDocuments({}), {wrapper: Wrapper});
   await waitFor(() => expect(result.current.isError).toBe(true));
@@ -240,4 +241,30 @@ it.each(['cte','nfse'] as const)('removes an authorized %s source from every lis
  state.rows.fiscal_documents[0][type+'_emitted_at']=null;
  await act(async()=>{await client.invalidateQueries({queryKey:['billing_documents']});});
  expect(result.current[type].data).toHaveLength(0);
+});
+
+it('hides uncertain dispatches without catalog entries but retains rejected, unsent and sandbox invoices', async () => {
+  const cases = ['uncertain', 'in_flight', 'processing', 'authorized', 'rejected', 'unsent', 'sandbox', 'other-tenant'];
+  state.rows.fiscal_documents = cases.map(id => invoice(id));
+  state.rows.fiscal_source_reservations = cases.map(source_id => ({source_id, outbound_id: source_id, tenant_id: 'tenant', environment: 'production'}));
+  state.rows.hub_fiscal_emissions = cases.filter(id => id !== 'unsent').map(id => ({
+    id, fiscal_document_id: id, dispatch_key: id, dispatch_state: ['uncertain', 'in_flight'].includes(id) ? id : 'recorded',
+    status: ['sandbox', 'other-tenant'].includes(id) ? 'processing' : id,
+    environment: id === 'sandbox' ? 'homologation' : 'production', tenant_id: id === 'other-tenant' ? 'other' : 'tenant',
+  }));
+  const {result} = renderHook(() => useBillingDocuments({onlySpecificInvoices: cases}), {wrapper: Wrapper});
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(result.current.data?.map(d => d.id)).toEqual(['rejected', 'unsent', 'sandbox', 'other-tenant']);
+  state.rows.hub_fiscal_emissions[0] = {...state.rows.hub_fiscal_emissions[0], dispatch_state: 'recorded', status: 'rejected'};
+  await act(async () => {await result.current.refetch();});
+  await waitFor(() => expect(result.current.data?.map(d => d.id)).toContain('uncertain'));
+});
+
+it('reserves NFS-e timeouts and paginates durable reservations beyond the API limit', async () => {
+  state.rows.fiscal_documents = [invoice('nfse-pending', {recipient_city: 'Montes Claros'}), invoice('local-free', {recipient_city: 'Montes Claros'})];
+  state.rows.fiscal_source_reservations = Array.from({length: 1001}, (_, i) => ({source_id: i === 1000 ? 'nfse-pending' : 'irrelevant-' + i, nfse_id: String(i), tenant_id: 'tenant', environment: 'production'}));
+  state.rows.hub_fiscal_emissions = Array.from({length: 1001}, (_, i) => ({id: String(i), nfse_document_id: String(i), dispatch_key: String(i), dispatch_state: 'uncertain', status: 'error', tenant_id: 'tenant', environment: 'production'}));
+  const {result} = renderHook(() => useBillingDocuments({}, 'nfse'), {wrapper: Wrapper});
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(result.current.data?.map(d => d.id)).toEqual(['local-free']);
 });

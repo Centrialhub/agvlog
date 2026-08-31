@@ -121,7 +121,7 @@ export function useBillingDocuments(filters: BillingDocumentFilters, target: 'al
       const docs = await readAllPages((start, end) => makeQuery().range(start, end)) as FiscalDocument[];
 
       // Emissões em andamento também reservam a NF; rascunhos, prévias e falhas não.
-      const [emitted, nfse] = await Promise.all([
+      const [emitted, nfse, reservations, dispatches] = await Promise.all([
         readAllPages((start, end) => supabase
           .from('cte_documents')
           .select('fiscal_document_ids')
@@ -136,6 +136,12 @@ export function useBillingDocuments(filters: BillingDocumentFilters, target: 'al
           .eq('cancelled', false).eq('is_preview', false)
           .not('status', 'in', '("cancelled","rejected","error","failed","sefaz_error","draft","generated")')
           .order('id').range(start, end)),
+        readAllPages((start, end) => supabase.from('fiscal_source_reservations')
+          .select('source_id,outbound_id,nfse_id').eq('tenant_id', currentTenant.id)
+          .eq('environment', 'production').order('source_id').range(start, end)),
+        readAllPages((start, end) => supabase.from('hub_fiscal_emissions')
+          .select('fiscal_document_id,nfse_document_id,dispatch_state,status').eq('tenant_id', currentTenant.id)
+          .eq('environment', 'production').not('dispatch_key', 'is', null).order('id').range(start, end)),
       ]);
 
       const emittedIds = new Set<string>();
@@ -156,6 +162,23 @@ export function useBillingDocuments(filters: BillingDocumentFilters, target: 'al
 
       (emitted || []).forEach(processRow);
       (nfse || []).forEach(processRow);
+
+      // A timeout may precede the catalog entry. Keep these sources reserved until
+      // a definitive receipt arrives; an unsent preparation alone must not hide an NF.
+      const reservedOperations = new Set<string>();
+      for (const dispatch of dispatches) {
+        if (['in_flight', 'uncertain'].includes(dispatch.dispatch_state) ||
+            ['pending', 'processing', 'transmitting', 'submitted', 'queued', 'authorized', 'issued'].includes(dispatch.status)) {
+          if (dispatch.fiscal_document_id) reservedOperations.add(dispatch.fiscal_document_id);
+          if (dispatch.nfse_document_id) reservedOperations.add(dispatch.nfse_document_id);
+        }
+      }
+      for (const reservation of reservations) {
+        if (reservedOperations.has(reservation.outbound_id || '') || reservedOperations.has(reservation.nfse_id || '')) {
+          emittedIds.add(reservation.source_id);
+        }
+      }
+
 
       return docs.filter(d => {
         if (emittedIds.has(d.id)) return false;
