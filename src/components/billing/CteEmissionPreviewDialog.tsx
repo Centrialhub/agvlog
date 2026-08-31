@@ -22,7 +22,7 @@ import { useClients, type Client } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
-import { useScopedAlerts } from '@/hooks/useAlertStore';
+import { isSameFiscalMunicipality } from '@/lib/fiscal/fiscalMunicipality';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
@@ -535,7 +535,6 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const [bulkEditTransporte, setBulkEditTransporte] = useState(false);
   const [bulkEditCarga, setBulkEditCarga] = useState(false);
   const [bulkEditFiscal, setBulkEditFiscal] = useState(true);
-  const { showAlert } = useScopedAlerts();
 
   const activeEmitters = useMemo(() => emitters.filter(emitter => emitter.active), [emitters]);
   const defaultEmitter = useMemo(() => selectDefaultActiveEmitter(emitters), [emitters]);
@@ -964,41 +963,18 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   }
 
   function handleTransmitClick() {
-    const sameCityItems = items.filter((it) => {
-      const em = selectActiveEmitterById(emitters, it.emitterId);
-      const emitterCity = (em?.endereco?.municipio || "").toLowerCase().trim();
-      const destCity = (it.recipientCity || "").toLowerCase().trim();
-      return emitterCity && destCity && emitterCity === destCity;
-    });
-
-    if (sameCityItems.length > 0) {
-      const sameCityNames = sameCityItems
-        .map((it) => it.recipientName || it.recipientCnpj)
-        .join(", ");
-
-      showAlert(
-        "Atenção: Destino igual ao Emitente",
-        `As seguintes notas têm destino para a mesma cidade do emitente: ${sameCityNames}. Deseja prosseguir?`,
-        "warning",
-        {
-          confirmLabel: "Continuar (emitir todas)",
-          secondaryLabel: "Ignorar notas da cidade do emitente",
-          cancelLabel: "Cancelar emissão",
-          onConfirm: () => transmit(),
-          onSecondaryConfirm: () => {
-            const filtered = items.filter((it) => !sameCityItems.includes(it));
-            if (filtered.length > 0) {
-              transmit(filtered);
-            } else {
-              toast.info("Nenhuma nota restante para emitir.");
-            }
-          },
-        }
+    const hasLocalDestination = items.some((item) => {
+      const emitter = selectActiveEmitterById(emitters, item.emitterId);
+      return emitter && isSameFiscalMunicipality(
+        {city: item.recipientCity, state: item.recipientState, code: item.recipientCityIbge},
+        {city: emitter.endereco?.municipio, state: emitter.endereco?.uf, code: emitter.city_code},
       );
+    });
+    if (hasLocalDestination) {
+      toast.error('NFs com destino no município da transportadora devem ser faturadas pela lista de NFS-e. Revise o emitente e as notas selecionadas.');
       return;
     }
-
-    transmit();
+    void transmit();
   }
 
   if (!open || items.length === 0) {

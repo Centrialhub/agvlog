@@ -4,11 +4,14 @@ import { usePendingInvoices } from '@/hooks/usePendingInvoices';
 
 /**
  * Banner persistente exibido nas telas de Billing/Monitor/Consulta CT-e.
- * Avisa o usuário sobre NF-e elegíveis sem CT-e gerado e leva direto pro
+ * Avisa o usuário sobre NF-e elegíveis sem CT-e ou NFS-e emitido e leva direto pro
  * fluxo de faturamento já preparado para agrupar essas notas.
  */
 export function PendingInvoicesBanner({ from }: { from?: 'billing' | 'monitor' | 'search' }) {
-  const { data, isLoading } = usePendingInvoices();
+  const { data, isLoading, error, refetch } = usePendingInvoices();
+  if (error) return <div role="alert" className="rounded-md border border-destructive p-3 text-sm">
+    Não foi possível consultar as notas pendentes. <button className="underline" onClick={() => void refetch()}>Tentar novamente</button>
+  </div>;
   if (isLoading || !data || data.count === 0) return null;
 
   const valueFmt = data.totalValue.toLocaleString('pt-BR', {
@@ -35,6 +38,7 @@ export function PendingInvoicesBanner({ from }: { from?: 'billing' | 'monitor' |
           )}
         </div>
       </div>
+      <Link to="/nfse" className="text-sm font-medium hover:underline">Faturar NFS-e</Link>
       {from !== 'billing' && (
         <Link
           to="/billing?focus=pending"

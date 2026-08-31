@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { useClients } from '@/hooks/useClients';
@@ -136,6 +137,8 @@ const DEFAULT_BILLING_PREFS: BillingPreferences = {
 
 export default function Billing() {
   const toast = useSonnerToast();
+  const [searchParams] = useSearchParams();
+  const focusPending = searchParams.get('focus') === 'pending';
   const { data: clients = [] } = useClients();
   const { data: loads = [] } = useLoads();
   const { data: batches = [] } = useCteBatches();
@@ -192,7 +195,7 @@ export default function Billing() {
   const [onlySpecific, setOnlySpecific] = useState<boolean>(false);
   const problematicInvoices = ['444798', '444797', '444796', '446083', '446072', '446071', '446070', '446069', '446068', '446067', '446066', '446065', '446064'];
 
-  const { data: docs = [], isLoading: docsLoading } = useBillingDocuments({
+  const { data: docs = [], isLoading: docsLoading, isFetching: docsFetching, error: docsError, refetch: refetchDocs } = useBillingDocuments({
     clientId: clientId !== SENTINEL_NONE ? clientId : null,
     supplierId: supplierId !== SENTINEL_NONE ? supplierId : null,
     periodStart: (tab === 'period' && periodStart) ? periodStart : null,
@@ -205,7 +208,7 @@ export default function Billing() {
     remitterCnpj: supplierCnpj || null,
     recipientCity: recipientCity !== SENTINEL_NONE ? recipientCity : null,
     onlySpecificInvoices: onlySpecific ? problematicInvoices : null,
-  });
+  }, 'cte');
 
   const loadsById = useMemo(() => {
     const m = new Map<string, typeof loads[number]>();
@@ -290,6 +293,7 @@ export default function Billing() {
   useEffect(() => {
     if (!isLoaded || hydratedRef.current || !preference) return;
     hydratedRef.current = true;
+    if (focusPending) return;
     const p = preference;
     setTab(p.tab ?? 'period');
     setClientId(p.clientId ?? SENTINEL_NONE);
@@ -321,7 +325,7 @@ export default function Billing() {
     setAccessKey(p.accessKey ?? '');
     setOpTypes(new Set(p.opTypes ?? []));
     setAllOps(p.allOps ?? true);
-  }, [isLoaded, preference]);
+  }, [isLoaded, preference, focusPending]);
 
   // ===== Auto-save (debounced) sempre que estado muda =====
   useEffect(() => {
@@ -397,6 +401,15 @@ export default function Billing() {
 
 
 
+
+  const showAllPending = () => {
+    hydratedRef.current = true;
+    clearAdvanced();
+    setTab('period'); setClientId(SENTINEL_NONE); setSupplierId(SENTINEL_NONE);
+    setPeriodStart(''); setPeriodEnd(''); setRecipientCity(SENTINEL_NONE);
+    setSelectedLoadIds(new Set()); setSelectedDocIds(new Set()); setOnlySpecific(false);
+    void refetchDocs();
+  };
 
   // Cidades de destino disponíveis nas notas elegíveis (chave normalizada -> rótulo exibido)
   const recipientCityOptions = useMemo(() => {
@@ -495,6 +508,19 @@ export default function Billing() {
           </p>
         </div>
       </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={showAllPending}>Mostrar todas as NFs não faturadas</Button>
+        <Button variant="outline" onClick={() => void refetchDocs()} disabled={docsFetching}>
+          {docsFetching ? 'Atualizando…' : 'Atualizar notas'}
+        </Button>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        NFs com destino no município da transportadora não aparecem para CT-e. Elas continuam disponíveis na lista de NFS-e.
+      </p>
+      {docsError && <div role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">
+        Não foi possível consultar as NFs não faturadas. Clique em Atualizar notas para tentar novamente.
+      </div>}
 
       {/* Configuração */}
       <Card>
@@ -840,7 +866,9 @@ export default function Billing() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {docsLoading ? (
+                {docsError ? (
+                  <TableRow><TableCell colSpan={10} className="text-center py-6">Falha ao consultar as notas. Tente atualizar.</TableCell></TableRow>
+                ) : docsLoading ? (
                   <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
                 ) : filteredDocs.length === 0 ? (
                   <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Nenhuma nota disponível com os filtros atuais.</TableCell></TableRow>
@@ -918,11 +946,11 @@ export default function Billing() {
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" disabled={groups.length === 0} onClick={() => setPreviewOpen(true)}>
+            <Button variant="ghost" disabled={groups.length === 0 || docsFetching || !!docsError} onClick={() => setPreviewOpen(true)}>
               Ver prévia ({groups.length})
             </Button>
             <Button
-              disabled={groups.length === 0}
+              disabled={groups.length === 0 || docsFetching || !!docsError}
               onClick={() => setEmitPreviewOpen(true)}
             >
               Prévia editável &amp; transmitir ({groups.length})

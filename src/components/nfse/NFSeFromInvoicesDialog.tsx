@@ -151,7 +151,18 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     recipientCity: recipientCity || null,
   }), [supplierId, clientId, periodStart, periodEnd, invoiceNumber, recipientCity]);
 
-  const { data: docs = [], isLoading } = useBillingDocuments(filters);
+  const { data: docs = [], isLoading, isFetching, error: docsError, refetch } = useBillingDocuments(filters, 'nfse');
+
+  useEffect(() => {
+    if (open) void refetch();
+  }, [open, refetch]);
+
+  const showAllPending = () => {
+    setSupplierId(SENTINEL_NONE); setClientId(SENTINEL_NONE);
+    setPeriodStart(''); setPeriodEnd(''); setInvoiceNumber(''); setRecipientCity('');
+    setSelected({});
+    void refetch();
+  };
 
   const selectedDocs = useMemo(
     () => docs.filter((document) => selected[document.id]),
@@ -538,8 +549,17 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
               <div><Label>até</Label><Input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} /></div>
             </div>
 
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={showAllPending}>Mostrar todas as NFs não faturadas</Button>
+              <Button variant="outline" onClick={() => void refetch()} disabled={isFetching}>
+                {isFetching ? 'Atualizando…' : 'Atualizar notas'}
+              </Button>
+            </div>
+            {docsError && <div role="alert" className="text-sm text-destructive">
+              Não foi possível consultar as NFs não faturadas. Clique em Atualizar notas para tentar novamente.
+            </div>}
             <div className="text-xs text-muted-foreground">
-              Somente NFs de entrada não faturadas (sem CT-e nem NFS-e emitidos).
+              Somente NFs de entrada não faturadas com destino no município da transportadora. Destinos de outros municípios ficam na lista de CT-e.
             </div>
 
             <div className="rounded-md border max-h-[52vh] overflow-y-auto">
@@ -563,7 +583,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                 </TableHeader>
                 <TableBody>
                   {isLoading && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Carregando…</TableCell></TableRow>}
-                  {!isLoading && docs.length === 0 && (
+                  {!isLoading && !docsError && docs.length === 0 && (
                     <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Nenhuma NF disponível</TableCell></TableRow>
                   )}
                   {docs.map((d) => (
@@ -653,7 +673,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                     const nfList = selectedDocs.map((d) => d.invoice_number || d.access_key?.slice(-9)).join(', ');
                     setObservacoes(`NFS-e referente a(s) NF ${nfList}`);
                   }}
-                  disabled={!canAdvance}
+                  disabled={!canAdvance || isFetching || !!docsError}
                 >
                   Avançar <ArrowRight className="h-4 w-4 ml-1" />
                 </Button>
@@ -998,7 +1018,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             </Button>
           )}
           {step === 3 && (
-            <Button onClick={handleEmit} disabled={issuing || create.isPending || issue.isPending}>
+            <Button onClick={handleEmit} disabled={issuing || create.isPending || issue.isPending || isFetching || !!docsError}>
               {issuing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
               Emitir NFS-e
             </Button>

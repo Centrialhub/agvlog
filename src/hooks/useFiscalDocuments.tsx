@@ -276,7 +276,10 @@ export function useCreateFiscalDocument() {
       }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['fiscal_documents'] }),
+    onSuccess: () => {
+      for (const key of ['fiscal_documents', 'billing_documents', 'pending_invoices_summary'])
+        void qc.invalidateQueries({ queryKey: [key] });
+    },
   });
 }
 
@@ -438,6 +441,7 @@ export function useUpdateFiscalDocument() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['load_documents'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
     },
   });
 }
