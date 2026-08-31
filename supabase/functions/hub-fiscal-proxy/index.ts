@@ -1,3 +1,4 @@
+import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 import { dispatchFiscalEmission } from '../_shared/fiscal-dispatch.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
@@ -178,7 +179,7 @@ function normalizeCteEmissionBody(source: Record<string, unknown>): Record<strin
   return body;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withFiscalCors(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
@@ -1116,4 +1117,4 @@ Deno.serve(async (req) => {
     const status = code.startsWith('HUB_CREDENTIAL_') ? 400 : 500;
     return json(status, { success: false, error: { code, message: e?.message } });
   }
-});
+}));

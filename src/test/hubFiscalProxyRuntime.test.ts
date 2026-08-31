@@ -109,6 +109,20 @@ describe('fiscal Edge handler environment isolation (no external requests)', () 
     expect((await emit()).status).toBe(400);
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it('preserves operator CFOP 5352 for an intrastate production CT-e', async () => {
+    state.tables.tenant_emitters[0].endereco = {uf:'MG',municipio:'Montes Claros',codigo_municipio:'3143302'};
+    const response = await request({action:'emit',type:'cte',emitterId:'emitter',body:{
+      environment:'production',emitterCnpj:'12345678000199',externalId:'qa-cfop-5352',
+      payload:{CFOP:'5352',inicio:{uf:'MG',municipio:'Montes Claros',codigoMunicipio:'3143302'},
+        fim:{uf:'MG',municipio:'Coracao de Jesus',codigoMunicipio:'3118802'}},
+    }});
+    expect(response.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledOnce();
+    const sent = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
+    expect(sent.environment).toBe('production');
+    expect(sent.payload.CFOP).toBe('5352');
+    expect(sent.payload.ide.CFOP).toBe('5352');
+  });
   it('rejects CNPJ mismatch before contacting the Hub', async () => {
     const response = await request({ action: 'emit', type: 'cte', emitterId: 'emitter', body: {
       environment: 'production', emitterCnpj: '99999999000199', externalId: 'stable', payload: {},
@@ -156,5 +170,26 @@ describe('fiscal Edge handler environment isolation (no external requests)', () 
     state.tables.tenant_emitters[0].tenant_id = 'other-tenant';
     expect((await emit()).status).toBe(403);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('actual proxy handler CORS entrypoint', () => {
+  const preview = 'https://agvlog-preview-thomaz-20260831.veituma.chatgpt.site';
+  it('accepts preview preflight and returns a readable 401 without authentication', async () => {
+    for (const method of ['OPTIONS', 'POST']) {
+      const response = await state.handler!(new Request('https://edge.example.test', { method, headers: { Origin: preview } }));
+      expect(response.status).toBe(method === 'OPTIONS' ? 200 : 401);
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe(preview);
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(state.inserts).toHaveLength(0);
+  });
+  it('rejects another hosted site before any Hub call or durable intent', async () => {
+    const response = await state.handler!(new Request('https://edge.example.test', { method: 'POST', headers: { Origin: 'https://other.veituma.chatgpt.site', Authorization: 'Bearer user-token' }, body: JSON.stringify({action:'emit'}) }));
+    expect(response.status).toBe(403);
+    expect(response.headers.has('Access-Control-Allow-Origin')).toBe(false);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(state.inserts).toHaveLength(0);
   });
 });

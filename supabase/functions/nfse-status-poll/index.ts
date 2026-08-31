@@ -1,3 +1,4 @@
+import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 // Consulta periódica de status das NFS-e que ficaram "processando" no provedor.
 // Invocada pelo pg_cron (a cada 5 min) e também sob demanda pela UI.
 // Para cada NFS-e pendente: consulta o Hub Fiscal (GET /hub_documents_get),
@@ -36,7 +37,7 @@ function json(status: number, payload: unknown) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withFiscalCors(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json(405, { success: false, error: { code: 'METHOD_NOT_ALLOWED' } });
 
@@ -284,4 +285,4 @@ Deno.serve(async (req) => {
     console.error('[nfse-status-poll] error', e);
     return json(500, { success: false, error: { code: 'POLL_FAILED', message: (e as Error).message } });
   }
-});
+}));

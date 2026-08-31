@@ -1,5 +1,7 @@
 # Pacote fiscal para homologação — 31/08/2026
 
+Atualização posterior: o núcleo fiscal e suas quatro Edge Functions foram publicados; o acoplamento financeiro foi separado e permanece pendente. Consulte [a correção da RPC](FATURAMENTO-RPC-RECOVERY-2026-08-31.md). O estado abaixo registra o preflight anterior.
+
 Estado: correções locais implementadas. NÃO publicado e NÃO liberado para o cliente emitir. O ensaio com provedor real continua bloqueado por credenciais de homologação ausentes e dependências de banco ainda não publicadas.
 
 ## O que foi corrigido
@@ -26,7 +28,7 @@ Consulta repetível: [FATURAMENTO-PREFLIGHT-2026-08-31.sql](FATURAMENTO-PREFLIGH
 
 ## Unidade de publicação e dependências
 
-Migração nova: `20260831124505_fiscal_emission_readiness.sql`. Depende de `_client_invoice_draft_snapshot` da migração `20260830192908_audit_client_invoice_lifecycle.sql`; não aplicar isoladamente no servidor atual.
+Na versão inicial deste pacote, `20260831124505_fiscal_emission_readiness.sql` dependia de `_client_invoice_draft_snapshot`. A correção posterior separou o núcleo fiscal (já aplicado) do acoplamento financeiro `20260831144530_attach_fiscal_invoice_gate.sql` (não aplicado), que continua dependendo de `20260830192908_audit_client_invoice_lifecycle.sql`. Ver o relatório de recuperação vinculado no início para o estado atual.
 
 A cadeia financeira local inclui recebimentos `20260830183929`, ciclo de fechamento `20260830174819`, rascunho atômico `20260830165149`, fontes por tentativa `20260830161722` e suas dependências operacionais. Os documentos de cada lote preservam as condições de publicação. Não é seguro executar `db push` de toda a árvore para satisfazer essa dependência.
 

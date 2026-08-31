@@ -2,7 +2,8 @@ import {readFileSync} from 'node:fs';
 import {createInvoiceLifecycleDatabase} from './clientInvoiceLifecycleDatabase.ts';
 import {operationIds as i,operationRpc} from './operationOutcomeDatabase.ts';
 export const fiscalMigration='20260831124505_fiscal_emission_readiness.sql';
-export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof createInvoiceLifecycleDatabase>>['db']){
+export const fiscalInvoiceGateMigration='20260831144530_attach_fiscal_invoice_gate.sql';
+export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof createInvoiceLifecycleDatabase>>['db'], options:{invoiceGate?:boolean}={}){
  const baseline=readFileSync('supabase/migrations/20260824224152_baseline.sql','utf8').replace(/\r\n/g,'\n');
  for(const table of ['tenant_emitters','hub_fiscal_emissions','cte_batches','cte_documents','nfse_documents','fiscal_documents']){
   const declaration=baseline.match(new RegExp('CREATE TABLE public\\.'+table+' \\([\\s\\S]*?\\n\\);'))?.[0];
@@ -13,6 +14,7 @@ export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof
  }
  await db.exec('grant all on all tables in schema public to service_role');
  await db.exec(readFileSync('supabase/migrations/'+fiscalMigration,'utf8'));
+ if(options.invoiceGate!==false) await db.exec(readFileSync('supabase/migrations/'+fiscalInvoiceGateMigration,'utf8'));
  const emitter='fa100000-0000-4000-8000-000000000001';
  await db.query("insert into tenant_emitters(id,tenant_id,cnpj,razao_social,active) values($1,$2,'11222333000181','Emitente QA',true)",[emitter,i.tenant]);
  await db.query("update fiscal_documents set document_type='inbound',cte_emitted_at=null,cte_emitted_outbound_id=null,nfse_emitted_at=null where tenant_id=$1",[i.tenant]);
