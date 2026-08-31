@@ -1,7 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
+import { requireHubEnvironment } from '../../../supabase/functions/_shared/fiscal-environment';
 
-export type HubDocType = 'nfe' | 'nfce' | 'nfse' | 'cte' | 'mdfe';
-export type HubEnvironment = 'sandbox' | 'production';
+export type HubDocType = 'nfe' | 'nfce' | 'nfse' | 'cte' | 'mdfe' | 'nfcom';
+/** Environments accepted by the public Hub Fiscal contract. */
+export type HubEnvironment = 'sandbox' | 'homologation' | 'production';
 
 export interface HubDocument {
   id?: string;
@@ -41,7 +43,7 @@ export interface EmitParams {
   type: HubDocType;
   body: {
     emitterCnpj: string;
-    environment?: HubEnvironment;
+    environment: HubEnvironment;
     externalId?: string;
     callbackUrl?: string;
     payload: Record<string, unknown>;
@@ -82,7 +84,7 @@ export const hubFiscal = {
     return invoke({
       action: 'emit',
       type: params.type,
-      body: params.body,
+      body: { ...params.body, environment: requireHubEnvironment(params.body.environment) },
       fiscalDocumentId: params.fiscalDocumentId,
       cteDocumentId: params.cteDocumentId,
       nfseDocumentId: params.nfseDocumentId,
@@ -171,8 +173,8 @@ export const hubFiscal = {
     });
   },
 
-  query(filters: Record<string, string>, emitterId: string) {
-    return invoke({ action: 'query', query: filters, emitterId });
+  query(filters: Record<string, string>, emitterId: string, environment: HubEnvironment) {
+    return invoke({ action: 'query', query: filters, emitterId, environment: requireHubEnvironment(environment, filters.environment) });
   },
 
   /** CT-e — Desacordo do Tomador (mín. 15 caracteres). */
@@ -197,12 +199,12 @@ export const hubFiscal = {
 
   /** CT-e — Importa XML autorizado externamente. */
   import(body: { emitterCnpj: string; environment: HubEnvironment; xmlBase64: string }, emitterId?: string) {
-    return invoke({ action: 'import', body, emitterId });
+    return invoke({ action: 'import', body: { ...body, environment: requireHubEnvironment(body.environment) }, emitterId });
   },
 
   /** Diagnóstico: verifica qual credencial seria usada para um emitente/escopo. Não retorna o token. */
-  ping(emitterId: string | undefined, type: HubDocType | 'all' = 'all') {
-    return invoke({ action: 'ping', emitterId, type });
+  ping(emitterId: string, type: HubDocType | 'all', environment: HubEnvironment) {
+    return invoke({ action: 'ping', emitterId, type, environment: requireHubEnvironment(environment) });
   },
 
   /** Returns a Blob you can hand to URL.createObjectURL for download/preview. */

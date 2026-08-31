@@ -80,7 +80,12 @@ Deno.serve(async (req) => {
   else if (plugnotasId) q = q.eq('plugnotas_id', plugnotasId);
   else if (idIntegracao) q = q.eq('id_integracao', idIntegracao);
 
-  const { data: emissions, error: findErr } = await q;
+  let { data: emissions, error: findErr } = await q;
+  if(!findErr && !emissions?.length && idIntegracao) {
+    const fallback = await admin.from('hub_fiscal_emissions').select('*').eq('id_integracao',idIntegracao).limit(2);
+    emissions=fallback.data;findErr=fallback.error;
+  }
+  if(emissions && emissions.length>1) {await completeFiscalWebhook(admin,claim,{success:false,error:'ambiguous_identifier'});return new Response('ambiguous_identifier',{status:409,headers:corsHeaders});}
   if (findErr) {
     console.error('[webhook-in] find error', findErr);
     await completeFiscalWebhook(admin, claim, { success: false, error: `find_failed:${findErr.message}` });
@@ -125,6 +130,18 @@ Deno.serve(async (req) => {
   }
 
   const normalized = normalizeStatus(doc.status || doc.plugnotasStatus);
+  if(emission.dispatch_key) {
+    const result=await admin.rpc('complete_hub_fiscal_emission',{
+      _tenant:emission.tenant_id,_emission:emission.id,_http_status:200,
+      _response:{document:{...doc,id:hubId||emission.hub_document_id,status:normalized,
+        accessKey:doc.accessKey||doc.chave,authorizationProtocol:doc.authorizationProtocol||doc.plugnotasProtocol||doc.protocolo,
+        number:doc.number||doc.numero,pdfUrl:doc.pdfUrl||doc.pdf,xmlUrl:doc.xmlUrl||doc.xml}},
+    });
+    const confirmed=!result.error && result.data?.confirmed===true;
+    await completeFiscalWebhook(admin,claim,{success:confirmed,tenantId:emission.tenant_id,emissionId:emission.id,error:confirmed?undefined:'fiscal_confirmation_failed'});
+    return new Response(JSON.stringify({success:confirmed,matched:true}),{status:confirmed?200:503,headers:{...corsHeaders,'Content-Type':'application/json'}});
+  }
+
 
   const { error: updErr } = await admin.from('hub_fiscal_emissions').update({
     status: normalized,

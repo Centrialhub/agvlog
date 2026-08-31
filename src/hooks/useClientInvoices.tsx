@@ -1,8 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json, Tables } from '@/integrations/supabase/types';
 import type { InvoiceCharge, InvoiceDetail } from '@/lib/clientInvoicePdf';
 import { useTenant } from './useTenant';
+import { useAuth } from './useAuth';
+import {parseInvoiceList} from '@/lib/financial/clientInvoiceList';
 
 export const INVOICE_STATUSES = ['draft', 'generated', 'sent', 'paid', 'cancelled'] as const;
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
@@ -27,6 +29,9 @@ export interface ClientInvoice {
   discount_amount: number;
   interest_amount: number;
   total_amount: number;
+  received_amount: number | null;
+  open_amount: number | null;
+  requires_reconciliation: boolean;
   status: InvoiceStatus | string;
   notes: string | null;
   pdf_url: string | null;
@@ -79,27 +84,24 @@ export interface ClientInvoiceDetailData {
 
 export function useClientInvoices() {
   const { currentTenant } = useTenant();
+  const {user}=useAuth();
   return useQuery({
-    queryKey: ['client_invoices', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [] as ClientInvoice[];
-      const { data, error } = await supabase
-        .from('client_invoices')
-        .select('*, clients(company_name, tax_id)')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as unknown as ClientInvoice[];
+    queryKey: ['client_invoices', currentTenant?.id, user?.id],
+    queryFn: async ({signal}) => {
+      if(!currentTenant||!user)return {rows:[],truncated:false};
+      const {data,error}=await supabase.rpc('list_client_invoice_financials',{_tenant_id:currentTenant.id}).abortSignal(signal);
+      if(error)throw error;return parseInvoiceList(data,currentTenant.id,user.id);
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant&&!!user,
   });
 }
 
 export function useClientInvoiceDetail(invoiceId: string | null) {
   const { currentTenant } = useTenant();
+  const {user}=useAuth();
   return useQuery({
-    queryKey: ['client_invoice_detail', currentTenant?.id, invoiceId],
-    enabled: !!invoiceId && !!currentTenant,
+    queryKey: ['client_invoice_detail', currentTenant?.id, user?.id, invoiceId],
+    enabled: !!invoiceId && !!currentTenant && !!user,
     queryFn: async (): Promise<ClientInvoiceDetailData | null> => {
       const tenantId = currentTenant?.id;
       if (!invoiceId || !tenantId) return null;
@@ -119,9 +121,10 @@ export function useClientInvoiceDetail(invoiceId: string | null) {
 /** CT-e elegíveis para faturamento (não cancelados, não vinculados a fatura ativa) */
 export function useEligibleCtes(clientId: string | null) {
   const { currentTenant } = useTenant();
+  const {user}=useAuth();
   return useQuery({
-    queryKey: ['eligible_ctes', currentTenant?.id, clientId],
-    enabled: !!currentTenant && !!clientId,
+    queryKey: ['eligible_ctes', currentTenant?.id, user?.id, clientId],
+    enabled: !!currentTenant && !!clientId && !!user,
     queryFn: async () => {
       const tenantId = currentTenant?.id;
       if (!tenantId || !clientId) return [];
@@ -131,8 +134,8 @@ export function useEligibleCtes(clientId: string | null) {
         .eq('tenant_id', tenantId)
         .eq('client_id', clientId)
         .is('cancelled_at', null)
-        .neq('status', 'cancelled')
-        .is('deleted_at', null)
+        .eq('status', 'authorized').eq('sefaz_environment', 'production')
+        .eq('is_voided', false)
         .order('issued_at', { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -147,16 +150,20 @@ export function useEligibleCtes(clientId: string | null) {
         .is('cancelled_at', null);
       if (usedError) throw usedError;
       const used = new Set((usedRows || []).map(r => r.source_id));
-      return (data || []).filter(d => !used.has(d.id));
+      const proof = await supabase.rpc('filter_billable_fiscal_sources', {_tenant:tenantId,_type:'cte_document',_ids:ids});
+      if(proof.error)throw proof.error;
+      const billable = new Set(proof.data || []);
+      return (data || []).filter(d => !used.has(d.id) && billable.has(d.id));
     },
   });
 }
 
 export function useEligibleNfse(clientId: string | null) {
   const { currentTenant } = useTenant();
+  const {user}=useAuth();
   return useQuery({
-    queryKey: ['eligible_nfse', currentTenant?.id, clientId],
-    enabled: !!currentTenant && !!clientId,
+    queryKey: ['eligible_nfse', currentTenant?.id, user?.id, clientId],
+    enabled: !!currentTenant && !!clientId && !!user,
     queryFn: async () => {
       const tenantId = currentTenant?.id;
       if (!tenantId || !clientId) return [];
@@ -167,7 +174,7 @@ export function useEligibleNfse(clientId: string | null) {
         .eq('cliente_id', clientId)
         .eq('cancelled', false)
         .neq('status', 'cancelled')
-        .is('deleted_at', null)
+        .eq('is_preview', false)
         .order('issue_date', { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -182,7 +189,10 @@ export function useEligibleNfse(clientId: string | null) {
         .is('cancelled_at', null);
       if (usedError) throw usedError;
       const used = new Set((usedRows || []).map(r => r.source_id));
-      return (data || []).filter(d => !used.has(d.id));
+      const proof = await supabase.rpc('filter_billable_fiscal_sources', {_tenant:tenantId,_type:'nfse_document',_ids:ids});
+      if(proof.error)throw proof.error;
+      const billable = new Set(proof.data || []);
+      return (data || []).filter(d => !used.has(d.id) && billable.has(d.id));
     },
   });
 }
@@ -198,80 +208,4 @@ export async function fetchCteFiscalDocs(tenantId: string, fiscalDocIds: string[
     .is('deleted_at', null);
   if (error) throw error;
   return data || [];
-}
-
-export function useCreateClientInvoice() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payload: CreateClientInvoicePayload) => {
-      const { data, error } = await supabase.rpc('create_client_invoice', { payload: payload as unknown as Json });
-      if (error) throw error;
-      return data as string;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['client_invoices'] });
-      qc.invalidateQueries({ queryKey: ['receivables'] });
-      qc.invalidateQueries({ queryKey: ['eligible_ctes'] });
-      qc.invalidateQueries({ queryKey: ['eligible_nfse'] });
-    },
-  });
-}
-
-export function useCancelClientInvoice() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      const { error } = await supabase.rpc('cancel_client_invoice', { _invoice_id: id, _reason: reason });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['client_invoices'] });
-      qc.invalidateQueries({ queryKey: ['receivables'] });
-      qc.invalidateQueries({ queryKey: ['eligible_ctes'] });
-      qc.invalidateQueries({ queryKey: ['eligible_nfse'] });
-    },
-  });
-}
-
-export function useMarkInvoiceSent() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, channel, to }: { id: string; channel?: string; to?: string }) => {
-      const tenantId = currentTenant?.id;
-      if (!tenantId) throw new Error('Tenant ativo não encontrado.');
-      const { error } = await supabase.from('client_invoices').update({
-        status: 'sent',
-        sent_at: new Date().toISOString(),
-        sent_channel: channel || 'email',
-        sent_to: to || null,
-      }).eq('id', id).eq('tenant_id', tenantId);
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['client_invoices'] }),
-  });
-}
-
-export function useMarkInvoicePaid() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, receivable_id }: { id: string; receivable_id?: string | null }) => {
-      const tenantId = currentTenant?.id;
-      if (!tenantId) throw new Error('Tenant ativo não encontrado.');
-      const { error } = await supabase.from('client_invoices').update({ status: 'paid' }).eq('id', id).eq('tenant_id', tenantId);
-      if (error) throw error;
-      if (receivable_id) {
-        const { error: receivableError } = await supabase.from('receivables').update({
-          status: 'received',
-          received_at: new Date().toISOString(),
-        }).eq('id', receivable_id).eq('tenant_id', tenantId);
-        if (receivableError) throw receivableError;
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['client_invoices'] });
-      qc.invalidateQueries({ queryKey: ['receivables'] });
-    },
-  });
 }

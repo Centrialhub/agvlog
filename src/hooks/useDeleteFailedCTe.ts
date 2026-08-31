@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useTenant } from './useTenant';
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Não foi possível excluir o registro.';
@@ -10,6 +10,7 @@ const errorMessage = (error: unknown) => error instanceof Error ? error.message 
  * Isso serve para "limpar" a visualização de tentativas que falharam antes mesmo de gerar um hub_document_id.
  */
 export function useDeleteFailedCTe() {
+  const toast = useSonnerToast();
   const qc = useQueryClient();
   const { currentTenant } = useTenant();
 

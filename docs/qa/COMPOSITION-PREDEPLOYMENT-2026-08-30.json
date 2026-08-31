@@ -1,0 +1,188 @@
+{
+  "captured_on": "2026-08-30",
+  "project_id": "qcvnsdrbcchaxvawcngk",
+  "functions": [
+    {
+      "signature": "_load_is_locked(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public._load_is_locked(_load_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  SELECT EXISTS (\n    SELECT 1 FROM public.loads l\n    WHERE l.id = _load_id\n      AND (l.status IN ('in_transit','delivered','partial_delivery','returned','refused','failed','cancelled')\n           OR EXISTS (SELECT 1 FROM public.dispatch_trips dt\n                       WHERE dt.load_id = l.id AND dt.status IN ('in_progress','completed'))\n           OR EXISTS (SELECT 1 FROM public.dispatch_trip_loads dtl\n                       JOIN public.dispatch_trips dt ON dt.id = dtl.dispatch_trip_id\n                       WHERE dtl.load_id = l.id AND dt.status IN ('in_progress','completed')))\n  );\n$function$\n",
+      "hash": "e77c73ef2b708130f34da83c2830c478",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "assign_fiscal_documents_to_load(uuid,uuid,uuid[])",
+      "definition": "CREATE OR REPLACE FUNCTION public.assign_fiscal_documents_to_load(_tenant_id uuid, _load_id uuid, _document_ids uuid[])\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_count int := 0;\n  v_requested int := 0;\n  v_blocked int := 0;\n  v_doc_ids uuid[];\nBEGIN\n  IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN\n    RAISE EXCEPTION 'not_authorized';\n  END IF;\n\n  IF _load_id IS NULL OR _document_ids IS NULL OR array_length(_document_ids, 1) IS NULL THEN\n    RAISE EXCEPTION 'invalid_input';\n  END IF;\n\n  SELECT array_agg(DISTINCT d.id)\n    INTO v_doc_ids\n  FROM unnest(_document_ids) AS d(id)\n  WHERE d.id IS NOT NULL;\n\n  IF v_doc_ids IS NULL OR array_length(v_doc_ids, 1) IS NULL THEN\n    RAISE EXCEPTION 'invalid_input';\n  END IF;\n\n  IF public._load_is_locked(_load_id) THEN\n    RAISE EXCEPTION 'load_locked';\n  END IF;\n\n  IF NOT EXISTS (\n    SELECT 1\n    FROM public.loads l\n    WHERE l.id = _load_id\n      AND l.tenant_id = _tenant_id\n  ) THEN\n    RAISE EXCEPTION 'load_not_found';\n  END IF;\n\n  SELECT count(*)::int\n    INTO v_requested\n  FROM unnest(v_doc_ids) AS d(id);\n\n  SELECT count(*)::int\n    INTO v_blocked\n  FROM public.fiscal_documents fd\n  WHERE fd.id = ANY(v_doc_ids)\n    AND fd.tenant_id = _tenant_id\n    AND fd.load_id IS NOT NULL\n    AND fd.load_id <> _load_id;\n\n  IF v_blocked > 0 THEN\n    RAISE EXCEPTION 'document_already_linked';\n  END IF;\n\n  UPDATE public.fiscal_documents\n    SET load_id = _load_id,\n        updated_at = now()\n    WHERE id = ANY(v_doc_ids)\n      AND tenant_id = _tenant_id\n      AND (load_id IS NULL OR load_id = _load_id);\n  GET DIAGNOSTICS v_count = ROW_COUNT;\n\n  IF v_count <> v_requested THEN\n    RAISE EXCEPTION 'document_link_count_mismatch: expected %, updated %', v_requested, v_count;\n  END IF;\n\n  INSERT INTO public.load_items (\n    tenant_id,\n    load_id,\n    fiscal_document_id,\n    item_description,\n    pallet_count,\n    weight_kg,\n    volume_m3\n  )\n  SELECT _tenant_id,\n         _load_id,\n         fd.id,\n         COALESCE(NULLIF(fd.product_summary, ''), 'Documento ' || COALESCE(fd.invoice_number, fd.id::text)),\n         COALESCE(fd.pallet_count, 0),\n         COALESCE(fd.weight_kg, 0),\n         0\n  FROM public.fiscal_documents fd\n  WHERE fd.id = ANY(v_doc_ids)\n    AND fd.tenant_id = _tenant_id\n    AND fd.load_id = _load_id\n    AND NOT EXISTS (\n      SELECT 1\n      FROM public.load_items li\n      WHERE li.fiscal_document_id = fd.id\n        AND li.load_id = _load_id\n    );\n\n  PERFORM public._log_entity_audit(\n    _tenant_id,\n    'load',\n    _load_id,\n    'assign_documents',\n    NULL,\n    jsonb_build_object('document_ids', to_jsonb(v_doc_ids), 'updated', v_count),\n    'composition_rpc'\n  );\n\n  RETURN jsonb_build_object('updated', v_count, 'load_id', _load_id);\nEND $function$\n",
+      "hash": "5ad09d2beee5b419d9af5ebd5eb96753",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "assign_fiscal_documents_to_load_v2(uuid,uuid,uuid[])",
+      "definition": "CREATE OR REPLACE FUNCTION public.assign_fiscal_documents_to_load_v2(_tenant_id uuid, _load_id uuid, _document_ids uuid[])\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE v_result jsonb;\nBEGIN\n  v_result := public.assign_fiscal_documents_to_load(_tenant_id, _load_id, _document_ids);\n  PERFORM public.recalculate_load_totals(_tenant_id, _load_id);\n  RETURN v_result || jsonb_build_object('totals_recalculated', true);\nEND;\n$function$\n",
+      "hash": "1dfac4d7f001d60ac388f7767609a3cf",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "delete_load_item_v3(uuid,uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.delete_load_item_v3(p_tenant_id uuid, p_item_id uuid)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_load_id uuid;\n  v_fiscal_document_id uuid;\n  v_old jsonb;\nBEGIN\n  IF NOT public.is_tenant_operator_or_admin(p_tenant_id) THEN\n    RAISE EXCEPTION 'not_authorized';\n  END IF;\n\n  SELECT li.load_id, li.fiscal_document_id, to_jsonb(li)\n    INTO v_load_id, v_fiscal_document_id, v_old\n  FROM public.load_items li\n  WHERE li.id = p_item_id AND li.tenant_id = p_tenant_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN RETURN false; END IF;\n  IF public._load_is_locked(v_load_id) THEN RAISE EXCEPTION 'load_locked'; END IF;\n\n  DELETE FROM public.load_items\n  WHERE id = p_item_id AND tenant_id = p_tenant_id;\n\n  IF v_fiscal_document_id IS NOT NULL THEN\n    UPDATE public.fiscal_documents\n    SET load_id = NULL, updated_at = now()\n    WHERE id = v_fiscal_document_id\n      AND tenant_id = p_tenant_id\n      AND load_id = v_load_id;\n  END IF;\n\n  PERFORM public.recalculate_load_totals(p_tenant_id, v_load_id);\n  PERFORM public._log_entity_audit(\n    p_tenant_id,\n    'load_item',\n    p_item_id,\n    'delete',\n    v_old,\n    NULL,\n    'delete_load_item_v3'\n  );\n  RETURN true;\nEND;\n$function$\n",
+      "hash": "4d28b1e151579934386be2ec0b8833c5",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "move_load_items_between_loads(uuid,uuid,uuid,uuid[])",
+      "definition": "CREATE OR REPLACE FUNCTION public.move_load_items_between_loads(_tenant_id uuid, _source_load_id uuid, _target_load_id uuid, _item_ids uuid[])\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE v_moved int; v_doc_ids uuid[];\nBEGIN\n  IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN RAISE EXCEPTION 'not_authorized'; END IF;\n  IF _source_load_id = _target_load_id THEN RAISE EXCEPTION 'same_load'; END IF;\n  IF public._load_is_locked(_source_load_id) THEN RAISE EXCEPTION 'source_load_locked'; END IF;\n  IF public._load_is_locked(_target_load_id) THEN RAISE EXCEPTION 'target_load_locked'; END IF;\n\n  SELECT COALESCE(array_agg(DISTINCT fiscal_document_id) FILTER (WHERE fiscal_document_id IS NOT NULL),\n                  ARRAY[]::uuid[])\n    INTO v_doc_ids\n  FROM public.load_items\n  WHERE id = ANY(_item_ids) AND load_id = _source_load_id AND tenant_id = _tenant_id;\n\n  UPDATE public.load_items\n    SET load_id = _target_load_id, updated_at = now()\n    WHERE id = ANY(_item_ids) AND load_id = _source_load_id AND tenant_id = _tenant_id;\n  GET DIAGNOSTICS v_moved = ROW_COUNT;\n\n  IF array_length(v_doc_ids, 1) IS NOT NULL THEN\n    UPDATE public.fiscal_documents\n      SET load_id = _target_load_id, updated_at = now()\n      WHERE id = ANY(v_doc_ids) AND tenant_id = _tenant_id;\n  END IF;\n\n  PERFORM public._log_entity_audit(_tenant_id, 'load', _source_load_id, 'move_items_out',\n    NULL, jsonb_build_object('target_load_id', _target_load_id, 'item_ids', to_jsonb(_item_ids),\n                             'document_ids', to_jsonb(v_doc_ids)), 'composition_rpc');\n  PERFORM public._log_entity_audit(_tenant_id, 'load', _target_load_id, 'move_items_in',\n    NULL, jsonb_build_object('source_load_id', _source_load_id, 'item_ids', to_jsonb(_item_ids),\n                             'document_ids', to_jsonb(v_doc_ids)), 'composition_rpc');\n\n  RETURN jsonb_build_object('moved', v_moved, 'document_ids', COALESCE(to_jsonb(v_doc_ids), '[]'::jsonb));\nEND $function$\n",
+      "hash": "7426489e533d6eecb3335dcd5bc1c8dd",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "remove_fiscal_documents_from_load(uuid,uuid,uuid[])",
+      "definition": "CREATE OR REPLACE FUNCTION public.remove_fiscal_documents_from_load(_tenant_id uuid, _load_id uuid, _document_ids uuid[])\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE v_count int;\nBEGIN\n  IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN RAISE EXCEPTION 'not_authorized'; END IF;\n  IF public._load_is_locked(_load_id) THEN RAISE EXCEPTION 'load_locked'; END IF;\n\n  DELETE FROM public.load_items\n    WHERE load_id = _load_id AND fiscal_document_id = ANY(_document_ids) AND tenant_id = _tenant_id;\n  GET DIAGNOSTICS v_count = ROW_COUNT;\n\n  UPDATE public.fiscal_documents\n    SET load_id = NULL, updated_at = now()\n    WHERE id = ANY(_document_ids) AND tenant_id = _tenant_id AND load_id = _load_id;\n\n  PERFORM public._log_entity_audit(_tenant_id, 'load', _load_id, 'remove_documents',\n    NULL, jsonb_build_object('document_ids', to_jsonb(_document_ids)), 'composition_rpc');\n\n  RETURN jsonb_build_object('removed', v_count, 'load_id', _load_id);\nEND $function$\n",
+      "hash": "cb97d4e58d535240efc9be062cbd1593",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "remove_fiscal_documents_from_load_v2(uuid,uuid,uuid[])",
+      "definition": "CREATE OR REPLACE FUNCTION public.remove_fiscal_documents_from_load_v2(_tenant_id uuid, _load_id uuid, _document_ids uuid[])\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE v_result jsonb;\nBEGIN\n  v_result := public.remove_fiscal_documents_from_load(_tenant_id, _load_id, _document_ids);\n  PERFORM public.recalculate_load_totals(_tenant_id, _load_id);\n  RETURN v_result || jsonb_build_object('totals_recalculated', true);\nEND;\n$function$\n",
+      "hash": "385f77f83284de737f01eeba4d466f53",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "upsert_load_item_v3(uuid,uuid,uuid,uuid,text,numeric,numeric,numeric,numeric,text,text,uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.upsert_load_item_v3(p_tenant_id uuid, p_load_id uuid DEFAULT NULL::uuid, p_item_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid, p_item_description text DEFAULT NULL::text, p_quantity numeric DEFAULT NULL::numeric, p_pallet_count numeric DEFAULT NULL::numeric, p_weight_kg numeric DEFAULT NULL::numeric, p_volume_m3 numeric DEFAULT NULL::numeric, p_status text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_fiscal_document_id uuid DEFAULT NULL::uuid)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_item public.load_items;\n  v_item_id uuid;\n  v_load_id uuid;\n  v_fiscal_document_id uuid;\nBEGIN\n  IF NOT public.is_tenant_operator_or_admin(p_tenant_id) THEN\n    RAISE EXCEPTION 'not_authorized';\n  END IF;\n\n  IF p_item_id IS NOT NULL THEN\n    SELECT * INTO v_item\n    FROM public.load_items\n    WHERE id = p_item_id AND tenant_id = p_tenant_id\n    FOR UPDATE;\n    IF NOT FOUND THEN RAISE EXCEPTION 'load_item_not_found'; END IF;\n    IF p_load_id IS NOT NULL AND p_load_id <> v_item.load_id THEN\n      RAISE EXCEPTION 'load_change_requires_move_rpc';\n    END IF;\n    v_load_id := v_item.load_id;\n  ELSE\n    v_load_id := p_load_id;\n  END IF;\n\n  IF v_load_id IS NULL OR NOT EXISTS (\n    SELECT 1 FROM public.loads WHERE id = v_load_id AND tenant_id = p_tenant_id\n  ) THEN\n    RAISE EXCEPTION 'load_not_found';\n  END IF;\n  IF public._load_is_locked(v_load_id) THEN RAISE EXCEPTION 'load_locked'; END IF;\n\n  IF p_order_id IS NOT NULL AND NOT EXISTS (\n    SELECT 1 FROM public.orders WHERE id = p_order_id AND tenant_id = p_tenant_id\n  ) THEN\n    RAISE EXCEPTION 'order_not_found';\n  END IF;\n  IF p_fiscal_document_id IS NOT NULL AND NOT EXISTS (\n    SELECT 1 FROM public.fiscal_documents WHERE id = p_fiscal_document_id AND tenant_id = p_tenant_id\n  ) THEN\n    RAISE EXCEPTION 'fiscal_document_not_found';\n  END IF;\n  IF p_status IS NOT NULL AND p_status <> ALL(ARRAY[\n    'pending', 'waiting_conference', 'in_stock', 'picking', 'ready_for_load',\n    'in_loading', 'loaded', 'in_transit', 'delivered', 'divergence', 'return', 'redelivery'\n  ]) THEN\n    RAISE EXCEPTION 'invalid_load_item_status';\n  END IF;\n\n  IF p_item_id IS NULL THEN\n    INSERT INTO public.load_items (\n      tenant_id, load_id, order_id, fiscal_document_id, item_description,\n      quantity, pallet_count, weight_kg, volume_m3, status, notes\n    ) VALUES (\n      p_tenant_id, v_load_id, p_order_id, p_fiscal_document_id,\n      COALESCE(p_item_description, ''), COALESCE(p_quantity, 0),\n      COALESCE(p_pallet_count, 0), COALESCE(p_weight_kg, 0), COALESCE(p_volume_m3, 0),\n      COALESCE(p_status, 'pending'), p_notes\n    ) RETURNING id, fiscal_document_id INTO v_item_id, v_fiscal_document_id;\n  ELSE\n    UPDATE public.load_items\n    SET order_id = COALESCE(p_order_id, order_id),\n        item_description = COALESCE(p_item_description, item_description),\n        quantity = COALESCE(p_quantity, quantity),\n        pallet_count = COALESCE(p_pallet_count, pallet_count),\n        weight_kg = COALESCE(p_weight_kg, weight_kg),\n        volume_m3 = COALESCE(p_volume_m3, volume_m3),\n        status = COALESCE(p_status, status),\n        notes = COALESCE(p_notes, notes),\n        fiscal_document_id = COALESCE(p_fiscal_document_id, fiscal_document_id),\n        updated_at = now()\n    WHERE id = p_item_id AND tenant_id = p_tenant_id\n    RETURNING id, fiscal_document_id INTO v_item_id, v_fiscal_document_id;\n  END IF;\n\n  IF v_fiscal_document_id IS NOT NULL THEN\n    UPDATE public.fiscal_documents\n    SET load_id = v_load_id, updated_at = now()\n    WHERE id = v_fiscal_document_id AND tenant_id = p_tenant_id;\n  END IF;\n\n  PERFORM public.recalculate_load_totals(p_tenant_id, v_load_id);\n  PERFORM public._log_entity_audit(\n    p_tenant_id,\n    'load_item',\n    v_item_id,\n    CASE WHEN p_item_id IS NULL THEN 'create' ELSE 'update' END,\n    NULL,\n    jsonb_build_object('load_id', v_load_id, 'status', COALESCE(p_status, v_item.status, 'pending')),\n    'upsert_load_item_v3'\n  );\n\n  RETURN v_item_id;\nEND;\n$function$\n",
+      "hash": "62f819a77731d9fc694d7cd9bc4fe0db",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "_sync_fiscal_document_load_mirror()",
+      "definition": "CREATE OR REPLACE FUNCTION public._sync_fiscal_document_load_mirror()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_document_id uuid;\n  v_load_count integer;\n  v_load_id uuid;\nBEGIN\n  FOR v_document_id IN\n    SELECT DISTINCT document_id\n    FROM unnest(ARRAY[\n      CASE WHEN TG_OP <> 'DELETE' THEN NEW.fiscal_document_id ELSE NULL END,\n      CASE WHEN TG_OP <> 'INSERT' THEN OLD.fiscal_document_id ELSE NULL END\n    ]) AS affected(document_id)\n    WHERE document_id IS NOT NULL\n  LOOP\n    SELECT count(DISTINCT load_id), (array_agg(DISTINCT load_id ORDER BY load_id))[1]\n    INTO v_load_count, v_load_id\n    FROM public.load_items\n    WHERE fiscal_document_id = v_document_id;\n\n    IF v_load_count > 1 THEN\n      RAISE EXCEPTION 'Documento fiscal % não pode pertencer a mais de uma carga', v_document_id;\n    END IF;\n\n    UPDATE public.fiscal_documents\n    SET load_id = v_load_id,\n        updated_at = now()\n    WHERE id = v_document_id\n      AND load_id IS DISTINCT FROM v_load_id;\n  END LOOP;\n\n  RETURN COALESCE(NEW, OLD);\nEND;\n$function$\n",
+      "hash": "098af8ebf9e9defbc4153f7b6fba43e4",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true,
+      "security_definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "comment": "Internal trigger: keeps fiscal_documents.load_id synchronized from canonical load_items relationships."
+    },
+    {
+      "signature": "recalc_load_totals()",
+      "definition": "CREATE OR REPLACE FUNCTION public.recalc_load_totals()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  UPDATE public.loads SET\n    total_pallet_count = COALESCE((SELECT SUM(pallet_count) FROM public.load_items WHERE load_id = COALESCE(NEW.load_id, OLD.load_id)), 0),\n    total_weight_kg = COALESCE((SELECT SUM(weight_kg) FROM public.load_items WHERE load_id = COALESCE(NEW.load_id, OLD.load_id)), 0),\n    total_volume_m3 = COALESCE((SELECT SUM(volume_m3) FROM public.load_items WHERE load_id = COALESCE(NEW.load_id, OLD.load_id)), 0),\n    updated_at = now()\n  WHERE id = COALESCE(NEW.load_id, OLD.load_id);\n  RETURN COALESCE(NEW, OLD);\nEND;\n$function$\n",
+      "hash": "87b2082210a98ec8b9447543b6092e8e",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "recalculate_load_totals(uuid,uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.recalculate_load_totals(p_tenant_id uuid, p_load_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n    UPDATE public.loads\n    SET \n        total_weight_kg = COALESCE((SELECT SUM(weight_kg) FROM public.load_items WHERE load_id = p_load_id AND tenant_id = p_tenant_id), 0),\n        total_volume_m3 = COALESCE((SELECT SUM(volume_m3) FROM public.load_items WHERE load_id = p_load_id AND tenant_id = p_tenant_id), 0),\n        total_pallet_count = COALESCE((SELECT SUM(pallet_count) FROM public.load_items WHERE load_id = p_load_id AND tenant_id = p_tenant_id), 0)\n    WHERE id = p_load_id AND tenant_id = p_tenant_id;\nEND;\n$function$\n",
+      "hash": "b1db75fc257d1279f5bd0ab4f1f1acf8",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "trg_handle_empty_load_on_doc_change()",
+      "definition": "CREATE OR REPLACE FUNCTION public.trg_handle_empty_load_on_doc_change()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public'\nAS $function$\nBEGIN\n    -- If it's an UPDATE that changed load_id, check the OLD load_id\n    IF TG_OP = 'UPDATE' THEN\n        IF OLD.load_id IS NOT NULL AND (NEW.load_id IS NULL OR NEW.load_id <> OLD.load_id OR NEW.status = 'deleted') THEN\n            PERFORM public.delete_load_if_empty(OLD.load_id);\n        END IF;\n    -- If it's a DELETE, check the OLD load_id\n    ELSIF TG_OP = 'DELETE' THEN\n        IF OLD.load_id IS NOT NULL THEN\n            PERFORM public.delete_load_if_empty(OLD.load_id);\n        END IF;\n    END IF;\n    RETURN NULL;\nEND;\n$function$\n",
+      "hash": "a0e0758aa917356d938277bf7026565e",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true,
+      "security_definer": false,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "delete_load_if_empty(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.delete_load_if_empty(v_load_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n    v_doc_count INT;\n    v_tenant_id UUID;\nBEGIN\n    IF v_load_id IS NULL THEN\n        RETURN;\n    END IF;\n\n    -- Count active fiscal documents for this load\n    SELECT count(*) INTO v_doc_count\n    FROM public.fiscal_documents\n    WHERE load_id = v_load_id \n      AND deleted_at IS NULL \n      AND status <> 'deleted';\n\n    IF v_doc_count = 0 THEN\n        SELECT tenant_id INTO v_tenant_id FROM public.loads WHERE id = v_load_id;\n        \n        IF v_tenant_id IS NOT NULL THEN\n            -- delete_load_safely handles unlinking remaining items and deleting the load\n            PERFORM public.delete_load_safely(v_tenant_id, v_load_id);\n        END IF;\n    END IF;\nEXCEPTION WHEN OTHERS THEN\n    NULL;\nEND;\n$function$\n",
+      "hash": "242330e8795383f6d9e66cdb4cd83b3a",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    },
+    {
+      "signature": "delete_load_safely(uuid,uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.delete_load_safely(_tenant_id uuid, _load_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE v_pod int; v_terminal_doc int; v_dtl int; v_crit_occ int;\nBEGIN\n  IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN RAISE EXCEPTION 'not_authorized'; END IF;\n  IF public._load_is_locked(_load_id) THEN RAISE EXCEPTION 'load_locked'; END IF;\n\n  SELECT count(*) INTO v_pod FROM public.proof_of_delivery WHERE load_id = _load_id;\n  IF v_pod > 0 THEN RAISE EXCEPTION 'load_has_pod'; END IF;\n\n  SELECT count(*) INTO v_terminal_doc\n    FROM public.fiscal_documents\n    WHERE load_id = _load_id AND tenant_id = _tenant_id\n      AND status IN ('delivered','partial_delivery','returned','refused','failed','not_delivered');\n  IF v_terminal_doc > 0 THEN RAISE EXCEPTION 'load_has_terminal_documents'; END IF;\n\n  SELECT count(*) INTO v_dtl FROM public.dispatch_trip_loads WHERE load_id = _load_id;\n  IF v_dtl > 0 THEN RAISE EXCEPTION 'load_in_dispatch_trip'; END IF;\n\n  SELECT count(*) INTO v_crit_occ\n    FROM public.operational_events\n    WHERE load_id = _load_id AND public_status = 'open' AND severity IN ('high','critical');\n  IF v_crit_occ > 0 THEN RAISE EXCEPTION 'load_has_critical_occurrence'; END IF;\n\n  UPDATE public.fiscal_documents SET load_id = NULL, updated_at = now()\n    WHERE load_id = _load_id AND tenant_id = _tenant_id;\n  DELETE FROM public.load_items WHERE load_id = _load_id AND tenant_id = _tenant_id;\n  DELETE FROM public.loads WHERE id = _load_id AND tenant_id = _tenant_id;\n\n  PERFORM public._log_entity_audit(_tenant_id, 'load', _load_id, 'delete_safely', NULL, NULL, 'composition_rpc');\n\n  RETURN jsonb_build_object('deleted', true, 'load_id', _load_id);\nEND $function$\n",
+      "hash": "67ab76c6b2de56f9f7392e0567a9026f",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true,
+      "security_definer": true,
+      "config": [
+        "search_path=public"
+      ],
+      "comment": null
+    }
+  ]
+}

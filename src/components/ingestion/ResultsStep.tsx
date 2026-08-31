@@ -7,7 +7,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { PdfWorkerRequest, PdfWorkerResponse } from './pdfReportWorker';
 import type { IngestionReport } from '@/lib/ingestion/types';
 
@@ -18,6 +18,7 @@ interface ResultsStepProps {
 }
 
 export default function ResultsStep({ results, onReset, report }: ResultsStepProps) {
+  const toast = useSonnerToast();
   const navigate = useNavigate();
   const successes = results.filter(r => r.startsWith('✅'));
   const errors = results.filter(r => r.startsWith('❌'));

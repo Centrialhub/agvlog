@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,7 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Plus, Search, Pencil, Trash2, DollarSign } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 
 const UF_OPTIONS = [
   'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
@@ -61,6 +61,8 @@ const emptyForm = {
 };
 
 export default function FreightTables() {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
 

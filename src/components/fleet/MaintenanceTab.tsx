@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Wrench, AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format, isPast, addDays } from 'date-fns';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -48,6 +48,7 @@ interface Props {
 }
 
 export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
+  const toast = useSonnerToast();
   const { data: items = [], isLoading } = useVehicleMaintenanceList(vehicleId);
   const createMut = useCreateMaintenance();
   const updateMut = useUpdateMaintenance();

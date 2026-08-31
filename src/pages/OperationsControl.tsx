@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,13 +11,28 @@ import AlertsPanel from '@/components/control-tower/AlertsPanel';
 import TripDetailsDrawer from '@/components/control-tower/TripDetailsDrawer';
 import { STATE_COLORS, STATE_LABELS, type ActiveTripLive } from '@/lib/controlTower/types';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
+import { requireRouteResult } from '@/lib/controlTower/contracts';
+import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
+import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
+import { calculateTripRoute } from '@/lib/controlTower/routeCalculation';
 
 
 export default function OperationsControl() {
-  const { data: trips = [], isLoading, dataUpdatedAt, refetch, isFetching } = useActiveTripsLive();
-  const { data: alerts = [] } = useOpenTripAlerts();
-  const [selectedTrip, setSelectedTrip] = useState<ActiveTripLive | null>(null);
+  const { toast } = useToast();
+  const {currentTenant}=useTenant();
+  const {user}=useAuth();
+  const capability=useTenantCapabilities();
+  const [evaluating,setEvaluating]=useState(false);
+  const tripQuery = useActiveTripsLive();
+  const alertQuery = useOpenTripAlerts();
+  const { isLoading, dataUpdatedAt, refetch, isFetching } = tripQuery;
+  const trips = tripQuery.isError ? [] : tripQuery.data ?? [];
+  const alerts = alertQuery.isError ? [] : alertQuery.data ?? [];
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedTrip = trips.find(t => t.trip_id === selectedId) ?? null;
+  const setSelectedTrip = (trip: ActiveTripLive | null) => setSelectedId(trip?.trip_id ?? null);
   const [now, setNow] = useState(Date.now());
   const [calculatingAll, setCalculatingAll] = useState(false);
 
@@ -28,35 +43,40 @@ export default function OperationsControl() {
 
   const lastUpdateAge = dataUpdatedAt ? Math.round((now - dataUpdatedAt) / 1000) : null;
 
-  const criticalCount = useMemo(
-    () => alerts.filter((a) => a.severity === 'critical' || a.severity === 'danger').length,
-    [alerts],
-  );
+  const criticalCount = alerts.filter(a => a.severity === 'critical' || a.severity === 'danger').length;
 
   const goFullscreen = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen();
   };
+  const evaluateTracking=async()=>{
+    if(!currentTenant || !capability.isEnabled('ssx') || capability.isError || evaluating)return;
+    setEvaluating(true);
+    try {
+      requireRouteResult(await supabase.functions.invoke('update-trip-live-status',{body:{tenant_id:currentTenant.id}}));
+      await Promise.all([refetch(),alertQuery.refetch()]);
+      toast({title:'Rastreamento reavaliado',description:'Avaliação das posições já recebidas. Nenhuma consulta ao provedor SSX.'});
+    }catch{toast({title:'Falha ao reavaliar rastreamento',description:'A atualização não foi confirmada.',variant:'destructive'});}
+    finally{setEvaluating(false);}
+  };
 
   const handleCalculateAll = async () => {
-    if (trips.length === 0) return;
+    if (trips.length === 0 || !user || !currentTenant || calculatingAll) return;
     setCalculatingAll(true);
     try {
-      const results = await Promise.allSettled(
-        trips.map((t) =>
-          supabase.functions.invoke('calculate-trip-route', { body: { trip_id: t.trip_id } })
-        )
-      );
+      const results = await Promise.allSettled(trips.map(async t => {
+        await calculateTripRoute(currentTenant.id,user.id,t.trip_id);
+      }));
       const ok = results.filter((r) => r.status === 'fulfilled').length;
       const fail = results.length - ok;
       toast({
-        title: 'Rotas calculadas',
+        title: fail ? 'Cálculo com falhas' : 'Rotas calculadas',
         description: `${ok} sucesso${fail > 0 ? `, ${fail} falha` : ''} via OSRM.`,
-        variant: fail > 0 ? 'default' : 'default',
+        variant: fail > 0 ? 'destructive' : 'default',
       });
       await refetch();
-    } catch (e: any) {
-      toast({ title: 'Falha ao calcular rotas', description: e?.message ?? 'Erro inesperado', variant: 'destructive' });
+    } catch {
+      toast({ title: 'Falha ao calcular rotas', description: 'Não foi possível confirmar o cálculo.', variant: 'destructive' });
     } finally {
       setCalculatingAll(false);
     }
@@ -72,34 +92,42 @@ export default function OperationsControl() {
           </div>
           <div>
             <h1 className="text-sm font-bold tracking-tight">Torre de Controle Operacional</h1>
-            <p className="text-[10px] text-muted-foreground">Monitoramento em tempo real</p>
+            <p className="text-[10px] text-muted-foreground">Dados operacionais · posições somente com rastreamento habilitado e sinal recente</p>
           </div>
         </div>
         <div className="flex items-center gap-3 ml-auto text-xs">
-          <Metric label="Veículos ativos" value={trips.length} />
-          <Metric label="Alertas críticos" value={criticalCount} tone={criticalCount > 0 ? 'text-red-600' : ''} />
-          <Metric label="Última atualização" value={lastUpdateAge != null ? `${lastUpdateAge}s atrás` : '—'} />
-          <Button size="sm" variant="ghost" onClick={() => refetch()} disabled={isFetching}>
+          <Metric label="Viagens ativas" value={tripQuery.isError ? '—' : trips.length} />
+          <Metric label="Alertas críticos" value={alertQuery.isError ? '—' : criticalCount} tone={criticalCount > 0 ? 'text-red-600' : ''} />
+          <Metric label="Última consulta válida" value={!tripQuery.isError && lastUpdateAge != null ? `${lastUpdateAge}s atrás` : '—'} />
+          <Button size="sm" variant="ghost" aria-label="Atualizar torre" onClick={() => { void refetch(); void alertQuery.refetch(); }} disabled={isFetching || alertQuery.isFetching}>
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
           </Button>
-          <Button size="sm" variant="ghost" onClick={goFullscreen}>
+          <Button size="sm" variant="ghost" aria-label="Alternar tela cheia" onClick={goFullscreen}>
             <Maximize2 className="h-3.5 w-3.5" />
           </Button>
         </div>
       </header>
+      <div className="flex items-center gap-3 border-b p-2 text-xs">
+        <p>{capability.isEnabled('ssx') && !capability.isError ? 'SSX habilitado. Consulta de dados não recalcula alertas automaticamente.' : 'SSX desativado ou indisponível. Nenhuma atualização de rastreamento será executada.'}</p>
+        <Button size="sm" variant="outline" onClick={evaluateTracking} disabled={!capability.isEnabled('ssx') || capability.isError || evaluating}>
+          {evaluating ? 'Reavaliando…' : 'Reavaliar rastreamento'}
+        </Button>
+      </div>
+      {tripQuery.isError && <p role="alert" className="p-3 text-destructive">Não foi possível consultar as viagens. Dados anteriores ocultados; use Atualizar torre para tentar novamente.</p>}
+      {alertQuery.isError && <p role="alert" className="p-3 text-destructive">Não foi possível consultar os alertas. Não é possível afirmar que não há alertas abertos.</p>}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
         <aside className="w-72 border-r bg-card flex flex-col overflow-hidden">
           <div className="p-3 border-b">
-            <KpiCards trips={trips} />
+            {!tripQuery.isError && <KpiCards trips={trips} />}
           </div>
 
           <div className="p-3 border-b">
             <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Alertas ({alerts.length})
             </h3>
-            <AlertsPanel alerts={alerts} trips={trips} onSelectTrip={setSelectedTrip} />
+            {!alertQuery.isError && !alertQuery.isPending && <AlertsPanel alerts={alerts} trips={trips} onSelectTrip={setSelectedTrip} />}
           </div>
 
           <div className="flex-1 overflow-hidden flex flex-col">
@@ -124,7 +152,7 @@ export default function OperationsControl() {
                 {isLoading && (
                   <p className="text-xs text-muted-foreground text-center py-4">Carregando…</p>
                 )}
-                {!isLoading && trips.length === 0 && (
+                {!isLoading && !tripQuery.isError && trips.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">Nenhuma viagem ativa.</p>
                 )}
                 {trips.map((t) => (
@@ -156,6 +184,7 @@ export default function OperationsControl() {
       </div>
 
       <TripDetailsDrawer
+        key={selectedTrip?.trip_id ?? 'closed'}
         trip={selectedTrip}
         open={!!selectedTrip}
         onOpenChange={(v) => !v && setSelectedTrip(null)}

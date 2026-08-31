@@ -1,4 +1,5 @@
 export type TripLiveState =
+  | 'planned' | 'tracking_disabled' | 'unknown'
   | 'normal' | 'arriving' | 'at_stop' | 'stopped'
   | 'delayed' | 'off_route' | 'no_signal' | 'critical';
 
@@ -12,6 +13,8 @@ export interface ActiveTripLiveStop {
   actual_arrival_at?: string | null;
   actual_departure_at?: string | null;
   status: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface ActiveTripLiveLoad {
@@ -23,8 +26,11 @@ export interface ActiveTripLiveLoad {
 
 export interface ActiveTripLive {
   trip_id: string;
+  tenant_id: string;
+  trip_status: string;
+  tracking_enabled: boolean;
   trip_code: string;
-  vehicle_id: string;
+  vehicle_id: string | null;
   vehicle_plate: string | null;
   vehicle_name: string | null;
   driver_id: string | null;
@@ -66,6 +72,9 @@ export interface TripAlert {
 }
 
 export const STATE_LABELS: Record<TripLiveState, string> = {
+  planned: 'Não iniciada',
+  tracking_disabled: 'Rastreamento desativado',
+  unknown: 'Aguardando avaliação',
   normal: 'Em rota',
   arriving: 'Chegando',
   at_stop: 'Na parada',
@@ -77,6 +86,9 @@ export const STATE_LABELS: Record<TripLiveState, string> = {
 };
 
 export const STATE_COLORS: Record<TripLiveState, string> = {
+  planned: '#64748b',
+  tracking_disabled: '#64748b',
+  unknown: '#64748b',
   normal: '#2563eb',
   arriving: '#0ea5e9',
   at_stop: '#16a34a',

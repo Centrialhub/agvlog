@@ -1,0 +1,241 @@
+{
+  "stage": "A: installed but all six new functions are private to database owner; cutover not applied",
+  "production_contract": {
+    "functions": [
+      {
+        "anon": false,
+        "hash": "be12c89528e9935bc76ce89dec420de7",
+        "definer": false,
+        "service": false,
+        "signature": "_delivery_result_from_statuses(text[])",
+        "authenticated": false
+      },
+      {
+        "anon": false,
+        "hash": "f9c85c43e7813e316467b95fb09b5963",
+        "definer": false,
+        "service": false,
+        "signature": "_derive_driver_delivery_result(uuid,uuid)",
+        "authenticated": false
+      },
+      {
+        "anon": false,
+        "hash": "ffa8920db62358d266660d11685ed9c0",
+        "definer": false,
+        "service": false,
+        "signature": "_lock_delivery_trip_graph(uuid,uuid)",
+        "authenticated": false
+      },
+      {
+        "anon": false,
+        "hash": "78068242359e41562da395ea27564dd2",
+        "definer": false,
+        "service": false,
+        "signature": "_lock_driver_delivery_stop(uuid)",
+        "authenticated": false
+      },
+      {
+        "anon": false,
+        "hash": "8c2b9d7ee1dbac08dc3a80fab68aff59",
+        "definer": true,
+        "service": true,
+        "signature": "derive_trip_and_load_status_v1(uuid,uuid)",
+        "authenticated": false
+      },
+      {
+        "anon": false,
+        "hash": "4763cb11f881c831b3b632c58018b71d",
+        "definer": true,
+        "service": true,
+        "signature": "driver_finalize_delivery(uuid,text,text,text[],text,text,text)",
+        "authenticated": true
+      },
+      {
+        "anon": false,
+        "hash": "65c6456a38ade57bb4c7137bc81d1f16",
+        "definer": true,
+        "service": false,
+        "signature": "driver_record_delivery_note(uuid,text,jsonb,uuid)",
+        "authenticated": false
+      },
+      {
+        "anon": false,
+        "hash": "381e01547f4b7b67d1945018151ff3e2",
+        "definer": true,
+        "service": false,
+        "signature": "driver_record_delivery_outcome(uuid,text,jsonb,uuid,text)",
+        "authenticated": false
+      },
+      {
+        "anon": false,
+        "hash": "bc46a754cd9e3f9d688b80292d4837dc",
+        "definer": true,
+        "service": true,
+        "signature": "driver_update_stop_status(uuid,text,text)",
+        "authenticated": true
+      },
+      {
+        "anon": false,
+        "hash": "fa2466240c273dee0aa0e9e74c91ff1e",
+        "definer": true,
+        "service": true,
+        "signature": "finalize_driver_delivery(uuid,text,text,text[],uuid)",
+        "authenticated": false
+      },
+      {
+        "anon": false,
+        "hash": "4aaa78a290e6ad9e8ce1ced7396f374d",
+        "definer": true,
+        "service": true,
+        "signature": "transition_stop_status_v1(uuid,uuid,text,uuid,text,text,jsonb)",
+        "authenticated": false
+      }
+    ],
+    "migration": {
+      "name": "enforce_delivery_outcome_atomicity",
+      "version": "20260830050226"
+    }
+  },
+  "pre_deployment_contract": {
+    "legacy": [
+      {
+        "anon": false,
+        "auth": false,
+        "hash": "8c2b9d7ee1dbac08dc3a80fab68aff59",
+        "service": true,
+        "signature": "derive_trip_and_load_status_v1(uuid,uuid)"
+      },
+      {
+        "anon": false,
+        "auth": true,
+        "hash": "4763cb11f881c831b3b632c58018b71d",
+        "service": true,
+        "signature": "driver_finalize_delivery(uuid,text,text,text[],text,text,text)"
+      },
+      {
+        "anon": false,
+        "auth": true,
+        "hash": "bc46a754cd9e3f9d688b80292d4837dc",
+        "service": true,
+        "signature": "driver_update_stop_status(uuid,text,text)"
+      },
+      {
+        "anon": false,
+        "auth": false,
+        "hash": "fa2466240c273dee0aa0e9e74c91ff1e",
+        "service": true,
+        "signature": "finalize_driver_delivery(uuid,text,text,text[],uuid)"
+      },
+      {
+        "anon": false,
+        "auth": false,
+        "hash": "4aaa78a290e6ad9e8ce1ced7396f374d",
+        "service": true,
+        "signature": "transition_stop_status_v1(uuid,uuid,text,uuid,text,text,jsonb)"
+      }
+    ],
+    "request_index": null,
+    "canonical_new_history": 0,
+    "existing_new_functions": 0
+  },
+  "runtime_api_denials": [
+    {
+      "role": "anon",
+      "outcome_denied": true,
+      "note_denied": true,
+      "sqlstate": "42501"
+    },
+    {
+      "role": "authenticated",
+      "outcome_denied": true,
+      "note_denied": true,
+      "sqlstate": "42501"
+    },
+    {
+      "role": "service_role",
+      "outcome_denied": true,
+      "note_denied": true,
+      "sqlstate": "42501"
+    }
+  ],
+  "owner_with_driver_identity_rolled_back_probe": {
+    "result": {
+      "pod_ids": [],
+      "event_id": "6372fe08-f5c6-42a4-9045-f3501412c4cf",
+      "replayed": false,
+      "trip_completed": true,
+      "updated_stop_id": "d66535db-7cdb-46a9-8172-bd205722a5af",
+      "operational_event_id": "8ca1260e-aa65-42d5-9f23-7d57ccc1cd75"
+    },
+    "payments": 0,
+    "replayed": true,
+    "execution": "database-owner-with-driver-identity; APIs remain private",
+    "same_event": true,
+    "settlement": {
+      "loads": 1,
+      "reason": null,
+      "status": "pending_review",
+      "paid_at": null,
+      "documents": 103,
+      "approved_at": null,
+      "needs_recalculation": false,
+      "snapshot_trip_status": "completed"
+    },
+    "load_status": "failed",
+    "stop_status": "failed",
+    "trip_status": "completed",
+    "internal_qa_occurrences": 2,
+    "failed_inbound_documents": 103
+  },
+  "foreign_identity_denied": true,
+  "persisted_qa_events": 0,
+  "persisted_qa_occurrences": 0,
+  "before_probe": {
+    "load": "263f0d463d1d21715b8b347ba5fbf6ba",
+    "trip": "3612b894bb4711bccbe420e4c1bffdde",
+    "stops": "1b956e7cc91ca46970a4b4019fbd6363",
+    "events": 7,
+    "proofs": 0,
+    "documents": "a8bfc01728e41b662ebf76f8797dc6ba",
+    "occurrences": 1,
+    "settlements": 0
+  },
+  "after_rollback_independent_read": {
+    "load": "263f0d463d1d21715b8b347ba5fbf6ba",
+    "trip": "3612b894bb4711bccbe420e4c1bffdde",
+    "stops": "1b956e7cc91ca46970a4b4019fbd6363",
+    "events": 7,
+    "proofs": 0,
+    "documents": "a8bfc01728e41b662ebf76f8797dc6ba",
+    "occurrences": 1,
+    "settlements": 0
+  },
+  "before_security_advisors": {
+    "rls_enabled_no_policy": 3,
+    "authenticated_security_definer_function_executable": 140,
+    "auth_leaked_password_protection": 1
+  },
+  "after_security_advisors": {
+    "rls_enabled_no_policy": 3,
+    "authenticated_security_definer_function_executable": 140,
+    "auth_leaked_password_protection": 1
+  },
+  "browser": {
+    "requested_url": "https://agvlog.lovable.app/driver/deliveries",
+    "actual_url": "https://agvlog.lovable.app/auth",
+    "labels": [
+      "Email",
+      "Senha",
+      "Entrar"
+    ],
+    "page_errors": 0,
+    "authenticated_e2e": false,
+    "screenshot": "delivery-stage-a-postdeploy-auth-2026-08-30.png"
+  },
+  "limits": [
+    "No frontend deployment",
+    "No delivery API granted to anon/authenticated/service_role in stage A",
+    "Successful photo/signature storage flow not tested on production",
+    "No fiscal emission, payment, paid service or SSX activation"
+  ]
+}

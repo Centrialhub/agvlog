@@ -64,22 +64,7 @@ export function usePayablePayments(payableId: string | null) {
   });
 }
 
-export function useReceivablePayments(receivableId: string | null) {
-  return useQuery({
-    queryKey: ['receivables_payments', receivableId],
-    queryFn: async () => {
-      if (!receivableId) return [];
-      const { data, error } = await supabase
-        .from('receivables_payments')
-        .select('*, bank_accounts(name)')
-        .eq('receivable_id', receivableId)
-        .order('received_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!receivableId,
-  });
-}
+
 
 export function useRegisterPayablePayment() {
   const qc = useQueryClient();
@@ -124,48 +109,7 @@ export function useReversePayablePayment() {
   });
 }
 
-export function useRegisterReceivablePayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (args: {
-      receivable_id: string; amount: number; received_at: string;
-      bank_account_id: string; method: PaymentMethod;
-      notes?: string | null; attachment_url?: string | null;
-    }) => {
-      const { data, error } = await supabase.rpc('register_receivable_payment', {
-        _receivable_id: args.receivable_id,
-        _amount: args.amount,
-        _received_at: args.received_at,
-        _bank_account_id: args.bank_account_id,
-        _method: args.method,
-        _notes: args.notes ?? undefined,
-        _attachment_url: args.attachment_url ?? undefined,
-      });
-      if (error) throw error;
-      return data as string;
-    },
-    onSuccess: (_d, v) => {
-      qc.invalidateQueries({ queryKey: ['receivables'] });
-      qc.invalidateQueries({ queryKey: ['receivables_payments', v.receivable_id] });
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-    },
-  });
-}
 
-export function useReverseReceivablePayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payment_id: string) => {
-      const { error } = await supabase.rpc('reverse_receivable_payment', { _payment_id: payment_id });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['receivables'] });
-      qc.invalidateQueries({ queryKey: ['receivables_payments'] });
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-    },
-  });
-}
 
 export function useCreateManualExpense() {
   const { currentTenant } = useTenant();

@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   Route, Plus, Wand2, Trash2,
   PackageCheck, ChevronDown, ChevronUp,
@@ -24,6 +24,7 @@ import {
 import { format } from 'date-fns';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 import StopDraftTable from '@/components/route-planning/StopDraftTable';
+import DispatchRecoveryPanel from '@/components/route-planning/DispatchRecoveryPanel';
 import RouteValidationPanel from '@/components/route-planning/RouteValidationPanel';
 import { consolidateLoadsIntoStops } from '@/lib/route-planning/stopConsolidation';
 import { routeStopOrder } from '@/lib/route-planning/routeStopOrder';
@@ -34,9 +35,10 @@ import { generateAutomaticRoutePlans, defaultPlannedStartAt } from '@/lib/route-
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
 import { useCustomerDeliveryWindowsForRouting } from '@/hooks/route-planning/useCustomerDeliveryWindowsForRouting';
 import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePlan';
+import { useRoutePlanAutosave } from '@/hooks/route-planning/useRoutePlanAutosave';
 import { validateRouteConsistency } from '@/lib/route-planning/routeConsistency';
 import { computeRouteStatus, STATUS_VISUALS, type RoutePlanStatusExt } from '@/lib/route-planning/routeStatus';
-import { useRoutePlanningDrafts, useSavePlanSnapshot, useDeleteDraft, DraftConflictError, type RoutePlanSnapshot } from '@/hooks/useRoutePlanningDrafts';
+import { useRoutePlanningDrafts, useSavePlanSnapshot, useDeleteDraft, type RoutePlanSnapshot } from '@/hooks/useRoutePlanningDrafts';
 import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
 import { normalizeCity } from '@/lib/utils/normalizeCity';
 import type { Json } from '@/integrations/supabase/types';
@@ -134,6 +136,8 @@ function inheritAssignmentFromLoads(loads: Array<{ vehicle_id?: string | null; d
 }
 
 export default function RoutePlanning() {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const { data: vehicles = [] } = useVehicles();
   const qc = useQueryClient();
@@ -259,39 +263,10 @@ export default function RoutePlanning() {
     draftsHydratedRef.current = true;
   }, [pendingLoads, persistedDrafts, savePlanSnapshot]);
 
-  // ──── Persistir cada rota como draft (debounce) ────
-  useEffect(() => {
-    if (!draftsHydratedRef.current) return undefined;
-    if (routes.length === 0) return undefined;
-    const timers = routes.map(r => setTimeout(() => {
-      savePlanSnapshot.mutate({
-        routeId: r.id,
-        name: r.name,
-        snapshot: {
-          loads: r.loads.map(l => ({ id: l.id })),
-          load_ids: r.loads.map(l => l.id),
-          stops: r.stops,
-          vehicle_id: r.vehicle_id,
-          driver_id: r.driver_id,
-          planned_start_at: r.planned_start_at,
-          sortMode: r.sortMode,
-          initial_transit_minutes: r.initial_transit_minutes,
-          notes: r.notes,
-        },
-      }, {
-        onError: (err: Error) => {
-          if (err instanceof DraftConflictError) {
-            toast.error('Rascunho alterado em outra sessão. Recarregando última versão.');
-            savePlanSnapshot.forgetVersion(r.id);
-            qc.invalidateQueries({ queryKey: ['route_planning_drafts'] });
-            draftsHydratedRef.current = false;
-          }
-        },
-      });
-    }, 1500));
-    return () => { timers.forEach(t => clearTimeout(t)); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routes]);
+  useRoutePlanAutosave(routes,dispatchPlan.pendingDispatches,draftsHydratedRef,savePlanSnapshot,()=>{
+    toast.error('Rascunho alterado em outra sessão. Recarregando última versão.');
+    void qc.invalidateQueries({queryKey:['route_planning_drafts']});draftsHydratedRef.current=false;
+  });
 
   const availableLoads = useMemo(() => {
     return pendingLoads.filter(l => !assignedLoadIds.has(l.id));
@@ -326,7 +301,7 @@ export default function RoutePlanning() {
     if (await confirmAction(
       `Existem ${hiddenSelectedLoads.length} carga(s) selecionada(s) fora do filtro atual (${names}${extra}). Deseja incluí-las mesmo assim?`,
     )) proceed();
-  }, [hiddenSelectedLoads]);
+  }, [confirmAction, hiddenSelectedLoads]);
 
   /* ──── actions ──── */
   const toggleLoad = (id: string) => {
@@ -486,6 +461,8 @@ export default function RoutePlanning() {
 
   // Vincular veículo às cargas e criar dispatch_trip
   const dispatchRouteMutation = useMutation({
+    onMutate:(route:RoutePlan)=>setRoutes(previous=>previous.map(item=>item.id===route.id?{...item,dispatching:true}:item)),
+    onSettled:(_data,_error,route)=>setRoutes(previous=>previous.map(item=>item.id===route.id?{...item,dispatching:false}:item)),
     mutationFn: async (route: RoutePlan) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       const c = validateRouteConsistency(route, {
@@ -498,7 +475,14 @@ export default function RoutePlanning() {
       }
       if (!route.planned_start_at) throw new Error('Data/hora planejada é obrigatória para despachar a rota');
       const stops = route.stops!;
+      // Flush and retain the stable draft before the transactional conversion.
+      await savePlanSnapshot.mutateAsync({routeId:route.id,name:route.name,snapshot:{
+        loads:route.loads.map(l=>({id:l.id})),stops,vehicle_id:route.vehicle_id,driver_id:route.driver_id,
+        planned_start_at:route.planned_start_at,sortMode:route.sortMode,notes:route.notes,
+      }});
       const tripId = await dispatchPlan.dispatchRoute({
+        attempt_scope: route.id,
+        planning_draft_id: route.id,
         vehicle_id: route.vehicle_id!,
         driver_id: route.driver_id!,
         planned_start_at: route.planned_start_at,
@@ -625,7 +609,13 @@ export default function RoutePlanning() {
     for (const r of ready) {
       setRoutes(prev => prev.map(x => x.id === r.id ? { ...x, dispatching: true, lastDispatchError: undefined } : x));
       try {
+        await savePlanSnapshot.mutateAsync({routeId:r.id,name:r.name,snapshot:{
+          loads:r.loads.map(l=>({id:l.id})),stops:r.stops,vehicle_id:r.vehicle_id,driver_id:r.driver_id,
+          planned_start_at:r.planned_start_at,sortMode:r.sortMode,notes:r.notes,
+        }});
         await dispatchPlan.dispatchRoute({
+          attempt_scope: r.id,
+          planning_draft_id: r.id,
           vehicle_id: r.vehicle_id!,
           driver_id: r.driver_id!,
           planned_start_at: r.planned_start_at!,
@@ -781,6 +771,11 @@ export default function RoutePlanning() {
         </div>
       </div>
 
+      <DispatchRecoveryPanel onConfirmed={(item)=>{
+        setRoutes(previous=>previous.filter(route=>route.id!==item.scope));
+        savePlanSnapshot.forgetVersion(item.scope);
+        toast.success('Despacho confirmado. Cargas e viagem atualizadas.');
+      }}/>
       {/* ──── Cargas Disponíveis ──── */}
       <Card>
         <CardHeader className="pb-3">

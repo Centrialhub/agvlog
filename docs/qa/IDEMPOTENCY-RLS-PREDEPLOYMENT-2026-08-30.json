@@ -1,0 +1,23 @@
+{
+  "helper": "CREATE OR REPLACE FUNCTION public.is_tenant_operator_or_admin(_tenant_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.tenant_memberships membership\n    where membership.user_id = auth.uid()\n      and membership.tenant_id = _tenant_id\n      and membership.active\n      and membership.role::text in ('owner', 'admin', 'operator')\n  );\n$function$\n",
+  "policy": {
+    "hash": "52dcb2b8b590a76089a38b21cebaf9c7",
+    "name": "agvlog_select_authenticated",
+    "roles": [
+      "authenticated"
+    ],
+    "using": "(tenant_id = ( SELECT idempotency_keys.tenant_id\n   FROM profiles\n  WHERE (profiles.id = ( SELECT auth.uid() AS uid))))",
+    "command": "r",
+    "permissive": true,
+    "with_check": null
+  },
+  "key_count": 0,
+  "captured_at": "2026-08-30T06:04:40.303097+00:00",
+  "helper_hash": "682f66029dc9bb798f9f329b4e8f95aa",
+  "tenant_count": 2,
+  "table": {
+    "acl": "{postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres}",
+    "rls": true,
+    "force_rls": false
+  }
+}

@@ -1,3 +1,5 @@
+import { requireHubEnvironment, selectScopedHubCredential } from './fiscal-environment.ts';
+
 const MAX_POLL_AGE_MS = 15 * 60 * 1000;
 const MAX_POLL_ATTEMPTS = 15;
 const MAX_MISSING_PROVIDER_ATTEMPTS = 5;
@@ -15,10 +17,10 @@ export interface HubFiscalCredential {
 }
 
 interface ResolveHubFiscalTokenInput {
+  tenantId: string;
   emitterId: string | null;
   environment?: string | null;
   scope: FiscalDocumentScope;
-  defaultToken: string;
   encryptionKey: string;
   getSecret: (name: string) => string | undefined;
 }
@@ -96,55 +98,41 @@ export function selectHubFiscalCredential(
   scope: FiscalDocumentScope,
   environment?: string | null,
 ): HubFiscalCredential | null {
-  const pick = (candidateScope: string) =>
-    credentials.find(credential => credential.doc_scope === candidateScope);
-  const pickEnvironment = (candidateScope: string, candidateEnvironment: string) =>
-    credentials.find(credential =>
-      credential.doc_scope === candidateScope
-      && credential.environment === candidateEnvironment,
-    );
-  const pickUnscoped = (candidateScope: string) =>
-    credentials.find(credential =>
-      credential.doc_scope === candidateScope
-      && !credential.environment,
-    );
-
-  if (!environment) return pick(scope) ?? pick('all') ?? null;
-
-  return (
-    pickEnvironment(scope, environment)
-    ?? pickUnscoped(scope)
-    ?? pickEnvironment('all', environment)
-    ?? pickUnscoped('all')
-    ?? null
-  );
+  try {
+    return selectScopedHubCredential(credentials, scope, requireHubEnvironment(environment));
+  } catch {
+    return null;
+  }
 }
 
 // deno-lint-ignore no-explicit-any
 export async function resolveHubFiscalToken(admin: any, input: ResolveHubFiscalTokenInput): Promise<string> {
-  if (!input.emitterId) return input.defaultToken;
+  if (!input.tenantId || !input.emitterId) return '';
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from('hub_fiscal_credentials')
     .select('doc_scope, environment, secret_name, secret_ciphertext')
+    .eq('tenant_id', input.tenantId)
     .eq('emitter_id', input.emitterId)
     .eq('enabled', true);
+  if (error) throw error;
   const credential = selectHubFiscalCredential(
     (data ?? []) as HubFiscalCredential[],
     input.scope,
     input.environment,
   );
 
-  if (!credential) return input.defaultToken;
-  if (credential.secret_ciphertext && input.encryptionKey) {
+  if (!credential) return '';
+  if (credential.secret_ciphertext) {
+    if (!input.encryptionKey) return '';
     try {
       return await decryptAesGcm(credential.secret_ciphertext, input.encryptionKey);
     } catch {
-      // Credenciais legadas podem depender do secret_name até serem regravadas.
+      return '';
     }
   }
-  if (credential.secret_name) return input.getSecret(credential.secret_name) || input.defaultToken;
-  return input.defaultToken;
+  if (credential.secret_name) return input.getSecret(credential.secret_name) || '';
+  return '';
 }
 
 export async function getHubFiscalDocument({
@@ -154,6 +142,9 @@ export async function getHubFiscalDocument({
   fetcher = fetch,
 }: GetHubFiscalDocumentInput): Promise<{ status: number; data: unknown }> {
   const normalizedBaseUrl = baseUrl.trim().replace(/\/$/, '');
+  if (!token) return { status: 424, data: { error: {
+    code: 'HUB_CREDENTIAL_UNAVAILABLE', message: 'Credencial indisponível para o emitente e ambiente do documento.',
+  } } };
   if (!normalizedBaseUrl) {
     return {
       status: 503,

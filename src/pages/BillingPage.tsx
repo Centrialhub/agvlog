@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useSortableData } from '@/hooks/useSortableData';
 import { usePagination } from '@/hooks/usePagination';
 import { DataPagination } from '@/components/ui/data-pagination';
@@ -135,6 +135,7 @@ const DEFAULT_BILLING_PREFS: BillingPreferences = {
 };
 
 export default function Billing() {
+  const toast = useSonnerToast();
   const { data: clients = [] } = useClients();
   const { data: loads = [] } = useLoads();
   const { data: batches = [] } = useCteBatches();
@@ -1123,6 +1124,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function IssuedCtesTable() {
+  const toast = useSonnerToast();
   const { data: ctes = [], isLoading } = useIssuedCtes();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [cancelTarget, setCancelTarget] = useState<CancelCteTarget | null>(null);

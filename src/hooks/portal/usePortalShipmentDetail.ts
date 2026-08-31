@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useTenant } from '@/hooks/useTenant';
 import type { PublicShipmentStatus } from '@/lib/portal/portalStatus';
 
 export type TimelineEntryType = 'status' | 'event' | 'occurrence' | 'pod' | 'pickup' | 'document';
@@ -75,6 +77,8 @@ export interface ShipmentOccurrence {
 
 export interface ShipmentProof {
   id: string;
+  version?: number;
+  retired_at?: string | null;
   proof_type?: string | null;
   status?: string | null;
   has_file?: boolean | null;
@@ -83,6 +87,7 @@ export interface ShipmentProof {
 }
 
 export interface ShipmentDetail {
+  context?: { tenant_id: string; actor_id: string; document_id: string };
   document: ShipmentDocument;
   load: ShipmentLoad | null;
   trip: ShipmentTrip | null;
@@ -91,24 +96,43 @@ export interface ShipmentDetail {
   timeline?: TimelineEntry[];
   occurrences: ShipmentOccurrence[];
   proofs: ShipmentProof[];
+  proof_history?: ShipmentProof[];
   permissions?: ShipmentPermissions;
 }
 
 export function usePortalShipmentDetail(documentId?: string) {
+  const { user } = useAuth();
+  const { currentTenant } = useTenant();
+  const actorId = user?.id; const tenantId = currentTenant?.id;
   return useQuery({
-    queryKey: ['portal_shipment_detail_v2', documentId],
-    queryFn: async (): Promise<ShipmentDetail> => {
-      if (!documentId) throw new Error('Documento não selecionado');
+    queryKey: ['portal_shipment_detail_v2', tenantId, actorId, documentId],
+    queryFn: async ({ signal }): Promise<ShipmentDetail> => {
+      if (!documentId || !tenantId || !actorId) throw new Error('Selecione a empresa e entre com uma sessão válida.');
       const v2 = await supabase.rpc('get_client_portal_shipment_detail_v2', {
         _fiscal_document_id: documentId,
-      });
-      if (!v2.error && v2.data) return v2.data as unknown as ShipmentDetail;
-      const { data, error } = await supabase.rpc('get_client_portal_shipment_detail', {
-        _fiscal_document_id: documentId,
-      });
-      if (error) throw error;
-      return data as unknown as ShipmentDetail;
+      }).abortSignal(signal);
+      // Missing version may use the hardened legacy contract. A denial or
+      // outage must never silently downgrade the authorization/read path.
+      let result = v2;
+      if (v2.error?.code === 'PGRST202') {
+        result = await supabase.rpc('get_client_portal_shipment_detail', {
+          _fiscal_document_id: documentId,
+        }).abortSignal(signal);
+      }
+      if (result.error) throw result.error;
+      const data = result.data as unknown as ShipmentDetail | null;
+      const document = data?.document as ShipmentDocument & { id?: string } | undefined;
+      if (!data || data.context?.tenant_id !== tenantId || data.context?.actor_id !== actorId
+        || data.context?.document_id !== documentId || document?.id !== documentId
+        || !Array.isArray(data.occurrences) || !Array.isArray(data.proofs)
+        || data.proof_history !== undefined && !Array.isArray(data.proof_history)
+        || data.timeline !== undefined && !Array.isArray(data.timeline)) {
+        throw new Error('O servidor não confirmou o documento para esta sessão e empresa. Atualize seu acesso.');
+      }
+      return data;
     },
-    enabled: !!documentId,
+    enabled: !!documentId && !!tenantId && !!actorId,
+    staleTime: 0,
+    gcTime: 0,
   });
 }

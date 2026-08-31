@@ -1,0 +1,44 @@
+# Torre de Controle — avaliação transacional
+
+Estado: **candidata local com gate completo aprovado; não publicada**. O objetivo completo continua aberto: concluir o aplicativo motorista primeiro e, depois, todos os fluxos do operador para produção. Nenhuma escrita em produção, chamada SSX/OSRM real, emissão fiscal, pagamento ou contratação de serviço neste bloco.
+
+## Reprodução e correção
+
+- O teste de falha no INSERT do alerta reproduziu um status salvo sem o respectivo alerta. A Edge usava diversas transações HTTP independentes.
+- A distância de rota considerava apenas vértices: um ponto sobre o meio de um segmento de 111 km foi calculado como 55,6 km fora da rota. O teste do cruzamento da linha de data também falhou antes da correção.
+- A migração `20260831024934_make_control_tower_evaluation_atomic.sql` foi criada pelo CLI. Calcula estado e métricas no banco e persiste status/alertas na mesma transação por viagem. Não aceita estado, métricas, usuário ou horário calculados pelo chamador.
+- `evaluate_trip_live_status_v1(uuid,uuid)` é INVOKER. A implementação DEFINER fica em `control_tower_private`, com search_path vazio, grants explícitos e validação própria de identidade, membership ativa, papel, MFA e capacidade SSX. Não há novo grant genérico de UPDATE em viagens/paradas.
+- Locks: viagem primeiro; filhos em ordem e com NOWAIT para rejeitar inversão com escritores legados. A autorização é refeita depois da espera na viagem; membership e flags existentes são mantidas sob lock até o commit. Os testes de corrida verificam alterações confirmadas durante essa espera; não se declara coordenação universal com todos os escritores administrativos de flags.
+- Escritas diretas de authenticated/anon/PUBLIC em `trip_live_status` e `trip_alerts` foram revogadas na candidata. Busca local encontrou somente a Edge reavaliadora como escritora dessas tabelas. Consumidores externos e grants efetivos ainda precisam de preflight antes da publicação. Permissões de serviço não foram ampliadas.
+- Replay preserva o ID do alerta atual. Duplicatas legadas são fechadas com `superseded_by`, sem exclusão; alertas manuais são preservados. Falha em qualquer gravação reverte também fechamento de alertas anteriores.
+- A geometria usa distância até o segmento de grande círculo, limitada aos extremos, com teste de paridade SQL/TypeScript. Geometria inválida rejeita a avaliação; não vira falsa confirmação de normalidade.
+- Velocidade ausente não vira zero. ETA usa o horário da observação para não avançar a cada clique. Duração parado depende do histórico disponível; não representa prova antifraude ou continuidade GPS comprovada.
+- Status e alertas carregam revisão de viagem, paradas, posição e rota. O leitor deixa de apresentar métricas/alertas derivados quando o contexto muda. As linhas históricas permanecem. O digest é para invalidação, não para autorização.
+- A Edge mantém JWT do usuário e guardas de acesso; passa a chamar uma RPC por viagem. O cliente de serviço continua restrito à consulta da capacidade, não à escrita operacional.
+
+## Evidência local
+
+- Reprodução inicial: **3 falhas esperadas / 17 testes** — rollback parcial, ponto no meio da rota e linha de data.
+- Bateria focada atual: **95 testes / 9 arquivos aprovados**, incluindo 21 casos novos do cálculo SQL, quatro de geometria, rollback Edge e tela real com avaliação SQL seguida de mudança operacional. Lint dirigido aprovado.
+- O teste de tela substitui Auth/Tenant e transporte da Edge, mas executa a RPC SQL real e os hooks/leitores reais. Os testes Edge executam os handlers reais sobre adaptador SQL com papel autenticado. Não equivalem a E2E do Auth/PostgREST hospedado ou verificação visual do mapa.
+- Oito ensaios PostgreSQL 17.11 iniciais passaram. A regressão nativa final aprovou **301 cenários: 290 anteriores + 11 de rastreamento**, processo encerrado com código zero e servidor descartável parado. Os testes de espera confirmam sobreposição com `pg_blocking_pids`; os três casos adicionais mantêm uma sessão segurando parada/posição/rota e exigem rejeição 55P03 sem gravações parciais, seguida de retry bem-sucedido.
+- Um primeiro typecheck encontrou resultado SQL sem tipo explícito no teste; corrigido com `Record<string,unknown>`, sem `any` ou supressão. Um teste de numeric foi ajustado para conversão explícita do valor retornado pelo driver. Nenhuma asserção de negócio removida.
+- Primeira rodada geral interrompida após tipos/lint/qualidade/42 sintaxes Edge aprovados e uma falha no contrato que exigia service_role para toda RPC chamada pela Edge. Não há resultado terminal que aprove essa rodada. Na retomada, o handle não existia e nenhum processo correspondente estava ativo; o cache Vitest era anterior. **1.055 arquivos com hash idêntico antes/depois**: `7e2913599a2ff2bed47c1a93895827fb8c3275894982b0847696f010743ab169`.
+- O contrato foi ajustado para exigir authenticated e negar grant service_role na nova RPC, além de conferir o encaminhamento do JWT no handler. Não houve ampliação de privilégios. **79 testes / 4 arquivos aprovados** após o ajuste.
+- **Gate geral final aprovado: 2.558 testes / 216 arquivos**, tipos, lint de erros/crítico, baseline de qualidade, 42 sintaxes Edge, build e scanner público. Processo encerrado com código zero. Testes em 331,85 s; build em 23,87 s. Maior chunk 488,3 KiB; entrada 375,7 KiB. Scanner não encontrou sourcemaps nem material secreto reconhecido.
+- **1.055 arquivos com hash idêntico antes/depois** do gate final: `5848ab0f07d2e9d4b3883f0991b977d392a70e8ca33efa24ce432ec1855a5d8b`. Escopo: src, scripts, funções/migrações/testes SQL e configurações selecionadas da raiz; documentos não entram no hash. Fontes/testes permaneceram congelados durante a execução.
+- A cobertura configurada inclui somente cinco arquivos lib: 93,03% linhas/statements, 65,83% branches e 81,81% funções. **Não é cobertura do aplicativo inteiro nem percentual de conclusão do objetivo.** Este bloco adicionou 27 testes Vitest e 11 ensaios PostgreSQL nativos.
+- `supabase db advisors --local --type security --level info` não conectou: `ECONNREFUSED 127.0.0.1:54322`. A stack Supabase local não está disponível; PostgreSQL nativo/PGlite não substituem advisors da stack. Não foi usado advisor de produção como prova da candidata local.
+- Revalidação na retomada de 31/08: `.env.test.local` continua ausente; a consulta administrativa da CLI terminou com código 1, sem provar acesso administrativo disponível. O navegador suportado falhou antes de estabelecer conexão (`helper_unknown_error: setup refresh had errors`). Nenhum cookie, perfil ou armazenamento de sessão foi inspecionado, e nenhuma alternativa foi usada para contornar autenticação. E2E autenticado permanece não comprovado.
+
+## Pendências para o objetivo completo
+
+Leitura restrita de produção em 31/08/2026: schema `control_tower_private` e RPC `evaluate_trip_live_status_v1` **ainda ausentes**; zero tenants com SSX efetivamente habilitado. Os leitores publicados continuam DEFINER e com os hashes legados: `get_active_trips_live` = `ef1370f47b1f64c9f2fa81d6e6cbef6f`, `get_open_trip_alerts` = `492f1282e3266f34c7425daad12c48f1`. Somente metadados e contagem de flags foram consultados; nenhum registro operacional exportado ou alterado.
+
+1. Cálculo de rota: preparação/revisão e commit consistente após OSRM, origem recente, nenhum waypoint omitido silenciosamente, replay/resposta incerta e encerramento das escritas diretas. A invalidação implementada aqui não torna o escritor de rotas atômico.
+2. Ingestão SSX: upsert monotônico de `positions_last`, concorrência e encadeamento automático da reavaliação. A ação manual atual não satisfaz a reintegração solicitada. Manter SSX inativo.
+3. Conferir schema privado fora da Data API, grants/consumidores, dependências MFA e contratos de produção; ensaiar contenção/retomada e publicar banco, Edge e frontend coordenadamente. Não aplicar indiscriminadamente o rascunho de revogações de outras funções.
+4. Restantes P1/P2: carga/viagem/entrega, Auth por convite, auditoria individual de privilégios, fiscal, GPS/anexos e publicação dos lotes já testados localmente. E2E autenticado motorista → operação → portal ainda não comprovado.
+5. Após concluir o motorista, auditar e completar o operador inteiro para produção, conforme ampliação do objetivo em 31/08/2026. Nenhuma emissão fiscal durante manipulações ou QA; a restrição de gastos extras permanece.
+
+As skills Supabase/PostgreSQL orientaram a separação INVOKER/implementação privada, grants mínimos e ordem dos locks. Referências consultadas: [funções Supabase](https://supabase.com/docs/guides/database/functions) e [locks PostgreSQL](https://www.postgresql.org/docs/current/explicit-locking.html). Nenhuma mudança de plataforma relevante identificada no changelog consultado exigiu ativar serviço ou instalar extensão.

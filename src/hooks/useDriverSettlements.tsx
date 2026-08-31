@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage } from '@/lib/errors';
 import type { Database, Json, Tables } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
+import { parseSettlementList, parseSettlementFilterOptions } from '@/lib/financial/settlementListResponse';
 
 type UpdateKmReviewRpcArgs = Database['public']['Functions']['update_driver_settlement_km_review']['Args'];
 type NullableUpdateKmReviewRpcArgs = Omit<UpdateKmReviewRpcArgs, '_audited_km' | '_notes'> & {
@@ -37,7 +39,7 @@ export type DriverSettlementItem = Omit<Tables<'driver_settlement_items'>, 'item
   nature: 'credit' | 'debit' | null;
 };
 
-export type DriverSettlementListItem = DriverSettlement & { driver_name?: string; vehicle_plate?: string };
+export type DriverSettlementListItem = DriverSettlement & { driver_name?: string | null; vehicle_plate?: string | null };
 export type DriverSettlementWithRelations = DriverSettlement & {
   drivers: { name: string; cpf: string | null } | null;
   vehicles: { plate: string; brand: string | null; model: string | null } | null;
@@ -80,10 +82,12 @@ export interface ListSettlementsFilters {
 
 export function useDriverSettlements(filters: ListSettlementsFilters = {}) {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['driver_settlements', currentTenant?.id, filters],
-    enabled: !!currentTenant,
-    queryFn: async () => {
+    queryKey: ['driver_settlements', currentTenant?.id, user?.id, filters],
+    enabled: !!currentTenant && !!user,
+    retry: false,
+    queryFn: async ({ signal }) => {
       if (!currentTenant) return { items: [] as DriverSettlementListItem[], total_count: 0, page: 1, page_size: 50, summary: null as DriverSettlementSummary | null };
       const { data, error } = await supabase.rpc('list_driver_settlements', {
         _tenant_id: currentTenant.id,
@@ -99,49 +103,44 @@ export function useDriverSettlements(filters: ListSettlementsFilters = {}) {
         _only_needs_recalculation: filters.only_needs_recalculation ?? false,
         _page: filters.page ?? 1,
         _page_size: filters.page_size ?? 50,
-      });
+      }).abortSignal(signal);
       if (error) throw error;
-      const d = jsonRecord(data);
-      return {
-        items: (Array.isArray(d.items) ? d.items : []) as unknown as DriverSettlementListItem[],
-        total_count: Number(d.total_count ?? 0),
-        page: Number(d.page ?? 1),
-        page_size: Number(d.page_size ?? 50),
-        summary: d.summary == null ? null : jsonRecord(d.summary) as unknown as DriverSettlementSummary,
-      };
+      return parseSettlementList(data, currentTenant.id);
     },
   });
 }
 
 export function useDriverSettlementFilterOptions() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['driver_settlement_filter_options', currentTenant?.id],
-    enabled: !!currentTenant,
-    queryFn: async () => {
+    queryKey: ['driver_settlement_filter_options', currentTenant?.id, user?.id],
+    enabled: !!currentTenant && !!user,
+    retry: false,
+    queryFn: async ({ signal }) => {
       if (!currentTenant) return { drivers: [], vehicles: [] };
-      const { data, error } = await supabase.rpc('list_driver_settlement_filter_options', { _tenant_id: currentTenant.id });
+      const { data, error } = await supabase.rpc('list_driver_settlement_filter_options', { _tenant_id: currentTenant.id }).abortSignal(signal);
       if (error) throw error;
-      const d = jsonRecord(data);
-      return {
-        drivers: (d.drivers ?? []) as { id: string; name: string }[],
-        vehicles: (d.vehicles ?? []) as { id: string; plate: string }[],
-      };
+      return parseSettlementFilterOptions(data);
     },
   });
 }
 
 export function useDriverSettlement(id: string | null) {
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
+  const tenant = currentTenant?.id, actor = user?.id;
   return useQuery({
-    queryKey: ['driver_settlement', id],
-    enabled: !!id,
-    queryFn: async () => {
-      if (!id) return null;
+    queryKey: ['driver_settlement', tenant, actor, id],
+    enabled: !!id && !!tenant && !!actor,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      if (!id || !tenant || !actor) return null;
       const [{ data: settlement, error: e1 }, { data: items, error: e2 }, { data: events, error: e3 }, { data: payments, error: e4 }] = await Promise.all([
-        supabase.from('driver_settlements').select('*, drivers(name, cpf), vehicles(plate, brand, model)').eq('id', id).maybeSingle(),
-        supabase.from('driver_settlement_items').select('*').eq('settlement_id', id).order('item_type'),
-        supabase.from('driver_settlement_events').select('*').eq('settlement_id', id).order('created_at', { ascending: false }),
-        supabase.from('driver_settlement_payments').select('*').eq('settlement_id', id).order('paid_at', { ascending: false }),
+        supabase.from('driver_settlements').select('*, drivers(name, cpf), vehicles(plate, brand, model)').eq('tenant_id', tenant).eq('id', id).abortSignal(signal).maybeSingle(),
+        supabase.from('driver_settlement_items').select('*').eq('tenant_id', tenant).eq('settlement_id', id).order('item_type').abortSignal(signal),
+        supabase.from('driver_settlement_events').select('*').eq('tenant_id', tenant).eq('settlement_id', id).order('created_at', { ascending: false }).abortSignal(signal),
+        supabase.from('driver_settlement_payments').select('*').eq('tenant_id', tenant).eq('settlement_id', id).order('paid_at', { ascending: false }).abortSignal(signal),
       ]);
       if (e1) throw e1;
       if (e2) throw e2;
@@ -158,6 +157,7 @@ export function useDriverSettlement(id: string | null) {
 }
 
 export function useGeneratePendingDriverSettlements() {
+  const { toast } = useToast();
   const qc = useQueryClient();
   const { currentTenant } = useTenant();
   return useMutation({
@@ -185,11 +185,20 @@ export function useGeneratePendingDriverSettlements() {
 }
 
 export function useRegenerateDriverSettlement() {
+  const { toast } = useToast();
   const qc = useQueryClient();
   const { currentTenant } = useTenant();
   return useMutation({
-    mutationFn: async (dispatchTripId: string) => {
+    mutationFn: async (dispatchTripId: string | { manualSettlementId: string }) => {
       if (!currentTenant) throw new Error('no_tenant');
+      if (typeof dispatchTripId !== 'string') {
+        const { data, error } = await supabase.rpc('recalculate_manual_expense_settlement', {
+          _tenant_id: currentTenant.id, _settlement_id: dispatchTripId.manualSettlementId,
+        });
+        if (error) throw error;
+        if (data !== dispatchTripId.manualSettlementId) throw new Error('Recálculo sem confirmação compatível.');
+        return data;
+      }
       const { data, error } = await supabase.rpc('generate_driver_settlement', {
         _tenant_id: currentTenant.id, _dispatch_trip_id: dispatchTripId,
       });
@@ -206,6 +215,7 @@ export function useRegenerateDriverSettlement() {
 }
 
 export function useUpdateDriverSettlementStatus() {
+  const { toast } = useToast();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status, reason, allow_exceptions }: { id: string; status: DriverSettlementStatus; reason?: string | null; allow_exceptions?: boolean }) => {
@@ -226,6 +236,7 @@ export function useUpdateDriverSettlementStatus() {
 }
 
 export function useUpdateSettlementKmReview() {
+  const { toast } = useToast();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (p: { 
@@ -261,44 +272,12 @@ export function useUpdateSettlementKmReview() {
   });
 }
 
-export function useAddSettlementAdjustment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (p: { id: string; nature: 'credit' | 'debit'; amount: number; description: string; reason: string }) => {
-      const { data, error } = await supabase.rpc('add_driver_settlement_adjustment', {
-        _settlement_id: p.id, _nature: p.nature, _amount: p.amount, _description: p.description, _reason: p.reason,
-      });
-      if (error) throw error;
-      return data as string;
-    },
-    onSuccess: () => {
-      toast({ title: 'Ajuste registrado' });
-      qc.invalidateQueries({ queryKey: ['driver_settlements'] });
-      qc.invalidateQueries({ queryKey: ['driver_settlement'] });
-    },
-    onError: error => toast({ title: 'Falha ao registrar ajuste', description: getErrorMessage(error), variant: 'destructive' }),
-  });
-}
 
-export function useRemoveSettlementAdjustment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (p: { settlement_id: string; item_id: string; reason: string }) => {
-      const { error } = await supabase.rpc('remove_driver_settlement_adjustment', {
-        _settlement_id: p.settlement_id, _item_id: p.item_id, _reason: p.reason,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast({ title: 'Ajuste removido' });
-      qc.invalidateQueries({ queryKey: ['driver_settlements'] });
-      qc.invalidateQueries({ queryKey: ['driver_settlement'] });
-    },
-    onError: error => toast({ title: 'Falha ao remover ajuste', description: getErrorMessage(error), variant: 'destructive' }),
-  });
-}
+
+
 
 export function useRegisterSettlementPayment() {
+  const { toast } = useToast();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (p: {
@@ -332,6 +311,7 @@ export function useRegisterSettlementPayment() {
 }
 
 export function useSettleZeroDriverSettlement() {
+  const { toast } = useToast();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (p: { id: string; reason: string }) => {
@@ -394,6 +374,7 @@ export function useAvailableLoadsForSettlement(params: {
 }
 
 export function useCreateManualDriverSettlement() {
+  const { toast } = useToast();
   const qc = useQueryClient();
   const { currentTenant } = useTenant();
   return useMutation({
@@ -420,6 +401,7 @@ export function useCreateManualDriverSettlement() {
 }
 
 export function useAttachLoadsToSettlement() {
+  const { toast } = useToast();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (p: { settlement_id: string; load_ids: string[] }) => {
@@ -439,6 +421,7 @@ export function useAttachLoadsToSettlement() {
 }
 
 export function useDetachLoadFromSettlement() {
+  const { toast } = useToast();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (p: { settlement_id: string; load_id: string }) => {
@@ -458,6 +441,7 @@ export function useDetachLoadFromSettlement() {
 }
 
 export function useDeleteDriverSettlement() {
+  const { toast } = useToast();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (p: { id: string; reason: string }) => {
@@ -473,43 +457,6 @@ export function useDeleteDriverSettlement() {
       qc.invalidateQueries({ queryKey: ['available_loads_for_settlement'] });
     },
     onError: error => toast({ title: 'Falha ao excluir acerto', description: getErrorMessage(error), variant: 'destructive' }),
-  });
-}
-
-export function useAddSettlementManualExpense() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (p: {
-      settlement_id: string;
-      category: string;
-      amount: number;
-      expense_at: string;
-      cost_center: string;
-      payment_source?: string;
-      reimbursable?: boolean;
-      receipt_url?: string;
-      notes?: string;
-    }) => {
-      const { data, error } = await supabase.rpc('add_driver_settlement_manual_expense', {
-        _settlement_id: p.settlement_id,
-        _category: p.category,
-        _amount: p.amount,
-        _expense_at: p.expense_at,
-        _cost_center: p.cost_center,
-        _payment_source: p.payment_source ?? 'driver',
-        _reimbursable: p.reimbursable ?? true,
-        _receipt_url: p.receipt_url ?? undefined,
-        _notes: p.notes ?? undefined,
-      });
-      if (error) throw error;
-      return data as string;
-    },
-    onSuccess: () => {
-      toast({ title: 'Despesa manual adicionada' });
-      qc.invalidateQueries({ queryKey: ['driver_settlements'] });
-      qc.invalidateQueries({ queryKey: ['driver_settlement'] });
-    },
-    onError: error => toast({ title: 'Falha ao adicionar despesa', description: getErrorMessage(error), variant: 'destructive' }),
   });
 }
 

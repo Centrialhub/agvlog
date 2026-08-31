@@ -117,7 +117,12 @@ test("driver completes the canonical trip, arrival, checklist, expense, occurren
   const started = await rpc(request, session, "driver_start_trip", { _trip_id: fixtureIds.tripA });
   expect(started.ok(), await started.text()).toBeTruthy();
 
-  const arrived = await rpc(request, session, "driver_mark_arrival", { _stop_id: fixtureIds.stopA });
+  const arrived = await rpc(request, session, "driver_mark_arrival", {
+    _stop_id: fixtureIds.stopA,
+    _latitude: -15.802,
+    _longitude: -43.313,
+    _accuracy_m: 10,
+  });
   expect(arrived.ok(), await arrived.text()).toBeTruthy();
 
   const checklist = await rpc(request, session, "driver_save_checklist", {

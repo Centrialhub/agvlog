@@ -1,0 +1,161 @@
+{
+  "source": "Local fixture only, not a production capture",
+  "predecessor": [
+    {
+      "signature": "assign_fiscal_documents_to_load(uuid,uuid,uuid[])",
+      "hash": "5ad09d2beee5b419d9af5ebd5eb96753",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "assign_fiscal_documents_to_load_v2(uuid,uuid,uuid[])",
+      "hash": "1dfac4d7f001d60ac388f7767609a3cf",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "delete_load_item_v3(uuid,uuid)",
+      "hash": "4d28b1e151579934386be2ec0b8833c5",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "remove_fiscal_documents_from_load(uuid,uuid,uuid[])",
+      "hash": "cb97d4e58d535240efc9be062cbd1593",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "remove_fiscal_documents_from_load_v2(uuid,uuid,uuid[])",
+      "hash": "385f77f83284de737f01eeba4d466f53",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    }
+  ],
+  "candidate": [
+    {
+      "signature": "_assert_load_replanning_graph(uuid,uuid[])",
+      "hash": "88587d953ac20149f3beb9a825d42275",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_change_load_documents(uuid,uuid,uuid[],text,jsonb,text,text)",
+      "hash": "4709abef93d37fd2f61aca104bb8ca77",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_load_document_change_snapshot(uuid,uuid,uuid[])",
+      "hash": "3a6c5df0074fb6622405b64bdc397fd4",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_load_is_locked(uuid)",
+      "hash": "a15b8a40dfd93a05479f8cc0b04db3eb",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "_load_replanning_snapshot(uuid,uuid[])",
+      "hash": "805fbe6706cde044e5904baaf6edea52",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_lock_load_document_graph(uuid,uuid)",
+      "hash": "56f03495204150746ffd94a12a25b340",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_sync_fiscal_document_load_mirror()",
+      "hash": "098af8ebf9e9defbc4153f7b6fba43e4",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "assign_fiscal_documents_to_load(uuid,uuid,uuid[])",
+      "hash": "73793256599bf96b8232ddc15a68d166",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "assign_fiscal_documents_to_load_v2(uuid,uuid,uuid[])",
+      "hash": "6ee516b30bc6d8fb5acdfd3a7820c9a4",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "change_load_documents(jsonb)",
+      "hash": "c6d375a215a500f8799426fe4290de65",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "delete_load_if_empty(uuid)",
+      "hash": "7e103b5a3c3c898aed492644c527c993",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "delete_load_item_v3(uuid,uuid)",
+      "hash": "fe43393cb817dfaa323e226e35a54566",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "get_load_document_change_context(uuid,uuid,uuid[])",
+      "hash": "4c45f2f4484c43d842dcbf1dd1732b7d",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "is_tenant_operator_or_admin(uuid)",
+      "hash": "682f66029dc9bb798f9f329b4e8f95aa",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "recalc_load_totals()",
+      "hash": "7dc12046ecada4d2f04bb2942a92493d",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "remove_fiscal_documents_from_load(uuid,uuid,uuid[])",
+      "hash": "151cc5f78065f8cbce15464d9d088933",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "remove_fiscal_documents_from_load_v2(uuid,uuid,uuid[])",
+      "hash": "c2220961533993d755e6cae225c402ca",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    }
+  ]
+}

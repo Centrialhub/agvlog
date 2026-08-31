@@ -1,0 +1,174 @@
+{
+  "captured_at": "2026-08-30T05:59:35.302296+00:00",
+  "functions": [
+    {
+      "anon": false,
+      "hash": "2ad186be84b9aca809f36302a3135be3",
+      "signature": "dispatch_planned_route(jsonb)",
+      "definition": "CREATE OR REPLACE FUNCTION public.dispatch_planned_route(_payload jsonb)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  _tenant_id uuid := (_payload->>'tenant_id')::uuid;\n  _vehicle_id uuid := NULLIF(_payload->>'vehicle_id','')::uuid;\n  _driver_id uuid := NULLIF(_payload->>'driver_id','')::uuid;\n  _planned_start_at timestamptz := NULLIF(_payload->>'planned_start_at','')::timestamptz;\n  _route_name text := _payload->>'route_name';\n  _planning_draft_id uuid := NULLIF(_payload->>'planning_draft_id','')::uuid;\n  _load_ids uuid[]; _distinct_load_ids uuid[];\n  _stops jsonb := COALESCE(_payload->'stops','[]'::jsonb);\n  _trip_id uuid; _primary_load uuid;\n  _stop jsonb; _stop_id uuid; _stop_order int;\n  _valid_count int; _fd_id uuid; _fd_ids uuid[] := ARRAY[]::uuid[];\n  _orphan_count int; _fd_load uuid;\n  _lat numeric; _lng numeric;\nBEGIN\n  IF _tenant_id IS NULL\n     OR (NOT public.is_tenant_admin(_tenant_id)\n         AND NOT public.has_tenant_role(_tenant_id, 'operator'::app_role)) THEN\n    RAISE EXCEPTION 'Não autorizado';\n  END IF;\n  IF _vehicle_id IS NULL THEN RAISE EXCEPTION 'Veículo obrigatório'; END IF;\n  IF _driver_id IS NULL THEN RAISE EXCEPTION 'Motorista obrigatório'; END IF;\n  IF _planned_start_at IS NULL THEN RAISE EXCEPTION 'Horário previsto de saída obrigatório'; END IF;\n\n  SELECT ARRAY(SELECT jsonb_array_elements_text(_payload->'load_ids'))::uuid[] INTO _load_ids;\n  IF _load_ids IS NULL OR array_length(_load_ids,1) IS NULL THEN\n    RAISE EXCEPTION 'Lista de cargas vazia';\n  END IF;\n  SELECT ARRAY(SELECT DISTINCT unnest(_load_ids)) INTO _distinct_load_ids;\n  IF array_length(_distinct_load_ids,1) <> array_length(_load_ids,1) THEN\n    RAISE EXCEPTION 'Cargas duplicadas na lista';\n  END IF;\n  IF jsonb_array_length(_stops) = 0 THEN RAISE EXCEPTION 'Rota sem paradas'; END IF;\n\n  SELECT count(*) INTO _valid_count\n  FROM public.loads\n  WHERE id = ANY(_load_ids) AND tenant_id = _tenant_id AND trip_id IS NULL;\n  IF _valid_count <> array_length(_load_ids,1) THEN\n    RAISE EXCEPTION 'Uma ou mais cargas são inválidas, inexistentes ou já despachadas';\n  END IF;\n\n  -- Collect FD ids referenced by stops\n  _stop_order := 0;\n  FOR _stop IN SELECT * FROM jsonb_array_elements(_stops) LOOP\n    _stop_order := _stop_order + 1;\n    IF COALESCE(trim(_stop->>'destination'),'') = '' THEN\n      RAISE EXCEPTION 'Parada %: destino obrigatório', _stop_order;\n    END IF;\n    IF jsonb_typeof(_stop->'fiscal_document_ids') = 'array' THEN\n      FOR _fd_id IN SELECT (jsonb_array_elements_text(_stop->'fiscal_document_ids'))::uuid LOOP\n        _fd_ids := _fd_ids || _fd_id;\n      END LOOP;\n    END IF;\n  END LOOP;\n\n  -- 1) FDs must exist + belong to tenant\n  IF array_length(_fd_ids,1) IS NOT NULL THEN\n    SELECT count(*) INTO _orphan_count\n    FROM unnest(_fd_ids) AS x(id)\n    WHERE NOT EXISTS (\n      SELECT 1 FROM public.fiscal_documents fd\n      WHERE fd.id = x.id AND fd.tenant_id = _tenant_id\n    );\n    IF _orphan_count > 0 THEN\n      RAISE EXCEPTION 'Documentos fiscais inexistentes ou de outro tenant: %', _orphan_count;\n    END IF;\n\n    -- 2) Every FD MUST belong to one of the dispatched loads via load_items\n    SELECT count(*) INTO _orphan_count\n    FROM unnest(_fd_ids) AS x(id)\n    WHERE NOT EXISTS (\n      SELECT 1 FROM public.load_items li\n      WHERE li.fiscal_document_id = x.id\n        AND li.load_id = ANY(_load_ids)\n    );\n    IF _orphan_count > 0 THEN\n      RAISE EXCEPTION 'Documento fiscal não pertence às cargas despachadas: % doc(s)', _orphan_count;\n    END IF;\n  END IF;\n\n  _primary_load := _load_ids[1];\n\n  INSERT INTO public.dispatch_trips(\n    tenant_id, vehicle_id, driver_id, load_id, status,\n    planned_start_at, notes, created_by\n  ) VALUES (\n    _tenant_id, _vehicle_id, _driver_id, _primary_load, 'planned',\n    _planned_start_at, COALESCE(_route_name,'Rota planejada'), auth.uid()\n  ) RETURNING id INTO _trip_id;\n\n  INSERT INTO public.dispatch_trip_loads(tenant_id, dispatch_trip_id, load_id)\n  SELECT _tenant_id, _trip_id, unnest(_load_ids);\n\n  UPDATE public.loads\n    SET trip_id = _trip_id, vehicle_id = _vehicle_id, driver_id = _driver_id,\n        status = 'loading', updated_at = now()\n    WHERE id = ANY(_load_ids);\n\n  _stop_order := 0;\n  FOR _stop IN SELECT * FROM jsonb_array_elements(_stops) LOOP\n    _stop_order := _stop_order + 1;\n    _lat := NULLIF(_stop->>'latitude','')::numeric;\n    _lng := NULLIF(_stop->>'longitude','')::numeric;\n\n    INSERT INTO public.dispatch_stops(\n      tenant_id, dispatch_trip_id, stop_order, destination, client_id,\n      planned_arrival_at, estimated_departure_at, service_time_minutes,\n      delivery_window_start, delivery_window_end,\n      risk_level, risk_reason, notes, status,\n      latitude, longitude\n    ) VALUES (\n      _tenant_id, _trip_id, _stop_order,\n      _stop->>'destination',\n      NULLIF(_stop->>'client_id','')::uuid,\n      NULLIF(_stop->>'planned_arrival_at','')::timestamptz,\n      NULLIF(_stop->>'estimated_departure_at','')::timestamptz,\n      COALESCE((_stop->>'service_time_minutes')::int, 20),\n      NULLIF(_stop->>'delivery_window_start','')::time,\n      NULLIF(_stop->>'delivery_window_end','')::time,\n      COALESCE(_stop->>'risk_level','normal'),\n      _stop->>'risk_reason',\n      _stop->>'notes',\n      'pending',\n      _lat, _lng\n    ) RETURNING id INTO _stop_id;\n\n    IF jsonb_typeof(_stop->'fiscal_document_ids') = 'array' THEN\n      FOR _fd_id IN SELECT (jsonb_array_elements_text(_stop->'fiscal_document_ids'))::uuid LOOP\n        SELECT load_id INTO _fd_load\n        FROM public.load_items\n        WHERE fiscal_document_id = _fd_id AND load_id = ANY(_load_ids)\n        LIMIT 1;\n        INSERT INTO public.dispatch_stop_documents(\n          tenant_id, dispatch_stop_id, fiscal_document_id, load_id\n        ) VALUES (_tenant_id, _stop_id, _fd_id, _fd_load)\n        ON CONFLICT DO NOTHING;\n      END LOOP;\n    END IF;\n  END LOOP;\n\n  IF _planning_draft_id IS NOT NULL THEN\n    UPDATE public.route_planning_drafts\n      SET status='dispatched', converted_load_id=_primary_load, updated_at=now()\n      WHERE id=_planning_draft_id AND tenant_id=_tenant_id;\n  END IF;\n\n  RETURN _trip_id;\nEND;\n$function$\n",
+      "service_role": true,
+      "authenticated": true,
+      "security_definer": true
+    },
+    {
+      "anon": false,
+      "hash": "682f66029dc9bb798f9f329b4e8f95aa",
+      "signature": "is_tenant_operator_or_admin(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.is_tenant_operator_or_admin(_tenant_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.tenant_memberships membership\n    where membership.user_id = auth.uid()\n      and membership.tenant_id = _tenant_id\n      and membership.active\n      and membership.role::text in ('owner', 'admin', 'operator')\n  );\n$function$\n",
+      "service_role": true,
+      "authenticated": true,
+      "security_definer": true
+    },
+    {
+      "anon": false,
+      "hash": "ea81d617fe991bf3c6e7bde902737605",
+      "signature": "plan_dispatch_trip_v3(uuid,text,uuid,uuid,text,uuid[],jsonb)",
+      "definition": "CREATE OR REPLACE FUNCTION public.plan_dispatch_trip_v3(p_tenant_id uuid, p_idempotency_key text, p_driver_id uuid, p_vehicle_id uuid, p_route_name text, p_load_ids uuid[], p_stops jsonb)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_operator_id uuid := auth.uid();\n  v_payload_hash text;\n  v_existing_result_id uuid;\n  v_existing_payload_hash text;\n  v_trip_id uuid;\n  v_stop record;\n  v_stop_id uuid;\n  v_doc_id uuid;\n  v_doc_ids uuid[];\n  v_load_id uuid;\n  v_found_count integer;\nbegin\n  if v_operator_id is null or not exists (\n    select 1\n    from public.tenant_memberships\n    where user_id = v_operator_id\n      and tenant_id = p_tenant_id\n      and active = true\n      and role in ('owner', 'admin', 'operator')\n  ) then\n    raise exception 'not_authorized';\n  end if;\n\n  if nullif(btrim(p_idempotency_key), '') is null then\n    raise exception 'idempotency_key_required';\n  end if;\n\n  if coalesce(array_length(p_load_ids, 1), 0) = 0 then\n    raise exception 'load_ids_required';\n  end if;\n\n  if p_stops is null or jsonb_typeof(p_stops) <> 'array' then\n    raise exception 'stops_must_be_an_array';\n  end if;\n\n  v_payload_hash := md5(jsonb_build_object(\n    'driver_id', p_driver_id,\n    'vehicle_id', p_vehicle_id,\n    'route_name', p_route_name,\n    'load_ids', p_load_ids,\n    'stops', p_stops\n  )::text);\n\n  select result_id, payload_hash\n    into v_existing_result_id, v_existing_payload_hash\n  from public.idempotency_keys\n  where tenant_id = p_tenant_id\n    and operation = 'plan_dispatch_trip'\n    and idempotency_key = p_idempotency_key;\n\n  if found then\n    if v_existing_payload_hash = v_payload_hash then\n      return v_existing_result_id;\n    end if;\n    raise exception 'idempotency_key_mismatch';\n  end if;\n\n  perform id\n  from public.loads\n  where id = any(p_load_ids)\n    and tenant_id = p_tenant_id\n  for update;\n  get diagnostics v_found_count = row_count;\n\n  if v_found_count <> array_length(p_load_ids, 1) then\n    raise exception 'load_ownership_mismatch';\n  end if;\n\n  if not exists (\n    select 1 from public.vehicles\n    where id = p_vehicle_id and tenant_id = p_tenant_id\n  ) then\n    raise exception 'invalid_vehicle_for_tenant';\n  end if;\n\n  if not exists (\n    select 1 from public.drivers\n    where id = p_driver_id and tenant_id = p_tenant_id\n  ) then\n    raise exception 'invalid_driver_for_tenant';\n  end if;\n\n  insert into public.dispatch_trips (\n    tenant_id, driver_id, vehicle_id, notes, status, planned_start_at, created_by\n  ) values (\n    p_tenant_id, p_driver_id, p_vehicle_id, p_route_name, 'planned', now(), v_operator_id\n  )\n  returning id into v_trip_id;\n\n  foreach v_load_id in array p_load_ids loop\n    insert into public.dispatch_trip_loads (tenant_id, dispatch_trip_id, load_id)\n    values (p_tenant_id, v_trip_id, v_load_id);\n\n    update public.loads\n    set status = 'ready',\n        trip_id = v_trip_id,\n        updated_at = now()\n    where id = v_load_id and tenant_id = p_tenant_id;\n  end loop;\n\n  for v_stop in\n    select *\n    from jsonb_to_recordset(p_stops) as x(\n      destination text,\n      client_id uuid,\n      stop_order integer,\n      fiscal_document_ids uuid[],\n      document_ids uuid[]\n    )\n  loop\n    if nullif(btrim(v_stop.destination), '') is null or v_stop.stop_order is null then\n      raise exception 'invalid_dispatch_stop';\n    end if;\n\n    if v_stop.client_id is not null and not exists (\n      select 1 from public.clients\n      where id = v_stop.client_id and tenant_id = p_tenant_id\n    ) then\n      raise exception 'invalid_client_for_tenant';\n    end if;\n\n    insert into public.dispatch_stops (\n      tenant_id, dispatch_trip_id, destination, client_id, stop_order, status\n    ) values (\n      p_tenant_id, v_trip_id, v_stop.destination, v_stop.client_id, v_stop.stop_order, 'pending'\n    )\n    returning id into v_stop_id;\n\n    v_doc_ids := coalesce(v_stop.fiscal_document_ids, v_stop.document_ids, array[]::uuid[]);\n    foreach v_doc_id in array v_doc_ids loop\n      if not exists (\n        select 1 from public.fiscal_documents\n        where id = v_doc_id and tenant_id = p_tenant_id\n      ) then\n        raise exception 'invalid_document_for_tenant';\n      end if;\n\n      insert into public.dispatch_stop_documents (\n        tenant_id, dispatch_stop_id, fiscal_document_id\n      ) values (\n        p_tenant_id, v_stop_id, v_doc_id\n      );\n    end loop;\n  end loop;\n\n  insert into public.idempotency_keys (\n    tenant_id, key_value, operation, idempotency_key, payload_hash, result_id\n  ) values (\n    p_tenant_id,\n    'plan_dispatch_trip:' || p_idempotency_key,\n    'plan_dispatch_trip',\n    p_idempotency_key,\n    v_payload_hash,\n    v_trip_id\n  );\n\n  insert into public.entity_state_audit_log (\n    tenant_id, entity_type, entity_id, to_status, actor_id, idempotency_key, metadata\n  ) values (\n    p_tenant_id,\n    'trip',\n    v_trip_id,\n    'planned',\n    v_operator_id,\n    p_idempotency_key,\n    jsonb_build_object('route_name', p_route_name, 'load_ids', p_load_ids)\n  );\n\n  return v_trip_id;\nexception\n  when unique_violation then\n    select result_id, payload_hash\n      into v_existing_result_id, v_existing_payload_hash\n    from public.idempotency_keys\n    where tenant_id = p_tenant_id\n      and operation = 'plan_dispatch_trip'\n      and idempotency_key = p_idempotency_key;\n\n    if v_existing_payload_hash = v_payload_hash then\n      return v_existing_result_id;\n    end if;\n    raise exception 'idempotency_key_mismatch';\nend;\n$function$\n",
+      "service_role": true,
+      "authenticated": true,
+      "security_definer": true
+    }
+  ],
+  "triggers": [
+    {
+      "name": "trg_recalc_load_totals",
+      "table": "load_items",
+      "function": "recalc_load_totals()",
+      "definition": "CREATE TRIGGER trg_recalc_load_totals AFTER INSERT OR DELETE OR UPDATE ON public.load_items FOR EACH ROW EXECUTE FUNCTION recalc_load_totals()"
+    },
+    {
+      "name": "trg_dispatch_trip_completed_settlement",
+      "table": "dispatch_trips",
+      "function": "_on_dispatch_trip_completed_create_settlement()",
+      "definition": "CREATE TRIGGER trg_dispatch_trip_completed_settlement AFTER UPDATE OF status ON public.dispatch_trips FOR EACH ROW EXECUTE FUNCTION _on_dispatch_trip_completed_create_settlement()"
+    },
+    {
+      "name": "trg_dispatch_trip_loads_outdate",
+      "table": "dispatch_trip_loads",
+      "function": "_tg_mark_outdated_trip_loads()",
+      "definition": "CREATE TRIGGER trg_dispatch_trip_loads_outdate AFTER INSERT OR DELETE OR UPDATE ON public.dispatch_trip_loads FOR EACH ROW EXECUTE FUNCTION _tg_mark_outdated_trip_loads()"
+    },
+    {
+      "name": "trg_loads_autofill_driver",
+      "table": "loads",
+      "function": "loads_autofill_driver_from_vehicle()",
+      "definition": "CREATE TRIGGER trg_loads_autofill_driver BEFORE INSERT OR UPDATE OF vehicle_id, driver_id ON public.loads FOR EACH ROW EXECUTE FUNCTION loads_autofill_driver_from_vehicle()"
+    },
+    {
+      "name": "trg_check_load_dispatch_duplicity",
+      "table": "dispatch_trip_loads",
+      "function": "check_load_dispatch_duplicity()",
+      "definition": "CREATE TRIGGER trg_check_load_dispatch_duplicity BEFORE INSERT ON public.dispatch_trip_loads FOR EACH ROW EXECUTE FUNCTION check_load_dispatch_duplicity()"
+    },
+    {
+      "name": "trg_sync_trip_load_mirrors",
+      "table": "dispatch_trip_loads",
+      "function": "sync_trip_load_mirrors()",
+      "definition": "CREATE TRIGGER trg_sync_trip_load_mirrors AFTER INSERT OR DELETE ON public.dispatch_trip_loads FOR EACH ROW EXECUTE FUNCTION sync_trip_load_mirrors()"
+    },
+    {
+      "name": "sync_fiscal_document_load_mirror",
+      "table": "load_items",
+      "function": "_sync_fiscal_document_load_mirror()",
+      "definition": "CREATE TRIGGER sync_fiscal_document_load_mirror AFTER INSERT OR DELETE OR UPDATE ON public.load_items FOR EACH ROW EXECUTE FUNCTION _sync_fiscal_document_load_mirror()"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "dispatch_trip_loads_dispatch_trip_id_fkey",
+      "table": "dispatch_trip_loads",
+      "definition": "FOREIGN KEY (dispatch_trip_id) REFERENCES dispatch_trips(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "dispatch_trip_loads_dispatch_trip_id_load_id_key",
+      "table": "dispatch_trip_loads",
+      "definition": "UNIQUE (dispatch_trip_id, load_id)"
+    },
+    {
+      "name": "dispatch_trip_loads_load_id_fkey",
+      "table": "dispatch_trip_loads",
+      "definition": "FOREIGN KEY (load_id) REFERENCES loads(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "dispatch_trip_loads_pkey",
+      "table": "dispatch_trip_loads",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "dispatch_trip_loads_tenant_id_fkey",
+      "table": "dispatch_trip_loads",
+      "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "dispatch_stop_documents_dispatch_stop_id_fiscal_document_id_key",
+      "table": "dispatch_stop_documents",
+      "definition": "UNIQUE (dispatch_stop_id, fiscal_document_id)"
+    },
+    {
+      "name": "dispatch_stop_documents_dispatch_stop_id_fkey",
+      "table": "dispatch_stop_documents",
+      "definition": "FOREIGN KEY (dispatch_stop_id) REFERENCES dispatch_stops(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "dispatch_stop_documents_fiscal_document_id_fkey",
+      "table": "dispatch_stop_documents",
+      "definition": "FOREIGN KEY (fiscal_document_id) REFERENCES fiscal_documents(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "dispatch_stop_documents_load_id_fkey",
+      "table": "dispatch_stop_documents",
+      "definition": "FOREIGN KEY (load_id) REFERENCES loads(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "dispatch_stop_documents_pkey",
+      "table": "dispatch_stop_documents",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "dispatch_stop_documents_tenant_id_fkey",
+      "table": "dispatch_stop_documents",
+      "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "idempotency_keys_pkey",
+      "table": "idempotency_keys",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "idempotency_keys_tenant_id_fkey",
+      "table": "idempotency_keys",
+      "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "idempotency_keys_tenant_id_key_value_key",
+      "table": "idempotency_keys",
+      "definition": "UNIQUE (tenant_id, key_value)"
+    }
+  ],
+  "legacy_planners": [
+    {
+      "hash": "19e8678fc39719ebb30f1b805cd449dc",
+      "signature": "plan_dispatch_start_trip_v1(uuid,uuid,uuid,uuid[],jsonb,timestamp with time zone,text,boolean)",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "hash": "7f3e895f441a0e46a98e6655115015f5",
+      "signature": "plan_dispatch_trip_v2(uuid,uuid,uuid,uuid[],timestamp with time zone,text)",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "hash": "71e0e20c2a2e4e338621e5b8d8928031",
+      "signature": "plan_dispatch_trip_v2(uuid,uuid,uuid,text,uuid[],jsonb,text)",
+      "service_role": true,
+      "authenticated": true
+    },
+    {
+      "hash": "ea81d617fe991bf3c6e7bde902737605",
+      "signature": "plan_dispatch_trip_v3(uuid,text,uuid,uuid,text,uuid[],jsonb)",
+      "service_role": true,
+      "authenticated": true
+    }
+  ]
+}

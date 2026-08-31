@@ -9,7 +9,7 @@
 export interface MdfeEmitter {
   cnpj: string;
   name: string;
-  environment: 'sandbox' | 'production';
+  environment: 'sandbox' | 'homologation' | 'production';
 }
 
 export interface MdfeDriver {

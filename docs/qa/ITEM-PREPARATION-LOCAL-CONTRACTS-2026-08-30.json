@@ -1,0 +1,63 @@
+{
+  "source": "Local fixture only, not a production capture",
+  "predecessor": [
+    {
+      "signature": "upsert_load_item_v3(uuid,uuid,uuid,uuid,text,numeric,numeric,numeric,numeric,text,text,uuid)",
+      "hash": "62f819a77731d9fc694d7cd9bc4fe0db",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    }
+  ],
+  "candidate": [
+    {
+      "signature": "upsert_load_item_v3(uuid,uuid,uuid,uuid,text,numeric,numeric,numeric,numeric,text,text,uuid)",
+      "hash": "04a3da6fbb4fe20bf8fc0ef4d59d7908",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "save_load_item_preparation(jsonb)",
+      "hash": "effc26025f50cecaa5dd5c44818de186",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "_lock_load_document_graph(uuid,uuid)",
+      "hash": "56f03495204150746ffd94a12a25b340",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_assert_load_replanning_graph(uuid,uuid[])",
+      "hash": "88587d953ac20149f3beb9a825d42275",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "recalc_load_totals()",
+      "hash": "7dc12046ecada4d2f04bb2942a92493d",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "_sync_fiscal_document_load_mirror()",
+      "hash": "098af8ebf9e9defbc4153f7b6fba43e4",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "is_tenant_operator_or_admin(uuid)",
+      "hash": "682f66029dc9bb798f9f329b4e8f95aa",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    }
+  ]
+}

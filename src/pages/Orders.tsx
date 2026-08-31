@@ -1,3 +1,6 @@
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch, matchesDateRange } from '@/lib/listFilters';
 import { useState, useMemo, useCallback } from 'react';
 import { useOrders, useCreateOrder, useUpdateOrder, ORDER_STATUSES, ORDER_STATUS_LABELS, Order } from '@/hooks/useOrders';
 import { useClients, type Client } from '@/hooks/useClients';
@@ -12,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Search, Plus, ShoppingCart, Edit, DollarSign, FileSearch } from 'lucide-react';
+import { Plus, ShoppingCart, Edit, DollarSign, FileSearch } from 'lucide-react';
 import { getNextStatuses } from '@/lib/statusPipeline';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -305,21 +308,19 @@ export default function Orders() {
   const { data: clients = [] } = useClients();
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', client: 'all', from: '', to: '' });
+  const { search, status: statusFilter } = filters;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | undefined>();
   const [auditOrderId, setAuditOrderId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return orders.filter(o => {
-      if (q && !o.order_number.toLowerCase().includes(q) && !(o.clients?.company_name || '').toLowerCase().includes(q)) return false;
-      if (statusFilter !== 'all' && o.status !== statusFilter) return false;
-      return true;
-    });
-  }, [orders, search, statusFilter]);
+  const filtered = useMemo(() => orders.filter(order =>
+    matchesSearch(search, order.order_number, order.clients?.company_name, order.remitter, order.recipient, order.city, order.destination) &&
+    (statusFilter === 'all' || order.status === statusFilter) &&
+    (filters.client === 'all' || order.client_id === filters.client) &&
+    matchesDateRange(order.issue_date, filters.from, filters.to)
+  ), [orders, search, statusFilter, filters.client, filters.from, filters.to]);
 
   const handleSave = async (values: Partial<Order>) => {
     try {
@@ -368,19 +369,13 @@ export default function Orders() {
         </Dialog>
       </div>
 
-      <div className="flex gap-3 items-center flex-wrap">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar pedido..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{ORDER_STATUS_LABELS[s]}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={orders.length} loading={isLoading} fields={[
+        { key: 'search', label: 'Busca', type: 'search', placeholder: 'Pedido, cliente, remetente, destinatário ou cidade', value: search, onChange: value => setFilter('search', value) },
+        { key: 'status', label: 'Situação', value: statusFilter, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, ...ORDER_STATUSES.map(value => ({ value, label: ORDER_STATUS_LABELS[value] }))] },
+        { key: 'client', label: 'Cliente', value: filters.client, onChange: value => setFilter('client', value), options: [{ value: 'all', label: 'Todos os clientes' }, ...clients.map(client => ({ value: client.id, label: client.company_name }))] },
+        { key: 'from', label: 'Emissão de', type: 'date', value: filters.from, onChange: value => setFilter('from', value), max: filters.to || undefined },
+        { key: 'to', label: 'Emissão até', type: 'date', value: filters.to, onChange: value => setFilter('to', value), min: filters.from || undefined },
+      ]} />
 
       <Card>
         <CardContent className="p-0">

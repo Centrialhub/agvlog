@@ -1,3 +1,6 @@
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch, matchesDateRange } from '@/lib/listFilters';
 import { useState, useMemo } from 'react';
 import {
   usePayables, useCreatePayable, useUpdatePayable,
@@ -13,8 +16,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, Wallet, Download, CheckCircle, XCircle, DollarSign, Receipt } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { Plus, Wallet, Download, CheckCircle, XCircle, DollarSign, Receipt } from 'lucide-react';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
 import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
 import ManualExpenseDialog from '@/components/financial/ManualExpenseDialog';
@@ -42,27 +45,24 @@ function isOverdue(p: Payable) {
 }
 
 export default function Payables() {
+  const toast = useSonnerToast();
   const { data: payables = [], isLoading } = usePayables();
   const { currentTenant } = useTenant();
   const createMut = useCreatePayable();
   const updateMut = useUpdatePayable();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', category: 'all', source: 'all', from: '', to: '' });
+  const { search, status: statusFilter, category: categoryFilter, source: sourceFilter } = filters;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [pendingReceipt, setPendingReceipt] = useState<File | null>(null);
   const [paymentPayable, setPaymentPayable] = useState<Payable | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState('all');
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
     return payables.filter((p) => {
-      if (q && !(p.supplier_name || '').toLowerCase().includes(q)
-          && !(p.description || '').toLowerCase().includes(q)
-          && !(p.document_number || '').toLowerCase().includes(q)) return false;
+      if (!matchesSearch(search, p.supplier_name, p.description, p.document_number)) return false;
+      if (!matchesDateRange(p.due_date, filters.from, filters.to)) return false;
       if (statusFilter !== 'all') {
         if (statusFilter === 'overdue' && !isOverdue(p)) return false;
         else if (statusFilter !== 'overdue' && p.status !== statusFilter) return false;
@@ -71,7 +71,7 @@ export default function Payables() {
       if (sourceFilter !== 'all' && (p.source || 'system') !== sourceFilter) return false;
       return true;
     });
-  }, [payables, search, statusFilter, categoryFilter, sourceFilter]);
+  }, [payables, search, statusFilter, categoryFilter, sourceFilter, filters.from, filters.to]);
 
   const totals = useMemo(() => ({
     pending: payables.filter(p => p.status === 'pending').reduce((s, p) => s + Number(p.amount || 0), 0),
@@ -262,35 +262,14 @@ export default function Payables() {
         </CardContent></Card>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[220px] max-w-xs">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar fornecedor, doc..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            <SelectItem value="overdue">Vencidas</SelectItem>
-            {PAYABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{PAYABLE_STATUS_LABELS[s]}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as categorias</SelectItem>
-            {PAYABLE_CATEGORIES.map(c => <SelectItem key={c} value={c}>{PAYABLE_CATEGORY_LABELS[c]}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={sourceFilter} onValueChange={setSourceFilter}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Origem: todas</SelectItem>
-            <SelectItem value="system">Operacional</SelectItem>
-            <SelectItem value="manual">Avulsa</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={payables.length} loading={isLoading} description="Os indicadores acima mostram todas as contas." fields={[
+        { key: 'search', label: 'Buscar conta', type: 'search', placeholder: 'Fornecedor, descrição ou documento', value: search, onChange: value => setFilter('search', value) },
+        { key: 'status', label: 'Situação', value: statusFilter, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, { value: 'partial', label: 'Pagamento parcial' }, ...PAYABLE_STATUSES.map(value => ({ value, label: PAYABLE_STATUS_LABELS[value] }))] },
+        { key: 'category', label: 'Categoria', value: categoryFilter, onChange: value => setFilter('category', value), options: [{ value: 'all', label: 'Todas as categorias' }, ...PAYABLE_CATEGORIES.map(value => ({ value, label: PAYABLE_CATEGORY_LABELS[value] }))] },
+        { key: 'source', label: 'Origem', value: sourceFilter, onChange: value => setFilter('source', value), options: [{ value: 'all', label: 'Todas as origens' }, { value: 'system', label: 'Operacional' }, { value: 'manual', label: 'Avulsa' }] },
+        { key: 'from', label: 'Vencimento de', type: 'date', value: filters.from, onChange: value => setFilter('from', value), max: filters.to || undefined },
+        { key: 'to', label: 'Vencimento até', type: 'date', value: filters.to, onChange: value => setFilter('to', value), min: filters.from || undefined },
+      ]} />
 
       <Card>
         <CardContent className="p-0">

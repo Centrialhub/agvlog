@@ -21,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Plus, AlertOctagon, Edit } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { Separator } from '@/components/ui/separator';
 
 function errorMessage(error: unknown): string {
@@ -29,6 +29,7 @@ function errorMessage(error: unknown): string {
 }
 
 export default function Incidents() {
+  const toast = useSonnerToast();
   const { data: incidents = [], isLoading } = useIncidents();
   const { data: employees = [] } = useEmployees();
   const { data: vehicles = [] } = useVehicles();
@@ -276,6 +277,7 @@ export default function Incidents() {
 }
 
 function HrActionsSection({ incidentId, defaultEmployeeId, savedEmployeeId }: { incidentId: string; defaultEmployeeId?: string; savedEmployeeId?: string }) {
+  const toast = useSonnerToast();
   const { data: actions = [] } = useIncidentActions(incidentId);
   const addAction = useAddEmployeeIncidentAction();
   const [actionType, setActionType] = useState<string>('note');

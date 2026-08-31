@@ -1,0 +1,31 @@
+{
+  "captured_at": "2026-08-30T02:34:25.532Z",
+  "project_id": "qcvnsdrbcchaxvawcngk",
+  "state": "Before journey migration; no production changes in this batch",
+  "functions": [
+    {
+      "proname": "_assert_driver_owns_trip",
+      "args": "_trip_id uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public._assert_driver_owns_trip(_trip_id uuid)\n RETURNS TABLE(driver_id uuid, tenant_id uuid, status text)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_uid uuid := auth.uid();\n  v_driver uuid;\n  v_tenant uuid;\n  v_status text;\nbegin\n  if v_uid is null then\n    raise exception 'unauthenticated' using errcode = '42501';\n  end if;\n\n  select t.driver_id, t.tenant_id, t.status\n    into v_driver, v_tenant, v_status\n  from public.dispatch_trips t\n  where t.id = _trip_id;\n\n  if not found then\n    raise exception 'trip_not_found' using errcode = 'P0002';\n  end if;\n\n  if not exists (\n    select 1\n    from public.drivers d\n    where d.id = v_driver\n      and d.user_id = v_uid\n      and d.tenant_id = v_tenant\n      and d.active = true\n  ) then\n    raise exception 'access_denied' using errcode = '42501';\n  end if;\n\n  if v_status not in (\n    'planned',\n    'loading',\n    'dispatched',\n    'in_progress',\n    'in_transit',\n    'completed'\n  ) then\n    raise exception 'trip_not_active' using errcode = '22023';\n  end if;\n\n  driver_id := v_driver;\n  tenant_id := v_tenant;\n  status := v_status;\n  return next;\nend;\n$function$\n",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "owner": "postgres",
+      "definition_hash": "9c374732a4df0d512283d47f07484aa3"
+    },
+    {
+      "proname": "driver_create_event",
+      "args": "_trip_id uuid, _event_type text, _payload jsonb, _stop_id uuid, _notes text",
+      "definition": "CREATE OR REPLACE FUNCTION public.driver_create_event(_trip_id uuid, _event_type text, _payload jsonb DEFAULT '{}'::jsonb, _stop_id uuid DEFAULT NULL::uuid, _notes text DEFAULT NULL::text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE v_tenant uuid; v_id uuid;\nBEGIN\n  SELECT tenant_id INTO v_tenant FROM public._assert_driver_owns_trip(_trip_id);\n  IF _event_type IS NULL OR length(_event_type) = 0 THEN RAISE EXCEPTION 'event_type_required'; END IF;\n  IF _stop_id IS NOT NULL AND NOT EXISTS (\n    SELECT 1 FROM public.dispatch_stops WHERE id=_stop_id AND dispatch_trip_id=_trip_id\n  ) THEN RAISE EXCEPTION 'stop_not_in_trip'; END IF;\n  INSERT INTO public.dispatch_events(tenant_id, dispatch_trip_id, dispatch_stop_id, event_type, payload, notes, created_by)\n  VALUES (v_tenant, _trip_id, _stop_id, _event_type, COALESCE(_payload,'{}'::jsonb), _notes, auth.uid())\n  RETURNING id INTO v_id;\n  RETURN v_id;\nEND; $function$\n",
+      "acl": "{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}",
+      "owner": "postgres",
+      "definition_hash": "2aef2da1a4ea07b50e481ee04e4252dc"
+    },
+    {
+      "proname": "driver_save_checklist",
+      "args": "_trip_id uuid, _kind text, _payload jsonb",
+      "definition": "CREATE OR REPLACE FUNCTION public.driver_save_checklist(_trip_id uuid, _kind text, _payload jsonb)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE v_tenant uuid; v_type text; v_id uuid;\nBEGIN\n  IF _kind NOT IN ('pre','post') THEN RAISE EXCEPTION 'invalid_kind'; END IF;\n  v_type := CASE _kind WHEN 'pre' THEN 'checklist_pre' ELSE 'checklist_post' END;\n  SELECT tenant_id INTO v_tenant FROM public._assert_driver_owns_trip(_trip_id);\n  INSERT INTO public.dispatch_events(tenant_id, dispatch_trip_id, event_type, payload, created_by)\n  VALUES (v_tenant, _trip_id, v_type, COALESCE(_payload,'{}'::jsonb), auth.uid())\n  RETURNING id INTO v_id;\n  RETURN v_id;\nEND; $function$\n",
+      "acl": "{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}",
+      "owner": "postgres",
+      "definition_hash": "25d2661ed91d262f316313193ea80b17"
+    }
+  ]
+}

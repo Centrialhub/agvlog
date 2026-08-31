@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { FileText, Calculator, CheckCircle, Eye, Edit3, Search } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import FreightReviewDialog from '@/components/freight/FreightReviewDialog';
 import type { Json, TablesInsert } from '@/integrations/supabase/types';
 
@@ -45,6 +45,7 @@ interface Props {
 }
 
 export default function CTeWorkbench({ loadId, loadNumber, destination, documents }: Props) {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();

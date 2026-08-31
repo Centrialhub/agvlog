@@ -21,6 +21,8 @@ import { Plus, Loader2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch } from '@/lib/listFilters';
 import { portalErrorMessage } from '@/lib/portal/portalErrors';
 
 const STATUS_TONE: Record<string, string> = {
@@ -35,10 +37,15 @@ export default function PortalPickups() {
   const { selectedClientId } = usePortalClientScope();
   const canRequest = hasAnyPermission(access, 'can_request_pickup');
   const requestableClients = access.filter(a => a.can_request_pickup);
+  const [search, setSearch] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const { data: pickups = [], isLoading, error, refetch } = usePortalPickups({
     status: statusFilter === 'all' ? undefined : statusFilter,
+    start: from || undefined, end: to || undefined,
   });
+  const filteredPickups = pickups.filter(row => matchesSearch(search, row.pickup_number, row.remitter_name, row.recipient_name, row.notes));
   const [open, setOpen] = useState(false);
   const [cancelPickupId, setCancelPickupId] = useState<string | null>(null);
   const [form, setForm] = useState({ client_id: '', pickup_at: '', recipient_name: '', notes: '' });
@@ -90,17 +97,13 @@ export default function PortalPickups() {
       title="Coletas"
       description="Acompanhe e solicite coletas de mercadoria."
     >
+      <div className="mb-4"><ListFilterBar fields={[
+        { key: 'search', label: 'Buscar coleta', type: 'search', value: search, onChange: setSearch, placeholder: 'Número, remetente ou destinatário' },
+        { key: 'status', label: 'Situação', value: statusFilter, onChange: setStatusFilter, options: [{ value: 'all', label: 'Todas as situações' }, { value: 'pendente', label: 'Pendente' }, { value: 'vinculada', label: 'Vinculada' }, { value: 'finalizada', label: 'Finalizada' }, { value: 'cancelada', label: 'Cancelada' }] },
+        { key: 'from', label: 'Coleta de', type: 'date', value: from, max: to || undefined, onChange: setFrom },
+        { key: 'to', label: 'Coleta até', type: 'date', value: to, min: from || undefined, onChange: setTo },
+      ]} onReset={() => { setSearch(''); setStatusFilter('all'); setFrom(''); setTo(''); }} activeCount={Number(Boolean(search)) + Number(statusFilter !== 'all') + Number(Boolean(from)) + Number(Boolean(to))} resultCount={error ? undefined : filteredPickups.length} totalCount={pickups.length} loading={isLoading} description="Busca textual nas até 200 coletas carregadas para o período e situação." /></div>
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            <SelectItem value="pendente">Pendente</SelectItem>
-            <SelectItem value="vinculada">Vinculada</SelectItem>
-            <SelectItem value="finalizada">Finalizada</SelectItem>
-            <SelectItem value="cancelada">Cancelada</SelectItem>
-          </SelectContent>
-        </Select>
         {canRequest && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -154,7 +157,7 @@ export default function PortalPickups() {
               <span>Erro ao carregar coletas: {(error as Error).message}</span>
               <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
             </div>
-          ) : pickups.length === 0 ? (
+          ) : filteredPickups.length === 0 ? (
             <PortalEmptyState title="Nenhuma coleta" description="Você ainda não tem coletas registradas." />
           ) : (
             <Table>
@@ -170,7 +173,7 @@ export default function PortalPickups() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pickups.map(p => (
+                {filteredPickups.map(p => (
                   <TableRow key={p.id}>
                     <TableCell className="font-mono">#{p.pickup_number}</TableCell>
                     <TableCell>{p.pickup_at && format(new Date(p.pickup_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</TableCell>

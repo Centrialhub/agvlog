@@ -1,14 +1,16 @@
 import { useTheme } from "next-themes";
-import { Toaster as Sonner, toast as sonnerToast } from "sonner";
-import { useAlertStore } from "@/hooks/useAlertStore";
+import { Toaster as Sonner } from "sonner";
+import {useNotificationScope} from '@/lib/notificationScope';
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
+  const scope=useNotificationScope();
 
   return (
     <Sonner
+      key={scope}
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
       toastOptions={{
@@ -25,22 +27,4 @@ const Toaster = ({ ...props }: ToasterProps) => {
   );
 };
 
-const toast = {
-  ...sonnerToast,
-  error: (message: string | React.ReactNode, data?: any) => {
-    const description = data?.description || "";
-    useAlertStore.getState().showAlert(String(message), String(description), 'error');
-    return "alert-popup";
-  },
-  warning: (message: string | React.ReactNode, data?: any) => {
-    const description = data?.description || "";
-    useAlertStore.getState().showAlert(String(message), String(description), 'warning');
-    return "alert-popup";
-  },
-  loading: (message: string | React.ReactNode, data?: any) => {
-    // Keep loading toasts as standard toasts since they are temporary
-    return sonnerToast.loading(message, data);
-  }
-};
-
-export { Toaster, toast };
+export { Toaster };

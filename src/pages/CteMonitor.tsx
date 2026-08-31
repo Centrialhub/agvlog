@@ -1,7 +1,8 @@
-import { promptAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FilterField as Field } from '@/components/ui/filter-field';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
@@ -16,7 +17,7 @@ import {
 import {
   FileText, FileDown, RefreshCw, Search, Filter as FilterIcon, X, AlertCircle, Eye, Ban,
 } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useCancelCTe } from '@/hooks/useIssueCTe';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
@@ -73,6 +74,7 @@ async function fetchRowBlob(row: CteMonitorRow, format: 'pdf' | 'xml'): Promise<
 }
 
 async function downloadHubFile(
+  toast: ReturnType<typeof useSonnerToast>,
   row: CteMonitorRow,
   format: 'pdf' | 'xml',
   opts: { silent?: boolean; view?: boolean } = {},
@@ -137,20 +139,12 @@ function StatusPill({ status }: { status: SefazStatus }) {
   );
 }
 
-function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`flex flex-col gap-1 ${className}`}>
-      <label className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</label>
-      {children}
-    </div>
-  );
-}
-
 // Mostra todos os status por padrão — CT-es autorizadas (processed) precisam
 // aparecer no monitor para download de PDF/XML.
 const DEFAULT_STATUSES: SefazStatus[] = [];
 
 export default function CteMonitor() {
+  const toast = useSonnerToast();
   const [filters, setFilters] = useState<CteMonitorFilters>({
     statuses: DEFAULT_STATUSES,
     correctionLetter: 'all',
@@ -248,10 +242,10 @@ export default function CteMonitor() {
   }
 
   async function downloadXml(row: CteMonitorRow) {
-    await downloadHubFile(row, 'xml');
+    await downloadHubFile(toast, row, 'xml');
   }
   async function downloadPdf(row: CteMonitorRow) {
-    await downloadHubFile(row, 'pdf');
+    await downloadHubFile(toast, row, 'pdf');
   }
 
   return (
@@ -498,7 +492,7 @@ export default function CteMonitor() {
                     </TableCell>
                     <TableCell className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="inline-flex gap-1">
-                        <Button size="sm" variant="ghost" title="Visualizar DACTE (PDF)" onClick={() => downloadHubFile(r, 'pdf', { view: true })}>
+                        <Button size="sm" variant="ghost" title="Visualizar DACTE (PDF)" onClick={() => downloadHubFile(toast, r, 'pdf', { view: true })}>
                           <Eye className="h-4 w-4" />
                         </Button>
                         <Button size="sm" variant="ghost" title="Baixar PDF (DACTE)" onClick={() => downloadPdf(r)}>
@@ -508,8 +502,8 @@ export default function CteMonitor() {
                           <FileDown className="h-4 w-4" />
                         </Button>
                         {r.sefaz_status.endsWith('_error') && (
-                          <Button size="sm" variant="ghost" title="Reenviar à SEFAZ" onClick={() => resend.mutate(r.id, {
-                            onSuccess: () => toast.success('CT-e marcado para reenvio'),
+                          <Button size="sm" variant="ghost" title="Consultar/recuperar operação" onClick={() => resend.mutate(r.id, {
+                            onSuccess: () => toast.success('Operação fiscal consultada e recuperada'),
                             onError: (error: unknown) => toast.error(errorMessage(error)),
                           })}>
                             <RefreshCw className="h-4 w-4" />
@@ -535,6 +529,8 @@ export default function CteMonitor() {
 }
 
 function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }) {
+  const { promptAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { data: events = [] } = useCteSefazEvents(row.id);
   const cancelCte = useCancelCTe();
 
@@ -632,13 +628,13 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
           </Button>
         )}
         <div className="flex-1" />
-        <Button variant="outline" size="sm" onClick={() => downloadHubFile(row, 'pdf', { view: true })}>
+        <Button variant="outline" size="sm" onClick={() => downloadHubFile(toast, row, 'pdf', { view: true })}>
           <Eye className="h-4 w-4" /> Visualizar
         </Button>
-        <Button variant="outline" size="sm" onClick={() => downloadHubFile(row, 'pdf')}>
+        <Button variant="outline" size="sm" onClick={() => downloadHubFile(toast, row, 'pdf')}>
           <FileText className="h-4 w-4" /> PDF
         </Button>
-        <Button variant="outline" size="sm" onClick={() => downloadHubFile(row, 'xml')}>
+        <Button variant="outline" size="sm" onClick={() => downloadHubFile(toast, row, 'xml')}>
           <FileDown className="h-4 w-4" /> XML
         </Button>
         <Button size="sm" onClick={onClose}>Fechar</Button>

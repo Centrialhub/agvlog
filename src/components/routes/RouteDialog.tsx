@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { WaypointEditor } from './WaypointEditor';
 import type { Waypoint } from '@/lib/routes/waypoints';
 import type { Tables, TablesInsert } from '@/integrations/supabase/types';
@@ -29,6 +29,7 @@ interface RouteDialogProps {
 }
 
 export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, editRoute }: RouteDialogProps) {
+  const toast = useSonnerToast();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [corridorId, setCorridorId] = useState('');

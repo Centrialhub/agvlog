@@ -2,13 +2,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { getErrorMessage } from '@/lib/errors';
 import type { Tables } from '@/integrations/supabase/types';
 
 export type CostCenter = Tables<'cost_centers'>;
 
 export function useCostCenters() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const queryClient = useQueryClient();
 

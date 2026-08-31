@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2, FileSpreadsheet } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { downloadImportedNotesSummaryPdf, type SummaryReportType } from '@/lib/importedNotesSummaryPdf';
 import { downloadImportedNotesXlsx } from '@/lib/importedNotesXlsx';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
@@ -58,6 +58,8 @@ const emptyFilters: ImportedNoteFilters = {
 };
 
 export default function ImportedNotesSummary() {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();

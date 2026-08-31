@@ -1,0 +1,134 @@
+{
+  "source": "Local fixture only; not a production capture",
+  "migration": "20260830080608_add_explicit_load_replanning.sql",
+  "predecessor": [
+    {
+      "signature": "_derive_driver_delivery_result(uuid,uuid)",
+      "hash": "f9c85c43e7813e316467b95fb09b5963",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_load_is_locked(uuid)",
+      "hash": "a15b8a40dfd93a05479f8cc0b04db3eb",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "delete_load_if_empty(uuid)",
+      "hash": "d724afa8cce7714aae6c4deedf00e7a3",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "guard_trip_load_link_graph()",
+      "hash": "020ab0928aa3b624f2cdbb2f10eee329",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "is_tenant_operator_or_admin(uuid)",
+      "hash": "682f66029dc9bb798f9f329b4e8f95aa",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "move_load_items_between_loads(uuid,uuid,uuid,uuid[])",
+      "hash": "7ac9704abb7f610328b22b1e9f129d99",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "recalc_load_totals()",
+      "hash": "7dc12046ecada4d2f04bb2942a92493d",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    }
+  ],
+  "candidate": [
+    {
+      "signature": "_assert_load_replanning_graph(uuid,uuid[])",
+      "hash": "88587d953ac20149f3beb9a825d42275",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_derive_driver_delivery_result(uuid,uuid)",
+      "hash": "31a4a4ec4f9a00f7bf7df2f96ede223a",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_load_is_locked(uuid)",
+      "hash": "a15b8a40dfd93a05479f8cc0b04db3eb",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "_load_replanning_snapshot(uuid,uuid[])",
+      "hash": "805fbe6706cde044e5904baaf6edea52",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "delete_load_if_empty(uuid)",
+      "hash": "7e103b5a3c3c898aed492644c527c993",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "get_load_replanning_context(uuid,uuid,uuid)",
+      "hash": "54fb4c85f58c8e8fb2c983760f88181b",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "guard_trip_load_link_graph()",
+      "hash": "020ab0928aa3b624f2cdbb2f10eee329",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "is_tenant_operator_or_admin(uuid)",
+      "hash": "682f66029dc9bb798f9f329b4e8f95aa",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "move_load_items_between_loads(uuid,uuid,uuid,uuid[])",
+      "hash": "7ac9704abb7f610328b22b1e9f129d99",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "recalc_load_totals()",
+      "hash": "7dc12046ecada4d2f04bb2942a92493d",
+      "anon": false,
+      "authenticated": false,
+      "service_role": true
+    },
+    {
+      "signature": "replan_load_items(jsonb)",
+      "hash": "8dbd165b7b03de00262955d5a8d3082b",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    }
+  ]
+}

@@ -64,6 +64,7 @@ export interface BuilderInput {
 }
 
 export interface BuiltItem {
+  metadata?: unknown;
   fiscal_document_id: string | null;
   cte_document_id: string | null;
   load_id: string | null;

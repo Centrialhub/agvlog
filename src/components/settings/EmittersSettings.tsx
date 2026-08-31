@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import {
   useEmitters, useSaveEmitter, useDeleteEmitter, useMakeDefaultEmitter,
@@ -16,9 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Pencil, Trash2, Star, Key, Building2 } from 'lucide-react';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 
 export default function EmittersSettings() {
+  const { confirmAction } = useScopedAlerts();
   const isAdmin = useIsAdmin();
   const { data: emitters = [], isLoading } = useEmitters();
   const [editing, setEditing] = useState<Partial<TenantEmitter> | null>(null);
@@ -129,6 +130,7 @@ type EmitterForm = {
 };
 
 function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitter>; onClose: () => void }) {
+  const toast = useSonnerToast();
   const save = useSaveEmitter();
   const saveToken = useSaveHubCredentialToken();
   const saveMeta = useSaveHubCredential();
@@ -150,7 +152,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
   const [cred, setCred] = useState({
     mode: 'token' as 'token' | 'secret_name',
     doc_scope: 'all' as HubFiscalCredential['doc_scope'],
-    environment: 'production' as HubFiscalCredential['environment'],
+    environment: 'homologation' as HubFiscalCredential['environment'],
     token: '',
     secret_name: '',
   });
@@ -202,7 +204,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await hubFiscal.ping(savedId, cred.doc_scope);
+      const res = await hubFiscal.ping(savedId, cred.doc_scope, cred.environment);
       if (res?.success) {
         setTestResult({
           ok: true,
@@ -303,6 +305,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
                 <SelectItem value="nfe">NF-e</SelectItem>
                 <SelectItem value="nfce">NFC-e</SelectItem>
                 <SelectItem value="mdfe">MDF-e</SelectItem>
+                <SelectItem value="nfcom">NFCom</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -312,7 +315,8 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="production">Produção</SelectItem>
-                <SelectItem value="sandbox">Homologação</SelectItem>
+                <SelectItem value="homologation">Homologação</SelectItem>
+                <SelectItem value="sandbox">Sandbox</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -387,7 +391,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
     enabled: boolean;
   }>({
     doc_scope: 'all',
-    environment: 'production',
+    environment: 'homologation',
     mode: 'token',
     token: '',
     secret_name: '',
@@ -430,7 +434,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
           <p><strong>Como funciona:</strong> cada emitente pode ter uma conta própria no Hub Fiscal.</p>
           <p>Cole o token do Hub Fiscal aqui — ele é criptografado no backend com AES-GCM (chave <code>AGVLOG_ENCRYPTION_KEY</code>) antes de ir para o banco e nunca é devolvido para a tela.</p>
           <p>Alternativa avançada: se você preferir guardar o token como variável de ambiente, use o modo <em>“Nome de segredo”</em> e informe apenas o nome (ex.: <code>HUB_FISCAL_KEY_FILIAL2</code>).</p>
-          <p>Sem credencial cadastrada, o sistema usa o token padrão <code>HUB_FISCAL_API_KEY</code>.</p>
+          <p>É obrigatória uma credencial para o emitente e o ambiente selecionados. Sem ela, a operação é bloqueada; não há troca automática para produção ou token global.</p>
         </div>
 
         <Table>
@@ -485,6 +489,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
                   <SelectItem value="nfe">NF-e</SelectItem>
                   <SelectItem value="nfce">NFC-e</SelectItem>
                   <SelectItem value="mdfe">MDF-e</SelectItem>
+                <SelectItem value="nfcom">NFCom</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -494,7 +499,8 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="production">Produção</SelectItem>
-                  <SelectItem value="sandbox">Homologação</SelectItem>
+                  <SelectItem value="homologation">Homologação</SelectItem>
+                <SelectItem value="sandbox">Sandbox</SelectItem>
                 </SelectContent>
               </Select>
             </div>

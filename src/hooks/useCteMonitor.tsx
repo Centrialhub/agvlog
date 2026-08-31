@@ -1,7 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import { readCtePayloadRecipient } from '@/lib/fiscal/ctePayload';
+import { matchesCteMonitorFilters } from '@/lib/fiscal/cteListFilters';
+import { localDayBoundary } from '@/lib/listFilters';
 import { useTenant } from './useTenant';
 
 export const SEFAZ_STATUSES = [
@@ -158,7 +160,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       const key = nz(filters.accessKey);
       if (key) q = q.ilike('access_key', `%${key}%`);
       const plate = nz(filters.plate);
-      if (plate) q = q.ilike('vehicle_plate', `%${plate.replace(/\W/g, '')}%`);
+      if (plate) q = q.ilike('vehicle_plate', `%${plate.replace(/\W/g, '').split('').join('%')}%`);
       const driver = nz(filters.driver);
       if (driver) q = q.ilike('driver_name', `%${driver}%`);
       const series = nz(filters.series);
@@ -171,15 +173,15 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       if (pg) q = q.ilike('payer_group', `%${pg}%`);
 
       if (filters.statuses && filters.statuses.length > 0) {
-        q = q.in('sefaz_status', filters.statuses);
+        q = q.or(`sefaz_status.in.(${filters.statuses.join(',')}),access_key.not.is.null`);
       }
       if (filters.correctionLetter === 'yes') q = q.eq('correction_letter', true);
       if (filters.correctionLetter === 'no') q = q.eq('correction_letter', false);
 
-      if (filters.processedStart) q = q.gte('processed_at', filters.processedStart);
-      if (filters.processedEnd) q = q.lte('processed_at', filters.processedEnd + 'T23:59:59');
-      if (filters.issuedStart) q = q.gte('issued_at', filters.issuedStart);
-      if (filters.issuedEnd) q = q.lte('issued_at', filters.issuedEnd + 'T23:59:59');
+      if (filters.processedStart) q = q.gte('processed_at', localDayBoundary(filters.processedStart));
+      if (filters.processedEnd) q = q.lt('processed_at', localDayBoundary(filters.processedEnd, true));
+      if (filters.issuedStart) q = q.or(`issued_at.gte.${localDayBoundary(filters.issuedStart)},and(issued_at.is.null,created_at.gte.${localDayBoundary(filters.issuedStart)})`);
+      if (filters.issuedEnd) q = q.or(`issued_at.lt.${localDayBoundary(filters.issuedEnd, true)},and(issued_at.is.null,created_at.lt.${localDayBoundary(filters.issuedEnd, true)})`);
 
       const { data, error } = await q;
       if (error) throw error;
@@ -272,25 +274,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 
 
 
-      const filteredHub = hubRows.filter((r) => {
-        if (filters.statuses?.length && !filters.statuses.includes(r.sefaz_status)) return false;
-        if (docNumber) {
-          const hit = (r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase()) || 
-                      (r.invoice_numbers || '').toLowerCase().includes(docNumber.toLowerCase());
-          if (!hit) return false;
-        }
-
-
-
-        if (key && !(r.access_key || '').includes(key)) return false;
-        if (payer && !(r.payer_name || '').toLowerCase().includes(payer.toLowerCase())) return false;
-        if (filters.plate && !(r.vehicle_plate || '').toLowerCase().includes(filters.plate.replace(/\W/g, '').toLowerCase())) return false;
-        if (filters.series && r.cte_series !== filters.series) return false;
-        if (filters.correctionLetter === 'yes') return false;
-        return true;
-      });
-
-      return [...filteredHub, ...draftRows].sort(
+      return [...hubRows, ...draftRows].filter(row => matchesCteMonitorFilters(row, filters)).sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
     },
@@ -348,26 +332,4 @@ export function useCteSefazEvents(cteDocumentId: string | null) {
   });
 }
 
-/** Marca CT-e para reenvio (status volta a 'pending') — integração fiscal real consome essa fila. */
-export function useResendCte() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { error } = await supabase
-        .from('cte_documents')
-        .update({
-          sefaz_status: 'pending',
-          sefaz_status_reason: null,
-          sefaz_status_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .eq('tenant_id', currentTenant.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cte_monitor'] });
-    },
-  });
-}
+export { useResendCte } from './useIssueCTe';

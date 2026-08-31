@@ -23,13 +23,13 @@ const ins = {
 
 describe('NFS-e — propagação do seguro', () => {
   it('não emite bloco de seguro quando não há dados', () => {
-    const { payload } = buildNFSeEmitPayload({ doc: baseDoc, emitter });
+    const { payload } = buildNFSeEmitPayload({ doc: baseDoc, emitter, environment: 'homologation' });
     expect((payload as any).seguro).toBeUndefined();
     expect(payload.servico.discriminacao).toBe('Frete de transporte');
   });
 
   it('propaga seguradora, apólice, averbação e valores', () => {
-    const { payload } = buildNFSeEmitPayload({ doc: { ...baseDoc, ...ins }, emitter });
+    const { payload } = buildNFSeEmitPayload({ doc: { ...baseDoc, ...ins }, emitter, environment: 'homologation' });
     expect((payload as any).seguro).toMatchObject({
       seguradora: 'Seguradora Brasil',
       cnpjSeguradora: '11222333000181',
@@ -41,7 +41,7 @@ describe('NFS-e — propagação do seguro', () => {
   });
 
   it('imprime os dados do seguro na discriminação e na observação', () => {
-    const { payload } = buildNFSeEmitPayload({ doc: { ...baseDoc, ...ins, notes: 'obs' }, emitter });
+    const { payload } = buildNFSeEmitPayload({ doc: { ...baseDoc, ...ins, notes: 'obs' }, emitter, environment: 'homologation' });
     expect(payload.servico.discriminacao).toContain('Apólice: AP-2026-001');
     expect(payload.servico.discriminacao).toContain('Averbação: AV-99881');
     expect(payload.servico.discriminacao).toContain('Seguradora: Seguradora Brasil');
@@ -50,7 +50,7 @@ describe('NFS-e — propagação do seguro', () => {
 
   it('bloqueia emissão com seguro incompleto/inválido', () => {
     expect(() => {
-      buildNFSeEmitPayload({ doc: { ...baseDoc, insurer_policy: 'AP-1' }, emitter });
+      buildNFSeEmitPayload({ doc: { ...baseDoc, insurer_policy: 'AP-1' }, emitter, environment: 'homologation' });
     }).toThrow(/Dados do seguro inválidos/);
   });
 
@@ -59,5 +59,23 @@ describe('NFS-e — propagação do seguro', () => {
   it('helpers de texto', () => {
     expect(hasInsuranceData(null)).toBe(false);
     expect(buildInsuranceText(ins)).toContain('Valor segurado: R$ 50.000,00');
+  });
+});
+
+describe('NFS-e — ambiente fiscal obrigatório e consistente', () => {
+  it.each(['sandbox','homologation','production'] as const)('mantém %s no envelope e no payload', environment => {
+    const result=buildNFSeEmitPayload({doc:baseDoc,emitter,environment});
+    expect(result.environment).toBe(environment);
+    expect(result.payload.ambiente).toBe(environment==='production'?'producao':'homologacao');
+  });
+  it('não assume produção quando o ambiente não foi informado',()=>{
+    expect(()=>buildNFSeEmitPayload({doc:baseDoc,emitter})).toThrow(/ambiente fiscal/);
+  });
+  it('preserva identidade de emissão em duas construções do mesmo documento',()=>{
+    const input={doc:baseDoc,emitter,environment:'homologation' as const};
+    expect(buildNFSeEmitPayload(input).externalId).toBe(buildNFSeEmitPayload(input).externalId);
+  });
+  it('bloqueia cadastro incompleto antes de enviar',()=>{
+    expect(()=>buildNFSeEmitPayload({doc:baseDoc,emitter:{...emitter,im:null},environment:'homologation'})).toThrow(/inscrição municipal/);
   });
 });

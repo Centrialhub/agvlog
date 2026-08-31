@@ -14,7 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import {
   useOccurrences,
   useReportExports,
@@ -50,6 +50,7 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export default function OccurrenceReports() {
+  const { toast } = useToast();
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [customer, setCustomer] = useState('');

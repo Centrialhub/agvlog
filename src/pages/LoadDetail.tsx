@@ -3,20 +3,24 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
+import { isRecord } from '@/lib/loads/operationDocumentOutcome';
 import { useTransitionLoadStatus, LOAD_STATUS_LABELS, Load, type LoadStatus } from '@/hooks/useLoads';
 import { useLoadItems } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
+import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePlan';
+import DispatchRecoveryPanel from '@/components/route-planning/DispatchRecoveryPanel';
 import { useGenerateCTe } from '@/hooks/useGenerateCTe';
 import { calculateFreight, type FreightResult } from '@/hooks/useFreightCalculator';
 import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 import { getNextStatuses } from '@/lib/statusPipeline';
 import { useToast } from '@/hooks/use-toast';
-import LoadRomaneioTabs from '@/components/loads/LoadRomaneioTabs';
+import LoadRomaneioTabs, { type LoadRomaneioDocument } from '@/components/loads/LoadRomaneioTabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -26,11 +30,17 @@ import {
   MapPin, Calendar, AlertTriangle, Send, Route as RouteIcon,
 } from 'lucide-react';
 import { getErrorMessage } from '@/lib/errors';
+import {
+  isDriverTripStarted,
+  resolveCanonicalTripLink,
+  type CanonicalLoadTripLink,
+} from '@/lib/driverTrip';
+import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
 
 function useLoad(id: string | undefined) {
   const { currentTenant } = useTenant();
   return useQuery({
-    queryKey: ['load', id],
+    queryKey: ['load', id, currentTenant?.id],
     queryFn: async () => {
       if (!id || !currentTenant) return null;
       const { data, error } = await supabase
@@ -47,19 +57,46 @@ function useLoad(id: string | undefined) {
 }
 
 function useLoadDocuments(loadId: string | undefined) {
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['load_documents', loadId, 'v2'],
-    queryFn: async () => {
-      if (!loadId) return [];
+    queryKey: ['load_documents', loadId, currentTenant?.id, user?.id, 'attempt-v1'],
+    queryFn: async ({ signal }): Promise<LoadRomaneioDocument[]> => {
+      if (!loadId || !currentTenant || !user) return [];
+      const { data, error } = await supabase.rpc('get_load_operational_documents', {
+        _tenant_id: currentTenant.id, _load_id: loadId,
+      }).abortSignal(signal);
+      if (error) throw error;
+      if (!isRecord(data) || data.tenant_id !== currentTenant.id || data.actor_id !== user.id || data.load_id !== loadId
+        || !Array.isArray(data.documents) || !data.documents.every(document => isRecord(document)
+          && typeof document.id === 'string' && typeof document.status === 'string' && typeof document.is_historical === 'boolean')) {
+        throw new Error('Não foi possível conferir as notas e tentativas desta carga.');
+      }
+      return data.documents as LoadRomaneioDocument[];
+    },
+    enabled: !!loadId && !!currentTenant?.id && !!user?.id,
+  });
+}
+
+function useLoadTripState(loadId: string | undefined) {
+  const { currentTenant } = useTenant();
+  return useQuery({
+    queryKey: ['load_trip_state', loadId, currentTenant?.id],
+    queryFn: async (): Promise<CanonicalLoadTripLink[]> => {
+      if (!loadId || !currentTenant) return [];
       const { data, error } = await supabase
-        .from('fiscal_documents')
-        .select('id, invoice_number, reference_number, document_type, status, remitter, remitter_cnpj, recipient, recipient_cnpj, recipient_city, recipient_state, recipient_neighborhood, pallet_count, weight_kg, value, issue_date, freight_value, freight_value_original, freight_breakdown, freight_overridden, freight_override_reason, freight_confirmed_at, delivery_meta, client_load_source, load_id, deleted_at')
+        .from('dispatch_trip_loads')
+        .select(`
+          dispatch_trip_id,
+          dispatch_trips!dispatch_trip_loads_dispatch_trip_id_fkey(status, actual_start_at)
+        `)
         .eq('load_id', loadId)
+        .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data || [];
+      return (data || []) as unknown as CanonicalLoadTripLink[];
     },
-    enabled: !!loadId,
+    enabled: !!loadId && !!currentTenant?.id,
   });
 }
 
@@ -80,9 +117,12 @@ export default function LoadDetail() {
   const { currentTenant } = useTenant();
   const { data: load, isLoading, refetch } = useLoad(id);
   const { data: items = [] } = useLoadItems(id);
-  const { data: documents = [] } = useLoadDocuments(id);
+  const documentsQuery = useLoadDocuments(id);
+  const documents = documentsQuery.data ?? [];
+  const { data: loadTripLinks = [] } = useLoadTripState(id);
   const { data: vehicles = [] } = useVehicles();
   const transitionLoadStatus = useTransitionLoadStatus();
+  const dispatchPlan=useDispatchRoutePlan();
   const generateCTe = useGenerateCTe();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -113,26 +153,28 @@ export default function LoadDetail() {
     vehicle_id: '',
     notes: '',
   });
-  const [dispatchStops, setDispatchStops] = useState<{ destination: string; client_id: string }[]>([]);
+  const [dispatchStops, setDispatchStops] = useState<{ destination: string; client_id: string; fiscal_document_ids:string[] }[]>([]);
+  const dispatchDocuments=useMemo(()=>Array.from(new Set(items.map(item=>item.fiscal_document_id)
+    .filter((documentId):documentId is string=>Boolean(documentId)))),[items]);
 
   // Auto-populate stops from load items when dialog opens
   const populateStopsFromItems = () => {
     if (items.length === 0) {
-      setDispatchStops([{ destination: load?.destination || '', client_id: '' }]);
+      setDispatchStops([{ destination: load?.destination || '', client_id: '',fiscal_document_ids:[] }]);
       return;
     }
     // A carga expõe hoje um único destino consolidado, independentemente da
     // quantidade de itens. O operador pode refinar as paradas no planejamento.
-    const stops: { destination: string; client_id: string }[] = [];
+    const stops: { destination: string; client_id: string; fiscal_document_ids:string[] }[] = [];
     const destination = load?.destination || '';
-    if (destination) stops.push({ destination, client_id: '' });
+    if (destination) stops.push({ destination, client_id: '',fiscal_document_ids:dispatchDocuments });
     if (stops.length === 0) {
-      stops.push({ destination: load?.destination || '', client_id: '' });
+      stops.push({ destination: load?.destination || '', client_id: '',fiscal_document_ids:dispatchDocuments });
     }
     setDispatchStops(stops);
   };
 
-  const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '' }]);
+  const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '',fiscal_document_ids:[] }]);
   const removeStop = (idx: number) => setDispatchStops(s => s.filter((_, i) => i !== idx));
   const updateStop = (idx: number, field: string, value: string) =>
     setDispatchStops(s => s.map((stop, i) => i === idx ? { ...stop, [field]: value } : stop));
@@ -142,31 +184,31 @@ export default function LoadDetail() {
       if (!load || !currentTenant) throw new Error('Dados insuficientes');
       // Usa exclusivamente a RPC oficial — garante dispatch_trip_loads
       // e dispatch_stop_documents consistentes com o contrato de dados.
-      const validStops = dispatchStops.filter(s => s.destination.trim());
+      const validStops = dispatchStops;
       if (validStops.length === 0) throw new Error('Adicione pelo menos uma parada');
-
-      // Distribui todos os documentos fiscais da carga na primeira parada por padrão;
-      // o operador refina pela tela de planejamento de rotas se quiser separar.
-      const fdIds = items.map(item => item.fiscal_document_id).filter((documentId): documentId is string => Boolean(documentId));
+      if(items.some(item=>!item.fiscal_document_id))throw new Error('Esta carga contém itens manuais. O fluxo de baixa desses itens ainda precisa ser habilitado.');
+      if(validStops.some(stop=>!stop.destination.trim() || stop.fiscal_document_ids.length===0))
+        throw new Error('Informe o destino e distribua os documentos de cada parada.');
+      const assigned=validStops.flatMap(stop=>stop.fiscal_document_ids);
+      if(assigned.length!==dispatchDocuments.length || new Set(assigned).size!==dispatchDocuments.length
+        || dispatchDocuments.some(document=>!assigned.includes(document)))throw new Error('Distribua cada documento exatamente uma vez.');
       const stopsPayload = validStops.map((s, idx) => ({
+        id:`stop-${idx}`,recipient_name:s.destination,load_ids:[load.id],invoice_numbers:[],
+        total_weight_kg:0,total_volume_m3:0,total_pallet_count:0,total_value:0,service_time_minutes:20,
+        priority:0,risk_level:'normal' as const,manual_order:idx+1,notes:idx===0?dispatchForm.notes:undefined,
         destination: s.destination,
         client_id: s.client_id || null,
-        stop_order: idx + 1,
-        fiscal_document_ids: idx === 0 ? fdIds : [],
+        fiscal_document_ids: s.fiscal_document_ids,
       }));
-
-      const { data: tripId, error } = await supabase.rpc('dispatch_planned_route', {
-        _payload: {
-          tenant_id: currentTenant.id,
-          vehicle_id: dispatchForm.vehicle_id || load.vehicle_id,
-          driver_id: dispatchForm.driver_id || load.driver_id,
+      const tripId = await dispatchPlan.dispatchRoute({
+          attempt_scope:`load:${load.id}`,
+          vehicle_id: dispatchForm.vehicle_id || load.vehicle_id || '',
+          driver_id: dispatchForm.driver_id || load.driver_id || '',
           planned_start_at: new Date().toISOString(),
           route_name: `Carga ${load.load_number}`,
           load_ids: [load.id],
           stops: stopsPayload,
-        },
       });
-      if (error) throw error;
       return { id: tripId };
     },
     onSuccess: () => {
@@ -205,7 +247,14 @@ export default function LoadDetail() {
     );
   }
 
-  const nextStatuses = getNextStatuses(load.status, 'load');
+  const tripLink = resolveCanonicalTripLink(loadTripLinks, TRIP_ACTIVE_STATUSES);
+  const tripStarted = isDriverTripStarted(
+    tripLink?.dispatch_trips?.status,
+    tripLink?.dispatch_trips?.actual_start_at,
+  );
+  const rawNextStatuses = getNextStatuses(load.status, 'load');
+  const nextStatuses = rawNextStatuses.filter(status => status !== 'in_transit' || tripStarted);
+  const awaitingTripStart = rawNextStatuses.includes('in_transit') && !tripStarted;
   const palletCapacity = vehicle?.max_pallets;
   const weightCapacity = vehicle?.max_weight_kg;
   const palletPct = palletCapacity ? Math.round((computedTotals.pallets / palletCapacity) * 100) : null;
@@ -355,17 +404,24 @@ export default function LoadDetail() {
               {LOAD_STATUS_LABELS[ns as keyof typeof LOAD_STATUS_LABELS] || ns}
             </Button>
           ))}
+          {awaitingTripStart ? (
+            <p role="status" className="basis-full text-xs text-muted-foreground">
+              {tripLink
+                ? 'A saída será registrada pelo motorista ao iniciar a viagem.'
+                : 'Crie uma viagem antes de colocar a carga em trânsito.'}
+            </p>
+          ) : null}
           {['loaded', 'in_transit', 'delivered'].includes(load.status) && (
             <Button size="sm" variant="outline" onClick={openCTePreview} disabled={generateCTe.isPending}>
               <FileText className="h-3 w-3 mr-1" /> CT-e
             </Button>
           )}
-          {['ready', 'loaded', 'loading', 'in_transit'].includes(load.status) && !load.trip_id && (
+          {['ready', 'loaded', 'loading'].includes(load.status) && !load.trip_id && (
             <Dialog open={dispatchOpen} onOpenChange={(v) => { setDispatchOpen(v); if (v) populateStopsFromItems(); }}>
               <DialogTrigger asChild>
                 <Button 
                   size="sm" 
-                  disabled={createTrip.isPending}
+                  disabled={createTrip.isPending || documentsQuery.isPending || !!documentsQuery.error}
                 >
                   <Send className="h-3 w-3 mr-1" /> Despachar
                 </Button>
@@ -373,15 +429,16 @@ export default function LoadDetail() {
               <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Despachar Carga {load.load_number}</DialogTitle>
+                  <DialogDescription>Confirme motorista, veículo e distribua cada documento em uma única parada.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                   <div>
-                    <Label className="text-xs">Motorista</Label>
+                    <Label htmlFor="dispatch-driver" className="text-xs">Motorista</Label>
                     <Select
                       value={dispatchForm.driver_id || load.driver_id || ''}
                       onValueChange={v => setDispatchForm(f => ({ ...f, driver_id: v }))}
                     >
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecionar motorista" /></SelectTrigger>
+                      <SelectTrigger id="dispatch-driver" className="h-9"><SelectValue placeholder="Selecionar motorista" /></SelectTrigger>
                       <SelectContent>
                         {drivers.map((driver) => (
                           <SelectItem key={driver.id} value={driver.id}>{driver.name}</SelectItem>
@@ -390,12 +447,12 @@ export default function LoadDetail() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs">Veículo</Label>
+                    <Label htmlFor="dispatch-vehicle" className="text-xs">Veículo</Label>
                     <Select
                       value={dispatchForm.vehicle_id || load.vehicle_id || ''}
                       onValueChange={v => setDispatchForm(f => ({ ...f, vehicle_id: v }))}
                     >
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecionar veículo" /></SelectTrigger>
+                      <SelectTrigger id="dispatch-vehicle" className="h-9"><SelectValue placeholder="Selecionar veículo" /></SelectTrigger>
                       <SelectContent>
                         {vehicles.map((vehicleOption) => (
                           <SelectItem key={vehicleOption.id} value={vehicleOption.id}>{vehicleOption.plate}{vehicleOption.nickname ? ` (${vehicleOption.nickname})` : ''}</SelectItem>
@@ -419,13 +476,14 @@ export default function LoadDetail() {
                             {idx + 1}
                           </div>
                           <Input
+                            aria-label={`Destino parada ${idx+1}`}
                             value={stop.destination}
                             onChange={e => updateStop(idx, 'destination', e.target.value)}
                             placeholder={`Destino parada ${idx + 1}`}
                             className="h-8 text-xs"
                           />
                           {dispatchStops.length > 1 && (
-                            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeStop(idx)}>
+                            <Button type="button" variant="ghost" size="sm" aria-label={`Remover parada ${idx+1}`} className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeStop(idx)}>
                               ×
                             </Button>
                           )}
@@ -434,9 +492,22 @@ export default function LoadDetail() {
                     </div>
                   </div>
 
+                  {dispatchDocuments.map((documentId,index)=><div key={documentId}>
+                    <Label htmlFor={`dispatch-document-${index}`}>Documento {documents.find(document=>document.id===documentId)?.invoice_number || documentId.slice(0,8)}</Label>
+                    <Select value={String(dispatchStops.findIndex(stop=>stop.fiscal_document_ids.includes(documentId)))} onValueChange={value=>
+                      setDispatchStops(previous=>previous.map((stop,n)=>({...stop,fiscal_document_ids:n===Number(value)
+                        ? [...stop.fiscal_document_ids.filter(id=>id!==documentId),documentId]
+                        : stop.fiscal_document_ids.filter(id=>id!==documentId)})))}>
+                      <SelectTrigger id={`dispatch-document-${index}`}><SelectValue placeholder="Escolha a parada"/></SelectTrigger>
+                      <SelectContent><SelectItem value="-1">Sem parada</SelectItem>
+                        {dispatchStops.map((stop,n)=><SelectItem key={n} value={String(n)}>Parada {n+1}: {stop.destination || 'Sem destino'}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>)}
                   <div>
-                    <Label className="text-xs">Observações</Label>
+                    <Label htmlFor="dispatch-notes" className="text-xs">Observações da primeira parada</Label>
                     <Textarea
+                      id="dispatch-notes"
                       rows={2}
                       value={dispatchForm.notes}
                       onChange={e => setDispatchForm(f => ({ ...f, notes: e.target.value }))}
@@ -446,7 +517,7 @@ export default function LoadDetail() {
                   <Button
                     className="w-full"
                     onClick={() => createTrip.mutate()}
-                    disabled={createTrip.isPending || (load.status === 'loading' && !!load.trip_id)}
+                    disabled={createTrip.isPending || documentsQuery.isPending || !!documentsQuery.error || (load.status === 'loading' && !!load.trip_id)}
                   >
                     {createTrip.isPending ? 'Despachando...' : 
                      (load.status === 'loading' && !!load.trip_id) ? 'Carga já despachada' : 
@@ -459,6 +530,9 @@ export default function LoadDetail() {
         </div>
       </div>
 
+      <DispatchRecoveryPanel loadId={load.id} onConfirmed={()=>{
+        setDispatchOpen(false);void refetch();toast({title:'Despacho confirmado'});
+      }}/>
       {/* Capacity summary */}
       {vehicle && (palletCapacity || weightCapacity) && (
         <Card>
@@ -500,12 +574,15 @@ export default function LoadDetail() {
       )}
 
       {/* Cabeçalho com abas (Romaneio de Expedição) */}
-      <LoadRomaneioTabs
+      {documentsQuery.error ? <div role="alert" className="rounded border p-4">
+        {getErrorMessage(documentsQuery.error, 'Não foi possível carregar as notas desta carga.')}
+        <Button variant="outline" onClick={() => void documentsQuery.refetch()}>Tentar novamente</Button>
+      </div> : documentsQuery.isPending ? <p role="status">Carregando notas e tentativas da carga…</p> : <LoadRomaneioTabs
         load={load}
         documents={documents}
         items={items}
         onSaved={() => { refetch(); qc.invalidateQueries({ queryKey: ['load_documents', load.id] }); }}
-      />
+      />}
 
       {/* CT-e Freight Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>

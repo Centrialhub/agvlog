@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ShieldCheck, Loader2, Pencil } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useIsAdmin } from '@/hooks/useTenant';
 import {
   useInsuranceProfile,
@@ -21,6 +21,7 @@ const EMPTY: InsuranceProfile = {};
  * O nº da averbação (CGC) NÃO fica aqui — muda a cada documento.
  */
 export function InsuranceSettings() {
+  const toast = useSonnerToast();
   const isAdmin = useIsAdmin();
   const { data: profile, isLoading } = useInsuranceProfile();
   const updateMut = useUpdateInsuranceProfile();

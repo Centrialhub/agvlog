@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, AlertTriangle, History } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { supabase } from '@/integrations/supabase/client';
 import FreightBreakdownPanel from './FreightBreakdownPanel';
 import { useOverrideFreightValue, useConfirmFreightValue } from '@/hooks/useOverrideFreightValue';
@@ -39,6 +39,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function FreightReviewDialog({ open, onOpenChange, doc }: Props) {
+  const toast = useSonnerToast();
   const [newValue, setNewValue] = useState<string>('');
   const [reason, setReason] = useState('');
   const [history, setHistory] = useState<Tables<'freight_override_log'>[]>([]);

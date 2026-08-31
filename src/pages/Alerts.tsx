@@ -1,5 +1,8 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState } from 'react';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch, filterOptions } from '@/lib/listFilters';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { Bell, Eye, Plus, AlertTriangle, X, Play } from 'lucide-react';
 import { addDays, differenceInCalendarDays, format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -24,6 +27,7 @@ function errorMessage(error: unknown): string {
 }
 
 function ProcessButton() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
   const [running, setRunning] = useState(false);
@@ -80,10 +84,12 @@ export default function Alerts() {
 }
 
 function AlertInstancesSection() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState('open');
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'open', type: 'all' }, 'alert_');
+  const statusFilter = filters.status;
 
   const { data: instances = [], isLoading } = useQuery({
     queryKey: ['alert_instances', currentTenant?.id, statusFilter],
@@ -119,6 +125,8 @@ function AlertInstancesSection() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alert_instances'] }); toast.success('Alerta fechado'); },
   });
 
+  const ruleLabels: Record<string, string> = { overspeed: 'Excesso de velocidade', offline: 'Sem comunicação', geofence: 'Cerca virtual', idle: 'Ociosidade', long_stop: 'Parada prolongada', route_deviation: 'Desvio de rota' };
+  const filteredInstances = instances.filter(row => matchesSearch(filters.search, row.vehicles?.plate, row.vehicles?.nickname, ruleLabels[row.alert_rules?.rule_type || ''] || row.alert_rules?.rule_type) && (filters.type === 'all' || row.alert_rules?.rule_type === filters.type));
   const severityColor = (type: string | undefined): NonNullable<BadgeProps['variant']> => {
     if (type === 'overspeed') return 'destructive';
     if (type === 'offline') return 'secondary';
@@ -127,18 +135,11 @@ function AlertInstancesSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="open">Abertos</SelectItem>
-            <SelectItem value="ack">Reconhecidos</SelectItem>
-            <SelectItem value="closed">Fechados</SelectItem>
-            <SelectItem value="all">Todos</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-sm text-muted-foreground">{instances.length} alertas</span>
-      </div>
+      <ListFilterBar fields={[
+        { key: 'search', label: 'Buscar alerta', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Placa, identificação do veículo ou tipo' },
+        { key: 'status', label: 'Situação do alerta', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'open', label: 'Abertos' }, { value: 'ack', label: 'Reconhecidos' }, { value: 'closed', label: 'Fechados' }, { value: 'all', label: 'Todos' }] },
+        { key: 'type', label: 'Tipo de alerta', value: filters.type, onChange: value => setFilter('type', value), options: [{ value: 'all', label: 'Todos os tipos' }, ...filterOptions(instances.map(row => row.alert_rules?.rule_type)).map(value => ({ value, label: ruleLabels[value] || value }))] },
+      ]} onReset={resetFilters} activeCount={activeCount} resultCount={filteredInstances.length} totalCount={instances.length} loading={isLoading} description="Busca e tipo nas 100 ocorrências mais recentes da situação escolhida. Limpar restaura alertas abertos." />
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -154,23 +155,23 @@ function AlertInstancesSection() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : instances.length === 0 ? (
+              ) : filteredInstances.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                   <Bell className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                   Nenhum alerta {statusFilter === 'open' ? 'aberto' : ''}
                 </TableCell></TableRow>
-              ) : instances.map((inst) => (
+              ) : filteredInstances.map((inst) => (
                 <TableRow key={inst.id}>
                   <TableCell>
                     <Badge variant={severityColor(inst.alert_rules?.rule_type)} className="text-xs">
                       <AlertTriangle className="mr-1 h-3 w-3" />
-                      {inst.alert_rules?.rule_type || 'unknown'}
+                      {ruleLabels[inst.alert_rules?.rule_type || ''] || inst.alert_rules?.rule_type || 'Tipo não informado'}
                     </Badge>
                   </TableCell>
                   <TableCell className="font-medium">{inst.vehicles?.plate || '—'}</TableCell>
                   <TableCell>
                     <Badge variant={inst.status === 'open' ? 'destructive' : inst.status === 'ack' ? 'secondary' : 'outline'} className="text-xs">
-                      {inst.status}
+                      {({ open: 'Aberto', ack: 'Reconhecido', closed: 'Fechado' } as Record<string, string>)[inst.status] || inst.status}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
@@ -281,6 +282,8 @@ function useMemoDate(daysAgo: number) {
 }
 
 function AlertRulesSection() {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
@@ -357,6 +360,7 @@ function AlertRulesSection() {
 }
 
 function NewRuleDialog({ open, onOpenChange, tenantId }: { open: boolean; onOpenChange: (v: boolean) => void; tenantId?: string }) {
+  const toast = useSonnerToast();
   const qc = useQueryClient();
   const [ruleType, setRuleType] = useState('offline');
   const [threshold, setThreshold] = useState('15');

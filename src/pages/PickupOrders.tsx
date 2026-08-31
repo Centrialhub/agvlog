@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ function isPickupStatus(value: string): value is PickupStatus {
 }
 
 export default function PickupOrders() {
+  const { confirmAction } = useScopedAlerts();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<PickupStatus | 'all'>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -35,7 +36,7 @@ export default function PickupOrders() {
 
   const { data: pickups = [], isLoading } = usePickupOrders({
     status: statusFilter,
-    search: search.length >= 2 ? search : undefined,
+    search: search.trim() || undefined,
   });
   const ids = useMemo(() => pickups.map(p => p.id), [pickups]);
   const { data: counts = {} } = usePickupOrderCounts(ids);

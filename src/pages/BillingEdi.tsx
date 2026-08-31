@@ -18,7 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Download, FileText, Send, XCircle, Settings, RefreshCw } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { generateDoccob } from '@/lib/doccob/doccobGenerator';
 import { validateDoccobExportInput, resolveFileName, validateFileName } from '@/lib/doccob/doccobValidator';
 import type { DoccobBuildInput, DoccobInvoiceInput, DoccobChargeInput, DoccobDetailInput } from '@/lib/doccob/doccobTypes';
@@ -214,6 +214,7 @@ export default function BillingEdi() {
 }
 
 function HistoryTab({ exports_, loading }: { exports_: EdiExport[]; loading: boolean }) {
+  const toast = useSonnerToast();
   const markSent = useMarkEdiSent();
   const markDl = useMarkEdiDownloaded();
   const cancel = useCancelEdiExport();
@@ -297,6 +298,7 @@ function GenerateDialog({
   profile: EdiProfile | null;
   onSuccess: () => void;
 }) {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const register = useRegisterEdiExport();
   const markDl = useMarkEdiDownloaded();
@@ -485,6 +487,7 @@ function ProfileDialog({ open, onClose, clients, profiles }: {
   clients: Array<Pick<Tables<'clients'>, 'id' | 'company_name'>>;
   profiles: EdiProfile[];
 }) {
+  const toast = useSonnerToast();
   const save = useSaveEdiProfile();
   const [editing, setEditing] = useState<EdiProfileDraft>({ name: '', client_id: null, enabled: true, file_name_pattern: 'SIAT_CTMS_DOCCOB_{dd}_{mm}_{yyyy}_{hh}_{MM}.txt' });
 

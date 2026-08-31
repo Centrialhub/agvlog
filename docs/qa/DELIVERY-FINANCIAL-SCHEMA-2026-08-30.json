@@ -1,0 +1,1063 @@
+{
+  "source": "Read-only production catalog capture; no business rows or credentials.",
+  "columns": [
+    {
+      "type": "uuid",
+      "table": "driver_expenses",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_expenses",
+      "column": "tenant_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_expenses",
+      "column": "dispatch_trip_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_expenses",
+      "column": "driver_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "category",
+      "default": "'other'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_expenses",
+      "column": "amount",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_expenses",
+      "column": "expense_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "receipt_url",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "notes",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "approval_status",
+      "default": "'pending'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_expenses",
+      "column": "approved_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_expenses",
+      "column": "approved_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_expenses",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_expenses",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "bool",
+      "table": "driver_expenses",
+      "column": "reimbursable",
+      "default": "true",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "payment_source",
+      "default": "'driver'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "supplier_name",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "document_number",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "city",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "state",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_expenses",
+      "column": "odometer",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "bool",
+      "table": "driver_expenses",
+      "column": "no_receipt",
+      "default": "false",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "no_receipt_reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "bool",
+      "table": "driver_expenses",
+      "column": "paid_with_advance",
+      "default": "false",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_expenses",
+      "column": "cost_center",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_events",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_events",
+      "column": "tenant_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_events",
+      "column": "settlement_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_events",
+      "column": "event_type",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_events",
+      "column": "from_status",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_events",
+      "column": "to_status",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_events",
+      "column": "reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "driver_settlement_events",
+      "column": "payload",
+      "default": "'{}'::jsonb",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_events",
+      "column": "created_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlement_events",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_items",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_items",
+      "column": "tenant_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_items",
+      "column": "settlement_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_items",
+      "column": "item_type",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_items",
+      "column": "source_table",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_items",
+      "column": "source_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_items",
+      "column": "description",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlement_items",
+      "column": "amount",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlement_items",
+      "column": "quantity",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "driver_settlement_items",
+      "column": "metadata",
+      "default": "'{}'::jsonb",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlement_items",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_items",
+      "column": "nature",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlements",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlements",
+      "column": "tenant_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlements",
+      "column": "dispatch_trip_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlements",
+      "column": "driver_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlements",
+      "column": "vehicle_id",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlements",
+      "column": "status",
+      "default": "'pending_review'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlements",
+      "column": "trip_started_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlements",
+      "column": "trip_completed_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlements",
+      "column": "route_name",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlements",
+      "column": "route_origin",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlements",
+      "column": "route_destination",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "int4",
+      "table": "driver_settlements",
+      "column": "loads_count",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "int4",
+      "table": "driver_settlements",
+      "column": "stops_count",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "int4",
+      "table": "driver_settlements",
+      "column": "documents_count",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "total_invoice_value",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "total_freight_value",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "total_weight_kg",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "estimated_km",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "audited_km",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlements",
+      "column": "km_review_status",
+      "default": "'pending'::text",
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlements",
+      "column": "km_review_notes",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "approved_expenses_total",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "pending_expenses_total",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "rejected_expenses_total",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "expenses_total",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "invoice_balance",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "operational_balance",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "manual_adjustments_total",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "final_amount",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "driver_settlements",
+      "column": "snapshot_json",
+      "default": "'{}'::jsonb",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlements",
+      "column": "created_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlements",
+      "column": "reviewed_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlements",
+      "column": "reviewed_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlements",
+      "column": "approved_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlements",
+      "column": "approved_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlements",
+      "column": "paid_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlements",
+      "column": "paid_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlements",
+      "column": "closed_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlements",
+      "column": "closed_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlements",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlements",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "total_goods_value",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "total_freight_revenue",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "route_result",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "driver_credits_total",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "driver_debits_total",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "driver_reimbursement_total",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "driver_payable_amount",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "total_paid_amount",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "payment_balance",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlements",
+      "column": "last_recalculated_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "bool",
+      "table": "driver_settlements",
+      "column": "needs_recalculation",
+      "default": "false",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlements",
+      "column": "recalculation_reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlements",
+      "column": "source_updated_at",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "bool",
+      "table": "driver_settlements",
+      "column": "approved_with_exception",
+      "default": "false",
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlements",
+      "column": "exception_reason",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "bool",
+      "table": "driver_settlements",
+      "column": "is_manual",
+      "default": "false",
+      "nullable": "NO"
+    },
+    {
+      "type": "date",
+      "table": "driver_settlements",
+      "column": "manual_reference_date",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "km_start",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlements",
+      "column": "km_end",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlements",
+      "column": "audited_start_location",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlements",
+      "column": "audited_end_location",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "trip_routes",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "trip_routes",
+      "column": "tenant_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "trip_routes",
+      "column": "trip_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "trip_routes",
+      "column": "provider",
+      "default": "'osrm'::text",
+      "nullable": "NO"
+    },
+    {
+      "type": "jsonb",
+      "table": "trip_routes",
+      "column": "geometry_geojson",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "trip_routes",
+      "column": "encoded_polyline",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "trip_routes",
+      "column": "distance_meters",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "trip_routes",
+      "column": "duration_seconds",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "trip_routes",
+      "column": "origin_lat",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "trip_routes",
+      "column": "origin_lng",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "trip_routes",
+      "column": "destination_lat",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "numeric",
+      "table": "trip_routes",
+      "column": "destination_lng",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "jsonb",
+      "table": "trip_routes",
+      "column": "waypoints",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "trip_routes",
+      "column": "calculated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "trip_routes",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "trip_routes",
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_payments",
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_payments",
+      "column": "tenant_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_payments",
+      "column": "settlement_id",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "numeric",
+      "table": "driver_settlement_payments",
+      "column": "amount",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_payments",
+      "column": "payment_method",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_payments",
+      "column": "payment_account",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_payments",
+      "column": "payment_reference",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_payments",
+      "column": "receipt_url",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "text",
+      "table": "driver_settlement_payments",
+      "column": "notes",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "uuid",
+      "table": "driver_settlement_payments",
+      "column": "paid_by",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlement_payments",
+      "column": "paid_at",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "type": "timestamptz",
+      "table": "driver_settlement_payments",
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO"
+    }
+  ],
+  "constraints": [
+    {
+      "type": "p",
+      "table": "driver_settlement_events",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "type": "p",
+      "table": "driver_settlement_items",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "type": "c",
+      "table": "driver_settlement_items",
+      "definition": "CHECK ((item_type = ANY (ARRAY['load'::text, 'fiscal_document'::text, 'expense'::text, 'adjustment'::text, 'km'::text])))"
+    },
+    {
+      "type": "c",
+      "table": "driver_settlement_payments",
+      "definition": "CHECK ((amount > (0)::numeric))"
+    },
+    {
+      "type": "p",
+      "table": "driver_settlement_payments",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "type": "c",
+      "table": "driver_settlements",
+      "definition": "CHECK ((km_review_status = ANY (ARRAY['pending'::text, 'reviewed'::text, 'disputed'::text])))"
+    },
+    {
+      "type": "p",
+      "table": "driver_settlements",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "type": "c",
+      "table": "driver_settlements",
+      "definition": "CHECK ((status = ANY (ARRAY['pending_review'::text, 'in_review'::text, 'approved'::text, 'paid'::text, 'closed'::text, 'reopened'::text])))"
+    },
+    {
+      "type": "u",
+      "table": "driver_settlements",
+      "definition": "UNIQUE (tenant_id, dispatch_trip_id)"
+    }
+  ],
+  "triggers": [
+    {
+      "name": "trg_dispatch_trip_completed_settlement",
+      "table": "dispatch_trips",
+      "definition": "CREATE TRIGGER trg_dispatch_trip_completed_settlement AFTER UPDATE OF status ON public.dispatch_trips FOR EACH ROW EXECUTE FUNCTION _on_dispatch_trip_completed_create_settlement()"
+    },
+    {
+      "name": "trg_driver_settlements_touch",
+      "table": "driver_settlements",
+      "definition": "CREATE TRIGGER trg_driver_settlements_touch BEFORE UPDATE ON public.driver_settlements FOR EACH ROW EXECUTE FUNCTION _touch_driver_settlements_updated_at()"
+    },
+    {
+      "name": "trg_sync_obligations_from_settlement",
+      "table": "driver_settlements",
+      "definition": "CREATE TRIGGER trg_sync_obligations_from_settlement AFTER INSERT OR UPDATE OF status, driver_payable_amount ON public.driver_settlements FOR EACH ROW EXECUTE FUNCTION _tg_sync_obligations_from_settlement()"
+    },
+    {
+      "name": "trg_cleanup_empty_loads",
+      "table": "fiscal_documents",
+      "definition": "CREATE TRIGGER trg_cleanup_empty_loads AFTER DELETE OR UPDATE ON public.fiscal_documents FOR EACH ROW EXECUTE FUNCTION trg_handle_empty_load_on_doc_change()"
+    },
+    {
+      "name": "trg_fiscal_documents_autofill_recipient_cnpj",
+      "table": "fiscal_documents",
+      "definition": "CREATE TRIGGER trg_fiscal_documents_autofill_recipient_cnpj BEFORE INSERT OR UPDATE OF client_id, recipient_cnpj ON public.fiscal_documents FOR EACH ROW EXECUTE FUNCTION fiscal_documents_autofill_recipient_cnpj()"
+    },
+    {
+      "name": "trg_fiscal_documents_autolink_supplier",
+      "table": "fiscal_documents",
+      "definition": "CREATE TRIGGER trg_fiscal_documents_autolink_supplier BEFORE INSERT OR UPDATE OF remitter_cnpj, supplier_id ON public.fiscal_documents FOR EACH ROW EXECUTE FUNCTION trg_fiscal_documents_autolink_supplier()"
+    },
+    {
+      "name": "trg_fiscal_documents_single_outbound",
+      "table": "fiscal_documents",
+      "definition": "CREATE TRIGGER trg_fiscal_documents_single_outbound BEFORE INSERT OR UPDATE OF cte_emitted_at, nfse_emitted_at ON public.fiscal_documents FOR EACH ROW EXECUTE FUNCTION fiscal_documents_enforce_single_outbound()"
+    },
+    {
+      "name": "trg_release_notes_from_failed_cte",
+      "table": "fiscal_documents",
+      "definition": "CREATE TRIGGER trg_release_notes_from_failed_cte AFTER INSERT OR DELETE OR UPDATE OF status, sefaz_status ON public.fiscal_documents FOR EACH ROW EXECUTE FUNCTION release_inbound_notes_from_failed_cte()"
+    },
+    {
+      "name": "trg_loads_autofill_driver",
+      "table": "loads",
+      "definition": "CREATE TRIGGER trg_loads_autofill_driver BEFORE INSERT OR UPDATE OF vehicle_id, driver_id ON public.loads FOR EACH ROW EXECUTE FUNCTION loads_autofill_driver_from_vehicle()"
+    },
+    {
+      "name": "trg_pod_updated_at",
+      "table": "proof_of_delivery",
+      "definition": "CREATE TRIGGER trg_pod_updated_at BEFORE UPDATE ON public.proof_of_delivery FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()"
+    }
+  ]
+}

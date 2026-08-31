@@ -15,11 +15,12 @@ import {
 } from '@/components/ui/select';
 import { Calculator, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { calculateFreight, type FreightResult } from '@/hooks/useFreightCalculator';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 
 const NONE = '__none__';
 export default function FreightSimulator() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const tenantId = currentTenant?.id;
 
@@ -238,7 +239,7 @@ export default function FreightSimulator() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, regions, regionId, clientId, payerGroup, destMunicipality, destState, vehicleType, totalValue, totalWeight, totalPallets]);
+  }, [toast, tenantId, regions, regionId, clientId, payerGroup, destMunicipality, destState, vehicleType, totalValue, totalWeight, totalPallets]);
 
   // Auto-recalculate (debounced) when inputs change
   useEffect(() => {

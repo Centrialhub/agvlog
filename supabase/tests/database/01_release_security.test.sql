@@ -1,6 +1,6 @@
 begin;
 
-select plan(63);
+select plan(90);
 
 select has_table('public', 'tenant_feature_policy', 'tenant capability policy exists');
 
@@ -425,6 +425,18 @@ select ok(
   'route planning writes its audit event'
 );
 
+select throws_ok(
+  $$select public.transition_load_status_v1(
+    '20000000-0000-4000-8000-000000000001',
+    md5('agvlog-e2e-load-a-2')::uuid,
+    'in_transit',
+    'must wait for trip start'
+  )$$,
+  '23514',
+  'trip_must_be_started_before_load',
+  'operator cannot move a load to in_transit before its trip starts'
+);
+
 reset role;
 select set_config(
   'request.jwt.claims',
@@ -454,6 +466,25 @@ select is(
   'starting the newly planned route persists its trip status'
 );
 
+select ok(
+  (select actual_start_at is not null from public.dispatch_trips where id = (
+    select result_id from public.idempotency_keys
+    where tenant_id = '20000000-0000-4000-8000-000000000001'
+      and operation = 'plan_dispatch_trip'
+      and idempotency_key = 'pgtap-route-plan-contract-001'
+  )),
+  'starting a route persists its actual start timestamp atomically'
+);
+
+select is(
+  (select trip_id from public.loads where id = md5('agvlog-e2e-load-a-2')::uuid),
+  (select result_id from public.idempotency_keys
+   where tenant_id = '20000000-0000-4000-8000-000000000001'
+     and operation = 'plan_dispatch_trip'
+     and idempotency_key = 'pgtap-route-plan-contract-001'),
+  'starting a route synchronizes the load trip mirror'
+);
+
 select lives_ok(
   $$select public.driver_start_trip('80000000-0000-4000-8000-000000000001')$$,
   'assigned driver starts the canonical trip through an RPC'
@@ -480,15 +511,230 @@ select ok(
   'trip start creates an audit event'
 );
 
+select is(
+  (
+    select count(*)::integer
+    from public.loads load
+    where load.status = 'in_transit'
+      and exists (
+        select 1
+        from public.dispatch_trip_loads trip_load
+        join public.dispatch_trips trip on trip.id = trip_load.dispatch_trip_id
+        where trip_load.load_id = load.id
+          and trip_load.tenant_id = load.tenant_id
+          and (
+            trip.status not in ('in_transit', 'in_progress')
+            or trip.actual_start_at is null
+          )
+      )
+  ),
+  0,
+  'no canonical load remains in transit with a non-started trip'
+);
+
 select throws_ok(
   $$select public.driver_start_trip('80000000-0000-4000-8000-000000000002')$$,
-  'P0001',
+  '42501',
   'Viagem não atribuída ao motorista autenticado',
   'driver cannot start a known tenant B trip'
 );
 
+select throws_ok(
+  $$select public.driver_create_event(
+    '80000000-0000-4000-8000-000000000001',
+    'lunch'
+  )$$,
+  '23514',
+  null,
+  'driver cannot pause a journey before starting it'
+);
+
 select lives_ok(
-  $$select public.driver_mark_arrival('82000000-0000-4000-8000-000000000001')$$,
+  $$select public.driver_save_checklist(
+    '80000000-0000-4000-8000-000000000001',
+    'pre',
+    '{"checked_items":[0,1,2,3,4,5,6,7],"total_items":8}'::jsonb
+  )$$,
+  'driver saves the complete pre-trip checklist'
+);
+
+select lives_ok(
+  $$select public.driver_create_event(
+    '80000000-0000-4000-8000-000000000001',
+    'start_shift'
+  )$$,
+  'driver starts the journey after the pre-trip checklist'
+);
+
+select throws_ok(
+  $$select public.driver_create_event(
+    '80000000-0000-4000-8000-000000000001',
+    'start_shift'
+  )$$,
+  '23514',
+  null,
+  'driver cannot duplicate the journey start'
+);
+
+select lives_ok(
+  $$select public.driver_create_event(
+    '80000000-0000-4000-8000-000000000001',
+    'lunch'
+  )$$,
+  'working driver starts a lunch pause'
+);
+
+select throws_ok(
+  $$select public.driver_create_event(
+    '80000000-0000-4000-8000-000000000001',
+    'rest'
+  )$$,
+  '23514',
+  null,
+  'paused driver cannot start a second pause'
+);
+
+select lives_ok(
+  $$select public.driver_create_event(
+    '80000000-0000-4000-8000-000000000001',
+    'resume'
+  )$$,
+  'paused driver resumes the journey'
+);
+
+select throws_ok(
+  $$select public.driver_create_event(
+    '80000000-0000-4000-8000-000000000001',
+    'resume'
+  )$$,
+  '23514',
+  null,
+  'working driver cannot duplicate resume'
+);
+
+select throws_ok(
+  $$select public.driver_create_event(
+    '80000000-0000-4000-8000-000000000001',
+    'end_shift'
+  )$$,
+  '23514',
+  null,
+  'driver cannot end the journey before the post-trip checklist'
+);
+
+select lives_ok(
+  $$select public.driver_save_checklist(
+    '80000000-0000-4000-8000-000000000001',
+    'post',
+    '{"checked_items":[0,1,2,3,4],"total_items":5}'::jsonb
+  )$$,
+  'driver saves the complete post-trip checklist'
+);
+
+select lives_ok(
+  $$select public.driver_create_event(
+    '80000000-0000-4000-8000-000000000001',
+    'end_shift'
+  )$$,
+  'working driver ends the journey after the post-trip checklist'
+);
+
+select throws_ok(
+  $$select public.driver_create_event(
+    '80000000-0000-4000-8000-000000000001',
+    'resume'
+  )$$,
+  '23514',
+  null,
+  'ended journey rejects resume until a new shift starts'
+);
+
+select lives_ok(
+  $$select public.driver_create_operational_occurrence(
+    '80000000-0000-4000-8000-000000000001',
+    'other',
+    'pgTAP trip-level occurrence',
+    'medium',
+    null,
+    null
+  )$$,
+  'driver creates a trip-level occurrence without selecting a stop'
+);
+
+select results_eq(
+  $$select
+      dispatch_stop_id::text,
+      client_id::text,
+      fiscal_document_id::text,
+      visible_to_client
+    from public.operational_events
+    where description = 'pgTAP trip-level occurrence'$$,
+  $$values (null::text, null::text, null::text, false)$$,
+  'trip-level occurrence does not infer stop, client, fiscal document, or portal visibility'
+);
+
+select lives_ok(
+  $$select public.driver_create_operational_occurrence(
+    '80000000-0000-4000-8000-000000000001',
+    'damaged',
+    'pgTAP stop occurrence',
+    'high',
+    '82000000-0000-4000-8000-000000000001',
+    '40000000-0000-4000-8000-000000000001'
+  )$$,
+  'driver creates an occurrence for an explicit stop'
+);
+
+select results_eq(
+  $$select
+      dispatch_stop_id::text,
+      client_id::text,
+      fiscal_document_id::text,
+      visible_to_client
+    from public.operational_events
+    where description = 'pgTAP stop occurrence'$$,
+  $$values (
+    '82000000-0000-4000-8000-000000000001'::text,
+    '40000000-0000-4000-8000-000000000001'::text,
+    '90000000-0000-4000-8000-000000000001'::text,
+    false
+  )$$,
+  'explicit stop occurrence derives its tenant graph but remains internal'
+);
+
+select throws_ok(
+  $$select public.driver_create_operational_occurrence(
+    '80000000-0000-4000-8000-000000000001',
+    'other',
+    'cross-tenant stop attempt',
+    'medium',
+    '82000000-0000-4000-8000-000000000002',
+    null
+  )$$,
+  '42501',
+  'Parada não pertence à viagem do motorista',
+  'driver cannot associate an occurrence with a stop from another tenant'
+);
+
+select throws_ok(
+  $$select public.driver_mark_arrival(
+    '82000000-0000-4000-8000-000000000001',
+    -19.932,
+    -44.053,
+    10
+  )$$,
+  '23514',
+  null,
+  'driver cannot record arrival remotely outside the stop radius'
+);
+
+select lives_ok(
+  $$select public.driver_mark_arrival(
+    '82000000-0000-4000-8000-000000000001',
+    -15.802,
+    -43.313,
+    10
+  )$$,
   'assigned driver records arrival through the canonical RPC'
 );
 
@@ -496,6 +742,17 @@ select is(
   (select status from public.dispatch_stops where id = '82000000-0000-4000-8000-000000000001'),
   'arrived',
   'arrival persists on the stop'
+);
+
+select is(
+  (select payload ->> 'geofence_verified'
+   from public.dispatch_events
+   where dispatch_stop_id = '82000000-0000-4000-8000-000000000001'
+     and event_type = 'arrival'
+   order by event_at desc
+   limit 1),
+  'true',
+  'arrival persists verified GPS evidence'
 );
 
 select lives_ok(
@@ -565,6 +822,58 @@ select is(
   public.is_tenant_admin('20000000-0000-4000-8000-000000000001'),
   true,
   'owner is authorized as admin at AAL2'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon',
+    'public.create_tenant_with_owner(text)',
+    'EXECUTE'
+  ),
+  'anonymous users cannot provision tenants'
+);
+
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.create_tenant_with_owner(text)',
+    'EXECUTE'
+  ),
+  'authenticated users cannot provision tenants'
+);
+
+select ok(
+  not has_function_privilege(
+    'service_role',
+    'public.create_tenant_with_owner(text)',
+    'EXECUTE'
+  ),
+  'legacy tenant provisioning is not a service-role API'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from pg_proc as procedure
+    join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'public'
+      and procedure.prosecdef
+      and has_function_privilege('authenticated', procedure.oid, 'execute')
+      and procedure.proname in (
+        'assign_fiscal_documents_to_load',
+        'audit_data_consistency_v4',
+        'audit_operational_congruence_v1',
+        'create_load_v1',
+        'delete_load_item_v1',
+        'driver_report_event_v1',
+        'execute_data_repair_v1',
+        'handle_new_user',
+        'remove_fiscal_documents_from_load',
+        'update_load_v1'
+      )
+  ),
+  0,
+  'classified legacy and internal SECURITY DEFINER routines are not executable by authenticated users'
 );
 
 select * from finish();

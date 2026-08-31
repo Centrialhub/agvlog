@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { readCtePayloadRecipient } from '@/lib/fiscal/ctePayload';
+import { matchesCteSearchFilters } from '@/lib/fiscal/cteListFilters';
+import { localDayBoundary } from '@/lib/listFilters';
 import { useTenant } from './useTenant';
 
 export type TriState = 'all' | 'yes' | 'no';
@@ -51,6 +53,20 @@ export interface CteSearchFilters {
 }
 
 export interface CteSearchRow {
+  internal_number?: string | null;
+  reference_number?: string | null;
+  consignee?: string | null;
+  payer_group?: string | null;
+  trailer_plate?: string | null;
+  insurance_company?: string | null;
+  contract_number?: string | null;
+  trip_number?: string | null;
+  romexp_number?: string | null;
+  is_voided?: boolean | null;
+  is_closed?: boolean | null;
+  is_compensated?: boolean | null;
+  autonomous_freight?: boolean | null;
+  complementary_doc?: boolean | null;
   id: string;
   source: 'draft' | 'hub';
   cte_number: string | null;
@@ -87,10 +103,6 @@ function bool(v?: TriState) {
   if (v === 'no') return false;
   return null;
 }
-function has(haystack: unknown, needle: string) {
-  return String(haystack ?? '').toLowerCase().includes(needle.toLowerCase());
-}
-
 /** Traduz status de `fiscal_documents` (saída) para o vocabulário SEFAZ do monitor. */
 function mapOutboundStatus(status?: string | null, sefaz?: string | null): string {
   const s = (sefaz || '').toLowerCase();
@@ -125,7 +137,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
 
 
       const f = filters;
-      const text = nz(f.text);
+
       const docNumber = nz(f.docNumber); if (docNumber) q = q.ilike('cte_number', `%${docNumber}%`);
       const internal = nz(f.internalNumber); if (internal) q = q.ilike('internal_number', `%${internal}%`);
       const ref = nz(f.referenceNumber); if (ref) q = q.ilike('reference_number', `%${ref}%`);
@@ -138,19 +150,19 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
       const payer = nz(f.payer); if (payer) q = q.ilike('payer_name', `%${payer}%`);
       const payerGroup = nz(f.payerGroup); if (payerGroup) q = q.ilike('payer_group', `%${payerGroup}%`);
       const driver = nz(f.driverName); if (driver) q = q.ilike('driver_name', `%${driver}%`);
-      const plate = nz(f.vehiclePlate); if (plate) q = q.ilike('vehicle_plate', `%${plate.replace(/\W/g, '')}%`);
-      const trailer = nz(f.trailerPlate); if (trailer) q = q.ilike('trailer_plate', `%${trailer.replace(/\W/g, '')}%`);
+      const plate = nz(f.vehiclePlate); if (plate) q = q.ilike('vehicle_plate', `%${plate.replace(/\W/g, '').split('').join('%')}%`);
+      const trailer = nz(f.trailerPlate); if (trailer) q = q.ilike('trailer_plate', `%${trailer.replace(/\W/g, '').split('').join('%')}%`);
       const ins = nz(f.insuranceCompany); if (ins) q = q.ilike('insurance_company', `%${ins}%`);
       const contract = nz(f.contractNumber); if (contract) q = q.ilike('contract_number', `%${contract}%`);
       const trip = nz(f.tripNumber); if (trip) q = q.ilike('trip_number', `%${trip}%`);
       const invoice = nz(f.invoiceNumber); if (invoice) q = q.ilike('invoice_numbers', `%${invoice}%`);
       const romexp = nz(f.romexpNumber); if (romexp) q = q.ilike('romexp_number', `%${romexp}%`);
 
-      if (f.issueDateStart) q = q.gte('issued_at', f.issueDateStart);
-      if (f.issueDateEnd) q = q.lte('issued_at', f.issueDateEnd + 'T23:59:59');
+      if (f.issueDateStart) q = q.or(`issued_at.gte.${localDayBoundary(f.issueDateStart)},and(issued_at.is.null,created_at.gte.${localDayBoundary(f.issueDateStart)})`);
+      if (f.issueDateEnd) q = q.or(`issued_at.lt.${localDayBoundary(f.issueDateEnd, true)},and(issued_at.is.null,created_at.lt.${localDayBoundary(f.issueDateEnd, true)})`);
 
       if (f.cteTypes && f.cteTypes.length > 0) q = q.in('cte_type', f.cteTypes);
-      if (f.statuses && f.statuses.length > 0) q = q.in('sefaz_status', f.statuses);
+      if (f.statuses && f.statuses.length > 0) q = q.or(`sefaz_status.in.(${f.statuses.join(',')}),access_key.not.is.null`);
 
       const v = bool(f.voided); if (v !== null) q = q.eq('is_voided', v);
       const c = bool(f.closed); if (c !== null) q = q.eq('is_closed', c);
@@ -191,6 +203,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         // Prioriza dados do rascunho (cte_documents) que tem mais colunas, 
         // mas usa o status e ids reais do Hub quando houver vínculo.
         return {
+          ...r,
           id: match?.id ?? r.id,
           source: match ? 'hub' : 'draft',
           cte_number: r.cte_number ?? null,
@@ -248,44 +261,9 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           pdf_url: null,
           xml_url: null,
           };
-        })
-        // Filtros equivalentes aplicados em memória (a fonte é outra tabela).
-        .filter((r) => {
-          if (docNumber) {
-            const hit = has(r.cte_number, docNumber) || has(r.invoice_numbers, docNumber);
-            if (!hit) return false;
-          }
-
-          if (accessKey && !has(r.access_key, accessKey.replace(/\D/g, ''))) return false;
-          if (remitter && !has(r.remitter, remitter)) return false;
-          if (recipient && !has(r.recipient, recipient)) return false;
-          if (city && !has(r.recipient_city, city)) return false;
-          if (payer && !has(r.payer_name, payer)) return false;
-          if (series || internal || ref || consignee || payerGroup || driver || plate || trailer) return false;
-          if (ins || contract || trip || romexp) return false;
-          if (invoice && !has(r.invoice_numbers, invoice)) return false;
-          if (f.statuses?.length && !f.statuses.includes(r.sefaz_status)) return false;
-          if (f.cteTypes?.length && !f.cteTypes.includes('normal')) return false;
-          if (f.issueDateStart && (r.issued_at ?? '') < f.issueDateStart) return false;
-          if (f.issueDateEnd && (r.issued_at ?? '') > f.issueDateEnd + 'T23:59:59') return false;
-          return true;
         });
 
-      const all = [...draftRows, ...hubRows];
-      const filtered = all.filter((r) => {
-        if (text) {
-          const hit =
-            has(r.cte_number, text) || has(r.access_key, text) || has(r.remitter, text) ||
-            has(r.recipient, text) || has(r.payer_name, text) || has(r.vehicle_plate, text) ||
-            has(r.driver_name, text) || has(r.invoice_numbers, text) || has(r.recipient_city, text) ||
-            has(r.cte_number, text) || has(r.invoice_numbers, text);
-          if (!hit) return false;
-        }
-
-        if (f.downloadable === 'yes' && !(r.hub_document_id || r.pdf_url || r.xml_url)) return false;
-        if (f.downloadable === 'no' && (r.hub_document_id || r.pdf_url || r.xml_url)) return false;
-        return true;
-      });
+      const filtered = [...draftRows, ...hubRows].filter(row => matchesCteSearchFilters(row, filters));
 
       return filtered.sort((a, b) => {
         const da = new Date(a.issued_at ?? a.created_at).getTime();

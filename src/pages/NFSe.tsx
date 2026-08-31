@@ -1,4 +1,4 @@
-import { confirmAction, promptAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,9 +12,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useNFSeList, useIssueNFSe, useCancelNFSe, useDeleteNFSe, useSyncNFSeStatus, useResendNFSe, fetchNfseHubRefs, type NFSeDoc } from '@/hooks/useNFSe';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
 import NFSeFromInvoicesDialog from '@/components/nfse/NFSeFromInvoicesDialog';
+import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
+import type { HubEnvironment } from '@/lib/fiscal/hubFiscalClient';
 
 type BadgeVariant = NonNullable<BadgeProps['variant']>;
 
@@ -44,8 +46,11 @@ function saveBlob(blob: Blob, filename: string) {
 }
 
 export default function NFSePage() {
+  const { promptAction, confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { data: docs = [], isLoading } = useNFSeList();
-  const issue = useIssueNFSe();
+  const [environment, setEnvironment] = useState<HubEnvironment>('homologation');
+  const issue = useIssueNFSe(environment);
   const cancel = useCancelNFSe();
   const del = useDeleteNFSe();
   const sync = useSyncNFSeStatus();
@@ -213,6 +218,7 @@ export default function NFSePage() {
             <Input className="max-w-xs" placeholder="Buscar nº, cliente, CNPJ…" value={search} onChange={e => setSearch(e.target.value)} />
           </CardHeader>
           <CardContent>
+            <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issue.isPending} />
             {/* Filtros de seleção para download em massa */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
               <div className="flex flex-col gap-1">
@@ -367,7 +373,7 @@ export default function NFSePage() {
                         )}
                         {(d.status === 'rejected' || d.status === 'error' || d.status === 'submitted' || d.status === 'processing') && (
                           <Button size="sm" variant="outline" onClick={() => resend.mutate(d.id)} disabled={resend.isPending}>
-                            <RefreshCw className="h-3 w-3 mr-1" /> Reenviar
+                            <RefreshCw className="h-3 w-3 mr-1" /> Recuperar
                           </Button>
                         )}
                         {d.status !== 'cancelled' && (

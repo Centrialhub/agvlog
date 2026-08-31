@@ -1,3 +1,6 @@
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch, filterOptions } from '@/lib/listFilters';
 import { useState, useMemo } from 'react';
 import { useEmployees, useCreateEmployee, useUpdateEmployee, Employee, EMPLOYEE_STATUSES, EMPLOYEE_STATUS_LABELS } from '@/hooks/useEmployees';
 import {
@@ -20,17 +23,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Plus, Users, Edit, AlertTriangle, Eye } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { Plus, Users, Edit, AlertTriangle, Eye } from 'lucide-react';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { getErrorMessage } from '@/lib/errors';
 
 export default function Employees() {
+  const toast = useSonnerToast();
   const { data: employees = [], isLoading } = useEmployees();
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', department: 'all', branch: 'all' });
+  const { search, status: statusFilter } = filters;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | undefined>();
   const [detailEmployee, setDetailEmployee] = useState<Employee | null>(null);
@@ -42,15 +46,12 @@ export default function Employees() {
     status: 'active' as string, notes: '',
   });
 
-  const filtered = useMemo(() => {
-    let list = employees;
-    if (statusFilter !== 'all') list = list.filter(e => e.status === statusFilter);
-    if (search) {
-      const s = search.toLowerCase();
-      list = list.filter(e => e.name.toLowerCase().includes(s) || e.doc_cpf?.includes(s) || e.role_title?.toLowerCase().includes(s));
-    }
-    return list;
-  }, [employees, search, statusFilter]);
+  const filtered = useMemo(() => employees.filter(employee =>
+    matchesSearch(search, employee.name, employee.doc_cpf, employee.role_title, employee.email) &&
+    (statusFilter === 'all' || employee.status === statusFilter) &&
+    (filters.department === 'all' || employee.department === filters.department) &&
+    (filters.branch === 'all' || employee.branch === filters.branch)
+  ), [employees, search, statusFilter, filters.department, filters.branch]);
 
   const expiringDocs = useMemo(() => {
     const now = new Date();
@@ -140,20 +141,12 @@ export default function Employees() {
         </CardContent></Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-8 h-9" placeholder="Buscar nome, CPF, cargo..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {EMPLOYEE_STATUSES.map(s => <SelectItem key={s} value={s}>{EMPLOYEE_STATUS_LABELS[s]}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={employees.length} loading={isLoading} fields={[
+        { key: 'search', label: 'Busca', type: 'search', placeholder: 'Nome, CPF, cargo ou e-mail', value: search, onChange: value => setFilter('search', value) },
+        { key: 'status', label: 'Situação', value: statusFilter, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, ...EMPLOYEE_STATUSES.map(value => ({ value, label: EMPLOYEE_STATUS_LABELS[value] }))] },
+        { key: 'department', label: 'Departamento', value: filters.department, onChange: value => setFilter('department', value), options: [{ value: 'all', label: 'Todos' }, ...filterOptions(employees.map(employee => employee.department)).map(value => ({ value, label: value }))] },
+        { key: 'branch', label: 'Filial', value: filters.branch, onChange: value => setFilter('branch', value), options: [{ value: 'all', label: 'Todos' }, ...filterOptions(employees.map(employee => employee.branch)).map(value => ({ value, label: value }))] },
+      ]} />
 
       {/* Table */}
       <Card>
@@ -466,6 +459,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
 }
 
 function ContractTab({ employeeId, contracts }: { employeeId: string; contracts: EmployeeContract[] }) {
+  const toast = useSonnerToast();
   const create = useCreateEmployeeContract();
   const update = useUpdateEmployeeContract();
   const [showNew, setShowNew] = useState(false);

@@ -22,7 +22,7 @@ export interface CanonicalTripLoadLink {
 
 export interface CanonicalLoadTripLink {
   dispatch_trip_id: string;
-  dispatch_trips: { status: string } | null;
+  dispatch_trips: { status: string; actual_start_at?: string | null } | null;
 }
 
 export type DriverTripQueryRow = DispatchTripRow & {
@@ -79,4 +79,32 @@ export function resolveCanonicalTripLink(
     links.find((link) => link.dispatch_trips?.status && activeStatuses.includes(link.dispatch_trips.status)) ??
     links[0]
   );
+}
+
+export function isDriverTripStarted(
+  status: string | null | undefined,
+  actualStartAt?: string | null,
+): boolean {
+  return (status === 'in_transit' || status === 'in_progress')
+    && Boolean(actualStartAt);
+}
+
+export function hasDriverLoadTransitMismatch(
+  loadStatus: string | null | undefined,
+  trip: CanonicalLoadTripLink | null | undefined,
+): boolean {
+  return loadStatus === 'in_transit'
+    && !isDriverTripStarted(
+      trip?.dispatch_trips?.status,
+      trip?.dispatch_trips?.actual_start_at,
+    );
+}
+
+export function driverTripNeedsReconciliation(
+  status: string | null | undefined,
+  actualStartAt?: string | null,
+  loadStatus?: string | null,
+): boolean {
+  return !isDriverTripStarted(status, actualStartAt)
+    && (loadStatus === 'in_transit' || status === 'in_transit' || status === 'in_progress');
 }

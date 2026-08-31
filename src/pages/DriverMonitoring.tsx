@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertTriangle, CheckCircle2, Clock, Download, FileSpreadsheet, MapPin, Truck, Upload, Users } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   useDriverMonitorsList, useCreateMonitor, useAddProgressUpdate, useAddForecast,
   useUpdateMonitorStatus, useMonitorUpdates, useMonitorForecasts,
@@ -36,6 +36,7 @@ const STATUS_VARIANT: Record<string, NonNullable<BadgeProps['variant']>> = {
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Falha inesperada';
 
 export default function DriverMonitoring() {
+  const toast = useSonnerToast();
   const [filters, setFilters] = useState<DriverMonitoringFilters>({});
   const [applied, setApplied] = useState<DriverMonitoringFilters>({});
   const { data: rows = [], isLoading } = useDriverMonitorsList(applied);
@@ -451,6 +452,7 @@ function MonitorsTable({ rows, isLoading, onOpen, onProgress, onForecast, onUpda
   onUpdate: ReturnType<typeof useUpdateMonitorStatus>;
   compact?: boolean;
 }) {
+  const toast = useSonnerToast();
   return (
     <Card>
       <CardContent className="p-0">

@@ -1,11 +1,12 @@
-import { confirmAction, promptAction } from '@/hooks/useAlertStore';
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
+import { useMemo, useState, useEffect, useRef, useId } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FilterField as Field } from '@/components/ui/filter-field';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import {
   useCteSearch, CTE_TYPE_LABELS,
@@ -44,31 +45,23 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`flex flex-col gap-1 ${className}`}>
-      <label className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</label>
-      {children}
-    </div>
-  );
-}
-
 function TriRadio({ label, value, onChange }: { label: string; value: TriState; onChange: (v: TriState) => void }) {
+  const name = useId();
   const opts: { v: TriState; l: string }[] = [
     { v: 'all', l: 'Todos' }, { v: 'yes', l: 'Sim' }, { v: 'no', l: 'Não' },
   ];
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
+    <fieldset className="flex flex-col gap-1">
+      <legend className="text-xs text-muted-foreground">{label}</legend>
       <div className="flex gap-2">
         {opts.map((o) => (
           <label key={o.v} className="flex items-center gap-1 text-xs cursor-pointer">
-            <input type="radio" checked={value === o.v} onChange={() => onChange(o.v)} />
+            <input type="radio" name={name} checked={value === o.v} onChange={() => onChange(o.v)} />
             {o.l}
           </label>
         ))}
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -81,7 +74,7 @@ const DEFAULT_FILTERS: CteSearchFilters = {
   cteTypes: ['normal', 'complementary', 'voiding', 'substitute'],
   statuses: [],
   downloadable: 'all',
-  voided: 'no',
+  voided: 'all',
   closed: 'all',
   compensated: 'all',
   autonomousFreight: 'all',
@@ -129,6 +122,8 @@ function toCsv(rows: CteSearchRow[]) {
 }
 
 export default function CteSearch() {
+  const { promptAction, confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const cancelCte = useCancelCTe();
   const resendCte = useResendCte();
   const deleteCte = useDeleteFailedCTe();
@@ -330,7 +325,7 @@ export default function CteSearch() {
   async function handleResend(row: CteSearchRow) {
     try {
       await resendCte.mutateAsync(row.id);
-      toast.success('CT-e marcado para reenvio');
+      toast.success('Operação fiscal consultada e recuperada');
     } catch (error: unknown) {
       toast.error('Falha ao reenviar', { description: errorMessage(error) });
     }
@@ -617,7 +612,7 @@ export default function CteSearch() {
                           <Button 
                             size="sm" 
                             variant="ghost" 
-                            title="Reenviar à SEFAZ" 
+                            title="Consultar/recuperar operação"
                             disabled={resendCte.isPending}
                             onClick={() => handleResend(r)}
                           >

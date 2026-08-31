@@ -1,0 +1,100 @@
+{
+  "source": "Local fixture only, not a production capture",
+  "predecessor": [
+    {
+      "signature": "driver_record_delivery_outcome(uuid,text,jsonb,uuid,text)",
+      "hash": "381e01547f4b7b67d1945018151ff3e2",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "_delivery_result_from_statuses(text[])",
+      "hash": "be12c89528e9935bc76ce89dec420de7",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    }
+  ],
+  "candidate": [
+    {
+      "signature": "driver_record_delivery_outcome(uuid,text,jsonb,uuid,text)",
+      "hash": "6664818c64d992c324fa57bc2cdfd535",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    },
+    {
+      "signature": "_delivery_result_from_statuses(text[])",
+      "hash": "2acc28ff3b14abf6153a535f8b3c23f6",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_preserve_delivery_document_outcome()",
+      "hash": "d64c6d648e261271ac86a97e46701450",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_snapshot_delivery_document_outcome(uuid,uuid,text,timestamptz)",
+      "hash": "87045bcd032515b747b8427f76d10626",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_capture_driver_document_outcomes()",
+      "hash": "0c2926ed7b8fb5600348db2ef3d523ac",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_operation_document_context(uuid,uuid,uuid)",
+      "hash": "dd57aa341cb02a3358258097408fdfb3",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "get_operation_document_context(uuid,uuid,uuid)",
+      "hash": "6dfa1b18d9b725d645ab5d471afc7623",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "record_operation_document_outcome(jsonb)",
+      "hash": "11ae3f47818aaf4a239279ab33926b4f",
+      "anon": false,
+      "authenticated": true,
+      "service_role": false
+    },
+    {
+      "signature": "_lock_delivery_trip_graph(uuid,uuid)",
+      "hash": "ffa8920db62358d266660d11685ed9c0",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "_derive_driver_delivery_result(uuid,uuid)",
+      "hash": "31a4a4ec4f9a00f7bf7df2f96ede223a",
+      "anon": false,
+      "authenticated": false,
+      "service_role": false
+    },
+    {
+      "signature": "is_tenant_operator_or_admin(uuid)",
+      "hash": "682f66029dc9bb798f9f329b4e8f95aa",
+      "anon": false,
+      "authenticated": true,
+      "service_role": true
+    }
+  ],
+  "historySchemaHash": "b7104361d58d881172a72b2edb849d7f",
+  "historySchemaNormalization": "NOT NULL via pg_attribute.attnotnull; excludes duplicate PostgreSQL 18 pg_constraint contype=n entries. Verified against PostgreSQL 17.11 and PGlite/PostgreSQL 18.3."
+}

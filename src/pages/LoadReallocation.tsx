@@ -1,9 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLoads, Load } from '@/hooks/useLoads';
 import { useLoadItems, LoadItem } from '@/hooks/useLoadItems';
 import { useVehicles, type Vehicle } from '@/hooks/useVehicles';
-import { useUpdateLoad, useDeleteLoad } from '@/hooks/useLoads';
+import { useMoveLoadItems } from '@/hooks/useMoveLoadItems';
+import { useLoadReplanning } from '@/hooks/useLoadReplanning';
+import { LoadReplanningPanel } from '@/components/loads/LoadReplanningPanel';
+import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,14 +15,10 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { ArrowRightLeft, Truck, Package, AlertTriangle, CheckCircle, ChevronRight, History, X, ExternalLink, Route as RouteIcon, Search, CheckSquare, Square } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { supabase } from '@/integrations/supabase/client';
-import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { mergeDestinations } from '@/lib/loads/mergeDestinations';
 import { normalizeCity } from '@/lib/utils/normalizeCity';
-import type { Json } from '@/integrations/supabase/types';
-import type { JsonObject } from '@/lib/jsonTypes';
 import { getErrorMessage } from '@/lib/errors';
 
 type FilterField = 'all' | 'remitter' | 'recipient' | 'city' | 'invoice';
@@ -28,10 +28,6 @@ type FiscalDetails = NonNullable<LoadItem['fiscal_documents']>;
 function fiscalDetails(value: unknown): FiscalDetails | null {
   const candidate = Array.isArray(value) ? value[0] : value;
   return typeof candidate === 'object' && candidate !== null ? candidate as FiscalDetails : null;
-}
-
-function jsonObject(value: Json): JsonObject | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : null;
 }
 
 function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleItem, onSelectMany, isTarget }: {
@@ -412,16 +408,20 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
 }
 
 export default function LoadReallocation() {
+  const toast = useSonnerToast();
   const { data: loads = [] } = useLoads();
   const { data: vehicles = [] } = useVehicles();
-  const updateLoad = useUpdateLoad();
-  const deleteLoad = useDeleteLoad();
-  const qc = useQueryClient();
+  const { moveItems, isPending: moving } = useMoveLoadItems();
+  const replanning = useLoadReplanning();
+  const compositionBusy = moving || replanning.isPending;
+  const confirmationPending = replanning.pending.length > 0 || !!replanning.recoveryError;
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
 
   const [sourceLoadId, setSourceLoadId] = useState<string>('');
   const [targetLoadId, setTargetLoadId] = useState<string>('');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [moving, setMoving] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
   const [history, setHistory] = useState<Array<{
     id: string; at: Date; kind: 'move' | 'swap';
     fromLabel: string; toLabel: string;
@@ -430,10 +430,14 @@ export default function LoadReallocation() {
     success: boolean; errorCount?: number;
   }>>([]);
   const [lastResult, setLastResult] = useState<{ moved: number; errors: number; targetLabel: string } | null>(null);
+  useEffect(() => {
+    setSourceLoadId(''); setTargetLoadId(''); setSelectedItems(new Set());
+    setHistory([]); setLastResult(null); setMoveError(null);
+  }, [currentTenant?.id, user?.id]);
 
   // Only show active loads (not delivered)
   const activeLoads = useMemo(() =>
-    loads.filter(l => !['delivered'].includes(l.status)),
+    loads.filter(l => ['planned', 'assembling', 'ready', 'loading', 'loaded', 'divergent'].includes(l.status)),
     [loads]
   );
 
@@ -539,6 +543,7 @@ export default function LoadReallocation() {
   const targetLoad = activeLoads.find(l => l.id === targetLoadId);
 
   const toggleItem = (id: string) => {
+    if (compositionBusy) return;
     setSelectedItems(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -548,10 +553,8 @@ export default function LoadReallocation() {
   };
 
   const handleMoveItems = async () => {
-    if (!targetLoadId || selectedItems.size === 0) return;
-    setMoving(true);
-    let moved = 0;
-    let errors = 0;
+    if (compositionBusy || confirmationPending || !sourceLoad || !targetLoad || selectedItems.size === 0) return;
+    setLastResult(null); setMoveError(null);
     const movedItems: Array<{ desc: string; pallets: number; weight: number }> = [];
 
     const itemIds = Array.from(selectedItems);
@@ -560,85 +563,27 @@ export default function LoadReallocation() {
       if (item) movedItems.push({ desc: item.item_description, pallets: item.pallet_count || 0, weight: item.weight_kg || 0 });
     }
     try {
-      const tenantId = sourceLoad?.tenant_id || targetLoad?.tenant_id;
-      if (!tenantId) throw new Error('Tenant ID não encontrado');
-      const { data, error } = await supabase.rpc('move_load_items_between_loads', {
-        _tenant_id: tenantId,
-        _source_load_id: sourceLoadId,
-        _target_load_id: targetLoadId,
-        _item_ids: itemIds,
-      });
-      if (error) throw error;
-      const result = jsonObject(data);
-      moved = typeof result?.moved === 'number' ? result.moved : itemIds.length;
-    } catch (error: unknown) {
-      errors = itemIds.length;
-      toast.error(getErrorMessage(error, 'Falha ao mover itens'));
-    }
-
-    qc.invalidateQueries({ queryKey: ['load_items'] });
-    qc.invalidateQueries({ queryKey: ['loads'] });
-    qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-    qc.invalidateQueries({ queryKey: ['reallocation_load_meta'] });
-
-    const fromLabel = sourceLoad?.load_number || '—';
-    const toLabel = targetLoad?.load_number || '—';
-
-    // If all items were moved out of the source load, remove the empty load so it
-    // doesn't keep showing in /loads with the same content.
-    let sourceRemoved = false;
-    if (errors === 0 && sourceLoadId) {
-      try {
-        const { count } = await supabase
-          .from('load_items')
-          .select('id', { count: 'exact', head: true })
-          .eq('load_id', sourceLoadId);
-        if ((count ?? 0) === 0) {
-          await deleteLoad.mutateAsync(sourceLoadId);
-          sourceRemoved = true;
-          setSourceLoadId('');
-        }
-      } catch {
-        // non-critical; load just stays empty
-      }
-    }
-
-    // Merge source destination tokens into target so the consolidated load
-    // shows the combined route (e.g. "PAI PEDRO - PIRAPORA - JAIBA").
-    if (moved > 0 && targetLoad && sourceLoad) {
-      const merged = mergeDestinations(targetLoad.destination, sourceLoad.destination);
-      if (merged && merged !== targetLoad.destination) {
-        try {
-          await updateLoad.mutateAsync({ id: targetLoad.id, destination: merged });
-        } catch {
-          // non-critical
-        }
-      }
-    }
-
-    setHistory(prev => [{
-      id: crypto.randomUUID(),
-      at: new Date(),
-      kind: 'move' as const,
-      fromLabel,
-      toLabel,
-      items: movedItems,
-      success: errors === 0,
-      errorCount: errors,
-    }, ...prev].slice(0, 20));
-
-    setLastResult({ moved, errors, targetLabel: toLabel });
-    setSelectedItems(new Set());
-    setMoving(false);
-
-    if (errors > 0) {
-      toast.error(`${moved} movidos, ${errors} erros`);
-    } else {
+      const items = itemIds.map(id => sourceItems.find(item => item.id === id));
+      if (items.some(item => !item)) throw new Error('A composição mudou. Confira os itens atuais da origem.');
+      const result = await moveItems({ sourceLoadId, targetLoadId, items: items.map(item => ({
+        id: item!.id, fiscalDocumentId: item!.fiscal_document_id,
+      })) });
+      const fromLabel = sourceLoad.load_number; const toLabel = targetLoad.load_number;
+      if (result.source_removed) setSourceLoadId('');
+      setHistory(prev => [{ id: crypto.randomUUID(), at: new Date(), kind: 'move' as const,
+        fromLabel, toLabel, items: movedItems, success: true }, ...prev].slice(0, 20));
+      setLastResult({ moved: result.moved, errors: 0, targetLabel: toLabel });
       toast.success(
-        sourceRemoved
-          ? `${moved} item(ns) realocado(s) para ${toLabel}. Carga ${fromLabel} ficou vazia e foi removida.`
-          : `${moved} item(ns) realocado(s) para ${toLabel}`,
+        result.source_removed
+          ? `${result.moved} item(ns) realocado(s) para ${toLabel}. Carga ${fromLabel} ficou vazia e foi removida.`
+          : `${result.moved} item(ns) realocado(s) para ${toLabel}`,
       );
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, 'Não foi possível confirmar a realocação. Confira as duas cargas.');
+      setMoveError(message); toast.error(message);
+    } finally {
+      // Require a fresh selection after either a rejection or an uncertain response.
+      setSelectedItems(new Set());
     }
   };
 
@@ -668,9 +613,9 @@ export default function LoadReallocation() {
       {/* Load selectors */}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-end gap-2 md:gap-4 max-w-full">
         <div className="min-w-0">
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">Carga Origem</label>
-          <Select value={sourceLoadId} onValueChange={v => { setSourceLoadId(v); setSelectedItems(new Set()); }}>
-            <SelectTrigger className="w-full">
+          <label htmlFor="reallocation-source" className="text-xs font-medium text-muted-foreground mb-1 block">Carga Origem</label>
+          <Select disabled={compositionBusy} value={sourceLoadId} onValueChange={v => { setSourceLoadId(v); setSelectedItems(new Set()); }}>
+            <SelectTrigger id="reallocation-source" className="w-full">
               <SelectValue placeholder="Selecione a carga de origem..." />
             </SelectTrigger>
             <SelectContent className="max-h-[420px] w-[var(--radix-select-trigger-width)] md:w-[450px]">
@@ -709,9 +654,9 @@ export default function LoadReallocation() {
         </div>
 
         <div className="min-w-0">
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">Carga Destino</label>
-          <Select value={targetLoadId} onValueChange={setTargetLoadId}>
-            <SelectTrigger className="w-full">
+          <label htmlFor="reallocation-target" className="text-xs font-medium text-muted-foreground mb-1 block">Carga Destino</label>
+          <Select disabled={compositionBusy} value={targetLoadId} onValueChange={setTargetLoadId}>
+            <SelectTrigger id="reallocation-target" className="w-full">
               <SelectValue placeholder="Selecione a carga de destino..." />
             </SelectTrigger>
             <SelectContent className="max-h-[420px] w-[var(--radix-select-trigger-width)] md:w-[450px]">
@@ -747,6 +692,7 @@ export default function LoadReallocation() {
       </div>
 
       {/* Confirmation banner */}
+      {moveError && <p role="alert" className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">{moveError}</p>}
       {lastResult && (
         <div className={`flex items-start gap-3 p-3 rounded-lg border ${
           lastResult.errors > 0 ? 'bg-warning/10 border-warning/30' : 'bg-success/10 border-success/30'
@@ -762,7 +708,7 @@ export default function LoadReallocation() {
               As capacidades das cargas e os totais foram atualizados. Veja o histórico abaixo para conferir.
             </p>
           </div>
-          <button onClick={() => setLastResult(null)} className="text-muted-foreground hover:text-foreground">
+          <button aria-label="Fechar confirmação" onClick={() => setLastResult(null)} className="text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -795,13 +741,22 @@ export default function LoadReallocation() {
               {selectedPallets} pal · {selectedWeight.toLocaleString('pt-BR')} kg
             </span>
             <div className="flex-1" />
-            <Button size="sm" onClick={handleMoveItems} disabled={moving}>
+            <Button size="sm" onClick={handleMoveItems} disabled={compositionBusy || confirmationPending}>
               {moving ? 'Movendo...' : `Mover para ${targetLoad?.load_number}`}
               <ArrowRightLeft className="h-3.5 w-3.5 ml-2" />
             </Button>
           </>
         )}
       </div>
+
+      <LoadReplanningPanel api={replanning} sourceId={sourceLoadId} targetId={targetLoadId}
+        itemIds={Array.from(selectedItems)} disabled={moving} onConfirmed={result => {
+          const label = loads.find(load => load.id === result.target_load_id)?.load_number || result.target_load_id;
+          setMoveError(null); setSelectedItems(new Set());
+          if (result.source_removed && sourceLoadId === result.source_load_id) setSourceLoadId('');
+          setLastResult({ moved: result.moved, errors: 0, targetLabel: label });
+          toast.success(`${result.moved} item(ns) replanejado(s) para ${label}. Paradas e histórico preservados.`);
+        }} />
 
       {/* Side by side loads */}
       {sourceLoadId && targetLoadId ? (
@@ -823,6 +778,7 @@ export default function LoadReallocation() {
                 selectedItems={selectedItems}
                 onToggleItem={toggleItem}
                 onSelectMany={(ids, checked) => {
+                  if (compositionBusy) return;
                   setSelectedItems(prev => {
                     const next = new Set(prev);
                     if (checked) ids.forEach(id => next.add(id));

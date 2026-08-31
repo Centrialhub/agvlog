@@ -15,7 +15,7 @@ import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
 import { TRIP_ACTIVE_STATUSES, tripStatusLabel, LOAD_ACTIVE_STATUSES } from '@/lib/status';
 import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
 import { useDriverTripActions } from '@/hooks/useDriverTripActions';
-import { DRIVER_TRIP_SELECT, normalizeDriverTrip, resolveCanonicalTripLink } from '@/lib/driverTrip';
+import { DRIVER_TRIP_SELECT, driverTripNeedsReconciliation, isDriverTripStarted, normalizeDriverTrip, resolveCanonicalTripLink } from '@/lib/driverTrip';
 
 
 
@@ -349,10 +349,14 @@ export default function DriverHome() {
                 <Button
                   size="sm"
                   className="w-full"
-                  disabled={isStartingTrip}
-                  onClick={() => accessTrip(trip.id, trip.status)}
+                  disabled={isStartingTrip || driverTripNeedsReconciliation(trip.status, trip.actual_start_at, trip.loads?.status)}
+                  onClick={() => accessTrip(trip.id, trip.status, trip.actual_start_at, trip.loads?.status)}
                 >
-                  {trip.status === 'in_transit' ? 'Acessar Viagem' : 'Iniciar Viagem'}
+                  {driverTripNeedsReconciliation(trip.status, trip.actual_start_at, trip.loads?.status)
+                    ? 'Revisão operacional necessária'
+                    : isDriverTripStarted(trip.status, trip.actual_start_at)
+                    ? 'Acessar Viagem'
+                    : 'Iniciar Viagem'}
                 </Button>
                 {trip.loads?.id && (
                   <DriverLoadNotes

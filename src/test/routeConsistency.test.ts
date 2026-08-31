@@ -103,4 +103,30 @@ describe('validateRouteConsistency', () => {
     expect(r.warnings.join(' ')).toMatch(/excedem/);
     expect(r.valid).toBe(true);
   });
+  it('bloqueia documento omitido mesmo se sua carga aparece na parada',()=>{
+    const result=validateRouteConsistency({loads:[baseLoad({items:[{fiscal_document_id:'FD1'},{fiscal_document_id:'FD2'}]})],
+      stops:[baseStop()],vehicle_id:'V1',driver_id:'D1',planned_start_at:'2030-01-01T08:00'});
+    expect(result.valid).toBe(false);expect(result.blockingErrors.join(' ')).toContain('NF-e FD2… não aparece');
+  });
+  it('bloqueia parada extra sem documentos',()=>{
+    const result=validateRouteConsistency({loads:[baseLoad()],stops:[baseStop(),baseStop({id:'s2',fiscal_document_ids:[]})],
+      vehicle_id:'V1',driver_id:'D1',planned_start_at:'2030-01-01T08:00'});
+    expect(result.valid).toBe(false);expect(result.blockingErrors.join(' ')).toContain('distribua os documentos');
+  });
+  it('bloqueia o documento certo associado à carga errada na parada',()=>{
+    const result=validateRouteConsistency({loads:[baseLoad(),baseLoad({id:'L2',items:[{fiscal_document_id:'FD2'}]})],
+      stops:[baseStop({load_ids:['L2']}),baseStop({id:'s2',load_ids:['L1'],fiscal_document_ids:['FD2']})],
+      vehicle_id:'V1',driver_id:'D1',planned_start_at:'2030-01-01T08:00'});
+    expect(result.valid).toBe(false);expect(result.blockingErrors.join(' ')).toContain('cargas não correspondem');
+  });
+  it('aceita distribuição completa de uma carga em duas paradas',()=>{
+    const result=validateRouteConsistency({loads:[baseLoad({items:[{fiscal_document_id:'FD1'},{fiscal_document_id:'FD2'}]})],
+      stops:[baseStop(),baseStop({id:'s2',fiscal_document_ids:['FD2']})],vehicle_id:'V1',driver_id:'D1',planned_start_at:'2030-01-01T08:00'});
+    expect(result.valid).toBe(true);
+  });
+  it('expõe a pendência de baixa de itens manuais em vez de descartá-los da rota',()=>{
+    const result=validateRouteConsistency({loads:[baseLoad({items:[{fiscal_document_id:'FD1'},{fiscal_document_id:null}]})],
+      stops:[baseStop()],vehicle_id:'V1',driver_id:'D1',planned_start_at:'2030-01-01T08:00'});
+    expect(result.valid).toBe(false);expect(result.blockingErrors.join(' ')).toContain('itens manuais');
+  });
 });

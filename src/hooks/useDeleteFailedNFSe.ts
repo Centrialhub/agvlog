@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useTenant } from './useTenant';
 
 function errorMessage(error: unknown): string {
@@ -11,6 +11,7 @@ function errorMessage(error: unknown): string {
  * Exclui um registro de NFS-e que esteja em estado de erro.
  */
 export function useDeleteFailedNFSe() {
+  const toast = useSonnerToast();
   const qc = useQueryClient();
   const { currentTenant } = useTenant();
 
@@ -32,16 +33,7 @@ export function useDeleteFailedNFSe() {
         throw new Error('Apenas notas com erro ou rejeitadas podem ser excluídas.');
       }
 
-      // Retorna as NFs vinculadas
-      const { error: releaseErr } = await supabase
-        .from('fiscal_documents')
-        .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
-        .eq('nfse_emitted_document_id', nfseId)
-        .eq('tenant_id', doc.tenant_id)
-        .is('deleted_at', null);
-
-      if (releaseErr) throw releaseErr;
-
+      // Server guard checks the fiscal outcome before deletion; never release sources from an uncertain document.
       const { error: delErr } = await supabase
         .from('nfse_documents')
         .delete()
@@ -52,7 +44,7 @@ export function useDeleteFailedNFSe() {
       return true;
     },
     onSuccess: () => {
-      toast.success('Registro de erro removido com sucesso e NFs liberadas');
+      toast.success('Registro de erro removido com sucesso');
       qc.invalidateQueries({ queryKey: ['nfse'] });
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });

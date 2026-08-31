@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
+import { useItemPreparationWrites } from './useItemPreparationWrites';
+import { PREPARATION_STATUSES, type ItemPreparationValues, type ItemPreparationExpected } from '@/lib/loads/itemPreparation';
 
 export const ITEM_STATUSES = [
   'pending', 'waiting_conference', 'in_stock', 'picking',
@@ -69,78 +71,27 @@ export function useLoadItems(loadId: string | undefined) {
   });
 }
 
+function preparationValues(values: Partial<LoadItem>): ItemPreparationValues {
+  const fields: (keyof ItemPreparationValues)[] = ['order_id','item_description','quantity','pallet_count','weight_kg','volume_m3','status','notes'];
+  if(values.status && !(PREPARATION_STATUSES as readonly string[]).includes(values.status))
+    throw new Error('Use o fluxo operacional para trânsito, entrega, devolução ou reentrega.');
+  return Object.fromEntries(fields.filter(key=>values[key]!=null).map(key=>[key,values[key]])) as ItemPreparationValues;
+}
+
 export function useCreateLoadItem() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (values: Partial<LoadItem> & Pick<LoadItem, 'load_id'>) => {
-      // Vínculo com NF é exclusivamente via RPC oficial (sincroniza fiscal_documents.load_id + auditoria).
-      if (values.fiscal_document_id) {
-        const { data, error } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
-          _tenant_id: currentTenant!.id,
-          _load_id: values.load_id,
-          _document_ids: [values.fiscal_document_id],
-        });
-        if (error) throw error;
-        return data;
-      }
-      const { data, error } = await supabase.rpc('upsert_load_item_v3', {
-        p_tenant_id: currentTenant!.id,
-        p_load_id: values.load_id,
-        p_order_id: values.order_id ?? undefined,
-        p_item_description: values.item_description ?? undefined,
-        p_quantity: values.quantity ?? undefined,
-        p_pallet_count: values.pallet_count ?? undefined,
-        p_weight_kg: values.weight_kg ?? undefined,
-        p_volume_m3: values.volume_m3 ?? undefined,
-        p_status: values.status ?? undefined,
-        p_notes: values.notes ?? undefined,
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['load_items'] });
-      qc.invalidateQueries({ queryKey: ['loads'] });
-      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-    },
-  });
+  const api=useItemPreparationWrites();
+  return {...api,mutateAsync:async(values:Partial<LoadItem>&Pick<LoadItem,'load_id'>)=>{
+    if(values.fiscal_document_id)throw new Error('Use a confirmação de inclusão de notas para alterar a composição documental.');
+    return api.submit({load_id:values.load_id,item_id:null,values:preparationValues(values),expected:null});
+  }};
 }
 
 export function useUpdateLoadItem() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<LoadItem> & { id: string }) => {
-      // Bloqueia mudança de load_id por write direto — use move_load_items_between_loads.
-      if ('load_id' in values) {
-        throw new Error('Mudança de load_id deve passar por move_load_items_between_loads.');
-      }
-      // Mudança de fiscal_document_id pelo write direto também é bloqueada — invalida composição.
-      if ('fiscal_document_id' in values) {
-        throw new Error('Mudança de fiscal_document_id não é permitida por update direto.');
-      }
-      if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { data, error } = await supabase.rpc('upsert_load_item_v3', {
-        p_tenant_id: currentTenant.id,
-        p_item_id: id,
-        p_order_id: values.order_id ?? undefined,
-        p_item_description: values.item_description ?? undefined,
-        p_quantity: values.quantity ?? undefined,
-        p_pallet_count: values.pallet_count ?? undefined,
-        p_weight_kg: values.weight_kg ?? undefined,
-        p_volume_m3: values.volume_m3 ?? undefined,
-        p_status: values.status ?? undefined,
-        p_notes: values.notes ?? undefined,
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['load_items'] });
-      qc.invalidateQueries({ queryKey: ['loads'] });
-    },
-  });
+  const api=useItemPreparationWrites();
+  return {...api,mutateAsync:async({id,loadId,expected,...values}:Partial<LoadItem>&{id:string;loadId:string;expected:ItemPreparationExpected})=>{
+    if('load_id' in values||'fiscal_document_id' in values)throw new Error('Use a realocação de notas para alterar a composição documental.');
+    return api.submit({load_id:loadId,item_id:id,values:preparationValues(values),expected});
+  }};
 }
 
 export function useDeleteLoadItem() {

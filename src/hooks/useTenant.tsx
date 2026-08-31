@@ -1,144 +1,64 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-
-interface Tenant {
-  id: string;
-  name: string;
-  plan_key: string;
-  timezone: string;
-}
-
-interface Membership {
-  tenant_id: string;
-  role: 'owner' | 'admin' | 'operator' | 'client' | 'driver';
-  tenants: Tenant;
-}
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
+import { MEMBERSHIP_QUERY, TenantDataBoundary } from '@/components/auth/TenantDataBoundary';
+import { readTenantMemberships, readTenantSelection, saveTenantSelection, type Membership } from '@/lib/tenantMemberships';
 
 interface TenantContextType {
-  currentTenant: Tenant | null;
+  currentTenant: Membership['tenants'] | null;
   currentRole: string | null;
   memberships: Membership[];
   setCurrentTenantId: (id: string) => void;
   loading: boolean;
 }
-
 const TenantContext = createContext<TenantContextType>({
-  currentTenant: null,
-  currentRole: null,
-  memberships: [],
-  setCurrentTenantId: () => {},
-  loading: true,
+  currentTenant: null, currentRole: null, memberships: [], setCurrentTenantId: () => {}, loading: true,
 });
+const EMPTY_MEMBERSHIPS: Membership[] = [];
 
 export function TenantProvider({ children }: { children: ReactNode }) {
-  const [memberships, setMemberships] = useState<Membership[]>([]);
-  const [currentTenantId, setCurrentTenantId] = useState<string | null>(
-    localStorage.getItem('agvlog_tenant_id')
-  );
-  const [loading, setLoading] = useState(true);
-
+  const { user, session, loading: authLoading } = useAuth();
+  const actor = user?.id;
+  const [selection, setSelection] = useState<{ actor: string; tenant: string } | null>(null);
+  const query = useQuery({
+    queryKey: [MEMBERSHIP_QUERY, actor], enabled: !!actor && !authLoading,
+    queryFn: ({ signal }) => readTenantMemberships(signal),
+    retry: false, staleTime: 0, gcTime: 0,
+  });
+  const previousToken = useRef(session?.access_token);
+  const { refetch } = query;
   useEffect(() => {
-    const fetchMemberships = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setLoading(false);
-          return;
-        }
+    if (previousToken.current !== session?.access_token) {
+      previousToken.current = session?.access_token;
+      if (actor) void refetch();
+    }
+  }, [actor, session?.access_token, refetch]);
 
-        const { data, error } = await supabase.rpc('get_current_memberships_v1');
-
-      if (!error && data) {
-        let mapped = data.map(d => ({
-          tenant_id: d.tenant_id,
-          role: d.role,
-          tenants: {
-            id: d.tenant_id,
-            name: d.tenant_name,
-            plan_key: d.plan_key,
-            timezone: d.timezone,
-          },
-        }));
-
-        // Portal-only users (no operational membership) may still belong to tenants
-        // via client_portal_access. Surface those as virtual "client" memberships
-        // so the portal layout works without an operational role.
-        if (mapped.length === 0) {
-          const { data: portalTenants } = await supabase.rpc('get_user_portal_tenants');
-          if (Array.isArray(portalTenants) && portalTenants.length > 0) {
-            mapped = (portalTenants as any[]).map((t) => ({
-              tenant_id: t.id,
-              role: 'client' as const,
-              tenants: { id: t.id, name: t.name, plan_key: t.plan_key, timezone: t.timezone },
-            }));
-          }
-        }
-
-        setMemberships(mapped);
-
-        // Selecionar tenant: prioriza o salvo se ainda é válido, senão pega o primeiro.
-        const stored = localStorage.getItem('agvlog_tenant_id');
-        const validStored = stored && mapped.some(m => m.tenant_id === stored) ? stored : null;
-        if (validStored) {
-          setCurrentTenantId(validStored);
-        } else if (mapped.length > 0) {
-          const firstId = mapped[0].tenant_id;
-          setCurrentTenantId(firstId);
-          localStorage.setItem('agvlog_tenant_id', firstId);
-        } else {
-          // Sem memberships: limpa seleção anterior.
-          if (stored) localStorage.removeItem('agvlog_tenant_id');
-          setCurrentTenantId(null);
-        }
-      }
-        setLoading(false);
-      } catch (err) {
-        console.warn('[useTenant] fetchMemberships failed', err);
-        setLoading(false);
-      }
-    };
-
-    fetchMemberships();
-    // Safety net so the app never hangs on a stuck backend.
-    const timer = setTimeout(() => setLoading(false), 8000);
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-        fetchMemberships();
-      }
-    });
-
-    return () => {
-      clearTimeout(timer);
-      subscription.unsubscribe();
-    };
-  }, []);
-
+  const memberships = actor && !query.isError ? query.data ?? EMPTY_MEMBERSHIPS : EMPTY_MEMBERSHIPS;
+  const preferred = actor && selection?.actor === actor ? selection.tenant : actor ? readTenantSelection(actor) : null;
+  const currentMembership = memberships.find(m => m.tenant_id === preferred) ?? memberships[0];
+  const tenant = currentMembership?.tenant_id;
+  useEffect(() => { if (actor && tenant) saveTenantSelection(actor, tenant); }, [actor, tenant]);
   const handleSetTenantId = (id: string) => {
-    setCurrentTenantId(id);
-    localStorage.setItem('agvlog_tenant_id', id);
+    if (!actor || !memberships.some(m => m.tenant_id === id)) return;
+    saveTenantSelection(actor, id);
+    setSelection({ actor, tenant: id });
   };
-
-  const currentMembership = memberships.find(m => m.tenant_id === currentTenantId);
-
+  const loading = authLoading || (!!actor && query.isPending);
+  const scope = [actor ?? '', tenant ?? '', currentMembership?.role ?? ''].join(':');
   return (
     <TenantContext.Provider value={{
-      currentTenant: currentMembership?.tenants || null,
-      currentRole: currentMembership?.role || null,
-      memberships,
-      setCurrentTenantId: handleSetTenantId,
-      loading,
+      currentTenant: currentMembership?.tenants ?? null, currentRole: currentMembership?.role ?? null,
+      memberships, setCurrentTenantId: handleSetTenantId, loading,
     }}>
-      {children}
+      <TenantDataBoundary key={scope}>
+        {actor && query.isError ? <div role="alert" className="p-6 space-y-3">
+          <p>Não foi possível confirmar seus acessos. Os dados anteriores foram ocultados.</p>
+          <button type="button" className="underline" disabled={query.isFetching} onClick={() => { void refetch(); }}>Tentar novamente</button>
+        </div> : children}
+      </TenantDataBoundary>
     </TenantContext.Provider>
   );
 }
-
-export function useTenant() {
-  return useContext(TenantContext);
-}
-
-export function useIsAdmin() {
-  const { currentRole } = useTenant();
-  return currentRole === 'owner' || currentRole === 'admin';
-}
+export function useTenant() { return useContext(TenantContext); }
+export function useIsAdmin() { const { currentRole } = useTenant(); return currentRole === 'owner' || currentRole === 'admin'; }

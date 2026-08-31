@@ -50,6 +50,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/useTenant';
 import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { useAuth } from '@/hooks/useAuth';
+import { useItemPreparationWrites } from '@/hooks/useItemPreparationWrites';
+import { prepareOrderItems } from '@/lib/ingestion/prepareOrderItems';
 import type { RouteDestination } from '@/hooks/useOperationalRoutes';
 
 type PersistedValidatedDocument = ValidatedDocument & { _savedId?: string };
@@ -188,6 +190,7 @@ export default function Ingestion() {
   const createDoc = useCreateFiscalDocument();
   const createOrder = useCreateOrder();
   const createLoad = useCreateLoad();
+  const itemPreparations = useItemPreparationWrites();
   const updateRoute = useUpdateOperationalRoute();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1211,6 +1214,10 @@ export default function Ingestion() {
   };
 
   const handleExecute = async (assignments: Map<number, { vehicleId: string | null; driverId: string | null }>) => {
+    if(itemPreparations.isPending || itemPreparations.pending.length || itemPreparations.recoveryError){
+      toast({title:'Recupere a preparação pendente antes de executar novamente',description:itemPreparations.recoveryError||'Use o painel de recuperação no topo da página.',variant:'destructive'});
+      return;
+    }
     setExecuting(true);
     const results: string[] = [];
 
@@ -1443,23 +1450,8 @@ export default function Ingestion() {
           }
 
           // Itens derivados de pedidos também passam pela composição canônica e auditável.
-          for (const order of suggestion.orders) {
-            const orderId = createdOrderIds.get(order.source.orderNumber);
-            try {
-              const { error: liErr } = await supabase.rpc('upsert_load_item_v3', {
-                p_tenant_id: currentTenant.id,
-                p_load_id: loadId,
-                p_order_id: orderId || undefined,
-                p_item_description: `Pedido ${order.source.orderNumber} - ${order.source.clientName || 'Sem cliente'}`,
-                p_quantity: order.source.quantity || 0,
-                p_pallet_count: order.source.palletCount || Math.ceil((order.source.quantity || 0) / 50),
-                p_weight_kg: order.source.weightKg || 0,
-              });
-              if (!liErr) itemsCreated++;
-            } catch {
-              // Continue
-            }
-          }
+          itemsCreated=await prepareOrderItems({loadId,loadNumber,orders:suggestion.orders,orderIds:createdOrderIds,
+            confirmedCount:itemsCreated,submit:itemPreparations.submit});
 
           results.push(`✅ Carga ${loadNumber} → ${suggestion.region} (${itemsCreated} itens vinculados)`);
         } catch (e: unknown) {

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   useBankAccounts, useCreateManualExpense, uploadPaymentAttachment,
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
@@ -24,6 +24,7 @@ interface Props {
 const NONE = '__none__';
 
 export default function ManualExpenseDialog({ open, onOpenChange }: Props) {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const { data: accounts = [] } = useBankAccounts();
   const { data: clients = [] } = useClients();

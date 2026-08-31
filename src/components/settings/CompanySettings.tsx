@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Building2, Upload, Trash2, Loader2 } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useIsAdmin } from '@/hooks/useTenant';
 import { useCompanyProfile, useUpdateCompanyProfile, type CompanyProfile } from '@/hooks/useCompanyProfile';
 
@@ -28,6 +28,7 @@ async function fileToDataUrl(file: File, maxDim = 512): Promise<string> {
 }
 
 export function CompanySettings() {
+  const toast = useSonnerToast();
   const isAdmin = useIsAdmin();
   const { data: profile, isLoading } = useCompanyProfile();
   const updateMut = useUpdateCompanyProfile();

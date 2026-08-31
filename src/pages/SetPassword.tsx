@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -15,6 +15,7 @@ function isStrongPassword(value: string): boolean {
 }
 
 export default function SetPassword() {
+  const toast = useSonnerToast();
   const navigate = useNavigate();
   const { user, loading: authLoading, signOut } = useAuth();
   const [password, setPassword] = useState('');

@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import {useMemo} from 'react';
+import {isNotificationScopeCurrent,registerNotificationReset,useNotificationScope} from '@/lib/notificationScope';
 
 interface AlertInputOptions {
   label: string;
@@ -68,6 +70,8 @@ export const useAlertStore = create<AlertState>((set) => ({
   hideAlert: () =>
     set({
       isOpen: false,
+      title: '',
+      description: '',
       onConfirm: undefined,
       onSecondaryConfirm: undefined,
       onCancel: undefined,
@@ -79,6 +83,14 @@ export const useAlertStore = create<AlertState>((set) => ({
       inputError: undefined,
     }),
 }));
+
+/** Cancel an unsubmitted confirmation before replacing its account/tenant. */
+export function cancelPendingAlert() {
+  const { hideAlert, onCancel } = useAlertStore.getState();
+  hideAlert();
+  try { onCancel?.(); } catch { /* A stale component callback cannot block logout. */ }
+}
+registerNotificationReset('alerts',cancelPendingAlert);
 
 interface ConfirmActionOptions {
   title?: string;
@@ -143,8 +155,27 @@ export function promptAction(
 /**
  * Hook centralizador para erros críticos que precisam de confirmação.
  */
+export function useScopedAlerts() {
+  const scope=useNotificationScope();
+  return useMemo(()=>{
+    const current=()=>isNotificationScopeCurrent(scope);
+    const showAlert:AlertState['showAlert']=(title,description,type,options={})=>{
+      if(!current())return;
+      useAlertStore.getState().showAlert(title,description,type,{...options,
+        onConfirm:value=>{if(current())options.onConfirm?.(value);},
+        onSecondaryConfirm:()=>{if(current())options.onSecondaryConfirm?.();},
+        onCancel:()=>{if(current())options.onCancel?.();},
+      });
+    };
+    return {showAlert,
+      confirmAction:(...args:Parameters<typeof confirmAction>)=>current()?confirmAction(...args).then(result=>current()&&result):Promise.resolve(false),
+      promptAction:(...args:Parameters<typeof promptAction>)=>current()?promptAction(...args).then(result=>current()?result:null):Promise.resolve(null),
+    };
+  },[scope]);
+}
+
 export const useErrorPopup = () => {
-  const showAlert = useAlertStore((state) => state.showAlert);
+  const {showAlert} = useScopedAlerts();
 
   return {
     showError: (title: string, description?: string) => showAlert(title, description, 'error'),

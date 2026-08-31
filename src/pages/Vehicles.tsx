@@ -1,6 +1,9 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch, filterOptions } from '@/lib/listFilters';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { VEHICLE_SAFE_SELECT } from '@/integrations/supabase/selects';
@@ -31,7 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Pencil, Trash2, User } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 
 type VehicleRow = Omit<Tables<'vehicles'>, 'tracker_password'> & {
   current_driver: Pick<Tables<'drivers'>, 'id' | 'name'> | null;
@@ -40,11 +43,14 @@ type VehicleRow = Omit<Tables<'vehicles'>, 'tracker_password'> & {
 type VehicleForm = Record<string, string | number | boolean | null | undefined>;
 
 export default function Vehicles() {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', type: 'all', driver: 'all' });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<VehicleRow | null>(null);
 
@@ -108,6 +114,13 @@ export default function Vehicles() {
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : String(error)),
   });
 
+  const filteredVehicles = vehicles.filter(vehicle =>
+    matchesSearch(filters.search, vehicle.plate, vehicle.nickname, vehicle.current_driver?.name, vehicle.body_type) &&
+    (filters.status === 'all' || vehicle.active === (filters.status === 'active')) &&
+    (filters.type === 'all' || vehicle.type === filters.type) &&
+    (filters.driver === 'all' || Boolean(vehicle.current_driver_id) === (filters.driver === 'assigned'))
+  );
+
   const handleEdit = (v: VehicleRow) => {
     setEditingVehicle(v);
     setDialogOpen(true);
@@ -135,6 +148,13 @@ export default function Vehicles() {
         )}
       </div>
 
+      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filteredVehicles.length} totalCount={vehicles.length} loading={isLoading} fields={[
+        { key: 'search', label: 'Buscar veículo', type: 'search', placeholder: 'Placa, apelido, motorista ou carroceria', value: filters.search, onChange: value => setFilter('search', value) },
+        { key: 'status', label: 'Situação', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, { value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Inativos' }] },
+        { key: 'type', label: 'Tipo de veículo', value: filters.type, onChange: value => setFilter('type', value), options: [{ value: 'all', label: 'Todos os tipos' }, ...filterOptions(vehicles.map(vehicle => vehicle.type)).map(value => ({ value, label: value }))] },
+        { key: 'driver', label: 'Vínculo com motorista', value: filters.driver, onChange: value => setFilter('driver', value), options: [{ value: 'all', label: 'Todos os veículos' }, { value: 'assigned', label: 'Com motorista' }, { value: 'unassigned', label: 'Sem motorista' }] },
+      ]} />
+
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -156,16 +176,16 @@ export default function Vehicles() {
                     Carregando...
                   </TableCell>
                 </TableRow>
-              ) : vehicles.length === 0 ? (
+              ) : filteredVehicles.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    Nenhum veículo cadastrado
+                    {activeCount ? 'Nenhum veículo corresponde aos filtros' : 'Nenhum veículo cadastrado'}
                   </TableCell>
                 </TableRow>
               ) : (
-                vehicles.map((v) => (
+                filteredVehicles.map((v) => (
                   <TableRow key={v.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/vehicles/${v.id}`)}>
-                    <TableCell className="font-mono font-medium">{v.plate}</TableCell>
+                    <TableCell className="font-mono font-medium"><Link to={`/vehicles/${v.id}`} onClick={event => event.stopPropagation()} className="text-primary underline-offset-4 hover:underline focus-visible:underline">{v.plate}</Link></TableCell>
                     <TableCell>{v.nickname || '—'}</TableCell>
                     <TableCell className="capitalize">{v.type}</TableCell>
                     <TableCell onClick={e => e.stopPropagation()}>
@@ -208,7 +228,7 @@ export default function Vehicles() {
                     {isAdmin && (
                       <TableCell>
                         <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(v)}>
+                          <Button variant="ghost" size="icon" aria-label={`Editar veículo ${v.plate}`} onClick={() => handleEdit(v)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
@@ -249,6 +269,7 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
   tenantId?: string;
   userId?: string;
 }) {
+  const toast = useSonnerToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<VehicleForm>({});
   const [loading, setLoading] = useState(false);

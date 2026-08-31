@@ -1,0 +1,132 @@
+{
+  "generated_at": "2026-08-31T13:15:02.798Z",
+  "state": "local_candidate_not_deployed",
+  "project_id": "qcvnsdrbcchaxvawcngk",
+  "note": "Hashes delimit this fiscal candidate. Files also contain pre-existing work. This is not a standalone deploy artifact or permission to publish the dirty workspace. Financial dependencies require their own operational predecessors.",
+  "files": [
+    {
+      "path": "supabase/migrations/20260831124505_fiscal_emission_readiness.sql",
+      "sha256": "1c7433c6bffccd653ce0f1b0663dc60afb45f0662a62888565d761c649be1abb"
+    },
+    {
+      "path": "supabase/functions/_shared/fiscal-dispatch.ts",
+      "sha256": "405edba621f19a8d5cb539861fdbc67bbbc7c6707670d9dd61060d216e937f4f"
+    },
+    {
+      "path": "supabase/functions/hub-fiscal-proxy/index.ts",
+      "sha256": "ac9eebf600d332c4e0dbf2c66ae9cb2cf5e3ce222c0995673465fa4589e84de7"
+    },
+    {
+      "path": "supabase/functions/hub-fiscal-webhook-in/index.ts",
+      "sha256": "27abac7ad3ae24f8b84206f78cc6d5ef01bb1ea73789bf4e34e399c409e5c938"
+    },
+    {
+      "path": "supabase/functions/cte-status-poll/index.ts",
+      "sha256": "61c0e9d2cf5e3314a756d6cc1adf4c5e3b20a3f2ce488487af70cfb957a8b6ed"
+    },
+    {
+      "path": "supabase/functions/nfse-status-poll/index.ts",
+      "sha256": "c17d43208b18ba9c71a8cc38f3838c8067f4d1e49bb28a983d7fae8b1b005cfa"
+    },
+    {
+      "path": "src/hooks/useIssueCTe.tsx",
+      "sha256": "dafb49cb8007dbe7eaf1dd1e23cf8d10501a64147b913f493b498ed09a250865"
+    },
+    {
+      "path": "src/hooks/useNFSe.tsx",
+      "sha256": "6a08776c71d5d8c45e977ad7c7d56e4a687adcd69c518f565f7a5c8763e42881"
+    },
+    {
+      "path": "src/hooks/useDeleteFailedNFSe.ts",
+      "sha256": "fc475272d8e7a5e1f92811264f4d2cb30d1b05586391ea66299ca102bc354ff2"
+    },
+    {
+      "path": "src/hooks/useCteMonitor.tsx",
+      "sha256": "178c1075e96afcc00aff3cbc55dfb17bfe616c9ad0da60a32cc649a56f0b86af"
+    },
+    {
+      "path": "src/hooks/useClientInvoices.tsx",
+      "sha256": "1bcddb63a8f5df9962e6055098c30b761e24438386e4feb8484d6d4f420e6cb3"
+    },
+    {
+      "path": "src/lib/fiscal/nfseBuilder.ts",
+      "sha256": "b0bb9cb19a5681c16be7e914640fa0a50bceef7053aae1df718ce5b08bcb7f59"
+    },
+    {
+      "path": "src/pages/CteSearch.tsx",
+      "sha256": "2c2a398beea9c49297c30d12c30e8e0162fc28abef95b3b203065eaf11871454"
+    },
+    {
+      "path": "src/pages/CteMonitor.tsx",
+      "sha256": "bf75d398d53840cf6e0877f8844c3cadff19e5b85821029b9cde7675195381e8"
+    },
+    {
+      "path": "src/pages/NFSe.tsx",
+      "sha256": "dfe12eedef2e1b40816cb19608ed645f6f63d85e2a94628caac836e742dd2988"
+    },
+    {
+      "path": "src/integrations/supabase/types.ts",
+      "sha256": "b4f12eea5dfc9e0cba7e2eccd7ad736fbae170766e6e4caa435735dd0f44e40f"
+    },
+    {
+      "path": "src/test/fiscalReadinessDatabase.test.ts",
+      "sha256": "6b8f2be7606d7f16b57d09c3910b8c214c665a77d05dbe06cd688956698b67e6"
+    },
+    {
+      "path": "src/test/fiscalDispatchDatabase.test.ts",
+      "sha256": "b12a378f182a921ede0f0e4f58aa084ea067cb147de80a0713c4ebee2c582af9"
+    },
+    {
+      "path": "src/test/helpers/fiscalReadinessDatabase.ts",
+      "sha256": "7dfdf1afbb86a946d06cd8cec8798b9d6d6cd990899d0fa869de967bdc4d8de6"
+    },
+    {
+      "path": "src/test/helpers/fiscalServiceAdapter.ts",
+      "sha256": "86902d5a1a764b1253c0f2e5830cc0b6deb3c1e0353931e89c42c21749381c9d"
+    },
+    {
+      "path": "src/test/nfseBuilder.insurance.test.ts",
+      "sha256": "4bb9d1ab87a70a20f35da27b6504f88ec302a3d640fe488e8046315cd69c031c"
+    },
+    {
+      "path": "src/test/hubFiscalProxyRuntime.test.ts",
+      "sha256": "c9b842a934c7df15ff4e53ae620de1ab49d43f10b4ff916d5bc8d9daefc36b78"
+    },
+    {
+      "path": "scripts/test-delivery-concurrency.mjs",
+      "sha256": "55e58a1acb55dc2370e12a188846f337f50e79bdc28aff6d597c00c33d54dc7d"
+    },
+    {
+      "path": "scripts/test-fiscal-readiness-native-cases.mjs",
+      "sha256": "736ebdaae3a6742862d5d123bfea399c8d221f60c3b2d635e5e56f9ea36ffc75"
+    }
+  ],
+  "financial_dependencies": [
+    {
+      "path": "supabase/migrations/20260830161722_make_closing_reports_attempt_aware.sql",
+      "sha256": "80e61b8d9acf4ba679e29105dca168905521fd13ebd948c0e6138a7de8c447c5"
+    },
+    {
+      "path": "supabase/migrations/20260830165149_make_closing_drafts_atomic.sql",
+      "sha256": "6ddceefdcf0fa323be38533762b12fce25560fca9034afac93659890874e1cc9"
+    },
+    {
+      "path": "supabase/migrations/20260830174819_audit_closing_lifecycle_and_charge_claims.sql",
+      "sha256": "dd38a8be1314caef81cf7f3a2cbe35d1cd029cd5e29e822b62e5d0fed5cfcd71"
+    },
+    {
+      "path": "supabase/migrations/20260830183929_audit_receivable_payments_and_reversals.sql",
+      "sha256": "031851dab23c76b18d872cd81837e60224156f5f6e3a3ad07a81bfaa0b67464d"
+    },
+    {
+      "path": "supabase/migrations/20260830192908_audit_client_invoice_lifecycle.sql",
+      "sha256": "e345e26f41d2ccc4c2b21d3f5450983eb41ca359856d61dc29afd11472ae5ccf"
+    }
+  ],
+  "hosted_blockers": [
+    "no_enabled_homologation_credentials_for_active_emitters",
+    "financial_contract_chain_not_installed",
+    "fiscal_candidate_not_installed",
+    "authenticated_provider_acceptance_not_performed"
+  ]
+}

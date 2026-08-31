@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import type { BuiltItem, SummaryLine } from './closingReportBuilder';
 import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
 import { getAutoTableFinalY } from '@/lib/pdf/autoTable';
+import {closingExportTotals,closingItemTrace,closingTripKey} from './closingExport';
 
 const brl = (n: number) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kg = (n: number) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -54,12 +55,13 @@ export function generateClosingReportPdf(opts: PdfOptions): jsPDF {
   ].filter(Boolean).join('   |   ');
   doc.text(sub, 14, headerY + 10);
 
-  const totalValor = opts.items.reduce((s, i) => s + i.invoice_value, 0);
-  const totalPeso = opts.items.reduce((s, i) => s + i.weight_kg, 0);
-  const totalFrete = opts.items.reduce((s, i) => s + i.freight_value, 0);
+  const totals=closingExportTotals(opts.items,opts.summaryLines);
+  const totalValor = totals.value;
+  const totalPeso = totals.weight;
+  const totalFrete = totals.freight;
 
   doc.setFontSize(9);
-  doc.text(`Peso: ${kg(totalPeso)} kg   Valor NF: ${brl(totalValor)}   Frete: ${brl(totalFrete)}   Notas: ${opts.items.length}`, 14, headerY + 16);
+  doc.text(`Peso: ${kg(totalPeso)} kg   Valor NF (distintas): ${brl(totalValor)}   Frete: ${brl(totalFrete)}   Notas: ${totals.notes}`, 14, headerY + 16);
   const tableStart = headerY + 22;
 
   if (model === 'summary') {
@@ -73,7 +75,7 @@ export function generateClosingReportPdf(opts: PdfOptions): jsPDF {
         kg(s.total_weight_kg),
         brl(s.total_invoice_value),
       ]),
-      foot: [['TOTAIS', String(opts.items.length), kg(totalPeso), brl(totalValor)]],
+      foot: [['TOTAIS (notas distintas)', String(totals.notes), kg(totalPeso), brl(totalValor)]],
       styles: { fontSize: 8, cellPadding: 1.5 },
       headStyles: { fillColor: [30, 41, 59] },
       footStyles: { fillColor: [226, 232, 240], textColor: 20 },
@@ -85,7 +87,7 @@ export function generateClosingReportPdf(opts: PdfOptions): jsPDF {
       const seen = new Set<string>();
       const trips: BuiltItem[] = [];
       for (const i of opts.items) {
-        const k = i.load_id || `nf-${i.fiscal_document_id}`;
+        const k = closingTripKey(i);
         if (seen.has(k)) continue;
         seen.add(k);
         trips.push(i);
@@ -148,7 +150,7 @@ export function generateClosingReportPdf(opts: PdfOptions): jsPDF {
         kg(i.weight_kg),
         brl(i.freight_value),
         dt(i.delivery_date),
-        i.observation ?? '',
+        [i.observation,`Carga ${i.load_number||'sem vínculo'}; tentativa ${closingItemTrace(i).attempt}; ${closingItemTrace(i).outcome}`,closingItemTrace(i).review].filter(Boolean).join(' · '),
       ]),
       foot: [['', '', '', '', '', '', 'TOTAIS', brl(totalValor), kg(totalPeso), brl(totalFrete), '', '']],
       styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },

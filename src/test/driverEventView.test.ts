@@ -68,8 +68,21 @@ describe('mapOperationalEventToDriverEvent', () => {
     }));
 
     expect(mapped.type).toBe('informativo');
-    expect(mapped.label).toBe('arrival');
-    expect(mapped.stopName).toBe('—');
+    expect(mapped.label).toBe('Arrival');
+    expect(mapped.stopName).toBe('Parada não identificada');
     expect(mapped.hasPhoto).toBe(false);
+  });
+
+  it('turns a generic trip occurrence into useful list context', () => {
+    const mapped = mapOperationalEventToDriverEvent(event({
+      event_type: 'other',
+      description: 'Cliente pediu nova previsão de entrega.',
+      payload: { scope: 'trip' },
+    }));
+
+    expect(mapped.label).toBe('Outra ocorrência');
+    expect(mapped.stopName).toBe('Viagem — sem parada específica');
+    expect(mapped.observation).toBe('Cliente pediu nova previsão de entrega.');
+    expect(mapped.code).toBe('OTHE');
   });
 });

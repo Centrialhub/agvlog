@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { NFSE_PROVIDER_CONFIG_SAFE_SELECT } from '@/integrations/supabase/selects';
@@ -5,9 +6,10 @@ import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/su
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { TenantEmitter } from './useEmitters';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { hubFiscal, type HubResponse } from '@/lib/fiscal/hubFiscalClient';
 import { buildNFSeEmitPayload, type BuildNFSeInput } from '@/lib/fiscal/nfseBuilder';
+import { requireHubEnvironment, selectScopedHubCredential, type HubEnvironment } from '../../supabase/functions/_shared/fiscal-environment';
 
 export interface NFSeItem {
   description?: string;
@@ -221,16 +223,7 @@ export function useCreateNFSe() {
         .select()
         .single();
       if (error) throw error;
-      // Vincula as NFs escolhidas para gerar a NFS-e — a mesma regra do CT-e:
-      // uma NF de entrada só pode virar UM documento de saída.
-      const fdIds = input.fiscal_document_ids ?? undefined;
-      if (fdIds && fdIds.length) {
-        await supabase
-          .from('fiscal_documents')
-          .update({ nfse_emitted_at: new Date().toISOString(), nfse_emitted_document_id: data.id })
-          .in('id', fdIds)
-          .eq('tenant_id', currentTenant.id);
-      }
+      // Drafts do not consume fiscal sources; the server reserves them at dispatch.
       await supabase.from('nfse_events').insert({
         tenant_id: currentTenant.id,
         nfse_id: data.id,
@@ -252,8 +245,6 @@ export function useUpdateNFSe() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<NFSeDoc> }) => {
-      // Se a atualização mudou o conjunto de NFs vinculadas, sincroniza flags nas NFs.
-      const fdIds = patch.fiscal_document_ids ?? undefined;
       const { data, error } = await supabase
         .from('nfse_documents')
         .update({ ...patch, items: patch.items as Json | undefined } as NFSeUpdate)
@@ -261,20 +252,6 @@ export function useUpdateNFSe() {
         .select()
         .single();
       if (error) throw error;
-      if (fdIds) {
-        // Libera NFs previamente vinculadas a esta NFS-e que não estão mais na lista
-        await supabase
-          .from('fiscal_documents')
-          .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
-          .eq('nfse_emitted_document_id', id)
-          .not('id', 'in', `(${fdIds.length ? fdIds.map((x) => `"${x}"`).join(',') : '""'})`);
-        if (fdIds.length) {
-          await supabase
-            .from('fiscal_documents')
-            .update({ nfse_emitted_at: new Date().toISOString(), nfse_emitted_document_id: id })
-            .in('id', fdIds);
-        }
-      }
       return normalizeNFSeDocument(data);
     },
     onSuccess: () => {
@@ -285,7 +262,8 @@ export function useUpdateNFSe() {
   });
 }
 
-export function useIssueNFSe() {
+export function useIssueNFSe(selectedEnvironment: HubEnvironment) {
+  const toast = useSonnerToast();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
@@ -320,38 +298,25 @@ export function useIssueNFSe() {
       }
 
       // 2. Se há emitente com credencial Hub Fiscal, roteia pelo proxy.
-      let hasHubCred = false;
-      let environment: 'sandbox' | 'production' = 'production';
+      const environment = requireHubEnvironment(selectedEnvironment);
       if (emitter) {
-        const { data: creds } = await supabase
+        const { data: creds, error: credentialsError } = await supabase
           .from('hub_fiscal_credentials')
           .select('id, doc_scope, environment')
           .eq('emitter_id', emitter.id)
+          .eq('tenant_id', doc.tenant_id)
           .eq('enabled', true)
           .in('doc_scope', ['nfse', 'all']);
-        const credential =
-          (creds || []).find((item) => item.doc_scope === 'nfse') ||
-          (creds || []).find((item) => item.doc_scope === 'all');
-        hasHubCred = Boolean(credential);
-        environment = credential?.environment === 'sandbox' ? 'sandbox' : 'production';
+        if (credentialsError) throw credentialsError;
+        const credential = selectScopedHubCredential(creds || [], 'nfse', environment);
+        if (!credential) throw new Error(`Emitente sem credencial NFS-e em ${environment}.`);
       }
 
-      if (hasHubCred && emitter) {
-        // Reenvio: o Hub/PlugNotas deduplica pelo idIntegracao. Contamos as
-        // tentativas anteriores para gerar um id novo a cada reenvio, senão a
-        // requisição é descartada silenciosamente e nada chega ao provedor.
-        // Use total emissions count for NFSe/CTe documents to guarantee a fresh idIntegracao
-        // even if some attempts failed before registering in hub_fiscal_emissions (due to 503).
-        const { count: priorAttempts } = await supabase
-          .from('hub_fiscal_emissions')
-          .select('id', { count: 'exact', head: true })
-          .or(`nfse_document_id.eq.${doc.id},cte_document_id.eq.${doc.id},fiscal_document_id.eq.${doc.id}`);
-
+      if (emitter) {
         const built = buildNFSeEmitPayload({
           doc: normalizeNFSeDocument(doc) as unknown as BuildNFSeInput['doc'],
           emitter,
           environment,
-          attempt: (priorAttempts || 0),
         });
         let res: Awaited<ReturnType<typeof hubFiscal.emit>>;
         try {
@@ -368,22 +333,10 @@ export function useIssueNFSe() {
           });
         } catch (error: unknown) {
           const message = errorMessage(error, 'Falha ao enviar ao Hub Fiscal');
-          await supabase.from('nfse_documents').update({
-            status: 'error',
-            provider: 'hub_fiscal',
-            rejection_messages: { message, retryable: /BOOT_ERROR|503|indisponível/i.test(message) },
-          }).eq('id', doc.id);
-          await supabase.from('nfse_events').insert({
-            tenant_id: doc.tenant_id,
-            nfse_id: doc.id,
-            event_type: 'error',
-            message: `Falha de comunicação com o Hub Fiscal: ${message}`,
-            payload: { retryable: /BOOT_ERROR|503|indisponível/i.test(message) },
-          });
-          throw error;
+          // The server retains uncertain outcomes. Do not relabel them as rejected.
+          throw new Error(message);
         }
         const hubDoc = res.hub?.document || {};
-        const emission = res.emission;
         // Normaliza status devolvido pelo Hub para o vocabulário local.
         const rawStatus = String(hubDoc.status || hubDoc.plugnotasStatus || '').toLowerCase();
         const isAuthorized = ['authorized', 'autorizado', 'concluido', 'issued'].includes(rawStatus);
@@ -399,32 +352,7 @@ export function useIssueNFSe() {
             : isRejected
               ? 'rejected'
               : 'submitted'; // Força saída de 'draft' se o Hub aceitou a nota
-        await supabase.from('nfse_documents').update({
-          status: localStatus,
-          provider: 'hub_fiscal',
-          protocol_number: hubDoc.authorizationProtocol || hubDoc.plugnotasProtocol || null,
-          nfse_number: hubDoc.number || null,
-          verification_code: hubDoc.accessKey || null,
-          pdf_url: hubDoc.pdfUrl || null,
-          xml_url: hubDoc.xmlUrl || null,
-          authorization_date: isAuthorized ? new Date().toISOString() : null,
-          rejection_messages: isRejected
-            ? { message: hubErrorMessage || 'Rejeitada' }
-            : null,
-        }).eq('id', doc.id);
-        await supabase.from('nfse_events').insert({
-          tenant_id: doc.tenant_id,
-          nfse_id: doc.id,
-          event_type: !res.success ? 'rejected' : isAuthorized ? 'issued' : 'submitted',
-          message: !res.success
-            ? `Falha na validação do JSON de NFSe: ${hubErrorMessage || 'erro'}`
-            : isAuthorized
-              ? `Autorizada pelo Hub Fiscal — nº ${hubDoc.number || '(pendente)'}`
-              : isRejected
-                ? `Rejeitada pelo Hub Fiscal: ${hubErrorMessage || 'sem detalhe'}`
-                : `Enviado ao Hub Fiscal (emitente ${emitter.cnpj}) — ${rawStatus || 'processing'}`,
-          payload: { hub: res.hub as unknown as Json, emission_id: emission?.id ?? null },
-        });
+        // The proxy commits the fiscal status, references and document atomically.
         if (!res.success || isRejected) {
           throw new Error(hubErrorMessage || 'Falha ao enviar ao Hub Fiscal');
         }
@@ -455,121 +383,44 @@ export function useIssueNFSe() {
 }
 
 export function useCancelNFSe() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      // Se já foi emitido pelo Hub Fiscal, cancela pelo proxy (per-emitente).
-      const { data: doc } = await supabase
-        .from('nfse_documents')
-        .select('id, tenant_id, emitter_id, provider, protocol_number, status')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (doc?.provider === 'hub_fiscal' && doc?.emitter_id) {
-        // Recupera hub_document_id da emissão mais recente.
-        const { data: em } = await supabase
-          .from('hub_fiscal_emissions')
-          .select('id, hub_document_id')
-          .eq('nfse_document_id', id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (em?.hub_document_id) {
-          const justif = (reason || '').padEnd(15, ' ');
-          const res = await hubFiscal.cancelNFSe(em.hub_document_id, justif, em.id);
-          if (!res.success) {
-            const hubMsg = res.hub?.error?.message || res.hub?.document?.message;
-            throw new Error(hubMsg || 'Falha ao cancelar no Hub Fiscal');
-          }
-          await supabase.from('nfse_documents').update({
-            status: 'transmitting', // Muda para transmitting enquanto espera confirmação do cancelamento no Hub
-            cancellation_reason: reason ?? null,
-          }).eq('id', id);
-          
-          await supabase.from('nfse_events').insert({
-            tenant_id: doc.tenant_id, nfse_id: id,
-            event_type: 'cancellation_requested',
-            message: `Solicitado cancelamento no Hub Fiscal — Aguardando confirmação. Motivo: ${reason || ''}`,
-          });
-          
-          return { status: 'transmitting', provider: 'hub_fiscal' };
-        }
-      }
-
-      // Sem emissão no Hub (rascunho, rejeitada, erro): cancela localmente e libera as NFs.
-      if (!doc || doc.status !== 'issued') {
-        await supabase.from('nfse_documents').update({
-          status: 'cancelled', cancelled: true,
-          cancellation_date: new Date().toISOString(),
-          cancellation_reason: reason ?? null,
-        }).eq('id', id);
-        await supabase
-          .from('fiscal_documents')
-          .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
-          .eq('nfse_emitted_document_id', id);
-        if (doc?.tenant_id) {
-          await supabase.from('nfse_events').insert({
-            tenant_id: doc.tenant_id, nfse_id: id,
-            event_type: 'cancelled',
-            message: `Cancelada localmente — ${reason || ''}`,
-          });
-        }
-        return { status: 'cancelled', provider: 'local' };
-      }
-
-      const { data, error } = await supabase.functions.invoke('emit-nfse', {
-        body: { action: 'cancel', nfse_id: id, reason },
-      });
-      if (error) throw error;
-      // Fallback legado: também libera NFs vinculadas
-      await supabase
-        .from('fiscal_documents')
-        .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
-        .eq('nfse_emitted_document_id', id);
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['nfse'] });
-      qc.invalidateQueries({ queryKey: ['billing_documents'] });
-      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      toast.success('Cancelamento registrado');
-    },
-    onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao cancelar NFS-e')),
-  });
+  const toast=useSonnerToast();const qc=useQueryClient();const {currentTenant}=useTenant();
+  return useMutation({mutationFn:async({id,reason}:{id:string;reason:string})=>{
+    if(!currentTenant)throw new Error('Tenant não selecionado');
+    const justification=reason.trim();if(justification.length<15)throw new Error('Justificativa deve ter pelo menos 15 caracteres.');
+    const found=await supabase.from('nfse_documents').select('id,tenant_id,provider,status').eq('id',id).eq('tenant_id',currentTenant.id).single();
+    if(found.error)throw found.error;
+    const latest=await supabase.from('hub_fiscal_emissions').select('id,hub_document_id').eq('nfse_document_id',id).eq('tenant_id',currentTenant.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    if(latest.error)throw latest.error;
+    if(latest.data){
+      if(!latest.data.hub_document_id)throw new Error('Resultado de emissão incerto. Concilie a operação antes de cancelar; as origens permanecem reservadas.');
+      const result=await hubFiscal.cancelNFSe(latest.data.hub_document_id,justification,latest.data.id);
+      return {status:result.hub?.document?.status==='cancelled'?'cancelled':'pending'};
+    }
+    if(found.data.status!=='draft')throw new Error('Documento sem referência verificável no provedor. Concilie antes de cancelar.');
+    const saved=await supabase.from('nfse_documents').update({status:'cancelled',cancelled:true,cancellation_date:new Date().toISOString(),cancellation_reason:justification}).eq('id',id).eq('tenant_id',currentTenant.id).select('id').single();
+    if(saved.error)throw saved.error;
+    const released=await supabase.from('fiscal_documents').update({nfse_emitted_at:null,nfse_emitted_document_id:null}).eq('tenant_id',currentTenant.id).eq('nfse_emitted_document_id',id);
+    if(released.error)throw new Error('Rascunho cancelado; falha ao liberar as origens. Atualize e concilie.');
+    return {status:'cancelled'};
+  },onSuccess:(data)=>{
+    for(const key of ['nfse','billing_documents','fiscal_documents','eligible_nfse'])qc.invalidateQueries({queryKey:[key]});
+    if(data.status==='cancelled')toast.success('Cancelamento confirmado');else toast.info('Cancelamento solicitado; aguardando confirmação do provedor.');
+  },onError:(error:unknown)=>toast.error(errorMessage(error,'Falha ao cancelar NFS-e'))});
 }
 
-/** Exclui definitivamente uma NFS-e que não foi autorizada, liberando as NFs vinculadas. */
 export function useDeleteNFSe() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { data: doc } = await supabase
-        .from('nfse_documents')
-        .select('id, status')
-        .eq('id', id)
-        .maybeSingle();
-      if (doc && ['issued', 'authorized'].includes(doc.status)) {
-        throw new Error('NFS-e autorizada não pode ser excluída — cancele primeiro');
-      }
-      // Libera NFs vinculadas antes de remover o documento
-      await supabase
-        .from('fiscal_documents')
-        .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
-        .eq('nfse_emitted_document_id', id);
-      // nfse_events is removed by the FK ON DELETE CASCADE. Avoid a redundant
-      // client-side DELETE that has no RLS policy and would always be denied.
-      const { error } = await supabase.from('nfse_documents').delete().eq('id', id);
-      if (error) throw error;
-      return { id };
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['nfse'] });
-      qc.invalidateQueries({ queryKey: ['billing_documents'] });
-      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      toast.success('NFS-e excluída — NFs liberadas para novo faturamento');
-    },
-    onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao excluir NFS-e')),
-  });
+  const toast=useSonnerToast();const {currentTenant}=useTenant();const qc=useQueryClient();
+  return useMutation({mutationFn:async(id:string)=>{
+    if(!currentTenant)throw new Error('Tenant não selecionado');
+    const {data:doc,error:readError}=await supabase.from('nfse_documents').select('id,status').eq('tenant_id',currentTenant.id).eq('id',id).single();
+    if(readError)throw readError;
+    if(!['draft','rejected'].includes(doc.status))throw new Error('Somente rascunhos ou documentos rejeitados podem ser excluídos. Preserve o histórico fiscal.');
+    // The database guard refuses uncertain/dispatched documents. Never release sources before it succeeds.
+    const {error}=await supabase.from('nfse_documents').delete().eq('tenant_id',currentTenant.id).eq('id',id);
+    if(error)throw error;
+    return {id};
+  },onSuccess:()=>{for(const key of ['nfse','billing_documents','fiscal_documents'])qc.invalidateQueries({queryKey:[key]});toast.success('NFS-e excluída');},
+  onError:(error:unknown)=>toast.error(errorMessage(error,'Falha ao excluir NFS-e'))});
 }
 
 /**
@@ -579,26 +430,25 @@ export function useDeleteNFSe() {
  * e no histórico de `hub_fiscal_emissions` para conferência posterior.
  */
 export function useResendNFSe() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('nfse_documents')
-        .update({
-          status: 'submitted',
-          rejection_messages: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['nfse'] });
-    },
-  });
+  const toast=useSonnerToast();const {currentTenant}=useTenant();const qc=useQueryClient();
+  return useMutation({mutationFn:async(id:string)=>{
+    if(!currentTenant)throw new Error('Tenant não selecionado');
+    const {data:emission,error}=await supabase.from('hub_fiscal_emissions')
+      .select('emitter_id,environment,request_payload').eq('tenant_id',currentTenant.id)
+      .eq('nfse_document_id',id).eq('doc_type','nfse').order('created_at',{ascending:false}).limit(1).maybeSingle();
+    if(error)throw error;
+    if(!emission?.emitter_id||!emission.request_payload)throw new Error('Sem operação fiscal registrada. Emita pela prévia após conferir os dados.');
+    const body=z.object({emitterCnpj:z.string(),environment:z.enum(['sandbox','homologation','production']),payload:z.record(z.unknown())}).passthrough().parse(emission.request_payload);
+    requireHubEnvironment(body.environment,emission.environment);
+    const result=await hubFiscal.emit({type:'nfse',emitterId:emission.emitter_id,nfseDocumentId:id,body});
+    if(['rejected','cancelled'].includes(String(result.hub?.document?.status)))throw new Error(result.hub?.document?.message||'Documento recusado ou cancelado. Confira o retorno na prévia.');
+    return result;
+  },onSuccess:()=>{for(const key of ['nfse','billing_documents','fiscal_documents','eligible_nfse'])qc.invalidateQueries({queryKey:[key]});toast.success('Operação fiscal consultada');},
+  onError:(error:unknown)=>toast.error(errorMessage(error,'Falha ao recuperar NFS-e'))});
 }
 
 export function useSyncNFSeStatus() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({

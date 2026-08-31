@@ -10,7 +10,7 @@ export default function KpiCards({ trips }: { trips: ActiveTripLive[] }) {
   const noSignal = trips.filter((t) => t.state === 'no_signal').length;
 
   const items = [
-    { label: 'Em rota', value: total, tone: 'text-foreground' },
+    { label: 'Viagens ativas', value: total, tone: 'text-foreground' },
     { label: 'Normais', value: normal, tone: 'text-emerald-500' },
     { label: 'Atrasados', value: delayed, tone: 'text-orange-500' },
     { label: 'Fora da rota', value: offRoute, tone: 'text-red-600' },

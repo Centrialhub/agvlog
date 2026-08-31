@@ -4,12 +4,13 @@ import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
-export const RECEIVABLE_STATUSES = ['pending', 'invoiced', 'received', 'cancelled'] as const;
+export const RECEIVABLE_STATUSES = ['pending', 'invoiced', 'partial', 'received', 'cancelled'] as const;
 export type ReceivableStatus = typeof RECEIVABLE_STATUSES[number];
 
 export const RECEIVABLE_STATUS_LABELS: Record<ReceivableStatus, string> = {
   pending: 'Pendente',
   invoiced: 'Faturado',
+  partial: 'Parcialmente recebido',
   received: 'Recebido',
   cancelled: 'Cancelado',
 };
@@ -23,8 +24,9 @@ export type UpdateReceivableInput = TablesUpdate<'receivables'> & { id: string }
 
 export function useReceivables() {
   const { currentTenant } = useTenant();
+  const {user}=useAuth();
   return useQuery({
-    queryKey: ['receivables', currentTenant?.id],
+    queryKey: ['receivables', currentTenant?.id,user?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data, error } = await supabase
@@ -35,7 +37,7 @@ export function useReceivables() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant&&!!user?.id,
   });
 }
 

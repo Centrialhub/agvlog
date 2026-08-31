@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,16 +11,16 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Plus, Clock, MessageSquare, Send } from 'lucide-react';
+import { AlertTriangle, Plus, Clock, MessageSquare } from 'lucide-react';
 
-import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
-import { format } from 'date-fns';
+import { EventConversation } from '@/components/driver/DriverConversation';
 import { OCCURRENCE_TEMPLATES, getTemplateFields, formatOccurrenceReport } from '@/lib/occurrenceTemplate';
 import { EVENT_TYPE_LABELS, OperationalEventType } from '@/hooks/useOperationalEvents';
 import type { Tables } from '@/integrations/supabase/types';
+import { buildDriverOccurrenceRpcArgs } from '@/lib/driver/driverOccurrence';
 
 // Tipos com modelo padronizado (texto pronto para o fornecedor) + tipos genéricos para casos do dia-a-dia.
 const TEMPLATE_TYPES = Object.keys(OCCURRENCE_TEMPLATES) as OperationalEventType[];
@@ -38,6 +39,7 @@ const SEVERITY_OPTIONS = [
 
 export default function DriverIssues() {
   const { currentTenant } = useTenant();
+  const {user}=useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: driver } = useCurrentDriver();
@@ -47,8 +49,8 @@ export default function DriverIssues() {
     event_type: 'missing_goods', severity: 'medium', description: '', details: {},
   });
 
-  const { data: events = [] } = useQuery({
-    queryKey: ['driver_operational_events', driver?.id],
+  const { data: events = [], error: eventsError, isPending: eventsPending, refetch: refetchEvents } = useQuery({
+    queryKey: ['driver_operational_events', driver?.id, currentTenant?.id, user?.id],
     queryFn: async () => {
       if (!currentTenant || !driver) return [];
       const { data, error } = await supabase
@@ -61,7 +63,8 @@ export default function DriverIssues() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentTenant && !!driver,
+    enabled: !!currentTenant && !!driver && !!user,
+    retry: false,
   });
 
   const { data: stops = [] } = useQuery({
@@ -104,14 +107,17 @@ export default function DriverIssues() {
       if (!currentTenant || !driver || !trip) throw new Error('Sem viagem ativa.');
       
       try {
-        const { error, data } = await supabase.rpc('driver_create_operational_occurrence', {
-          _trip_id: trip.id,
-          _event_type: form.event_type,
-          _description: description || '',
-          _severity: form.severity,
-          _stop_id: typeof form.details.stop_id === 'string' ? form.details.stop_id : undefined,
-          _client_id: typeof form.details.client_id === 'string' ? form.details.client_id : undefined,
-        });
+        const { error, data } = await supabase.rpc(
+          'driver_create_operational_occurrence',
+          buildDriverOccurrenceRpcArgs({
+            tripId: trip.id,
+            eventType: form.event_type,
+            description: description || '',
+            severity: form.severity,
+            stopId: typeof form.details.stop_id === 'string' ? form.details.stop_id : null,
+            clientId: typeof form.details.client_id === 'string' ? form.details.client_id : null,
+          }),
+        );
         
         if (error) {
           console.error('[DriverIssues] RPC error:', error);
@@ -136,7 +142,7 @@ export default function DriverIssues() {
     }),
   });
 
-  const effectiveEvents = driver ? events : [];
+  const effectiveEvents = driver && !eventsError ? events : [];
   const [chatEvent, setChatEvent] = useState<Tables<'operational_events'> | null>(null);
 
   const severityColors: Record<string, string> = {
@@ -184,7 +190,7 @@ export default function DriverIssues() {
                           ...f.details, 
                           stop_id: v === "none" ? null : v,
                           client_id: stop?.client_id || null,
-                          razao_social: stop?.clients?.company_name || f.details.razao_social
+                          razao_social: v === "none" ? '' : (stop?.clients?.company_name || f.details.razao_social)
                         } 
                       }));
                     }}
@@ -284,7 +290,7 @@ export default function DriverIssues() {
       </div>
 
 
-      {effectiveEvents.length === 0 ? (
+      {eventsError ? <div role="alert">Não foi possível consultar as ocorrências. <Button onClick={()=>void refetchEvents()}>Tentar novamente</Button></div> : eventsPending && driver ? <p role="status">Carregando ocorrências...</p> : effectiveEvents.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
             <AlertTriangle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -332,17 +338,15 @@ export default function DriverIssues() {
       )}
 
       <DriverChatSheet
-        event={chatEvent}
-        driverName={driver?.name || 'Motorista'}
+        event={effectiveEvents.find(event=>event.id===chatEvent?.id)??null}
         onClose={() => setChatEvent(null)}
       />
     </div>
   );
 }
 
-function DriverChatSheet({ event, driverName, onClose }: {
+function DriverChatSheet({ event, onClose }: {
   event: Tables<'operational_events'> | null;
-  driverName: string;
   onClose: () => void;
 }) {
   const isOpen = !!event;
@@ -355,9 +359,9 @@ function DriverChatSheet({ event, driverName, onClose }: {
               <SheetTitle className="text-base flex items-center gap-2">
                 <MessageSquare className="h-4 w-4 text-primary" /> Comunicação com a operação
               </SheetTitle>
-              <p className="text-xs text-muted-foreground">{event.description || event.event_type}</p>
+              <SheetDescription>{event.description || event.event_type}</SheetDescription>
             </SheetHeader>
-            <DriverChat eventId={event.id} driverName={driverName} />
+            <DriverChat eventId={event.id} />
           </>
         )}
       </SheetContent>
@@ -365,61 +369,6 @@ function DriverChatSheet({ event, driverName, onClose }: {
   );
 }
 
-function DriverChat({ eventId, driverName }: { eventId: string; driverName: string }) {
-  const { data: messages = [], isLoading } = useEventMessages(eventId);
-  const send = useSendEventMessage();
-  const [text, setText] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages.length]);
-
-  const handleSend = async () => {
-    const v = text.trim();
-    if (!v) return;
-    setText('');
-    await send.mutateAsync({ eventId, message: v, role: 'driver', name: driverName });
-  };
-
-  return (
-    <>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2 bg-muted/10">
-        {isLoading ? (
-          <div className="text-center text-xs text-muted-foreground py-4">Carregando...</div>
-        ) : messages.length === 0 ? (
-          <div className="text-center text-xs text-muted-foreground py-8">
-            Aguardando mensagens da equipe de operação.
-          </div>
-        ) : (
-          messages.map((m) => {
-            const fromDriver = m.sender_role === 'driver';
-            return (
-              <div key={m.id} className={`flex ${fromDriver ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${fromDriver ? 'bg-primary text-primary-foreground' : 'bg-background border'}`}>
-                  <div className={`text-[10px] mb-0.5 opacity-70`}>
-                    {fromDriver ? 'Você' : `🏢 ${m.sender_name || 'Operação'}`}
-                    {' · '}
-                    {format(new Date(m.created_at), 'dd/MM HH:mm')}
-                  </div>
-                  <div className="whitespace-pre-wrap break-words">{m.message}</div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-      <div className="p-3 border-t bg-background flex gap-2">
-        <Input
-          placeholder="Escreva sua mensagem..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-        />
-        <Button onClick={handleSend} disabled={send.isPending || !text.trim()} size="icon">
-          <Send className="h-4 w-4" />
-        </Button>
-      </div>
-    </>
-  );
+function DriverChat({ eventId }: { eventId: string }) {
+  return <EventConversation eventId={eventId}/>;
 }

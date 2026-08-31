@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
@@ -7,12 +7,12 @@ import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Loader2, FileCheck2, X, ChevronRight } from 'lucide-react';
+import { Loader2, FileCheck2, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 
 const TYPES = [
@@ -23,7 +23,7 @@ const TYPES = [
 ];
 
 export default function PortalDocuments() {
-  const { can } = usePortalClientScope();
+  const { can, selectedClientId } = usePortalClientScope();
   const showFinancial = can('can_view_financial');
   const [search, setSearch] = useState('');
   const [type, setType] = useState('all');
@@ -31,16 +31,17 @@ export default function PortalDocuments() {
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(0);
   const limit = 50;
+  useEffect(() => setPage(0), [selectedClientId]);
   const { data: docs = [], isLoading, error, refetch } = usePortalDocuments({
     document_type: type === 'all' ? undefined : type,
-    search: search.length >= 2 ? search : undefined,
+    search: search.trim() || undefined,
     start: startDate || undefined,
     end: endDate || undefined,
     limit,
     offset: page * limit,
   });
 
-  const anyFilter = !!(search || startDate || endDate || type !== 'all');
+  const activeCount = Number(Boolean(search)) + Number(Boolean(startDate)) + Number(Boolean(endDate)) + Number(type !== 'all');
   const clear = () => { setSearch(''); setStartDate(''); setEndDate(''); setType('all'); setPage(0); };
 
   return (
@@ -51,18 +52,12 @@ export default function PortalDocuments() {
             {TYPES.map(t => <TabsTrigger key={t.id} value={t.id}>{t.label}</TabsTrigger>)}
           </TabsList>
         </Tabs>
-        <div className="relative md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nº, chave, remetente..." value={search} onChange={e => { setPage(0); setSearch(e.target.value); }} className="pl-9 h-9" />
-        </div>
-        <Input type="date" value={startDate} onChange={(e) => { setPage(0); setStartDate(e.target.value); }} className="h-9 w-[140px]" />
-        <Input type="date" value={endDate} onChange={(e) => { setPage(0); setEndDate(e.target.value); }} className="h-9 w-[140px]" />
-        {anyFilter && (
-          <Button variant="ghost" size="sm" onClick={clear} className="h-9">
-            <X className="h-3.5 w-3.5 mr-1" /> Limpar
-          </Button>
-        )}
       </div>
+      <div className="mb-4"><ListFilterBar fields={[
+        { key: 'search', label: 'Buscar documento', type: 'search', value: search, onChange: value => { setPage(0); setSearch(value); }, placeholder: 'Número, chave ou remetente' },
+        { key: 'from', label: 'Emissão de', type: 'date', value: startDate, max: endDate || undefined, onChange: value => { setPage(0); setStartDate(value); } },
+        { key: 'to', label: 'Emissão até', type: 'date', value: endDate, min: startDate || undefined, onChange: value => { setPage(0); setEndDate(value); } },
+      ]} onReset={clear} activeCount={activeCount} resultCount={error ? undefined : docs.length} loading={isLoading} description={`Página ${page + 1}; até 50 documentos por página.`} /></div>
 
       <Card>
         <CardContent className="p-0">
@@ -115,7 +110,7 @@ export default function PortalDocuments() {
                     <TableCell><Badge variant="outline">{d.status || '—'}</Badge></TableCell>
                     <TableCell>{d.has_pod && <FileCheck2 className="h-4 w-4 text-green-600" />}</TableCell>
                     <TableCell>
-                      <Link to={`/portal/shipments/${d.id}`}>
+                      <Link to={`/portal/shipments/${d.id}`} aria-label={`Abrir documento ${d.invoice_number || d.id}`}>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </Link>
                     </TableCell>
@@ -127,12 +122,12 @@ export default function PortalDocuments() {
         </CardContent>
       </Card>
 
-      {docs.length >= limit && (
+      {(page > 0 || docs.length >= limit) && (
         <div className="flex items-center justify-between pt-3">
           <span className="text-xs text-muted-foreground">Página {page + 1}</span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Anterior</Button>
-            <Button size="sm" variant="outline" disabled={docs.length < limit} onClick={() => setPage(p => p + 1)}>Próxima</Button>
+            <Button size="sm" variant="outline" disabled={page === 0 || isLoading} onClick={() => setPage(p => p - 1)}>Anterior</Button>
+            <Button size="sm" variant="outline" disabled={docs.length < limit || isLoading} onClick={() => setPage(p => p + 1)}>Próxima</Button>
           </div>
         </div>
       )}

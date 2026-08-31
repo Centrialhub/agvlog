@@ -20,7 +20,7 @@ import {
 } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { CostCenterManager } from '@/components/cost-centers/CostCenterManager';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { cn } from '@/lib/utils';
 
 const COLORS = [
@@ -40,6 +40,7 @@ interface CostCenterTransaction {
 }
 
 export default function CostCenters() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const { data: costCenters = [] } = useCostCenters();
   const [selectedCostCenter, setSelectedCostCenter] = useState<string>('all');

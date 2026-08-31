@@ -233,3 +233,93 @@ O sistema só deve ser considerado pronto quando:
 - testes E2E passarem em desktop, tablet e mobile;
 - não houver erro sério/crítico de acessibilidade;
 - nenhuma etapa fiscal tiver sido acionada fora de ambiente homologado.
+
+---
+
+## Reteste pós-deploy — 29/08/2026
+
+### Versão e escopo
+
+- Produção validada: `https://agvlogistica.vercel.app`.
+- Commit publicado: `af802aa3577fb0932fdca0281884e3397c91c19e`.
+- Deployment Vercel: `dpl_9oZS7Zdi5L4QKfdGvuY3APF9quFw`, estado `READY`.
+- Perfis usados: motorista e owner/admin fornecidos para QA.
+- Nenhuma emissão fiscal, início de viagem, chegada, checklist, mensagem, despesa, ocorrência ou outra mutação operacional foi executada.
+
+### Resultado executivo atualizado
+
+| Área | Estado após o reteste | Evidência |
+|---|---|---|
+| Deploy e artefato | Pronto | Versão nova publicada; HTML usa `index-OyxDulyS.js`; build local e verificações de artefato aprovados |
+| Cabeçalhos de segurança | Pronto | CSP, HSTS, `nosniff`, `DENY`, Referrer-Policy e Permissions-Policy presentes em produção |
+| Suíte automática | Pronto | 57 arquivos e 468 testes aprovados; 92,61% de linhas; tipos, lint, 39 Edge Functions e build aprovados |
+| Motorista — autenticação e navegação | Pronto para leitura | Login, início, cargas, paradas, entregas, eventos, ocorrências, jornada, despesas, checklist e chat carregaram sem erros de console ou rede |
+| Motorista — responsividade | Pronto com melhoria de acessibilidade | 390×844 sem overflow horizontal em início, paradas e entregas |
+| Motorista — autorização | Pronto | Tentativas de abrir `/loads`, `/clients`, `/billing` e `/team` redirecionaram para `/driver` |
+| Grafo operacional da carga 1012 | Pronto para leitura | Início, viagem, veículo, 1 parada, 0/1 entrega, pedido e 103 notas convergem para a mesma viagem |
+| Grafo operacional da carga 1003 | Precisa correção/explicitação | Aparece “em trânsito” e com “Iniciar Viagem” em Cargas, mas não integra a única viagem ativa nem Paradas/Entregas |
+| Operador — segurança MFA | Pronto | URLs diretas de cargas, faturamento e equipe não contornam o segundo fator |
+| Operador — funções internas | Bloqueado para homologação | Falta o código TOTP atual; não houve bypass, enrollment ou alteração do fator |
+| Cruzamento operador ↔ motorista | Parcial | Cruzamento interno do motorista para a carga 1012 passou; o reflexo nas telas do operador não pôde ser observado por causa do MFA |
+| Cadastro somente por convite | Não pronto | Configuração pública do Auth continua retornando `disable_signup=false`, divergindo do texto da interface |
+| Acessibilidade | Não pronto | Axe encontrou 2 regras violadas: contraste sério (8 nós na tela do motorista) e zoom móvel desabilitado |
+| Observabilidade Vercel | Pronto para este ensaio | Nenhum cluster de erro de runtime nas 2 horas que abrangeram os testes |
+| Fiscal | Fora do ensaio | Nenhuma emissão ou tentativa de emissão foi realizada |
+
+### Correções comprovadas em relação ao ensaio anterior
+
+1. A carga 1012 agora resolve uma viagem ativa e suas paradas; a falha de `useActiveTrip` não reapareceu.
+2. Paradas e Entregas deixaram de mostrar estado vazio incorreto: ambas apresentam a mesma parada pendente e a entrega 0/1.
+3. Todas as consultas Supabase observadas nesses fluxos responderam 200, inclusive `dispatch_trips`, `dispatch_stops`, documentos, eventos, mensagens e motorista atual.
+4. O deployment validado corresponde ao commit aprovado e os cabeçalhos definidos no projeto chegaram ao domínio de produção.
+5. O MFA privilegiado permanece obrigatório mesmo quando o usuário tenta navegar diretamente para uma rota interna.
+
+### Problemas remanescentes e planos de resolução
+
+#### P1 — Carga 1003 em trânsito fora do grafo da viagem ativa
+
+**Sintoma:** o motorista vê duas cargas em trânsito, 1012 e 1003, ambas com ação “Iniciar Viagem”; porém o início informa apenas uma viagem ativa e Paradas/Entregas resolvem somente a carga 1012.
+
+**Plano:**
+
+1. auditar, somente leitura, `loads` → `dispatch_trip_loads` → `dispatch_trips` → `dispatch_stops` para a carga 1003;
+2. determinar se 1003 é uma carga órfã, uma carga adicional da mesma viagem ou um registro cujo status ficou adiantado;
+3. impedir `in_transit` sem vínculo canônico com viagem ativa, motorista e tenant compatíveis;
+4. na lista do motorista, trocar “Iniciar Viagem” por um estado explicativo quando a carga não for iniciável;
+5. critério de aceite: toda carga em trânsito mostrada ao motorista aparece na viagem/paradas correspondentes, ou exibe explicitamente por que está fora da viagem ativa.
+
+#### P1 — Homologação do operador depende do TOTP atual
+
+**Diagnóstico:** não é falha de segurança; o bloqueio está funcionando. É uma limitação de cobertura do ensaio.
+
+**Plano:**
+
+1. disponibilizar o código TOTP atual em uma sessão acompanhada pelo usuário, ou criar uma conta QA com papel `operator` não privilegiado;
+2. repetir a matriz de dashboard, cargas, clientes, rotas, monitoramento, ocorrências, despesas, equipe e faturamento;
+3. cruzar a carga 1012 e a carga 1003 com os dados vistos no motorista;
+4. critério de aceite: operador e motorista apresentam os mesmos IDs, status, paradas, documentos e eventos para a mesma viagem.
+
+#### P1 — Política “somente convite” divergente no Supabase Auth
+
+**Evidência:** a interface afirma que o acesso é criado por convite, mas `/auth/v1/settings` retorna `disable_signup=false`.
+
+**Plano:** desabilitar signup público no projeto hospedado, manter o fluxo administrativo de convite e validar em staging descartável que signup sem convite é rejeitado e convite válido continua funcionando.
+
+#### P1 — Acessibilidade WCAG AA
+
+**Evidência Axe 4.12.1:**
+
+- contraste abaixo de 4,5:1 em textos secundários, botão Sair e navegação inferior do motorista (8 nós; impacto sério);
+- `<meta name="viewport">` contém `maximum-scale=1`, impedindo zoom (impacto moderado).
+
+**Plano:** escurecer o token `text-muted-foreground` ou elevar peso/tamanho nos elementos afetados; remover `maximum-scale=1`; adicionar Axe às rotas autenticadas em desktop e mobile. Critério de aceite: zero violações sérias ou críticas WCAG 2 A/AA.
+
+#### P2 — E2E isolado não executável nesta estação
+
+**Motivo:** não existe `.env.test` com backend local e Docker/Podman não está instalado. A configuração Playwright recusou corretamente qualquer backend remoto sem autorização explícita, evitando testes destrutivos em produção.
+
+**Plano:** provisionar Supabase local ou staging descartável, aplicar as migrations, semear dois tenants e contas QA e então executar `npm run e2e` nos projetos desktop, tablet e mobile. Nunca apontar essa suíte para produção.
+
+### Parecer do reteste
+
+A versão nova está tecnicamente implantada e o aplicativo do motorista está utilizável para a jornada vinculada à carga 1012. O sistema ainda não deve ser declarado integralmente homologado: falta explicar/corrigir a carga 1003 fora do grafo ativo, concluir a validação funcional do operador após MFA, alinhar o signup somente por convite e corrigir as violações de acessibilidade.

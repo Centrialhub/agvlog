@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,8 +12,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { Users, UserPlus, ShieldCheck, Truck, Building2, UserCog, Ban, CheckCircle2, AlertTriangle, Pencil, Link2 } from 'lucide-react';
+import { useListFilters } from '@/hooks/useListFilters';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch } from '@/lib/listFilters';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Enums, Tables, TablesInsert } from '@/integrations/supabase/types';
 
@@ -88,12 +91,13 @@ interface MemberRow {
 }
 
 export default function TeamManagement() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editMember, setEditMember] = useState<MemberRow | null>(null);
-  const [filterRole, setFilterRole] = useState<string>('all');
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', role: 'all', status: 'all' });
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['tenant_members', currentTenant?.id],
@@ -192,7 +196,7 @@ export default function TeamManagement() {
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao atualizar status')),
   });
 
-  const filtered = filterRole === 'all' ? members : members.filter(m => m.role === filterRole);
+  const filtered = members.filter(row => matchesSearch(filters.search, row.profile_name, row.profile_email) && (filters.role === 'all' || row.role === filters.role) && (filters.status === 'all' || row.active === (filters.status === 'active')));
 
   const stats = {
     total: members.length,
@@ -262,21 +266,11 @@ export default function TeamManagement() {
           <TabsTrigger value="portal_access">Acessos do Portal</TabsTrigger>
         </TabsList>
         <TabsContent value="members" className="mt-4 space-y-4">
-          <div className="flex items-center gap-3">
-            <Label className="text-sm text-muted-foreground whitespace-nowrap">Filtrar por papel:</Label>
-            <Select value={filterRole} onValueChange={setFilterRole}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="owner">Proprietário</SelectItem>
-                <SelectItem value="admin">Administrador</SelectItem>
-                <SelectItem value="operator">Operador</SelectItem>
-                 <SelectItem value="driver">Motorista</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <ListFilterBar fields={[
+            { key: 'search', label: 'Buscar membro', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Nome ou e-mail' },
+            { key: 'role', label: 'Papel de acesso', value: filters.role, onChange: value => setFilter('role', value), options: [{ value: 'all', label: 'Todos os papéis' }, ...Object.entries(roleLabels).map(([value, label]) => ({ value, label }))] },
+            { key: 'status', label: 'Situação', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas' }, { value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Inativos' }] },
+          ]} onReset={resetFilters} activeCount={activeCount} resultCount={filtered.length} totalCount={members.length} loading={isLoading} description="Os indicadores acima representam toda a equipe." />
 
           {isLoading ? (
             <Card><CardContent className="py-8 text-center text-muted-foreground">Carregando...</CardContent></Card>
@@ -447,6 +441,8 @@ const PERM_FIELDS: ReadonlyArray<readonly [PortalPermissionKey, string]> = [
 ];
 
 function PortalAccessTab({ tenantId }: { tenantId?: string }) {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PortalAccessRow | null>(null);
@@ -578,6 +574,7 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
 function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: {
   open: boolean; onOpenChange: (v: boolean) => void; editing: PortalAccessRow | null; clients: ClientOption[]; tenantId?: string;
 }) {
+  const toast = useSonnerToast();
   const queryClient = useQueryClient();
   const [userId, setUserId] = useState('');
   const [userQuery, setUserQuery] = useState('');
@@ -622,7 +619,7 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
       } finally { setSearching(false); }
     }, 300);
     return () => clearTimeout(handle);
-  }, [userQuery, open, tenantId]);
+  }, [toast, userQuery, open, tenantId]);
 
   const save = async () => {
     if (!tenantId || !userId || !clientId) { toast.error('Preencha usuário, cliente e tipo'); return; }
@@ -785,6 +782,7 @@ function InviteDialog({
   tenantId?: string;
   drivers: DriverOption[];
 }) {
+  const toast = useSonnerToast();
   const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
@@ -946,6 +944,7 @@ function EditMemberDialog({
   onOpenChange: (open: boolean) => void;
   tenantId?: string;
 }) {
+  const toast = useSonnerToast();
   const queryClient = useQueryClient();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');

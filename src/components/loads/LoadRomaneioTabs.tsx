@@ -1,4 +1,4 @@
-import { promptAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useEffect, useMemo, useState } from 'react';
 import { isBillableFiscalDoc } from '@/lib/fiscal/documentStatus';
 import { useNavigate } from 'react-router-dom';
@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import LoadItemsPanel from './LoadItemsPanel';
 import CTeWorkbench from './CTeWorkbench';
 import NFSePanel from './NFSePanel';
@@ -42,7 +42,7 @@ export type LoadRomaneioDocument = Pick<Tables<'fiscal_documents'>,
   'value' | 'issue_date' | 'freight_value' | 'freight_value_original' |
   'freight_breakdown' | 'freight_overridden' | 'freight_override_reason' |
   'freight_confirmed_at' | 'delivery_meta' | 'client_load_source' | 'load_id' | 'deleted_at'
->;
+> & { is_historical?: boolean; current_delivery_attempt_id?: string | null; operational_metadata?: unknown };
 
 interface Props {
   load: Load;
@@ -85,6 +85,9 @@ const fmtMoney = (n?: number | null) =>
   n == null ? 'R$ 0,00' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
+  const { promptAction } = useScopedAlerts();
+  const toast = useSonnerToast();
+  const currentDocuments = documents.filter(document => !document.is_historical);
   const { currentTenant } = useTenant();
   const { data: vehicles = [] } = useVehicles();
   const updateLoad = useUpdateLoad();
@@ -704,14 +707,14 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
 
         {/* ===================== DOCUMENTOS ===================== */}
         <TabsContent value="docs" className="p-4 m-0 space-y-4">
-          <CTeWorkbench loadId={load.id} loadNumber={load.load_number} destination={load.destination} documents={documents} />
+          <CTeWorkbench loadId={load.id} loadNumber={load.load_number} destination={load.destination} documents={currentDocuments} />
           <NFSePanel
             loadId={load.id}
             loadNumber={load.load_number}
             destination={load.destination}
-            defaultClientName={documents[0]?.recipient ?? null}
-            defaultClientCnpj={documents[0]?.recipient_cnpj ?? null}
-            freightTotal={documents.reduce((sum, document) => sum + Number(document.freight_value || 0), 0)}
+            defaultClientName={currentDocuments[0]?.recipient ?? null}
+            defaultClientCnpj={currentDocuments[0]?.recipient_cnpj ?? null}
+            freightTotal={currentDocuments.reduce((sum, document) => sum + Number(document.freight_value || 0), 0)}
           />
         </TabsContent>
 

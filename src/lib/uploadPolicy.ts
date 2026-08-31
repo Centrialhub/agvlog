@@ -51,7 +51,7 @@ function ascii(bytes: Uint8Array, start: number, end: number) {
   return String.fromCharCode(...bytes.slice(start, end));
 }
 
-async function readBlobBytes(blob: Blob): Promise<Uint8Array> {
+export async function readBlobBytes(blob: Blob): Promise<Uint8Array> {
   if (typeof blob.arrayBuffer === 'function') {
     return new Uint8Array(await blob.arrayBuffer());
   }

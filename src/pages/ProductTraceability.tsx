@@ -2,13 +2,13 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, FileSearch, Download, Package } from 'lucide-react';
+import { Search, Download, Package } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Link } from 'react-router-dom';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -45,18 +45,15 @@ interface TraceRow {
   } | null;
 }
 
+const DEFAULT_FILTERS = { product: '', supplier: '', invoiceNumber: '', driverId: 'all', plate: '', loadStatus: 'all', issueFrom: '', issueTo: '' };
+
 export default function ProductTraceability() {
   const { currentTenant } = useTenant();
-  const [filters, setFilters] = useState({
-    product: '',
-    supplier: '',
-    invoiceNumber: '',
-    driverId: 'all',
-    plate: '',
-    hasLoad: 'all', // 'all' | 'yes' | 'no'
-    issueFrom: '',
-    issueTo: '',
-  });
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS);
+  const activeCount = Object.keys(DEFAULT_FILTERS).filter(key => filters[key as keyof typeof filters] !== DEFAULT_FILTERS[key as keyof typeof DEFAULT_FILTERS]).length;
+  const pendingFilters = JSON.stringify(filters) !== JSON.stringify(appliedFilters);
+  const invalidPeriod = Boolean(filters.issueFrom && filters.issueTo && filters.issueFrom > filters.issueTo);
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers-trace', currentTenant?.id],
@@ -65,59 +62,36 @@ export default function ProductTraceability() {
       const { data } = await supabase.from('drivers')
         .select('id, name')
         .eq('tenant_id', currentTenant.id)
-        .eq('active', true)
         .order('name');
       return data || [];
     },
     enabled: !!currentTenant,
   });
 
-  const { data: rows = [], isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['product-traceability', currentTenant?.id, filters],
+  const { data: rows = [], isLoading, refetch, isFetching, isError } = useQuery({
+    queryKey: ['product-traceability', currentTenant?.id, appliedFilters],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = (supabase as any)
-        .from('load_items')
-        .select(`
-          id, item_description, quantity, pallet_count, weight_kg, volume_m3, status,
-          fiscal_document_id, load_id,
-          fiscal_documents(invoice_number, issue_date, remitter, remitter_cnpj, recipient, recipient_city, recipient_state, value, pickup_order_id),
-          loads!inner(load_number, status, destination, driver_id, vehicle_id,
-            drivers(id, name),
-            vehicles(plate, nickname)
-          )
-        `)
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false })
-        .limit(1000);
-
-      if (filters.product) q = q.ilike('item_description', `%${filters.product}%`);
-      if (filters.driverId !== 'all') q = q.eq('loads.driver_id', filters.driverId);
-
+      const f = appliedFilters;
+      const filterDocument = Boolean(f.supplier.trim() || f.invoiceNumber.trim() || f.issueFrom || f.issueTo);
+      let q = supabase.from('load_items').select(`
+        id, item_description, quantity, pallet_count, weight_kg, volume_m3, status,
+        fiscal_document_id, load_id,
+        fiscal_documents${filterDocument ? '!inner' : ''}(invoice_number, issue_date, remitter, remitter_cnpj, recipient, recipient_city, recipient_state, value, pickup_order_id),
+        loads!inner(load_number, status, destination, driver_id, vehicle_id,
+          drivers(id, name), vehicles${f.plate.trim() ? '!inner' : ''}(plate, nickname))
+      `).eq('tenant_id', currentTenant.id).order('created_at', { ascending: false }).limit(1000);
+      if (f.product.trim()) q = q.ilike('item_description', `%${f.product.trim()}%`);
+      if (f.driverId !== 'all') q = q.eq('loads.driver_id', f.driverId);
+      if (f.loadStatus !== 'all') q = q.eq('loads.status', f.loadStatus);
+      if (f.supplier.trim()) q = q.ilike('fiscal_documents.remitter', `%${f.supplier.trim()}%`);
+      if (f.invoiceNumber.trim()) q = q.ilike('fiscal_documents.invoice_number', `%${f.invoiceNumber.trim()}%`);
+      if (f.plate.trim()) q = q.ilike('loads.vehicles.plate', `%${f.plate.replace(/[^a-z0-9]/gi, '').split('').join('%')}%`);
+      if (f.issueFrom) q = q.gte('fiscal_documents.issue_date', f.issueFrom);
+      if (f.issueTo) q = q.lte('fiscal_documents.issue_date', f.issueTo);
       const { data, error } = await q;
       if (error) throw error;
-
-      let result = (data || []) as TraceRow[];
-
-      // Client-side filters on joined fields
-      if (filters.supplier) {
-        const s = filters.supplier.toLowerCase();
-        result = result.filter(r => (r.fiscal_documents?.remitter || '').toLowerCase().includes(s));
-      }
-      if (filters.invoiceNumber) {
-        const s = filters.invoiceNumber.toLowerCase();
-        result = result.filter(r => (r.fiscal_documents?.invoice_number || '').toLowerCase().includes(s));
-      }
-      if (filters.plate) {
-        const s = filters.plate.toLowerCase().replace(/[^a-z0-9]/g, '');
-        result = result.filter(r => (r.loads?.vehicles?.plate || '').toLowerCase().replace(/[^a-z0-9]/g, '').includes(s));
-      }
-      if (filters.hasLoad === 'yes') result = result.filter(r => !!r.load_id);
-      if (filters.hasLoad === 'no') result = result.filter(r => !r.load_id);
-      if (filters.issueFrom) result = result.filter(r => (r.fiscal_documents?.issue_date || '') >= filters.issueFrom);
-      if (filters.issueTo) result = result.filter(r => (r.fiscal_documents?.issue_date || '') <= filters.issueTo);
-
-      return result;
+      return (data || []) as unknown as TraceRow[];
     },
     enabled: !!currentTenant,
   });
@@ -126,12 +100,12 @@ export default function ProductTraceability() {
     rows: rows.length,
     quantity: rows.reduce((a, r) => a + (Number(r.quantity) || 0), 0),
     weight: rows.reduce((a, r) => a + (Number(r.weight_kg) || 0), 0),
-    value: rows.reduce((a, r) => a + (Number(r.fiscal_documents?.value) || 0), 0),
+    value: [...new Map(rows.filter(r => r.fiscal_document_id).map(r => [r.fiscal_document_id, Number(r.fiscal_documents?.value) || 0])).values()].reduce((sum, value) => sum + value, 0),
     pallets: rows.reduce((a, r) => a + (Number(r.pallet_count) || 0), 0),
   }), [rows]);
   const pagination = usePagination(rows, {
     pageSize: 50,
-    resetKey: JSON.stringify(filters),
+    resetKey: JSON.stringify(appliedFilters),
   });
 
   const exportCsv = () => {
@@ -163,20 +137,19 @@ export default function ProductTraceability() {
     URL.revokeObjectURL(url);
   };
 
-  const clearFilters = () => setFilters({
-    product: '', supplier: '', invoiceNumber: '', driverId: 'all', plate: '', hasLoad: 'all', issueFrom: '', issueTo: '',
-  });
+  const clearFilters = () => { setFilters(DEFAULT_FILTERS); setAppliedFilters(DEFAULT_FILTERS); };
 
   return (
     <>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Package className="h-6 w-6 text-primary" /> Rastreabilidade de Produto
             </h1>
             <p className="text-sm text-muted-foreground">
-              Investigue o fluxo de saída de qualquer item: fornecedor, NF, carga, motorista e destino.
+              Consulte itens vinculados a cargas por fornecedor, NF, motorista e destino.{' '}
+              <Link to="/fiscal-documents?load=no_load" className="text-primary underline underline-offset-4">Ver notas sem carga</Link>
             </p>
           </div>
           <div className="flex gap-2">
@@ -186,86 +159,26 @@ export default function ProductTraceability() {
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileSearch className="h-4 w-4" /> Filtros
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="space-y-1.5 col-span-2">
-                <Label className="text-xs">Produto (descrição)</Label>
-                <Input
-                  value={filters.product}
-                  onChange={e => setFilters(f => ({ ...f, product: e.target.value }))}
-                  placeholder="Ex: NESCAU, leite, parafuso..."
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Fornecedor</Label>
-                <Input
-                  value={filters.supplier}
-                  onChange={e => setFilters(f => ({ ...f, supplier: e.target.value }))}
-                  placeholder="Nome do remetente"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Nº Nota Fiscal</Label>
-                <Input
-                  value={filters.invoiceNumber}
-                  onChange={e => setFilters(f => ({ ...f, invoiceNumber: e.target.value }))}
-                  placeholder="Número da NF"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Motorista</Label>
-                <Select value={filters.driverId} onValueChange={(v) => setFilters(f => ({ ...f, driverId: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {drivers.map((d: any) => (
-                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Placa do Veículo</Label>
-                <Input
-                  value={filters.plate}
-                  onChange={e => setFilters(f => ({ ...f, plate: e.target.value }))}
-                  placeholder="Ex: ABC1D23"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Possui Carga (Romaneio)</Label>
-                <Select value={filters.hasLoad} onValueChange={(v) => setFilters(f => ({ ...f, hasLoad: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="yes">Sim</SelectItem>
-                    <SelectItem value="no">Não</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Emissão NF — De</Label>
-                <Input type="date" value={filters.issueFrom} onChange={e => setFilters(f => ({ ...f, issueFrom: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Emissão NF — Até</Label>
-                <Input type="date" value={filters.issueTo} onChange={e => setFilters(f => ({ ...f, issueTo: e.target.value }))} />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button onClick={() => refetch()} disabled={isFetching}>
-                <Search className="h-4 w-4 mr-2" /> {isFetching ? 'Buscando...' : 'Aplicar filtros'}
-              </Button>
-              <Button variant="outline" onClick={clearFilters}>Limpar</Button>
-            </div>
-          </CardContent>
-        </Card>
+        <ListFilterBar
+          fields={[
+            { key: 'product', label: 'Produto', type: 'search', value: filters.product, onChange: value => setFilters(f => ({ ...f, product: value })), placeholder: 'Descrição do produto' },
+            { key: 'supplier', label: 'Fornecedor', value: filters.supplier, onChange: value => setFilters(f => ({ ...f, supplier: value })) },
+            { key: 'invoiceNumber', label: 'Número da NF', value: filters.invoiceNumber, onChange: value => setFilters(f => ({ ...f, invoiceNumber: value })) },
+            { key: 'driverId', label: 'Motorista', value: filters.driverId, onChange: value => setFilters(f => ({ ...f, driverId: value })), options: [{ value: 'all', label: 'Todos os motoristas' }, ...drivers.map(driver => ({ value: driver.id, label: driver.name }))] },
+            { key: 'plate', label: 'Placa', value: filters.plate, onChange: value => setFilters(f => ({ ...f, plate: value })) },
+            { key: 'loadStatus', label: 'Situação da carga', value: filters.loadStatus, onChange: value => setFilters(f => ({ ...f, loadStatus: value })), options: [{ value: 'all', label: 'Todas as situações' }, ...Object.entries(LOAD_STATUS_LABELS).map(([value, label]) => ({ value, label }))] },
+            { key: 'issueFrom', label: 'Emissão da NF de', type: 'date', value: filters.issueFrom, max: filters.issueTo || undefined, onChange: value => setFilters(f => ({ ...f, issueFrom: value })) },
+            { key: 'issueTo', label: 'Emissão da NF até', type: 'date', value: filters.issueTo, min: filters.issueFrom || undefined, onChange: value => setFilters(f => ({ ...f, issueTo: value })) },
+          ]}
+          onReset={clearFilters} activeCount={activeCount || (pendingFilters ? 1 : 0)} resultCount={isError ? undefined : rows.length} loading={isFetching}
+          description="Os indicadores e a exportação acompanham os filtros aplicados."
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={() => pendingFilters ? setAppliedFilters({ ...filters }) : refetch()} disabled={isFetching || invalidPeriod}><Search className="mr-2 h-4 w-4" />Aplicar filtros</Button>
+            {pendingFilters && <span className="text-xs text-muted-foreground">Há alterações ainda não aplicadas.</span>}
+            {invalidPeriod && <span role="alert" className="text-xs text-destructive">A data final deve ser igual ou posterior à inicial.</span>}
+          </div>
+        </ListFilterBar>
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
@@ -273,7 +186,7 @@ export default function ProductTraceability() {
             { label: 'Qtde total', value: totals.quantity.toLocaleString('pt-BR') },
             { label: 'Peso (kg)', value: totals.weight.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) },
             { label: 'Paletes', value: totals.pallets },
-            { label: 'Valor NF (R$)', value: totals.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+            { label: 'Valor das NFs únicas (R$)', value: totals.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
           ].map(s => (
             <Card key={s.label}>
               <CardContent className="py-4">
@@ -286,7 +199,7 @@ export default function ProductTraceability() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Resultados (limite 1000)</CardTitle>
+            <CardTitle className="text-base">Resultados ({rows.length} itens; limite de 1.000 por consulta)</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <Table>
@@ -308,7 +221,9 @@ export default function ProductTraceability() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {isError ? (
+                  <TableRow><TableCell colSpan={13} className="py-8 text-center">Não foi possível carregar os itens. <Button variant="link" onClick={() => refetch()}>Tentar novamente</Button></TableCell></TableRow>
+                ) : isLoading ? (
                   <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Nenhum item encontrado para os filtros aplicados.</TableCell></TableRow>
@@ -332,7 +247,7 @@ export default function ProductTraceability() {
                     </TableCell>
                     <TableCell>
                       {r.loads?.load_number ? (
-                        <Badge variant="secondary" className="font-mono">{r.loads.load_number}</Badge>
+                        <Link to={`/loads/${r.load_id}`} aria-label={`Abrir carga ${r.loads.load_number}`} className="underline underline-offset-4"><Badge variant="secondary" className="font-mono">{r.loads.load_number}</Badge></Link>
                       ) : <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell>{r.loads?.drivers?.name || <span className="text-muted-foreground">—</span>}</TableCell>

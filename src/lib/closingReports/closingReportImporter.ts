@@ -73,7 +73,9 @@ export function detectModel(sheet: XLSX.WorkSheet): LegacyModel {
 }
 
 export function parseLegacyWorkbook(buffer: ArrayBuffer): LegacyImport {
-  const wb = XLSX.read(buffer, { type: 'array' });
+  // A typed byte view is also reliable when File.arrayBuffer() comes from
+  // another browser realm; SheetJS must not interpret the ZIP bytes as text.
+  const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const model = detectModel(sheet);
   const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });

@@ -1,10 +1,13 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
+import { useListFilters } from '@/hooks/useListFilters';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch } from '@/lib/listFilters';
+import { calendarDay } from '@/lib/listFilters';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FileText, Route, Clock, AlertTriangle, Gauge, TrendingUp, MapPin, Download } from 'lucide-react';
@@ -12,20 +15,17 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 
 export default function Reports() {
   const { currentTenant } = useTenant();
-  const [from, setFrom] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 10);
-  });
-  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const defaults = useMemo(() => { const date = new Date(); date.setDate(date.getDate() - 7); return { from: calendarDay(date.toISOString()), to: calendarDay(new Date().toISOString()), search: '' }; }, []);
+  const { filters: { from, to, search }, setFilter, resetFilters, activeCount } = useListFilters(defaults);
 
-  const { data: metrics = [], isLoading } = useQuery({
+  const { data: allMetrics = [], isLoading } = useQuery({
     queryKey: ['reports_metrics', currentTenant?.id, from, to],
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data, error } = await supabase.from('metrics_daily')
         .select('*, vehicles(plate, nickname)')
         .eq('tenant_id', currentTenant.id)
-        .gte('day', from).lte('day', to)
+        .gte('day', from || '1900-01-01').lte('day', to || '9999-12-31')
         .order('day', { ascending: false });
       if (error) throw error;
       return data;
@@ -33,10 +33,12 @@ export default function Reports() {
     enabled: !!currentTenant,
   });
 
+  const metrics = useMemo(() => allMetrics.filter(row => matchesSearch(search, row.vehicles?.plate, row.vehicles?.nickname)), [allMetrics, search]);
+
   // Aggregate by vehicle
   const byVehicle = useMemo(() => {
     const map: Record<string, { plate: string; km: number; moving: number; stopped: number; trips: number; stops: number; overspeed: number; offline: number }> = {};
-    for (const m of metrics as any[]) {
+    for (const m of metrics) {
       const vid = m.vehicle_id;
       if (!map[vid]) map[vid] = { plate: m.vehicles?.plate || vid, km: 0, moving: 0, stopped: 0, trips: 0, stops: 0, overspeed: 0, offline: 0 };
       map[vid].km += m.km_estimated || 0;
@@ -58,7 +60,7 @@ export default function Reports() {
   // Daily evolution chart
   const dailyEvolution = useMemo(() => {
     const byDay: Record<string, { day: string; km: number; trips: number; stops: number }> = {};
-    for (const m of metrics as any[]) {
+    for (const m of metrics) {
       if (!byDay[m.day]) byDay[m.day] = { day: m.day, km: 0, trips: 0, stops: 0 };
       byDay[m.day].km += m.km_estimated || 0;
       byDay[m.day].trips += m.trips_count || 0;
@@ -104,17 +106,13 @@ export default function Reports() {
         <p className="text-sm text-muted-foreground">KPIs e ranking da frota por período</p>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-40" />
-        <span className="text-muted-foreground">até</span>
-        <Input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-40" />
-        <Badge variant="outline" className="text-xs">{metrics.length} registros</Badge>
-        {byVehicle.length > 0 && (
-          <Button variant="outline" size="sm" onClick={exportCSV}>
-            <Download className="h-4 w-4 mr-2" />Exportar CSV
-          </Button>
-        )}
-      </div>
+      <ListFilterBar fields={[
+        { key: 'search', label: 'Buscar veículo', type: 'search', value: search, onChange: value => setFilter('search', value), placeholder: 'Placa ou identificação' },
+        { key: 'from', label: 'Período de', type: 'date', value: from, max: to || undefined, onChange: value => setFilter('from', value) },
+        { key: 'to', label: 'Período até', type: 'date', value: to, min: from || undefined, onChange: value => setFilter('to', value) },
+      ]} onReset={resetFilters} activeCount={activeCount} resultCount={metrics.length} totalCount={allMetrics.length} loading={isLoading} description="Indicadores, gráficos e CSV acompanham os filtros. Limpar restaura os últimos 7 dias.">
+        <Button variant="outline" size="sm" onClick={exportCSV} disabled={byVehicle.length === 0}><Download className="mr-2 h-4 w-4" />Exportar CSV</Button>
+      </ListFilterBar>
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

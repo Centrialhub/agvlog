@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
-import type { BuiltItem, BuiltPreview, Divergence } from './closingReportBuilder';
+import type { BuiltItem, BuiltPreview, Divergence, SummaryLine } from './closingReportBuilder';
+import {closingExportTotals,closingItemTrace,closingTripKey} from './closingExport';
 
 export interface ExcelInput {
   title: string;
@@ -9,6 +10,7 @@ export interface ExcelInput {
   items: BuiltItem[];
   preview?: BuiltPreview;
   divergences?: Divergence[];
+  summaryLines?: SummaryLine[];
 }
 
 type SpreadsheetRow = unknown[];
@@ -38,8 +40,9 @@ function fmtTime(v?: string | null) {
   return '';
 }
 
-export function buildWorkbook({ title, clientName, periodStart, periodEnd, items, divergences }: ExcelInput): XLSX.WorkBook {
+export function buildWorkbook({ title, clientName, periodStart, periodEnd, items, divergences, summaryLines=[] }: ExcelInput): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
+  const totals=closingExportTotals(items,summaryLines);
 
   // Resumo
   const resumoRows: SpreadsheetRow[] = [
@@ -47,28 +50,29 @@ export function buildWorkbook({ title, clientName, periodStart, periodEnd, items
     [`Cliente: ${clientName ?? '—'}`],
     [`Período: ${periodStart} a ${periodEnd}`],
     [],
-    ['Total Notas', items.length],
-    ['Peso total (kg)', items.reduce((s, i) => s + i.weight_kg, 0)],
-    ['Valor NF total', items.reduce((s, i) => s + i.invoice_value, 0)],
-    ['Frete total', items.reduce((s, i) => s + i.freight_value, 0)],
+    ['Notas distintas', totals.notes],
+    ['Peso das tentativas (kg)', totals.weight],
+    ['Valor das notas distintas', totals.value],
+    ['Frete total', totals.freight],
+    ['Tentativas / linhas detalhadas', totals.attempts],
+    ['Conferência', 'Valores da mesma NF podem aparecer em mais de uma tentativa; o total considera cada nota uma única vez.'],
   ];
+  if(summaryLines.length)resumoRows.push([],['Grupo','Notas distintas no grupo','Peso (kg)','Valor NF','Frete'],...summaryLines.map(row=>[row.group_label,row.fiscal_document_count,row.total_weight_kg,row.total_invoice_value,row.total_freight_value]));
   const resumoWs = XLSX.utils.aoa_to_sheet(resumoRows);
   resumoWs['!cols'] = autoWidth(resumoRows);
   XLSX.utils.book_append_sheet(wb, resumoWs, 'Resumo');
 
   // Detalhado
-  const detHeader = ['Origem', 'Remetente', 'Destinatário', 'Destino', 'Emissão', 'Nº Nota', 'CT-e', 'Valor Nota', 'Peso (kg)', 'Frete', 'Data Entrega', 'Observação'];
+  const detHeader = ['Origem', 'Remetente', 'Destinatário', 'Destino', 'Emissão', 'Nº Nota', 'CT-e', 'Valor Nota', 'Peso (kg)', 'Frete', 'Data Entrega', 'Observação','Carga','Tentativa','Resultado auditado','Revisão financeira'];
   const detRows: SpreadsheetRow[] = [detHeader];
   items.forEach(i => detRows.push([
     i.origin_city ?? '', i.remitter_name ?? '', i.recipient_name ?? '', i.destination_city ?? '',
     i.issue_date ?? '', i.invoice_number ?? '', i.cte_number ?? '',
     Number(i.invoice_value), Number(i.weight_kg), Number(i.freight_value),
-    i.delivery_date ?? '', i.observation ?? '',
+    i.delivery_date ?? '', i.observation ?? '',i.load_number??'',closingItemTrace(i).attempt,closingItemTrace(i).outcome,closingItemTrace(i).review,
   ]));
   const totalRow = ['TOTAIS', '', '', '', '', '', '',
-    items.reduce((s, i) => s + i.invoice_value, 0),
-    items.reduce((s, i) => s + i.weight_kg, 0),
-    items.reduce((s, i) => s + i.freight_value, 0), '', ''];
+    totals.value, totals.weight, totals.freight, '', ''];
   detRows.push(totalRow);
   const detWs = XLSX.utils.aoa_to_sheet(detRows);
   detWs['!cols'] = autoWidth(detRows);
@@ -83,7 +87,7 @@ export function buildWorkbook({ title, clientName, periodStart, periodEnd, items
     'NR. DIAS', 'KM INICIAL', 'KM FINAL', 'KM RODADO',
     'QUANTIDADE LITROS', 'PREÇO LITRO', 'VR. TOTAL COMBUSTÍVEL', 'CONSUMO POR LITRO',
   ];
-  const tripKey = (item: BuiltItem) => item.load_id || `nf-${item.fiscal_document_id}`;
+  const tripKey = closingTripKey;
   const tripMap = new Map<string, BuiltItem>();
   const order: string[] = [];
   for (const i of items) {

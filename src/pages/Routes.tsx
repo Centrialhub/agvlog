@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,8 +7,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { Plus, Route, Trash2, Edit } from 'lucide-react';
+import { useListFilters } from '@/hooks/useListFilters';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch } from '@/lib/listFilters';
 import { RouteDialog } from '@/components/routes/RouteDialog';
 import { getWaypointTypeConfig } from '@/lib/routes/waypoints';
 import type { Tables } from '@/integrations/supabase/types';
@@ -16,9 +19,12 @@ import type { Tables } from '@/integrations/supabase/types';
 type RouteTemplateView = Tables<'route_templates'> & { geofences: { name: string } | null };
 
 export default function Routes() {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', corridor: 'all' });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editRoute, setEditRoute] = useState<RouteTemplateView | null>(null);
 
@@ -112,6 +118,8 @@ export default function Routes() {
   const getRouteWaypoints = (routeId: string) =>
     allWaypoints.filter(waypoint => waypoint.route_id === routeId);
 
+  const filteredRoutes = routes.filter(row => matchesSearch(filters.search, row.name, row.geofences?.name, ...getRouteWaypoints(row.id).map(point => point.label)) && (filters.status === 'all' || row.enabled === (filters.status === 'active')) && (filters.corridor === 'all' || Boolean(row.corridor_geofence_id) === (filters.corridor === 'yes')));
+
   const renderWaypointSummary = (routeId: string) => {
     const wps = getRouteWaypoints(routeId);
     if (wps.length === 0) return <span className="text-muted-foreground">—</span>;
@@ -142,7 +150,7 @@ export default function Routes() {
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Rotas</h1>
+          <h1 className="text-2xl font-bold text-foreground">Corredores monitorados</h1>
           <p className="text-sm text-muted-foreground">Rotas com pontos estratégicos e corredores monitorados</p>
         </div>
         {isAdmin && (
@@ -152,13 +160,18 @@ export default function Routes() {
         )}
       </div>
 
+      <ListFilterBar fields={[
+        { key: 'search', label: 'Buscar corredor', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Nome, cerca ou ponto da rota' },
+        { key: 'status', label: 'Situação', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas' }, { value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Inativos' }] },
+        { key: 'corridor', label: 'Cerca vinculada', value: filters.corridor, onChange: value => setFilter('corridor', value), options: [{ value: 'all', label: 'Todos' }, { value: 'yes', label: 'Com cerca' }, { value: 'no', label: 'Sem cerca' }] },
+      ]} onReset={resetFilters} activeCount={activeCount} resultCount={filteredRoutes.length} totalCount={routes.length} loading={isLoading} />
       {isLoading ? (
         <Card><CardContent className="py-8 text-center text-muted-foreground">Carregando...</CardContent></Card>
-      ) : routes.length === 0 ? (
+      ) : filteredRoutes.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center py-12">
           <Route className="h-12 w-12 text-muted-foreground mb-4" />
-          <p className="font-medium text-foreground">Nenhuma rota configurada</p>
-          <p className="text-sm text-muted-foreground mt-1">Crie rotas com origem, destino e pontos estratégicos</p>
+          <p className="font-medium text-foreground">Nenhum corredor encontrado</p>
+          <p className="text-sm text-muted-foreground mt-1">Ajuste os filtros ou cadastre um corredor com seus pontos estratégicos</p>
         </CardContent></Card>
       ) : (
         <Card>
@@ -176,7 +189,7 @@ export default function Routes() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {routes.map((r) => {
+                {filteredRoutes.map((r) => {
                   const stats = getRouteStats(r.id);
                   return (
                     <TableRow key={r.id}>

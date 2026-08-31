@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Fuel, TrendingUp, DollarSign, Gauge } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -27,6 +27,7 @@ interface Props {
 }
 
 export default function FuelingTab({ vehicleId }: Props) {
+  const toast = useSonnerToast();
   const { consumption, avgKmPerLiter, fuelings } = useConsumptionHistory(vehicleId);
   const createMut = useCreateFueling();
   const [dialogOpen, setDialogOpen] = useState(false);

@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { AlertTriangle, XCircle } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useCancelCTe } from '@/hooks/useIssueCTe';
 
 const CONFIRM_WORD = 'CANCELAR';
@@ -45,6 +45,7 @@ export function CancelCteDialog({
   target: CancelCteTarget | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const toast = useSonnerToast();
   const cancelCte = useCancelCTe();
   const [reason, setReason] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);

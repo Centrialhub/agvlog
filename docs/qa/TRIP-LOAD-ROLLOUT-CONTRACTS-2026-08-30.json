@@ -1,0 +1,46 @@
+{
+  "functions": [
+    {
+      "anon": false,
+      "hash": "854c3470a50de5c97a2a6170287ebb3d",
+      "signature": "_tg_mark_outdated_trip_loads()",
+      "comment": null,
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION public._tg_mark_outdated_trip_loads()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE v_trip uuid; v_tid uuid;\nBEGIN\n  v_trip := COALESCE(NEW.dispatch_trip_id, OLD.dispatch_trip_id);\n  SELECT tenant_id INTO v_tid FROM public.dispatch_trips WHERE id = v_trip;\n  IF v_tid IS NOT NULL THEN PERFORM public.mark_driver_settlement_outdated(v_tid, v_trip, 'trip_loads_change'); END IF;\n  RETURN COALESCE(NEW, OLD);\nEND; $function$\n",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "anon": false,
+      "hash": "40a8d39b40f83a1499decd4a877c32c1",
+      "signature": "driver_start_trip(uuid)",
+      "comment": "Starts a trip only for its authenticated linked driver and synchronizes canonical load assignment/status.",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION public.driver_start_trip(_trip_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_trip public.dispatch_trips%ROWTYPE;\n  v_driver_id uuid;\n  v_load_ids uuid[] := ARRAY[]::uuid[];\n  v_previous_status text;\nBEGIN\n  IF auth.uid() IS NULL THEN\n    RAISE EXCEPTION 'Não autenticado';\n  END IF;\n\n  SELECT *\n  INTO v_trip\n  FROM public.dispatch_trips\n  WHERE id = _trip_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN\n    RAISE EXCEPTION 'Viagem não encontrada';\n  END IF;\n\n  v_driver_id := public.current_driver_id(v_trip.tenant_id);\n  IF v_driver_id IS NULL OR v_trip.driver_id IS DISTINCT FROM v_driver_id THEN\n    RAISE EXCEPTION 'Viagem não atribuída ao motorista autenticado';\n  END IF;\n\n  IF v_trip.status IN ('completed', 'cancelled') THEN\n    RAISE EXCEPTION 'Viagem encerrada ou cancelada';\n  END IF;\n\n  SELECT COALESCE(array_agg(load_id ORDER BY load_id), ARRAY[]::uuid[])\n  INTO v_load_ids\n  FROM (\n    SELECT DISTINCT dispatch_trip_loads.load_id\n    FROM public.dispatch_trip_loads\n    WHERE dispatch_trip_loads.dispatch_trip_id = v_trip.id\n      AND dispatch_trip_loads.tenant_id = v_trip.tenant_id\n    UNION\n    SELECT v_trip.load_id\n    WHERE v_trip.load_id IS NOT NULL\n  ) AS assigned_loads;\n\n  IF EXISTS (\n    SELECT 1\n    FROM public.loads\n    WHERE id = ANY(v_load_ids)\n      AND tenant_id = v_trip.tenant_id\n      AND on_hold\n  ) THEN\n    RAISE EXCEPTION 'Uma ou mais cargas da viagem estão bloqueadas';\n  END IF;\n\n  v_previous_status := v_trip.status;\n\n  UPDATE public.dispatch_trips\n  SET status = 'in_transit',\n      actual_start_at = COALESCE(actual_start_at, now()),\n      updated_at = now()\n  WHERE id = v_trip.id\n    AND status IS DISTINCT FROM 'in_transit';\n\n  UPDATE public.loads\n  SET trip_id = v_trip.id,\n      driver_id = v_driver_id,\n      vehicle_id = COALESCE(v_trip.vehicle_id, vehicle_id),\n      status = CASE\n        WHEN status IN ('delivered', 'cancelled', 'returned', 'refused', 'partial_delivery', 'failed') THEN status\n        ELSE 'in_transit'\n      END,\n      updated_at = now()\n  WHERE id = ANY(v_load_ids)\n    AND tenant_id = v_trip.tenant_id;\n\n  IF v_previous_status IS DISTINCT FROM 'in_transit' THEN\n    INSERT INTO public.dispatch_events(\n      tenant_id, dispatch_trip_id, event_type, payload, created_by\n    ) VALUES (\n      v_trip.tenant_id,\n      v_trip.id,\n      'trip_started',\n      jsonb_build_object('previous_status', v_previous_status, 'driver_id', v_driver_id),\n      auth.uid()\n    );\n\n    PERFORM public._log_entity_audit(\n      v_trip.tenant_id,\n      'dispatch_trip',\n      v_trip.id,\n      'start_by_driver',\n      jsonb_build_object('status', v_previous_status),\n      jsonb_build_object('status', 'in_transit', 'driver_id', v_driver_id),\n      'driver_app'\n    );\n  END IF;\n\n  RETURN jsonb_build_object(\n    'trip_id', v_trip.id,\n    'status', 'in_transit',\n    'load_ids', to_jsonb(v_load_ids)\n  );\nEND;\n$function$\n",
+      "service_role": true,
+      "authenticated": true
+    },
+    {
+      "anon": false,
+      "hash": "1d76545c63804e8d35582a1f2116228c",
+      "signature": "sync_trip_load_mirrors()",
+      "comment": null,
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION public.sync_trip_load_mirrors()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n    IF TG_OP = 'INSERT' THEN\n        -- Atualiza espelho na loads (apenas se for o primeiro link ou principal)\n        UPDATE public.loads \n        SET trip_id = NEW.dispatch_trip_id, \n            updated_at = now() \n        WHERE id = NEW.load_id AND (trip_id IS NULL OR trip_id = NEW.dispatch_trip_id);\n        \n        -- Atualiza espelho na dispatch_trips (apenas se for o primeiro link ou principal)\n        UPDATE public.dispatch_trips \n        SET load_id = NEW.load_id, \n            updated_at = now() \n        WHERE id = NEW.dispatch_trip_id AND (load_id IS NULL OR load_id = NEW.load_id);\n    ELSIF TG_OP = 'DELETE' THEN\n        -- Limpa espelhos se a relação for removida\n        UPDATE public.loads \n        SET trip_id = NULL, \n            updated_at = now() \n        WHERE id = OLD.load_id AND trip_id = OLD.dispatch_trip_id;\n        \n        UPDATE public.dispatch_trips \n        SET load_id = NULL, \n            updated_at = now() \n        WHERE id = OLD.dispatch_trip_id AND load_id = OLD.load_id;\n    END IF;\n    RETURN NULL;\nEND;\n$function$\n",
+      "service_role": true,
+      "authenticated": false
+    },
+    {
+      "anon": false,
+      "hash": "91dd327e222a28cad6ffa62d0e12997b",
+      "signature": "transition_load_status_v1(uuid,uuid,text,text)",
+      "comment": null,
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION public.transition_load_status_v1(p_tenant_id uuid, p_load_id uuid, p_to_status text, p_reason text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_from_status text;\n  v_allowed text[];\nBEGIN\n  IF NOT public.is_tenant_operator_or_admin(p_tenant_id) THEN\n    RAISE EXCEPTION 'not_authorized';\n  END IF;\n\n  SELECT status\n    INTO v_from_status\n  FROM public.loads\n  WHERE id = p_load_id AND tenant_id = p_tenant_id\n  FOR UPDATE;\n\n  IF NOT FOUND THEN\n    RAISE EXCEPTION 'load_not_found';\n  END IF;\n\n  IF v_from_status = p_to_status THEN\n    RETURN jsonb_build_object('load_id', p_load_id, 'from_status', v_from_status, 'to_status', p_to_status, 'changed', false);\n  END IF;\n\n  v_allowed := CASE v_from_status\n    WHEN 'planned' THEN ARRAY['assembling']\n    WHEN 'assembling' THEN ARRAY['ready', 'planned']\n    WHEN 'ready' THEN ARRAY['loading', 'assembling', 'in_transit']\n    WHEN 'loading' THEN ARRAY['loaded', 'ready', 'in_transit']\n    WHEN 'loaded' THEN ARRAY['in_transit']\n    WHEN 'in_transit' THEN ARRAY['delivered', 'divergent', 'partial_delivery', 'returned', 'refused']\n    WHEN 'divergent' THEN ARRAY['in_transit', 'delivered', 'partial_delivery', 'returned', 'refused']\n    WHEN 'partial_delivery' THEN ARRAY['delivered', 'returned']\n    WHEN 'returned' THEN ARRAY['delivered']\n    WHEN 'refused' THEN ARRAY['returned', 'delivered']\n    WHEN 'failed' THEN ARRAY['returned', 'delivered']\n    ELSE ARRAY[]::text[]\n  END;\n\n  IF NOT (p_to_status = ANY(v_allowed)) THEN\n    RAISE EXCEPTION 'invalid_load_status_transition: % -> %', v_from_status, p_to_status;\n  END IF;\n\n  UPDATE public.loads\n  SET status = p_to_status,\n      updated_at = now()\n  WHERE id = p_load_id AND tenant_id = p_tenant_id;\n\n  INSERT INTO public.load_status_history (\n    tenant_id, load_id, field_name, old_value, new_value, reason, created_by\n  ) VALUES (\n    p_tenant_id, p_load_id, 'status', v_from_status, p_to_status,\n    NULLIF(btrim(p_reason), ''), auth.uid()\n  );\n\n  PERFORM public._log_entity_audit(\n    p_tenant_id,\n    'load',\n    p_load_id,\n    'status_transition',\n    jsonb_build_object('status', v_from_status),\n    jsonb_build_object('status', p_to_status, 'reason', NULLIF(btrim(p_reason), '')),\n    'transition_load_status_v1'\n  );\n\n  RETURN jsonb_build_object('load_id', p_load_id, 'from_status', v_from_status, 'to_status', p_to_status, 'changed', true);\nEND;\n$function$\n",
+      "service_role": false,
+      "authenticated": true
+    }
+  ],
+  "captured_at": "2026-08-30T05:38:07.850256+00:00",
+  "mirror_trigger": "CREATE TRIGGER trg_sync_trip_load_mirrors AFTER INSERT OR DELETE ON public.dispatch_trip_loads FOR EACH ROW EXECUTE FUNCTION sync_trip_load_mirrors()"
+}

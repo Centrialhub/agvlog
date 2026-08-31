@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
+import {isNotificationScopeCurrent,registerNotificationReset,useNotificationScope} from '@/lib/notificationScope';
 
 const TOAST_LIMIT = 1;
 const TOAST_REMOVE_DELAY = 1000000;
@@ -125,20 +126,33 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">;
 
-function toast({ ...props }: Toast) {
+function scopedProps(props: Toast, scope: number): Toast {
+  return { ...props,
+    ...(props.action ? { action: React.cloneElement(props.action, { onClick: event => {
+      if (isNotificationScopeCurrent(scope)) props.action?.props.onClick?.(event);
+    } }) } : {}),
+    ...(props.onClick ? {onClick: (event: Parameters<NonNullable<ToastProps['onClick']>>[0]) => {
+      if (isNotificationScopeCurrent(scope)) props.onClick?.(event);
+    }} : {}),
+  };
+}
+
+function toast({ ...props }: Toast, scope: number) {
   const id = genId();
 
-  const update = (props: ToasterToast) =>
+  const update = (props: ToasterToast) => {
+    if (!isNotificationScopeCurrent(scope)) return;
     dispatch({
       type: "UPDATE_TOAST",
-      toast: { ...props, id },
+      toast: { ...scopedProps(props, scope), id },
     });
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
+  };
+  const dismiss = () => { if (isNotificationScopeCurrent(scope)) dispatch({ type: "DISMISS_TOAST", toastId: id }); };
 
-  dispatch({
+  if (isNotificationScopeCurrent(scope)) dispatch({
     type: "ADD_TOAST",
     toast: {
-      ...props,
+      ...scopedProps(props, scope),
       id,
       open: true,
       onOpenChange: (open) => {
@@ -155,23 +169,22 @@ function toast({ ...props }: Toast) {
 }
 
 function useToast() {
-  const [state, setState] = React.useState<State>(memoryState);
-
-  React.useEffect(() => {
-    listeners.push(setState);
-    return () => {
-      const index = listeners.indexOf(setState);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
-    };
-  }, [state]);
+  const scope=useNotificationScope();
+  const state=React.useSyncExternalStore(subscribe,()=>memoryState,()=>memoryState);
+  const scopedToast=React.useMemo(()=>(props:Toast)=>toast(props,scope),[scope]);
 
   return {
     ...state,
-    toast,
-    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
+    toast: scopedToast,
+    dismiss: (toastId?: string) => { if (isNotificationScopeCurrent(scope)) dispatch({ type: "DISMISS_TOAST", toastId }); },
   };
 }
 
-export { useToast, toast };
+const subscribe=(listener:()=>void)=>{
+  listeners.push(listener);
+  return ()=>{const index=listeners.indexOf(listener);if(index>=0)listeners.splice(index,1);};
+};
+registerNotificationReset('shadcn',()=>{
+  toastTimeouts.forEach(clearTimeout);toastTimeouts.clear();dispatch({type:'REMOVE_TOAST'});
+});
+export { useToast };

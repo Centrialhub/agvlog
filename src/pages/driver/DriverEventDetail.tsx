@@ -20,31 +20,36 @@ import {
 } from 'lucide-react';
 
 import { useCurrentDriver } from '@/hooks/useCurrentDriver';
+import { useAuth } from '@/hooks/useAuth';
+import { useTenant } from '@/hooks/useTenant';
+import { EventConversation } from '@/components/driver/DriverConversation';
 import { mapOperationalEventToDriverEvent } from '@/lib/driver/driverEventView';
 
 export default function DriverEventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: driver } = useCurrentDriver();
+  const { data: driver, isPending: driverLoading, error: driverError, refetch: refetchDriver } = useCurrentDriver();
+  const {user}=useAuth(),{currentTenant}=useTenant();
   
 
-  const { data: realRow } = useQuery({
-    queryKey: ['driver_event_detail', id, driver?.id],
+  const { data: realRow, isPending, error, refetch } = useQuery({
+    queryKey: ['driver_event_detail', currentTenant?.id, user?.id, id, driver?.id],
     queryFn: async () => {
-      if (!id || !driver?.id) return null;
+      if (!id || !driver?.id || !currentTenant || !user) return null;
       const { data, error } = await supabase
         .from('operational_events')
-        .select('*')
+        .select('id,event_type,report_details,payload,description,created_at')
         .eq('id', id)
-        .eq('driver_id', driver.id)
+        .eq('tenant_id', currentTenant.id)
         .maybeSingle();
       if (error) throw error;
       return data;
     },
-    enabled: !!id && !!driver?.id,
+    enabled: !!id && !!driver?.id && !!currentTenant && !!user,
+    retry: false,
   });
 
-  const event = realRow ? mapOperationalEventToDriverEvent(realRow) : undefined;
+  const event = !error && !driverError && realRow ? mapOperationalEventToDriverEvent(realRow) : undefined;
 
   if (!event) {
     return (
@@ -55,7 +60,7 @@ export default function DriverEventDetail() {
         <Card>
           <CardContent className="py-8 text-center">
             <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm font-medium">Evento não encontrado</p>
+            {error || driverError ? <><p role="alert">Não foi possível consultar a ocorrência. Tente novamente.</p><Button onClick={()=>{if(driverError)void refetchDriver();else void refetch();}}>Tentar novamente</Button></> : <p className="text-sm font-medium">{driverLoading || (driver && isPending) ? 'Carregando ocorrência...' : 'Evento não encontrado'}</p>}
           </CardContent>
         </Card>
       </div>
@@ -213,6 +218,7 @@ export default function DriverEventDetail() {
         </CardContent>
       </Card>
 
+      <EventConversation eventId={event.id}/>
       <Button variant="outline" className="w-full" onClick={() => navigate('/driver/deliveries')}>
         <Package className="h-4 w-4 mr-2" /> Ir para entregas
       </Button>

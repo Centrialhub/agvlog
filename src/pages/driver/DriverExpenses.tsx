@@ -1,334 +1,58 @@
-import { useEffect, useState, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Receipt, Fuel, UtensilsCrossed, Car, Wrench, ParkingCircle, Camera, Image, AlertTriangle } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
-
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useTenant } from '@/hooks/useTenant';
-import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
-import { useToast } from '@/hooks/use-toast';
-import { validateUploadFile } from '@/lib/uploadPolicy';
-import { uploadSecureFile } from '@/lib/secureUpload';
-
-const CATEGORIES = [
-  { value: 'fuel', label: 'Combustível', icon: Fuel },
-  { value: 'food', label: 'Alimentação', icon: UtensilsCrossed },
-  { value: 'toll', label: 'Pedágio', icon: Car },
-  { value: 'maintenance', label: 'Manutenção', icon: Wrench },
-  { value: 'parking', label: 'Estacionamento', icon: ParkingCircle },
-  { value: 'other', label: 'Outro', icon: Receipt },
-];
-
-const approvalLabels: Record<string, string> = {
-  pending: 'Pendente',
-  approved: 'Aprovada',
-  rejected: 'Rejeitada',
-};
-
-
-export default function DriverExpenses() {
-  const { currentTenant } = useTenant();
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const { data: driver } = useCurrentDriver();
-  const { data: trip } = useActiveTrip(driver?.id);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    category: 'fuel',
-    amount: '',
-    notes: '',
-    supplier_name: '',
-    document_number: '',
-    city: '',
-    state: '',
-    odometer: '',
-    payment_source: 'driver',
-    paid_with_advance: false,
-    no_receipt: false,
-    no_receipt_reason: '',
-  });
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const { data: expenses = [] } = useQuery({
-    queryKey: ['driver_expenses', driver?.id],
-    queryFn: async () => {
-      if (!currentTenant || !driver) return [];
-      const { data, error } = await supabase
-        .from('driver_expenses')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('driver_id', driver.id)
-        .order('expense_at', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant && !!driver,
-  });
-
-  // Realtime: refresh when operator approves/rejects or updates expenses.
-  useEffect(() => {
-    if (!driver?.id) return undefined;
-    const channel = supabase
-      .channel(`driver_expenses_${driver.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'driver_expenses', filter: `driver_id=eq.${driver.id}` },
-        () => {
-          qc.invalidateQueries({ queryKey: ['driver_expenses'] });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [driver?.id, qc]);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      validateUploadFile(file, 'image');
-    } catch (error) {
-      e.target.value = '';
-      toast({
-        title: 'Comprovante inválido',
-        description: error instanceof Error ? error.message : 'Selecione uma imagem válida.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    setReceiptFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setReceiptPreview(reader.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  const createExpense = useMutation({
-    mutationFn: async () => {
-      if (!currentTenant || !driver) throw new Error('Não autenticado');
-      if (!trip) throw new Error('Sem viagem ativa para vincular a despesa.');
-
-      let receiptPath: string | null = null;
-      if (receiptFile) {
-        receiptPath = await uploadSecureFile({
-          tenantId: currentTenant.id,
-          bucket: 'receipts',
-          folder: `expenses/${trip.id}`,
-          file: receiptFile,
-          kind: 'image',
-        });
-      }
-
-      try {
-        const { error, data } = await supabase.rpc('driver_create_expense', {
-          _trip_id: trip.id,
-          _category: form.category,
-          _amount: parseFloat(form.amount) || 0,
-          _notes: form.notes || undefined,
-          _receipt_path: receiptPath ?? undefined,
-          _supplier_name: form.supplier_name || undefined,
-          _document_number: form.document_number || undefined,
-          _city: form.city || undefined,
-          _state: form.state || undefined,
-          _odometer: form.odometer ? parseFloat(form.odometer) : undefined,
-          _no_receipt: form.no_receipt,
-          _no_receipt_reason: form.no_receipt ? (form.no_receipt_reason || undefined) : undefined,
-          _paid_with_advance: form.paid_with_advance,
-          _payment_source: form.payment_source,
-        });
-        
-        if (error) {
-          console.error('[DriverExpenses] RPC error:', error);
-          throw error;
-        }
-        return data;
-      } catch (error: unknown) {
-        console.error('[DriverExpenses] Mutation error:', error);
-        throw error;
-      }
-    },
-    onSuccess: () => {
-      toast({ title: 'Despesa registrada' });
-      setOpen(false);
-      setForm({
-        category: 'fuel', amount: '', notes: '',
-        supplier_name: '', document_number: '', city: '', state: '', odometer: '',
-        payment_source: 'driver', paid_with_advance: false,
-        no_receipt: false, no_receipt_reason: '',
-      });
-      setReceiptFile(null);
-      setReceiptPreview(null);
-      qc.invalidateQueries({ queryKey: ['driver_expenses'] });
-    },
-    onError: (error: unknown) => {
-      toast({
-        title: 'Erro',
-        description: error instanceof Error ? error.message : 'Não foi possível registrar a despesa.',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const effectiveExpenses = expenses;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">Despesas</h1>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setReceiptFile(null); setReceiptPreview(null); } }}>
-          <DialogTrigger asChild>
-            <Button size="sm"><Plus className="h-3.5 w-3.5 mr-1" /> Nova</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Nova Despesa</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">Categoria</Label>
-                <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Valor (R$)</Label>
-                <Input type="number" step="0.01" placeholder="0,00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className="h-9" />
-              </div>
-              <div>
-                <Label className="text-xs">Origem do pagamento</Label>
-                <Select value={form.payment_source} onValueChange={v => setForm(f => ({ ...f, payment_source: v, paid_with_advance: v === 'advance' ? true : f.paid_with_advance }))}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="driver">Motorista (reembolsável)</SelectItem>
-                    <SelectItem value="advance">Adiantamento</SelectItem>
-                    <SelectItem value="company_card">Cartão da empresa</SelectItem>
-                    <SelectItem value="company_account">Conta da empresa</SelectItem>
-                    <SelectItem value="other">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Fornecedor</Label>
-                  <Input value={form.supplier_name} onChange={e => setForm(f => ({ ...f, supplier_name: e.target.value }))} className="h-9" placeholder="Ex: Posto Shell" />
-                </div>
-                <div>
-                  <Label className="text-xs">Nº documento</Label>
-                  <Input value={form.document_number} onChange={e => setForm(f => ({ ...f, document_number: e.target.value }))} className="h-9" placeholder="Cupom / NF" />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-2">
-                  <Label className="text-xs">Cidade</Label>
-                  <Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className="h-9" />
-                </div>
-                <div>
-                  <Label className="text-xs">UF</Label>
-                  <Input maxLength={2} value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value.toUpperCase() }))} className="h-9" />
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">Hodômetro (km)</Label>
-                <Input type="number" step="0.1" value={form.odometer} onChange={e => setForm(f => ({ ...f, odometer: e.target.value }))} className="h-9" placeholder="Opcional" />
-              </div>
-              <div>
-                <Label className="text-xs">Observação</Label>
-                <Textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="text-sm" />
-              </div>
-              <div>
-                <Label className="text-xs">Comprovante (foto)</Label>
-                <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
-                <div className="flex gap-2 mt-1">
-                  <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => fileRef.current?.click()}>
-                    <Camera className="h-3.5 w-3.5 mr-1" /> {receiptFile ? 'Trocar' : 'Tirar foto'}
-                  </Button>
-                  {receiptPreview && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Image className="h-3 w-3" /> Foto selecionada
-                    </div>
-                  )}
-                </div>
-                {receiptPreview && (
-                  <img src={receiptPreview} alt="Comprovante" className="mt-2 rounded-md max-h-32 object-cover" />
-                )}
-                <div className="flex items-center gap-2 mt-2">
-                  <Checkbox id="no_receipt" checked={form.no_receipt} onCheckedChange={(v) => setForm(f => ({ ...f, no_receipt: !!v }))} />
-                  <label htmlFor="no_receipt" className="text-xs text-muted-foreground">Sem comprovante</label>
-                </div>
-                {form.no_receipt && (
-                  <div className="mt-1">
-                    <Label className="text-xs flex items-center gap-1 text-amber-600">
-                      <AlertTriangle className="h-3 w-3" /> Motivo (obrigatório)
-                    </Label>
-                    <Input value={form.no_receipt_reason} onChange={e => setForm(f => ({ ...f, no_receipt_reason: e.target.value }))} className="h-9" placeholder="Ex: cupom perdido" />
-                  </div>
-                )}
-              </div>
-              {trip && (
-                <p className="text-[10px] text-muted-foreground">
-                  Vinculada à viagem da carga {trip.loads?.load_number || ''}
-                </p>
-              )}
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={() => createExpense.mutate()}
-                disabled={!form.amount || createExpense.isPending || (form.no_receipt && !form.no_receipt_reason.trim())}
-              >
-                {createExpense.isPending ? 'Salvando...' : 'Registrar'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-
-      {effectiveExpenses.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <Receipt className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">Nenhuma despesa registrada.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {effectiveExpenses.map((exp) => {
-            const cat = CATEGORIES.find(c => c.value === exp.category);
-            const Icon = cat?.icon || Receipt;
-            return (
-              <Card key={exp.id}>
-                <CardContent className="p-3 flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
-                    <Icon className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{cat?.label || exp.category}</p>
-                    {exp.notes && <p className="text-xs text-muted-foreground truncate">{exp.notes}</p>}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold">R$ {Number(exp.amount).toFixed(2)}</p>
-                    <Badge variant={exp.approval_status === 'approved' ? 'default' : 'secondary'} className="text-[10px]">
-                      {approvalLabels[exp.approval_status] || exp.approval_status}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+import {useId,useState} from 'react';
+import {useTenant} from '@/hooks/useTenant';
+import {useAuth} from '@/hooks/useAuth';
+import {useDriverExpenseHistory,useDriverExpenseSources} from '@/hooks/useDriverExpenseHistory';
+import {ExpenseCreationForm} from '@/components/financial/ExpenseCreationForm';
+import {ExpenseReceiptDialog} from '@/components/financial/ExpenseReceiptDialog';
+import {Button} from '@/components/ui/button';
+import {Card,CardContent} from '@/components/ui/card';
+import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
+import {ListFilterBar} from '@/components/ui/list-filter-bar';
+import {matchesSearch} from '@/lib/listFilters';
+import {creationError} from '@/lib/financial/expenseCreationCommands';
+import {expenseAmount,expenseCategoryLabels,expensePaymentLabels} from '@/lib/financial/expenseReviewCommands';
+const statusLabels:Record<string,string>={pending:'Pendente',approved:'Aprovada',rejected:'Rejeitada'};
+const tripLabels:Record<string,string>={planned:'Planejada',in_transit:'Em trânsito',completed:'Concluída'};
+export default function DriverExpenses(){
+ const {currentTenant}=useTenant(),{user}=useAuth();
+ return currentTenant&&user?<ScopedExpenses key={currentTenant.id+':'+user.id} tenant={currentTenant.id}/>:<p>Entre e selecione a empresa.</p>;
+}
+function ScopedExpenses({tenant}:{tenant:string}){
+ const [offset,setOffset]=useState(0),[sourceOffset,setSourceOffset]=useState(0),[open,setOpen]=useState(false),[source,setSource]=useState(''),[receipt,setReceipt]=useState<string>();
+ const [search,setSearch]=useState(''),[status,setStatus]=useState('all'),[category,setCategory]=useState('all'),[message,setMessage]=useState('');
+ const query=useDriverExpenseHistory(offset),sources=useDriverExpenseSources(sourceOffset,open),selectId=useId();
+ const rows=query.data?.rows??[],shown=rows.filter(e=>matchesSearch(search,e.notes,e.supplier_name,e.document_number,e.review_reason)&&(status==='all'||e.approval_status===status)&&(category==='all'||e.category===category));
+ return <div className="space-y-4">
+  <div className="flex justify-between"><h1 className="text-lg font-bold">Despesas</h1><Button onClick={()=>{setOpen(true);setSource('');}}>Nova despesa</Button></div>
+  {message?<p role="status">{message}</p>:null}
+  <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto"><DialogHeader><DialogTitle>Nova despesa</DialogTitle><DialogDescription>Escolha a viagem e confira o gasto antes de registrar.</DialogDescription></DialogHeader>
+   {sources.isPending?<p role="status">Carregando viagens...</p>:sources.error?<p role="alert">{creationError(sources.error)}</p>:<>
+    <label htmlFor={selectId}>Viagem da despesa</label><select id={selectId} className="w-full rounded border p-2" value={source} onChange={e=>setSource(e.target.value)}>
+     <option value="">Selecione a viagem</option>{sources.data?.rows.map(t=><option key={t.id} value={t.id}>{tripLabels[t.status]} · {t.id.slice(0,8)} · {t.notes||new Date(t.created_at).toLocaleDateString('pt-BR')}</option>)}
+    </select><p>{sources.data?.total??0} viagens disponíveis · página {sourceOffset/50+1}</p></>}
+   <div className="flex gap-2"><Button variant="outline" disabled={sources.isFetching||sourceOffset===0} onClick={()=>{setSource('');setSourceOffset(n=>n-50);}}>Viagens anteriores</Button>
+    <Button variant="outline" disabled={sources.isFetching||!sources.data||sourceOffset+50>=sources.data.total} onClick={()=>{setSource('');setSourceOffset(n=>n+50);}}>Mais viagens</Button>
+    {sources.error?<Button variant="outline" onClick={()=>void sources.refetch()}>Consultar viagens novamente</Button>:null}</div>
+   {source?<ExpenseCreationForm sourceType="trip" sourceId={source} onConfirmed={()=>{setOpen(false);setMessage('Despesa registrada e aguardando aprovação.');}}/>:null}
+  </DialogContent></Dialog>
+  <ListFilterBar activeCount={Number(!!search)+Number(status!=='all')+Number(category!=='all')} onReset={()=>{setSearch('');setStatus('all');setCategory('all');}} resultCount={shown.length} totalCount={rows.length} loading={query.isPending}
+   description="Filtros aplicados à página atual. Use a paginação para consultar despesas anteriores." fields={[
+    {key:'search',label:'Buscar despesa',type:'search',value:search,onChange:setSearch,placeholder:'Fornecedor, documento, observação ou motivo'},
+    {key:'approval',label:'Aprovação',value:status,onChange:setStatus,options:[{value:'all',label:'Todas as situações'},...Object.entries(statusLabels).map(([value,label])=>({value,label}))]},
+    {key:'category',label:'Categoria da despesa',value:category,onChange:setCategory,options:[{value:'all',label:'Todas as categorias'},...Object.entries(expenseCategoryLabels).map(([value,label])=>({value,label}))]},
+   ]}/>
+  {query.isPending?<p role="status">Carregando despesas...</p>:query.error?<div role="alert"><p>Falha ao consultar despesas: {creationError(query.error)}</p><Button onClick={()=>void query.refetch()}>Tentar novamente</Button></div>:<>
+   <p>{query.data?.total??0} despesas · página {offset/50+1}</p>
+   {!shown.length?<p>Nenhuma despesa encontrada nesta página para os filtros selecionados.</p>:shown.map(e=><Card key={e.id}><CardContent className="space-y-1 p-3">
+    <div className="flex justify-between"><h2 className="font-medium">{expenseCategoryLabels[e.category]||e.category}</h2><strong>{expenseAmount(e.amount)}</strong></div>
+    <p>{statusLabels[e.approval_status]||e.approval_status} · {new Date(e.expense_at).toLocaleString('pt-BR')}</p>
+    <p>{e.dispatch_trip_id?'Viagem '+e.dispatch_trip_id.slice(0,8):'Acerto manual'} · {expensePaymentLabels[e.payment_source]||e.payment_source}</p>
+    {e.notes?<p>{e.notes}</p>:null}{e.supplier_name?<p>Fornecedor: {e.supplier_name}</p>:null}
+    {e.review_reason?<p>Motivo da revisão: {e.review_reason}</p>:null}
+    {e.receipt_url?<Button variant="outline" onClick={()=>setReceipt(e.receipt_url!)}>Ver comprovante</Button>:<p>Sem comprovante: {e.no_receipt_reason||'Ausência não justificada no registro legado'}</p>}
+   </CardContent></Card>)}
+   <div className="flex gap-2"><Button variant="outline" disabled={offset===0||query.isFetching} onClick={()=>setOffset(n=>n-50)}>Página anterior</Button><Button variant="outline" disabled={!query.data||offset+50>=query.data.total||query.isFetching} onClick={()=>setOffset(n=>n+50)}>Próxima página</Button></div>
+  </>}
+  {receipt?<ExpenseReceiptDialog tenantId={tenant} path={receipt} onClose={()=>setReceipt(undefined)}/>:null}
+ </div>;
 }

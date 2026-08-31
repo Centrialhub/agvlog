@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Send, FileText } from 'lucide-react';
 import { useNFSeList, useIssueNFSe } from '@/hooks/useNFSe';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
+import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
+import type { HubEnvironment } from '@/lib/fiscal/hubFiscalClient';
 
 interface Props {
   loadId: string;
@@ -17,7 +19,8 @@ interface Props {
 
 export default function NFSePanel({ loadId, loadNumber, destination, defaultClientName, defaultClientCnpj, freightTotal }: Props) {
   const { data: notes = [] } = useNFSeList({ loadId });
-  const issue = useIssueNFSe();
+  const [environment, setEnvironment] = useState<HubEnvironment>('homologation');
+  const issue = useIssueNFSe(environment);
   const [open, setOpen] = useState(false);
 
   return (
@@ -31,6 +34,7 @@ export default function NFSePanel({ loadId, loadNumber, destination, defaultClie
         </Button>
       </CardHeader>
       <CardContent>
+        <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issue.isPending} />
         {notes.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhuma NFS-e gerada para esta carga.</p>
         ) : (

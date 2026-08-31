@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { invalidateTripLoadQueries, isConfirmedLoadTransition, tripMutationError } from '@/lib/tripMutation';
 
 import type { LoadStatus } from '@/lib/status/loadStatus';
 export { LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
@@ -160,6 +161,7 @@ export function useTransitionLoadStatus() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
+    retry:false,
     mutationFn: async ({ id, status, reason }: { id: string; status: LoadStatus; reason?: string }) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       const { data, error } = await supabase.rpc('transition_load_status_v1', {
@@ -168,10 +170,12 @@ export function useTransitionLoadStatus() {
         p_to_status: status,
         p_reason: reason ?? undefined,
       });
-      if (error) throw error;
+      if (error) throw tripMutationError(error);
+      if(!isConfirmedLoadTransition(data,id,status))throw new Error('Não foi possível confirmar o status da carga. Atualize os dados antes de continuar.');
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+    onSuccess: () => invalidateTripLoadQueries(qc),
+    onError: () => invalidateTripLoadQueries(qc),
   });
 }
 

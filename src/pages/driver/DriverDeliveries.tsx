@@ -1,8 +1,9 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,14 +18,18 @@ import {
   Package, CheckCircle, AlertTriangle, Truck, Camera, X, ImageIcon,
   ChevronRight, Search, PenLine, FileSignature,
   Ban, AlertCircle, PackageX, MapPinned, UserX,
-  Phone, MessageSquare, Send, Percent, FileText, Clock, User as UserIcon
+  Phone, MessageSquare, Percent, FileText
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
-import { isStopTerminal } from '@/lib/status/stopStatus';
+import { isStopTerminal, stopStatusLabel } from '@/lib/status/stopStatus';
+import { isDocumentTerminal } from '@/lib/status/documentStatus';
+import { readDriverDeliveryItems } from '@/lib/driver/driverDeliveryItems';
 import { validateUploadFile } from '@/lib/uploadPolicy';
-import { removeSecureFiles, uploadSecureFile } from '@/lib/secureUpload';
+import { createDeliverySubmission, deliveryOutcome, deliveryErrorMessage, invalidateDeliveryQueries } from '@/lib/driver/driverDeliverySubmission';
+import { DRIVER_TRIP_SELECT, normalizeDriverTrip, isDriverTripStarted } from '@/lib/driverTrip';
+import { markDriverArrival } from '@/lib/driver/driverArrival';
 import type { Tables } from '@/integrations/supabase/types';
 
 
@@ -49,7 +54,7 @@ type EventDef = {
 
 const EVENTS: EventDef[] = [
   { key: 'entregue',            label: 'ENTREGUE',            icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresPhoto: true, requiresSignature: true },
-  { key: 'devolucao_parcial',   label: 'DEVOLUÇÃO PARCIAL',   icon: PackageX,    category: 'finalizador', finalAction: 'partial', requiresReceiver: true, showsItems: true, needsOperatorReply: true },
+  { key: 'devolucao_parcial',   label: 'DEVOLUÇÃO PARCIAL',   icon: PackageX,    category: 'finalizador', finalAction: 'partial', requiresReceiver: true, requiresPhoto: true, requiresSignature: true, showsItems: true, needsOperatorReply: true },
   { key: 'devolucao_total',     label: 'DEVOLUÇÃO TOTAL',     icon: Ban,         category: 'finalizador', finalAction: 'refused', showsItems: true, needsOperatorReply: true },
   { key: 'chegada_no_cliente',  label: 'CHEGADA NO CLIENTE',  icon: MapPinned,   category: 'informativo' },
   { key: 'solicitar_desconto',  label: 'SOLICITAR DESCONTO',  icon: Percent,     category: 'informativo', showsDiscount: true, showsContact: true, needsOperatorReply: true },
@@ -81,6 +86,7 @@ type StopProduct = {
   qty: number;
   unit: string;
   price: number;
+  documentStatus: string | null;
 };
 
 function getStopOrderNumber(stop: DriverStop): string | null {
@@ -99,11 +105,31 @@ function getStopOrderNumber(stop: DriverStop): string | null {
 
 export default function DriverDeliveries() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { data: driver } = useCurrentDriver();
-  const { data: trip } = useActiveTrip(driver?.id);
+  const driverQuery = useCurrentDriver();
+  const driver = driverQuery.data;
+  const autoTripQuery = useActiveTrip(driver?.id);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedTripId = searchParams.get('trip');
+  const specificTripQuery = useQuery({
+    queryKey: ['driver_trip_specific',currentTenant?.id,driver?.id,selectedTripId],
+    enabled: !!selectedTripId && !!driver?.id && !!currentTenant?.id,
+    queryFn: async () => {
+      if (!selectedTripId || !driver || !currentTenant) return null;
+      const {data,error} = await supabase.from('dispatch_trips').select(DRIVER_TRIP_SELECT)
+        .eq('id',selectedTripId).eq('driver_id',driver.id).eq('tenant_id',currentTenant.id).maybeSingle();
+      if (error) throw error;
+      return data ? normalizeDriverTrip(data) : null;
+    },
+  });
+  const tripQuery = selectedTripId ? specificTripQuery : autoTripQuery;
+  const trip = tripQuery.data;
+  const submissionRef = useRef<ReturnType<typeof createDeliverySubmission> | null>(null);
+  const [submissionLocked, setSubmissionLocked] = useState(false);
+  const [lastEventId, setLastEventId] = useState<string | null>(null);
 
   const [tab, setTab] = useState<'em_rota' | 'concluidas'>('em_rota');
   const [search, setSearch] = useState('');
@@ -137,79 +163,55 @@ export default function DriverDeliveries() {
   const [boletoDueDate, setBoletoDueDate] = useState('');
   const [boletoNote, setBoletoNote] = useState('');
 
-  // Thread de mensagens (demo) — chave: stopId|eventKey
-  type ThreadMsg = {
-    id: string;
-    from: 'driver' | 'operator';
-    author: string;
-    text: string;
-    at: string;
-    status?: 'pending' | 'approved' | 'rejected' | 'info';
-  };
-  const [threads, setThreads] = useState<Record<string, ThreadMsg[]>>({});
-  const [followUp, setFollowUp] = useState('');
+  // Comunicações são persistidas; nenhuma resposta da operação é simulada.
 
-  const threadKey = eventForm ? `${eventForm.stop.id}|${eventForm.eventKey}` : '';
-  const currentThread = threadKey ? (threads[threadKey] || []) : [];
-
-  // Itens reais da parada: o vínculo canônico é dispatch_stop_documents.
-  // Não dependa do load_id legado da viagem nem do client_id, pois uma viagem
-  // pode ter várias cargas e uma parada pode conter documentos sem cliente.
-  const { data: realStopProducts = [] } = useQuery<StopProduct[]>({
-    queryKey: ['driver_stop_products', eventForm?.stop?.id],
-    queryFn: async () => {
-      if (!eventForm?.stop?.id) return [];
-      const { data: stopDocuments, error: stopDocumentsError } = await supabase
-        .from('dispatch_stop_documents')
-        .select('fiscal_document_id')
-        .eq('dispatch_stop_id', eventForm.stop.id);
-      if (stopDocumentsError) throw stopDocumentsError;
-      const docIds = Array.from(new Set(
-        (stopDocuments || [])
-          .map((row) => row.fiscal_document_id)
-          .filter((id): id is string => Boolean(id)),
-      ));
-      if (docIds.length === 0) return [];
-      const { data: items, error: itemsErr } = await supabase
-        .from('load_items')
-        .select('id, item_description, quantity, weight_kg, volume_m3, fiscal_document_id')
-        .in('fiscal_document_id', docIds);
-      if (itemsErr) throw itemsErr;
-      return (items || []).map((it) => ({
-        id: it.id,
-        sku: it.fiscal_document_id ? String(it.fiscal_document_id).slice(0, 8) : '',
-        name: it.item_description || 'Item',
-        qty: Number(it.quantity) || 0,
-        unit: 'UN',
-        price: 0,
-      }));
+  // Read the exact allocation/attempt: one invoice may have items on several trips.
+  const productsQuery = useQuery<StopProduct[]>({
+    queryKey: ['driver_stop_products', currentTenant?.id, driver?.id, user?.id, trip?.id, eventForm?.stop?.id, 'attempt-v1'],
+    queryFn: async ({ signal }) => {
+      if (!eventForm || !currentTenant || !user || !trip?.id || eventForm.stop.dispatch_trip_id !== trip.id) {
+        throw new Error('A parada não pertence à viagem selecionada.');
+      }
+      const { data, error } = await supabase.rpc('get_driver_delivery_items', { _stop_id: eventForm.stop.id }).abortSignal(signal);
+      if (error) throw error;
+      return readDriverDeliveryItems(data, { tenant: currentTenant.id, actor: user.id, trip: trip.id, stop: eventForm.stop.id });
     },
-    enabled: !!eventForm?.stop?.id,
+    enabled: !!eventForm?.stop?.id && !!currentTenant?.id && !!driver?.id && !!user?.id && !!trip?.id,
   });
 
-  const stopProducts = realStopProducts;
+  const allStopProducts = productsQuery.data ?? [];
+  const stopProducts = getEventDef(eventForm?.eventKey ?? '')?.category === 'finalizador'
+    ? allStopProducts.filter(item => !isDocumentTerminal(item.documentStatus)) : allStopProducts;
 
   const totalReturnValue = stopProducts.reduce((sum, p) => {
     const q = returnedItems[p.id] || 0;
     return sum + q * p.price;
   }, 0);
 
-  const { data: stops, isLoading: stopsLoading } = useQuery({
-    queryKey: ['driver_delivery_stops', trip?.id],
+  const stopsQuery = useQuery({
+    queryKey: ['driver_delivery_stops', currentTenant?.id, driver?.id, trip?.id],
     queryFn: async () => {
       if (!trip?.id) return [];
       const { data, error } = await supabase
         .from('dispatch_stops')
         .select('*, clients(company_name, phone, mobile, email), dispatch_stop_documents(fiscal_documents(invoice_number, reference_number))')
-        .eq('dispatch_trip_id', trip.id)
+        .eq('dispatch_trip_id', trip.id).eq('tenant_id', currentTenant!.id)
         .order('stop_order', { ascending: true });
       if (error) throw error;
       return data || [];
     },
-    enabled: !!trip?.id,
+    enabled: !!trip?.id && !!currentTenant?.id && !!driver?.id,
   });
 
-  const effectiveStops = useMemo<DriverStop[]>(() => stops ?? [], [stops]);
+  const effectiveStops = useMemo<DriverStop[]>(() => stopsQuery.data ?? [], [stopsQuery.data]);
+  const currentFormStop = effectiveStops.find(stop => stop.id===eventForm?.stop.id);
+  useEffect(() => {
+    if (!trip?.id) return;
+    const channel = supabase.channel(`driver_deliveries_${trip.id}`).on('postgres_changes',
+      {event:'*',schema:'public',table:'dispatch_stops',filter:`dispatch_trip_id=eq.${trip.id}`},
+      () => { void invalidateDeliveryQueries(qc); }).subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [trip?.id,qc]);
 
   const filteredStops = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -249,9 +251,8 @@ export default function DriverDeliveries() {
     setDiscountReason('');
     setBoletoDueDate('');
     setBoletoNote('');
-    setFollowUp('');
-    // Evita crescimento indefinido de mensagens em memória entre entregas.
-    setThreads({});
+    submissionRef.current = null;
+    setSubmissionLocked(false);
   };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -283,234 +284,54 @@ export default function DriverDeliveries() {
 
   const submitEvent = useMutation({
     mutationFn: async () => {
-      if (!eventForm) throw new Error('Sem evento');
-      const def = getEventDef(eventForm.eventKey);
-      if (!def) throw new Error('Evento inválido');
-
-      // Constrói a mensagem-resumo do motorista (usada em demo e produção).
-      const buildDriverSummary = (): ThreadMsg => {
-        const parts: string[] = [];
-        parts.push(`Evento: ${def.label}`);
-        if (receiverName) parts.push(`Recebedor: ${receiverName}${receiverDoc ? ` (${receiverDoc})` : ''}`);
-        const itemsList = stopProducts.filter(p => (returnedItems[p.id] || 0) > 0);
-        if (def.showsItems && itemsList.length) {
-          parts.push(
-            'Itens devolvidos:\n' + itemsList.map(p => `• ${p.name} — ${returnedItems[p.id]}/${p.qty} ${p.unit}`).join('\n')
-          );
-          if (returnReason) parts.push(`Motivo: ${returnReason}`);
-          if (totalReturnValue > 0) parts.push(`Valor estimado: R$ ${totalReturnValue.toFixed(2)}`);
-        }
-        if (def.showsDiscount && discountAmount) {
-          parts.push(`Desconto solicitado: ${discountAmount}${discountKind === 'percent' ? '%' : ' R$'}`);
-          if (discountReason) parts.push(`Justificativa: ${discountReason}`);
-        }
-        if (def.key === 'atualizar_boleto') {
-          if (boletoDueDate) parts.push(`Novo vencimento sugerido: ${boletoDueDate}`);
-          if (boletoNote) parts.push(`Detalhe: ${boletoNote}`);
-        }
-        if (notes) parts.push(`Obs.: ${notes}`);
-        return {
-          id: `m-${Date.now()}`,
-          from: 'driver',
-          author: driver?.name || 'Motorista',
-          text: parts.join('\n'),
-          at: new Date().toISOString(),
-          status: def.needsOperatorReply ? 'pending' : 'info',
-        };
-      };
-
-      // Upload de fotos resiliente: se qualquer uma falhar, remove as já enviadas para
-      // evitar arquivos órfãos sem link com o evento.
-      const photoPaths: string[] = [];
-      if (photos.length > 0) {
-        const results = await Promise.allSettled(
-          photos.map(async (photo) => {
-            return uploadSecureFile({
-              tenantId: currentTenant!.id,
-              bucket: 'receipts',
-              folder: `deliveries/${trip!.id}/${eventForm.stop.id}`,
-              file: photo,
-              kind: 'image',
-            });
-          }),
-        );
-        for (const r of results) {
-          if (r.status === 'fulfilled') photoPaths.push(r.value);
-        }
-        const failed = results.filter((r) => r.status === 'rejected');
-        if (failed.length > 0) {
-          if (photoPaths.length > 0) {
-            await removeSecureFiles(currentTenant!.id, 'receipts', photoPaths).catch(() => {});
-          }
-          const firstErr = (failed[0] as PromiseRejectedResult).reason;
-          throw new Error(`Falha ao enviar ${failed.length} foto(s): ${firstErr?.message || firstErr}`);
-        }
+      if (!eventForm || !trip || !currentTenant) throw new Error('Sem viagem ou evento selecionado.');
+      if (!submissionRef.current && (!currentFormStop || isStopTerminal(currentFormStop.status))) {
+        throw new Error('A parada foi encerrada ou reatribuída. Atualize a viagem antes de enviar.');
       }
-
-      let signaturePath: string | null = null;
-      if (signatureDataUrl) {
-        const blob = await (await fetch(signatureDataUrl)).blob();
-        const signatureFile = new File([blob], 'assinatura.png', { type: 'image/png' });
-        let path: string;
-        try {
-          path = await uploadSecureFile({
-            tenantId: currentTenant!.id,
-            bucket: 'receipts',
-            folder: `deliveries/${trip!.id}/${eventForm.stop.id}/signatures`,
-            file: signatureFile,
-            kind: 'image',
-          });
-        } catch (error) {
-          if (photoPaths.length > 0) {
-            await removeSecureFiles(currentTenant!.id, 'receipts', photoPaths).catch(() => {});
-          }
-          throw error;
-        }
-        signaturePath = path;
+      if (eventForm.eventKey === 'chegada_no_cliente') { await markDriverArrival(eventForm.stop.id); return null; }
+      if (!submissionRef.current) {
+        const def = getEventDef(eventForm.eventKey);
+        if (!def) throw new Error('Evento inválido.');
+        const reason = [notes.trim(),returnReason.trim(),discountReason.trim(),boletoNote.trim()].filter(Boolean).join('\n');
+        const positiveItems = Object.fromEntries(Object.entries(returnedItems).filter(([,qty]) => qty>0));
+        submissionRef.current = createDeliverySubmission({tenantId:currentTenant.id,tripId:trip.id,stopId:eventForm.stop.id,
+          expectedStatus:currentFormStop!.status,eventKey:def.key,photos,signatureDataUrl,details:{
+            event_subtype:def.key,event_label:def.label,notes:reason,return_reason:returnReason.trim() || null,
+            receiver_name:receiverName.trim() || null,receiver_document:receiverDoc.trim() || null,
+            returned_items:positiveItems,discount_amount:discountAmount || null,discount_kind:discountKind,
+            discount_reason:discountReason.trim() || null,boleto_due_date:boletoDueDate || null,boleto_note:boletoNote.trim() || null,
+          }});
       }
-
-      // Caminho seguro: finalizador "ENTREGUE" passa por RPC transacional.
-      if (def.finalAction === 'delivered') {
-        try {
-          const { error: rpcErr, data } = await supabase.rpc('driver_finalize_delivery', {
-            _stop_id: eventForm.stop.id,
-            _receiver_name: receiverName.trim(),
-            _signature_path: signaturePath ?? undefined,
-            _photo_paths: photoPaths,
-            _receiver_document: receiverDoc.trim() || undefined,
-            _receiver_role: undefined,
-            _notes: notes || undefined,
-          });
-          if (rpcErr) {
-            console.error('[DriverDeliveries] Finalize RPC error:', rpcErr);
-            throw rpcErr;
-          }
-          return data;
-        } catch (error: unknown) {
-          console.error('[DriverDeliveries] Finalize mutation error:', error);
-          throw error;
+      setSubmissionLocked(true);
+      setSearchParams({trip:trip.id},{replace:true});
+      try { return await submissionRef.current.submit(); }
+      catch (error) {
+        if (submissionRef.current.canRevise) {
+          submissionRef.current=null; setSubmissionLocked(false);
+          await invalidateDeliveryQueries(qc);
         }
-      }
-
-      // Mapa de eventos → RPCs seguras. Nenhum write direto em tabela operacional.
-      const reason = notes?.trim() || null;
-
-      if (def.key === 'chegada_no_cliente') {
-        try {
-          const { error, data } = await supabase.rpc('driver_mark_arrival', { _stop_id: eventForm.stop.id });
-          if (error) {
-            console.error('[DriverDeliveries] Arrival RPC error:', error);
-            throw error;
-          }
-          return data;
-        } catch (error: unknown) {
-          console.error('[DriverDeliveries] Arrival mutation error:', error);
-          throw error;
-        }
-      }
-
-      // Status finalizadores via driver_update_stop_status
-      const STATUS_MAP: Record<string, string | undefined> = {
-        devolucao_parcial: 'partial_delivery',
-        devolucao_total: 'returned',
-        cliente_recusou: 'refused',
-        cliente_estava_fora: 'failed',
-      };
-      const mappedStatus = STATUS_MAP[def.key];
-      if (mappedStatus) {
-        try {
-          const { error: statusErr } = await supabase.rpc('driver_update_stop_status', {
-            _stop_id: eventForm.stop.id,
-            _new_status: mappedStatus,
-            _reason: reason ?? undefined,
-          });
-          
-          if (statusErr) {
-            console.error('[DriverDeliveries] Status update RPC error:', statusErr);
-            throw statusErr;
-          }
-
-          // anexa evento contextual (fotos, recebedor, itens) sem alterar status
-          const { error: evtErr } = await supabase.rpc('driver_create_event', {
-            _trip_id: trip!.id,
-            _event_type: `info_${def.key}`,
-            _payload: {
-              event_subtype: def.key,
-              event_label: def.label,
-              receiver_name: receiverName.trim() || null,
-              receiver_document: receiverDoc.trim() || null,
-              photo_paths: photoPaths,
-              photo_count: photoPaths.length,
-              signature_path: signaturePath,
-              returned_items: returnedItems,
-            },
-            _stop_id: eventForm.stop.id,
-            _notes: reason ?? undefined,
-          });
-          
-          if (evtErr) {
-            console.error('[DriverDeliveries] Contextual event RPC error:', evtErr);
-            // Non-critical, but log it
-          }
-
-          setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
-          return null;
-        } catch (error: unknown) {
-          console.error('[DriverDeliveries] Status update chain error:', error);
-          throw error;
-        }
-      }
-
-      // Eventos informativos (avaria, solicitar_desconto, atualizar_boleto, coleta_realizada, etc.)
-      try {
-        const { error: evtErr, data } = await supabase.rpc('driver_create_event', {
-          _trip_id: trip!.id,
-          _event_type: `info_${def.key}`,
-          _payload: {
-            event_subtype: def.key,
-            event_label: def.label,
-            receiver_name: receiverName.trim() || null,
-            receiver_document: receiverDoc.trim() || null,
-            photo_paths: photoPaths,
-            photo_count: photoPaths.length,
-            signature_path: signaturePath,
-            discount_amount: discountAmount || null,
-            discount_kind: discountKind,
-            discount_reason: discountReason || null,
-            boleto_due_date: boletoDueDate || null,
-            boleto_note: boletoNote || null,
-          },
-          _stop_id: eventForm.stop.id,
-          _notes: reason ?? undefined,
-        });
-        
-        if (evtErr) {
-          console.error('[DriverDeliveries] Info event RPC error:', evtErr);
-          throw evtErr;
-        }
-        
-        setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
-        return data;
-      } catch (error: unknown) {
-        console.error('[DriverDeliveries] Info event mutation error:', error);
         throw error;
       }
     },
-    onSuccess: () => {
-      toast({ title: 'Evento lançado com sucesso' });
-      resetForm();
-      setEventCatalogStop(null);
-      qc.invalidateQueries({ queryKey: ['driver_delivery_stops'] });
-      qc.invalidateQueries({ queryKey: ['driver_stops'] });
+    onSuccess: async result => {
+      if (result) setLastEventId(result.operational_event_id);
+      toast({title:result ? 'Evento registrado e enviado à operação' : 'Chegada registrada'});
+      resetForm(); setEventCatalogStop(null);
+      await invalidateDeliveryQueries(qc);
     },
-    onError: (error: unknown) => toast({
-      title: 'Erro',
-      description: error instanceof Error ? error.message : 'Não foi possível registrar o evento.',
-      variant: 'destructive',
-    }),
+    onError: error => toast({title:'Envio não confirmado',description:deliveryErrorMessage(error),variant:'destructive'}),
   });
 
-  if (!trip?.id && !stopsLoading) {
+  const pageError = driverQuery.error ?? tripQuery.error ?? stopsQuery.error;
+  if (pageError) return <Card><CardContent className="py-8 space-y-3" role="alert">
+    <p>{deliveryErrorMessage(pageError)}</p>
+    <Button onClick={() => { void driverQuery.refetch(); void tripQuery.refetch(); if (trip?.id) void stopsQuery.refetch(); }}>Tentar novamente</Button>
+  </CardContent></Card>;
+  if (driverQuery.isLoading || (!!driver && tripQuery.isLoading) || (!!trip && stopsQuery.isLoading)) {
+    return <p role="status">Carregando entregas...</p>;
+  }
+
+  if (!trip?.id) {
     return (
       <Card>
         <CardContent className="py-12 text-center space-y-4">
@@ -531,42 +352,21 @@ export default function DriverDeliveries() {
 
   const def = eventForm ? getEventDef(eventForm.eventKey) : null;
   const totalReturnedQty = Object.values(returnedItems).reduce((a, b) => a + (b || 0), 0);
-  const canSubmit =
-    !!def &&
-    (!def.requiresReceiver || receiverName.trim().length >= 2) &&
-    (!def.requiresPhoto || photos.length >= 1) &&
-    (!def.requiresSignature || !!signatureDataUrl) &&
-    (!def.showsItems || !def.finalAction || def.key === 'avaria' || def.key === 'cliente_recusou' || totalReturnedQty > 0) &&
-    (!def.showsDiscount || (parseFloat(discountAmount) > 0 && discountReason.trim().length >= 3));
-
-  const sendFollowUp = () => {
-    if (!followUp.trim() || !threadKey) return;
-    const msg: ThreadMsg = {
-      id: `m-${Date.now()}-fu`,
-      from: 'driver',
-      author: driver?.name || 'Motorista',
-      text: followUp.trim(),
-      at: new Date().toISOString(),
-      status: 'info',
-    };
-    setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), msg] }));
-    setFollowUp('');
-    // resposta simulada do operador
-    setTimeout(() => {
-      setThreads((prev) => {
-        const list = prev[threadKey] || [];
-        const reply: ThreadMsg = {
-          id: `m-${Date.now()}-opfu`,
-          from: 'operator',
-          author: 'Operação CD',
-          text: 'Recebido, motorista. Vou verificar e te respondo em instantes.',
-          at: new Date().toISOString(),
-          status: 'info',
-        };
-        return { ...prev, [threadKey]: [...list, reply] };
-      });
-    }, 1500);
-  };
+  const totalProductQty = stopProducts.reduce((sum,item) => sum+item.qty,0);
+  const mappedOutcome = def ? deliveryOutcome(def.key) : undefined;
+  const reason = [notes,returnReason,discountReason,boletoNote].map(value => value.trim()).filter(Boolean).join('\n');
+  const quantitiesValid = Object.entries(returnedItems).every(([id,qty]) => Number.isFinite(qty) && qty>=0
+    && stopProducts.some(item => item.id===id && qty<=item.qty));
+  const canSubmit = !!def && isDriverTripStarted(trip.status,trip.actual_start_at)
+    && !!currentFormStop && !isStopTerminal(currentFormStop.status) && !stopsQuery.isFetching
+    && (!mappedOutcome || !!currentFormStop.actual_arrival_at)
+    && (!def.requiresReceiver || receiverName.trim().length>=2)
+    && (!def.requiresPhoto || photos.length>0) && (!def.requiresSignature || !!signatureDataUrl)
+    && (def.key==='entregue' || def.key==='chegada_no_cliente' || reason.length>=3)
+    && (!def.showsItems || (!productsQuery.isLoading && !productsQuery.error && quantitiesValid))
+    && (mappedOutcome!=='partial_delivery' || (totalReturnedQty>0 && totalReturnedQty<totalProductQty))
+    && (!['returned','refused'].includes(mappedOutcome ?? '') || totalReturnedQty===0 || totalReturnedQty===totalProductQty)
+    && (!def.showsDiscount || (Number(discountAmount)>0 && discountReason.trim().length>=3));
 
   return (
     <div className="space-y-4">
@@ -578,13 +378,17 @@ export default function DriverDeliveries() {
       </div>
 
 
+      {lastEventId && <Button variant="outline" onClick={() => navigate(`/driver/events/${lastEventId}`)}>Ver evento enviado à operação</Button>}
+      {!isDriverTripStarted(trip.status,trip.actual_start_at) && trip.status!=='completed' && (
+        <p role="alert" className="text-sm text-destructive">A viagem precisa estar iniciada para registrar chegadas e entregas.</p>
+      )}
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar cliente ou nº da nota"
+          aria-label="Buscar cliente ou número da nota" placeholder="Buscar cliente ou nº da nota"
           className="pl-9 h-10 text-sm"
         />
       </div>
@@ -662,7 +466,7 @@ export default function DriverDeliveries() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{stop.clients?.company_name || stop.destination || 'Parada'}</p>
                     </div>
-                    <Badge variant="secondary" className="text-[10px]">OK</Badge>
+                    <Badge variant="secondary" className="text-[10px]">{stopStatusLabel(stop.status)}</Badge>
                   </CardContent>
                 </Card>
               ))}
@@ -725,7 +529,7 @@ export default function DriverDeliveries() {
       </Sheet>
 
       {/* Sheet: Dados do evento */}
-      <Sheet open={!!eventForm} onOpenChange={(o) => !o && resetForm()}>
+      <Sheet open={!!eventForm} onOpenChange={(o) => { if (!o && !submitEvent.isPending) resetForm(); }}>
         <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="text-base">Dados do evento</SheetTitle>
@@ -737,6 +541,7 @@ export default function DriverDeliveries() {
                 Evento: <span className="font-bold">{def.label}</span>
               </div>
 
+              <fieldset disabled={submitEvent.isPending || submissionLocked} className="space-y-4 disabled:opacity-70">
               {/* Cliente / parada resumo */}
               {eventForm?.stop && (
                 <div className="rounded-md border border-border p-3 space-y-1 bg-muted/30">
@@ -813,6 +618,9 @@ export default function DriverDeliveries() {
               )}
 
               {/* Bloco PRODUTOS para devolução */}
+              {def.showsItems && def.category === 'finalizador' && allStopProducts.length > stopProducts.length && (
+                <p role="status" className="text-sm text-muted-foreground">Notas já concluídas foram preservadas. A devolução considera somente os itens restantes desta parada.</p>
+              )}
               {def.showsItems && stopProducts.length > 0 && (
                 <div className="space-y-2 rounded-md border border-border p-3">
                   <div className="flex items-center justify-between">
@@ -860,11 +668,11 @@ export default function DriverDeliveries() {
                               <Label className="text-[10px] text-muted-foreground">Devolver:</Label>
                               <Input
                                 type="number"
-                                min={1}
+                                aria-label={`Quantidade devolvida de ${p.name}`} min={0} step="any"
                                 max={p.qty}
                                 value={q}
                                 onChange={(e) => {
-                                  const v = Math.min(p.qty, Math.max(0, parseInt(e.target.value || '0', 10)));
+                                  const v = Math.min(p.qty, Math.max(0, Number(e.target.value || '0')));
                                   setReturnedItems((prev) => ({ ...prev, [p.id]: v }));
                                 }}
                                 className="h-7 text-xs w-20"
@@ -887,7 +695,7 @@ export default function DriverDeliveries() {
                     rows={2}
                     value={returnReason}
                     onChange={(e) => setReturnReason(e.target.value)}
-                    placeholder="Motivo da devolução (avaria, validade, divergência...)"
+                    aria-label="Motivo da devolução" placeholder="Motivo da devolução (avaria, validade, divergência...)"
                     className="text-sm"
                   />
                 </div>
@@ -895,11 +703,11 @@ export default function DriverDeliveries() {
 
               {/* Recebedor */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">
+                <Label htmlFor="delivery-receiver" className="text-xs font-medium">
                   Recebedor {def.requiresReceiver && <span className="text-destructive">*</span>}
                 </Label>
                 <Input
-                  placeholder="Digite o nome aqui"
+                  id="delivery-receiver" placeholder="Digite o nome aqui"
                   value={receiverName}
                   onChange={(e) => setReceiverName(e.target.value)}
                   className="text-sm h-10"
@@ -909,9 +717,9 @@ export default function DriverDeliveries() {
 
               {/* Documento */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Número do documento</Label>
+                <Label htmlFor="delivery-document" className="text-xs font-medium">Número do documento</Label>
                 <Input
-                  placeholder="RG/CPF"
+                  id="delivery-document" placeholder="RG/CPF"
                   value={receiverDoc}
                   onChange={(e) => setReceiverDoc(e.target.value)}
                   className="text-sm h-10"
@@ -922,9 +730,9 @@ export default function DriverDeliveries() {
 
               {/* Observações */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Observações</Label>
+                <Label htmlFor="delivery-notes" className="text-xs font-medium">Observações</Label>
                 <Textarea
-                  placeholder="Observações"
+                  id="delivery-notes" placeholder="Observações"
                   rows={3}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -945,7 +753,7 @@ export default function DriverDeliveries() {
                         <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
                         <button
                           type="button"
-                          onClick={() => removePhoto(i)}
+                          aria-label={`Remover foto ${i+1}`} onClick={() => removePhoto(i)}
                           className="absolute top-1 right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"
                         >
                           <X className="h-3 w-3" />
@@ -1016,6 +824,19 @@ export default function DriverDeliveries() {
 
               {/* Fallback signature pad para finalizador requerido — já renderizado acima quando required */}
 
+              </fieldset>
+              {submissionLocked && <p role="status" className="text-sm">Os dados deste envio foram preservados. Tentar novamente usa os mesmos anexos e identificador.</p>}
+              {def.showsItems && productsQuery.isLoading && <p role="status">Carregando itens desta tentativa…</p>}
+              {productsQuery.error && <div role="alert" className="space-y-2 text-sm text-destructive">
+                <p>{deliveryErrorMessage(productsQuery.error)}</p>
+                <Button variant="outline" type="button" onClick={() => void productsQuery.refetch()}>Recarregar itens</Button>
+              </div>}
+              {!submissionLocked && (!currentFormStop || isStopTerminal(currentFormStop.status)) && <p role="alert" className="text-sm">A parada foi encerrada ou reatribuída. Os campos preenchidos foram preservados.</p>}
+              {mappedOutcome && currentFormStop && !currentFormStop.actual_arrival_at && <p role="alert" className="text-sm">Registre a chegada antes do resultado da entrega.</p>}
+              {mappedOutcome==='partial_delivery' && !(totalReturnedQty>0 && totalReturnedQty<totalProductQty) && (
+                <p role="alert" className="text-sm">Na entrega parcial, devolva uma quantidade maior que zero e menor que o total.</p>
+              )}
+              {def.key!=='entregue' && def.key!=='chegada_no_cliente' && reason.length<3 && <p className="text-sm">Informe um motivo ou descrição com pelo menos três caracteres.</p>}
               {/* Validação */}
               {!canSubmit && (
                 <div className="bg-muted/50 rounded-md px-3 py-2 space-y-0.5">
@@ -1041,59 +862,12 @@ export default function DriverDeliveries() {
                 size="lg"
                 className="w-full"
                 onClick={() => submitEvent.mutate()}
-                disabled={!canSubmit || submitEvent.isPending}
+                disabled={(!canSubmit && !submissionLocked) || submitEvent.isPending}
               >
-                {submitEvent.isPending ? 'Enviando...' : 'Lançar evento'}
+                {submitEvent.isPending ? 'Enviando...' : submissionLocked ? 'Tentar novamente o mesmo envio' : 'Lançar evento'}
               </Button>
 
-              {/* Thread de mensagens com a operação */}
-              {currentThread.length > 0 && (
-                <div className="space-y-2 rounded-md border border-border p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                      Conversa com a operação
-                    </p>
-                    {currentThread[0]?.status === 'pending' && (
-                      <Badge variant="outline" className="text-[10px] gap-1">
-                        <Clock className="h-3 w-3" /> Aguardando
-                      </Badge>
-                    )}
-                    {currentThread.some(m => m.status === 'approved') && (
-                      <Badge className="text-[10px] bg-success text-success-foreground">Aprovado</Badge>
-                    )}
-                  </div>
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {currentThread.map((m) => (
-                      <div key={m.id} className={cn('flex flex-col', m.from === 'driver' ? 'items-end' : 'items-start')}>
-                        <div className={cn(
-                          'max-w-[85%] rounded-lg px-3 py-2 text-xs whitespace-pre-wrap',
-                          m.from === 'driver' ? 'bg-primary text-primary-foreground' : 'bg-muted',
-                        )}>
-                          {m.text}
-                        </div>
-                        <div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground">
-                          <UserIcon className="h-2.5 w-2.5" />
-                          <span>{m.author}</span>
-                          <span>·</span>
-                          <span>{new Date(m.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2 pt-1 border-t border-border">
-                    <Input
-                      value={followUp}
-                      onChange={(e) => setFollowUp(e.target.value)}
-                      placeholder="Enviar mensagem para a operação..."
-                      className="h-9 text-xs"
-                      onKeyDown={(e) => { if (e.key === 'Enter') sendFollowUp(); }}
-                    />
-                    <Button size="sm" onClick={sendFollowUp} disabled={!followUp.trim()}>
-                      <Send className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <p className="text-xs text-muted-foreground">Solicitações são registradas para análise da operação. O envio não representa aprovação.</p>
             </div>
           )}
         </SheetContent>
@@ -1144,18 +918,18 @@ export default function DriverDeliveries() {
                 <div>
                   <p className="text-xs font-semibold">Saída</p>
                   <p className="text-xs text-muted-foreground">
-                    {detailStop.actual_arrival_at
-                      ? new Date(detailStop.actual_arrival_at).toLocaleString('pt-BR', {
+                    {detailStop.actual_departure_at
+                      ? new Date(detailStop.actual_departure_at).toLocaleString('pt-BR', {
                           day: '2-digit', month: '2-digit', year: 'numeric',
                           hour: '2-digit', minute: '2-digit',
                         })
-                      : 'Dia ' + new Date().toLocaleDateString('pt-BR') + ' às 05:00'}
+                      : 'Saída não registrada'}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs font-semibold">Previsão</p>
                   <p className="text-xs text-muted-foreground">
-                    Dia {new Date().toLocaleDateString('pt-BR')}, das 08:00 às 18:00
+                    {detailStop.planned_arrival_at ? new Date(detailStop.planned_arrival_at).toLocaleString('pt-BR') : 'Sem previsão cadastrada'}
                   </p>
                 </div>
               </div>
@@ -1168,9 +942,7 @@ export default function DriverDeliveries() {
                   detailStop.status === 'arrived' && 'bg-primary/10 text-primary',
                   detailStop.status === 'completed' && 'bg-green-100 text-green-700',
                 )}>
-                  {detailStop.status === 'arrived' ? 'No local'
-                    : detailStop.status === 'completed' ? 'Concluída'
-                    : 'Pendente'}
+                  {stopStatusLabel(detailStop.status)}
                 </Badge>
               </div>
 
@@ -1184,7 +956,7 @@ export default function DriverDeliveries() {
                     setEventCatalogStop(detailStop);
                     setDetailStop(null);
                   }}
-                  disabled={detailStop.status === 'completed'}
+                  disabled={isStopTerminal(detailStop.status)}
                 >
                   <PenLine className="h-4 w-4 mr-1.5" /> Lançar evento
                 </Button>
@@ -1195,7 +967,7 @@ export default function DriverDeliveries() {
                     setEventForm({ stop: detailStop, eventKey: 'entregue' });
                     setDetailStop(null);
                   }}
-                  disabled={detailStop.status === 'completed'}
+                  disabled={isStopTerminal(detailStop.status)}
                 >
                   <CheckCircle className="h-4 w-4 mr-1.5" /> TudoEntregue
                 </Button>

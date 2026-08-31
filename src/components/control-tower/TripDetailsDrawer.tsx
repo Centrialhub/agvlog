@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Truck, MapPin, Clock, AlertTriangle, RefreshCw, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { STATE_COLORS, STATE_LABELS, type ActiveTripLive } from '@/lib/controlTower/types';
 import { Link } from 'react-router-dom';
+import { calculateTripRoute } from '@/lib/controlTower/routeCalculation';
+import { useAuth } from '@/hooks/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
 
 function fmtTime(iso?: string | null) {
   if (!iso) return '—';
@@ -31,6 +33,9 @@ export default function TripDetailsDrawer({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const client = useQueryClient();
   const [recalculating, setRecalculating] = useState(false);
 
   if (!trip) return null;
@@ -38,15 +43,14 @@ export default function TripDetailsDrawer({
   const color = STATE_COLORS[trip.state];
 
   const handleRecalc = async () => {
+    if(!user || recalculating)return;
     setRecalculating(true);
     try {
-      const { error } = await supabase.functions.invoke('calculate-trip-route', {
-        body: { trip_id: trip.trip_id },
-      });
-      if (error) throw error;
+      await calculateTripRoute(trip.tenant_id,user.id,trip.trip_id);
       toast({ title: 'Rota recalculada', description: 'Geometria atualizada via OSRM.' });
-    } catch (e: any) {
-      toast({ title: 'Falha ao calcular rota', description: e?.message ?? 'OSRM indisponível', variant: 'destructive' });
+      await client.invalidateQueries({queryKey:['active-trips-live',trip.tenant_id]});
+    } catch (error) {
+      toast({ title: 'Falha ao calcular rota', description: error instanceof Error ? error.message : 'Confirmação pendente. Tente novamente.', variant: 'destructive' });
     } finally {
       setRecalculating(false);
     }

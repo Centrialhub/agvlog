@@ -1,4 +1,4 @@
-import { promptAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   useShortageCases, useCreateShortageCase, useUpdateShortageStatus,
   useShortageReportRows, useImportBatches,
@@ -45,6 +45,8 @@ const STATUSES = [
 const RESPONSIBLES = ['driver','supplier','customer','company','unknown','not_applicable'];
 
 export default function MerchandiseShortages() {
+  const { promptAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const now = new Date();
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [year, setYear] = useState<number>(now.getFullYear());

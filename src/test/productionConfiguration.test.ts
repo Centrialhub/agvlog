@@ -128,10 +128,24 @@ describe("production configuration contract", () => {
     expect(hardening).toContain("using (false)");
   });
 
+  it("does not expose autonomous tenant provisioning through the Data API", () => {
+    const migration = read(
+      "supabase",
+      "migrations",
+      "20260830013726_restrict_tenant_creation_to_platform.sql",
+    );
+
+    expect(migration).toContain("public.create_tenant_with_owner(text)");
+    expect(migration).toContain("from public, anon, authenticated, service_role");
+    expect(migration).not.toMatch(/grant\s+execute[\s\S]*create_tenant_with_owner/i);
+    expect(migration).toContain("Tenant provisioning is restricted to the platform backend");
+  });
+
   it("requires TOTP MFA for privileged roles", () => {
     const config = read("supabase", "config.toml");
     const routeGuards = read("src", "app", "routeGuards.tsx");
     const mfaGate = read("src", "components", "auth", "PrivilegedMfaGate.tsx");
+    const mfaFlow = read("src", "hooks", "usePrivilegedMfa.ts");
 
     expect(config).toContain("[auth.mfa]");
     expect(config).toContain("[auth.mfa.totp]");
@@ -139,22 +153,17 @@ describe("production configuration contract", () => {
     expect(config).toContain("verify_enabled = true");
     expect(config).toContain('additional_redirect_urls = ["https://agvlog.lovable.app/set-password"]');
     expect(routeGuards).toContain("PrivilegedMfaGate");
-    expect(mfaGate).toContain('currentRole === "owner" || currentRole === "admin"');
-    expect(mfaGate).toContain("getAuthenticatorAssuranceLevel");
-    expect(mfaGate).toContain("supabase.auth.mfa.enroll");
-    expect(mfaGate).toContain("supabase.auth.mfa.verify");
+    expect(mfaGate).toContain('currentRole !== "owner" && currentRole !== "admin"');
+    expect(mfaGate).toContain("usePrivilegedMfa(actor, token, expiresAt)");
+    expect(mfaFlow).toContain("getAuthenticatorAssuranceLevel(token)");
+    expect(mfaFlow).toContain("supabase.auth.mfa.enroll");
+    expect(mfaFlow).toContain("supabase.auth.mfa.verify");
     expect(routeGuards).toContain("<RequireInternalRole>{children}</RequireInternalRole>");
     expect(routeGuards).toContain("if (!user) return <Navigate to=\"/auth\" replace />");
   });
 
-  it("keeps service-role Edge mutations authorized without MFA dependencies", () => {
+  it("tracks service credentials explicitly and keeps Control Tower writes on caller JWT/MFA", () => {
     const functionsRoot = join(root, "supabase", "functions");
-    const browserAuthenticatedHandlers = new Set([
-      "cte-sefaz-callback",
-      "get-client-pod-signed-url",
-      "hub-fiscal-webhook-in",
-      "secure-upload",
-    ]);
     const serviceRoleHandlers = readdirSync(functionsRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_"))
       .map((entry) => ({
@@ -163,13 +172,30 @@ describe("production configuration contract", () => {
       }))
       .filter(({ source }) => source.includes("SUPABASE_SERVICE_ROLE_KEY"));
 
-    expect(serviceRoleHandlers).toHaveLength(30);
-    for (const { name, source } of serviceRoleHandlers) {
-      if (browserAuthenticatedHandlers.has(name)) continue;
-      expect(source, `${name} must not retain MFA/AAL checks`).not.toMatch(
-        /hasRequiredAalForRole|auth-assurance|MFA_REQUIRED|MFA required|aal2/i,
-      );
+    // Inventory is not an authorization audit. Remaining handlers need their
+    // own role/tenant/MFA review; do not require the absence of MFA protections.
+    expect(serviceRoleHandlers.map(handler => handler.name).sort()).toEqual([
+      "agvlog-aggregate-daily", "agvlog-compute-state", "agvlog-integration-upsert",
+      "agvlog-pipeline-run", "agvlog-process-vehicle", "agvlog-run-queue",
+      "clients-merge-contacts-addresses", "create-team-member", "cte-sefaz-callback",
+      "cte-status-poll", "emit-nfse", "frontend-error-report", "get-client-pod-signed-url",
+      "hub-fiscal-credential-save", "hub-fiscal-proxy", "hub-fiscal-webhook-in",
+      "list-tenant-members", "nfse-status-poll", "search-users-by-email", "secure-upload",
+      "ssx-diagnostic", "ssx-insert-person", "ssx-insert-person-client", "ssx-login",
+      "ssx-poll-positions", "ssx-sync-telemetry", "ssx-sync-units", "update-team-member",
+      "update-trip-live-status",
+    ].sort());
+    for (const name of ["calculate-trip-route", "update-trip-live-status"]) {
+      const source=read("supabase","functions",name,"index.ts");
+      expect(source).toContain("canManageControlTower(anon,");
+      expect(source).toMatch(/const supabase\s*=\s*anon;/);
     }
+    expect(read("supabase","functions","calculate-trip-route","index.ts")).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(read("supabase","functions","update-trip-live-status","index.ts")).toContain("requireIntegrationCapability(capabilityClient,tenant_id,'ssx')");
+    const guard=read("supabase","functions","_shared","control-tower-auth.ts");
+    expect(guard).toContain("getAuthenticatorAssuranceLevel()");
+    expect(guard).toContain("currentLevel!=='aal2'");
+    expect(guard).toContain("rpc('is_tenant_operator_or_admin'");
   });
 
   it("requires platform JWT validation for browser-invoked Edge Functions", () => {

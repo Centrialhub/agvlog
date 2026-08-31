@@ -7,10 +7,10 @@ import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch } from '@/lib/listFilters';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Download, Search, X } from 'lucide-react';
+import { Loader2, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -46,14 +46,7 @@ export default function PortalPods() {
   const download = useDownloadPortalPod();
   const { toast } = useToast();
 
-  const filtered = useMemo(() => {
-    if (!search) return pods;
-    const q = search.toLowerCase();
-    return pods.filter((p) =>
-      (p.invoice_number ?? '').toLowerCase().includes(q) ||
-      (p.receiver_name ?? '').toLowerCase().includes(q)
-    );
-  }, [pods, search]);
+  const filtered = useMemo(() => pods.filter(row => matchesSearch(search, row.invoice_number, row.receiver_name)), [pods, search]);
 
   const handleDownload = async (id: string) => {
     try {
@@ -65,34 +58,17 @@ export default function PortalPods() {
   };
 
   const canDownload = can('can_download_documents');
-  const anyFilter = status !== 'all' || !!search || !!startDate || !!endDate;
+  const activeCount = Number(status !== 'all') + Number(Boolean(search)) + Number(Boolean(startDate)) + Number(Boolean(endDate));
   const clear = () => { setStatus('all'); setSearch(''); setStartDate(''); setEndDate(''); };
 
   return (
     <PortalSection title="Canhotos / POD" description="Comprovantes de entrega das suas mercadorias.">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por NF ou recebedor..." className="pl-8 h-9 text-sm" />
-        </div>
-        <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-[180px] h-9 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            <SelectItem value="pending">Pendente</SelectItem>
-            <SelectItem value="uploaded">Recebido</SelectItem>
-            <SelectItem value="validated">Validado</SelectItem>
-            <SelectItem value="rejected">Rejeitado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 text-sm w-[140px]" />
-        <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 text-sm w-[140px]" />
-        {anyFilter && (
-          <Button variant="ghost" size="sm" onClick={clear} className="h-9">
-            <X className="h-3.5 w-3.5 mr-1" /> Limpar
-          </Button>
-        )}
-      </div>
+      <div className="mb-4"><ListFilterBar fields={[
+        { key: 'search', label: 'Buscar canhoto', type: 'search', value: search, onChange: setSearch, placeholder: 'Nota fiscal ou recebedor' },
+        { key: 'status', label: 'Situação', value: status, onChange: setStatus, options: [{ value: 'all', label: 'Todas as situações' }, ...Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))] },
+        { key: 'from', label: 'Recebido de', type: 'date', value: startDate, max: endDate || undefined, onChange: setStartDate },
+        { key: 'to', label: 'Recebido até', type: 'date', value: endDate, min: startDate || undefined, onChange: setEndDate },
+      ]} onReset={clear} activeCount={activeCount} resultCount={error ? undefined : filtered.length} totalCount={pods.length} loading={isLoading} description="Busca por nota e recebedor nos até 200 canhotos carregados para o período." /></div>
 
       {/* Desktop */}
       <Card className="hidden md:block">

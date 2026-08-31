@@ -1,3 +1,6 @@
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch, matchesDateRange } from '@/lib/listFilters';
 import { useState, useMemo } from 'react';
 import { useReceivables, useCreateReceivable, useUpdateReceivable, RECEIVABLE_STATUS_LABELS, RECEIVABLE_STATUSES } from '@/hooks/useReceivables';
 import { useClients } from '@/hooks/useClients';
@@ -10,42 +13,48 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, DollarSign, TrendingUp, CheckCircle } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { Plus, DollarSign, TrendingUp, CheckCircle } from 'lucide-react';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
 import ReceivablePaymentDialog from '@/components/financial/ReceivablePaymentDialog';
 import type { Receivable } from '@/hooks/useReceivables';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 import { getErrorMessage } from '@/lib/errors';
+import {receivableTotals} from '@/lib/financial/receivableTotals';
+import {useTenant} from '@/hooks/useTenant';
+import {useAuth} from '@/hooks/useAuth';
 
 export default function Receivables() {
+  const {currentTenant}=useTenant();const {user}=useAuth();
+  return <ReceivablesScreen key={`${currentTenant?.id}:${user?.id}`}/>;
+}
+function ReceivablesScreen() {
+  const toast = useSonnerToast();
   const { data: receivables = [], isLoading } = useReceivables();
   const { data: clients = [] } = useClients();
   const createReceivable = useCreateReceivable();
   const updateReceivable = useUpdateReceivable();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', client: 'all', from: '', to: '' });
+  const { search, status: statusFilter } = filters;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     description: '', client_id: '', amount: '', due_date: '', invoice_number: '', notes: '', status: 'pending',
   });
   const [paymentReceivable, setPaymentReceivable] = useState<Receivable | null>(null);
+  const editedReceivable=receivables.find(row=>row.id===editingId);
+  const manualStatusAllowed=(!editingId||!!editedReceivable)&&!editedReceivable?.client_invoice_id&&!Number(editedReceivable?.received_amount||0)&&['pending','cancelled'].includes(form.status);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return receivables.filter(r => {
-      if (q && !(r.description || '').toLowerCase().includes(q) && !(r.invoice_number || '').toLowerCase().includes(q) && !(r.clients?.company_name || '').toLowerCase().includes(q)) return false;
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-      return true;
-    });
-  }, [receivables, search, statusFilter]);
+  const filtered = useMemo(() => receivables.filter(receivable =>
+    matchesSearch(search, receivable.description, receivable.invoice_number, receivable.clients?.company_name) &&
+    (statusFilter === 'all' || (statusFilter === 'overdue'
+      ? Boolean(receivable.due_date) && new Date(receivable.due_date + 'T23:59:59') < new Date() && !['received', 'cancelled'].includes(receivable.status)
+      : receivable.status === statusFilter)) &&
+    (filters.client === 'all' || receivable.client_id === filters.client) &&
+    matchesDateRange(receivable.due_date, filters.from, filters.to)
+  ), [receivables, search, statusFilter, filters.client, filters.from, filters.to]);
 
-  const totals = useMemo(() => ({
-    pending: receivables.filter(r => r.status === 'pending').reduce((sum, r) => sum + Number(r.amount || 0), 0),
-    invoiced: receivables.filter(r => r.status === 'invoiced').reduce((sum, r) => sum + Number(r.amount || 0), 0),
-    received: receivables.filter(r => r.status === 'received').reduce((sum, r) => sum + Number(r.received_amount || r.amount || 0), 0),
-  }), [receivables]);
+  const totals = useMemo(() => receivableTotals(receivables), [receivables]);
 
   const resetForm = () => {
     setForm({ description: '', client_id: '', amount: '', due_date: '', invoice_number: '', notes: '', status: 'pending' });
@@ -101,7 +110,6 @@ export default function Receivables() {
         invoice_number: form.invoice_number || null,
         notes: form.notes || null,
         status: form.status,
-        received_at: form.status === 'received' ? new Date().toISOString() : undefined,
       };
       if (editingId) {
         await updateReceivable.mutateAsync({ id: editingId, ...values });
@@ -142,33 +150,26 @@ export default function Receivables() {
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-4">
         <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Pendente</p>
+          <p className="text-xs text-muted-foreground">Em aberto sem fatura</p>
           <p className="text-xl font-bold text-warning">{fmt(totals.pending)}</p>
         </CardContent></Card>
         <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Faturado</p>
+          <p className="text-xs text-muted-foreground">Faturado em aberto</p>
           <p className="text-xl font-bold text-blue-600">{fmt(totals.invoiced)}</p>
         </CardContent></Card>
         <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Recebido</p>
+          <p className="text-xs text-muted-foreground">Recebido líquido (inclui parciais)</p>
           <p className="text-xl font-bold text-green-600">{fmt(totals.received)}</p>
         </CardContent></Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {RECEIVABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{RECEIVABLE_STATUS_LABELS[s]}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={receivables.length} loading={isLoading} description="Os indicadores acima mostram todos os títulos." fields={[
+        { key: 'search', label: 'Buscar título', type: 'search', placeholder: 'Descrição, fatura ou cliente', value: search, onChange: value => setFilter('search', value) },
+        { key: 'status', label: 'Situação', value: statusFilter, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, { value: 'overdue', label: 'Vencidos em aberto' }, ...RECEIVABLE_STATUSES.map(value => ({ value, label: RECEIVABLE_STATUS_LABELS[value] }))] },
+        { key: 'client', label: 'Cliente', value: filters.client, onChange: value => setFilter('client', value), options: [{ value: 'all', label: 'Todos os clientes' }, ...clients.map(client => ({ value: client.id, label: client.company_name }))] },
+        { key: 'from', label: 'Vencimento de', type: 'date', value: filters.from, onChange: value => setFilter('from', value), max: filters.to || undefined },
+        { key: 'to', label: 'Vencimento até', type: 'date', value: filters.to, onChange: value => setFilter('to', value), min: filters.from || undefined },
+      ]} />
 
       {/* Table */}
       <Card>
@@ -249,13 +250,8 @@ export default function Receivables() {
               <div><Label>Vencimento</Label><Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} /></div>
             </div>
             <div>
-              <Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {RECEIVABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{RECEIVABLE_STATUS_LABELS[s]}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {manualStatusAllowed?<label className="block">Status do título manual<select className="h-10 w-full rounded border bg-background px-3" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="pending">Pendente</option><option value="cancelled">Cancelado</option></select></label>:<p>Status: {RECEIVABLE_STATUS_LABELS[form.status as keyof typeof RECEIVABLE_STATUS_LABELS]||form.status}</p>}
+              <p className="text-xs text-muted-foreground">Recebimentos e estornos alteram o status automaticamente. Use a ação de recebimentos para registrar valores.</p>
             </div>
             <div><Label>Observações</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
             <div className="flex gap-2 justify-end">

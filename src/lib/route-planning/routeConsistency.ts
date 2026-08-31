@@ -64,6 +64,16 @@ export function validateRouteConsistency(
 
   const loadIdsSet = new Set(route.loads.map((l) => l.id));
   const allLoadFdIds = new Set<string>();
+  const documentLoads=new Map<string,Set<string>>();
+  route.loads.forEach(load=>{
+    if(load.items.length===0 || load.items.some(item=>!item.fiscal_document_id))
+      blocking.push('Há carga sem documentos ou com itens manuais. O fluxo de baixa desses itens ainda precisa ser habilitado.');
+    load.items.forEach(item=>{
+      if(!item.fiscal_document_id)return;
+      const ids=documentLoads.get(item.fiscal_document_id) || new Set<string>();ids.add(load.id);
+      documentLoads.set(item.fiscal_document_id,ids);
+    });
+  });
   route.loads.forEach((l) =>
     l.items.forEach((it) => {
       if (it.fiscal_document_id) allLoadFdIds.add(it.fiscal_document_id);
@@ -76,6 +86,7 @@ export function validateRouteConsistency(
   stops.forEach((s, idx) => {
     const i = idx + 1;
     if (!s.destination?.trim()) blocking.push(`Parada ${i}: destino obrigatório.`);
+    if (!s.fiscal_document_ids.length) blocking.push(`Parada ${i}: distribua os documentos desta entrega.`);
     if (!s.city) warnings.push(`Parada ${i}: sem cidade.`);
     s.load_ids.forEach((lid) => {
       if (!loadIdsSet.has(lid)) {
@@ -90,6 +101,9 @@ export function validateRouteConsistency(
       }
       fdSeen.set(fdId, (fdSeen.get(fdId) || 0) + 1);
     });
+    const actualLoads=new Set(s.fiscal_document_ids.flatMap(id=>[...(documentLoads.get(id) || [])]));
+    if(s.load_ids.length!==actualLoads.size || s.load_ids.some(id=>!actualLoads.has(id)))
+      blocking.push(`Parada ${i}: cargas não correspondem aos documentos distribuídos.`);
     if (s.risk_level === 'critical') {
       warnings.push(`Parada ${i}: ${s.risk_reason || 'risco crítico'}.`);
     } else if (s.risk_level === 'warning' && s.risk_reason && !s.risk_reason.startsWith('Cliente sem janela')) {
@@ -100,6 +114,10 @@ export function validateRouteConsistency(
   // Duplicate FD across distinct stops
   fdSeen.forEach((count, fdId) => {
     if (count > 1) blocking.push(`NF-e ${fdId.slice(0, 8)}… aparece em ${count} paradas diferentes.`);
+  });
+  allLoadFdIds.forEach(id=>{
+    if(!fdSeen.has(id))blocking.push(`NF-e ${id.slice(0,8)}… não aparece em nenhuma parada.`);
+    if((documentLoads.get(id)?.size || 0)>1)blocking.push(`NF-e ${id.slice(0,8)}… está vinculada a mais de uma carga.`);
   });
 
   // Loads not covered by any stop

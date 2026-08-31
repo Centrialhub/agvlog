@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeDriverTrip, resolveCanonicalTripLink, type DriverTripQueryRow } from '@/lib/driverTrip';
+import {
+  hasDriverLoadTransitMismatch,
+  isDriverTripStarted,
+  normalizeDriverTrip,
+  resolveCanonicalTripLink,
+  type DriverTripQueryRow,
+} from '@/lib/driverTrip';
 
 const baseTrip: Omit<DriverTripQueryRow, 'dispatch_trip_loads'> = {
   id: 'trip-1',
@@ -71,5 +77,24 @@ describe('driver trip canonical load relation', () => {
     ], ['planned', 'in_transit']);
 
     expect(link?.dispatch_trip_id).toBe('active-trip');
+  });
+
+  it('requires both a started status and actual start timestamp', () => {
+    expect(isDriverTripStarted('in_transit', '2026-08-29T12:00:00Z')).toBe(true);
+    expect(isDriverTripStarted('in_progress', '2026-08-29T12:00:00Z')).toBe(true);
+    expect(isDriverTripStarted('in_transit', null)).toBe(false);
+    expect(isDriverTripStarted('in_transit')).toBe(false);
+    expect(isDriverTripStarted('planned', null)).toBe(false);
+  });
+
+  it('flags an in-transit load whose trip was not started', () => {
+    expect(hasDriverLoadTransitMismatch('in_transit', {
+      dispatch_trip_id: 'trip-1',
+      dispatch_trips: { status: 'planned', actual_start_at: null },
+    })).toBe(true);
+    expect(hasDriverLoadTransitMismatch('in_transit', {
+      dispatch_trip_id: 'trip-1',
+      dispatch_trips: { status: 'in_transit', actual_start_at: '2026-08-29T12:00:00Z' },
+    })).toBe(false);
   });
 });

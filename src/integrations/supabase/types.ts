@@ -2342,6 +2342,7 @@ export type Database = {
           invoice_status: string
           issue_date_end: string | null
           issue_date_start: string | null
+          lifecycle_revision: number
           load_count: number
           notes: string | null
           open_amount: number
@@ -2406,6 +2407,7 @@ export type Database = {
           invoice_status?: string
           issue_date_end?: string | null
           issue_date_start?: string | null
+          lifecycle_revision?: number
           load_count?: number
           notes?: string | null
           open_amount?: number
@@ -2470,6 +2472,7 @@ export type Database = {
           invoice_status?: string
           issue_date_end?: string | null
           issue_date_start?: string | null
+          lifecycle_revision?: number
           load_count?: number
           notes?: string | null
           open_amount?: number
@@ -7298,18 +7301,21 @@ export type Database = {
       }
       idempotency_keys: {
         Row: {
+          response_body: Json | null
           created_at: string | null
           id: string
           key_value: string
           tenant_id: string
         }
         Insert: {
+          response_body?: Json | null
           created_at?: string | null
           id?: string
           key_value: string
           tenant_id: string
         }
         Update: {
+          response_body?: Json | null
           created_at?: string | null
           id?: string
           key_value?: string
@@ -15641,6 +15647,41 @@ export type Database = {
       }
     }
     Functions: {
+      filter_billable_fiscal_sources: { Args: { _tenant: string; _type: string; _ids: string[] }; Returns: string[] }
+      prepare_cte_issue: { Args: { _tenant_id: string; _emitter_id: string; _environment: string; _source_ids: string[]; _snapshot: Json }; Returns: Json }
+
+      get_driver_settlement_adjustment_context: { Args: { _tenant_id: string; _settlement_id: string }; Returns: Json }
+      apply_driver_settlement_adjustment: { Args: { _payload: Json }; Returns: Json }
+      get_driver_expense_review_context: { Args: { _tenant_id: string; _expense_id: string }; Returns: Json }
+      list_driver_expenses_for_review: { Args: { _tenant_id: string; _status?: string; _offset?: number }; Returns: Json }
+      review_driver_expense: { Args: { _payload: Json }; Returns: Json }
+      create_driver_expense_command: { Args: { _payload: Json }; Returns: Json }
+      get_expense_creation_context: { Args: { _tenant_id: string; _source_type: string; _source_id: string }; Returns: Json }
+      get_driver_chat_context: { Args: { _tenant_id: string; _driver_id: string }; Returns: Json }
+      list_driver_chat_messages: { Args: { _tenant_id: string; _driver_id: string; _before?: Json }; Returns: Json }
+      send_driver_chat_message: { Args: { _payload: Json }; Returns: Json }
+      get_event_chat_context: { Args: { _tenant_id: string; _event_id: string }; Returns: Json }
+      list_event_chat_messages: { Args: { _tenant_id: string; _event_id: string; _before?: Json }; Returns: Json }
+      send_event_chat_message: { Args: { _payload: Json }; Returns: Json }
+      get_expense_receipt_status: { Args: { _tenant_id: string; _request_id: string; _source_type: string; _source_id: string; _receipt: Json }; Returns: Json }
+      list_driver_expenses: { Args: { _tenant_id: string; _offset?: number }; Returns: Json }
+      list_driver_expense_sources: { Args: { _tenant_id: string; _offset?: number }; Returns: Json }
+      recalculate_manual_expense_settlement: { Args: { _tenant_id: string; _settlement_id: string }; Returns: string }
+      get_client_invoice_action_context: { Args: { _tenant_id: string; _invoice_id: string }; Returns: Json }
+      list_client_invoice_financials: { Args: { _tenant_id: string }; Returns: Json }
+      get_client_invoice_creation_context: { Args: { _tenant_id: string; _report_id?: string | null; _draft?: Json | null }; Returns: Json }
+      apply_client_invoice_command: { Args: { _payload: Json }; Returns: Json }
+      get_receivable_financial_context: { Args: { _tenant_id: string; _receivable_id: string }; Returns: Json }
+      apply_receivable_financial_command: { Args: { _payload: Json }; Returns: Json }
+      get_closing_report_action_context: {
+        Args: { _tenant_id: string; _report_id: string }
+        Returns: Json
+      }
+      apply_closing_report_action: {
+        Args: { _payload: Json }
+        Returns: Json
+      }
+      update_load_document_metadata: { Args: { _payload: Json }; Returns: Json }
       _apply_match_amounts: {
         Args: {
           _delta: number
@@ -16182,6 +16223,10 @@ export type Database = {
         }
         Returns: string
       }
+      driver_get_journey_context: {
+        Args: { _tenant_id: string }
+        Returns: Json
+      }
       driver_create_expense: {
         Args: {
           _amount: number
@@ -16226,8 +16271,24 @@ export type Database = {
         }
         Returns: Json
       }
-      driver_mark_arrival: { Args: { _stop_id: string }; Returns: string }
+      driver_mark_arrival: {
+        Args: {
+          _accuracy_m: number
+          _latitude: number
+          _longitude: number
+          _stop_id: string
+        }
+        Returns: string
+      }
       driver_owns_trip: { Args: { _trip_id: string }; Returns: boolean }
+      driver_record_delivery_outcome: {
+        Args: { _stop_id: string; _outcome: string; _details?: Json; _client_event_id?: string; _expected_status?: string }
+        Returns: Json
+      }
+      driver_record_delivery_note: {
+        Args: { _stop_id: string; _event_type: string; _details: Json; _client_event_id: string }
+        Returns: Json
+      }
       driver_register_departure: {
         Args: { _notes?: string; _stop_id: string }
         Returns: string
@@ -16920,6 +16981,61 @@ export type Database = {
           _target_load_id: string
           _tenant_id: string
         }
+        Returns: Json
+      }
+      get_load_replanning_context: {
+        Args: { _tenant_id: string; _source_load_id: string; _target_load_id: string }
+        Returns: Json
+      }
+      get_load_document_change_context: {
+        Args: { _tenant_id: string; _load_id: string; _document_ids: string[] }
+        Returns: Json
+      }
+      change_load_documents: {
+        Args: { _payload: Json }
+        Returns: Json
+      }
+      save_load_item_preparation: {
+        Args: { _payload: Json }
+        Returns: Json
+      }
+      get_operation_document_context: {
+        Args: { _tenant_id: string; _load_id: string; _document_id: string }
+        Returns: Json
+      }
+      get_redelivery_context: {
+        Args: { _tenant_id: string; _document_id: string }
+        Returns: Json
+      }
+      request_document_redelivery: {
+        Args: { _payload: Json }
+        Returns: Json
+      }
+      get_driver_delivery_items: {
+        Args: { _stop_id: string }
+        Returns: Json
+      }
+      get_load_operational_documents: {
+        Args: { _tenant_id: string; _load_id: string }
+        Returns: Json
+      }
+      get_closing_report_sources: {
+        Args: { _tenant_id: string; _filters: Json }
+        Returns: Json
+      }
+      create_closing_report_draft: { Args: { _payload: Json }; Returns: Json }
+      mark_closing_report_sent: { Args: { _tenant_id: string; _report_id: string; _sent_to?: string; _channel?: string }; Returns: undefined }
+      update_closing_report_trip_fields: { Args: { _tenant_id: string; _report_id: string; _item_id: string; _expected: Json; _patch: Json }; Returns: Json }
+      record_operation_document_outcome: {
+        Args: { _payload: Json }
+        Returns: Json
+      }
+      record_operation_document_correction: {
+        Args: { _payload: Json }
+        Returns: Json
+      }
+      replan_load_items: {
+        Args: { _payload: Json }
         Returns: Json
       }
       move_load_items_v2: {

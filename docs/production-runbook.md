@@ -56,6 +56,26 @@ são controles independentes e nunca devem ser usados para simular sucesso.
 - Um erro sintético autenticado chega a `application_error_events` com release
   e correlation ID, sem token, e aponta para o runbook.
 
+## Reativação controlada do SSX
+
+1. Com `ssx_enabled=false`, um owner/admin pode abrir **Configurações →
+   Integração SSX** e cadastrar ou substituir a credencial. Nessa fase, login,
+   sincronizações e polling continuam bloqueados no frontend e no backend.
+2. Em staging, confirme `ssx_kill_switch=false` e habilite `ssx_enabled=true`
+   somente para o tenant piloto. Execute, nesta ordem: teste de login,
+   diagnóstico, sincronização de rastreadores, sincronização de telemetria e um
+   polling manual curto. Não use `force_rediscovery` ou lookback amplo no primeiro
+   ciclo.
+3. Valide que os rastreadores pertencem ao tenant correto, os vínculos com
+   veículos não foram recriados indevidamente, a fila terminou sem erro e uma
+   posição nova apareceu em `positions_last` com horário posterior ao teste.
+4. Observe staging por 24 horas: sem tempestade de login, sem rate limit
+   recorrente, sem crescimento de fila/dead-letter e com frescor de posições
+   dentro do SLA definido.
+5. Repita em produção com um único tenant e polling normal. Expanda somente
+   após a janela de observação. Em qualquer falha de escopo, credencial,
+   persistência ou volume, ative `ssx_kill_switch=true` antes do diagnóstico.
+
 ## Rollback
 
 1. Acione primeiro o kill switch da capacidade afetada. Para o núcleo, bloqueie

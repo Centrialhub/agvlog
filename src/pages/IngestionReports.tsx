@@ -5,7 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { localDayBoundary } from '@/lib/listFilters';
+import { useListFilters } from '@/hooks/useListFilters';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -71,12 +73,10 @@ function reviewItems(value: unknown): ReviewItem[] {
 export default function IngestionReports() {
   const { currentTenant } = useTenant();
   const navigate = useNavigate();
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [batch, setBatch] = useState('');
+  const { filters: { from, to, batch }, setFilter, resetFilters, activeCount } = useListFilters({ from: '', to: '', batch: '' });
   const [selected, setSelected] = useState<IngestionReportRow | null>(null);
 
-  const { data: reports = [], isLoading, refetch } = useQuery({
+  const { data: reports = [], isLoading, refetch, isError } = useQuery({
     queryKey: ['ingestion_reports', currentTenant?.id, from, to, batch],
     enabled: !!currentTenant,
     queryFn: async () => {
@@ -86,11 +86,9 @@ export default function IngestionReports() {
         .eq('tenant_id', currentTenant!.id)
         .order('created_at', { ascending: false })
         .limit(500);
-      if (from) q = q.gte('created_at', new Date(from).toISOString());
+      if (from) q = q.gte('created_at', localDayBoundary(from));
       if (to) {
-        const end = new Date(to);
-        end.setHours(23, 59, 59, 999);
-        q = q.lte('created_at', end.toISOString());
+        q = q.lt('created_at', localDayBoundary(to, true));
       }
       if (batch) q = q.ilike('batch_id', `%${batch}%`);
       const { data, error } = await q;
@@ -121,24 +119,11 @@ export default function IngestionReports() {
         <p className="text-xs text-muted-foreground mt-0.5">Relatórios de qualidade salvos por lote.</p>
       </div>
 
-      <Card>
-        <CardContent className="py-3 flex flex-wrap items-end gap-3">
-          <div>
-            <label className="text-xs text-muted-foreground">De</label>
-            <Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="h-8 w-40" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Até</label>
-            <Input type="date" value={to} onChange={e => setTo(e.target.value)} className="h-8 w-40" />
-          </div>
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-xs text-muted-foreground">Lote</label>
-            <Input placeholder="Filtrar por batch_id" value={batch} onChange={e => setBatch(e.target.value)} className="h-8" />
-          </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>Aplicar</Button>
-          <Button variant="ghost" size="sm" onClick={() => { setFrom(''); setTo(''); setBatch(''); }}>Limpar</Button>
-        </CardContent>
-      </Card>
+      <ListFilterBar fields={[
+        { key: 'batch', label: 'Lote', type: 'search', value: batch, onChange: value => setFilter('batch', value), placeholder: 'Identificador do lote' },
+        { key: 'from', label: 'Importado de', type: 'date', value: from, max: to || undefined, onChange: value => setFilter('from', value) },
+        { key: 'to', label: 'Importado até', type: 'date', value: to, min: from || undefined, onChange: value => setFilter('to', value) },
+      ]} onReset={resetFilters} activeCount={activeCount} resultCount={isError ? undefined : reports.length} loading={isLoading} description="Até 500 relatórios por consulta. Os indicadores acompanham os filtros." />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card><CardContent className="py-3"><div className="text-xs text-muted-foreground">Lotes</div><div className="text-2xl font-bold">{reports.length}</div></CardContent></Card>
@@ -149,7 +134,7 @@ export default function IngestionReports() {
 
       <Card>
         <CardContent className="p-0">
-          {isLoading ? (
+          {isError ? <div role="alert" className="p-6 text-sm">Não foi possível carregar os relatórios. <Button variant="link" onClick={() => refetch()}>Tentar novamente</Button></div> : isLoading ? (
             <div className="p-6 text-sm text-muted-foreground">Carregando…</div>
           ) : reports.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">Nenhum relatório encontrado.</div>

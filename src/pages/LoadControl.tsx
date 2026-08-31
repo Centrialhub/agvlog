@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Download, Printer, Upload, Search, RefreshCw, FileText, CheckCircle2, Undo2 } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   useLoadControlList, useLoadDocuments, useUnloadingCharges, useImportBatches,
   useRegisterPayment, useMarkUnpaid, commitSpreadsheetImport, commitXmlImport,
@@ -38,6 +38,8 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'dest
 };
 
 export default function LoadControl() {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
   const [filters, setFilters] = useState<LoadControlFilters>({});
@@ -318,6 +320,7 @@ function Kpi({ label, value, tone }: { label: string; value: ReactNode; tone?: '
 }
 
 function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => void }) {
+  const toast = useSonnerToast();
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
 

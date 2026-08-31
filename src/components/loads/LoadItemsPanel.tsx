@@ -13,13 +13,18 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Plus, Trash2, AlertTriangle, Loader2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage } from '@/lib/errors';
 import { usePagination } from '@/hooks/usePagination';
 import { DataPagination } from '@/components/ui/data-pagination';
+import { useAuth } from '@/hooks/useAuth';
+import { useLoadDocumentChanges } from '@/hooks/useLoadDocumentChanges';
+import { DocumentChangeDialog, type DocumentChangeSelection } from './DocumentChangeDialog';
+import { invalidateCompositionQueries } from '@/lib/loads/compositionMutation';
+import { PREPARATION_STATUSES } from '@/lib/loads/itemPreparation';
 
 interface LoadItemsPanelProps {
   loadId: string;
@@ -29,6 +34,7 @@ interface LoadItemsPanelProps {
 
 const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
+const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const emptyDocFilters = { invoice: '', client: '', neighborhood: '', city: '' };
 const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha', visibleDocCount: DOC_PAGE_SIZE, scrollTop: 0 };
 const LOAD_ITEMS_SESSION_ONLY_KEY = 'agvlog:load-items-doc-session-only';
@@ -60,10 +66,15 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const { data: items = [], isLoading } = useLoadItems(loadId);
   const { data: orders = [] } = useOrders();
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
+  const documentChanges = useLoadDocumentChanges();
+  const [documentSelection, setDocumentSelection] = useState<DocumentChangeSelection | null>(null);
   const qc = useQueryClient();
   const createItem = useCreateLoadItem();
   const deleteItem = useDeleteLoadItem();
   const updateItem = useUpdateLoadItem();
+  const documentBlocked = documentChanges.isPending || documentChanges.pending.length > 0 || !!documentChanges.recoveryError
+    || createItem.isPending || updateItem.isPending || !!createItem.pending?.length || !!createItem.recoveryError;
   const { toast } = useToast();
   const { preference: docPreference, isLoaded: isDocPreferenceLoaded, savePreference: saveDocPreference } = useUserUiPreference('load_items_doc_filters', defaultDocPreference);
   const [sessionOnlyPreference, setSessionOnlyPreference] = useState(loadSessionOnly);
@@ -116,6 +127,10 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     pallet_count: 0,
     weight_kg: 0,
   });
+  useEffect(() => {
+    setDocumentSelection(null); setSelectedDocIds(new Set()); setAddOpen(false);
+    setForm({ order_id: '', item_description: '', quantity: 0, pallet_count: 0, weight_kg: 0 });
+  }, [loadId, currentTenant?.id, user?.id]);
 
   const { data: fiscalDocs = [], isFetching: isFetchingFiscalDocs } = useQuery({
     queryKey: ['load_item_pull_fiscal_docs', currentTenant?.id, addOpen],
@@ -135,7 +150,6 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     enabled: !!currentTenant && addOpen,
   });
 
-  const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const filteredDocs = useMemo(() => {
     const invoice = normalize(debouncedDocFilters.invoice);
     const invoiceDigits = debouncedDocFilters.invoice.replace(/\D/g, '');
@@ -264,9 +278,10 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const isOverWeight = weightOccupancy !== null && weightOccupancy > 100;
 
   const handleAdd = async () => {
+    if (documentBlocked) return;
     if (mode === 'note') {
       const docs = fiscalDocs.filter((doc) => selectedDocIds.has(doc.id));
-      if (docs.length === 0) {
+      if (docs.length === 0 || docs.length !== selectedDocIds.size) {
         toast({ title: 'Selecione ao menos uma NF', variant: 'destructive' });
         return;
       }
@@ -275,23 +290,8 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
         toast({ title: 'Capacidade excedida', description: `Máx: ${vehicleMaxPallets} paletes. Atual + novo: ${newPallets}`, variant: 'destructive' });
         return;
       }
-      try {
-        const docIds = docs.map(doc => doc.id);
-        const { error: assignError } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
-          _tenant_id: currentTenant!.id,
-          _load_id: loadId,
-          _document_ids: docIds,
-        });
-        if (assignError) throw assignError;
-        setAddOpen(false);
-        setSelectedDocIds(new Set());
-        qc.invalidateQueries({ queryKey: ['load_items'] });
-        qc.invalidateQueries({ queryKey: ['load_documents'] });
-        qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-        toast({ title: 'NF(s) puxada(s) para a carga' });
-      } catch (error: unknown) {
-        toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
-      }
+      setAddOpen(false);
+      setDocumentSelection({ action: 'attach', documentIds: docs.map(doc => doc.id) });
       return;
     }
 
@@ -318,28 +318,24 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   };
 
   const handleDelete = async (item: LoadItem) => {
+    if (documentBlocked) return;
+    if (item.fiscal_document_id) {
+      setDocumentSelection({ action: 'detach', documentIds: [item.fiscal_document_id] });
+      return;
+    }
     try {
-      if (item.fiscal_document_id) {
-        const { error: removeError } = await supabase.rpc('remove_fiscal_documents_from_load_v2', {
-          _tenant_id: currentTenant!.id,
-          _load_id: loadId,
-          _document_ids: [item.fiscal_document_id],
-        });
-        if (removeError) throw removeError;
-      } else {
-        await deleteItem.mutateAsync(item.id);
-      }
-      qc.invalidateQueries({ queryKey: ['load_documents'] });
-      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      toast({ title: 'NF removida da carga e da geração de CT-e' });
+      await deleteItem.mutateAsync(item.id);
+      await invalidateCompositionQueries(qc);
+      toast({ title: 'Item manual removido da carga' });
     } catch (error: unknown) {
       toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
   const handleStatusChange = async (item: LoadItem, status: string) => {
+    if (documentBlocked) return;
     try {
-      await updateItem.mutateAsync({ id: item.id, status: status as ItemStatus });
+      await updateItem.mutateAsync({ id: item.id, loadId, expected: {status:item.status}, status: status as ItemStatus });
     } catch (error: unknown) {
       toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
     }
@@ -355,15 +351,24 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
 
   return (
     <Card>
+      <DocumentChangeDialog api={documentChanges} loadId={loadId} selection={documentSelection}
+        onClose={() => setDocumentSelection(null)} onFailure={message => toast({ title: 'Alteração não confirmada', description: message, variant: 'destructive' })}
+        onConfirmed={result => {
+          setSelectedDocIds(new Set());
+          toast({ title: `${result.document_count} NF(s) ${result.action === 'attach' ? 'incluída(s)' : 'removida(s)'} com confirmação`,
+            description: result.load_removed ? 'A carga vazia foi removida; o histórico foi preservado.' : undefined });
+        }} />
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium">Itens da Carga</CardTitle>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
-              <Button size="sm"><Plus className="h-3 w-3 mr-1" /> Adicionar Item</Button>
+              <Button size="sm" disabled={documentBlocked}><Plus className="h-3 w-3 mr-1" /> Adicionar Item</Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl overflow-hidden" style={{ maxHeight: modalMaxHeight }}>
-              <DialogHeader><DialogTitle>Adicionar Item à Carga</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Adicionar Item à Carga</DialogTitle>
+                <DialogDescription>Escolha as notas ou informe o item manual. A inclusão de notas será confirmada na próxima etapa.</DialogDescription>
+              </DialogHeader>
               <div className="flex max-h-[70vh] flex-col gap-3">
                 <div className="flex gap-2 rounded-md bg-muted p-1">
                   <Button type="button" variant={mode === 'note' ? 'secondary' : 'ghost'} size="sm" className="flex-1" onClick={() => setMode('note')}>Puxar NF</Button>
@@ -371,6 +376,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                 </div>
                 {mode === 'note' ? (
                    <div className="flex min-h-0 flex-1 flex-col gap-3">
+                    <p className="text-xs text-muted-foreground">Notas de outras cargas devem ser transferidas em <a className="underline" href="/reallocation">Realocação de cargas</a>, preservando os vínculos de parada.</p>
                     <div className="grid grid-cols-4 gap-2">
                       <div className="relative">
                         <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -419,10 +425,10 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                       ) : visibleFilteredDocs.map((doc) => {
                         const isSelected = selectedDocIds.has(doc.id);
                         const isLinked = !!doc.load_id;
-                        const actionLabel = isSelected ? 'Selecionada' : isLinked ? 'Será reatribuída' : 'Será puxada';
+                        const actionLabel = isLinked ? 'Use realocação' : isSelected ? 'Selecionada' : 'Será incluída';
                         return (
-                          <button key={doc.id} type="button" onClick={() => setSelectedDocIds(prev => { const next = new Set(prev); if (next.has(doc.id)) next.delete(doc.id); else next.add(doc.id); return next; })} className="flex w-full items-start gap-2 rounded-md border border-border px-3 py-1.5 text-left hover:bg-muted/60">
-                            <Checkbox checked={isSelected} className="mt-0.5" />
+                          <button key={doc.id} type="button" disabled={isLinked || documentBlocked} aria-pressed={isSelected} onClick={() => setSelectedDocIds(prev => { const next = new Set(prev); if (next.has(doc.id)) next.delete(doc.id); else next.add(doc.id); return next; })} className="flex w-full items-start gap-2 rounded-md border border-border px-3 py-1.5 text-left hover:bg-muted/60 disabled:opacity-60">
+                            <span aria-hidden="true" className="mt-0.5">{isSelected ? '☑' : '☐'}</span>
                             <span className="min-w-0 flex-1">
                               <span className="block text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
                               <span className="block text-xs text-muted-foreground">{doc.recipient_neighborhood || 'Sem bairro'} · {doc.pallet_count || 0} pal · {doc.weight_kg || 0} kg{isLinked ? ` · sai da carga ${doc.loads?.load_number || 'atual'}` : ''}</span>
@@ -443,9 +449,9 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                 ) : (
                   <>
                 <div>
-                  <Label>Pedido (opcional)</Label>
+                  <Label htmlFor="manual-item-order">Pedido (opcional)</Label>
                   <Select value={form.order_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, order_id: v === '__none__' ? '' : v }))}>
-                    <SelectTrigger><SelectValue placeholder="Vincular a pedido" /></SelectTrigger>
+                    <SelectTrigger id="manual-item-order"><SelectValue placeholder="Vincular a pedido" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Nenhum</SelectItem>
                       {orders.filter(o => !['delivered', 'cancelled'].includes(o.status)).map(o => (
@@ -456,17 +462,17 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                     </SelectContent>
                   </Select>
                 </div>
-                <div><Label>Descrição</Label><Input value={form.item_description} onChange={e => setForm(f => ({ ...f, item_description: e.target.value }))} placeholder="Descrição do item" /></div>
+                <div><Label htmlFor="manual-item-description">Descrição</Label><Input id="manual-item-description" value={form.item_description} onChange={e => setForm(f => ({ ...f, item_description: e.target.value }))} placeholder="Descrição do item" /></div>
                 <div className="grid grid-cols-3 gap-3">
-                  <div><Label>Quantidade</Label><Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} /></div>
-                  <div><Label>Paletes</Label><Input type="number" value={form.pallet_count} onChange={e => setForm(f => ({ ...f, pallet_count: parseInt(e.target.value) || 0 }))} /></div>
-                  <div><Label>Peso (kg)</Label><Input type="number" value={form.weight_kg} onChange={e => setForm(f => ({ ...f, weight_kg: parseFloat(e.target.value) || 0 }))} /></div>
+                  <div><Label htmlFor="manual-item-quantity">Quantidade</Label><Input id="manual-item-quantity" type="number" min="0" step="any" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value===''?0:Number(e.target.value) }))} /></div>
+                  <div><Label htmlFor="manual-item-pallets">Paletes</Label><Input id="manual-item-pallets" type="number" min="0" step="1" value={form.pallet_count} onChange={e => setForm(f => ({ ...f, pallet_count: e.target.value===''?0:Number(e.target.value) }))} /></div>
+                  <div><Label htmlFor="manual-item-weight">Peso (kg)</Label><Input id="manual-item-weight" type="number" min="0" step="any" value={form.weight_kg} onChange={e => setForm(f => ({ ...f, weight_kg: e.target.value===''?0:Number(e.target.value) }))} /></div>
                 </div>
                   </>
                 )}
                 <div className="flex shrink-0 gap-2 justify-end border-t border-border pt-3">
                   <Button variant="outline" onClick={() => setAddOpen(false)}>Cancelar</Button>
-                  <Button onClick={handleAdd} disabled={createItem.isPending}>{mode === 'note' ? 'Puxar NF(s)' : 'Adicionar'}</Button>
+                  <Button onClick={handleAdd} disabled={createItem.isPending || documentBlocked}>{mode === 'note' ? 'Puxar NF(s)' : 'Adicionar'}</Button>
                 </div>
               </div>
             </DialogContent>
@@ -542,7 +548,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
               <TableHead>Qtd</TableHead>
               <TableHead>Paletes</TableHead>
               <TableHead>Peso</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Preparação / registro legado</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -562,21 +568,21 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                 <TableCell>{item.pallet_count}</TableCell>
                 <TableCell>{item.weight_kg || '—'}</TableCell>
                 <TableCell>
-                  <Select value={item.status} onValueChange={v => handleStatusChange(item, v)}>
-                    <SelectTrigger className="h-7 text-xs w-36">
+                  <Select value={item.status} onValueChange={v => handleStatusChange(item, v)} disabled={documentBlocked}>
+                    <SelectTrigger aria-label={`Preparação de ${item.item_description || 'item'}`} className="h-7 text-xs w-36">
                       <Badge variant="outline" className={`${statusColor(item.status)} text-xs`}>
                         {ITEM_STATUS_LABELS[item.status as keyof typeof ITEM_STATUS_LABELS] || item.status}
                       </Badge>
                     </SelectTrigger>
                     <SelectContent>
                       {ITEM_STATUSES.map(s => (
-                        <SelectItem key={s} value={s}>{ITEM_STATUS_LABELS[s]}</SelectItem>
+                        <SelectItem key={s} value={s} disabled={!(PREPARATION_STATUSES as readonly string[]).includes(s)}>{ITEM_STATUS_LABELS[s]}{!(PREPARATION_STATUSES as readonly string[]).includes(s)?' — via fluxo operacional':''}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(item)}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Remover ${item.item_description || 'item'}`} disabled={documentBlocked || deleteItem.isPending} onClick={() => handleDelete(item)}>
                     <Trash2 className="h-3 w-3 text-destructive" />
                   </Button>
                 </TableCell>
@@ -584,6 +590,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
             ))}
           </TableBody>
         </Table>
+        <p className="text-xs text-muted-foreground">Esta edição trata da preparação. Trânsito, entrega, devolução e reentrega devem refletir viagem, paradas e comprovantes no fluxo operacional.</p>
         <DataPagination {...itemsPagination} onPageChange={itemsPagination.setPage} />
       </CardContent>
     </Card>

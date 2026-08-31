@@ -1,30 +1,25 @@
-import { promptAction } from '@/hooks/useAlertStore';
-import { useState, useMemo } from 'react';
+import {useAuth} from '@/hooks/useAuth';
+import {NewInvoiceWizard} from '@/components/financial/NewInvoiceWizard';
+import {ClientInvoiceLifecycleDialog} from '@/components/financial/ClientInvoiceLifecycleDialog';
+import {ReceivableFinancialDialog} from '@/components/financial/ReceivableFinancialDialog';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
-  useClientInvoices, useEligibleCtes, useEligibleNfse,
-  useCreateClientInvoice, useCancelClientInvoice, useMarkInvoiceSent,
-  useClientInvoiceDetail, fetchCteFiscalDocs,
+  useClientInvoices, useClientInvoiceDetail,
   INVOICE_STATUS_LABELS, type ClientInvoice, type InvoiceStatus,
-  type ClientInvoiceChargeDraft, type ClientInvoiceDetailDraft,
 } from '@/hooks/useClientInvoices';
-import { useClients, type Client } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, FileText, Download, Send, XCircle, Search } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
-import { generateClientInvoicePdf, computeInvoiceTotals, type InvoiceCharge } from '@/lib/clientInvoicePdf';
+import { Plus, FileText, Download, Settings2, DollarSign, Search } from 'lucide-react';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
+import { generateClientInvoicePdf, type InvoiceCharge } from '@/lib/clientInvoicePdf';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
-import type { Json } from '@/integrations/supabase/types';
 
 const brl = (n: number) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = (s?: string | null) => s ? new Date(s.length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '-';
@@ -37,23 +32,24 @@ const statusVariant = (s: string): 'default' | 'destructive' | 'secondary' | 'ou
 };
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
-const isJsonObject = (value: unknown): value is { [key: string]: Json | undefined } =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-const jsonString = (value: unknown) => typeof value === 'string' ? value : null;
-const jsonNumber = (value: unknown) => {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
+const EMPTY_INVOICES:ClientInvoice[]=[];
 const isInvoiceSourceType = (value: string): value is InvoiceCharge['source_type'] =>
   value === 'cte_document' || value === 'nfse_document' || value === 'manual_service';
 
-export default function ClientInvoices() {
+export default function ClientInvoices(){
+ const {currentTenant}=useTenant();const {user}=useAuth();return <ClientInvoicesScreen key={currentTenant?.id+':'+user?.id}/>;
+}
+function ClientInvoicesScreen() {
+  const toast = useSonnerToast();
+  const alive=useRef(true);useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
-  const { data: invoices = [], isLoading } = useClientInvoices();
+  const {data:invoiceList,isLoading,error:listError}=useClientInvoices();
+  const invoices=invoiceList?.rows||EMPTY_INVOICES;
+  const balancesUnavailable=!!listError||!invoiceList||invoiceList.truncated||invoices.some(inv=>inv.requires_reconciliation);
   const { data: clients = [] } = useClients();
-  const cancelMut = useCancelClientInvoice();
-  const markSent = useMarkInvoiceSent();
+  const [actionInvoice,setActionInvoice]=useState<ClientInvoice|null>(null);
+  const [financialInvoice,setFinancialInvoice]=useState<ClientInvoice|null>(null);
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [clientFilter, setClientFilter] = useState<string>('all');
@@ -75,10 +71,10 @@ export default function ClientInvoices() {
   const totals = useMemo(() => {
     const now = new Date();
     return {
-      open: invoices.filter(i => i.status === 'generated' || i.status === 'sent').reduce((s, i) => s + Number(i.total_amount), 0),
-      overdue: invoices.filter(i => (i.status === 'generated' || i.status === 'sent') && i.due_date && new Date(i.due_date + 'T23:59:59') < now).reduce((s, i) => s + Number(i.total_amount), 0),
-      sent: invoices.filter(i => i.status === 'sent').reduce((s, i) => s + Number(i.total_amount), 0),
-      paid: invoices.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.total_amount), 0),
+      open: invoices.filter(i => i.status === 'generated' || i.status === 'sent').reduce((s, i) => s + Number(i.open_amount||0), 0),
+      overdue: invoices.filter(i => (i.status === 'generated' || i.status === 'sent') && i.due_date && new Date(i.due_date + 'T23:59:59') < now).reduce((s, i) => s + Number(i.open_amount||0), 0),
+      sent: invoices.filter(i => i.status === 'sent').reduce((s, i) => s + Number(i.open_amount||0), 0),
+      paid: invoices.filter(i => i.status !== 'cancelled').reduce((s, i) => s + Number(i.received_amount||0), 0),
     };
   }, [invoices]);
 
@@ -129,9 +125,10 @@ export default function ClientInvoices() {
         payer: { name: inv.clients?.company_name, tax_id: inv.clients?.tax_id || undefined },
         charges,
       });
+      if(!alive.current)return;
       doc.save(`fatura-${inv.invoice_number.replace('/', '-')}.pdf`);
     } catch (error: unknown) {
-      toast.error('Falha ao gerar PDF: ' + errorMessage(error));
+      if(alive.current)toast.error('Falha ao gerar PDF: ' + errorMessage(error));
     }
   };
 
@@ -152,26 +149,29 @@ export default function ClientInvoices() {
           { label: 'Em aberto', value: totals.open, tone: 'text-blue-600' },
           { label: 'Vencidas', value: totals.overdue, tone: 'text-red-600' },
           { label: 'Enviadas', value: totals.sent, tone: 'text-amber-600' },
-          { label: 'Pagas', value: totals.paid, tone: 'text-green-600' },
+          { label: 'Recebido líquido', value: totals.paid, tone: 'text-green-600' },
         ].map(k => (
           <Card key={k.label}>
             <CardContent className="pt-6">
               <div className="text-xs text-muted-foreground">{k.label}</div>
-              <div className={`text-2xl font-semibold ${k.tone}`}>{brl(k.value)}</div>
+              <div className={`text-2xl font-semibold ${k.tone}`}>{balancesUnavailable?'—':brl(k.value)}</div>
             </CardContent>
           </Card>
         ))}
       </div>
 
+      {listError?<p role="alert">Falha ao consultar faturas: {errorMessage(listError)}</p>:null}
+      {invoiceList?.truncated?<p role="alert">Exibindo as 500 faturas mais recentes. Totais gerais indisponíveis nesta consulta limitada.</p>:null}
+      {invoices.some(inv=>inv.requires_reconciliation)?<p role="alert">Há vínculos financeiros divergentes. Confira as ações de fatura; totais não são exibidos até a conciliação.</p>:null}
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div className="flex flex-wrap gap-2">
             <div className="relative flex-1 min-w-[220px]">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por número ou cliente..." className="pl-9" />
+              <Input aria-label="Buscar faturas" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por número ou cliente..." className="pl-9" />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Filtrar status" className="w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
                 {Object.entries(INVOICE_STATUS_LABELS).map(([k, v]) => (
@@ -180,7 +180,7 @@ export default function ClientInvoices() {
               </SelectContent>
             </Select>
             <Select value={clientFilter} onValueChange={setClientFilter}>
-              <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Filtrar cliente" className="w-[220px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os clientes</SelectItem>
                 {clients.map(c => (<SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>))}
@@ -218,29 +218,10 @@ export default function ClientInvoices() {
                     <TableCell className="text-xs text-muted-foreground">{dt(inv.sent_at)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" title="Visualizar" onClick={() => setDetailId(inv.id)}><FileText className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" title="Baixar PDF" onClick={() => handleDownloadPdf(inv)}><Download className="h-4 w-4" /></Button>
-                        {inv.status !== 'cancelled' && inv.status !== 'paid' && (
-                          <>
-                            <Button size="icon" variant="ghost" title="Marcar como enviada"
-                              onClick={() => markSent.mutateAsync({ id: inv.id }).then(() => toast.success('Fatura marcada como enviada'))}>
-                              <Send className="h-4 w-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" title="Cancelar"
-                              onClick={async () => {
-                                const reason = await promptAction('Informe por que esta fatura deve ser cancelada.', {
-                                  title: 'Cancelar fatura',
-                                  label: 'Motivo do cancelamento',
-                                });
-                                if (!reason) return;
-                                cancelMut.mutateAsync({ id: inv.id, reason })
-                                  .then(() => toast.success('Fatura cancelada'))
-                                  .catch(e => toast.error(e.message));
-                              }}>
-                              <XCircle className="h-4 w-4 text-red-600" />
-                            </Button>
-                          </>
-                        )}
+                        <Button size="icon" variant="ghost" aria-label="Visualizar" title="Visualizar" onClick={() => setDetailId(inv.id)}><FileText className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" aria-label="Baixar PDF" title="Baixar PDF" onClick={() => handleDownloadPdf(inv)}><Download className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" aria-label="Ações da fatura" title="Ações da fatura" onClick={()=>setActionInvoice(inv)}><Settings2 className="h-4 w-4"/></Button>
+                        {inv.receivable_id?<Button size="icon" variant="ghost" aria-label="Recebimentos e estornos" title="Recebimentos e estornos" onClick={()=>setFinancialInvoice(inv)}><DollarSign className="h-4 w-4"/></Button>:null}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -251,7 +232,9 @@ export default function ClientInvoices() {
         </CardContent>
       </Card>
 
-      <NewInvoiceWizard open={wizardOpen} onClose={() => setWizardOpen(false)} clients={clients} onGenerated={id => { setWizardOpen(false); setDetailId(id); }} />
+      {wizardOpen&&<NewInvoiceWizard open={wizardOpen} onClose={() => setWizardOpen(false)} clients={clients} onGenerated={id => { setWizardOpen(false); setDetailId(id); }} />}
+      {actionInvoice&&<ClientInvoiceLifecycleDialog invoiceId={actionInvoice.id} tenantId={actionInvoice.tenant_id} onClose={()=>setActionInvoice(null)}/>}
+      {financialInvoice?.receivable_id&&<ReceivableFinancialDialog receivableId={financialInvoice.receivable_id} tenantId={financialInvoice.tenant_id} onClose={()=>setFinancialInvoice(null)}/>}
       <InvoiceDetailDialog invoiceId={detailId} onClose={() => setDetailId(null)} />
     </div>
   );
@@ -259,314 +242,17 @@ export default function ClientInvoices() {
 
 /* ---------- Wizard ---------- */
 
-type ManualService = { id: string; description: string; reference_number: string; gross_amount: string; net_amount: string; ir_amount: string; notes: string };
-
-function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boolean; onClose: () => void; clients: Client[]; onGenerated: (id: string) => void }) {
-  const { currentTenant } = useTenant();
-  const [step, setStep] = useState(1);
-  const [clientId, setClientId] = useState<string>('');
-  const [issueDate, setIssueDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [dueDate, setDueDate] = useState<string>('');
-  const [discount, setDiscount] = useState<string>('0');
-  const [interest, setInterest] = useState<string>('0');
-  const [notes, setNotes] = useState('');
-  const [selectedCtes, setSelectedCtes] = useState<Set<string>>(new Set());
-  const [selectedNfses, setSelectedNfses] = useState<Set<string>>(new Set());
-  const [manuals, setManuals] = useState<ManualService[]>([]);
-  const createMut = useCreateClientInvoice();
-
-  const { data: ctes = [] } = useEligibleCtes(clientId || null);
-  const { data: nfses = [] } = useEligibleNfse(clientId || null);
-
-  const reset = () => {
-    setStep(1); setClientId(''); setDueDate(''); setDiscount('0'); setInterest('0'); setNotes('');
-    setSelectedCtes(new Set()); setSelectedNfses(new Set()); setManuals([]);
-  };
-
-  const closeAll = () => { reset(); onClose(); };
-
-  // Build charges from selection
-  const buildCharges = async (): Promise<ClientInvoiceChargeDraft[]> => {
-    const tenantId = currentTenant?.id;
-    if (!tenantId) throw new Error('Tenant ativo não encontrado.');
-    const charges: ClientInvoiceChargeDraft[] = [];
-    let sort = 0;
-
-    for (const cte of ctes.filter(c => selectedCtes.has(c.id))) {
-      const details: ClientInvoiceDetailDraft[] = [];
-      const fdIds: string[] = cte.fiscal_document_ids || [];
-      if (fdIds.length) {
-        const fds = await fetchCteFiscalDocs(tenantId, fdIds);
-        fds.forEach((fd, idx) => {
-          details.push({
-            source_type: 'fiscal_document',
-            source_id: fd.id,
-            emission_date: fd.issue_date,
-            document_label: 'NF',
-            document_number: fd.invoice_number,
-            destination: [fd.recipient_city, fd.recipient_state].filter(Boolean).join('/'),
-            remitter: fd.remitter,
-            recipient: fd.recipient,
-            weight_kg: fd.weight_kg,
-            cargo_value: fd.value,
-            displayed_freight_value: cte.freight_value,
-            sort_order: idx,
-          });
-        });
-      }
-      charges.push({
-        source_type: 'cte_document',
-        source_id: cte.id,
-        source_number: cte.cte_number,
-        source_series: cte.cte_series,
-        issue_date: cte.issued_at?.slice(0, 10),
-        description: `CT-e ${cte.cte_number || ''}`,
-        gross_amount: Number(cte.freight_value || 0),
-        net_amount: Number(cte.freight_value || 0),
-        sort_order: sort++,
-        details,
-      });
-    }
-
-    for (const n of nfses.filter(x => selectedNfses.has(x.id))) {
-      const items = Array.isArray(n.items) ? n.items.filter(isJsonObject) : [];
-      const details: ClientInvoiceDetailDraft[] = items.length ? items.map((item, idx) => ({
-        source_type: 'nfse_item',
-        emission_date: n.issue_date,
-        document_label: 'NFS-e',
-        document_number: n.nfse_number,
-        ort_number: jsonString(item.ort_number) || n.reference_number,
-        destination: n.cliente_municipio,
-        remitter: jsonString(item.description) || n.description,
-        cargo_value: jsonNumber(item.value),
-        displayed_freight_value: Number(n.valor_total || 0),
-        sort_order: idx,
-      })) : [];
-      charges.push({
-        source_type: 'nfse_document',
-        source_id: n.id,
-        source_number: n.nfse_number,
-        source_series: n.series,
-        reference_number: n.reference_number,
-        issue_date: n.issue_date,
-        description: n.description || `NFS-e ${n.nfse_number || ''}`,
-        gross_amount: Number(n.valor_total || 0),
-        ir_amount: Number(n.valor_ir || 0),
-        net_amount: Number(n.valor_liquido || n.valor_total || 0),
-        sort_order: sort++,
-        details,
-      });
-    }
-
-    for (const m of manuals) {
-      charges.push({
-        source_type: 'manual_service',
-        source_number: m.reference_number,
-        reference_number: m.reference_number,
-        issue_date: issueDate,
-        description: m.description,
-        gross_amount: Number(m.gross_amount || 0),
-        ir_amount: Number(m.ir_amount || 0),
-        net_amount: Number(m.net_amount || m.gross_amount || 0),
-        sort_order: sort++,
-      });
-    }
-    return charges;
-  };
-
-  const [previewCharges, setPreviewCharges] = useState<ClientInvoiceChargeDraft[]>([]);
-  const goPreview = async () => {
-    try {
-      const c = await buildCharges();
-      if (c.length === 0) { toast.error('Selecione ao menos um documento ou adicione um serviço.'); return; }
-      setPreviewCharges(c);
-      setStep(3);
-    } catch (error: unknown) {
-      toast.error('Falha ao montar a prévia: ' + errorMessage(error));
-    }
-  };
-
-  const totals = useMemo(() => computeInvoiceTotals(previewCharges, Number(discount || 0), Number(interest || 0)), [previewCharges, discount, interest]);
-  const hasCteMultiNf = previewCharges.some(c => c.source_type === 'cte_document' && (c.details?.length || 0) > 1);
-
-  const generate = async () => {
-    if (!currentTenant || !clientId) return;
-    try {
-      const id = await createMut.mutateAsync({
-        tenant_id: currentTenant.id,
-        client_id: clientId,
-        issue_date: issueDate,
-        due_date: dueDate || null,
-        discount_amount: Number(discount || 0),
-        interest_amount: Number(interest || 0),
-        notes: notes || null,
-        charges: previewCharges,
-      });
-      toast.success('Fatura gerada com sucesso');
-      onGenerated(id);
-      reset();
-    } catch (error: unknown) {
-      toast.error('Falha ao gerar fatura: ' + errorMessage(error));
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={v => !v && closeAll()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Nova Fatura — Etapa {step} de 4</DialogTitle>
-        </DialogHeader>
-
-        {step === 1 && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <Label>Cliente *</Label>
-                <Select value={clientId} onValueChange={setClientId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
-                  <SelectContent>
-                    {clients.map(c => (<SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Emissão</Label><Input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} /></div>
-              <div><Label>Vencimento</Label><Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
-              <div><Label>Desconto (R$)</Label><Input type="number" step="0.01" value={discount} onChange={e => setDiscount(e.target.value)} /></div>
-              <div><Label>Juros (R$)</Label><Input type="number" step="0.01" value={interest} onChange={e => setInterest(e.target.value)} /></div>
-              <div className="col-span-2"><Label>Observação</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} /></div>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <Tabs defaultValue="ctes">
-            <TabsList>
-              <TabsTrigger value="ctes">CT-e / CTRC ({ctes.length})</TabsTrigger>
-              <TabsTrigger value="nfses">NFS-e / ORT ({nfses.length})</TabsTrigger>
-              <TabsTrigger value="manual">Serviços avulsos ({manuals.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="ctes" className="mt-4">
-              <div className="max-h-[400px] overflow-y-auto border rounded">
-                <Table>
-                  <TableHeader><TableRow><TableHead className="w-10"></TableHead><TableHead>CT-e</TableHead><TableHead>Emissão</TableHead><TableHead>Destinatário</TableHead><TableHead className="text-right">Frete</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {ctes.length === 0 && (<TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Nenhum CT-e elegível.</TableCell></TableRow>)}
-                    {ctes.map(c => (
-                      <TableRow key={c.id}>
-                        <TableCell><Checkbox checked={selectedCtes.has(c.id)} onCheckedChange={v => { const s = new Set(selectedCtes); if (v) s.add(c.id); else s.delete(c.id); setSelectedCtes(s); }} /></TableCell>
-                        <TableCell>{c.cte_number}{c.cte_series ? '/' + c.cte_series : ''}</TableCell>
-                        <TableCell>{dt(c.issued_at)}</TableCell>
-                        <TableCell className="text-xs">{c.recipient} — {c.recipient_city}/{c.recipient_state}</TableCell>
-                        <TableCell className="text-right">{brl(Number(c.freight_value || 0))}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-            <TabsContent value="nfses" className="mt-4">
-              <div className="max-h-[400px] overflow-y-auto border rounded">
-                <Table>
-                  <TableHeader><TableRow><TableHead className="w-10"></TableHead><TableHead>NFS-e</TableHead><TableHead>Emissão</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {nfses.length === 0 && (<TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground">Nenhuma NFS-e elegível.</TableCell></TableRow>)}
-                    {nfses.map(n => (
-                      <TableRow key={n.id}>
-                        <TableCell><Checkbox checked={selectedNfses.has(n.id)} onCheckedChange={v => { const s = new Set(selectedNfses); if (v) s.add(n.id); else s.delete(n.id); setSelectedNfses(s); }} /></TableCell>
-                        <TableCell>{n.nfse_number}</TableCell>
-                        <TableCell>{dt(n.issue_date)}</TableCell>
-                        <TableCell className="text-xs">{n.description || n.reference_number}</TableCell>
-                        <TableCell className="text-right">{brl(Number(n.valor_total || 0))}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-            <TabsContent value="manual" className="mt-4 space-y-3">
-              {manuals.map((m, idx) => (
-                <div key={m.id} className="grid grid-cols-6 gap-2 items-end border p-2 rounded">
-                  <div className="col-span-2"><Label className="text-xs">Descrição</Label><Input value={m.description} onChange={e => { const copy = [...manuals]; copy[idx].description = e.target.value; setManuals(copy); }} /></div>
-                  <div><Label className="text-xs">Referência</Label><Input value={m.reference_number} onChange={e => { const copy = [...manuals]; copy[idx].reference_number = e.target.value; setManuals(copy); }} /></div>
-                  <div><Label className="text-xs">Bruto</Label><Input type="number" step="0.01" value={m.gross_amount} onChange={e => { const copy = [...manuals]; copy[idx].gross_amount = e.target.value; setManuals(copy); }} /></div>
-                  <div><Label className="text-xs">Líquido</Label><Input type="number" step="0.01" value={m.net_amount} onChange={e => { const copy = [...manuals]; copy[idx].net_amount = e.target.value; setManuals(copy); }} /></div>
-                  <div><Button variant="ghost" size="sm" onClick={() => setManuals(manuals.filter(x => x.id !== m.id))}>Remover</Button></div>
-                </div>
-              ))}
-              <Button variant="outline" size="sm" onClick={() => setManuals([...manuals, { id: crypto.randomUUID(), description: '', reference_number: '', gross_amount: '0', net_amount: '0', ir_amount: '0', notes: '' }])}>
-                <Plus className="h-4 w-4 mr-1" /> Adicionar serviço avulso
-              </Button>
-            </TabsContent>
-          </Tabs>
-        )}
-
-        {step === 3 && (
-          <div className="space-y-3">
-            {hasCteMultiNf && (
-              <div className="text-xs bg-amber-50 border border-amber-200 rounded p-2 text-amber-900">
-                ⚠️ Um ou mais CT-e possuem várias NFs. O valor do frete é contado <b>uma única vez</b> por CT-e (as linhas de detalhe são apenas apresentação).
-              </div>
-            )}
-            <div className="border rounded overflow-hidden">
-              <Table>
-                <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Referência</TableHead><TableHead>Descrição</TableHead><TableHead>Linhas</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {previewCharges.map((c, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Badge variant="outline">{c.source_type === 'cte_document' ? 'CT-e' : c.source_type === 'nfse_document' ? 'NFS-e' : 'Serviço'}</Badge></TableCell>
-                      <TableCell>{c.source_number || c.reference_number}</TableCell>
-                      <TableCell className="text-xs">{c.description}</TableCell>
-                      <TableCell>{c.details?.length || 0}</TableCell>
-                      <TableCell className="text-right">{brl(c.gross_amount)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <div className="flex justify-end">
-              <div className="w-72 space-y-1 text-sm">
-                <div className="flex justify-between"><span>Bruto</span><span>{brl(totals.gross)}</span></div>
-                <div className="flex justify-between"><span>(-) Desconto</span><span>{brl(totals.discount)}</span></div>
-                <div className="flex justify-between"><span>(+) Juros</span><span>{brl(totals.interest)}</span></div>
-                <div className="flex justify-between font-semibold border-t pt-1 text-base"><span>Total</span><span>{brl(totals.total)}</span></div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {step === 4 && (
-          <div className="text-center py-8 space-y-3">
-            <FileText className="h-16 w-16 mx-auto text-primary" />
-            <p className="text-lg font-medium">Pronto para gerar a fatura?</p>
-            <p className="text-sm text-muted-foreground">Um título único de {brl(totals.total)} será criado em Contas a Receber.</p>
-          </div>
-        )}
-
-        <DialogFooter className="flex justify-between sm:justify-between">
-          <Button variant="outline" onClick={closeAll}>Cancelar</Button>
-          <div className="flex gap-2">
-            {step > 1 && <Button variant="outline" onClick={() => setStep(step - 1)}>Voltar</Button>}
-            {step === 1 && <Button disabled={!clientId} onClick={() => setStep(2)}>Avançar</Button>}
-            {step === 2 && <Button onClick={goPreview}>Ver prévia</Button>}
-            {step === 3 && <Button onClick={() => setStep(4)}>Avançar</Button>}
-            {step === 4 && <Button onClick={generate} disabled={createMut.isPending}>{createMut.isPending ? 'Gerando...' : 'Gerar fatura'}</Button>}
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /* ---------- Detail dialog ---------- */
 
 function InvoiceDetailDialog({ invoiceId, onClose }: { invoiceId: string | null; onClose: () => void }) {
-  const { data } = useClientInvoiceDetail(invoiceId);
+  const { data,error,isPending } = useClientInvoiceDetail(invoiceId);
   if (!invoiceId) return null;
   return (
     <Dialog open={!!invoiceId} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Fatura {data?.invoice?.invoice_number}</DialogTitle></DialogHeader>
-        {!data ? <p>Carregando...</p> : (
+        <DialogHeader><DialogTitle>Fatura {data?.invoice?.invoice_number}</DialogTitle><DialogDescription>Contrato comercial e suas cobranças históricas.</DialogDescription></DialogHeader>
+        {error?<p role="alert">Falha ao consultar a fatura: {errorMessage(error)}</p>:isPending?<p>Carregando...</p>:!data?.invoice?<p>Fatura não encontrada nesta empresa.</p> : (
           <div className="space-y-3 text-sm">
             <div className="grid grid-cols-3 gap-2">
               <div><b>Cliente:</b> {data.invoice?.clients?.company_name}</div>

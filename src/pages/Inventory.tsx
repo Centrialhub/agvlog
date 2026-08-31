@@ -1,3 +1,6 @@
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch, matchesDateRange } from '@/lib/listFilters';
 import { useState, useMemo } from 'react';
 import {
   useInventoryBalances, useInventoryMovements, useInventoryLocations,
@@ -15,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, Warehouse, Package, ArrowDownUp, MapPin, Clock } from 'lucide-react';
+import { Plus, Warehouse, Package, ArrowDownUp, MapPin, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -114,15 +117,25 @@ export default function Inventory() {
   const { data: clients = [] } = useClients();
   const createMovement = useCreateMovement();
   const createLocation = useCreateLocation();
-  const [search, setSearch] = useState('');
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', client: 'all', location: 'all' });
+  const movementFilters = useListFilters({ type: 'all', from: '', to: '' }, 'movement_');
+  const { search } = filters;
   const [movDialog, setMovDialog] = useState(false);
   const [locDialog, setLocDialog] = useState(false);
   const { toast } = useToast();
 
-  const filteredBalances = useMemo(() => {
-    const q = search.toLowerCase();
-    return balances.filter(b => b.item_description.toLowerCase().includes(q) || (b.clients?.company_name || '').toLowerCase().includes(q));
-  }, [balances, search]);
+  const filteredBalances = useMemo(() => balances.filter(balance =>
+    matchesSearch(search, balance.item_description, balance.clients?.company_name, balance.inventory_locations?.name) &&
+    (filters.client === 'all' || balance.client_id === filters.client) &&
+    (filters.location === 'all' || balance.location_id === filters.location)
+  ), [balances, search, filters.client, filters.location]);
+  const filteredMovements = movements.filter(movement =>
+    matchesSearch(search, movement.item_description, movement.clients?.company_name, movement.inventory_locations?.name) &&
+    (filters.client === 'all' || movement.client_id === filters.client) &&
+    (filters.location === 'all' || movement.location_id === filters.location) &&
+    (movementFilters.filters.type === 'all' || movement.movement_type === movementFilters.filters.type) &&
+    matchesDateRange(movement.moved_at, movementFilters.filters.from, movementFilters.filters.to)
+  );
 
   const typeColor = (t: string) => {
     if (t === 'inbound') return 'bg-success/10 text-success';
@@ -157,6 +170,9 @@ export default function Inventory() {
     return balances.filter(b => b.quantity > 0 && b.first_inbound_at && new Date(b.first_inbound_at).getTime() < cutoff);
   }, [balances]);
 
+  const matchingBalanceIds = new Set(filteredBalances.map(row => row.id));
+  const filteredStagnant = stagnant.filter(balance => matchingBalanceIds.has(balance.id));
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
@@ -184,6 +200,11 @@ export default function Inventory() {
         <Card><CardContent className="pt-6"><div className="text-2xl font-bold text-warning">{stagnant.length}</div><p className="text-xs text-muted-foreground">Itens parados +30 dias</p></CardContent></Card>
       </div>
 
+      <ListFilterBar activeCount={activeCount} onReset={resetFilters} loading={balLoading || movLoading} description="Busca, cliente e local se aplicam às três abas. Os indicadores acima mostram todo o inventário." fields={[
+        { key: 'search', label: 'Buscar no inventário', type: 'search', placeholder: 'Item, cliente ou local', value: search, onChange: value => setFilter('search', value) },
+        { key: 'client', label: 'Cliente', value: filters.client, onChange: value => setFilter('client', value), options: [{ value: 'all', label: 'Todos os clientes' }, ...clients.map(client => ({ value: client.id, label: client.company_name }))] },
+        { key: 'location', label: 'Local de estoque', value: filters.location, onChange: value => setFilter('location', value), options: [{ value: 'all', label: 'Todos os locais' }, ...locations.map(location => ({ value: location.id, label: location.name }))] },
+      ]} />
       <Tabs defaultValue="balances">
         <TabsList>
           <TabsTrigger value="balances"><Package className="h-4 w-4 mr-1" /> Saldos</TabsTrigger>
@@ -192,10 +213,7 @@ export default function Inventory() {
         </TabsList>
 
         <TabsContent value="balances" className="mt-4">
-          <div className="relative max-w-sm mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar item ou cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-          </div>
+          <p role="status" className="mb-3 text-xs text-muted-foreground">{filteredBalances.length} de {balances.length} saldos</p>
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -230,7 +248,12 @@ export default function Inventory() {
           </CardContent></Card>
         </TabsContent>
 
-        <TabsContent value="movements" className="mt-4">
+        <TabsContent value="movements" className="mt-4 space-y-3">
+          <ListFilterBar activeCount={movementFilters.activeCount} onReset={movementFilters.resetFilters} resultCount={filteredMovements.length} totalCount={movements.length} loading={movLoading} description="Filtros adicionais nesta aba, sobre as 500 movimentações mais recentes." fields={[
+            { key: 'type', label: 'Tipo de movimento', value: movementFilters.filters.type, onChange: value => movementFilters.setFilter('type', value), options: [{ value: 'all', label: 'Todos os tipos' }, ...MOVEMENT_TYPES.map(value => ({ value, label: MOVEMENT_TYPE_LABELS[value] }))] },
+            { key: 'from', label: 'Movimentação de', type: 'date', value: movementFilters.filters.from, onChange: value => movementFilters.setFilter('from', value), max: movementFilters.filters.to || undefined },
+            { key: 'to', label: 'Movimentação até', type: 'date', value: movementFilters.filters.to, onChange: value => movementFilters.setFilter('to', value), min: movementFilters.filters.from || undefined },
+          ]} />
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader>
@@ -247,9 +270,9 @@ export default function Inventory() {
               <TableBody>
                 {movLoading ? (
                   <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
-                ) : movements.length === 0 ? (
+                ) : filteredMovements.length === 0 ? (
                   <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum movimento registrado</TableCell></TableRow>
-                ) : movements.map(m => (
+                ) : filteredMovements.map(m => (
                   <TableRow key={m.id}>
                     <TableCell><Badge variant="outline" className={typeColor(m.movement_type)}>{MOVEMENT_TYPE_LABELS[m.movement_type]}</Badge></TableCell>
                     <TableCell className="font-medium">{m.item_description}</TableCell>
@@ -278,9 +301,9 @@ export default function Inventory() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {stagnant.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum item parado há mais de 30 dias</TableCell></TableRow>
-                ) : stagnant.map(b => (
+                {filteredStagnant.length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum item parado há mais de 30 dias corresponde aos filtros</TableCell></TableRow>
+                ) : filteredStagnant.map(b => (
                   <TableRow key={b.id}>
                     <TableCell className="font-medium">{b.item_description}</TableCell>
                     <TableCell className="text-sm">{b.clients?.company_name || '—'}</TableCell>

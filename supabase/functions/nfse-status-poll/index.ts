@@ -18,7 +18,6 @@ import {
 } from '../_shared/fiscal-poll.ts';
 
 const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') || '').trim().replace(/\/$/, '');
-const DEFAULT_HUB_KEY = Deno.env.get('HUB_FISCAL_API_KEY') || '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -111,8 +110,9 @@ Deno.serve(async (req) => {
       }
 
       const { data: emission } = await admin.from('hub_fiscal_emissions')
-        .select('id, hub_document_id, environment, emitter_id')
+        .select('id, hub_document_id, environment, emitter_id, dispatch_key')
         .eq('nfse_document_id', doc.id)
+        .eq('tenant_id', doc.tenant_id)
         .order('created_at', { ascending: false })
         .limit(1).maybeSingle();
 
@@ -145,10 +145,10 @@ Deno.serve(async (req) => {
       }
 
       const token = await resolveHubFiscalToken(admin, {
+        tenantId: doc.tenant_id,
         emitterId: emission.emitter_id || doc.emitter_id || null,
         environment: emission.environment,
         scope: 'nfse',
-        defaultToken: DEFAULT_HUB_KEY,
         encryptionKey: ENC_KEY,
         getSecret: name => Deno.env.get(name),
       });
@@ -188,6 +188,17 @@ Deno.serve(async (req) => {
         }
         results.push({ id: doc.id, outcome: stoppedReason, message: safeMessage });
         break;
+      }
+
+      if(emission.dispatch_key) {
+        const confirmation=await admin.rpc('complete_hub_fiscal_emission',{
+          _tenant:doc.tenant_id,_emission:emission.id,_response:{document:{...d,id:d.id||emission.hub_document_id}},_http_status:status,
+        });
+        if(confirmation.error||confirmation.data?.confirmed!==true){results.push({id:doc.id,outcome:'reconciliation_required'});continue;}
+        const checked=await admin.from('nfse_documents').update({last_status_check_at:new Date().toISOString(),status_check_attempts:(doc.status_check_attempts||0)+1,last_status_response:safeSnapshot}).eq('id',doc.id).eq('tenant_id',doc.tenant_id);
+        if(checked.error)throw checked.error;
+        if(!outcome && shouldDeadLetter(doc,true))await terminalizeFiscalPoll(admin,{tenantId:doc.tenant_id,documentKind:'nfse',documentId:doc.id,documentNumber:doc.rps_number,reasonCode:'status_timeout',attemptCount:(doc.status_check_attempts||0)+1,firstSeenAt:doc.created_at,context:safeSnapshot});
+        results.push({id:doc.id,outcome:outcome||'pending'});continue;
       }
 
       // Histórico: guarda a resposta bruta para conferência posterior.

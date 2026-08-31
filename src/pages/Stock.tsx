@@ -1,3 +1,8 @@
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { usePagination } from '@/hooks/usePagination';
+import { DataPagination } from '@/components/ui/data-pagination';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch, matchesDateRange } from '@/lib/listFilters';
 import { useState, useMemo } from 'react';
 import { useStockItems, useCreateStockItem, useUpdateStockItem, useStockMovements, useCreateStockMovement, StockItem, STOCK_CATEGORIES, STOCK_CATEGORY_LABELS, MOVEMENT_TYPES, MOVEMENT_TYPE_LABELS } from '@/hooks/useStock';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -11,20 +16,22 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Plus, Warehouse, Edit, ArrowDown, ArrowUp } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { Plus, Warehouse, Edit, ArrowDown, ArrowUp } from 'lucide-react';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format, parseISO } from 'date-fns';
 import { getErrorMessage } from '@/lib/errors';
 
 export default function Stock() {
-  const { data: items = [] } = useStockItems();
-  const { data: movements = [] } = useStockMovements();
+  const toast = useSonnerToast();
+  const { data: items = [], isLoading: itemsLoading } = useStockItems();
+  const { data: movements = [], isLoading: movementsLoading } = useStockMovements();
   const { data: employees = [] } = useEmployees();
   const createItem = useCreateStockItem();
   const updateItem = useUpdateStockItem();
   const createMovement = useCreateStockMovement();
-  const [search, setSearch] = useState('');
-  const [catFilter, setCatFilter] = useState('all');
+  const itemFilters = useListFilters({ search: '', category: 'all', quantity: 'all' }, 'item_');
+  const movementFilters = useListFilters({ search: '', type: 'all', from: '', to: '' }, 'movement_');
+  const { search, category: catFilter, quantity } = itemFilters.filters;
   const [tab, setTab] = useState('items');
   const [itemDialog, setItemDialog] = useState(false);
   const [movDialog, setMovDialog] = useState(false);
@@ -33,12 +40,19 @@ export default function Stock() {
   const [itemForm, setItemForm] = useState({ code: '', name: '', category: 'general' as string, unit: 'un', min_quantity: '', location: '', supplier: '', notes: '' });
   const [movForm, setMovForm] = useState({ stock_item_id: '', movement_type: 'inbound' as string, quantity: '', unit_cost: '', reason: 'purchase', justification: '', responsible_employee_id: '' });
 
-  const filteredItems = useMemo(() => {
-    let list = items;
-    if (catFilter !== 'all') list = list.filter(i => i.category === catFilter);
-    if (search) { const s = search.toLowerCase(); list = list.filter(i => i.name.toLowerCase().includes(s) || i.code?.toLowerCase().includes(s)); }
-    return list;
-  }, [items, search, catFilter]);
+  const filteredItems = useMemo(() => items.filter(item =>
+    matchesSearch(search, item.name, item.code, item.supplier, item.location) &&
+    (catFilter === 'all' || item.category === catFilter) &&
+    (quantity === 'all' || (quantity === 'empty' ? (item.current_quantity ?? 0) <= 0 : (item.min_quantity ?? 0) > 0 && (item.current_quantity ?? 0) <= (item.min_quantity ?? 0)))
+  ), [items, search, catFilter, quantity]);
+  const filteredMovements = movements.filter(movement =>
+    matchesSearch(movementFilters.filters.search, movement.stock_items?.name, movement.reason, movement.employees?.name) &&
+    (movementFilters.filters.type === 'all' || movement.movement_type === movementFilters.filters.type) &&
+    matchesDateRange(movement.moved_at, movementFilters.filters.from, movementFilters.filters.to)
+  );
+
+  const itemPagination = usePagination(filteredItems, { pageSize: 50, resetKey: JSON.stringify(itemFilters.filters) });
+  const movementPagination = usePagination(filteredMovements, { pageSize: 50, resetKey: JSON.stringify(movementFilters.filters) });
 
   const lowStock = useMemo(() => items.filter(i =>
     (i.current_quantity ?? 0) <= (i.min_quantity ?? 0) && (i.min_quantity ?? 0) > 0,
@@ -103,19 +117,18 @@ export default function Stock() {
       <div className="grid grid-cols-3 gap-3">
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Total Itens</p><p className="text-lg font-bold">{items.length}</p></CardContent></Card>
         <Card className={lowStock.length > 0 ? 'border-warning' : ''}><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Estoque Baixo</p><p className="text-lg font-bold text-warning">{lowStock.length}</p></CardContent></Card>
-        <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Movimentações (mês)</p><p className="text-lg font-bold">{movements.length}</p></CardContent></Card>
+        <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Movimentações recentes</p><p className="text-lg font-bold">{movements.length}</p></CardContent></Card>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList><TabsTrigger value="items">Itens</TabsTrigger><TabsTrigger value="movements">Movimentações</TabsTrigger></TabsList>
 
         <TabsContent value="items" className="space-y-3 mt-3">
-          <div className="flex gap-2">
-            <div className="relative flex-1 max-w-xs"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8 h-9" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-            <Select value={catFilter} onValueChange={setCatFilter}><SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Todas</SelectItem>{STOCK_CATEGORIES.map(c => <SelectItem key={c} value={c}>{STOCK_CATEGORY_LABELS[c]}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
+          <ListFilterBar activeCount={itemFilters.activeCount} onReset={itemFilters.resetFilters} resultCount={filteredItems.length} totalCount={items.length} loading={itemsLoading} fields={[
+            { key: 'search', label: 'Buscar item', type: 'search', placeholder: 'Nome, código, fornecedor ou localização', value: search, onChange: value => itemFilters.setFilter('search', value) },
+            { key: 'category', label: 'Categoria', value: catFilter, onChange: value => itemFilters.setFilter('category', value), options: [{ value: 'all', label: 'Todas as categorias' }, ...STOCK_CATEGORIES.map(value => ({ value, label: STOCK_CATEGORY_LABELS[value] }))] },
+            { key: 'quantity', label: 'Disponibilidade', value: quantity, onChange: value => itemFilters.setFilter('quantity', value), options: [{ value: 'all', label: 'Todos os itens' }, { value: 'low', label: 'Abaixo ou no mínimo' }, { value: 'empty', label: 'Sem saldo disponível' }] },
+          ]} />
           <Card><CardContent className="p-0">
             <Table><TableHeader><TableRow>
               <TableHead>Código</TableHead><TableHead>Nome</TableHead><TableHead>Categoria</TableHead>
@@ -123,7 +136,8 @@ export default function Stock() {
               <TableHead>Unid</TableHead><TableHead className="w-10"></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {filteredItems.map(i => (
+              {itemsLoading ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow> : filteredItems.length === 0 ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Nenhum item encontrado</TableCell></TableRow> : null}
+              {itemPagination.items.map(i => (
                 <TableRow key={i.id} className={(i.current_quantity ?? 0) <= (i.min_quantity ?? 0) && (i.min_quantity ?? 0) > 0 ? 'bg-warning/5' : ''}>
                   <TableCell className="font-mono text-xs">{i.code || '—'}</TableCell>
                   <TableCell className="font-medium text-sm">{i.name}</TableCell>
@@ -134,18 +148,25 @@ export default function Stock() {
                   <TableCell><Button variant="ghost" size="icon" onClick={() => openEditItem(i)}><Edit className="h-4 w-4" /></Button></TableCell>
                 </TableRow>
               ))}
-            </TableBody></Table>
+            </TableBody></Table><DataPagination {...itemPagination} onPageChange={itemPagination.setPage} />
           </CardContent></Card>
         </TabsContent>
 
-        <TabsContent value="movements" className="mt-3">
+        <TabsContent value="movements" className="mt-3 space-y-3">
+          <ListFilterBar activeCount={movementFilters.activeCount} onReset={movementFilters.resetFilters} resultCount={filteredMovements.length} totalCount={movements.length} loading={movementsLoading} description="Busca nas 500 movimentações mais recentes carregadas." fields={[
+            { key: 'search', label: 'Buscar movimento', type: 'search', placeholder: 'Item, motivo ou responsável', value: movementFilters.filters.search, onChange: value => movementFilters.setFilter('search', value) },
+            { key: 'type', label: 'Tipo de movimento', value: movementFilters.filters.type, onChange: value => movementFilters.setFilter('type', value), options: [{ value: 'all', label: 'Todos os tipos' }, ...MOVEMENT_TYPES.map(value => ({ value, label: MOVEMENT_TYPE_LABELS[value] }))] },
+            { key: 'from', label: 'Movimentação de', type: 'date', value: movementFilters.filters.from, onChange: value => movementFilters.setFilter('from', value), max: movementFilters.filters.to || undefined },
+            { key: 'to', label: 'Movimentação até', type: 'date', value: movementFilters.filters.to, onChange: value => movementFilters.setFilter('to', value), min: movementFilters.filters.from || undefined },
+          ]} />
           <Card><CardContent className="p-0">
             <Table><TableHeader><TableRow>
               <TableHead>Data</TableHead><TableHead>Item</TableHead><TableHead>Tipo</TableHead>
               <TableHead className="text-right">Qtd</TableHead><TableHead>Motivo</TableHead><TableHead>Responsável</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {movements.slice(0, 100).map(m => (
+              {movementsLoading ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow> : filteredMovements.length === 0 ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Nenhum movimento encontrado</TableCell></TableRow> : null}
+              {movementPagination.items.map(m => (
                 <TableRow key={m.id}>
                   <TableCell className="text-xs">{format(parseISO(m.moved_at), 'dd/MM/yy HH:mm')}</TableCell>
                   <TableCell className="text-sm font-medium">{m.stock_items?.name || '—'}</TableCell>
@@ -158,7 +179,7 @@ export default function Stock() {
                   <TableCell className="text-sm text-muted-foreground">{m.employees?.name || '—'}</TableCell>
                 </TableRow>
               ))}
-            </TableBody></Table>
+            </TableBody></Table><DataPagination {...movementPagination} onPageChange={movementPagination.setPage} />
           </CardContent></Card>
         </TabsContent>
       </Tabs>

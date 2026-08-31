@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,11 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useListFilters } from '@/hooks/useListFilters';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch } from '@/lib/listFilters';
 import { Separator } from '@/components/ui/separator';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   Hexagon, Plus, Trash2, MapPin, Shield, Truck, Building2,
-  Info, ArrowDownUp, Eye, EyeOff, Search, HelpCircle
+  Info, ArrowDownUp, Eye, EyeOff, HelpCircle
 } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -30,11 +33,13 @@ const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
 export default function Geofences() {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const { filters, setFilter, resetFilters, activeCount: filterCount } = useListFilters({ search: '', category: 'all', status: 'all' });
   const [showHelp, setShowHelp] = useState(false);
 
   const { data: geofences = [], isLoading } = useQuery({
@@ -117,9 +122,7 @@ export default function Geofences() {
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao remover geofence')),
   });
 
-  const filtered = geofences.filter((g) =>
-    !search || g.name.toLowerCase().includes(search.toLowerCase()) || g.category?.includes(search.toLowerCase())
-  );
+  const filtered = geofences.filter(row => matchesSearch(filters.search, row.name, getCategoryConfig(row.category || 'general').label) && (filters.category === 'all' || row.category === filters.category) && (filters.status === 'all' || row.enabled === (filters.status === 'active')));
 
   const activeCount = geofences.filter((g) => g.enabled).length;
   const vehiclesInside = states.length;
@@ -268,18 +271,14 @@ export default function Geofences() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Suas Cercas ({geofences.length})</CardTitle>
-                <div className="relative w-48">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    className="h-8 pl-8 text-xs"
-                    placeholder="Buscar por nome..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
-                </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
+              <ListFilterBar fields={[
+                { key: 'search', label: 'Buscar cerca', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Nome ou categoria' },
+                { key: 'category', label: 'Categoria', value: filters.category, onChange: value => setFilter('category', value), options: [{ value: 'all', label: 'Todas as categorias' }, ...CATEGORIES] },
+                { key: 'status', label: 'Monitoramento', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todos' }, { value: 'active', label: 'Ativo' }, { value: 'inactive', label: 'Pausado' }] },
+              ]} onReset={resetFilters} activeCount={filterCount} resultCount={filtered.length} totalCount={geofences.length} loading={isLoading} description="Filtros desta lista; mapa e eventos mostram a visão geral." />
               {filtered.map((g) => {
                 const config = getCategoryConfig(g.category || 'general');
                 const Icon = config.icon;
@@ -327,7 +326,7 @@ export default function Geofences() {
               })}
               {filtered.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-6">
-                  {search ? 'Nenhuma cerca encontrada com esse nome' : 'Nenhuma cerca cadastrada'}
+                  Nenhuma cerca encontrada para os filtros
                 </p>
               )}
             </CardContent>
@@ -433,6 +432,7 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: b
 
 /* ─── Create Dialog ─── */
 function NewGeofenceDialog({ open, onOpenChange, tenantId }: { open: boolean; onOpenChange: (v: boolean) => void; tenantId?: string }) {
+  const toast = useSonnerToast();
   const qc = useQueryClient();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('base');

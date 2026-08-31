@@ -4,37 +4,40 @@ import { supabase } from '@/integrations/supabase/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer, Search } from 'lucide-react';
 import { Wand2 } from 'lucide-react';
 import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { isReasonableDate } from '@/lib/inputMasks';
 import { printLoadNotesReport } from '@/lib/printLoadNotes';
 import { detectPaymentMethod } from '@/lib/paymentMethodDetection';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/components/ui/dialog';
 import type { Json, Tables } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
 import type { Load } from '@/hooks/useLoads';
 import { getErrorMessage } from '@/lib/errors';
+import { OperationOutcomeDialog } from './OperationOutcomeDialog';
+import { OperationCorrectionDialog } from './OperationCorrectionDialog';
+import { RedeliveryDialog } from './RedeliveryDialog';
+import { useRedelivery } from '@/hooks/useRedelivery';
+import { useAuth } from '@/hooks/useAuth';
+import { useTenant } from '@/hooks/useTenant';
+import { useDocumentMetadataWrites } from '@/hooks/useDocumentMetadataWrites';
+import { useDocumentMetadataDrafts } from '@/hooks/useDocumentMetadataDrafts';
+import { DocumentMetadataDialog } from './DocumentMetadataDialog';
+import { ADMIN_FIELD_LABELS, type AdminFields, type MetadataItem } from '@/lib/loads/documentMetadata';
+import { documentStatusLabel } from '@/lib/status/documentStatus';
+import { useOperationDocumentOutcomes } from '@/hooks/useOperationDocumentOutcomes';
+import { operationResultMessage, type OperationOutcome } from '@/lib/loads/operationDocumentOutcome';
 
 type LoadNoteDocument = Pick<Tables<'fiscal_documents'>,
   'id' | 'document_type' | 'deleted_at' | 'delivery_meta' | 'client_load_source' |
   'invoice_number' | 'recipient' | 'recipient_city' | 'recipient_neighborhood' |
   'recipient_state' | 'reference_number' | 'remitter' | 'status' | 'value'
->;
+> & { is_historical?: boolean; current_delivery_attempt_id?: string | null; operational_metadata?: unknown };
 
 interface Props {
   load: Load;
@@ -91,7 +94,6 @@ const toLocalDT = (v?: string | null) => {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-const fromLocalDT = (v: string) => (v ? new Date(v).toISOString() : null);
 const fmtMoney = (n?: number | null) =>
   n == null ? 'R$ 0,00' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -108,64 +110,38 @@ type DocMeta = {
   redelivery?: boolean;
   redelivery_reason?: string;
   redelivery_at?: string;
+  correction_of?: string;
+  returned_items?: Record<string,number>;
 };
 
 const jsonObject = (value: Json): JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
 const docMeta = (value: Json): DocMeta => jsonObject(value) as unknown as DocMeta;
-const metaJson = (value: DocMeta): Json => value as unknown as Json;
 
 export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
+  const toast = useSonnerToast();
   const qc = useQueryClient();
+  const outcomeWrites=useOperationDocumentOutcomes();
+  const redeliveryWrites=useRedelivery();
+  const metadataWrites=useDocumentMetadataWrites();
+  const {user}=useAuth();const {currentTenant}=useTenant();
+  const outcomeBlocked=outcomeWrites.isPending||outcomeWrites.pending.length>0||!!outcomeWrites.recoveryError
+    ||redeliveryWrites.isPending||redeliveryWrites.pending.length>0||!!redeliveryWrites.recoveryError
+    ||metadataWrites.isPending||metadataWrites.pending.length>0||!!metadataWrites.recoveryError;
   const inboundDocs = useMemo(
-    () => documents.filter(document => document.document_type === 'inbound' && !document.deleted_at),
+    () => documents.filter(document => document.document_type === 'inbound' && !document.deleted_at && !document.is_historical),
     [documents],
   );
+  const historicalDocs = documents.filter(document => document.document_type === 'inbound' && document.is_historical);
 
-  // Per-document meta state (keyed by doc.id)
-  const [meta, setMeta] = useState<Record<string, DocMeta>>(() => {
-    const m: Record<string, DocMeta> = {};
-    inboundDocs.forEach(document => { m[document.id] = docMeta(document.delivery_meta); });
-    return m;
-  });
-  useEffect(() => {
-    const m: Record<string, DocMeta> = {};
-    const toPersist: Array<{ id: string; meta: DocMeta }> = [];
-    inboundDocs.forEach(document => {
-      const dm = docMeta(document.delivery_meta);
-      // Auto-detect forma de pagamento se ainda não definida
-      if (!dm.payment_method) {
-        const detected = detectPaymentMethod(getDocObservation(document));
-        if (detected) {
-          dm.payment_method = detected;
-          toPersist.push({ id: document.id, meta: dm });
-        }
-      }
-      m[document.id] = dm;
-    });
-    setMeta(m);
-    // Persiste silenciosamente as detecções no banco — usuário não precisa salvar manualmente
-    if (toPersist.length > 0) {
-      (async () => {
-        try {
-          await Promise.all(
-            toPersist.map(({ id, meta }) =>
-              supabase.from('fiscal_documents').update({ delivery_meta: metaJson(meta) }).eq('id', id),
-            ),
-          );
-          qc.invalidateQueries({ queryKey: ['load_documents'] });
-          qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-        } catch {
-          // silencioso: detecção é melhor-esforço
-        }
-      })();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load.id, inboundDocs.length]);
-
-  const [savingAll, setSavingAll] = useState(false);
-  const [detectingPayments, setDetectingPayments] = useState(false);
-  const [dirty, setDirty] = useState<Set<string>>(new Set());
+  const drafts=useDocumentMetadataDrafts(currentTenant?.id,user?.id,load.id,inboundDocs,outcomeBlocked);
+  const {dirty}=drafts;
+  const meta:Record<string,DocMeta>=Object.fromEntries(inboundDocs.map(document=>[document.id,{
+    ...docMeta(document.delivery_meta),
+    ...drafts.contexts.get(document.id)?.fields,
+    ...(!drafts.stale.includes(document.id)?drafts.rows[document.id]?.changes:{}),
+  }]));
+  const [metadataReview,setMetadataReview]=useState<{scope:string;items:MetadataItem[];documentLabels:Record<string,string>}|null>(null);
   const [inboundFilters, setInboundFilters] = useState({ invoice: '', recipient: '', neighborhood: '', city: '' });
   const [debouncedInboundFilters, setDebouncedInboundFilters] = useState(inboundFilters);
 
@@ -196,7 +172,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     });
   }, [inboundDocs, debouncedInboundFilters]);
 
-  const [neModal, setNeModal] = useState<{ docId: string; reason: string } | null>(null);
+  const [outcomeSelection,setOutcomeSelection]=useState<{docId:string;outcome:OperationOutcome;correction?:boolean}|null>(null);
+  const OutcomeDialog=outcomeSelection?.correction?OperationCorrectionDialog:OperationOutcomeDialog;
   const [reModal, setReModal] = useState<{ docId: string; reason: string } | null>(null);
   const [cashToReceive, setCashToReceive] = useState<string>(
     load?.cash_to_receive != null ? String(load.cash_to_receive) : '0',
@@ -209,35 +186,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     Number(cashToReceive || 0) !== Number(load?.cash_to_receive || 0)
     || Number(pixToReceive || 0) !== Number(load?.pix_to_receive || 0);
 
-  useEffect(() => {
-    const syncLoadPaymentMethod = async () => {
-      if (!load?.id) return;
-
-      const detectedMethods = inboundDocs
-        .map((document) => {
-          const dm = docMeta(document.delivery_meta);
-          return dm.payment_method || detectPaymentMethod(getDocObservation(document));
-        })
-        .filter(Boolean) as string[];
-
-      const nextLoadPaymentMethod = detectedMethods[0] || null;
-      if ((load.payment_method || null) === nextLoadPaymentMethod) return;
-
-      try {
-        const { error } = await supabase
-          .from('loads')
-          .update({ payment_method: nextLoadPaymentMethod })
-          .eq('id', load.id);
-        if (error) throw error;
-        qc.invalidateQueries({ queryKey: ['load', load.id] });
-        qc.invalidateQueries({ queryKey: ['loads'] });
-      } catch {
-        // silencioso: sincronização derivada
-      }
-    };
-
-    void syncLoadPaymentMethod();
-  }, [inboundDocs, load?.id, load?.payment_method, qc]);
+  // Payment suggestions are drafts only. Opening this panel must never update a load or note.
 
   const saveTotals = async () => {
     setSavingTotals(true);
@@ -261,232 +210,43 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     }
   };
 
-  const patchDoc = (id: string, patch: Partial<DocMeta>) => {
-    setMeta(prev => ({ ...prev, [id]: { ...(prev[id] || {}), ...patch } }));
-    setDirty(prev => new Set(prev).add(id));
+  const patchDoc=drafts.patch;
+  const markAllCanhotos=()=>{
+    for(const document of inboundDocs){
+      if(drafts.contexts.get(document.id)?.can_receive_receipt)patchDoc(document.id,{rec_canhoto:true});
+    }
   };
-
-  const markAllCanhotos = () => {
-    setMeta(prev => {
-      const next = { ...prev };
-      inboundDocs.forEach((d) => {
-        next[d.id] = { ...(next[d.id] || {}), rec_canhoto: true };
-      });
-      return next;
-    });
-    setDirty(new Set(inboundDocs.map((d) => d.id)));
-  };
-
-  // Re-executa detecção de forma de pagamento para todos os documentos da carga
-  // (útil para XMLs já ingeridos antes da nova lógica de detecção)
-  const detectAllPayments = async () => {
-    if (!inboundDocs.length) return;
-    setDetectingPayments(true);
-    try {
-      const updates: Array<{ id: string; meta: DocMeta; detected: string }> = [];
-      const nextMeta: Record<string, DocMeta> = { ...meta };
-      for (const d of inboundDocs) {
-        const current = (nextMeta[d.id] || {}) as DocMeta;
-        const detected = detectPaymentMethod(getDocObservation(d));
-        if (detected && detected !== current.payment_method) {
-          const merged: DocMeta = { ...current, payment_method: detected };
-          nextMeta[d.id] = merged;
-          updates.push({ id: d.id, meta: merged, detected });
-        }
+  const detectAllPayments=()=>{
+    let count=0;
+    for(const document of inboundDocs){
+      const detected=detectPaymentMethod(getDocObservation(document));
+      if(drafts.canEdit(document.id)&&detected&&detected!==meta[document.id]?.payment_method){
+        patchDoc(document.id,{payment_method:detected});count++;
       }
-      if (updates.length === 0) {
-        toast.info('Nenhuma nova forma de pagamento detectada nas observações');
-        return;
-      }
-      setMeta(nextMeta);
-      await Promise.all(
-        updates.map(({ id, meta }) =>
-          supabase.from('fiscal_documents').update({ delivery_meta: metaJson(meta) }).eq('id', id),
-        ),
-      );
-      // sincroniza carga com a primeira forma detectada se ainda estiver vazia
-      if (!load.payment_method && updates[0]?.detected) {
-        await supabase
-          .from('loads')
-          .update({ payment_method: updates[0].detected })
-          .eq('id', load.id);
-      }
-      toast.success(`Forma de pagamento detectada em ${updates.length} nota(s)`);
-      await qc.invalidateQueries({ queryKey: ['load_documents'] });
-      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      await qc.invalidateQueries({ queryKey: ['load', load.id] });
-      await qc.invalidateQueries({ queryKey: ['loads'] });
-      onSaved?.();
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Erro ao detectar forma de pagamento'));
-    } finally {
-      setDetectingPayments(false);
     }
+    toast.info(count?'Sugestões preparadas em '+count+' nota(s). Revise antes de salvar.':'Nenhuma nova forma de pagamento detectada nas observações');
   };
 
-  // Marca documento como Entregue e salva imediatamente (sincroniza com o sistema)
-  const markDelivered = async (docId: string) => {
-    const nowIso = new Date().toISOString();
-    const next: DocMeta = {
-      ...(meta[docId] || {}),
-      ne: false,
-      ne_reason: '',
-      delivery_at: nowIso,
-    };
-    setMeta(prev => ({ ...prev, [docId]: next }));
-    try {
-      const { error } = await supabase
-        .from('fiscal_documents')
-        .update({ status: 'delivered', delivery_meta: metaJson(next) })
-        .eq('id', docId);
-      if (error) throw error;
-      toast.success('Nota marcada como Entregue');
-      await qc.invalidateQueries({ queryKey: ['load_documents'] });
-      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
-      onSaved?.();
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Erro ao marcar como entregue'));
-    }
-  };
+  const markDelivered = (docId: string) => setOutcomeSelection({docId,outcome:'delivered'});
 
-  // Volta a nota para Pendente (desmarca Entregue/Não Entregue)
-  const clearDeliveryStatus = async (docId: string) => {
-    const next: DocMeta = {
-      ...(meta[docId] || {}),
-      ne: false,
-      ne_reason: '',
-      ne_at: undefined,
-      delivery_at: undefined,
-    };
-    setMeta(prev => ({ ...prev, [docId]: next }));
-    try {
-      const { error } = await supabase
-        .from('fiscal_documents')
-        .update({ status: 'confirmed', delivery_meta: metaJson(next) })
-        .eq('id', docId);
-      if (error) throw error;
-      toast.success('Status revertido para Pendente');
-      await qc.invalidateQueries({ queryKey: ['load_documents'] });
-      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
-      onSaved?.();
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Erro ao reverter status'));
-    }
-  };
 
-  // Confirma modal de Não Entregue (exige motivo)
-  const confirmNotDelivered = async () => {
-    if (!neModal) return;
-    const reason = neModal.reason.trim();
-    if (!reason) {
-      toast.error('Informe o motivo da não entrega');
-      return;
-    }
-    if (reason.length < 5) {
-      toast.error('Motivo muito curto (mínimo 5 caracteres)');
-      return;
-    }
-    const nowIso = new Date().toISOString();
-    const docId = neModal.docId;
-    const next: DocMeta = {
-      ...(meta[docId] || {}),
-      ne: true,
-      ne_reason: reason,
-      ne_at: nowIso,
-      delivery_at: undefined,
-    };
-    setMeta(prev => ({ ...prev, [docId]: next }));
-    try {
-      const { error } = await supabase
-        .from('fiscal_documents')
-        .update({ status: 'not_delivered', delivery_meta: metaJson(next) })
-        .eq('id', docId);
-      if (error) throw error;
-      toast.success('Nota marcada como Não Entregue');
-      await qc.invalidateQueries({ queryKey: ['load_documents'] });
-      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      setNeModal(null);
-      setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
-      onSaved?.();
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Erro ao salvar não entrega'));
-    }
-  };
 
-  // Marca nota para REENTREGA: libera para entrar na próxima carga
-  const confirmRedelivery = async () => {
-    if (!reModal) return;
-    const nowIso = new Date().toISOString();
-    const docId = reModal.docId;
-    const next: DocMeta = {
-      ...(meta[docId] || {}),
-      redelivery: true,
-      redelivery_reason: reModal.reason.trim() || 'Reentrega solicitada',
-      redelivery_at: nowIso,
-      ne: false,
-      ne_reason: '',
-      ne_at: undefined,
-      delivery_at: undefined,
-    };
-    setMeta(prev => ({ ...prev, [docId]: next }));
-    try {
-      // status volta para 'confirmed' e load_id é liberado via RPC oficial
-      const { error: metaErr } = await supabase
-        .from('fiscal_documents')
-        .update({ status: 'confirmed', delivery_meta: metaJson(next) })
-        .eq('id', docId);
-      if (metaErr) throw metaErr;
-      const { data: fiscalDocument } = await supabase
-        .from('fiscal_documents')
-        .select('tenant_id, load_id')
-        .eq('id', docId)
-        .maybeSingle();
-      if (fiscalDocument?.tenant_id && fiscalDocument.load_id) {
-        const { error: rmErr } = await supabase.rpc('remove_fiscal_documents_from_load_v2', {
-          _tenant_id: fiscalDocument.tenant_id,
-          _load_id: fiscalDocument.load_id,
-          _document_ids: [docId],
-        });
-        if (rmErr) throw rmErr;
-      }
-      toast.success('Nota marcada para Reentrega — disponível para próxima carga');
-      await qc.invalidateQueries({ queryKey: ['load_documents'] });
-      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      setReModal(null);
-      setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
-      onSaved?.();
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Erro ao marcar reentrega'));
-    }
-  };
-
-  const saveAll = async () => {
-    setSavingAll(true);
-    try {
-      const ids = Array.from(dirty);
-      for (const id of ids) {
-        const { error } = await supabase
-          .from('fiscal_documents')
-          .update({ delivery_meta: metaJson(meta[id] || {}) })
-          .eq('id', id);
-        if (error) throw error;
-      }
-      toast.success(`Notas salvas (${ids.length} alteração(ões))`);
-      setDirty(new Set());
-      await qc.invalidateQueries({ queryKey: ['load_documents'] });
-      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      onSaved?.();
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Erro ao salvar notas'));
-    } finally {
-      setSavingAll(false);
-    }
+  const saveAll=()=>{
+    if(outcomeBlocked||!dirty.size||drafts.stale.length||!currentTenant?.id||!user?.id)return;
+    setMetadataReview({scope:drafts.scope,items:drafts.items(),documentLabels:Object.fromEntries(inboundDocs.map(document=>[
+      document.id,[document.invoice_number||document.id.slice(0,8),document.recipient].filter(Boolean).join(' — '),
+    ]))});
   };
 
   return (
     <div className="border rounded-md">
+      {historicalDocs.length > 0 ? <section aria-label="Tentativas anteriores desta carga" className="space-y-2 border-b p-3">
+        <h3 className="text-sm font-semibold">Tentativas anteriores desta carga — somente leitura</h3>
+        <p className="text-xs text-muted-foreground">O saldo foi liberado para outra tentativa. Os resultados desta carga permanecem preservados.</p>
+        {historicalDocs.map(document => <p key={document.id} className="text-sm">
+          Nota {document.invoice_number || document.id.slice(0, 8)} — {documentStatusLabel(document.status)} — {document.recipient || 'Destinatário não informado'}
+        </p>)}
+      </section> : null}
       <div className="px-3 py-1.5 bg-muted/40 text-[10px] font-bold uppercase flex items-center justify-between">
         <span className="flex items-center gap-1.5">
           <FileText className="h-3 w-3" /> Notas Fiscais ({inboundDocs.length})
@@ -545,10 +305,10 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           variant="outline"
           className="h-7 text-xs"
           onClick={markAllCanhotos}
-          disabled={!inboundDocs.length}
+          disabled={!inboundDocs.some(document=>drafts.canEdit(document.id)&&drafts.contexts.get(document.id)?.can_receive_receipt)}
         >
           <CheckCircle2 className="h-3 w-3 mr-1 text-success" />
-          Marcar todos canhotos como Recebidos
+          Preparar recebimento dos canhotos elegíveis
         </Button>
         <Button
           size="sm"
@@ -556,7 +316,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           className="h-7 text-xs"
           onClick={() => printLoadNotesReport(load, inboundDocs.map(d => ({
             ...d,
-            delivery_meta: meta[d.id] || docMeta(d.delivery_meta),
+            delivery_meta: docMeta(d.delivery_meta),
           })))}
           disabled={!inboundDocs.length}
           title="Gerar relatório imprimível / Salvar como PDF"
@@ -569,25 +329,40 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           variant="outline"
           className="h-7 text-xs"
           onClick={detectAllPayments}
-          disabled={detectingPayments || !inboundDocs.length}
+          disabled={!inboundDocs.some(document=>drafts.canEdit(document.id))}
           title="Re-analisa observações dos XMLs e preenche a forma de pagamento detectada"
         >
           <Wand2 className="h-3 w-3 mr-1" />
-          {detectingPayments ? 'Detectando...' : 'Detectar formas de pagamento'}
+          Detectar formas de pagamento
         </Button>
         <div className="flex-1" />
         <Button
           size="sm"
           onClick={saveAll}
-          disabled={savingAll || !dirty.size}
+          disabled={outcomeBlocked || !dirty.size || drafts.stale.length>0}
           className="h-7 text-xs"
         >
           <Save className="h-3 w-3 mr-1" />
-          {savingAll ? 'Salvando...' : `Salvar Notas${dirty.size ? ` (${dirty.size})` : ''}`}
+          {`Salvar Notas${dirty.size ? ` (${dirty.size})` : ''}`}
         </Button>
       </div>
 
       {/* TABELA */}
+      {inboundDocs.some(document=>!drafts.contexts.has(document.id))?<p role="status" className="p-3 text-sm">
+        Conferência administrativa indisponível para notas sem contexto auditado. Atualize a página após a publicação do contrato de conferência.
+      </p>:null}
+      {dirty.size>0?<section aria-label="Rascunhos de conferência" className="space-y-2 border-b p-3 text-sm">
+        <p>Há {dirty.size} nota(s) com rascunhos ainda não salvos. As ações de baixa e reentrega dessas notas aguardam salvar ou descartar o rascunho.</p>
+        {drafts.stale.length>0?<>
+          <p role="alert">As notas mudaram desde a edição. A tabela mostra os dados atuais; revise os rascunhos abaixo antes de reaplicá-los. Uma nova tentativa ou resultado exige descartar e conferir novamente.</p>
+          {Object.entries(drafts.rows).map(([id,draft])=><p key={id}>Nota {inboundDocs.find(document=>document.id===id)?.invoice_number||id.slice(0,8)}: {Object.entries(draft.changes).map(([field,value])=>`${ADMIN_FIELD_LABELS[field as keyof AdminFields]} → ${typeof value==='boolean'?(value?'Recebido':'Não recebido'):value||'Não informado'}`).join('; ')}</p>)}
+          <Button variant="outline" disabled={outcomeBlocked} onClick={()=>{
+            if(!drafts.rebase())toast.error('A tentativa ou o resultado mudou. Descarte os rascunhos e confira novamente a nota atual.');
+          }}>Revisar rascunhos sobre valores atuais</Button>
+        </>:null}
+        <Button variant="outline" disabled={outcomeBlocked} onClick={()=>void qc.invalidateQueries({queryKey:['load_documents']})}>Atualizar notas</Button>
+        <Button variant="outline" disabled={outcomeBlocked} onClick={()=>drafts.drop(Array.from(dirty))}>Descartar rascunhos</Button>
+      </section>:null}
       {/* FILTROS NF */}
       <div className="grid grid-cols-4 gap-2 px-3 py-2 border-b bg-muted/5">
         <div className="relative">
@@ -649,19 +424,23 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
             ) : filteredDocs.map((d) => {
               const m = meta[d.id] || {};
               const isDelivered = d.status === 'delivered';
-              const isNotDelivered = d.status === 'not_delivered' || m.ne;
+              const isPartial = d.status === 'partial_delivery';
+              const isFinal = ['delivered','partial_delivery','returned','refused','failed','not_delivered','cancelled'].includes(d.status||'');
+              const isNotDelivered = ['not_delivered','returned','refused','failed'].includes(d.status||'') || (!isDelivered&&m.ne);
               return (
                 <TableRow key={d.id} className={isNotDelivered ? 'bg-destructive/5' : isDelivered ? 'bg-success/5' : ''}>
                   <TableCell className="p-1 text-center">
                     <Checkbox
                       checked={!!m.rec_canhoto}
+                      aria-label={`Canhoto recebido da nota ${d.invoice_number}`}
+                      disabled={!drafts.canEdit(d.id)||(!drafts.contexts.get(d.id)?.can_receive_receipt&&!m.rec_canhoto)}
                       onCheckedChange={v => patchDoc(d.id, { rec_canhoto: !!v })}
                     />
                   </TableCell>
                   <TableCell className="text-xs font-semibold whitespace-nowrap">{d.invoice_number || '—'}</TableCell>
                   <TableCell className="text-xs whitespace-nowrap">{d.reference_number || '0'}</TableCell>
                   <TableCell className="text-xs">
-                    {isNotDelivered ? (
+                    {isPartial ? <Badge variant="outline" className="text-[10px]">Entrega parcial</Badge> : isNotDelivered ? (
                       <Badge variant="destructive" className="text-[10px]" title={m.ne_reason || ''}>Não Entregue</Badge>
                     ) : isDelivered ? (
                       <Badge className="text-[10px] bg-success text-success-foreground">Entregue</Badge>
@@ -690,6 +469,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                     <div className="flex items-center gap-1">
                       <SearchableSelect
                         value={m.payment_method || '__none__'}
+                        ariaLabel={`Forma de pagamento da nota ${d.invoice_number}`}
+                        disabled={!drafts.canEdit(d.id)}
                         onChange={v => patchDoc(d.id, { payment_method: v === '__none__' ? '' : v })}
                         options={PAYMENT_METHODS}
                         placeholder="—"
@@ -701,12 +482,14 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                             <TooltipTrigger asChild>
                               <button
                                 type="button"
+                                disabled={!drafts.canEdit(d.id)}
+                                aria-label={`Sugerir pagamento pela observação da nota ${d.invoice_number}`}
                                 className="text-muted-foreground hover:text-primary"
                                 onClick={() => {
                                   const detected = detectPaymentMethod(getDocObservation(d));
                                   if (detected) {
                                     patchDoc(d.id, { payment_method: detected });
-                                    toast.success(`Detectado: ${PAYMENT_METHODS.find(p => p.value === detected)?.label}`);
+                                    toast.info(`Sugestão: ${PAYMENT_METHODS.find(p => p.value === detected)?.label}. Revise antes de salvar.`);
                                   } else {
                                     toast.info('Nenhum padrão de pagamento identificado na observação');
                                   }
@@ -727,6 +510,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                   <TableCell className="p-1">
                     <SearchableSelect
                       value={m.oco_01 || ''}
+                      ariaLabel={`Ocorrência 01 da nota ${d.invoice_number}`}
+                      disabled={!drafts.canEdit(d.id)}
                       onChange={v => patchDoc(d.id, { oco_01: v })}
                       options={OCO_CODES}
                       placeholder="—"
@@ -736,6 +521,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                   <TableCell className="p-1">
                     <SearchableSelect
                       value={m.oco_02 || ''}
+                      ariaLabel={`Ocorrência 02 da nota ${d.invoice_number}`}
+                      disabled={!drafts.canEdit(d.id)}
                       onChange={v => patchDoc(d.id, { oco_02: v })}
                       options={OCO_CODES}
                       placeholder="—"
@@ -745,6 +532,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                   <TableCell className="p-1">
                     <SearchableSelect
                       value={m.resp_oco || '__none__'}
+                      ariaLabel={`Responsável pela ocorrência da nota ${d.invoice_number}`}
+                      disabled={!drafts.canEdit(d.id)}
                       onChange={v => patchDoc(d.id, { resp_oco: v === '__none__' ? '' : v })}
                       options={OCO_RESPONSIBLES}
                       placeholder="—"
@@ -754,21 +543,10 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                   <TableCell className="p-1">
                     <Input
                       type="datetime-local"
-                      value={toLocalDT(m.delivery_at)}
-                      max={(() => {
-                        const f = new Date(Date.now() + 7 * 86400000);
-                        const pad = (n: number) => String(n).padStart(2, '0');
-                        return `${f.getFullYear()}-${pad(f.getMonth() + 1)}-${pad(f.getDate())}T23:59`;
-                      })()}
-                      min="2000-01-01T00:00"
-                      onChange={e => {
-                        const iso = fromLocalDT(e.target.value) || undefined;
-                        if (iso && !isReasonableDate(iso, 7)) {
-                          toast.error('Data inválida (não pode ser anterior a 2000 ou mais de 7 dias no futuro)');
-                          return;
-                        }
-                        patchDoc(d.id, { delivery_at: iso });
-                      }}
+                      value={toLocalDT(m.delivery_at||m.ne_at)}
+                      readOnly
+                      aria-label={'Data e hora auditadas da nota '+d.invoice_number}
+                      title="Use Registrar ou Corrigir resultado para alterar a data auditada."
                       className="h-7 text-xs w-40"
                     />
                   </TableCell>
@@ -778,8 +556,9 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                         size="sm"
                         variant={isDelivered ? 'default' : 'outline'}
                         className={`h-7 px-2 text-[10px] ${isDelivered ? 'bg-success hover:bg-success/90 text-success-foreground' : 'text-success border-success/40 hover:bg-success/10'}`}
-                        onClick={() => isDelivered ? clearDeliveryStatus(d.id) : markDelivered(d.id)}
-                        title={isDelivered ? 'Clique para desmarcar Entregue' : 'Marcar como Entregue (sincroniza no sistema)'}
+                        onClick={() => markDelivered(d.id)}
+                        disabled={outcomeBlocked||isFinal||dirty.has(d.id)}
+                        title={isFinal ? 'Use Corrigir resultado para revisar a baixa registrada' : 'Marcar como Entregue (sincroniza no sistema)'}
                       >
                         <CheckCircle2 className="h-3 w-3 mr-1" /> Entregue
                       </Button>
@@ -787,16 +566,20 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                         size="sm"
                         variant={isNotDelivered ? 'destructive' : 'outline'}
                         className={`h-7 px-2 text-[10px] ${isNotDelivered ? '' : 'text-destructive border-destructive/40 hover:bg-destructive/10'}`}
-                        onClick={() => isNotDelivered ? clearDeliveryStatus(d.id) : setNeModal({ docId: d.id, reason: m.ne_reason || '' })}
-                        title={isNotDelivered ? 'Clique para desmarcar Não Entregue' : 'Marcar como Não Entregue (exige observação)'}
+                        onClick={() => setOutcomeSelection({docId:d.id,outcome:'not_delivered'})}
+                        disabled={outcomeBlocked||isFinal||dirty.has(d.id)}
+                        title={isFinal ? 'Use Corrigir resultado para revisar a baixa registrada' : 'Marcar como Não Entregue (exige observação)'}
                       >
                         <XCircle className="h-3 w-3 mr-1" /> Não Entregue
                       </Button>
+                      {isFinal?<Button size="sm" variant="outline" disabled={outcomeBlocked||dirty.has(d.id)}
+                        onClick={()=>setOutcomeSelection({docId:d.id,outcome:'delivered',correction:true})}>Corrigir resultado</Button>:null}
                       <Button
                         size="sm"
                         variant="outline"
                         className="h-7 px-2 text-[10px] text-info border-info/40 hover:bg-info/10"
                         onClick={() => setReModal({ docId: d.id, reason: m.redelivery_reason || '' })}
+                        disabled={outcomeBlocked||dirty.has(d.id)}
                         title="Marcar para Reentrega — libera nota para entrar na próxima carga"
                       >
                         <RotateCcw className="h-3 w-3 mr-1" /> Reentrega
@@ -835,77 +618,27 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         </Table>
       </div>
 
-      {/* MODAL NÃO ENTREGUE */}
-      <Dialog open={!!neModal} onOpenChange={(o) => !o && setNeModal(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-destructive" />
-              Marcar Nota como Não Entregue
-            </DialogTitle>
-            <DialogDescription>
-              Informe o motivo da não entrega. Esta observação será usada nos relatórios operacionais.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label className="text-xs">Motivo / Observação *</Label>
-            <Textarea
-              rows={4}
-              autoFocus
-              maxLength={500}
-              placeholder="Ex.: Cliente ausente, endereço incorreto, recusou mercadoria..."
-              value={neModal?.reason || ''}
-              onChange={e => setNeModal(prev => prev ? { ...prev, reason: e.target.value } : prev)}
-            />
-            <div className="text-[10px] text-muted-foreground text-right">
-              {(neModal?.reason || '').length}/500
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNeModal(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmNotDelivered}>
-              <XCircle className="h-4 w-4 mr-1" />
-              Confirmar Não Entrega
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {outcomeSelection?<OutcomeDialog loadId={load.id} documentId={outcomeSelection.docId}
+        invoiceNumber={inboundDocs.find(d=>d.id===outcomeSelection.docId)?.invoice_number||'—'} outcome={outcomeSelection.outcome}
+        onClose={()=>setOutcomeSelection(null)} onConfirmed={result=>{
+          drafts.drop([result.document_id]);
+          toast.success(operationResultMessage(result));onSaved?.();
+        }}/>:null}
 
-      {/* MODAL REENTREGA */}
-      <Dialog open={!!reModal} onOpenChange={(o) => !o && setReModal(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <RotateCcw className="h-4 w-4 text-info" />
-              Marcar Nota para Reentrega
-            </DialogTitle>
-            <DialogDescription>
-              A nota será liberada da carga atual e ficará disponível para entrar na próxima carga (agrupamento). Informe o motivo da reentrega.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label className="text-xs">Motivo da Reentrega</Label>
-            <Textarea
-              rows={4}
-              autoFocus
-              maxLength={500}
-              placeholder="Ex.: Cliente solicitou nova tentativa, reentrega agendada para próxima rota..."
-              value={reModal?.reason || ''}
-              onChange={e => setReModal(prev => prev ? { ...prev, reason: e.target.value } : prev)}
-            />
-            <div className="text-[10px] text-muted-foreground text-right">
-              {(reModal?.reason || '').length}/500
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReModal(null)}>Cancelar</Button>
-            <Button onClick={confirmRedelivery} className="bg-info hover:bg-info/90 text-info-foreground">
-              <RotateCcw className="h-4 w-4 mr-1" />
-              Confirmar Reentrega
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {reModal ? <RedeliveryDialog loadId={load.id} documentId={reModal.docId}
+        invoiceNumber={inboundDocs.find(document => document.id === reModal.docId)?.invoice_number || '—'}
+        onClose={() => setReModal(null)} onConfirmed={result => {
+          drafts.drop([result.document_id]);
+          toast.success('Reentrega confirmada; histórico preservado e saldo disponível para nova carga.');
+          onSaved?.();
+        }} /> : null}
+      {metadataReview?.scope===drafts.scope&&currentTenant?.id&&user?.id?<DocumentMetadataDialog
+        loadId={load.id} tenantId={currentTenant.id} actorId={user.id} items={metadataReview.items} documentLabels={metadataReview.documentLabels}
+        onClose={()=>setMetadataReview(null)} onConfirmed={result=>{
+          drafts.drop(result.items.map(item=>item.document_id));
+          toast.success(`Conferência confirmada em ${result.document_count} nota(s); resultados de entrega preservados.`);
+          onSaved?.();
+        }}/>:null}
     </div>
   );
 }

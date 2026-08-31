@@ -3,6 +3,7 @@
 // commonly demand so the Hub does not reject the note for missing metadata.
 
 import type { TenantEmitter } from '@/hooks/useEmitters';
+import { requireHubEnvironment } from '../../../supabase/functions/_shared/fiscal-environment';
 import { buildInsuranceText, hasInsuranceData } from './insuranceText';
 import { validateInsurance, onlyDigits as cnpjDigits } from './insuranceValidation';
 import {
@@ -122,7 +123,7 @@ interface NFSeEmitterAddress {
 
 interface NFSeEmitterExtras {
   endereco?: NFSeEmitterAddress | null;
-  metadata?: { environment?: 'sandbox' | 'production' } | null;
+  metadata?: { environment?: 'sandbox' | 'homologation' | 'production' } | null;
   telefone?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -135,17 +136,11 @@ function isNFSeServiceItem(value: unknown): value is NFSeServiceItemInput {
 export interface BuildNFSeInput {
   doc: NFSeDocumentInput;       // row from nfse_documents (or the pending form payload)
   emitter: TenantEmitter | null;
-  environment?: 'sandbox' | 'production';
+  environment?: 'sandbox' | 'homologation' | 'production';
   callbackUrl?: string;
-  /**
-   * Nº da tentativa de envio (0 = primeira). O Hub Fiscal/PlugNotas deduplica
-   * requisições pelo `idIntegracao`; em reenvios precisamos de um id novo,
-   * senão a chamada é descartada e a nota nunca chega ao provedor.
-   */
-  attempt?: number;
 }
 
-export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, attempt = 0 }: BuildNFSeInput) {
+export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl }: BuildNFSeInput) {
   if (!emitter) throw new Error('Emitente fiscal não configurado');
 
   // ---------------------------------------------------------------------------
@@ -205,27 +200,26 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   if (!fiscalText(endRaw.logradouro || endRaw.endereco, 120)) prestadorMissing.push('logradouro do emitente');
   if (!fiscalText(endRaw.bairro, 60)) prestadorMissing.push('bairro do emitente');
   if (prestadorMissing.length) {
-    console.warn(`[NFSeBuilder] Campos obrigatórios do emitente ausentes: ${prestadorMissing.join(', ')}.`);
+    throw new Error(`Campos obrigatórios do emitente ausentes: ${prestadorMissing.join(', ')}.`);
   }
 
   if (!doc?.rps_number) {
-    console.warn('[NFSeBuilder] RPS sem número informado.');
+    throw new Error('Informe o número do RPS antes de emitir.');
   }
   if (!doc?.issue_date) {
-    console.warn('[NFSeBuilder] Data de emissão não informada.');
+    throw new Error('Informe a data de emissão.');
   }
   if (!doc?.cod_servico) {
-    console.warn('[NFSeBuilder] Código do serviço (item da lista LC 116, ex. 11.04) não informado. Enviando sem para aguardar retorno do Hub.');
+    throw new Error('Informe o código do serviço antes de emitir.');
   }
   if (money(doc?.valor_servicos) <= 0) {
-    console.warn('[NFSeBuilder] Valor dos serviços deve ser maior que zero. Enviando rascunho incompleto.');
+    throw new Error('Valor dos serviços deve ser maior que zero.');
   }
 
-  const integrationId = attempt > 0 ? `${doc.id}-r${attempt}` : String(doc.id);
+  const integrationId = String(doc.id);
 
   const emitterCnpj = onlyDigits(emitter.cnpj);
-  const env: 'sandbox' | 'production' =
-    environment || emitterDetails.metadata?.environment || 'production';
+  const env = requireHubEnvironment(environment);
 
   const end = endRaw;
   const totalServicos = money(doc.valor_servicos);
@@ -281,7 +275,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
     regimeEspecialTributacao: isSimples ? 1 : undefined, // 1 = Microempresa Municipal (Simples)
     optanteSimplesNacional: isSimples,
     regimeApuracaoSN: isSimples ? 1 : undefined, // 1 = Faturamento (Competência)
-    ambiente: env === 'sandbox' ? 'homologacao' : 'producao',
+    ambiente: env === 'production' ? 'producao' : 'homologacao',
 
     prestador: {
       cpfCnpj: emitterCnpj,

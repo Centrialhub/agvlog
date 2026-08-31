@@ -21,6 +21,9 @@ import {
 import {
   parseWorkbook, buildParsedRows, computeFileHash, type ColumnMapping, type ParsedRow,
 } from '@/lib/bankStatementParser';
+import { useListFilters } from '@/hooks/useListFilters';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch, filterOptions } from '@/lib/listFilters';
 import { useCostCenters } from '@/hooks/useCostCenters';
 import { getErrorMessage } from '@/lib/errors';
 import type { Json } from '@/integrations/supabase/types';
@@ -559,6 +562,8 @@ function MappingSelect({ label, value, onChange, headers }: { label: string; val
 }
 
 function ExtratoTab({ transactions, suggested, obligations }: { transactions: BankTransaction[]; suggested: SuggestedMatch[]; obligations: FinancialObligation[] }) {
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', direction: 'all' }, 'tx_');
+  const filtered = transactions.filter(row => matchesSearch(filters.search, row.description, row.document_number, row.cost_center) && (filters.status === 'all' || row.reconciliation_status === filters.status) && (filters.direction === 'all' || (filters.direction === 'in' ? row.amount > 0 : row.amount < 0)));
   const accept = useAcceptMatch();
   const reject = useRejectMatch();
   const { toast } = useToast();
@@ -573,14 +578,19 @@ function ExtratoTab({ transactions, suggested, obligations }: { transactions: Ba
 
   return (
     <Card><CardContent className="p-0">
+      <div className="p-3"><ListFilterBar fields={[
+        { key: 'search', label: 'Buscar transação', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Descrição, documento ou centro de custo' },
+        { key: 'status', label: 'Conciliação', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, ...filterOptions(transactions.map(row => row.reconciliation_status)).map(value => ({ value, label: STATUS_LABEL[value] || value }))] },
+        { key: 'direction', label: 'Movimento', value: filters.direction, onChange: value => setFilter('direction', value), options: [{ value: 'all', label: 'Entradas e saídas' }, { value: 'in', label: 'Entradas' }, { value: 'out', label: 'Saídas' }] },
+      ]} onReset={resetFilters} activeCount={activeCount} resultCount={filtered.length} totalCount={transactions.length} description="Filtros do extrato; os indicadores acima mantêm o período completo." /></div>
       <Table>
         <TableHeader><TableRow>
           <TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>C. Custo</TableHead><TableHead className="text-right">Valor</TableHead>
           <TableHead>Status</TableHead><TableHead>Candidato</TableHead><TableHead>Ações</TableHead>
         </TableRow></TableHeader>
         <TableBody>
-          {transactions.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Sem transações no período.</TableCell></TableRow>}
-          {transactions.map(t => {
+          {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Sem transações para o período e filtros.</TableCell></TableRow>}
+          {filtered.map(t => {
             const s = suggMap.get(t.id);
             return (
               <TableRow key={t.id}>

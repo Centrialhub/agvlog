@@ -1,16 +1,21 @@
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch } from '@/lib/listFilters';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentDriver } from '@/hooks/useCurrentDriver';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Package, MapPin, Truck, ArrowRight, Calendar, Info, AlertCircle, RefreshCcw } from 'lucide-react';
+import { Package, MapPin, Truck, ArrowRight, Calendar, Info, AlertCircle, RefreshCcw, AlertTriangle } from 'lucide-react';
 import { LOAD_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status/loadStatus';
 import { useDriverTripActions } from '@/hooks/useDriverTripActions';
-import { resolveCanonicalTripLink } from '@/lib/driverTrip';
+import { hasDriverLoadTransitMismatch, isDriverTripStarted, resolveCanonicalTripLink } from '@/lib/driverTrip';
 import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
 
 export default function DriverLoads() {
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');
   const {
     data: driver,
     isLoading: driverLoading,
@@ -42,7 +47,7 @@ export default function DriverLoads() {
           vehicles(plate, nickname),
           dispatch_trip_loads!dispatch_trip_loads_load_id_fkey(
             dispatch_trip_id,
-            dispatch_trips!dispatch_trip_loads_dispatch_trip_id_fkey(status)
+            dispatch_trips!dispatch_trip_loads_dispatch_trip_id_fkey(status, actual_start_at)
           )
         `)
         .eq('driver_id', driver.id)
@@ -54,6 +59,7 @@ export default function DriverLoads() {
     enabled: !!driver,
   });
 
+  const filteredLoads = loads.filter(load => matchesSearch(search, load.load_number, load.origin, load.destination, load.vehicles?.plate) && (status === 'all' || status === load.status));
   const loading = driverLoading || loadsLoading;
   const failed = driverFailed || loadsFailed;
 
@@ -68,6 +74,10 @@ export default function DriverLoads() {
         <p className="text-sm text-muted-foreground">Histórico e cargas atribuídas</p>
       </div>
 
+      {!failed && <ListFilterBar activeCount={Number(Boolean(search)) + Number(status !== 'all')} onReset={() => { setSearch(''); setStatus('all'); }} resultCount={filteredLoads.length} totalCount={loads.length} loading={loading} fields={[
+        { key: 'search', label: 'Buscar carga', type: 'search', placeholder: 'Número, destino, origem ou placa', value: search, onChange: setSearch },
+        { key: 'status', label: 'Situação da carga', value: status, onChange: setStatus, options: [{ value: 'all', label: 'Todas as cargas' }, ...Object.entries(LOAD_STATUS_LABELS).map(([value, label]) => ({ value, label }))] },
+      ]} />}
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -90,23 +100,28 @@ export default function DriverLoads() {
             </Button>
           </CardContent>
         </Card>
-      ) : loads.length === 0 ? (
+      ) : filteredLoads.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center space-y-3">
             <Package className="h-10 w-10 text-muted-foreground mx-auto" />
             <div className="space-y-1">
               <p className="text-sm font-medium">Nenhuma carga encontrada</p>
               <p className="text-xs text-muted-foreground">
-                As cargas atribuídas a você pela operação aparecerão aqui.
+                {search || status !== 'all' ? 'Limpe os filtros para ver todas as suas cargas.' : 'As cargas atribuídas a você pela operação aparecerão aqui.'}
               </p>
             </div>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {loads.map((load) => {
+          {filteredLoads.map((load) => {
             const tripLink = resolveCanonicalTripLink(load.dispatch_trip_loads, TRIP_ACTIVE_STATUSES);
             const tripStatus = tripLink?.dispatch_trips?.status ?? null;
+            const tripStarted = isDriverTripStarted(
+              tripStatus,
+              tripLink?.dispatch_trips?.actual_start_at,
+            );
+            const transitMismatch = hasDriverLoadTransitMismatch(load.status, tripLink);
 
             return (
             <Card key={load.id} className="overflow-hidden">
@@ -118,8 +133,10 @@ export default function DriverLoads() {
                     </div>
                     <span className="font-bold text-sm">Carga {load.load_number}</span>
                   </div>
-                  <Badge variant={load.status === 'in_transit' ? 'default' : 'secondary'} className="text-[10px] uppercase">
-                    {LOAD_STATUS_LABELS[load.status as keyof typeof LOAD_STATUS_LABELS] || load.status}
+                  <Badge variant={load.status === 'in_transit' && !transitMismatch ? 'default' : 'secondary'} className="text-[10px] uppercase">
+                    {transitMismatch
+                      ? 'Revisão operacional'
+                      : (LOAD_STATUS_LABELS[load.status as keyof typeof LOAD_STATUS_LABELS] || load.status)}
                   </Badge>
                 </div>
 
@@ -154,14 +171,26 @@ export default function DriverLoads() {
                     </div>
                   </div>
 
+                  {transitMismatch ? (
+                    <p role="status" className="flex items-start gap-1.5 text-amber-700">
+                      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      Carga e viagem têm registros divergentes. Confirme o início histórico com a operação.
+                    </p>
+                  ) : null}
+
                   {load.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(load.status) && tripLink && (
                     <Button 
                       size="sm" 
                       className="w-full mt-2" 
-                      disabled={isStartingTrip}
-                      onClick={() => accessTrip(tripLink.dispatch_trip_id, tripStatus)}
+                      disabled={isStartingTrip || transitMismatch}
+                      onClick={() => accessTrip(
+                        tripLink.dispatch_trip_id,
+                        tripStatus,
+                        tripLink.dispatch_trips?.actual_start_at,
+                        load.status,
+                      )}
                     >
-                      {tripStatus === 'in_transit' ? 'Acessar Viagem' : 'Iniciar Viagem'}
+                      {transitMismatch ? 'Revisão operacional necessária' : tripStarted ? 'Acessar Viagem' : 'Iniciar Viagem'}
                     </Button>
                   )}
                 </div>

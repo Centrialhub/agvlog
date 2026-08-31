@@ -32,6 +32,7 @@ describe("tenant integration capabilities", () => {
     "ssx-insert-person",
     "ssx-insert-person-client",
     "ssx-diagnostic",
+    "agvlog-pipeline-run",
   ])("guards the %s Edge Function before SSX use", (name) => {
     const source = read(`supabase/functions/${name}/index.ts`);
     expect(source).toContain("requireIntegrationCapability");

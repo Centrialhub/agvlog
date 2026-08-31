@@ -1,9 +1,11 @@
+import { dispatchFiscalEmission } from '../_shared/fiscal-dispatch.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
 import { requireIntegrationCapability } from '../_shared/capabilities.ts';
+import { FiscalCredentialError, requireHubEnvironment, selectScopedHubCredential, type HubEnvironment } from '../_shared/fiscal-environment.ts';
 
 const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') || '').trim().replace(/\/$/, '');
-const DEFAULT_HUB_KEY = Deno.env.get('HUB_FISCAL_API_KEY') || '';
+const HUB_API_VERSION = Deno.env.get('HUB_FISCAL_API_VERSION') || '2026-08-27';
 const MANAGERSAAS_BASE = (Deno.env.get('MANAGERSAAS_BASE_URL') || '').trim().replace(/\/$/, '');
 const MANAGERSAAS_GROUP = Deno.env.get('MANAGERSAAS_GROUP') || '';
 const MANAGERSAAS_AUTH = Deno.env.get('MANAGERSAAS_AUTH') || '';
@@ -37,7 +39,7 @@ type Action =
 interface ProxyRequest {
   action: Action;
   tenantId?: string;
-  type?: 'nfe' | 'nfce' | 'nfse' | 'cte' | 'mdfe';
+  type?: 'nfe' | 'nfce' | 'nfse' | 'cte' | 'mdfe' | 'nfcom';
   id?: string;          // hub document id
   emissionId?: string;  // local hub_fiscal_emissions.id
   query?: Record<string, string>;
@@ -56,6 +58,7 @@ interface ProxyRequest {
   cteDocumentId?: string;
   nfseDocumentId?: string;
   emitterId?: string;   // routes to per-emitter Hub credential
+  environment?: HubEnvironment;
 }
 
 function json(status: number, payload: unknown) {
@@ -73,10 +76,10 @@ function buildUrl(path: string, qs?: Record<string, string>) {
 }
 
 async function callHub(method: string, path: string, qs?: Record<string, string>, body?: unknown, token?: string) {
-  const key = token || DEFAULT_HUB_KEY;
+  const key = token;
   if (!key) throw new Error('Nenhum token do Hub Fiscal configurado');
   const requestBody = body ? JSON.stringify(body) : undefined;
-  const maxAttempts = method === 'POST' && path === '/hub_documents_emit' ? 3 : 1;
+  const maxAttempts = 1; // A durable intent must never blindly repeat a POST.
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const res = await fetch(buildUrl(path, qs), {
@@ -84,6 +87,7 @@ async function callHub(method: string, path: string, qs?: Record<string, string>
       headers: {
         'Authorization': `Bearer ${key}`,
         'Content-Type': 'application/json',
+        'X-HubFiscal-Api-Version': HUB_API_VERSION,
       },
       body: requestBody,
     });
@@ -294,48 +298,70 @@ Deno.serve(async (req) => {
     const capabilityResponse = await requireIntegrationCapability(admin, tenantId, 'fiscal');
     if (capabilityResponse) return capabilityResponse;
 
-    // Resolve Hub token for this call — per-emitter credential if provided, else per-emission emitter, else default.
+    // Credentials must match the local document, emitter and explicit environment.
     interface ResolvedToken {
       token: string;
-      source: 'ciphertext' | 'secret_name' | 'default';
+      source: 'ciphertext' | 'secret_name';
       emitter_id: string | null;
       scope_matched: string | null;
+      environment: HubEnvironment;
     }
     async function resolveToken(scope: string, emitterHint?: string | null): Promise<ResolvedToken> {
       let emId = emitterHint || null;
-      if (!emId && payload.emissionId) {
-        const { data: em } = await admin.from('hub_fiscal_emissions')
-          .select('emitter_id').eq('id', payload.emissionId).eq('tenant_id', tenantId).maybeSingle();
-        emId = em?.emitter_id || null;
+      type EmissionRoute = { emitter_id: string | null; environment: string; doc_type: string; hub_document_id: string | null };
+      let emission: EmissionRoute | null = null;
+      if (payload.emissionId) {
+        const { data, error } = await admin.from('hub_fiscal_emissions')
+          .select('emitter_id, environment, doc_type, hub_document_id')
+          .eq('id', payload.emissionId).eq('tenant_id', tenantId).maybeSingle();
+        if (error) throw error;
+        if (!data || (payload.id && data.hub_document_id !== payload.id)) {
+          throw new FiscalCredentialError('HUB_CREDENTIAL_DOCUMENT_MISMATCH', 'O documento informado não corresponde à emissão local.');
+        }
+        emission = data as EmissionRoute;
       }
-      if (!emId && payload.id) {
-        const { data: em } = await admin.from('hub_fiscal_emissions')
-          .select('emitter_id')
+      if (!emission && payload.id) {
+        const { data, error } = await admin.from('hub_fiscal_emissions')
+          .select('emitter_id, environment, doc_type, hub_document_id')
           .eq('hub_document_id', payload.id)
-          .eq('tenant_id', tenantId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        emId = em?.emitter_id || null;
+          .eq('tenant_id', tenantId);
+        if (error) throw error;
+        const routes = (data || []) as EmissionRoute[];
+        if (new Set(routes.map(row => JSON.stringify([row.emitter_id, row.environment, row.doc_type]))).size > 1) {
+          throw new FiscalCredentialError('HUB_CREDENTIAL_DOCUMENT_AMBIGUOUS', 'Documento com vínculos fiscais divergentes. Solicite reconciliação à operação.');
+        }
+        emission = routes[0] || null;
+      }
+      if (emission) {
+        if (emId && emId !== emission.emitter_id) {
+          throw new FiscalCredentialError('HUB_CREDENTIAL_EMITTER_MISMATCH', 'O emitente informado difere da emissão local.');
+        }
+        emId = emission.emitter_id;
+        if (scope !== 'all' && scope !== emission.doc_type) {
+          throw new FiscalCredentialError('HUB_CREDENTIAL_SCOPE_MISMATCH', 'O tipo informado difere da emissão local.');
+        }
+        scope = emission.doc_type;
       }
       if (!emId) {
-        return { token: DEFAULT_HUB_KEY, source: 'default', emitter_id: null, scope_matched: null };
+        throw new FiscalCredentialError('HUB_CREDENTIAL_EMITTER_REQUIRED', 'Documento sem emitente fiscal configurado.');
       }
-      // Ambiente-alvo: usa o do payload.body.environment quando presente (emit) ou payload.environment.
-      const wantedEnv: string | null =
-        ((payload as any)?.body?.environment as string | undefined) ||
-        ((payload as any)?.environment as string | undefined) ||
-        null;
-      const { data: creds } = await admin.from('hub_fiscal_credentials')
+      const wantedEnv = requireHubEnvironment(payload.body?.environment, payload.environment, payload.query?.environment, emission?.environment);
+      const { data: emitter, error: emitterError } = await admin.from('tenant_emitters')
+        .select('id, cnpj, active').eq('id', emId).eq('tenant_id', tenantId).maybeSingle();
+      if (emitterError) throw emitterError;
+      // Inactive emitters cannot issue/import or access unlinked documents, but
+      // their already-linked documents must remain available for reconciliation.
+      if (!emitter || (!emitter.active && (!emission || action === 'emit' || action === 'import'))) {
+        throw new FiscalCredentialError('HUB_CREDENTIAL_EMITTER_INACTIVE', 'Emitente fiscal inexistente ou inativo para esta operação.');
+      }
+      if ((action === 'emit' || action === 'import') && onlyDigits(payload.body?.emitterCnpj) !== onlyDigits(emitter.cnpj)) {
+        throw new FiscalCredentialError('HUB_CREDENTIAL_EMITTER_MISMATCH', 'O CNPJ informado difere do emitente selecionado.');
+      }
+      const { data: creds, error: credentialsError } = await admin.from('hub_fiscal_credentials')
         .select('doc_scope, environment, secret_name, secret_ciphertext, enabled')
         .eq('tenant_id', tenantId).eq('emitter_id', emId).eq('enabled', true);
-      const list = (creds || []) as any[];
-      // Nunca cruza ambientes: uma emissão de produção não pode usar credencial sandbox e vice-versa.
-      const pick = (fn: (c: any) => boolean) => list.find(fn);
-      const match = wantedEnv
-        ? pick(c => c.doc_scope === scope && c.environment === wantedEnv)
-          || pick(c => c.doc_scope === 'all' && c.environment === wantedEnv)
-        : pick(c => c.doc_scope === scope) || pick(c => c.doc_scope === 'all');
+      if (credentialsError) throw credentialsError;
+      const match = selectScopedHubCredential(creds || [], scope, wantedEnv);
       if (!match) {
         console.log('[hub-fiscal-proxy] no credential for emitter', { emitter_id: emId, scope, wantedEnv });
         const err: any = new Error(
@@ -360,7 +386,7 @@ Deno.serve(async (req) => {
             throw err;
           }
           console.log('[hub-fiscal-proxy] token resolved', { emitter_id: emId, scope: match.doc_scope, env: match.environment, wantedEnv, source: 'ciphertext' });
-          return { token, source: 'ciphertext', emitter_id: emId, scope_matched: match.doc_scope };
+          return { token, source: 'ciphertext', emitter_id: emId, scope_matched: match.doc_scope, environment: wantedEnv };
         } catch (e: any) {
           if (e?.code === 'HUB_CREDENTIAL_DECRYPT_FAILED' || e?.code === 'HUB_CREDENTIAL_ENC_KEY_MISSING') throw e;
           const err: any = new Error('Falha ao decriptar credencial do emitente.');
@@ -376,95 +402,62 @@ Deno.serve(async (req) => {
           throw err;
         }
         console.log('[hub-fiscal-proxy] token resolved', { emitter_id: emId, scope: match.doc_scope, env: match.environment, wantedEnv, source: 'secret_name' });
-        return { token, source: 'secret_name', emitter_id: emId, scope_matched: match.doc_scope };
+        return { token, source: 'secret_name', emitter_id: emId, scope_matched: match.doc_scope, environment: wantedEnv };
       }
-      return { token: DEFAULT_HUB_KEY, source: 'default', emitter_id: emId, scope_matched: null };
+      throw new FiscalCredentialError('HUB_CREDENTIAL_TOKEN_MISSING', 'A credencial selecionada não possui token configurado.');
+    }
+
+    async function persistDurableObservation(status: number, data: unknown) {
+      let query = admin.from('hub_fiscal_emissions').select('id,dispatch_key,hub_document_id').eq('tenant_id',tenantId);
+      query = payload.emissionId ? query.eq('id',payload.emissionId) : query.eq('hub_document_id',payload.id||'');
+      const found = await query.order('created_at',{ascending:false}).limit(1).maybeSingle();
+      if(found.error)throw found.error;
+      if(!found.data?.dispatch_key)return null;
+      const response = data as Record<string, unknown>;
+      const doc = (response.document||{}) as Record<string, unknown>;
+      const completed = await admin.rpc('complete_hub_fiscal_emission',{
+        _tenant:tenantId,_emission:found.data.id,_http_status:status,
+        _response:{...response,document:{...doc,id:doc.id||found.data.hub_document_id}},
+      });
+      if(completed.error||completed.data?.confirmed!==true)return json(409,{success:false,error:{code:'FISCAL_RECONCILIATION_REQUIRED',message:'Não foi possível confirmar o estado fiscal. Consulte a operação existente; não reemita.'}});
+      return json(status,{success:status<400,hub:{...response,document:{...doc,status:completed.data.status}}});
     }
 
     switch (action) {
       case 'emit': {
         const type = payload.type;
         if (!type) return json(400, { success: false, error: { code: 'MISSING_TYPE' } });
-        const body = type === 'cte'
-          ? normalizeCteEmissionBody(payload.body || {})
-          : (payload.body || {});
-        const resolved = await resolveToken(type, payload.emitterId);
-        console.log('[hub-fiscal-proxy] emit', { type, emitter_id: resolved.emitter_id, source: resolved.source });
-        const { status, data } = await callHub('POST', '/hub_documents_emit', { type }, body, resolved.token);
-
-        const doc = (data as any)?.document || {};
-        const documentAccessKey = doc.accessKey || doc.access_key || null;
-        const upstreamCode = String((data as any)?.code || (data as any)?.error?.code || '');
-        const upstreamBootFailure = status === 503 && upstreamCode === 'BOOT_ERROR';
-        const responseData = upstreamBootFailure
-          ? {
-              error: {
-                code: 'HUB_TEMPORARILY_UNAVAILABLE',
-                message: 'O serviço de emissão do Fiscal Hub não iniciou. A tentativa foi registrada e pode ser reenviada.',
-                retryable: true,
-                upstreamCode,
-              },
-            }
-          : data;
-        // Snapshot do bloco de seguro (seguradora/apólice/averbação) para auditoria
-        const inner = ((body as any).payload || {}) as Record<string, any>;
-        const seg = (inner.seguro || inner.seguradora || inner.seguros?.[0] || {}) as Record<string, any>;
-        const segNum = (v: unknown) => (v == null || v === '' ? null : Number(v));
-        const { data: row, error } = await admin.from('hub_fiscal_emissions').insert({
-          tenant_id: tenantId,
-          emitter_id: payload.emitterId || null,
-          doc_type: type,
-          environment: (body as any).environment || 'sandbox',
-          emitter_cnpj: (body as any).emitterCnpj || payload.emitterCnpj || null,
-          external_id: (body as any).externalId || null,
-          id_integracao: doc.idIntegracao || (body as any)?.payload?.idIntegracao || (body as any).externalId || null,
-          hub_document_id: doc.id || null,
-          plugnotas_id: doc.plugnotasId || null,
-          status: doc.status || (status >= 400 ? 'error' : 'processing'),
-          access_key: documentAccessKey,
-          authorization_protocol: doc.authorizationProtocol || doc.plugnotasProtocol || null,
-          number: doc.number || null,
-          series: doc.series || null,
-          c_stat: doc.cStat ?? null,
-          message: doc.message || (upstreamBootFailure ? (responseData as any).error.message : null),
-          fiscal_document_id: payload.fiscalDocumentId || null,
-          cte_document_id: payload.cteDocumentId || null,
-          nfse_document_id: payload.nfseDocumentId || null,
-          request_payload: body as any,
-           insurer_name: seg.seguradora || seg.nome || seg.xSeg || null,
-           insurer_cnpj: seg.cnpjSeguradora || seg.cnpj || null,
-          insurer_policy: seg.apolice || seg.nApol || null,
-          insurer_endorsement:
-            seg.averbacao || (Array.isArray(seg.nAver) ? seg.nAver[0] : seg.nAver) || null,
-          insured_amount: segNum(seg.valorSegurado),
-          insurance_premium: segNum(seg.valorSeguro),
-          last_response: responseData as any,
-          created_by: userId,
-        }).select().single();
-        if (error) console.warn('[hub-fiscal-proxy] insert emission failed', error);
-
-        if (status < 400 && payload.fiscalDocumentId && documentAccessKey) {
-          await admin.from('fiscal_documents').update({
-            access_key: documentAccessKey,
-            hub_document_id: doc.id || undefined,
-          }).eq('id', payload.fiscalDocumentId).eq('tenant_id', tenantId);
+        const rawBody = (payload.body || {}) as Record<string, unknown>;
+        const stableLocalId = payload.fiscalDocumentId || payload.cteDocumentId || payload.nfseDocumentId;
+        const idIntegracao = String(
+          rawBody.idIntegracao || rawBody.externalId || payload.idIntegracao ||
+          (stableLocalId ? `agvlog-${type}-${stableLocalId}` : ''),
+        ).trim();
+        if (!idIntegracao) {
+          return json(400, {
+            success: false,
+            error: { code: 'MISSING_ID_INTEGRACAO', message: 'Informe idIntegracao ou externalId para emissão idempotente.' },
+          });
         }
-
-        // BOOT_ERROR pertence à função upstream do Fiscal Hub, não ao runtime do
-        // AGVLog. HTTP 200 evita que o SDK gere FunctionsHttpError/tela de erro;
-        // `success: false` mantém a operação como falha recuperável na aplicação.
-        return json(upstreamBootFailure ? 200 : status, {
-          success: status < 400 && !upstreamBootFailure,
-          hub: responseData,
-          emission: row,
-          retryable: upstreamBootFailure,
+        const bodyWithIntegration = { ...rawBody, idIntegracao };
+        const body = type === 'cte'
+          ? normalizeCteEmissionBody(bodyWithIntegration)
+          : bodyWithIntegration;
+        const resolved = await resolveToken(type, payload.emitterId);
+        const result = await dispatchFiscalEmission({
+          admin, tenant: tenantId, actor: userId, emitter: resolved.emitter_id,
+          type, environment: resolved.environment, body,
+          fiscalId: payload.fiscalDocumentId, cteId: payload.cteDocumentId, nfseId: payload.nfseDocumentId,
+          call: (method, path, query, request) => callHub(method, path, query, request, resolved.token),
         });
+        return json(result.status, result.data);
       }
 
       case 'get': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
         const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
         const { status, data } = await callHub('GET', '/hub_documents_get', { id: payload.id }, undefined, resolved.token);
+        const durable=await persistDurableObservation(status,data);if(durable)return durable;
         if (status < 400 && payload.emissionId) {
           const d = (data as any)?.document || {};
           await admin.from('hub_fiscal_emissions').update({
@@ -487,6 +480,7 @@ Deno.serve(async (req) => {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
         const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
         const { status, data } = await callHub('POST', '/hub_documents_sync', { id: payload.id }, undefined, resolved.token);
+        const durable=await persistDurableObservation(status,data);if(durable)return durable;
         
         // Se a ação for sync e o documento estiver no Hub, o proxy atualiza fiscal_documents
         // para garantir que o polling reflita o estado real da SEFAZ.
@@ -550,6 +544,7 @@ Deno.serve(async (req) => {
           { reason, justificativa: reason },
           resolved.token,
         );
+        if(status<400 && (data as any)?.document?.id){const durable=await persistDurableObservation(status,data);if(durable)return durable;}
         const hubError = (data as any)?.error;
         const cancelRejected = status === 409 && (
           hubError?.code === 'NOT_CANCELABLE' ||
@@ -621,6 +616,8 @@ Deno.serve(async (req) => {
           resolved.token,
         );
 
+        if(status<400){const durable=await persistDurableObservation(status,data);if(durable)return durable;}
+        const cancellationConfirmed=status<400 && String((data as any)?.document?.status||'').toLowerCase()==='cancelled';
         const hubError = (data as any)?.error;
         const cancelRejected = status === 409 && (
           hubError?.code === 'NOT_CANCELABLE' ||
@@ -635,10 +632,10 @@ Deno.serve(async (req) => {
 
         if (payload.emissionId) {
           await admin.from('hub_fiscal_emissions').update({
-            status: status < 400 ? 'cancelled' : 'cancel_rejected',
-            message: status < 400 ? 'NFS-e cancelada' : rejectionMessage,
+            status: cancellationConfirmed ? 'cancelled' : status < 400 ? 'cancelling' : 'cancel_rejected',
+            message: cancellationConfirmed ? 'NFS-e cancelada' : status < 400 ? 'Aguardando confirmação do cancelamento' : rejectionMessage,
             cancel_reason: reason,
-            cancelled_at: status < 400 ? new Date().toISOString() : null,
+            cancelled_at: cancellationConfirmed ? new Date().toISOString() : null,
             last_response: data as any,
           }).eq('id', payload.emissionId).eq('tenant_id', tenantId);
         }
@@ -667,7 +664,7 @@ Deno.serve(async (req) => {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
         const format = payload.format || 'pdf';
         const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
-        const token = resolved.token || DEFAULT_HUB_KEY;
+        const token = resolved.token;
         if (!token) {
           return json(400, {
             success: false,
@@ -1019,6 +1016,7 @@ Deno.serve(async (req) => {
         if (!payload.id && !payload.idIntegracao) return json(400, { success: false, error: { code: 'MISSING_ID' } });
         const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
         const { status, data } = await callHub('POST', '/hub_documents_deliver', undefined, {
+          ...(payload.body || {}),
           id: payload.id,
           idIntegracao: payload.idIntegracao,
           kinds: payload.kinds && payload.kinds.length ? payload.kinds : ['pdf', 'xml'],
@@ -1026,7 +1024,6 @@ Deno.serve(async (req) => {
           mode: payload.mode || 'url',
           expiresIn: payload.expiresIn ?? 604800,
           forceRefresh: payload.forceRefresh ?? true,
-          ...(payload.body || {}),
         }, resolved.token);
         return json(status, { success: status < 400, hub: data });
       }
@@ -1098,7 +1095,7 @@ Deno.serve(async (req) => {
             scope_requested: scope,
             scope_matched: resolved.scope_matched,
             has_token: !!resolved.token,
-            default_key_configured: !!DEFAULT_HUB_KEY,
+            environment: resolved.environment,
           });
         } catch (e: any) {
           return json(400, {

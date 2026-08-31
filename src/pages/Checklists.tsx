@@ -1,4 +1,8 @@
 import { useState, useMemo } from 'react';
+import { useListFilters } from '@/hooks/useListFilters';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch, matchesDateRange } from '@/lib/listFilters';
+
 import {
   useOperationalChecklists, useCreateChecklist,
   useChecklistExecutions, useCreateChecklistExecution,
@@ -19,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, ClipboardCheck, Play, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format, parseISO } from 'date-fns';
 
 const DEFAULT_ITEMS: Record<string, { key: string; label: string; required: boolean }[]> = {
@@ -43,14 +47,20 @@ const DEFAULT_ITEMS: Record<string, { key: string; label: string; required: bool
 };
 
 export default function Checklists() {
-  const { data: checklists = [] } = useOperationalChecklists();
-  const { data: executions = [] } = useChecklistExecutions();
+  const toast = useSonnerToast();
+  const { data: checklists = [], isLoading: loadingTemplates } = useOperationalChecklists();
+  const { data: executions = [], isLoading: loadingExecutions } = useChecklistExecutions();
   const { data: vehicles = [] } = useVehicles();
   const { data: employees = [] } = useEmployees();
   const createChecklist = useCreateChecklist();
   const createExecution = useCreateChecklistExecution();
 
   const [tab, setTab] = useState('templates');
+  const templateFilter = useListFilters({ search: '', type: 'all' }, 'template_');
+  const executionFilter = useListFilters({ search: '', status: 'all', blocked: 'all', from: '', to: '' }, 'execution_');
+  const filteredTemplates = checklists.filter(row => matchesSearch(templateFilter.filters.search, row.name) && (templateFilter.filters.type === 'all' || row.checklist_type === templateFilter.filters.type));
+  const ef = executionFilter.filters;
+  const filteredExecutions = executions.filter(row => matchesSearch(ef.search, row.operational_checklists?.name, row.vehicles?.plate, row.employees?.name) && (ef.status === 'all' || row.status === ef.status) && (ef.blocked === 'all' || row.blocked_operation === (ef.blocked === 'yes')) && matchesDateRange(row.executed_at, ef.from, ef.to));
   const [templateDialog, setTemplateDialog] = useState(false);
   const [execDialog, setExecDialog] = useState(false);
   const [selectedChecklist, setSelectedChecklist] = useState<OperationalChecklist | null>(null);
@@ -141,9 +151,13 @@ export default function Checklists() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList><TabsTrigger value="templates">Templates</TabsTrigger><TabsTrigger value="executions">Execuções</TabsTrigger></TabsList>
 
-        <TabsContent value="templates" className="mt-3">
+        <TabsContent value="templates" className="mt-3 space-y-3">
+          <ListFilterBar fields={[
+            { key: 'search', label: 'Buscar modelo', type: 'search', value: templateFilter.filters.search, onChange: value => templateFilter.setFilter('search', value), placeholder: 'Nome do checklist' },
+            { key: 'type', label: 'Tipo', value: templateFilter.filters.type, onChange: value => templateFilter.setFilter('type', value), options: [{ value: 'all', label: 'Todos os tipos' }, ...CHECKLIST_TYPES.map(value => ({ value, label: CHECKLIST_TYPE_LABELS[value] }))] },
+          ]} onReset={templateFilter.resetFilters} activeCount={templateFilter.activeCount} resultCount={filteredTemplates.length} totalCount={checklists.length} loading={loadingTemplates} description="Os indicadores acima representam todos os registros carregados." />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {checklists.map(cl => (
+            {filteredTemplates.map(cl => (
               <Card key={cl.id} className="hover:shadow-md transition-shadow">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center justify-between">
@@ -159,13 +173,20 @@ export default function Checklists() {
                 </CardContent>
               </Card>
             ))}
-            {checklists.length === 0 && (
-              <p className="text-sm text-muted-foreground col-span-full text-center py-8">Nenhum template de checklist criado</p>
+            {filteredTemplates.length === 0 && ( 
+              <p className="text-sm text-muted-foreground col-span-full text-center py-8">{loadingTemplates ? 'Carregando modelos...' : 'Nenhum modelo encontrado para os filtros.'}</p>
             )}
           </div>
         </TabsContent>
 
-        <TabsContent value="executions" className="mt-3">
+        <TabsContent value="executions" className="mt-3 space-y-3">
+          <ListFilterBar fields={[
+            { key: 'search', label: 'Buscar execução', type: 'search', value: ef.search, onChange: value => executionFilter.setFilter('search', value), placeholder: 'Checklist, placa ou executante' },
+            { key: 'status', label: 'Resultado', value: ef.status, onChange: value => executionFilter.setFilter('status', value), options: [{ value: 'all', label: 'Todos os resultados' }, ...Object.entries(EXECUTION_STATUS_LABELS).map(([value, label]) => ({ value, label }))] },
+            { key: 'blocked', label: 'Bloqueio da operação', value: ef.blocked, onChange: value => executionFilter.setFilter('blocked', value), options: [{ value: 'all', label: 'Todos' }, { value: 'yes', label: 'Com bloqueio' }, { value: 'no', label: 'Sem bloqueio' }] },
+            { key: 'from', label: 'Executado de', type: 'date', value: ef.from, max: ef.to || undefined, onChange: value => executionFilter.setFilter('from', value) },
+            { key: 'to', label: 'Executado até', type: 'date', value: ef.to, min: ef.from || undefined, onChange: value => executionFilter.setFilter('to', value) },
+          ]} onReset={executionFilter.resetFilters} activeCount={executionFilter.activeCount} resultCount={filteredExecutions.length} totalCount={executions.length} loading={loadingExecutions} description="Filtro sobre as execuções carregadas; os indicadores acima são gerais." />
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
@@ -174,9 +195,9 @@ export default function Checklists() {
                 <TableHead>Status</TableHead><TableHead>Bloqueio</TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {executions.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma execução</TableCell></TableRow>
-                ) : executions.map(e => (
+                {filteredExecutions.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{loadingExecutions ? 'Carregando execuções...' : 'Nenhuma execução encontrada para os filtros.'}</TableCell></TableRow>
+                ) : filteredExecutions.map(e => (
                   <TableRow key={e.id}>
                     <TableCell className="text-xs">{format(parseISO(e.executed_at), 'dd/MM/yy HH:mm')}</TableCell>
                     <TableCell className="text-sm font-medium">{e.operational_checklists?.name || '—'}</TableCell>

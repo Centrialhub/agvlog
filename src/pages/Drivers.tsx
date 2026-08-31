@@ -1,4 +1,7 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch } from '@/lib/listFilters';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,7 +20,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Pencil, Trash2, RefreshCw, Truck } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 type DriverRow = Tables<'drivers'>;
@@ -77,12 +80,15 @@ const DRIVER_NON_EDITABLE_FIELDS = new Set([
 ]);
 
 export default function Drivers() {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { isEnabled } = useTenantCapabilities();
   const ssxEnabled = isEnabled('ssx');
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', vehicle: 'all', access: 'all' });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<DriverWithVehicle | null>(null);
   const [vehicleSearch, setVehicleSearch] = useState<Record<string, string>>({});
@@ -218,6 +224,13 @@ export default function Drivers() {
     onError: (error: unknown) => toast.error(`Falha sync SSX: ${errorMessage(error, 'erro desconhecido')}`),
   });
 
+  const filteredDrivers = drivers.filter(driver =>
+    matchesSearch(filters.search, driver.name, driver.doc, driver.phone, driver.current_vehicle?.plate) &&
+    (filters.status === 'all' || driver.active === (filters.status === 'active')) &&
+    (filters.vehicle === 'all' || Boolean(driver.current_vehicle_id) === (filters.vehicle === 'assigned')) &&
+    (filters.access === 'all' || Boolean(driver.user_id) === (filters.access === 'linked'))
+  );
+
   const syncStatusBadge = (status: string | null) => {
     switch (status) {
       case 'synced': return <Badge className="bg-success text-success-foreground text-xs">Sincronizado</Badge>;
@@ -240,6 +253,13 @@ export default function Drivers() {
         )}
       </div>
 
+      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filteredDrivers.length} totalCount={drivers.length} loading={isLoading} fields={[
+        { key: 'search', label: 'Buscar motorista', type: 'search', placeholder: 'Nome, documento, telefone ou placa', value: filters.search, onChange: value => setFilter('search', value) },
+        { key: 'status', label: 'Situação', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, { value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Inativos' }] },
+        { key: 'vehicle', label: 'Vínculo com veículo', value: filters.vehicle, onChange: value => setFilter('vehicle', value), options: [{ value: 'all', label: 'Todos os motoristas' }, { value: 'assigned', label: 'Com veículo' }, { value: 'unassigned', label: 'Sem veículo' }] },
+        { key: 'access', label: 'Acesso ao aplicativo', value: filters.access, onChange: value => setFilter('access', value), options: [{ value: 'all', label: 'Todos os acessos' }, { value: 'linked', label: 'Com usuário vinculado' }, { value: 'unlinked', label: 'Sem usuário vinculado' }] },
+      ]} />
+
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -258,10 +278,10 @@ export default function Drivers() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : drivers.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum motorista cadastrado</TableCell></TableRow>
+              ) : filteredDrivers.length === 0 ? (
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{activeCount ? 'Nenhum motorista corresponde aos filtros' : 'Nenhum motorista cadastrado'}</TableCell></TableRow>
               ) : (
-                drivers.map(d => (
+                filteredDrivers.map(d => (
                   <TableRow key={d.id}>
                     <TableCell className="font-medium">{d.name}</TableCell>
                     <TableCell className="font-mono">{d.doc || '—'}</TableCell>
@@ -327,7 +347,7 @@ export default function Drivers() {
                     {isAdmin && (
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => { setEditing(d); setDialogOpen(true); }}>
+                          <Button variant="ghost" size="icon" aria-label={`Editar motorista ${d.name}`} onClick={() => { setEditing(d); setDialogOpen(true); }}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                           {ssxEnabled && accounts.length > 0 && d.provider_person_sync_status !== 'synced' && (
@@ -363,6 +383,7 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUser
   open: boolean; onOpenChange: (v: boolean) => void; driver: DriverWithVehicle | null; tenantId?: string; userId?: string;
   driverUsers: DriverUser[]; existingDrivers: DriverWithVehicle[];
 }) {
+  const toast = useSonnerToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<DriverForm>({});
   const [driverType, setDriverType] = useState<'proprio' | 'terceiro'>('proprio');

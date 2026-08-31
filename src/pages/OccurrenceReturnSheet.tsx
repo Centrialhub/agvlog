@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { ArrowLeft, Download, Printer, FileText, XCircle, RefreshCw } from 'lucide-react';
 import {
   useReturnSheetsForOccurrence,
@@ -35,6 +35,7 @@ const sheetCompanyName = (sheet: ReturnSheet): string | undefined => {
 };
 
 export default function OccurrenceReturnSheetPage() {
+  const toast = useSonnerToast();
   const { id: occurrenceId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currentTenant } = useTenant();

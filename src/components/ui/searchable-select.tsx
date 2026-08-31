@@ -19,6 +19,8 @@ interface Props {
   searchPlaceholder?: string;
   emptyText?: string;
   className?: string;
+  disabled?: boolean;
+  ariaLabel?: string;
 }
 
 export function SearchableSelect({
@@ -29,17 +31,21 @@ export function SearchableSelect({
   searchPlaceholder = 'Buscar ou digitar...',
   emptyText = 'Nenhum resultado',
   className,
+  disabled = false,
+  ariaLabel,
 }: Props) {
   const [open, setOpen] = useState(false);
   const current = options.find(o => o.value === value);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && !disabled} onOpenChange={next => setOpen(next && !disabled)}>
       <PopoverTrigger asChild>
         <Button
           type="button"
           variant="outline"
           role="combobox"
-          aria-expanded={open}
+          disabled={disabled}
+          aria-label={ariaLabel}
+          aria-expanded={open && !disabled}
           className={cn('h-8 w-full justify-between text-xs font-normal px-2', className)}
         >
           <span className={cn('truncate', !current && 'text-muted-foreground')}>
@@ -58,7 +64,7 @@ export function SearchableSelect({
                 <CommandItem
                   key={o.value}
                   value={`${o.label} ${o.hint || ''} ${o.value}`}
-                  onSelect={() => { onChange(o.value); setOpen(false); }}
+                  onSelect={() => { if (!disabled) onChange(o.value); setOpen(false); }}
                   className="text-xs"
                 >
                   <Check className={cn('mr-2 h-3 w-3', value === o.value ? 'opacity-100' : 'opacity-0')} />

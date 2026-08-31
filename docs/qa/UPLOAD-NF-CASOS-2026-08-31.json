@@ -1,0 +1,121 @@
+{
+  "checkedAt": "2026-08-31T13:18:00.876Z",
+  "synthetic": true,
+  "networkRequests": 0,
+  "databaseWrites": 0,
+  "passed": 3,
+  "failed": 16,
+  "checks": [
+    {
+      "id": "XML-BASE",
+      "description": "XML padrão preserva destinatário, item, decimais, peso e volumes",
+      "passed": true
+    },
+    {
+      "id": "XML-MALFORMED",
+      "description": "XML malformado é rejeitado",
+      "passed": true
+    },
+    {
+      "id": "KEY-DV",
+      "description": "Dígito verificador incorreto bloqueia a nota",
+      "passed": true
+    },
+    {
+      "id": "FIN-DECIMAL",
+      "description": "Financeiro preserva o ponto decimal de vNF",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 123456\n- 1234.56\n      ^\n"
+    },
+    {
+      "id": "FIN-INSTALLMENT",
+      "description": "Financeiro preserva o ponto decimal de vDup",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n\n61728 !== 617.28\n"
+    },
+    {
+      "id": "XML-PREFIX-RECIPIENT",
+      "description": "Prefixo nfe mantém destinatário separado do emitente",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'EMITENTE TESTE'\n- 'DESTINATARIO TESTE'\n"
+    },
+    {
+      "id": "XML-PREFIX-ITEMS",
+      "description": "Prefixo nfe preserva itens e peso",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n\n0 !== 1\n"
+    },
+    {
+      "id": "XML-ARBITRARY-PREFIX",
+      "description": "Namespace equivalente com prefixo ns1 é aceito",
+      "passed": false,
+      "detail": "Estrutura de NF-e não encontrada no XML"
+    },
+    {
+      "id": "FIN-PREFIX",
+      "description": "Financeiro reconhece NF-e com namespace prefixado",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n\n'unknown' !== 'nfe'\n"
+    },
+    {
+      "id": "XML-MISSING-DEST",
+      "description": "Ausência do destinatário não copia o emitente e bloqueia importação",
+      "passed": false,
+      "detail": "hasErrors=false; recipientName=EMITENTE TESTE\n\nfalse !== true\n"
+    },
+    {
+      "id": "IDENTITY-OTHER-ISSUER",
+      "description": "Mesmo número com chave e emitente distintos não reaproveita nota alheia",
+      "passed": false,
+      "detail": "reused=other-invoice; isDuplicate=true\n\ntrue !== false\n"
+    },
+    {
+      "id": "CLIENT-CNPJ-PRIORITY",
+      "description": "Nome e cidade não substituem correspondência exata por CNPJ",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'wrong-client'\n- 'correct-client'\n"
+    },
+    {
+      "id": "KEY-IDENTITY",
+      "description": "Número divergente da chave de acesso bloqueia importação",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n\nfalse !== true\n"
+    },
+    {
+      "id": "KEY-ZERO",
+      "description": "Chave com 44 zeros é rejeitada",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n\ntrue !== false\n"
+    },
+    {
+      "id": "XML-BATCH-DUPLICATE",
+      "description": "Validação do lote detecta duas ocorrências da mesma NF antes de salvar",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n\n2 !== 1\n"
+    },
+    {
+      "id": "SCAN-UNIT-VALUE",
+      "description": "Total do item não é copiado como preço unitário quando quantidade é 10",
+      "passed": false,
+      "detail": "quantity=10; unitPrice=100; totalPrice=100"
+    },
+    {
+      "id": "SCAN-AUDIT-ITEM",
+      "description": "Alteração na quantidade aparece nos campos alterados da auditoria",
+      "passed": false,
+      "detail": "The expression evaluated to a falsy value:\n\n  assert.ok(api.getChangedOrtFields(after).includes('items'))\n"
+    },
+    {
+      "id": "FIN-NFSE-DECIMAL",
+      "description": "Financeiro preserva o ponto decimal de ValorServicos da NFS-e",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 123456\n- 1234.56\n      ^\n"
+    },
+    {
+      "id": "SCAN-UNKNOWN-IDENTITY",
+      "description": "Destinatário e CNPJ UNKNOWN não passam pela validação fiscal",
+      "passed": false,
+      "detail": "Expected values to be strictly equal:\n\nfalse !== true\n"
+    }
+  ]
+}

@@ -101,7 +101,16 @@ describe('Supabase baseline contract', () => {
       'utf8',
     );
     expect(appSource).toContain("rpc('transition_load_status_v1'");
-    expect(appSource).toContain("rpc('upsert_load_item_v3'");
+    const browserRpcs = new Set(captures(appSource, /\.rpc\(\s*['"]([^'"]+)['"]/g));
+    expect(browserRpcs).toContain('save_load_item_preparation');
+    expect(browserRpcs).not.toContain('upsert_load_item_v3');
+    const preparationMigration = readFileSync(
+      join(migrationsDir, '20260830094049_harden_load_item_preparation_writer.sql'), 'utf8',
+    );
+    expect(preparationMigration).toContain('v_new_id:=public.upsert_load_item_v3(');
+    expect(preparationMigration).toContain('perform public._log_entity_audit(');
+    expect(preparationMigration).toContain("'item_preparation'");
+    expect(preparationMigration).toContain('item_preparation_expected_changed');
     expect(appSource).toContain("rpc('delete_load_item_v3'");
     expect(appSource).toContain("rpc('assign_fiscal_documents_to_load_v2'");
     expect(appSource).toContain("rpc('remove_fiscal_documents_from_load_v2'");
@@ -140,8 +149,19 @@ describe('Supabase baseline contract', () => {
 
   it('defines and grants every RPC invoked by Edge Functions', () => {
     const invoked = new Set(captures(edgeSource, /\.rpc\(\s*['"]([^'"]+)['"]/g));
+    // This endpoint deliberately forwards the user's JWT, not service_role.
+    // Its database/Edge integration tests also assert effective ACLs and MFA.
+    const callerJwtFunctions = new Set(['evaluate_trip_live_status_v1','prepare_trip_route_v1','commit_trip_route_v1']);
     expect([...invoked].filter((name) => !functions.has(name))).toEqual([]);
-    expect([...invoked].filter((name) => !serviceFunctions.has(name))).toEqual([]);
+    expect([...invoked].filter((name) => !(callerJwtFunctions.has(name)
+      ? authenticatedFunctions : serviceFunctions).has(name))).toEqual([]);
+    expect([...callerJwtFunctions].filter((name) => !invoked.has(name))).toEqual([]);
+    expect([...callerJwtFunctions].filter((name) => serviceFunctions.has(name))).toEqual([]);
+    const evaluator = readFileSync(join(root,'supabase','functions','update-trip-live-status','index.ts'),'utf8');
+    expect(captures(evaluator,/\.rpc\(\s*['"]([^'"]+)['"]/g)).toEqual(['evaluate_trip_live_status_v1']);
+    expect(evaluator).toContain('const supabase=anon;');
+    expect(evaluator).toContain('headers: { Authorization: auth }');
+    expect(evaluator).toContain('anon.auth.getUser()');
   });
 
   it('keeps internal SECURITY DEFINER helpers off the browser API', () => {
@@ -324,11 +344,21 @@ describe('Supabase baseline contract', () => {
     expect(migration).toContain('v_invoice_id := public.create_client_invoice(');
     expect(migration).toContain('PERFORM public.register_receivable_payment(');
     expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.generate_client_invoice_from_closing(uuid)');
-    expect(closingHook).toContain("rpc('generate_client_invoice_from_closing'");
+    expect(closingHook).not.toContain("rpc('generate_client_invoice_from_closing'");
+    expect(closingPage).toContain('ClosingInvoiceCreationDialog reportId={invoiceReport.id} tenantId={invoiceReport.tenant_id}');
+    const invoiceHook=readFileSync(join(root,'src','hooks','useClientInvoiceLifecycle.ts'),'utf8');
+    expect(invoiceHook).toContain("rpc('get_client_invoice_creation_context'");
+    expect(invoiceHook).toContain("rpc('apply_client_invoice_command'");
     expect(closingHook).not.toContain("from('client_invoices').insert");
     expect(closingHook).not.toMatch(/\bas any\b/);
-    expect(closingPage).toContain("from('bank_accounts')");
-    expect(closingPage).toContain('bank_account_id: payForm.bankAccountId');
+    const financialHook=readFileSync(join(root,'src','hooks','useReceivableFinancial.ts'),'utf8');
+    const financialMigration=readFileSync(join(migrationsDir,'20260830183929_audit_receivable_payments_and_reversals.sql'),'utf8');
+    expect(closingPage).toContain('receivableId={payDlg.receivable_id} tenantId={payDlg.tenant_id}');
+    expect(closingHook).not.toContain("rpc('register_closing_report_payment'");
+    expect(financialHook).toContain("rpc('get_receivable_financial_context',{_tenant_id:tenant!,_receivable_id:receivable!})");
+    expect(financialHook).toContain("rpc('apply_receivable_financial_command'");
+    expect(financialMigration).toContain('financial_invalid_bank_account');
+    expect(financialMigration).toContain('receivable_payment_bank_account_tenant_fkey');
     expect(closingPage).not.toMatch(/\bas any\b/);
   });
 
@@ -522,8 +552,8 @@ describe('Supabase baseline contract', () => {
     expect([...tables].filter((name) => !rlsTables.has(name))).toEqual([]);
 
     const invokerViews = captures(
-      baseline,
-      /^CREATE(?: OR REPLACE)? VIEW public\.([a-zA-Z0-9_]+) WITH \(security_invoker=(?:'true'|true)\)/gm,
+      activeSql,
+      /^CREATE(?: OR REPLACE)? VIEW public\.([a-zA-Z0-9_]+) WITH\s*\(security_invoker\s*=\s*(?:'true'|true)\)/gim,
     );
     expect(new Set(invokerViews)).toEqual(views);
     expect(baseline).toContain('CREATE EVENT TRIGGER ensure_rls');

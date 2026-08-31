@@ -1,3 +1,4 @@
+import { localDayBoundary, localDayEnd } from '@/lib/listFilters';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -29,8 +30,8 @@ export function usePortalPods(filters?: { status?: string; start?: string; end?:
         _tenant_id: currentTenant.id,
         _client_id: selectedClientId ?? undefined,
         _status: filters?.status || undefined,
-        _start_date: filters?.start || undefined,
-        _end_date: filters?.end || undefined,
+        _start_date: filters?.start ? localDayBoundary(filters.start) : undefined,
+        _end_date: filters?.end ? localDayEnd(filters.end) : undefined,
         _limit: 200,
         _offset: 0,
       });

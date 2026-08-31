@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -166,6 +166,7 @@ export function useImportBatches() {
 // ---- Mutations ----------------------------------------------------
 
 export function useRegisterPayment() {
+  const { confirmAction } = useScopedAlerts();
   const qc = useQueryClient();
   const { currentTenant } = useTenant();
   return useMutation({
@@ -184,7 +185,9 @@ export function useRegisterPayment() {
       if ((load.operational_status || '').toLowerCase() === 'cancelled')
         throw new Error('Carga cancelada não pode receber pagamento.');
       const newReceived = Number(load.received_amount || 0) + Number(p.amount || 0);
-      if (newReceived > Number(load.freight_amount || 0) * 1.001 && !await confirmOverpay())
+      if (newReceived > Number(load.freight_amount || 0) * 1.001 && !await confirmAction('Pagamento maior que o valor de frete. Confirmar?', {
+        title: 'Confirmar pagamento excedente',
+      }))
         throw new Error('Pagamento maior que o valor de frete — cancelado.');
 
       const { error: pe } = await supabase.from('load_payments').insert({
@@ -215,12 +218,6 @@ export function useRegisterPayment() {
       });
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['load-control'] }); },
-  });
-}
-
-function confirmOverpay() {
-  return confirmAction('Pagamento maior que o valor de frete. Confirmar?', {
-    title: 'Confirmar pagamento excedente',
   });
 }
 

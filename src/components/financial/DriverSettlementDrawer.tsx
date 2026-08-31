@@ -1,6 +1,6 @@
-import { confirmAction, promptAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useEffect, useMemo, useState } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,21 +10,25 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, RefreshCw, FileText, Plus, Trash2, AlertTriangle, X } from 'lucide-react';
+import { AlertCircle, RefreshCw, Plus, Trash2, AlertTriangle, X } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   useDriverSettlement, useRegenerateDriverSettlement, useUpdateDriverSettlementStatus,
-  useUpdateSettlementKmReview, useAddSettlementAdjustment, useRemoveSettlementAdjustment,
+  useUpdateSettlementKmReview,
   useRegisterSettlementPayment, useSettleZeroDriverSettlement,
   SETTLEMENT_STATUS_LABEL, isLocked, DriverSettlementStatus,
-  useDetachLoadFromSettlement, useAddSettlementManualExpense,
+  useDetachLoadFromSettlement,
   useDeleteDriverSettlement,
 } from '@/hooks/useDriverSettlements';
+import { ExpenseCreationForm } from './ExpenseCreationForm';
+import { SettlementAdjustments } from './SettlementAdjustments';
+import { SettlementAdjustmentRecoveryPanel } from './SettlementAdjustmentRecoveryPanel';
+import { ExpenseReceiptDialog } from './ExpenseReceiptDialog';
 import { useCostCenters } from '@/hooks/useCostCenters';
 import { useBankAccounts } from '@/hooks/useBankReconciliation';
 import AttachLoadsDialog from './AttachLoadsDialog';
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import type { Json } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
@@ -55,21 +59,19 @@ function metadataBoolean(metadata: Json, key: string): boolean | null {
 interface Props { settlementId: string | null; open: boolean; onOpenChange: (o: boolean) => void; }
 
 export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Props) {
-  const { data, isLoading } = useDriverSettlement(settlementId);
+  const { confirmAction } = useScopedAlerts();
+  const { data, isLoading, isError, error, refetch } = useDriverSettlement(open ? settlementId : null);
   const regen = useRegenerateDriverSettlement();
   const updateStatus = useUpdateDriverSettlementStatus();
   const updateKm = useUpdateSettlementKmReview();
-  const addAdj = useAddSettlementAdjustment();
-  const removeAdj = useRemoveSettlementAdjustment();
   const registerPay = useRegisterSettlementPayment();
   const settleZero = useSettleZeroDriverSettlement();
   const detachLoad = useDetachLoadFromSettlement();
   const [attachOpen, setAttachOpen] = useState(false);
-  const addManualExp = useAddSettlementManualExpense();
   const deleteSettlement = useDeleteDriverSettlement();
   const { data: costCenters } = useCostCenters();
 
-  const s = data?.settlement;
+  const s = isError ? undefined : data?.settlement;
   const items = data?.items ?? [];
   const events = data?.events ?? [];
   const payments = data?.payments ?? [];
@@ -110,23 +112,9 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
     return { abs, pct };
   }, [s?.estimated_km, s?.audited_km]);
 
-  // Adjustment dialog
-  const [adjOpen, setAdjOpen] = useState(false);
-  const [adjNature, setAdjNature] = useState<'credit' | 'debit'>('credit');
-  const [adjAmount, setAdjAmount] = useState('');
-  const [adjDesc, setAdjDesc] = useState('');
-  const [adjReason, setAdjReason] = useState('');
-
   // Manual Expense dialog
   const [expOpen, setExpOpen] = useState(false);
-  const [expCategory, setExpCategory] = useState('');
-  const [expAmount, setExpAmount] = useState('');
-  const [expDate, setExpDate] = useState(() => new Date().toISOString().slice(0, 16));
-  const [expCostCenter, setExpCostCenter] = useState('');
-  const [expPaymentSource, setExpPaymentSource] = useState('driver');
-  const [expReimbursable, setExpReimbursable] = useState(true);
-  const [expReceipt, setExpReceipt] = useState('');
-  const [expNotes, setExpNotes] = useState('');
+  const [expenseReceipt, setExpenseReceipt] = useState<{ settlementId: string; path: string }>();
 
   // Payment dialog
   const [payOpen, setPayOpen] = useState(false);
@@ -192,10 +180,14 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             {s?.approved_with_exception && <Badge variant="outline" className="text-[10px]">Aprovado c/ exceção</Badge>}
             {needsRecalc && <Badge variant="destructive" className="text-[10px] flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Desatualizado</Badge>}
           </SheetTitle>
+          <SheetDescription>Revise os resultados, despesas e pagamentos da viagem antes de concluir o acerto.</SheetDescription>
         </SheetHeader>
 
-        {isLoading || !s ? (
-          <div className="py-12 text-center text-muted-foreground">Carregando…</div>
+        {!s ? <SettlementAdjustmentRecoveryPanel/> : null}
+        {isError ? (
+          <div role="alert">Não foi possível consultar o acerto: {error instanceof Error ? error.message : 'Verifique sua sessão e tente novamente.'}<Button onClick={() => void refetch()}>Tentar consultar acerto novamente</Button></div>
+        ) : isLoading || !s ? (
+          <div className="py-12 text-center text-muted-foreground">{isLoading ? 'Carregando…' : 'Acerto não encontrado nesta sessão.'}</div>
         ) : (
           <div className="space-y-4 mt-4">
             <Card>
@@ -205,7 +197,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 <div><div className="text-muted-foreground text-xs">Veículo</div><div>{s.vehicles?.plate ?? '—'}</div></div>
                 <div><div className="text-muted-foreground text-xs">Início</div><div>{fmtDate(s.trip_started_at)}</div></div>
                 <div><div className="text-muted-foreground text-xs">Fim</div><div>{fmtDate(s.trip_completed_at)}</div></div>
-                <div><div className="text-muted-foreground text-xs">KM estimado</div><div>{fmtNum(s.estimated_km, 1)} km</div></div>
+                <div><div className="text-muted-foreground text-xs">KM estimado</div><div>{s.estimated_km != null ? `${fmtNum(s.estimated_km, 1)} km` : 'Sem estimativa validada'}</div></div>
                 <div><div className="text-muted-foreground text-xs">KM auditado</div><div>{s.audited_km != null ? `${fmtNum(s.audited_km, 1)} km` : '—'}</div></div>
                 <div><div className="text-muted-foreground text-xs">KM Inicial / Final</div><div>{s.km_start != null ? fmtNum(s.km_start, 0) : '—'} / {s.km_end != null ? fmtNum(s.km_end, 0) : '—'}</div></div>
                 <div><div className="text-muted-foreground text-xs">Peso total</div><div>{fmtNum(s.total_weight_kg, 0)} kg</div></div>
@@ -226,7 +218,9 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
 
             {needsRecalc && (
               <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
-                <AlertTriangle className="h-4 w-4" /> Acerto desatualizado{s.recalculation_reason ? `: ${s.recalculation_reason}` : ''}. Recalcule antes de aprovar.
+                <AlertTriangle className="h-4 w-4" /> {s.recalculation_reason==='delivery_outcome_correction'
+                  ? `Resultado de entrega corrigido. Valores e pagamentos anteriores preservados. ${locked?'Reabra o acerto com autorização para revisar antes de novo pagamento ou fechamento.':'Revise e recalcule antes de aprovar ou pagar.'}`
+                  : `Acerto desatualizado${s.recalculation_reason ? `: ${s.recalculation_reason}` : ''}. Recalcule antes de aprovar.`}
               </div>
             )}
             {noFreight && (
@@ -241,8 +235,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             )}
 
             <div className="flex flex-wrap gap-2">
-              {!s.is_manual && (
-                <Button size="sm" variant="outline" onClick={() => s.dispatch_trip_id && regen.mutate(s.dispatch_trip_id)} disabled={locked || regen.isPending || !s.dispatch_trip_id}>
+              {(
+                <Button size="sm" variant="outline" onClick={() => { if (s.is_manual) regen.mutate({ manualSettlementId: s.id }); else if (s.dispatch_trip_id) regen.mutate(s.dispatch_trip_id); }} disabled={locked || regen.isPending || (!s.is_manual && !s.dispatch_trip_id)}>
                   <RefreshCw className="h-4 w-4 mr-1" /> Recalcular
                 </Button>
               )}
@@ -250,11 +244,11 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 if (next === 'paid') {
                   return (
                     <div key={next} className="flex gap-1">
-                      <Button size="sm" onClick={() => setPayOpen(true)} disabled={updateStatus.isPending}>
+                      <Button size="sm" onClick={() => setPayOpen(true)} disabled={updateStatus.isPending||needsRecalc}>
                         Registrar pagamento
                       </Button>
                       {canSettleZero && (
-                        <Button size="sm" variant="outline" onClick={() => setZeroOpen(true)} disabled={settleZero.isPending}>
+                        <Button size="sm" variant="outline" onClick={() => setZeroOpen(true)} disabled={settleZero.isPending||needsRecalc}>
                           Quitar sem pagamento
                         </Button>
                       )}
@@ -264,10 +258,10 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 if (next === 'approved') {
                   return (
                     <div key={next} className="flex gap-1">
-                      <Button size="sm" onClick={() => updateStatus.mutate({ id: s.id, status: next })} disabled={updateStatus.isPending}>
+                      <Button size="sm" onClick={() => updateStatus.mutate({ id: s.id, status: next })} disabled={updateStatus.isPending || needsRecalc}>
                         Aprovar
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setApproveOpen(true)}>
+                      <Button size="sm" variant="outline" onClick={() => setApproveOpen(true)} disabled={updateStatus.isPending || needsRecalc}>
                         Aprovar c/ exceção
                       </Button>
                     </div>
@@ -275,13 +269,13 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 }
                 if (next === 'closed' && s.status === 'approved') {
                   return (
-                    <Button key={next} size="sm" variant="outline" onClick={() => setCloseOpen(true)} disabled={updateStatus.isPending}>
+                    <Button key={next} size="sm" variant="outline" onClick={() => setCloseOpen(true)} disabled={updateStatus.isPending || needsRecalc}>
                       Fechar
                     </Button>
                   );
                 }
                 return (
-                  <Button key={next} size="sm" onClick={() => updateStatus.mutate({ id: s.id, status: next })} disabled={updateStatus.isPending}>
+                  <Button key={next} size="sm" onClick={() => updateStatus.mutate({ id: s.id, status: next })} disabled={updateStatus.isPending || (needsRecalc && next === 'closed')}>
                     {SETTLEMENT_STATUS_LABEL[next]}
                   </Button>
                 );
@@ -377,78 +371,9 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                       <DialogTrigger asChild>
                         <Button size="sm" disabled={locked}><Plus className="h-4 w-4 mr-1" /> Nova despesa</Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-md">
-                        <DialogHeader><DialogTitle>Adicionar despesa manual</DialogTitle></DialogHeader>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="col-span-2">
-                            <Label>Categoria / Descrição *</Label>
-                            <Input value={expCategory} onChange={(e) => setExpCategory(e.target.value)} placeholder="Ex.: Refeição, Estacionamento, Manutenção" />
-                          </div>
-                          <div>
-                            <Label>Valor *</Label>
-                            <Input type="number" step="0.01" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} />
-                          </div>
-                          <div>
-                            <Label>Data/Hora *</Label>
-                            <Input type="datetime-local" value={expDate} onChange={(e) => setExpDate(e.target.value)} />
-                          </div>
-                          <div>
-                            <Label>Centro de Custo *</Label>
-                            <Select value={expCostCenter} onValueChange={setExpCostCenter}>
-                              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                              <SelectContent>
-                                {costCenters?.map(cc => (
-                                  <SelectItem key={cc} value={cc}>{cc}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Fonte do pagamento</Label>
-                            <Select value={expPaymentSource} onValueChange={setExpPaymentSource}>
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="driver">Motorista</SelectItem>
-                                <SelectItem value="company">Empresa</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="flex items-center gap-2 pt-6">
-                            <Label className="flex items-center gap-2">
-                              <input type="checkbox" checked={expReimbursable} onChange={(e) => setExpReimbursable(e.target.checked)} className="rounded border-gray-300" />
-                              Reembolsável?
-                            </Label>
-                          </div>
-                          <div className="col-span-2">
-                            <Label>URL do comprovante</Label>
-                            <Input value={expReceipt} onChange={(e) => setExpReceipt(e.target.value)} placeholder="Link para imagem/PDF" />
-                          </div>
-                          <div className="col-span-2">
-                            <Label>Observações</Label>
-                            <Textarea value={expNotes} onChange={(e) => setExpNotes(e.target.value)} />
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setExpOpen(false)}>Cancelar</Button>
-                          <Button
-                            disabled={!expCategory || !expAmount || !expCostCenter || addManualExp.isPending}
-                            onClick={async () => {
-                              await addManualExp.mutateAsync({
-                                settlement_id: s.id,
-                                category: expCategory,
-                                amount: Number(expAmount),
-                                expense_at: new Date(expDate).toISOString(),
-                                cost_center: expCostCenter,
-                                payment_source: expPaymentSource,
-                                reimbursable: expReimbursable,
-                                receipt_url: expReceipt || undefined,
-                                notes: expNotes || undefined,
-                              });
-                              setExpOpen(false);
-                              setExpCategory(''); setExpAmount(''); setExpReceipt(''); setExpNotes('');
-                            }}
-                          >Salvar</Button>
-                        </DialogFooter>
+                      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+                        <DialogHeader><DialogTitle>Adicionar despesa manual</DialogTitle><DialogDescription>Registre o gasto neste acerto com comprovante ou justificativa.</DialogDescription></DialogHeader>
+                        <ExpenseCreationForm sourceType="settlement" sourceId={s.id} onConfirmed={() => setExpOpen(false)} />
                       </DialogContent>
                     </Dialog>
                   </div>
@@ -467,7 +392,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                           <TableCell><Badge variant={approvalStatus === 'approved' ? 'default' : approvalStatus === 'rejected' ? 'destructive' : 'secondary'}>{approvalStatus}</Badge></TableCell>
                           <TableCell>{metadataBoolean(i.metadata, 'reimbursable') === false ? <Badge variant="outline" className="text-[10px]">Não</Badge> : <Badge variant="secondary" className="text-[10px]">Sim</Badge>}</TableCell>
                           <TableCell className="text-xs">{metadataText(i.metadata, 'payment_source', 'driver')}</TableCell>
-                          <TableCell>{receiptUrl ? <a className="text-primary inline-flex items-center gap-1" href={receiptUrl} target="_blank" rel="noreferrer"><FileText className="h-3 w-3" /> abrir</a> : '—'}</TableCell>
+                          <TableCell>{receiptUrl ? <Button variant="link" size="sm" onClick={() => setExpenseReceipt({ settlementId: s.id, path: receiptUrl })}>Abrir comprovante da despesa</Button> : '—'}</TableCell>
                         </TableRow>
                         );
                       })}
@@ -566,77 +491,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               </TabsContent>
 
               <TabsContent value="adjustments" className="space-y-3">
-                <div className="flex justify-end">
-                  <Dialog open={adjOpen} onOpenChange={setAdjOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="sm" disabled={locked}><Plus className="h-4 w-4 mr-1" /> Novo ajuste</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader><DialogTitle>Adicionar ajuste manual</DialogTitle></DialogHeader>
-                      <div className="space-y-3">
-                        <div>
-                          <Label>Tipo</Label>
-                          <Select value={adjNature} onValueChange={value => setAdjNature(value as 'credit' | 'debit')}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="credit">Crédito (aumenta valor ao motorista)</SelectItem>
-                              <SelectItem value="debit">Débito (reduz valor ao motorista)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>Valor</Label>
-                          <Input type="number" step="0.01" min="0" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} />
-                        </div>
-                        <div>
-                          <Label>Descrição</Label>
-                          <Input value={adjDesc} onChange={(e) => setAdjDesc(e.target.value)} placeholder="Ex.: adiantamento, diária, pedágio sem comprovante" />
-                        </div>
-                        <div>
-                          <Label>Motivo *</Label>
-                          <Textarea value={adjReason} onChange={(e) => setAdjReason(e.target.value)} />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setAdjOpen(false)}>Cancelar</Button>
-                        <Button
-                          disabled={!adjAmount || !adjReason || addAdj.isPending}
-                          onClick={async () => {
-                            await addAdj.mutateAsync({ id: s.id, nature: adjNature, amount: Number(adjAmount), description: adjDesc, reason: adjReason });
-                            setAdjOpen(false); setAdjAmount(''); setAdjDesc(''); setAdjReason('');
-                          }}
-                        >Salvar</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Descrição</TableHead><TableHead>Motivo</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Data</TableHead><TableHead></TableHead></TableRow></TableHeader>
-                    <TableBody>
-                      {adjItems.map(i => (
-                        <TableRow key={i.id}>
-                          <TableCell><Badge variant={i.nature === 'credit' ? 'default' : 'destructive'}>{i.nature === 'credit' ? 'Crédito' : 'Débito'}</Badge></TableCell>
-                          <TableCell>{i.description ?? '—'}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{metadataText(i.metadata, 'reason')}</TableCell>
-                          <TableCell className="text-right">{fmtMoney(Number(i.amount))}</TableCell>
-                          <TableCell>{fmtDate(i.created_at)}</TableCell>
-                          <TableCell>
-                            <Button size="icon" variant="ghost" disabled={locked || removeAdj.isPending}
-                              onClick={async () => {
-                                const reason = await promptAction('Informe por que este ajuste deve ser removido.', {
-                                  title: 'Remover ajuste',
-                                  label: 'Motivo da remoção',
-                                });
-                                if (reason) removeAdj.mutate({ settlement_id: s.id, item_id: i.id, reason });
-                              }}><Trash2 className="h-4 w-4" /></Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {adjItems.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Sem ajustes manuais</TableCell></TableRow>}
-                    </TableBody>
-                  </Table>
-                </div>
+                <SettlementAdjustments settlementId={s.id}/>
               </TabsContent>
 
               <TabsContent value="payments" className="space-y-3">
@@ -679,7 +534,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                         return (
                         <TableRow key={ev.id}>
                           <TableCell>{fmtDate(ev.created_at)}</TableCell>
-                          <TableCell><Badge variant="outline" className="text-[10px]">{ev.event_type}</Badge></TableCell>
+                          <TableCell><Badge variant="outline" className="text-[10px]">{ev.event_type==='delivery_outcome_corrected'?'Resultado de entrega corrigido':ev.event_type}</Badge></TableCell>
                           <TableCell>{ev.from_status ?? '—'}</TableCell>
                           <TableCell>{ev.to_status ?? '—'}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">
@@ -706,12 +561,13 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             {/* Approve with exception */}
             <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
               <DialogContent>
-                <DialogHeader><DialogTitle>Aprovar com exceção</DialogTitle></DialogHeader>
-                <p className="text-sm text-muted-foreground">Informe a justificativa para aprovar mesmo com pendências. Requer perfil admin/owner.</p>
-                <Textarea value={exceptionReason} onChange={(e) => setExceptionReason(e.target.value)} placeholder="Motivo da aprovação com exceção" />
+                <DialogHeader><DialogTitle>Aprovar com exceção</DialogTitle>
+                  <DialogDescription>Informe a justificativa para aprovar mesmo com pendências. Requer perfil admin/owner. Correções de entrega precisam de revisão prévia.</DialogDescription></DialogHeader>
+                <Label htmlFor="settlement-approval-reason">Motivo da aprovação com exceção</Label>
+                <Textarea id="settlement-approval-reason" value={exceptionReason} onChange={(e) => setExceptionReason(e.target.value)} placeholder="Motivo da aprovação com exceção" />
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setApproveOpen(false)}>Cancelar</Button>
-                  <Button disabled={!exceptionReason || updateStatus.isPending}
+                  <Button disabled={needsRecalc || !exceptionReason || updateStatus.isPending}
                     onClick={async () => {
                       await updateStatus.mutateAsync({ id: s.id, status: 'approved', reason: exceptionReason, allow_exceptions: true });
                       setApproveOpen(false); setExceptionReason('');
@@ -723,11 +579,12 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             {/* Register payment */}
             <Dialog open={payOpen} onOpenChange={setPayOpen}>
               <DialogContent>
-                <DialogHeader><DialogTitle>Registrar pagamento</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>Registrar pagamento</DialogTitle>
+                  <DialogDescription>Registre somente um pagamento já conferido. Acertos desatualizados devem ser revisados antes desta ação.</DialogDescription></DialogHeader>
                 <div className="space-y-3">
                   <div>
-                    <Label>Valor pago * (saldo {fmtMoney(remaining)})</Label>
-                    <Input type="number" step="0.01" min="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+                    <Label htmlFor="settlement-payment-amount">Valor pago * (saldo {fmtMoney(remaining)})</Label>
+                    <Input id="settlement-payment-amount" type="number" step="0.01" min="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
                   </div>
                   <div>
                     <Label>Método *</Label>
@@ -818,7 +675,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setPayOpen(false)}>Cancelar</Button>
-                  <Button disabled={!payAmount || !payMethod || accountInvalid || registerPay.isPending || (isOverpayment && (!payAllowOver || !payOverReason.trim()))}
+                  <Button disabled={needsRecalc || !payAmount || !payMethod || accountInvalid || registerPay.isPending || (isOverpayment && (!payAllowOver || !payOverReason.trim()))}
                     onClick={async () => {
                       const accountLabelMap: Record<string, string> = {
                         caixa: 'Caixa', banco: 'Banco', pix: 'Pix',
@@ -846,17 +703,17 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             {/* Settle without payment (zero balance) */}
             <Dialog open={zeroOpen} onOpenChange={setZeroOpen}>
               <DialogContent>
-                <DialogHeader><DialogTitle>Quitar sem pagamento</DialogTitle></DialogHeader>
-                <p className="text-sm text-muted-foreground">
+                <DialogHeader><DialogTitle>Quitar sem pagamento</DialogTitle>
+                <DialogDescription>
                   Este acerto não possui saldo a pagar. Use esta ação apenas quando não há transferência financeira a ser feita ao motorista. A operação ficará registrada no histórico.
-                </p>
+                </DialogDescription></DialogHeader>
                 <div>
-                  <Label>Motivo *</Label>
-                  <Textarea value={zeroReason} onChange={(e) => setZeroReason(e.target.value)} placeholder="Ex.: acerto sem saldo a pagar, todas as despesas via cartão empresa" />
+                  <Label htmlFor="settlement-zero-reason">Motivo da quitação sem pagamento *</Label>
+                  <Textarea id="settlement-zero-reason" value={zeroReason} onChange={(e) => setZeroReason(e.target.value)} placeholder="Ex.: acerto sem saldo a pagar, todas as despesas via cartão empresa" />
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setZeroOpen(false)}>Cancelar</Button>
-                  <Button disabled={!zeroReason.trim() || settleZero.isPending}
+                  <Button disabled={needsRecalc || !zeroReason.trim() || settleZero.isPending}
                     onClick={async () => {
                       await settleZero.mutateAsync({ id: s.id, reason: zeroReason.trim() });
                       setZeroOpen(false); setZeroReason('');
@@ -868,17 +725,17 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             {/* Close approved without full payment */}
             <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
               <DialogContent>
-                <DialogHeader><DialogTitle>Fechar acerto sem pagamento</DialogTitle></DialogHeader>
-                <p className="text-sm text-muted-foreground">
+                <DialogHeader><DialogTitle>Fechar acerto sem pagamento</DialogTitle>
+                <DialogDescription>
                   Este acerto ainda não foi marcado como pago. Fechar sem pagamento deve ser usado apenas para cancelamento, baixa administrativa ou exceção operacional. Informe o motivo.
-                </p>
+                </DialogDescription></DialogHeader>
                 <div>
-                  <Label>Motivo *</Label>
-                  <Textarea value={closeReason} onChange={(e) => setCloseReason(e.target.value)} placeholder="Justificativa do fechamento excepcional" />
+                  <Label htmlFor="settlement-close-reason">Motivo do fechamento excepcional *</Label>
+                  <Textarea id="settlement-close-reason" value={closeReason} onChange={(e) => setCloseReason(e.target.value)} placeholder="Justificativa do fechamento excepcional" />
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setCloseOpen(false)}>Cancelar</Button>
-                  <Button disabled={!closeReason.trim() || updateStatus.isPending}
+                  <Button disabled={needsRecalc || !closeReason.trim() || updateStatus.isPending}
                     onClick={async () => {
                       await updateStatus.mutateAsync({ id: s.id, status: 'closed', reason: closeReason.trim() });
                       setCloseOpen(false); setCloseReason('');
@@ -934,6 +791,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             driverId={s.driver_id}
           />
         )}
+        {s && open && expenseReceipt?.settlementId === s.id && <ExpenseReceiptDialog tenantId={s.tenant_id} path={expenseReceipt.path} onClose={() => setExpenseReceipt(undefined)} />}
       </SheetContent>
     </Sheet>
   );

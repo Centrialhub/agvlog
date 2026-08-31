@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Send, ArrowRight, ArrowLeft, FileText } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normalizePhone } from '@/lib/fiscal/fiscalAddress';
 import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
@@ -24,6 +24,8 @@ import { hasInsuranceProfile } from '@/lib/fiscal/insuranceProfile';
 import { Calculator, Save } from 'lucide-react';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
 import { fiscalDocumentText } from '@/lib/fiscal/fiscalDocumentContact';
+import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
+import type { HubEnvironment } from '@/lib/fiscal/hubFiscalClient';
 
 interface Props {
   open: boolean;
@@ -68,10 +70,12 @@ function partyCnpj(document: FiscalDocument, mode: 'remetente' | 'destinatario')
 }
 
 export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
+  const toast = useSonnerToast();
   const { data: clients = [] } = useClients();
   const { data: emitters = [] } = useEmitters();
   const create = useCreateNFSe();
-  const issue = useIssueNFSe();
+  const [environment, setEnvironment] = useState<HubEnvironment>('homologation');
+  const issue = useIssueNFSe(environment);
   const recalcFreight = useRecalculateInboundFreight();
   const { data: insuranceProfile } = useInsuranceProfile();
   const saveInsuranceProfile = useUpdateInsuranceProfile();
@@ -495,6 +499,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             Emitir NFS-e a partir de NFs {step === 1 ? '— 1. Selecionar notas' : step === 2 ? '— 2. Valores por NF' : '— 3. Dados fiscais e emissão'}
           </DialogTitle>
         </DialogHeader>
+
+        <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issue.isPending || create.isPending} />
 
         {step === 1 && (
           <div className="space-y-4">

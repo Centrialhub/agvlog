@@ -1,4 +1,7 @@
-import { ReactNode } from 'react';
+import { DriverMoreMenu } from '@/components/driver/DriverMoreMenu';
+import { ExpenseCreationRecoveryPanel } from '@/components/financial/ExpenseCreationRecoveryPanel';
+import { ChatRecoveryPanel } from '@/components/driver/ChatRecoveryPanel';
+import { ReactNode, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -33,6 +36,10 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
   const { signOut } = useAuth();
   const location = useLocation();
   const isOnline = useOnlineStatus();
+  useEffect(() => {
+    const titles: Record<string, string> = { '/driver': 'Início', '/driver/loads': 'Minhas cargas', '/driver/stops': 'Paradas', '/driver/deliveries': 'Entregas e coletas', '/driver/journey': 'Jornada', '/driver/expenses': 'Despesas', '/driver/checklist': 'Checklist', '/driver/events': 'Eventos', '/driver/issues': 'Ocorrências', '/driver/chat': 'Chat' };
+    document.title = (titles[location.pathname] ?? 'Detalhes da viagem') + ' · Motorista · AGVLog';
+  }, [location.pathname]);
 
   const isActive = (href: string, match?: string[]) => {
     if (match && match.some((m) => location.pathname.startsWith(m))) return true;
@@ -76,16 +83,18 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
 
       {/* Content area */}
       <main className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="p-4 pb-6 max-w-lg mx-auto">{children}</div>
+        <div className="p-4 pb-6 max-w-lg mx-auto"><ExpenseCreationRecoveryPanel /><ChatRecoveryPanel />{children}</div>
       </main>
 
       {/* Bottom navigation - mobile style with iOS home-bar safe area */}
       <nav
+        aria-label="Navegação do motorista"
         className="shrink-0 border-t border-border bg-card"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <div className="flex justify-around items-stretch max-w-lg mx-auto">
           {driverNav.map((item) => {
+            if (item.label === 'Mais') return <DriverMoreMenu key="more" />;
             const active = isActive(item.href, item.match);
             const Icon = item.icon;
             return (

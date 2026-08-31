@@ -1,4 +1,4 @@
-import { confirmAction, promptAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useMemo, useState } from 'react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import {
@@ -23,25 +23,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Wallet, Plus, RefreshCw, CheckCircle2, Lock, Trash2, HandCoins } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
+import { useListFilters } from '@/hooks/useListFilters';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch } from '@/lib/listFilters';
 import { getErrorMessage } from '@/lib/errors';
+import { PayrollStatusBadge } from '@/components/financial/PayrollStatusBadge';
 
 const fmtBRL = (n: number) => (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-function statusBadge(s: string) {
-  const map: Record<string,string> = {
-    draft: 'bg-muted text-muted-foreground',
-    calculated: 'bg-blue-500/10 text-blue-600',
-    under_review: 'bg-amber-500/10 text-amber-600',
-    approved: 'bg-green-500/10 text-green-600',
-    closed: 'bg-slate-500/10 text-slate-600',
-    cancelled: 'bg-red-500/10 text-red-600',
-  };
-  return <Badge variant="outline" className={`text-[10px] ${map[s] ?? ''}`}>{PAYROLL_PERIOD_STATUS_LABELS[s as keyof typeof PAYROLL_PERIOD_STATUS_LABELS] ?? s}</Badge>;
-}
-
 export default function Payroll() {
   const { data: periods = [], isLoading } = usePayrollPeriods();
+  const [tab, setTab] = useState('periods');
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', payment: 'all' }, 'period_');
+  const filteredPeriods = periods.filter(row => matchesSearch(filters.search, row.period_name) && (filters.status === 'all' || row.status === filters.status) && (filters.payment === 'all' || row.payment_status === filters.payment));
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const [genOpen, setGenOpen] = useState(false);
   const [advanceOpen, setAdvanceOpen] = useState(false);
@@ -67,7 +62,7 @@ export default function Payroll() {
         </div>
       </div>
 
-      <Tabs defaultValue="periods">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="periods">Períodos</TabsTrigger>
           <TabsTrigger value="entries" disabled={!currentPeriodId}>Entradas</TabsTrigger>
@@ -75,6 +70,11 @@ export default function Payroll() {
         </TabsList>
 
         <TabsContent value="periods" className="space-y-3">
+          <ListFilterBar fields={[
+            { key: 'search', label: 'Buscar período da folha', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Nome ou competência do período' },
+            { key: 'status', label: 'Situação da folha', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, ...Object.entries(PAYROLL_PERIOD_STATUS_LABELS).map(([value, label]) => ({ value, label }))] },
+            { key: 'payment', label: 'Pagamento', value: filters.payment, onChange: value => setFilter('payment', value), options: [{ value: 'all', label: 'Todos' }, ...Object.entries(PAYROLL_PAYMENT_STATUS_LABELS).map(([value, label]) => ({ value, label }))] },
+          ]} onReset={resetFilters} activeCount={activeCount} resultCount={filteredPeriods.length} totalCount={periods.length} loading={isLoading} />
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
@@ -83,15 +83,15 @@ export default function Payroll() {
               </TableRow></TableHeader>
               <TableBody>
                 {isLoading ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
-                : periods.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">Nenhum período. Clique em "Gerar Folha".</TableCell></TableRow>
-                : periods.map(p => (
-                  <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedPeriodId(p.id)}>
+                : filteredPeriods.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">Nenhum período encontrado para os filtros.</TableCell></TableRow>
+                : filteredPeriods.map(p => (
+                  <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setSelectedPeriodId(p.id); setTab('entries'); }}>
                     <TableCell className="font-medium text-sm">{p.period_name}</TableCell>
                     <TableCell className="text-sm">{format(new Date(p.period_start), 'dd/MM/yyyy')}</TableCell>
                     <TableCell className="text-sm">{format(new Date(p.period_end), 'dd/MM/yyyy')}</TableCell>
-                    <TableCell>{statusBadge(p.status)}</TableCell>
+                    <TableCell><PayrollStatusBadge status={p.status} /></TableCell>
                     <TableCell><Badge variant="outline" className="text-[10px]">{PAYROLL_PAYMENT_STATUS_LABELS[p.payment_status] ?? p.payment_status}</Badge></TableCell>
-                    <TableCell><Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedPeriodId(p.id); }}>Abrir</Button></TableCell>
+                    <TableCell><Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedPeriodId(p.id); setTab('entries'); }}>Abrir</Button></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -117,6 +117,8 @@ export default function Payroll() {
 
 // -------------------- Period entries --------------------
 function PeriodEntries({ period, onOpenEntry }: { period: PayrollPeriod; onOpenEntry: (e: PayrollEntry) => void }) {
+  const { confirmAction, promptAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { data: entries = [], isLoading } = usePayrollEntries(period.id);
   const approve = useApprovePayrollPeriod();
   const close = useClosePayrollPeriod();
@@ -188,7 +190,7 @@ function PeriodEntries({ period, onOpenEntry }: { period: PayrollPeriod; onOpenE
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{period.period_name}</span>
-          {statusBadge(period.status)}
+          <PayrollStatusBadge status={period.status} />
         </div>
         <div className="flex gap-2">
           {!locked && <Button size="sm" variant="outline" onClick={handleRegen} disabled={gen.isPending}>
@@ -236,6 +238,8 @@ function PeriodEntries({ period, onOpenEntry }: { period: PayrollPeriod; onOpenE
 
 // -------------------- Entry drawer --------------------
 function EntryDrawer({ entry, period, onClose }: { entry: PayrollEntry | null; period: PayrollPeriod | null; onClose: () => void }) {
+  const { promptAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { data: items = [] } = usePayrollEntryItems(entry?.id);
   const recalc = useRecalculatePayrollEntry();
   const addItem = useAddPayrollManualItem();
@@ -344,6 +348,7 @@ function EntryDrawer({ entry, period, onClose }: { entry: PayrollEntry | null; p
 
 // -------------------- Generate dialog --------------------
 function GeneratePeriodDialog({ open, onOpenChange, onGenerated }: { open: boolean; onOpenChange: (o: boolean) => void; onGenerated: (id: string) => void }) {
+  const toast = useSonnerToast();
   const gen = useGeneratePayrollPeriod();
   const today = new Date();
   const [start, setStart] = useState(format(startOfMonth(today), 'yyyy-MM-dd'));
@@ -421,6 +426,7 @@ function AdvancesTable() {
 }
 
 function RegisterAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const toast = useSonnerToast();
   const { data: employees = [] } = useEmployees();
   const register = useRegisterEmployeeAdvance();
   const [employeeId, setEmployeeId] = useState('');

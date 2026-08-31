@@ -4,6 +4,7 @@ import {
   getHubFiscalDocument,
   safeProviderSnapshot,
   selectHubFiscalCredential,
+  resolveHubFiscalToken,
   shouldDeadLetter,
 } from '../../supabase/functions/_shared/fiscal-poll';
 import { readFileSync } from 'node:fs';
@@ -74,6 +75,32 @@ describe('fiscal polling terminal policy', () => {
     ];
 
     expect(selectHubFiscalCredential(credentials, 'cte', 'production')).toBeNull();
+    expect(selectHubFiscalCredential(credentials, 'cte', null)).toBeNull();
+    expect(selectHubFiscalCredential([{ ...credentials[0], environment: null }], 'cte', 'production')).toBeNull();
+  });
+
+  it('does not call the provider when scoped credentials are unavailable', async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const response = await getHubFiscalDocument({ baseUrl: 'https://hub.example.test', hubDocumentId: 'document', token: '', fetcher });
+    expect(response.status).toBe(424);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('requires tenant and emitter credentials without a global fallback', async () => {
+    const filters: unknown[][] = [];
+    const query = {
+      select: () => query,
+      eq: (key: string, value: unknown) => { filters.push([key, value]); return query; },
+      then: (resolve: (result: unknown) => unknown) => Promise.resolve({
+        data: [{ doc_scope: 'all', environment: 'production', secret_name: 'PROD', secret_ciphertext: null }], error: null,
+      }).then(resolve),
+    };
+    const admin = { from: () => query };
+    const input = { tenantId: 'tenant', emitterId: 'emitter', environment: 'homologation', scope: 'cte' as const, encryptionKey: '', getSecret: () => 'production-secret' };
+    expect(await resolveHubFiscalToken(admin, input)).toBe('');
+    expect(filters).toContainEqual(['tenant_id', 'tenant']);
+    expect(await resolveHubFiscalToken(admin, { ...input, environment: 'production' })).toBe('production-secret');
+    expect(await resolveHubFiscalToken(admin, { ...input, emitterId: null })).toBe('');
   });
 
   it('não chama o provedor quando HUB_FISCAL_BASE_URL está ausente', async () => {

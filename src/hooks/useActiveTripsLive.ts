@@ -2,25 +2,26 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import type { ActiveTripLive, TripAlert } from '@/lib/controlTower/types';
+import { useAuth } from './useAuth';
+import { readTowerTrips, readTowerAlerts } from '@/lib/controlTower/contracts';
 
 export function useActiveTripsLive() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['active-trips-live', currentTenant?.id],
-    queryFn: async (): Promise<ActiveTripLive[]> => {
+    queryKey: ['active-trips-live', currentTenant?.id, user?.id],
+    queryFn: async ({ signal }): Promise<ActiveTripLive[]> => {
       if (!currentTenant) return [];
-      // Recalcula status em background (best-effort; ignora erro)
-      supabase.functions
-        .invoke('update-trip-live-status', { body: { tenant_id: currentTenant.id } })
-        .catch(() => {});
-      const { data, error } = await supabase.rpc('get_active_trips_live' as any, {
+      // A read never launches an untracked write or an external integration.
+      const { data, error } = await supabase.rpc('get_active_trips_live', {
         _tenant_id: currentTenant.id,
-      });
+      }).abortSignal(signal);
       if (error) throw error;
-      return (data as unknown as ActiveTripLive[]) ?? [];
+      return readTowerTrips(data, currentTenant.id);
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
+    retry: false,
     refetchInterval: 10_000,
     staleTime: 5_000,
   });
@@ -28,18 +29,20 @@ export function useActiveTripsLive() {
 
 export function useOpenTripAlerts() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['open-trip-alerts', currentTenant?.id],
-    queryFn: async (): Promise<TripAlert[]> => {
+    queryKey: ['open-trip-alerts', currentTenant?.id, user?.id],
+    queryFn: async ({ signal }): Promise<TripAlert[]> => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.rpc('get_open_trip_alerts' as any, {
+      const { data, error } = await supabase.rpc('get_open_trip_alerts', {
         _tenant_id: currentTenant.id,
-      });
+      }).abortSignal(signal);
       if (error) throw error;
-      return (data as unknown as TripAlert[]) ?? [];
+      return readTowerAlerts(data, currentTenant.id);
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
+    retry: false,
     refetchInterval: 10_000,
   });
 }

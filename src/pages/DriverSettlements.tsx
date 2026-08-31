@@ -16,11 +16,20 @@ import {
 } from '@/hooks/useDriverSettlements';
 import DriverSettlementDrawer from '@/components/financial/DriverSettlementDrawer';
 import NewManualSettlementDialog from '@/components/financial/NewManualSettlementDialog';
+import { useAuth } from '@/hooks/useAuth';
+import { useTenant } from '@/hooks/useTenant';
 
 const fmtMoney = (v: number | null | undefined) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtNum = (v: number | null | undefined, d = 1) => (v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 export default function DriverSettlements() {
+  const { user } = useAuth();
+  const { currentTenant } = useTenant();
+  if (!user || !currentTenant) return <p role="status">Selecione uma conta e um tenant para consultar acertos.</p>;
+  return <SettlementList key={`${user.id}:${currentTenant.id}`} />;
+}
+
+function SettlementList() {
   const genPending = useGeneratePendingDriverSettlements();
 
   const [search, setSearch] = useState('');
@@ -36,7 +45,7 @@ export default function DriverSettlements() {
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
-  const { data, isLoading, refetch } = useDriverSettlements({
+  const { data: response, isLoading, isError, isFetching, refetch } = useDriverSettlements({
     search,
     driver_id: driverFilter === 'all' ? null : driverFilter,
     vehicle_id: vehicleFilter === 'all' ? null : vehicleFilter,
@@ -50,10 +59,12 @@ export default function DriverSettlements() {
     page,
     page_size: pageSize,
   });
+  const data = isError ? undefined : response;
   const list = data?.items ?? [];
   const totalCount = data?.total_count ?? 0;
   const summary = data?.summary ?? null;
-  const { data: filterOpts } = useDriverSettlementFilterOptions();
+  const filterQuery = useDriverSettlementFilterOptions();
+  const filterOpts = filterQuery.isError ? undefined : filterQuery.data;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -85,16 +96,18 @@ export default function DriverSettlements() {
           <p className="text-sm text-muted-foreground">Conferência financeira das viagens finalizadas</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
-          <Button variant="outline" onClick={() => setManualOpen(true)}>
+          <Button variant="outline" disabled={isFetching || filterQuery.isFetching} onClick={() => { void refetch(); void filterQuery.refetch(); }}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
+          <Button variant="outline" disabled={!data} onClick={() => setManualOpen(true)}>
             <Plus className="h-4 w-4 mr-1" /> Novo acerto manual
           </Button>
-          <Button onClick={() => genPending.mutate()} disabled={genPending.isPending}>
+          <Button onClick={() => genPending.mutate()} disabled={!data || genPending.isPending}>
             Gerar / Recalcular pendentes
           </Button>
         </div>
       </div>
 
+      {isError && <p role="alert">Não foi possível consultar os acertos. Os dados anteriores foram ocultados. Tente atualizar.</p>}
+      {filterQuery.isError && <p role="alert">Não foi possível consultar os filtros de motorista e veículo. Tente atualizar.</p>}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         {[
           { label: 'Pendentes', value: kpi.pending },
@@ -107,7 +120,7 @@ export default function DriverSettlements() {
           { label: 'Resultado das rotas', value: fmtMoney(kpi.totalRouteResult) },
         ].map((k) => (
           <Card key={k.label}><CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground">{k.label}</CardTitle></CardHeader>
-            <CardContent className="text-lg font-semibold">{k.value}</CardContent></Card>
+            <CardContent className="text-lg font-semibold">{data ? k.value : '—'}</CardContent></Card>
         ))}
       </div>
 
@@ -116,10 +129,10 @@ export default function DriverSettlements() {
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <div className="lg:col-span-2 relative">
               <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-              <Input className="pl-8" placeholder="Motorista, placa, rota, romaneio, nota…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} />
+              <Input aria-label="Pesquisar acertos" className="pl-8" placeholder="Motorista, placa, rota, romaneio, nota…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} />
             </div>
             <Select value={status} onValueChange={value => { setPage(1); setStatus(value as 'all' | DriverSettlementStatus); }}>
-              <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger aria-label="Status do acerto"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos status</SelectItem>
                 {(Object.keys(SETTLEMENT_STATUS_LABEL) as DriverSettlementStatus[]).map((s) => (
@@ -128,21 +141,21 @@ export default function DriverSettlements() {
               </SelectContent>
             </Select>
             <Select value={driverFilter} onValueChange={(v) => { setPage(1); setDriverFilter(v); }}>
-              <SelectTrigger><SelectValue placeholder="Motorista" /></SelectTrigger>
+              <SelectTrigger aria-label="Motorista" disabled={!filterOpts}><SelectValue placeholder="Motorista" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos motoristas</SelectItem>
                 {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={vehicleFilter} onValueChange={(v) => { setPage(1); setVehicleFilter(v); }}>
-              <SelectTrigger><SelectValue placeholder="Veículo" /></SelectTrigger>
+              <SelectTrigger aria-label="Veículo" disabled={!filterOpts}><SelectValue placeholder="Veículo" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos veículos</SelectItem>
                 {vehicles.map((v) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Input type="date" value={dateFrom} onChange={(e) => { setPage(1); setDateFrom(e.target.value); }} placeholder="De" />
-            <Input type="date" value={dateTo} onChange={(e) => { setPage(1); setDateTo(e.target.value); }} placeholder="Até" />
+            <Input aria-label="Finalizada de" type="date" value={dateFrom} onChange={(e) => { setPage(1); setDateFrom(e.target.value); }} placeholder="De" />
+            <Input aria-label="Finalizada até" type="date" value={dateTo} onChange={(e) => { setPage(1); setDateTo(e.target.value); }} placeholder="Até" />
           </div>
           <div className="flex flex-wrap gap-4 text-sm">
             <Label className="flex items-center gap-2"><Checkbox checked={onlyKmPending} onCheckedChange={(v) => { setPage(1); setOnlyKmPending(Boolean(v)); }} /> KM pendente</Label>
@@ -179,7 +192,7 @@ export default function DriverSettlements() {
               </TableHeader>
               <TableBody>
                 {isLoading && <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground">Carregando…</TableCell></TableRow>}
-                {!isLoading && filtered.length === 0 && (
+                {!isLoading && data && filtered.length === 0 && (
                   <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">Nenhum acerto encontrado.</TableCell></TableRow>
                 )}
                 {filtered.map(s => (
@@ -219,11 +232,11 @@ export default function DriverSettlements() {
             </Table>
           </div>
           <div className="flex justify-between items-center mt-3 text-sm text-muted-foreground">
-            <span>{totalCount} acerto(s)</span>
+            <span>{data ? `${totalCount} acerto(s)` : 'Total indisponível'}</span>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Anterior</Button>
+              <Button variant="outline" size="sm" disabled={!data || isFetching || page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Anterior</Button>
               <span className="px-2 self-center">Página {page}</span>
-              <Button variant="outline" size="sm" disabled={page * pageSize >= totalCount} onClick={() => setPage(p => p + 1)}>Próxima</Button>
+              <Button variant="outline" size="sm" disabled={!data || isFetching || page * pageSize >= totalCount} onClick={() => setPage(p => p + 1)}>Próxima</Button>
             </div>
           </div>
         </CardContent>

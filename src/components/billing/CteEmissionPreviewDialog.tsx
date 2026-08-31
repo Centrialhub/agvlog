@@ -11,16 +11,18 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, RotateCw, Send } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmitters, type TenantEmitter } from '@/hooks/useEmitters';
 import { useHubCredentials } from '@/hooks/useEmitters';
+import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
+import { selectScopedHubCredential, type HubEnvironment } from '../../../supabase/functions/_shared/fiscal-environment';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useClients, type Client } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
-import { useAlertStore } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
@@ -333,7 +335,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
 function toBuildInput(
   e: EditableCte,
   emitter: TenantEmitter | null | undefined,
-  environment: 'sandbox' | 'production' = 'sandbox',
+  environment: 'sandbox' | 'homologation' | 'production' = 'sandbox',
   clients: Client[] = [],
 ): BuildCtePayloadInput {
   // Completa lacunas das partes com o cadastro local (CNPJ, IE, endereço).
@@ -515,6 +517,7 @@ interface Props {
 }
 
 export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const { data: emitters = [] } = useEmitters();
   const { data: vehicles = [] } = useVehicles();
@@ -532,7 +535,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const [bulkEditTransporte, setBulkEditTransporte] = useState(false);
   const [bulkEditCarga, setBulkEditCarga] = useState(false);
   const [bulkEditFiscal, setBulkEditFiscal] = useState(true);
-  const { showAlert } = useAlertStore();
+  const { showAlert } = useScopedAlerts();
 
   const activeEmitters = useMemo(() => emitters.filter(emitter => emitter.active), [emitters]);
   const defaultEmitter = useMemo(() => selectDefaultActiveEmitter(emitters), [emitters]);
@@ -748,15 +751,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
   // Ambiente e disponibilidade da credencial CT-e do emitente ativo
   const { data: activeCreds = [] } = useHubCredentials(emitterForActive?.id);
+  const [activeEnvironment, setActiveEnvironment] = useState<HubEnvironment>('homologation');
   const activeCteCred = useMemo(
-    () =>
-      activeCreds.find((credential) => credential.doc_scope === 'cte' && credential.enabled) ||
-      activeCreds.find((credential) => credential.doc_scope === 'all' && credential.enabled) ||
-      null,
-    [activeCreds],
+    () => selectScopedHubCredential(activeCreds, 'cte', activeEnvironment),
+    [activeCreds, activeEnvironment],
   );
-  const activeEnvironment: 'sandbox' | 'production' =
-    activeCteCred?.environment === 'production' ? 'production' : 'sandbox';
 
   const validation = useMemo(() => {
     if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[], consistencyError: false };
@@ -872,7 +871,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     const errors: string[] = [];
     
     // Cache de credenciais por emitente para evitar lookups repetitivos
-    const credsCache: Record<string, { env: 'sandbox' | 'production' }> = {};
+    const credsCache: Record<string, { env: 'sandbox' | 'homologation' | 'production' }> = {};
 
     try {
       // Processamento em lote com limite de concorrência (5)
@@ -894,19 +893,17 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             
             // Resolve ambiente (cacheado)
             if (!credsCache[it.emitterId]) {
-              const { data: itCreds } = await supabase
+              const { data: itCreds, error: credentialsError } = await supabase
                 .from('hub_fiscal_credentials')
                 .select('doc_scope, environment, enabled')
                 .eq('emitter_id', it.emitterId)
                 .eq('enabled', true);
-                
-              const itCred =
-                (itCreds || []).find((credential) => credential.doc_scope === 'cte') ||
-                (itCreds || []).find((credential) => credential.doc_scope === 'all') ||
-                null;
+              if (credentialsError) throw credentialsError;
+              const itCred = selectScopedHubCredential(itCreds || [], 'cte', activeEnvironment);
+              if (!itCred) throw new Error(`Emitente sem credencial CT-e em ${activeEnvironment}.`);
                 
               credsCache[it.emitterId] = {
-                env: itCred?.environment === 'production' ? 'production' : 'sandbox'
+                env: activeEnvironment
               };
             }
 
@@ -1022,12 +1019,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
         </DialogHeader>
 
         <div className="flex items-center gap-2 text-xs">
+          <FiscalEnvironmentSelect value={activeEnvironment} onChange={setActiveEnvironment} disabled={transmitting} />
           <Badge variant={activeEnvironment === 'production' ? 'default' : 'secondary'}>
-            {activeEnvironment === 'production' ? 'PRODUÇÃO' : 'SANDBOX'}
+            {activeEnvironment === 'production' ? 'PRODUÇÃO' : activeEnvironment === 'homologation' ? 'HOMOLOGAÇÃO' : 'SANDBOX'}
           </Badge>
           {!activeCteCred && emitterForActive && (
             <Badge variant="destructive">
-              Sem credencial CT-e — usará token padrão (risco)
+              Sem credencial CT-e neste ambiente — transmissão bloqueada
             </Badge>
           )}
           {activeCteCred && (

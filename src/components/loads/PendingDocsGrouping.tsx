@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { FileStack, MapPin, Truck, CheckCircle, Loader2, User, UserX } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { Json } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
 import { getErrorMessage } from '@/lib/errors';
@@ -54,6 +54,7 @@ function jsonRecord(value: Json): JsonObject | null {
 }
 
 export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: Props) {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const { data: vehicles = [] } = useVehicles();
   const { data: operationalRoutes = [] } = useOperationalRoutes();

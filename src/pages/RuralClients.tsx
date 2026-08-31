@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sprout, Upload, Phone, Car, AlertTriangle, Download, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/hooks/useTenant';
@@ -105,41 +105,14 @@ export default function RuralClients() {
         </TabsList>
 
         <TabsContent value="clients" className="space-y-4 pt-4">
-          <Card><CardContent className="p-4 grid grid-cols-12 gap-3">
-            <Input className="col-span-4" placeholder="Buscar cliente, cidade, bairro..."
-              value={filters.search || ''} onChange={e => setFilters(f => ({ ...f, search: e.target.value }))} />
-            <Input className="col-span-2" placeholder="Cidade" value={filters.city || ''}
-              onChange={e => setFilters(f => ({ ...f, city: e.target.value }))} />
-            <Select value={filters.accessType || 'all'}
-              onValueChange={v => setFilters(f => ({ ...f, accessType: v === 'all' ? undefined : v }))}>
-              <SelectTrigger className="col-span-2"><SelectValue placeholder="Acesso" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os acessos</SelectItem>
-                <SelectItem value="paved">Asfalto</SelectItem>
-                <SelectItem value="dirt_road">Estrada de terra</SelectItem>
-                <SelectItem value="mixed">Misto</SelectItem>
-                <SelectItem value="unknown">Desconhecido</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filters.taxiRequired == null ? 'any' : filters.taxiRequired ? 'y' : 'n'}
-              onValueChange={v => setFilters(f => ({ ...f, taxiRequired: v === 'any' ? undefined : v === 'y' }))}>
-              <SelectTrigger className="col-span-2"><SelectValue placeholder="Táxi" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="any">Táxi (todos)</SelectItem>
-                <SelectItem value="y">Somente com táxi</SelectItem>
-                <SelectItem value="n">Sem táxi</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filters.requiresContact == null ? 'any' : filters.requiresContact ? 'y' : 'n'}
-              onValueChange={v => setFilters(f => ({ ...f, requiresContact: v === 'any' ? undefined : v === 'y' }))}>
-              <SelectTrigger className="col-span-2"><SelectValue placeholder="Ligar antes" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="any">Contato (todos)</SelectItem>
-                <SelectItem value="y">Precisa ligar antes</SelectItem>
-                <SelectItem value="n">Não precisa</SelectItem>
-              </SelectContent>
-            </Select>
-          </CardContent></Card>
+          <ListFilterBar fields={[
+            { key: 'search', label: 'Buscar cliente rural', type: 'search', value: filters.search || '', onChange: value => setFilters(f => ({ ...f, search: value })), placeholder: 'Cliente, cidade, bairro ou fornecedor' },
+            { key: 'city', label: 'Cidade', value: filters.city || '', onChange: value => setFilters(f => ({ ...f, city: value })) },
+            { key: 'access', label: 'Tipo de acesso', value: filters.accessType || 'all', onChange: value => setFilters(f => ({ ...f, accessType: value === 'all' ? undefined : value })), options: [{ value: 'all', label: 'Todos os acessos' }, { value: 'paved', label: 'Asfalto' }, { value: 'dirt_road', label: 'Estrada de terra' }, { value: 'mixed', label: 'Misto' }, { value: 'unknown', label: 'Desconhecido' }] },
+            { key: 'taxi', label: 'Necessita táxi', value: filters.taxiRequired == null ? 'all' : filters.taxiRequired ? 'yes' : 'no', onChange: value => setFilters(f => ({ ...f, taxiRequired: value === 'all' ? undefined : value === 'yes' })), options: [{ value: 'all', label: 'Todos' }, { value: 'yes', label: 'Com táxi' }, { value: 'no', label: 'Sem táxi' }] },
+            { key: 'contact', label: 'Contato antes da entrega', value: filters.requiresContact == null ? 'all' : filters.requiresContact ? 'yes' : 'no', onChange: value => setFilters(f => ({ ...f, requiresContact: value === 'all' ? undefined : value === 'yes' })), options: [{ value: 'all', label: 'Todos' }, { value: 'yes', label: 'Precisa ligar' }, { value: 'no', label: 'Não precisa' }] },
+            { key: 'active', label: 'Situação do cadastro', value: filters.active == null ? 'all' : filters.active ? 'yes' : 'no', onChange: value => setFilters(f => ({ ...f, active: value === 'all' ? undefined : value === 'yes' })), options: [{ value: 'all', label: 'Todos' }, { value: 'yes', label: 'Ativos' }, { value: 'no', label: 'Inativos' }] },
+          ]} onReset={() => setFilters({ active: true })} activeCount={Object.entries(filters).filter(([key, value]) => key === 'active' ? value !== true : value !== undefined && value !== '').length} resultCount={profiles.length} loading={isLoading} description="Até 1.000 perfis carregados por consulta. Limpar restaura os cadastros ativos; indicadores acima são gerais." />
 
           <Card><CardContent className="p-0">
             <Table>

@@ -8,6 +8,7 @@ import { usePortalShipmentDetail } from '@/hooks/portal/usePortalShipmentDetail'
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { PortalStatusBadge } from '@/components/portal/PortalStatusBadge';
 import { PortalShipmentTimeline } from '@/components/portal/PortalShipmentTimeline';
+import { PortalShipmentProofs } from '@/components/portal/PortalShipmentProofs';
 import { useDownloadPortalPod } from '@/hooks/portal/usePortalPods';
 import { useToast } from '@/hooks/use-toast';
 import type { PublicShipmentStatus } from '@/lib/portal/portalStatus';
@@ -20,13 +21,13 @@ const fmtBRL = (v?: number | null) =>
 
 export default function PortalShipmentDetail() {
   const { documentId } = useParams<{ documentId: string }>();
-  const { data, isLoading, error } = usePortalShipmentDetail(documentId);
+  const { data, isLoading, error, refetch } = usePortalShipmentDetail(documentId);
   const download = useDownloadPortalPod();
   const { toast } = useToast();
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-10">
+      <div role="status" aria-label="Carregando detalhes da entrega" className="flex justify-center py-10">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
@@ -37,6 +38,7 @@ export default function PortalShipmentDetail() {
       <div className="space-y-3">
         <Link to="/portal/shipments"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Button></Link>
         <PortalEmptyState title="Documento não disponível" description={(error as Error)?.message || 'Verifique seu acesso.'} />
+        {error && <Button variant="outline" onClick={() => void refetch()}>Tentar novamente</Button>}
       </div>
     );
   }
@@ -53,23 +55,23 @@ export default function PortalShipmentDetail() {
   };
   const publicStatus: PublicShipmentStatus =
     (doc.public_status as PublicShipmentStatus) ??
-    (data.proofs?.length > 0 ? 'pod_available'
+    (data.proofs?.some(proof=>proof.has_file&&['uploaded','validated'].includes(proof.status||'')) ? 'pod_available'
       : data.occurrences?.length > 0 ? 'exception'
       : doc.status === 'delivered' ? 'pod_pending'
       : 'received');
 
   const firstPod = data.proofs?.find((proof) => proof.has_file);
 
-  const handleDownloadPod = async () => {
-    if (!firstPod) return;
+  const handleDownloadProof = async (proofId: string) => {
     try {
-      const url = await download.mutateAsync(firstPod.id);
-      window.open(url, '_blank');
+      const url = await download.mutateAsync(proofId);
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch (error: unknown) {
       toast({ title: 'Erro ao baixar', description: portalErrorMessage(error, 'Não foi possível baixar o canhoto.'), variant: 'destructive' });
     }
   };
 
+  const handleDownloadPod = async () => { if (firstPod) await handleDownloadProof(firstPod.id); };
   return (
     <div className="space-y-4">
       {/* Cabeçalho executivo */}
@@ -81,7 +83,7 @@ export default function PortalShipmentDetail() {
                 <h1 className="text-lg font-bold">NF {doc.invoice_number || '—'}</h1>
                 <PortalStatusBadge status={publicStatus} />
                 {data.proofs?.length > 0 && (
-                  <Badge variant="outline" className="text-[10px]"><ClipboardCheck className="h-3 w-3 mr-0.5" />Canhoto</Badge>
+                  <Badge variant="outline" className="text-[10px]"><ClipboardCheck className="h-3 w-3 mr-0.5" />{firstPod?'Canhoto disponível':'Canhoto pendente'}</Badge>
                 )}
                 {data.occurrences?.length > 0 && (
                   <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="h-3 w-3 mr-0.5" />Ocorrência</Badge>
@@ -190,30 +192,8 @@ export default function PortalShipmentDetail() {
         <TabsContent value="pods">
           <Card>
             <CardContent className="p-4 text-xs space-y-2">
-              {(data.proofs?.length ?? 0) === 0 ? (
-                <p className="text-muted-foreground">Nenhum canhoto anexado ainda.</p>
-              ) : (
-                data.proofs.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between border rounded-md p-2">
-                    <div>
-                      <p className="font-medium capitalize">{p.proof_type}</p>
-                      <p className="text-[10px] text-muted-foreground">{fmt(p.received_at)} · {p.status}</p>
-                      {p.receiver_name && <p className="text-[10px]">Recebido por {p.receiver_name}</p>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[10px]">{p.status}</Badge>
-                      {perms.can_download_documents && p.has_file && (
-                        <Button size="sm" variant="outline" onClick={() => download.mutateAsync(p.id).then((u) => window.open(u, '_blank'))}>
-                          <Download className="h-3.5 w-3.5 mr-1" /> Baixar
-                        </Button>
-                      )}
-                      {!p.has_file && (
-                        <span className="text-[10px] text-muted-foreground">Arquivo pendente</span>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
+              <PortalShipmentProofs current={data.proofs} history={data.proof_history??[]}
+                canDownload={perms.can_download_documents} pending={download.isPending} onDownload={handleDownloadProof}/>
             </CardContent>
           </Card>
         </TabsContent>

@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState, useMemo } from 'react';
 import { useOperationalRoutes, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute, type OperationalRoute } from '@/hooks/useOperationalRoutes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,10 +11,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, Pencil, Trash2, Map as MapIcon, X } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { Plus, Pencil, Trash2, Map as MapIcon, X } from 'lucide-react';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { normalizeCity as norm } from '@/lib/utils/normalizeCity';
 import { getErrorMessage } from '@/lib/errors';
+import { useListFilters } from '@/hooks/useListFilters';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch } from '@/lib/listFilters';
+
 
 const CLASSIFICATIONS = [
   { value: 'general', label: 'Geral' },
@@ -24,12 +28,13 @@ const CLASSIFICATIONS = [
 ];
 
 export default function OperationalRoutesPage() {
-  const [showInactive, setShowInactive] = useState(false);
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'active', classification: 'all' });
   const { data: routes = [], isLoading } = useOperationalRoutes({ includeInactive: true });
   const createRoute = useCreateOperationalRoute();
   const updateRoute = useUpdateOperationalRoute();
   const deleteRoute = useDeleteOperationalRoute();
-  const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -37,14 +42,10 @@ export default function OperationalRoutesPage() {
   });
   const [newDest, setNewDest] = useState('');
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return routes.filter(r => {
-      if (!showInactive && !r.active) return false;
-      if (!q) return true;
-      return r.name.toLowerCase().includes(q) || (r.region_name || '').toLowerCase().includes(q);
-    });
-  }, [routes, search, showInactive]);
+  const filtered = routes.filter(row =>
+    matchesSearch(filters.search, row.name, row.region_name, row.description, ...row.destinations.map(destination => typeof destination === 'string' ? destination : destination.name))
+    && (filters.status === 'all' || row.active === (filters.status === 'active'))
+    && (filters.classification === 'all' || row.classification === filters.classification));
 
   // Detecta cidades presentes em mais de uma rota ativa (duplicatas de cobertura)
   const duplicateCities = useMemo(() => {
@@ -149,15 +150,11 @@ export default function OperationalRoutesPage() {
         </Button>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar rota..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Switch checked={showInactive} onCheckedChange={setShowInactive} id="show-inactive" />
-        <Label htmlFor="show-inactive" className="text-sm text-muted-foreground">Mostrar rotas inativas</Label>
-      </div>
+      <ListFilterBar fields={[
+        { key: 'search', label: 'Buscar rota', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Nome, região ou cidade atendida' },
+        { key: 'status', label: 'Situação', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas' }, { value: 'active', label: 'Ativas' }, { value: 'inactive', label: 'Inativas' }] },
+        { key: 'classification', label: 'Classificação', value: filters.classification, onChange: value => setFilter('classification', value), options: [{ value: 'all', label: 'Todas as classificações' }, ...CLASSIFICATIONS] },
+      ]} onReset={resetFilters} activeCount={activeCount} resultCount={filtered.length} totalCount={routes.length} loading={isLoading} />
 
       <Card>
         <CardHeader className="pb-3">

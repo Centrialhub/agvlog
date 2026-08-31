@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { STATE_COLORS, type ActiveTripLive } from '@/lib/controlTower/types';
 import { MapAutoFit } from '@/components/maps/MapAutoFit';
 import { DEFAULT_BRAZIL_MAP_CENTER, L } from '@/lib/maps/leaflet';
+import { escapeMarkerText } from '@/lib/controlTower/contracts';
 
 function vehicleIcon(trip: ActiveTripLive) {
   const color = STATE_COLORS[trip.state] ?? '#2563eb';
@@ -15,7 +16,7 @@ function vehicleIcon(trip: ActiveTripLive) {
     html: `
       <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
         <div style="background:${color};color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.4);white-space:nowrap;">
-          ${trip.vehicle_plate ?? '—'}${speed ? `<br/><span style="font-weight:400;opacity:.85;">${speed}</span>` : ''}
+          ${escapeMarkerText(trip.vehicle_plate ?? '—')}${speed ? `<br/><span style="font-weight:400;opacity:.85;">${speed}</span>` : ''}
         </div>
         <div style="width:14px;height:14px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.4);${pulse ? 'animation:ctPulse 1.4s ease-out infinite;' : ''}"></div>
       </div>
@@ -80,8 +81,8 @@ export default function ControlTowerMap({
                 />
               )}
               {t.pending_stops.map((s, i) => {
-                const lat = (s as any).latitude ?? null;
-                const lng = (s as any).longitude ?? null;
+                const lat = s.latitude ?? null;
+                const lng = s.longitude ?? null;
                 if (lat == null || lng == null) return null;
                 return (
                   <Marker key={`${t.trip_id}-s-${s.id}`} position={[lat, lng]} icon={stopIcon(s.sequence ?? i + 1, false)} />

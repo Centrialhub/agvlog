@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { PortalStatusBadge } from '@/components/portal/PortalStatusBadge';
@@ -41,6 +42,7 @@ const QUICK_CHIPS: QuickChip[] = [
 ];
 
 export default function PortalShipments() {
+  const { selectedClientId } = usePortalClientScope();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -52,6 +54,7 @@ export default function PortalShipments() {
   const [hasPodFilter, setHasPodFilter] = useState<boolean | undefined>(undefined);
   const [hasOccurrenceFilter, setHasOccurrenceFilter] = useState<boolean | undefined>(undefined);
   const limit = 50;
+  useEffect(() => setPage(0), [selectedClientId]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -96,14 +99,14 @@ export default function PortalShipments() {
             <Input
               value={search}
               onChange={(e) => { setPage(0); setSearch(e.target.value); }}
-              placeholder="Buscar NF, chave, pedido, carga, destinatário, CNPJ..."
+              aria-label="Buscar mercadorias" placeholder="Buscar NF, chave, pedido, carga, destinatário, CNPJ..."
               className="pl-8 h-9 text-sm"
             />
           </div>
-          <Input type="date" value={startDate} onChange={(e) => { setPage(0); setStartDate(e.target.value); }} className="h-9 text-sm w-[140px]" />
-          <Input type="date" value={endDate} onChange={(e) => { setPage(0); setEndDate(e.target.value); }} className="h-9 text-sm w-[140px]" />
-          <Input value={city} onChange={(e) => { setPage(0); setCity(e.target.value); }} placeholder="Cidade" className="h-9 text-sm w-[140px]" />
-          <Input value={state} onChange={(e) => { setPage(0); setState(e.target.value.toUpperCase().slice(0,2)); }} placeholder="UF" className="h-9 text-sm w-[70px]" />
+          <Input aria-label="Emissão de" max={endDate || undefined} type="date" value={startDate} onChange={(e) => { setPage(0); setStartDate(e.target.value); }} className="h-9 text-sm w-[140px]" />
+          <Input aria-label="Emissão até" min={startDate || undefined} type="date" value={endDate} onChange={(e) => { setPage(0); setEndDate(e.target.value); }} className="h-9 text-sm w-[140px]" />
+          <Input aria-label="Cidade de destino" value={city} onChange={(e) => { setPage(0); setCity(e.target.value); }} placeholder="Cidade" className="h-9 text-sm w-[140px]" />
+          <Input aria-label="UF de destino" value={state} onChange={(e) => { setPage(0); setState(e.target.value.toUpperCase().slice(0,2)); }} placeholder="UF" className="h-9 text-sm w-[70px]" />
           {anyFilter && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">
               <X className="h-3.5 w-3.5 mr-1" /> Limpar
@@ -119,7 +122,7 @@ export default function PortalShipments() {
             <Button
               key={c.id}
               size="sm"
-              variant={chip === c.id ? 'default' : 'outline'}
+              aria-pressed={chip === c.id} variant={chip === c.id ? 'default' : 'outline'}
               onClick={() => { setPage(0); setChip(chip === c.id ? null : c.id); }}
               className="h-7 text-xs rounded-full"
             >

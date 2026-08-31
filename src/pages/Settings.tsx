@@ -1,4 +1,4 @@
-import { confirmAction } from '@/hooks/useAlertStore';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   Plug, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Clock, Plus, Trash2,
   Activity, Wifi, Link2, Unlink, Radio, Pencil,
@@ -94,7 +94,7 @@ export default function Settings() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="company">Empresa</TabsTrigger>
           <TabsTrigger value="emitters">Emitentes Fiscais</TabsTrigger>
-          <TabsTrigger value="integration" disabled={!ssxEnabled}>Integração SSX · Em implantação</TabsTrigger>
+          <TabsTrigger value="integration">Integração SSX</TabsTrigger>
           <TabsTrigger value="units" disabled={!ssxEnabled}>Rastreadores</TabsTrigger>
           <TabsTrigger value="telemetry" disabled={!ssxEnabled}>Catálogo Telemetria</TabsTrigger>
           <TabsTrigger value="mapping" disabled={!ssxEnabled}>Mapeamento</TabsTrigger>
@@ -106,7 +106,7 @@ export default function Settings() {
           <InsuranceSettings />
         </TabsContent>
         <TabsContent value="emitters" className="mt-4"><EmittersSettings /></TabsContent>
-        <TabsContent value="integration" className="mt-4">{ssxEnabled ? <IntegrationSection /> : ssxUnavailable}</TabsContent>
+        <TabsContent value="integration" className="mt-4"><IntegrationSection ssxEnabled={ssxEnabled} /></TabsContent>
         <TabsContent value="units" className="mt-4">{ssxEnabled ? <UnitsSection /> : ssxUnavailable}</TabsContent>
         <TabsContent value="telemetry" className="mt-4">{ssxEnabled ? <TelemetryCatalogSection /> : ssxUnavailable}</TabsContent>
         <TabsContent value="mapping" className="mt-4">{ssxEnabled ? <TelemetryMappingSection /> : ssxUnavailable}</TabsContent>
@@ -119,6 +119,7 @@ export default function Settings() {
 
 /* ===== Maintenance Section (admin only) ===== */
 function MaintenanceSection() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
@@ -196,7 +197,9 @@ function MaintenanceSection() {
 }
 
 /* ===== Integration Section (existing, cleaned up) ===== */
-function IntegrationSection() {
+function IntegrationSection({ ssxEnabled }: { ssxEnabled: boolean }) {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -346,6 +349,20 @@ function IntegrationSection() {
         <Button onClick={() => { setEditingAccount(null); setDialogOpen(true); }}><Plus className="mr-2 h-4 w-4" />Nova integração</Button>
       </div>
 
+      {!ssxEnabled && (
+        <Card className="border-warning/50 bg-warning/5">
+          <CardContent className="p-4 flex gap-3">
+            <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">SSX desativado — preparação segura disponível</p>
+              <p className="text-xs text-muted-foreground">
+                Você pode cadastrar ou atualizar a credencial. Login, sincronizações e polling permanecem bloqueados até a capability ser habilitada.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {isLoading ? (
         <Card><CardContent className="py-8 text-center text-muted-foreground">Carregando...</CardContent></Card>
       ) : accounts.length === 0 ? (
@@ -379,7 +396,7 @@ function IntegrationSection() {
                   {acc.last_error && <div className="col-span-2"><span className="text-muted-foreground">Último erro:</span>{' '}<span className="text-destructive text-xs">{acc.last_error}</span></div>}
                 </div>
                 <div className="flex flex-wrap gap-2 pt-2">
-                  <Button size="sm" onClick={() => loginMutation.mutate(acc.id)} disabled={loginMutation.isPending}>
+                  <Button size="sm" onClick={() => loginMutation.mutate(acc.id)} disabled={!ssxEnabled || loginMutation.isPending}>
                     <RefreshCw className={`mr-2 h-3 w-3 ${loginMutation.isPending ? 'animate-spin' : ''}`} />Testar Login
                   </Button>
                   <Button
@@ -398,22 +415,22 @@ function IntegrationSection() {
                        const hasCachedSync = Boolean(lastSync && (Date.now() - new Date(lastSync).getTime()) < 3600000);
                       return (
                         <>
-                          <Button size="sm" variant="outline" onClick={() => syncUnitsMutation.mutate({ accountId: acc.id })} disabled={syncUnitsMutation.isPending || !['ok', 'degraded'].includes(acc.status) || isCooldown}>
+                          <Button size="sm" variant="outline" onClick={() => syncUnitsMutation.mutate({ accountId: acc.id })} disabled={!ssxEnabled || syncUnitsMutation.isPending || !['ok', 'degraded'].includes(acc.status) || isCooldown}>
                              <Radio className={`mr-2 h-3 w-3 ${syncUnitsMutation.isPending ? 'animate-spin' : ''}`} />
                              {isCooldown ? `Aguarde até ${retryTime}` : 'Sync Rastreadores'}
                            </Button>
                            {hasCachedSync && !isCooldown && (
-                             <Button size="sm" variant="ghost" onClick={() => syncUnitsMutation.mutate({ accountId: acc.id, force: true })} disabled={syncUnitsMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
+                             <Button size="sm" variant="ghost" onClick={() => syncUnitsMutation.mutate({ accountId: acc.id, force: true })} disabled={!ssxEnabled || syncUnitsMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
                                <RefreshCw className={`mr-2 h-3 w-3 ${syncUnitsMutation.isPending ? 'animate-spin' : ''}`} />Forçar Sync
                              </Button>
                            )}
                         </>
                       );
                     })()}
-                   <Button size="sm" variant="outline" onClick={() => syncTelemetryMutation.mutate(acc.id)} disabled={syncTelemetryMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
+                   <Button size="sm" variant="outline" onClick={() => syncTelemetryMutation.mutate(acc.id)} disabled={!ssxEnabled || syncTelemetryMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
                      <Activity className={`mr-2 h-3 w-3 ${syncTelemetryMutation.isPending ? 'animate-spin' : ''}`} />Sync Telemetria
                    </Button>
-                   <Button size="sm" variant="outline" onClick={() => pollMutation.mutate(acc.id)} disabled={pollMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
+                   <Button size="sm" variant="outline" onClick={() => pollMutation.mutate(acc.id)} disabled={!ssxEnabled || pollMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
                     <Radio className={`mr-2 h-3 w-3 ${pollMutation.isPending ? 'animate-spin' : ''}`} />Rodar Polling
                   </Button>
                   <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover integração?', { title: 'Remover integração', confirmLabel: 'Remover' })) deleteMutation.mutate(acc.id); }}>
@@ -441,6 +458,7 @@ function IntegrationDialog({ open, onOpenChange, tenantId, account }: {
   tenantId?: string;
   account: IntegrationAccount | null;
 }) {
+  const toast = useSonnerToast();
   const queryClient = useQueryClient();
   const [baseUrl, setBaseUrl] = useState('https://integration.systemsatx.com.br');
   const [username, setUsername] = useState('');
@@ -486,19 +504,19 @@ function IntegrationDialog({ open, onOpenChange, tenantId, account }: {
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>{account ? 'Atualizar credencial SSX' : 'Nova Integração SSX'}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2"><Label>URL Base</Label><Input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} required /></div>
-          <div className="space-y-2"><Label>Usuário</Label><Input value={username} onChange={e => setUsername(e.target.value)} required /></div>
-          <div className="space-y-2"><Label>Senha</Label><Input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></div>
+          <div className="space-y-2"><Label htmlFor="ssx-base-url">URL Base</Label><Input id="ssx-base-url" name="base_url" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} required /></div>
+          <div className="space-y-2"><Label htmlFor="ssx-username">Usuário</Label><Input id="ssx-username" name="username" autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required /></div>
+          <div className="space-y-2"><Label htmlFor="ssx-password">Senha</Label><Input id="ssx-password" name="password" autoComplete="new-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required /></div>
           <div className="space-y-2">
-            <Label>HashAuth</Label>
-            <Input value={hashauth} onChange={e => setHashauth(e.target.value)} placeholder={account ? 'Deixe em branco para manter o atual' : 'Recomendado para polling'} />
+            <Label htmlFor="ssx-hashauth">HashAuth</Label>
+            <Input id="ssx-hashauth" name="hashauth" value={hashauth} onChange={e => setHashauth(e.target.value)} placeholder={account ? 'Deixe em branco para manter o atual' : 'Recomendado para polling'} />
             {!account && !hashauth && (
               <p className="text-xs text-warning">
                 ⚠ Sem HashAuth, o polling de posições (PositionHistory) e violações de regras podem não funcionar. Configure se disponível.
               </p>
             )}
           </div>
-          <div className="space-y-2"><Label>Hashcode</Label><Input value={hashcode} onChange={e => setHashcode(e.target.value)} placeholder={account ? 'Deixe em branco para manter o atual' : 'Opcional'} /></div>
+          <div className="space-y-2"><Label htmlFor="ssx-hashcode">Hashcode</Label><Input id="ssx-hashcode" name="hashcode" value={hashcode} onChange={e => setHashcode(e.target.value)} placeholder={account ? 'Deixe em branco para manter o atual' : 'Opcional'} /></div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : account ? 'Atualizar' : 'Salvar'}</Button>
@@ -511,6 +529,8 @@ function IntegrationDialog({ open, onOpenChange, tenantId, account }: {
 
 /* ===== Units & Tracker Links Section (NEW) ===== */
 function UnitsSection() {
+  const { confirmAction } = useScopedAlerts();
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const { data: accounts = [] } = useQuery({
     queryKey: ['integration_accounts', currentTenant?.id],
@@ -755,6 +775,7 @@ function autoSuggestCanonical(name: string | null, description: string | null): 
 }
 
 function TelemetryMappingSection() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const queryClient = useQueryClient();
 

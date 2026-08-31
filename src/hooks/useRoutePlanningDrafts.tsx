@@ -61,21 +61,22 @@ export function useSavePlanSnapshot() {
   const versionsRef = useRef<Map<string, string>>(new Map());
   const mutation = useMutation({
     mutationFn: async ({ routeId, name, snapshot }: { routeId: string; name: string; snapshot: RoutePlanSnapshot }) => {
-      if (!currentTenant) return null;
+      if (!currentTenant || !user) throw new Error('Sessão não autenticada');
       const loadIds: string[] = Array.isArray(snapshot?.loads)
         ? snapshot.loads.map(load => load.id).filter(Boolean)
         : [];
       // 1. Leitura da versão atual no banco (se existir)
       const { data: existing, error: readErr } = await supabase
         .from('route_planning_drafts')
-        .select('updated_at')
+        .select('updated_at, status')
         .eq('id', routeId)
+        .eq('tenant_id', currentTenant.id)
         .maybeSingle();
       if (readErr) throw readErr;
       const dbVersion = existing?.updated_at ?? null;
       const knownVersion = versionsRef.current.get(routeId) ?? null;
       // Só bloqueia se já rastreamos uma versão prévia e ela difere do banco.
-      if (knownVersion && dbVersion && knownVersion !== dbVersion) {
+      if (existing && existing.status !== 'draft' || knownVersion && knownVersion !== dbVersion) {
         throw new DraftConflictError(routeId, knownVersion, dbVersion);
       }
       const nowIso = new Date().toISOString();
@@ -94,12 +95,18 @@ export function useSavePlanSnapshot() {
         created_by: user?.id,
         updated_at: nowIso,
       };
-      const { data: saved, error } = await supabase
-        .from('route_planning_drafts')
-        .upsert(payload, { onConflict: 'id' })
-        .select('id, updated_at')
-        .single();
+      // Compare-and-swap is part of the UPDATE, not just a preceding SELECT.
+      // A delayed autosave must never restore a dispatched draft to "draft".
+      const updates:TablesUpdate<'route_planning_drafts'>={...payload};
+      delete updates.id;delete updates.tenant_id;delete updates.created_by;delete updates.status;
+      const write=existing
+        ? supabase.from('route_planning_drafts').update(updates).eq('id',routeId)
+          .eq('tenant_id',currentTenant.id).eq('status','draft')
+          .eq('updated_at',dbVersion!)
+        : supabase.from('route_planning_drafts').insert(payload);
+      const { data: saved, error } = await write.select('id, updated_at').maybeSingle();
       if (error) throw error;
+      if (!saved) throw new DraftConflictError(routeId,dbVersion,null);
       const savedVersion = saved?.updated_at ?? nowIso;
       versionsRef.current.set(routeId, savedVersion);
       return routeId;
@@ -154,9 +161,12 @@ export function useSaveDraft() {
 
 export function useDeleteDraft() {
   const qc = useQueryClient();
+  const {currentTenant}=useTenant();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('route_planning_drafts').delete().eq('id', id);
+      if(!currentTenant)throw new Error('Tenant não selecionado');
+      const { error } = await supabase.from('route_planning_drafts').delete().eq('id', id)
+        .eq('tenant_id',currentTenant.id).eq('status','draft');
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['route_planning_drafts'] }),

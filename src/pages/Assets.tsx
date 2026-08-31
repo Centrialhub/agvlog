@@ -1,3 +1,6 @@
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch, filterOptions } from '@/lib/listFilters';
 import { useState, useMemo } from 'react';
 import { useAssets, useCreateAsset, useUpdateAsset, Asset, ASSET_CATEGORIES, ASSET_CATEGORY_LABELS, ASSET_STATUSES, ASSET_STATUS_LABELS } from '@/hooks/useAssets';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -10,17 +13,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, Package, Edit } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { Plus, Package, Edit } from 'lucide-react';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { getErrorMessage } from '@/lib/errors';
 
 export default function Assets() {
+  const toast = useSonnerToast();
   const { data: assets = [], isLoading } = useAssets();
   const { data: employees = [] } = useEmployees();
   const createAsset = useCreateAsset();
   const updateAsset = useUpdateAsset();
-  const [search, setSearch] = useState('');
-  const [catFilter, setCatFilter] = useState('all');
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', category: 'all', status: 'all', location: 'all' });
+  const { search, category: catFilter, status: statusFilter } = filters;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Asset | undefined>();
 
@@ -31,15 +35,12 @@ export default function Assets() {
     supplier: '', acquisition_date: '', acquisition_cost: '', notes: '',
   });
 
-  const filtered = useMemo(() => {
-    let list = assets;
-    if (catFilter !== 'all') list = list.filter(a => a.category === catFilter);
-    if (search) {
-      const s = search.toLowerCase();
-      list = list.filter(a => a.name.toLowerCase().includes(s) || a.asset_code.toLowerCase().includes(s) || a.serial_number?.toLowerCase().includes(s) || a.plate?.toLowerCase().includes(s));
-    }
-    return list;
-  }, [assets, search, catFilter]);
+  const filtered = useMemo(() => assets.filter(asset =>
+    matchesSearch(search, asset.name, asset.asset_code, asset.serial_number, asset.plate, asset.current_location) &&
+    (catFilter === 'all' || asset.category === catFilter) &&
+    (statusFilter === 'all' || asset.status === statusFilter) &&
+    (filters.location === 'all' || asset.current_location === filters.location)
+  ), [assets, search, catFilter, statusFilter, filters.location]);
 
   const openCreate = () => {
     setEditing(undefined);
@@ -109,16 +110,12 @@ export default function Assets() {
         ))}
       </div>
 
-      <div className="flex gap-2">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-8 h-9" placeholder="Buscar código, nome, placa..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <Select value={catFilter} onValueChange={setCatFilter}>
-          <SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">Todas Categorias</SelectItem>{ASSET_CATEGORIES.map(c => <SelectItem key={c} value={c}>{ASSET_CATEGORY_LABELS[c]}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
+      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={assets.length} loading={isLoading} description="Os indicadores acima mostram o cadastro completo." fields={[
+        { key: 'search', label: 'Busca', type: 'search', placeholder: 'Código, nome, série, placa ou localização', value: search, onChange: value => setFilter('search', value) },
+        { key: 'status', label: 'Situação', value: statusFilter, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, ...ASSET_STATUSES.map(value => ({ value, label: ASSET_STATUS_LABELS[value] }))] },
+        { key: 'category', label: 'Categoria', value: catFilter, onChange: value => setFilter('category', value), options: [{ value: 'all', label: 'Todas as categorias' }, ...ASSET_CATEGORIES.map(value => ({ value, label: ASSET_CATEGORY_LABELS[value] }))] },
+        { key: 'location', label: 'Localização', value: filters.location, onChange: value => setFilter('location', value), options: [{ value: 'all', label: 'Todos' }, ...filterOptions(assets.map(asset => asset.current_location)).map(value => ({ value, label: value }))] },
+      ]} />
 
       <Card><CardContent className="p-0">
         <Table><TableHeader><TableRow>

@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { corsHeaders } from "../_shared/cors.ts";
+import { expenseReceiptUpload } from "./expense-receipt.ts";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const JSON_HEADERS = { ...corsHeaders, "Content-Type": "application/json" };
@@ -151,6 +152,12 @@ Deno.serve(async (request) => {
       if (cleanup.action !== "cleanup" || !validUuid(tenantId) || !BUCKET_ROLES[bucket] || !validPaths) {
         return response(400, { error: "invalid_cleanup_request" });
       }
+      if (paths.some(path => path.includes("\\") || path.includes("%") || path.split("/").some(segment => !segment || segment === "."))) {
+        return response(400, { error: "invalid_cleanup_path" });
+      }
+      if (bucket === "receipts" && paths.some(path => path.split("/")[1] === "expense-receipts")) {
+        return response(403, { error: "expense_receipt_retention_required" });
+      }
       if (!await authorizeUpload(adminClient, callerClient, user.id, tenantId, bucket)) {
         return response(403, { error: "tenant_or_role_denied" });
       }
@@ -168,6 +175,7 @@ Deno.serve(async (request) => {
     const folder = String(form.get("folder") ?? "");
     const kind = String(form.get("kind") ?? "");
     const file = form.get("file");
+    const expenseReceipt = form.get("action") === "expense_receipt";
     if (!validUuid(tenantId) || !(file instanceof File) || !BUCKET_ROLES[bucket] || !KIND_MIMES[kind]) {
       return response(400, { error: "invalid_upload_request" });
     }
@@ -176,6 +184,10 @@ Deno.serve(async (request) => {
     const segments = folder.split("/").filter(Boolean);
     if (segments.length < 1 || segments.length > 6 || segments.some((part) => !/^[a-zA-Z0-9_-]{1,80}$/.test(part))) {
       return response(400, { error: "invalid_upload_folder" });
+    }
+    if ((segments[0] === "expense-receipts" && !expenseReceipt)
+      || (expenseReceipt && (bucket !== "receipts" || folder !== "expense-receipts" || kind !== "proof"))) {
+      return response(400, { error: "expense_receipt_reserved_folder" });
     }
 
     if (!await authorizeUpload(adminClient, callerClient, user.id, tenantId, bucket)) {
@@ -188,6 +200,20 @@ Deno.serve(async (request) => {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const mime = detectMime(bytes);
     if (!mime || !KIND_MIMES[kind].includes(mime)) return response(415, { error: "file_signature_mismatch" });
+    if (expenseReceipt) {
+      const result = await expenseReceiptUpload({
+        tenant: tenantId, actor: user.id, request: String(form.get("request_id") ?? ""),
+        sourceType: String(form.get("source_type") ?? ""), sourceId: String(form.get("source_id") ?? ""),
+        mime, bytes, declaredHash: String(form.get("sha256") ?? ""),
+      }, {
+        // Re-authorize using the verified caller JWT before/after scanning.
+        // A service-role request cannot prove the actor's MFA assurance level.
+        inspect: args => callerClient.rpc("inspect_expense_receipt_upload", args),
+        upload: (path, content, options) => adminClient.storage.from("receipts").upload(path, content, options),
+        scan: () => scannerAccepts(file, correlationId),
+      });
+      return response(result.status, result.body);
+    }
 
     const scan = await scannerAccepts(file, correlationId);
     if (!scan.available) return response(503, { error: "malware_scanner_unavailable" });

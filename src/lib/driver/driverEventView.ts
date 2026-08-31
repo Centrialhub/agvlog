@@ -21,6 +21,39 @@ const FINAL_EVENT_TYPES = new Set([
   'delivery_completed', 'delivery_failed',
 ]);
 
+const DRIVER_EVENT_LABELS: Record<string, string> = {
+  missing_goods: 'Falta de mercadoria',
+  missing_goods_fractional: 'Falta de mercadoria fracionada',
+  wrong_quantity: 'Quantidade errada',
+  client_refused: 'Cliente fechado ou recusa',
+  no_order: 'Cliente não fez o pedido',
+  expired_goods: 'Mercadoria vencida',
+  near_expiration: 'Produto próximo do vencimento',
+  damaged: 'Avaria',
+  wrong_address: 'Endereço errado',
+  partial_delivery: 'Entrega parcial',
+  return: 'Devolução',
+  returned: 'Devolução',
+  wrong_product: 'Mercadoria invertida',
+  boleto_extension: 'Prorrogação de boleto',
+  delivery_delay: 'Atraso na entrega',
+  delivered: 'Entrega concluída',
+  other: 'Outra ocorrência',
+};
+
+const humanizeEventType = (eventType: string) => {
+  const knownLabel = DRIVER_EVENT_LABELS[eventType];
+  if (knownLabel) return knownLabel;
+
+  const generatedLabel = eventType
+    .replace(/^info_/, '')
+    .split('_')
+    .filter(Boolean)
+    .map((word) => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`)
+    .join(' ');
+  return generatedLabel || 'Evento operacional';
+};
+
 function jsonRecord(value: Json | null): JsonObject {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
@@ -35,9 +68,10 @@ function stringValue(record: JsonObject, ...keys: string[]): string | undefined 
 }
 
 export function mapOperationalEventToDriverEvent(
-  row: Tables<'operational_events'>,
+  row: Pick<Tables<'operational_events'>,'id'|'event_type'|'report_details'|'payload'|'description'|'created_at'>,
 ): DriverEventView {
   const details = jsonRecord(row.report_details);
+  const payload = jsonRecord(row.payload);
   const type: DriverEventView['type'] = FINAL_EVENT_TYPES.has(row.event_type)
     ? 'finalizador'
     : 'informativo';
@@ -45,9 +79,10 @@ export function mapOperationalEventToDriverEvent(
     id: row.id,
     type,
     code: row.event_type.toUpperCase().slice(0, 4),
-    label: stringValue(details, 'label') ?? row.event_type ?? 'Evento',
-    stopName: stringValue(details, 'stop_name', 'client_name') ?? '—',
-    invoice: stringValue(details, 'invoice', 'nf'),
+    label: stringValue(details, 'label') ?? humanizeEventType(row.event_type),
+    stopName: stringValue(details, 'stop_name', 'client_name')
+      ?? (payload.scope === 'trip' ? 'Viagem — sem parada específica' : 'Parada não identificada'),
+    invoice: stringValue(details, 'invoice', 'nf') ?? stringValue(payload, 'invoice', 'nf'),
     receiver: stringValue(details, 'receiver_name'),
     document: stringValue(details, 'receiver_document'),
     observation: row.description ?? undefined,

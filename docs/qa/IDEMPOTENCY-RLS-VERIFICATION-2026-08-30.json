@@ -1,0 +1,78 @@
+{
+  "before": {
+    "keys": 0,
+    "consumers": [
+      {
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "hash": "938283f684aec640e4d996d6faae9bee",
+        "signature": "create_load_v1(uuid,uuid,uuid,text,text,text,text,timestamp with time zone,text)"
+      },
+      {
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "hash": "7f3e895f441a0e46a98e6655115015f5",
+        "signature": "plan_dispatch_trip_v2(uuid,uuid,uuid,uuid[],timestamp with time zone,text)"
+      },
+      {
+        "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "hash": "ea81d617fe991bf3c6e7bde902737605",
+        "signature": "plan_dispatch_trip_v3(uuid,text,uuid,uuid,text,uuid[],jsonb)"
+      }
+    ],
+    "table_acl": "{postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres}",
+    "helper_hash": "682f66029dc9bb798f9f329b4e8f95aa",
+    "policy_hash": "52dcb2b8b590a76089a38b21cebaf9c7"
+  },
+  "after": {
+    "keys": 0,
+    "qa_keys": 0,
+    "consumers": [
+      {
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "hash": "938283f684aec640e4d996d6faae9bee",
+        "signature": "create_load_v1(uuid,uuid,uuid,text,text,text,text,timestamp with time zone,text)"
+      },
+      {
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "hash": "7f3e895f441a0e46a98e6655115015f5",
+        "signature": "plan_dispatch_trip_v2(uuid,uuid,uuid,uuid[],timestamp with time zone,text)"
+      },
+      {
+        "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "hash": "ea81d617fe991bf3c6e7bde902737605",
+        "signature": "plan_dispatch_trip_v3(uuid,text,uuid,uuid,text,uuid[],jsonb)"
+      }
+    ],
+    "migration": {
+      "name": "restrict_idempotency_key_read_scope",
+      "version": "20260830061800"
+    },
+    "table_acl": "{postgres=arwdDxtm/postgres,authenticated=arwd/postgres,service_role=arwdDxtm/postgres}",
+    "helper_hash": "682f66029dc9bb798f9f329b4e8f95aa",
+    "policy_hash": "a5e2fc2cb8bbeb71640ea0bc13d8b3a8"
+  },
+  "legacy_probe": {
+    "probe": "legacy-policy",
+    "visible_synthetic_keys": 2,
+    "visible_foreign_synthetic_keys": 1
+  },
+  "post_probe": {
+    "anon_denied": true,
+    "verified_at": "2026-08-30T06:18:32.993462+00:00",
+    "service_visible": 2,
+    "unsigned_visible": 0,
+    "business_state_unchanged": true,
+    "planner_replay_preserved": true,
+    "visible_own_synthetic_keys": 1,
+    "visible_foreign_synthetic_keys": 0
+  },
+  "advisor_before": {
+    "rls_enabled_no_policy": 3,
+    "authenticated_security_definer_function_executable": 140,
+    "auth_leaked_password_protection": 1
+  },
+  "advisor_after": {
+    "rls_enabled_no_policy": 3,
+    "authenticated_security_definer_function_executable": 140,
+    "auth_leaked_password_protection": 1
+  }
+}

@@ -18,7 +18,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { AlertTriangle, Eye, FileSearch, Search, X, Copy, Check } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { Json } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
 
@@ -49,6 +49,7 @@ function jsonObject(value: Json): JsonObject | null {
 }
 
 export default function LoadExtractionAudit() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState<string>(SENTINEL_ALL);

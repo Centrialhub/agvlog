@@ -10,6 +10,8 @@ import { Loader2, MapPin, Truck, Phone, Clock, Navigation, Info, FileText, Alert
 import { Link } from 'react-router-dom';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch, filterOptions } from '@/lib/listFilters';
 import { cn } from '@/lib/utils';
 import PortalTrackingMap from '@/components/portal/PortalTrackingMap';
 
@@ -24,11 +26,13 @@ const STATUS_LABEL: Record<string, string> = {
 export default function PortalTracking() {
   const { data: items = [], isLoading, error, refetch } = usePortalTracking();
   const { selectedClientId, can } = usePortalClientScope();
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');
   const [selected, setSelected] = useState<string | null>(null);
 
   const filtered = useMemo(
-    () => (selectedClientId ? items.filter((i) => i.client_id === selectedClientId) : items),
-    [items, selectedClientId],
+    () => items.filter(row => (!selectedClientId || row.client_id === selectedClientId) && (status === 'all' || row.status === status) && matchesSearch(search, row.load_number, row.plate, row.next_stop?.destination, row.next_stop?.city, ...row.documents.flatMap(doc => [doc.invoice_number, doc.recipient, doc.recipient_city]))),
+    [items, selectedClientId, search, status],
   );
 
   const withPosition = filtered.filter((i) => typeof i.lat === 'number');
@@ -39,6 +43,10 @@ export default function PortalTracking() {
       title="Tracking"
       description="Acompanhe em tempo real as cargas em trânsito com sua mercadoria."
     >
+      <div className="mb-4"><ListFilterBar fields={[
+        { key: 'search', label: 'Buscar carga em acompanhamento', type: 'search', value: search, onChange: value => { setSearch(value); setSelected(null); }, placeholder: 'Carga, placa, nota, destinatário ou cidade' },
+        { key: 'status', label: 'Situação da carga', value: status, onChange: value => { setStatus(value); setSelected(null); }, options: [{ value: 'all', label: 'Todas as situações' }, ...filterOptions(items.map(row => row.status)).map(value => ({ value, label: STATUS_LABEL[value] || value }))] },
+      ]} onReset={() => { setSearch(''); setStatus('all'); setSelected(null); }} activeCount={Number(Boolean(search)) + Number(status !== 'all')} resultCount={error ? undefined : filtered.length} totalCount={items.length} loading={isLoading} description="O mapa e os cartões acompanham os mesmos filtros." /></div>
       {!canLive && (
         <div className="mb-3 flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
           <Info className="h-4 w-4 mt-0.5 shrink-0" />
@@ -60,7 +68,7 @@ export default function PortalTracking() {
       ) : filtered.length === 0 ? (
         <PortalEmptyState
           title="Nenhuma carga em trânsito"
-          description="Você não tem cargas ativas para acompanhamento no momento."
+          description="Não há cargas para os filtros e o cliente selecionados."
         />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">

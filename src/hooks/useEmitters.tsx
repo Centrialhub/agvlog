@@ -3,8 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { HUB_FISCAL_CREDENTIAL_SAFE_SELECT } from '@/integrations/supabase/selects';
 import type { Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { useTenant } from './useTenant';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { selectDefaultActiveEmitter } from '@/lib/fiscal/emitterSelection';
+import { requireHubDocumentScope, requireHubEnvironment } from '../../supabase/functions/_shared/fiscal-environment';
 
 export interface TenantEmitterAddress {
   logradouro?: string | null;
@@ -39,8 +40,8 @@ export interface TenantEmitter {
   updated_at: string;
 }
 
-export type HubFiscalDocumentScope = 'all' | 'nfse' | 'cte' | 'nfe' | 'nfce' | 'mdfe';
-export type HubFiscalEnvironment = 'sandbox' | 'production';
+export type HubFiscalDocumentScope = 'all' | 'nfse' | 'cte' | 'nfe' | 'nfce' | 'mdfe' | 'nfcom';
+export type HubFiscalEnvironment = 'sandbox' | 'homologation' | 'production';
 
 export interface HubFiscalCredential {
   id: string;
@@ -55,25 +56,6 @@ export interface HubFiscalCredential {
   metadata: Json;
   created_at: string;
   updated_at: string;
-}
-
-const HUB_FISCAL_DOCUMENT_SCOPES: readonly HubFiscalDocumentScope[] = [
-  'all',
-  'nfse',
-  'cte',
-  'nfe',
-  'nfce',
-  'mdfe',
-];
-
-function toDocumentScope(value: string): HubFiscalDocumentScope {
-  return HUB_FISCAL_DOCUMENT_SCOPES.includes(value as HubFiscalDocumentScope)
-    ? (value as HubFiscalDocumentScope)
-    : 'all';
-}
-
-function toEnvironment(value: string): HubFiscalEnvironment {
-  return value === 'production' ? 'production' : 'sandbox';
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -107,6 +89,7 @@ export function useDefaultEmitter() {
 }
 
 export function useSaveEmitter() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
@@ -147,6 +130,7 @@ export function useSaveEmitter() {
 }
 
 export function useDeleteEmitter() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
@@ -166,6 +150,7 @@ export function useDeleteEmitter() {
 }
 
 export function useMakeDefaultEmitter() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
@@ -200,8 +185,8 @@ export function useHubCredentials(emitterId?: string | null) {
       if (error) throw error;
       return (data ?? []).map((credential) => ({
         ...credential,
-        doc_scope: toDocumentScope(credential.doc_scope),
-        environment: toEnvironment(credential.environment),
+        doc_scope: requireHubDocumentScope(credential.doc_scope),
+        environment: requireHubEnvironment(credential.environment),
         metadata: credential.metadata,
         has_ciphertext: Boolean(credential.secret_hint || credential.secret_name),
       })) as HubFiscalCredential[];
@@ -210,6 +195,7 @@ export function useHubCredentials(emitterId?: string | null) {
 }
 
 export function useSaveHubCredential() {
+  const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
@@ -244,6 +230,7 @@ export function useSaveHubCredential() {
 }
 
 export function useSaveHubCredentialToken() {
+  const toast = useSonnerToast();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {

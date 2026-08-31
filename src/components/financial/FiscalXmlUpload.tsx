@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FileUp, FileCheck2, AlertTriangle } from 'lucide-react';
 import { parseFiscalXml, type ParsedFiscalXml } from '@/lib/nfeXmlParser';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { getErrorMessage } from '@/lib/errors';
 
 type Props = {
@@ -18,6 +18,7 @@ type Props = {
  * File is passed back so the parent can optionally upload it as receipt.
  */
 export default function FiscalXmlUpload({ onExtracted, perspective, className }: Props) {
+  const toast = useSonnerToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [lastFile, setLastFile] = useState<File | null>(null);
   const [lastKind, setLastKind] = useState<string | null>(null);

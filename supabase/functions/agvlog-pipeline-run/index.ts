@@ -16,6 +16,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { isCronRequest } from "../_shared/cron-auth.ts";
+import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 type PipelineMode = "poll" | "full" | "manual" | "sync_units_only" | "aggregate_only";
@@ -93,8 +94,15 @@ Deno.serve(async (req) => {
     } = body;
 
     // Determine effective mode
+    const allowedModes = new Set<PipelineMode>([
+      "poll", "full", "manual", "sync_units_only", "aggregate_only",
+    ]);
     let mode: PipelineMode = pipeline_mode || "poll";
     if (manual_run && !pipeline_mode) mode = "manual";
+
+    if (!allowedModes.has(mode)) {
+      return jsonResp({ error: "invalid pipeline_mode" }, 400);
+    }
 
     if (!tenant_id) {
       return jsonResp({ error: "tenant_id required" }, 400);
@@ -110,6 +118,9 @@ Deno.serve(async (req) => {
         return jsonResp({ error: "Forbidden" }, 403);
       }
     }
+
+    const capabilityResponse = await requireIntegrationCapability(supabase, tenant_id, "ssx");
+    if (capabilityResponse) return capabilityResponse;
 
     const stats: PipelineStats = {
       pipeline_mode: mode,

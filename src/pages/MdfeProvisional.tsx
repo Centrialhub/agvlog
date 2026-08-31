@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useListFilters } from '@/hooks/useListFilters';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesSearch, matchesDateRange, filterOptions } from '@/lib/listFilters';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,12 +14,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuthorizedCteList } from '@/hooks/useAuthorizedCteList';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useEmitters, useHubCredentials } from '@/hooks/useEmitters';
+import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
+import { selectScopedHubCredential, type HubEnvironment } from '../../supabase/functions/_shared/fiscal-environment';
 import { supabase } from '@/integrations/supabase/client';
 import { buildMdfePayload, BuildMdfePayloadInput } from '@/lib/fiscal/mdfeBuilder';
 import { useInsuranceProfile } from '@/hooks/useInsuranceProfile';
 import { format } from 'date-fns';
 import { Loader2, Send, RefreshCw, XCircle, FileText, Truck, User, MapPin } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { usePagination } from '@/hooks/usePagination';
 import { DataPagination } from '@/components/ui/data-pagination';
 import { useTenant } from '@/hooks/useTenant';
@@ -33,19 +38,24 @@ function errorMessage(error: unknown): string {
 }
 
 export default function MdfeProvisional() {
+  const toast = useSonnerToast();
   const { data: ctes, isLoading, refetch } = useAuthorizedCteList();
   const { data: vehicles = [] } = useVehicles();
   const { data: emitters = [] } = useEmitters();
   const { data: insurance } = useInsuranceProfile();
   const { currentTenant } = useTenant();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const ctePagination = usePagination(ctes ?? [], { pageSize: 50 });
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', state: 'all', from: '', to: '' });
+  const filteredCtes = (ctes ?? []).filter(row => matchesSearch(filters.search, row.cte_number, row.access_key, row.remitter, row.recipient, row.recipient_city, row.vehicle_plate, row.driver_name) && (filters.state === 'all' || row.recipient_state === filters.state) && matchesDateRange(row.issued_at, filters.from, filters.to));
+  const ctePagination = usePagination(filteredCtes, { pageSize: 50, resetKey: JSON.stringify(filters) });
+  useEffect(() => setSelectedIds([]), [filters.search, filters.state, filters.from, filters.to]);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTransmitting, setIsTransmitting] = useState(false);
 
   // Form states
   const [emitterId, setEmitterId] = useState<string>('');
+  const [environment, setEnvironment] = useState<HubEnvironment>('homologation');
   const [vehicleId, setVehicleId] = useState<string>('');
   const [driverName, setDriverName] = useState('');
   const [driverCpf, setDriverCpf] = useState('');
@@ -121,10 +131,10 @@ export default function MdfeProvisional() {
   };
 
   const toggleAll = () => {
-    if (selectedIds.length === (ctes?.length || 0)) {
+    if (filteredCtes.length > 0 && filteredCtes.every(row => selectedIds.includes(row.id))) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(ctes?.map(c => c.id) || []);
+      setSelectedIds(filteredCtes.map(row => row.id));
     }
   };
 
@@ -191,8 +201,7 @@ export default function MdfeProvisional() {
   const handleTransmit = async () => {
     const emitter = emitters.find(e => e.id === emitterId);
     const vehicle = vehicles.find(v => v.id === vehicleId);
-    const mdfeCredential = hubCredentials.find(c => c.enabled && c.doc_scope === 'mdfe')
-      || hubCredentials.find(c => c.enabled && c.doc_scope === 'all');
+    const mdfeCredential = selectScopedHubCredential(hubCredentials, 'mdfe', environment);
 
     if (!emitter || !vehicle || !driverName.trim() || !/^\d{11}$/.test(driverCpf.replace(/\D/g, ''))
       || !/^\d{7}$/.test(originIbge.replace(/\D/g, ''))
@@ -202,7 +211,7 @@ export default function MdfeProvisional() {
     }
 
     if (!mdfeCredential) {
-      toast.error("O emitente selecionado não possui credencial habilitada para MDF-e");
+      toast.error(`O emitente não possui credencial MDF-e em ${environment}`);
       return;
     }
 
@@ -249,6 +258,9 @@ export default function MdfeProvisional() {
           name: emitter.razao_social,
           environment: mdfeCredential.environment,
         },
+        // O proxy exige uma chave idempotente: nunca transmite um MDF-e sem
+        // referência estável para recuperação segura em caso de timeout.
+        externalId: `mdfe-${emitter.id}-${crypto.randomUUID()}`,
         driver: {
           name: driverName,
           cpf: driverCpf,
@@ -447,6 +459,13 @@ export default function MdfeProvisional() {
         </Card>
       </div>
 
+      <ListFilterBar fields={[
+        { key: 'search', label: 'Buscar CT-e autorizado', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Número, chave, remetente, destino ou placa' },
+        { key: 'state', label: 'UF de destino', value: filters.state, onChange: value => setFilter('state', value), options: [{ value: 'all', label: 'Todas as UFs' }, ...filterOptions((ctes ?? []).map(row => row.recipient_state)).map(value => ({ value, label: value }))] },
+        { key: 'from', label: 'Emitido de', type: 'date', value: filters.from, max: filters.to || undefined, onChange: value => setFilter('from', value) },
+        { key: 'to', label: 'Emitido até', type: 'date', value: filters.to, min: filters.from || undefined, onChange: value => setFilter('to', value) },
+      ]} onReset={resetFilters} activeCount={activeCount} resultCount={filteredCtes.length} totalCount={ctes?.length || 0} loading={isLoading} description="Até 100 CT-e autorizados recentes. Alterar os filtros limpa a seleção; selecionar todos inclui todo o resultado filtrado." />
+
       <Card>
         <CardHeader>
           <CardTitle>CT-es Autorizados</CardTitle>
@@ -459,14 +478,14 @@ export default function MdfeProvisional() {
             <div className="flex h-64 items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : ctes && ctes.length > 0 ? (
+          ) : filteredCtes.length > 0 ? (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[50px]">
                       <Checkbox 
-                        checked={ctes.length > 0 && selectedIds.length === ctes.length}
+                        aria-label="Selecionar todos os CT-e filtrados" checked={filteredCtes.length > 0 && filteredCtes.every(row => selectedIds.includes(row.id))}
                         onCheckedChange={toggleAll}
                       />
                     </TableHead>
@@ -524,6 +543,7 @@ export default function MdfeProvisional() {
           </DialogHeader>
 
           <div className="grid gap-6 py-4">
+            <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={isTransmitting} />
             <div className="space-y-4">
               <h4 className="flex items-center gap-2 text-sm font-semibold">
                 <FileText className="h-4 w-4" /> Emitente e Veículo

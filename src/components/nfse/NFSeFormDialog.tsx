@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { fiscalDocumentText } from '@/lib/fiscal/fiscalDocumentContact';
 
 interface NFSeItem {
@@ -111,6 +111,7 @@ const EMPTY_FORM: NFSeFormState = {
 };
 
 export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, onSaved }: Props) {
+  const toast = useSonnerToast();
   const create = useCreateNFSe();
   const update = useUpdateNFSe();
   const editing = !!initial?.id;

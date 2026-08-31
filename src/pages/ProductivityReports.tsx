@@ -1,4 +1,8 @@
 import { useMemo } from 'react';
+import { useListFilters } from '@/hooks/useListFilters';
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { matchesDateRange } from '@/lib/listFilters';
+
 import { useLoads } from '@/hooks/useLoads';
 import { useOperationalEvents } from '@/hooks/useOperationalEvents';
 import { useClients } from '@/hooks/useClients';
@@ -27,11 +31,21 @@ function useDriversAll() {
 }
 
 export default function ProductivityReports() {
-  const { data: loads = [] } = useLoads();
-  const { data: events = [] } = useOperationalEvents();
+  const { data: allLoads = [], isLoading: loadsLoading } = useLoads();
+  const { data: allEvents = [], isLoading: eventsLoading } = useOperationalEvents();
   const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDriversAll();
+
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ driver: 'all', vehicle: 'all', from: '', to: '' });
+  const loads = useMemo(() => allLoads.filter(row =>
+    (filters.driver === 'all' || row.driver_id === filters.driver)
+    && (filters.vehicle === 'all' || row.vehicle_id === filters.vehicle)
+    && matchesDateRange(row.created_at, filters.from, filters.to)), [allLoads, filters.driver, filters.vehicle, filters.from, filters.to]);
+  const events = useMemo(() => allEvents.filter(row =>
+    (filters.driver === 'all' || row.driver_id === filters.driver)
+    && (filters.vehicle === 'all' || row.vehicle_id === filters.vehicle)
+    && matchesDateRange(row.created_at, filters.from, filters.to)), [allEvents, filters.driver, filters.vehicle, filters.from, filters.to]);
 
   // Driver performance
   const driverMetrics = useMemo(() => {
@@ -68,17 +82,18 @@ export default function ProductivityReports() {
 
   // Vehicle occupancy efficiency
   const vehicleEfficiency = useMemo(() => {
-    return (vehicles as any[])
-      .filter(v => v.max_pallets && v.max_pallets > 0)
+    return vehicles
+      .filter(v => v.max_pallets && v.max_pallets > 0 && (filters.vehicle === 'all' || v.id === filters.vehicle))
       .map(v => {
         const vehicleLoads = loads.filter(l => l.vehicle_id === v.id && ['delivered', 'in_transit', 'loaded'].includes(l.status));
         const totalPallets = vehicleLoads.reduce((s, l) => s + (l.total_pallet_count || 0), 0);
         const trips = vehicleLoads.length;
-        const avgOccupancy = trips > 0 ? Math.round((totalPallets / (trips * v.max_pallets)) * 100) : 0;
+        const avgOccupancy = trips > 0 ? Math.round((totalPallets / (trips * (v.max_pallets || 1))) * 100) : 0;
         return { plate: v.plate, nickname: v.nickname, maxPallets: v.max_pallets, trips, avgOccupancy, totalPallets };
       })
+      .filter(row => filters.driver === 'all' || row.trips > 0)
       .sort((a, b) => b.trips - a.trips);
-  }, [vehicles, loads]);
+  }, [vehicles, loads, filters.vehicle, filters.driver]);
 
   // Chart data
   const driverChartData = driverMetrics.slice(0, 10).map(d => ({
@@ -105,6 +120,14 @@ export default function ProductivityReports() {
         </h1>
         <p className="text-sm text-muted-foreground">Performance por motorista, divergências por cliente e eficiência de veículos</p>
       </div>
+
+      <ListFilterBar fields={[
+        { key: 'driver', label: 'Motorista', value: filters.driver, onChange: value => setFilter('driver', value), options: [{ value: 'all', label: 'Todos os motoristas' }, ...drivers.map(row => ({ value: row.id, label: row.name }))] },
+        { key: 'vehicle', label: 'Veículo', value: filters.vehicle, onChange: value => setFilter('vehicle', value), options: [{ value: 'all', label: 'Todos os veículos' }, ...vehicles.map(row => ({ value: row.id, label: row.plate }))] },
+        { key: 'from', label: 'Registrado de', type: 'date', value: filters.from, max: filters.to || undefined, onChange: value => setFilter('from', value) },
+        { key: 'to', label: 'Registrado até', type: 'date', value: filters.to, min: filters.from || undefined, onChange: value => setFilter('to', value) },
+      ]} onReset={resetFilters} activeCount={activeCount} resultCount={loads.length} totalCount={allLoads.length} loading={loadsLoading || eventsLoading}
+        description={`Cargas e ocorrências filtradas pela data de cadastro e vínculos próprios. ${events.length} ocorrências no recorte. Indicadores calculados sobre os registros carregados.`} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

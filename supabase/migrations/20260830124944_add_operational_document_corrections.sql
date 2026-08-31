@@ -1,0 +1,600 @@
+-- LOCAL CANDIDATE. Correct an existing attempt; never reset it into a new attempt.
+set local lock_timeout='3s';set local statement_timeout='30s';
+do $guard$
+declare c record;
+begin
+ if to_regclass('public.delivery_document_corrections') is not null then raise exception 'Correction contract already exists';end if;
+ for c in select * from(values
+  ('public._operation_document_context(uuid,uuid,uuid)','452a5166c9711d4563a97e0968e101ef'),
+  ('public._derive_driver_delivery_result(uuid,uuid)','31a4a4ec4f9a00f7bf7df2f96ede223a'),
+  ('public.driver_record_delivery_outcome(uuid,text,jsonb,uuid,text)','99890a58fb8a6fc9cf0fb025c77f5a85'),
+  ('public.record_operation_document_outcome(jsonb)','e2dc86f29af6f7829052887cf83eea01'),
+  ('public._tg_sync_obligations_from_settlement()','3237b5583548c08a92aafcd63ee09ea0')
+ ) expected(signature,hash) loop
+  if md5(replace(pg_get_functiondef(to_regprocedure(c.signature)),E'\r\n',E'\n')) is distinct from c.hash then
+   raise exception 'Correction dependency changed: %',c.signature;end if;
+ end loop;
+ if to_regclass('public.current_delivery_proofs') is null then raise exception 'Correction requires proof versioning';end if;
+end;
+$guard$;
+
+create table public.delivery_document_corrections(
+ id uuid primary key default gen_random_uuid(),tenant_id uuid not null references public.tenants(id),
+ previous_outcome_id uuid not null unique references public.delivery_document_outcomes(id),
+ corrected_outcome_id uuid not null unique references public.delivery_document_outcomes(id),
+ financial_snapshot jsonb not null,recorded_at timestamptz not null default clock_timestamp(),
+ check(previous_outcome_id<>corrected_outcome_id)
+);
+create index delivery_document_corrections_tenant_idx on public.delivery_document_corrections(tenant_id);
+alter table public.delivery_document_corrections enable row level security;
+revoke all on public.delivery_document_corrections from public,anon,authenticated,service_role;
+grant select on public.delivery_document_corrections to authenticated,service_role;
+create policy delivery_document_corrections_operator_read on public.delivery_document_corrections for select to authenticated
+ using(auth.uid() is not null and public.is_tenant_operator_or_admin(tenant_id));
+create trigger preserve_delivery_document_correction before update or delete on public.delivery_document_corrections
+ for each row execute function public._preserve_delivery_document_outcome();
+
+create function public._validate_delivery_document_correction() returns trigger
+language plpgsql security invoker set search_path='' as $fn$
+declare p public.delivery_document_outcomes%rowtype;n public.delivery_document_outcomes%rowtype;e public.dispatch_events%rowtype;
+begin
+ select * into strict p from public.delivery_document_outcomes where id=new.previous_outcome_id;
+ select * into strict n from public.delivery_document_outcomes where id=new.corrected_outcome_id;
+ select * into strict e from public.dispatch_events where id=n.event_id;
+ if p.tenant_id<>new.tenant_id or n.tenant_id<>new.tenant_id or p.dispatch_stop_document_id<>n.dispatch_stop_document_id
+  or p.fiscal_document_id<>n.fiscal_document_id or p.load_id<>n.load_id or p.dispatch_trip_id<>n.dispatch_trip_id
+  or p.dispatch_stop_id<>n.dispatch_stop_id or p.recorded_at>n.recorded_at
+  or n.source<>'operation' or n.actor_id is distinct from auth.uid() or e.created_by is distinct from auth.uid()
+  or e.tenant_id<>new.tenant_id or e.event_type<>'operation_document_correction'
+  or e.payload->>'correction_of' is distinct from p.id::text or e.payload->>'document_id' is distinct from n.fiscal_document_id::text
+  or exists(select 1 from public.delivery_document_corrections where previous_outcome_id=new.corrected_outcome_id) then
+  raise exception 'Invalid delivery correction chain' using errcode='23514';end if;
+ return new;
+end;
+$fn$;
+revoke all on function public._validate_delivery_document_correction() from public,anon,authenticated,service_role;
+create trigger validate_delivery_document_correction before insert on public.delivery_document_corrections
+ for each row execute function public._validate_delivery_document_correction();
+
+create view public.current_delivery_document_outcomes with(security_invoker=true) as
+ select h.* from public.delivery_document_outcomes h where not exists(
+  select 1 from public.delivery_document_corrections c where c.previous_outcome_id=h.id);
+revoke all on public.current_delivery_document_outcomes from public,anon,authenticated,service_role;
+
+create function public.record_operation_document_correction(_payload jsonb)
+returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare v_tenant uuid;v_load uuid;v_doc uuid;v_stop uuid;v_previous uuid;v_request uuid;v_actor uuid:=auth.uid();v_trip uuid;
+ v_outcome text;v_reason text;v_receiver text;v_time timestamptz;v_key text;v_hash text;v_context jsonb;v_result jsonb;
+ v_cache public.idempotency_keys%rowtype;v_fd public.fiscal_documents%rowtype;v_s public.dispatch_stops%rowtype;
+ v_h public.delivery_document_outcomes%rowtype;v_settlement public.driver_settlements%rowtype;
+ v_event uuid;v_history uuid;v_correction uuid;v_pod uuid;v_stop_result text;v_snapshot jsonb;
+ v_items jsonb;v_item record;v_quantity numeric;v_returned numeric:=0;v_total numeric;v_trip_row public.dispatch_trips%rowtype;
+begin
+ if jsonb_typeof(_payload) is distinct from 'object' or octet_length(_payload::text)>131072 then raise exception 'invalid_operation_correction' using errcode='22023';end if;
+ if exists(select 1 from jsonb_each(_payload) p where p.key not in('tenant_id','load_id','document_id','stop_id','request_id','occurred_at','outcome','reason','receiver_name','revision','correction_of','returned_items')
+  or (p.key<>'returned_items' and jsonb_typeof(p.value)<>'string'))
+  or coalesce(_payload->>'occurred_at','')!~*'(Z|[+-][0-9]{2}:[0-9]{2})$' then raise exception 'invalid_operation_correction' using errcode='22023';end if;
+ v_tenant:=(_payload->>'tenant_id')::uuid;v_load:=(_payload->>'load_id')::uuid;v_doc:=(_payload->>'document_id')::uuid;
+ v_stop:=(_payload->>'stop_id')::uuid;v_previous:=(_payload->>'correction_of')::uuid;v_request:=(_payload->>'request_id')::uuid;
+ v_time:=(_payload->>'occurred_at')::timestamptz;v_outcome:=_payload->>'outcome';v_reason:=btrim(_payload->>'reason');
+ v_receiver:=nullif(btrim(_payload->>'receiver_name'),'');v_items:=coalesce(_payload->'returned_items','{}'::jsonb);
+ if v_actor is null or not coalesce(public.is_tenant_operator_or_admin(v_tenant),false) then raise exception 'not_authorized' using errcode='42501';end if;
+ if v_load is null or v_doc is null or v_stop is null or v_previous is null or v_request is null or v_time is null or not isfinite(v_time)
+  or v_outcome is null or v_outcome not in('delivered','partial_delivery','returned','refused','failed','not_delivered')
+  or coalesce(length(v_reason),0)<5 or length(v_reason)>2000 or jsonb_typeof(v_items) is distinct from 'object'
+  or (v_outcome in('delivered','partial_delivery') and (coalesce(length(v_receiver),0)<2 or length(v_receiver)>160))
+  or coalesce(_payload->>'revision','')!~'^[0-9a-f]{64}$' then raise exception 'invalid_operation_correction' using errcode='22023';end if;
+ v_key:='record_operation_document_correction:'||v_actor::text||':'||v_request::text;
+ v_hash:=encode(sha256(convert_to((_payload-'request_id')::text,'UTF8')),'hex');
+ perform pg_advisory_xact_lock(hashtext('record_operation_document_correction'),hashtext(v_tenant::text||':'||v_key));
+ perform tenant_id from public.tenant_memberships where tenant_id=v_tenant and user_id=v_actor and active and role::text in('owner','admin','operator') for share nowait;
+ if not found then raise exception 'not_authorized' using errcode='42501';end if;
+ select * into v_cache from public.idempotency_keys where tenant_id=v_tenant and key_value=v_key;
+ if found then
+  if v_cache.operation is distinct from 'record_operation_document_correction' or v_cache.payload_hash is distinct from v_hash then raise exception 'operation_correction_key_mismatch' using errcode='22023';end if;
+  if v_cache.response_body->>'request_id' is distinct from v_request::text then raise exception 'operation_correction_reconciliation_required' using errcode='23514';end if;
+  return v_cache.response_body;
+ end if;
+ select trip_id into v_trip from public.loads where id=v_load and tenant_id=v_tenant;
+ if v_trip is null then raise exception 'operation_correction_requires_recorded_trip' using errcode='23514';end if;
+ select * into v_trip_row from public._lock_delivery_trip_graph(v_tenant,v_trip);
+ if v_trip_row.actual_start_at is null or v_trip_row.status is null or v_trip_row.status not in('in_transit','in_progress','completed') then
+  raise exception 'operation_correction_requires_recorded_trip' using errcode='23514';end if;
+ -- Lock the existing financial record before comparing the context revision.
+ select * into v_settlement from public.driver_settlements where tenant_id=v_tenant and dispatch_trip_id=v_trip for update nowait;
+ v_context:=public._operation_document_context(v_tenant,v_load,v_doc);
+ if v_context is null or encode(sha256(convert_to(v_context::text,'UTF8')),'hex') is distinct from _payload->>'revision' then
+  raise exception 'operation_correction_context_changed' using errcode='40001';end if;
+ select * into strict v_fd from public.fiscal_documents where id=v_doc and tenant_id=v_tenant;
+ select * into v_h from public.current_delivery_document_outcomes where id=v_previous and fiscal_document_id=v_doc and tenant_id=v_tenant
+  and load_id=v_load and dispatch_stop_id=v_stop and dispatch_trip_id=v_trip;
+ if not found or (select count(*) from public.current_delivery_document_outcomes where dispatch_stop_document_id=v_h.dispatch_stop_document_id)<>1 then
+  raise exception 'operation_correction_requires_current_outcome' using errcode='23514';end if;
+ select * into strict v_s from public.dispatch_stops where id=v_stop and tenant_id=v_tenant and dispatch_trip_id=v_trip;
+ if v_s.actual_arrival_at is null or v_time<v_s.actual_arrival_at or v_time>clock_timestamp()+interval '2 minutes'
+  or v_trip_row.actual_end_at is not null and v_time>v_trip_row.actual_end_at then raise exception 'operation_correction_invalid_time' using errcode='22023';end if;
+ perform id from public.load_items where fiscal_document_id=v_doc order by id for share nowait;
+ if not exists(select 1 from public.load_items where fiscal_document_id=v_doc and load_id=v_load and tenant_id=v_tenant)
+  or exists(select 1 from public.load_items where fiscal_document_id=v_doc and (load_id is distinct from v_load or tenant_id is distinct from v_tenant or quantity is null or quantity<=0)) then
+  raise exception 'operation_correction_invalid_items' using errcode='23514';end if;
+ for v_item in select key,value from jsonb_each(v_items) loop
+  if v_item.key!~*'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' or jsonb_typeof(v_item.value)<>'number' then
+   raise exception 'operation_correction_invalid_quantities' using errcode='22023';end if;
+  select quantity into v_quantity from public.load_items where id=v_item.key::uuid and fiscal_document_id=v_doc and tenant_id=v_tenant and load_id=v_load;
+  if not found or (v_item.value::text)::numeric<=0 or (v_item.value::text)::numeric>v_quantity then raise exception 'operation_correction_invalid_quantities' using errcode='22023';end if;
+  v_returned:=v_returned+(v_item.value::text)::numeric;
+ end loop;
+ select sum(quantity) into v_total from public.load_items where fiscal_document_id=v_doc and load_id=v_load and tenant_id=v_tenant;
+ if (v_outcome='partial_delivery' and (v_returned<=0 or v_returned>=v_total)) or (v_outcome<>'partial_delivery' and v_items<>'{}'::jsonb) then
+  raise exception 'operation_correction_invalid_quantities' using errcode='22023';end if;
+ v_snapshot:=case when v_settlement.id is null then '{}'::jsonb else jsonb_build_object('settlement',to_jsonb(v_settlement),
+  'items',coalesce((select jsonb_agg(to_jsonb(x) order by id) from public.driver_settlement_items x where settlement_id=v_settlement.id),'[]'::jsonb),
+  'payments',coalesce((select jsonb_agg(to_jsonb(x) order by id) from public.driver_settlement_payments x where settlement_id=v_settlement.id),'[]'::jsonb)) end;
+ insert into public.dispatch_events(tenant_id,dispatch_trip_id,dispatch_stop_id,event_type,notes,payload,created_by,event_at)
+  values(v_tenant,v_trip,v_stop,'operation_document_correction',v_reason,jsonb_build_object('source','operation','document_id',v_doc,
+   'correction_of',v_previous,'outcome',v_outcome,'occurred_at',v_time,'request_id',v_request,'returned_items',v_items),v_actor,clock_timestamp()) returning id into v_event;
+ perform public._retire_delivery_proof(v_tenant,v_doc,v_event);
+ if v_outcome in('delivered','partial_delivery') then
+  v_pod:=public._prepare_delivery_proof(v_tenant,v_doc,v_trip,v_stop);
+  update public.proof_of_delivery set proof_type='manual_receipt',status='pending',receiver_name=v_receiver,
+   metadata=jsonb_build_object('source','operation','manual_attestation',true,'attested_at',v_time,'event_id',v_event,'reason',v_reason,'correction_of',v_previous,'returned_items',v_items),
+   created_by=v_actor,updated_at=clock_timestamp() where id=v_pod;
+ end if;
+ update public.fiscal_documents set status=v_outcome,delivery_meta=coalesce(delivery_meta,'{}'::jsonb)||jsonb_build_object(
+  'ne',v_outcome<>'delivered','ne_reason',case when v_outcome<>'delivered' then v_reason else '' end,
+  'delivery_at',case when v_outcome in('delivered','partial_delivery') then to_jsonb(v_time) else 'null'::jsonb end,
+  'ne_at',case when v_outcome<>'delivered' then to_jsonb(v_time) else 'null'::jsonb end,
+  'correction_of',v_previous,'returned_items',v_items),updated_at=clock_timestamp() where id=v_doc;
+ v_history:=public._snapshot_delivery_document_outcome(v_event,v_doc,'operation',v_time);
+ insert into public.delivery_document_corrections(tenant_id,previous_outcome_id,corrected_outcome_id,financial_snapshot)
+  values(v_tenant,v_previous,v_history,v_snapshot) returning id into v_correction;
+ select public._delivery_result_from_statuses(array_agg(f.status)) into v_stop_result
+  from public.dispatch_stop_documents d join public.fiscal_documents f on f.id=d.fiscal_document_id where d.dispatch_stop_id=v_stop;
+ if v_stop_result is not null then update public.dispatch_stops set status=v_stop_result,updated_at=clock_timestamp() where id=v_stop;end if;
+ perform public._derive_corrected_delivery_result(v_tenant,v_trip,v_event);
+ if v_settlement.id is not null then
+  -- Metadata flag only: retain approved/paid amounts, items, payments and snapshots.
+  update public.driver_settlements set needs_recalculation=true,recalculation_reason='delivery_outcome_correction',source_updated_at=clock_timestamp() where id=v_settlement.id;
+  perform public._log_settlement_event(v_settlement.id,'delivery_outcome_corrected',v_settlement.status,v_settlement.status,v_reason,
+   jsonb_build_object('document_id',v_doc,'correction_id',v_correction,'previous_outcome_id',v_previous,'corrected_outcome_id',v_history,'financial_review_required',true));
+ end if;
+ perform public._log_entity_audit(v_tenant,'fiscal_document',v_doc,'operation_delivery_correction',to_jsonb(v_fd),
+  jsonb_build_object('status',v_outcome,'history_id',v_history,'event_id',v_event,'correction_id',v_correction),'operation_document_correction');
+ v_result:=jsonb_build_object('request_id',v_request,'tenant_id',v_tenant,'load_id',v_load,'document_id',v_doc,'stop_id',v_stop,
+  'outcome',v_outcome,'correction_of',v_previous,'correction_id',v_correction,'event_id',v_event,'history_id',v_history,'pod_id',v_pod,
+  'proof_pending',v_outcome in('delivered','partial_delivery'),'financial_review_required',v_settlement.id is not null,
+  'settlement_id',v_settlement.id,'settlement_status',v_settlement.status,
+  'stop_status',(select status from public.dispatch_stops where id=v_stop),'trip_completed',(select status='completed' from public.dispatch_trips where id=v_trip));
+ insert into public.idempotency_keys(tenant_id,key_value,operation,idempotency_key,payload_hash,result_id,response_body)
+  values(v_tenant,v_key,'record_operation_document_correction',v_request::text,v_hash,v_correction,v_result);
+ return v_result;
+exception when lock_not_available then raise exception 'operation_correction_concurrent_change' using errcode='40001';
+end;
+$fn$;
+revoke all on function public.record_operation_document_correction(jsonb) from public,anon,authenticated,service_role;
+grant execute on function public.record_operation_document_correction(jsonb) to authenticated;
+
+-- CURRENT PROJECTIONS AND CANONICAL WRITERS BELOW.
+-- Backstop against old table writers resetting a recorded result/metadata.
+-- Deferral permits the canonical transaction to append its new history first.
+create function public._guard_recorded_delivery_document() returns trigger
+-- Deferred integrity checks run after the caller RPC has returned. This private
+-- trigger needs a complete reference read even when the caller cannot read
+-- operation history under RLS. It grants no write/read API and returns no data.
+language plpgsql security definer set search_path='' as $fn$
+declare f public.fiscal_documents%rowtype;h public.delivery_document_outcomes%rowtype;k text;
+begin
+ select * into f from public.fiscal_documents where id=new.id;
+ if not found then return null;end if;
+ select * into h from public.current_delivery_document_outcomes where fiscal_document_id=f.id
+  order by recorded_at desc,id desc limit 1;
+ if not found then return null;end if;
+ if f.load_id is distinct from h.load_id or f.tenant_id is distinct from h.tenant_id then
+  raise exception 'Nota com resultado exige nova tentativa auditada antes de trocar a carga' using errcode='23514';end if;
+ if f.status is distinct from h.outcome then raise exception 'Resultado registrado exige correção auditada; nenhuma alteração foi confirmada' using errcode='23514';end if;
+ foreach k in array array['ne','ne_reason','ne_at','delivery_at','correction_of','returned_items'] loop
+  if coalesce(f.delivery_meta->k,'null'::jsonb) is distinct from coalesce(h.document_snapshot->'delivery_meta'->k,'null'::jsonb) then
+   raise exception 'Metadados do resultado exigem correção auditada; nenhuma alteração foi confirmada' using errcode='23514';end if;
+ end loop;
+ return null;
+end;
+$fn$;
+revoke all on function public._guard_recorded_delivery_document() from public,anon,authenticated,service_role;
+create constraint trigger guard_recorded_delivery_document after insert or update on public.fiscal_documents
+ deferrable initially deferred for each row execute function public._guard_recorded_delivery_document();
+
+create function public._guard_delivery_correction_finance() returns trigger
+language plpgsql security invoker set search_path='' as $fn$
+declare s public.driver_settlements%rowtype;
+begin
+ if tg_table_name='driver_settlement_payments' then
+  select * into strict s from public.driver_settlements where id=new.settlement_id for update nowait;
+  if s.needs_recalculation then raise exception 'settlement_requires_review_before_payment' using errcode='23514';end if;
+ elsif new.status is distinct from old.status and new.status in('approved','paid','closed') and old.needs_recalculation then
+  raise exception 'settlement_requires_review_before_finalization' using errcode='23514';
+ end if;
+ return new;
+end;
+$fn$;
+revoke all on function public._guard_delivery_correction_finance() from public,anon,authenticated,service_role;
+create trigger guard_delivery_correction_payment before insert on public.driver_settlement_payments
+ for each row execute function public._guard_delivery_correction_finance();
+create trigger guard_delivery_correction_finalization before update of status on public.driver_settlements
+ for each row execute function public._guard_delivery_correction_finance();
+
+create or replace function public._operation_document_context(_tenant uuid,_load uuid,_document uuid)
+returns jsonb language sql stable security invoker set search_path=''
+as $fn$
+ select jsonb_build_object('tenant_id',f.tenant_id,'load_id',l.id,'document_id',f.id,'document_status',f.status,
+  'delivery_meta',f.delivery_meta,
+  'current_outcome_id',(select h.id from public.current_delivery_document_outcomes h where h.fiscal_document_id=f.id and h.load_id=l.id order by h.recorded_at desc,h.id desc limit 1),
+  'items',coalesce((select jsonb_agg(jsonb_build_object('id',li.id,'description',li.item_description,'quantity',li.quantity) order by li.id) from public.load_items li where li.fiscal_document_id=f.id and li.load_id=l.id and li.tenant_id=_tenant),'[]'::jsonb),
+  'settlement',(select jsonb_build_object('id',s.id,'status',s.status,'needs_recalculation',s.needs_recalculation,'updated_at',s.updated_at) from public.driver_settlements s where s.dispatch_trip_id=t.id and s.tenant_id=_tenant),'trip_id',t.id,'trip_status',t.status,'actual_start_at',t.actual_start_at,
+  'stops',coalesce((select jsonb_agg(jsonb_build_object('id',s.id,'status',s.status,'destination',s.destination,
+   'actual_arrival_at',s.actual_arrival_at,'actual_departure_at',s.actual_departure_at) order by s.id)
+   from public.dispatch_stops s join public.dispatch_stop_documents d on d.dispatch_stop_id=s.id
+   where d.fiscal_document_id=f.id and d.load_id=l.id and d.tenant_id=_tenant and s.dispatch_trip_id=t.id),'[]'::jsonb),
+  'proofs',coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'status',p.status,'updated_at',p.updated_at) order by p.id)
+   from public.current_delivery_proofs p where p.fiscal_document_id=f.id and p.tenant_id=_tenant),'[]'::jsonb),
+  'history',coalesce((select jsonb_agg(jsonb_build_object('id',h.id,'source',h.source,'outcome',h.outcome,
+   'occurred_at',h.occurred_at,'recorded_at',h.recorded_at,'reason',h.reason,'is_current',not exists(select 1 from public.delivery_document_corrections c where c.previous_outcome_id=h.id),'superseded_by',(select c.corrected_outcome_id from public.delivery_document_corrections c where c.previous_outcome_id=h.id)) order by h.recorded_at,h.id)
+   from public.delivery_document_outcomes h where h.fiscal_document_id=f.id and h.tenant_id=_tenant),'[]'::jsonb))
+ from public.fiscal_documents f join public.loads l on l.id=f.load_id and l.tenant_id=f.tenant_id
+ left join public.dispatch_trips t on t.id=l.trip_id and t.tenant_id=l.tenant_id
+ where f.id=_document and f.tenant_id=_tenant and l.id=_load and f.document_type='inbound' and f.deleted_at is null;
+$fn$;
+
+
+
+create function public._derive_corrected_delivery_result(p_tenant_id uuid,p_trip_id uuid,_event uuid)
+returns void language plpgsql security invoker set search_path = ''
+as $fn$
+declare v_trip public.dispatch_trips%rowtype; v_load public.loads%rowtype; v_count integer;
+  v_statuses text[]; v_result text; v_all_terminal boolean; v_missing boolean := false;
+begin
+  if not exists(select 1 from public.dispatch_events e join public.delivery_document_outcomes h on h.event_id=e.id
+    join public.delivery_document_corrections c on c.corrected_outcome_id=h.id
+    where e.id=_event and e.tenant_id=p_tenant_id and e.dispatch_trip_id=p_trip_id
+     and e.event_type='operation_document_correction' and e.created_by=auth.uid()) then
+    raise exception 'Invalid correction aggregate event' using errcode='42501';end if;
+  select * into v_trip from public._lock_delivery_trip_graph(p_tenant_id,p_trip_id);
+  if v_trip.actual_start_at is null or v_trip.status is null or v_trip.status not in('in_transit','in_progress','completed') then
+    raise exception 'Viagem sem início válido para concluir entregas' using errcode='23514';
+  end if;
+  select count(*) into v_count from public.dispatch_trip_loads where dispatch_trip_id=p_trip_id and tenant_id=p_tenant_id;
+  select coalesce(bool_and(coalesce(status in('completed','delivered','cancelled','skipped','refused','returned','partial_delivery','failed'),false)),false)
+    into v_all_terminal from public.dispatch_stops where dispatch_trip_id=p_trip_id and tenant_id=p_tenant_id;
+  if v_count=0 then raise exception 'Viagem sem cargas vinculadas' using errcode='23514'; end if;
+  -- A single-load trip unambiguously owns its stops. Shared trips require explicit document allocations.
+  if v_count>1 and v_all_terminal and exists(select 1 from public.dispatch_stops s
+    where s.dispatch_trip_id=p_trip_id and not exists(select 1 from public.dispatch_stop_documents d
+      join public.fiscal_documents f on f.id=d.fiscal_document_id
+      where d.dispatch_stop_id=s.id and coalesce(d.load_id,f.load_id) is not null)) then
+    raise exception 'Parada sem carga identificada; revise os vínculos antes de concluir' using errcode='23514';
+  end if;
+  for v_load in select l.* from public.loads l join public.dispatch_trip_loads tl on tl.load_id=l.id
+    where tl.dispatch_trip_id=p_trip_id and tl.tenant_id=p_tenant_id order by l.id loop
+    -- A partial stop can fully deliver one document/load and return another.
+    -- Use document outcomes for that stop, not its aggregate label for every load.
+    select array_agg(case when s.status='partial_delivery' then (
+      select public._delivery_result_from_statuses(array_agg(f.status))
+      from public.dispatch_stop_documents d join public.fiscal_documents f on f.id=d.fiscal_document_id
+      where d.dispatch_stop_id=s.id and d.tenant_id=p_tenant_id
+        and (v_count=1 or coalesce(d.load_id,f.load_id)=v_load.id)
+    ) else s.status end) into v_statuses from public.dispatch_stops s
+    where s.dispatch_trip_id=p_trip_id and s.tenant_id=p_tenant_id and (v_count=1 or exists(
+      select 1 from public.dispatch_stop_documents d join public.fiscal_documents f on f.id=d.fiscal_document_id
+      where d.dispatch_stop_id=s.id and d.tenant_id=p_tenant_id and coalesce(d.load_id,f.load_id)=v_load.id));
+    v_result := public._delivery_result_from_statuses(v_statuses);
+    if coalesce(cardinality(v_statuses),0)=0 or (v_all_terminal and v_result is null) then v_missing:=true; end if;
+    if v_result is not null and v_load.status is distinct from v_result then
+      update public.loads set status=v_result,updated_at=clock_timestamp() where id=v_load.id and tenant_id=p_tenant_id;
+      perform public._log_entity_audit(p_tenant_id,'load',v_load.id,'status_change',
+        jsonb_build_object('status',v_load.status),jsonb_build_object('status',v_result,'trip_id',p_trip_id),'operation_document_correction');
+    end if;
+  end loop;
+  if v_all_terminal then
+    if v_missing then raise exception 'Carga sem parada identificada; revise os vínculos antes de concluir' using errcode='23514'; end if;
+    if v_trip.actual_start_at is null then raise exception 'Viagem sem início registrado' using errcode='23514'; end if;
+    update public.dispatch_trips set status='completed',actual_end_at=coalesce(actual_end_at,clock_timestamp()),updated_at=clock_timestamp()
+      where id=p_trip_id and tenant_id=p_tenant_id and status<>'completed';
+  end if;
+end;
+$fn$;
+
+revoke all on function public._derive_corrected_delivery_result(uuid,uuid,uuid) from public,anon,authenticated,service_role;
+
+
+create or replace function public.driver_record_delivery_outcome(
+  _stop_id uuid,_outcome text,_details jsonb default '{}'::jsonb,
+  _client_event_id uuid default null,_expected_status text default null
+)
+returns jsonb language plpgsql security definer set search_path = ''
+as $fn$
+declare
+  v_stop public.dispatch_stops%rowtype; v_trip public.dispatch_trips%rowtype;
+  v_existing public.dispatch_events%rowtype; v_event uuid; v_occurrence uuid; v_pod uuid;
+  v_pods uuid[] := array[]::uuid[]; v_docs uuid[]; v_loads uuid[];
+  v_details jsonb; v_request jsonb; v_result jsonb; v_photos jsonb; v_items jsonb;
+  v_notes text; v_receiver text; v_signature text; v_path text; v_prefix text;
+  v_fd record; v_item record; v_quantity numeric; v_returned numeric := 0; v_total numeric;
+  v_doc_total numeric; v_doc_returned numeric; v_doc_outcome text; v_single_load uuid;
+  v_preserved uuid[]:=array[]::uuid[];v_applied uuid[]:=array[]::uuid[];v_stop_outcome text;
+begin
+  select * into v_stop from public._lock_driver_delivery_stop(_stop_id);
+  select * into v_trip from public.dispatch_trips where id=v_stop.dispatch_trip_id;
+  if _outcome is null or _outcome not in('delivered','partial_delivery','returned','refused','failed','skipped','cancelled') then
+    raise exception 'Resultado de entrega inválido' using errcode='22023'; end if;
+  if _details is null or jsonb_typeof(_details)<>'object' or octet_length(_details::text)>131072 then
+    raise exception 'Dados de entrega inválidos' using errcode='22023'; end if;
+  if exists(select 1 from jsonb_each(_details) x where x.key in('notes','return_reason','receiver_name','receiver_document','receiver_role','signature_path','event_label')
+    and jsonb_typeof(x.value) not in('string','null')) then
+    raise exception 'Campo de texto inválido' using errcode='22023'; end if;
+  v_notes:=coalesce(nullif(btrim(_details->>'notes'),''),nullif(btrim(_details->>'return_reason'),''));
+  v_receiver:=nullif(btrim(coalesce(_details->>'receiver_name','')),'');
+  v_signature:=nullif(btrim(coalesce(_details->>'signature_path','')),'');
+  v_photos:=coalesce(_details->'photo_paths','[]'::jsonb);
+  v_items:=coalesce(_details->'returned_items','{}'::jsonb);
+  if jsonb_typeof(v_photos)<>'array' or jsonb_array_length(v_photos)>5 or jsonb_typeof(v_items)<>'object'
+    or length(coalesce(v_notes,''))>2000 or length(coalesce(v_receiver,''))>160
+    or length(coalesce(_details->>'receiver_document',''))>80 or length(coalesce(_details->>'receiver_role',''))>80 then
+    raise exception 'Dados de entrega inválidos' using errcode='22023'; end if;
+  v_details:=_details || jsonb_build_object('notes',v_notes,'receiver_name',v_receiver,'signature_path',v_signature,
+    'photo_paths',v_photos,'returned_items',v_items);
+  v_request:=jsonb_build_object('outcome',_outcome,'details',v_details);
+  -- Resolve a lost response before checking files again: a committed result is immutable.
+  select * into v_existing from public.dispatch_events
+    where tenant_id=v_stop.tenant_id and created_by=auth.uid()
+      and event_type in('delivery_note','delivery_delivered','stop_partial_delivery','stop_returned','stop_refused','stop_failed','stop_skipped','stop_cancelled')
+      and ((_client_event_id is not null and payload->>'client_event_id'=_client_event_id::text)
+        or (_client_event_id is null and dispatch_stop_id=_stop_id and payload->'delivery_request'=v_request))
+      and payload ? 'delivery_result' order by event_at desc,created_at desc,id desc limit 1;
+  if found then
+    if v_existing.dispatch_stop_id<>_stop_id or v_existing.payload->'delivery_request' is distinct from v_request then
+      raise exception 'Identificador reutilizado para outra entrega' using errcode='23505'; end if;
+    return (v_existing.payload->'delivery_result') || jsonb_build_object('replayed',true);
+  end if;
+  if _expected_status is not null and _expected_status is distinct from v_stop.status then
+    raise exception 'A parada mudou. Atualize antes de confirmar.' using errcode='40001'; end if;
+  if v_stop.status is null or v_stop.status=any(public.stop_terminal_statuses()) or v_trip.status='completed' then
+    raise exception 'Parada já finalizada; solicite revisão à operação' using errcode='23514'; end if;
+  if _outcome not in('skipped','cancelled') and v_stop.actual_arrival_at is null then
+    raise exception 'Registre a chegada antes de informar o resultado' using errcode='23514'; end if;
+  if _outcome<>'delivered' and length(coalesce(v_notes,''))<3 then
+    raise exception 'Informe o motivo do resultado da entrega' using errcode='22023'; end if;
+  if _outcome in('delivered','partial_delivery') and length(coalesce(v_receiver,''))<2 then
+    raise exception 'Informe o recebedor' using errcode='22023'; end if;
+  if _outcome in('delivered','partial_delivery') and (v_signature is null or jsonb_array_length(v_photos)=0) then
+    raise exception 'Foto e assinatura são obrigatórias para comprovar a entrega' using errcode='22023'; end if;
+  v_prefix:=v_stop.tenant_id::text || '/deliveries/' || v_trip.id::text || '/' || _stop_id::text || '/';
+  if exists(select 1 from jsonb_array_elements(v_photos) p where jsonb_typeof(p)<>'string') then
+    raise exception 'Caminho de foto inválido' using errcode='22023'; end if;
+  for v_path in select value from jsonb_array_elements_text(v_photos) union all select v_signature where v_signature is not null loop
+    if v_path is null or length(v_path)>500 or position('..' in v_path)>0 or left(v_path,length(v_prefix))<>v_prefix
+      or not exists(select 1 from storage.objects where bucket_id='receipts' and name=v_path) then
+      raise exception 'Comprovante inexistente ou fora desta entrega' using errcode='42501'; end if;
+  end loop;
+  -- Lock quantities in stable order before validating item-level outcomes.
+  perform li.id from public.load_items li where exists(select 1 from public.dispatch_stop_documents d
+    where d.dispatch_stop_id=_stop_id and d.fiscal_document_id=li.fiscal_document_id) order by li.id for share;
+  if exists(select 1 from public.load_items li join public.fiscal_documents f on f.id=li.fiscal_document_id
+    join public.dispatch_stop_documents d on d.fiscal_document_id=f.id where d.dispatch_stop_id=_stop_id
+    and (li.tenant_id is distinct from v_stop.tenant_id or (li.load_id is not null and coalesce(d.load_id,f.load_id) is not null
+      and li.load_id<>coalesce(d.load_id,f.load_id)))) then
+    raise exception 'Itens fora do vínculo de carga da parada' using errcode='23514'; end if;
+  -- History is immutable. A legacy current-status edit cannot silently become
+  -- a second attempt or change the meaning of an already recorded outcome.
+  if exists(select 1 from public.current_delivery_document_outcomes h
+    join public.fiscal_documents f on f.id=h.fiscal_document_id
+    where h.dispatch_stop_id=_stop_id and (h.tenant_id is distinct from v_stop.tenant_id or h.outcome is distinct from f.status)) then
+    raise exception 'Histórico da nota diverge do estado atual; solicite revisão à operação' using errcode='23514';end if;
+  select coalesce(array_agg(distinct f.id),array[]::uuid[]) into v_preserved
+    from public.dispatch_stop_documents d join public.fiscal_documents f on f.id=d.fiscal_document_id
+    where d.dispatch_stop_id=_stop_id and d.tenant_id=v_stop.tenant_id
+      and f.status in('delivered','returned','refused','partial_delivery','failed','cancelled','not_delivered')
+      and exists(select 1 from public.current_delivery_document_outcomes h where h.dispatch_stop_id=_stop_id
+        and h.fiscal_document_id=f.id and h.tenant_id=v_stop.tenant_id and h.outcome=f.status);
+  if exists(select 1 from jsonb_object_keys(v_items) k join public.load_items li on li.id::text=k
+    join public.current_delivery_document_outcomes h on h.fiscal_document_id=li.fiscal_document_id
+    where h.dispatch_stop_id=_stop_id) then
+    raise exception 'Itens com resultado já registrado não podem ser devolvidos novamente' using errcode='23514';end if;
+  for v_item in select key,value from jsonb_each(v_items) loop
+    if v_item.key !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      or jsonb_typeof(v_item.value)<>'number' then raise exception 'Item devolvido inválido' using errcode='22023'; end if;
+    select li.quantity into v_quantity from public.load_items li
+      where li.id=v_item.key::uuid and li.tenant_id=v_stop.tenant_id and exists(select 1 from public.dispatch_stop_documents d
+        where d.dispatch_stop_id=_stop_id and d.tenant_id=v_stop.tenant_id and d.fiscal_document_id=li.fiscal_document_id) for share;
+    if not found or v_quantity is null or (v_item.value::text)::numeric<=0 or (v_item.value::text)::numeric>v_quantity then
+      raise exception 'Quantidade devolvida fora dos itens desta parada' using errcode='22023'; end if;
+    v_returned:=v_returned+(v_item.value::text)::numeric;
+  end loop;
+  if _outcome in('delivered','failed','skipped','cancelled') and v_returned>0 then
+    raise exception 'Resultado incompatível com itens devolvidos' using errcode='22023'; end if;
+  if _outcome='partial_delivery' then
+    select sum(li.quantity) into v_total from public.load_items li where li.tenant_id=v_stop.tenant_id
+      and not(li.fiscal_document_id=any(v_preserved)) and exists(
+      select 1 from public.dispatch_stop_documents d where d.dispatch_stop_id=_stop_id and d.fiscal_document_id=li.fiscal_document_id and d.tenant_id=v_stop.tenant_id);
+    if v_returned<=0 or v_total is null or v_returned>=v_total then
+      raise exception 'Entrega parcial exige quantidade devolvida menor que o total' using errcode='22023'; end if;
+  end if;
+  if _outcome in('returned','refused') and v_returned>0 then
+    if exists(select 1 from public.load_items li where not(li.fiscal_document_id=any(v_preserved)) and exists(select 1 from public.dispatch_stop_documents d
+      where d.dispatch_stop_id=_stop_id and d.fiscal_document_id=li.fiscal_document_id)
+      and (li.quantity is null or li.quantity<=0 or coalesce((v_items->>li.id::text)::numeric,0)<>li.quantity)) then
+      raise exception 'Devolução total exige todos os itens, ou apenas o motivo quando não detalhados' using errcode='22023'; end if;
+  end if;
+  select case when count(*)=1 then (array_agg(load_id))[1] end into v_single_load
+    from public.dispatch_trip_loads where dispatch_trip_id=v_trip.id and tenant_id=v_stop.tenant_id;
+  select array_agg(distinct fiscal_document_id) into v_docs from public.dispatch_stop_documents
+    where dispatch_stop_id=_stop_id and tenant_id=v_stop.tenant_id;
+  select array_agg(distinct coalesce(d.load_id,f.load_id,v_single_load)) filter(where coalesce(d.load_id,f.load_id,v_single_load) is not null)
+    into v_loads from public.dispatch_stop_documents d join public.fiscal_documents f on f.id=d.fiscal_document_id
+    where d.dispatch_stop_id=_stop_id and d.tenant_id=v_stop.tenant_id;
+  if v_loads is null and v_single_load is not null then v_loads:=array[v_single_load]; end if;
+  -- Route the operational message before trip closure; the occurrence API requires an active trip.
+  v_occurrence:=public.driver_create_operational_occurrence(v_trip.id,_outcome,
+    coalesce(v_notes,'Entrega concluída por ' || v_receiver),case when _outcome='delivered' then 'low' else 'medium' end,_stop_id,null);
+  update public.operational_events set
+    load_id=case when cardinality(v_loads)=1 then v_loads[1] else null end,
+    report_details=v_details || jsonb_build_object('label',coalesce(_details->>'event_label',_outcome),
+      'has_photo',jsonb_array_length(v_photos)>0,'has_signature',v_signature is not null,'stop_name',v_stop.destination),
+    payload=payload || jsonb_build_object('delivery_outcome',_outcome,'document_ids',coalesce(to_jsonb(v_docs),'[]'::jsonb),
+      'load_ids',coalesce(to_jsonb(v_loads),'[]'::jsonb))
+    where id=v_occurrence and tenant_id=v_stop.tenant_id;
+  insert into public.dispatch_events(tenant_id,dispatch_trip_id,dispatch_stop_id,event_type,notes,payload,created_by,event_at)
+    values(v_stop.tenant_id,v_trip.id,_stop_id,case when _outcome='delivered' then 'delivery_delivered' else 'stop_'||_outcome end,
+      v_notes,v_details || jsonb_build_object('source','driver_app','client_event_id',_client_event_id,'delivery_request',v_request,'operational_event_id',v_occurrence),
+      auth.uid(),clock_timestamp()) returning id into v_event;
+  for v_fd in select f.id,coalesce(d.load_id,f.load_id,v_single_load) load_id,f.status from public.dispatch_stop_documents d
+    join public.fiscal_documents f on f.id=d.fiscal_document_id
+    where d.dispatch_stop_id=_stop_id and d.tenant_id=v_stop.tenant_id order by f.id loop
+    -- Operation can confirm notes individually. Preserve those canonical results
+    -- and proofs while the driver confirms only the remaining cargo.
+    if v_fd.id=any(v_preserved) then continue;end if;
+    v_doc_outcome:=case when _outcome='skipped' then 'not_delivered' else _outcome end;
+    if _outcome='partial_delivery' then
+      select sum(li.quantity),sum(coalesce((v_items->>li.id::text)::numeric,0)) into v_doc_total,v_doc_returned
+        from public.load_items li where li.fiscal_document_id=v_fd.id and li.tenant_id=v_stop.tenant_id;
+      if v_doc_total is null or v_doc_total<=0 or exists(select 1 from public.load_items
+        where fiscal_document_id=v_fd.id and (quantity is null or quantity<=0)) then
+        raise exception 'Documento sem quantidades confiáveis para entrega parcial' using errcode='23514'; end if;
+      v_doc_outcome:=case when v_doc_returned=0 then 'delivered' when v_doc_returned=v_doc_total then 'returned' else 'partial_delivery' end;
+    end if;
+    if v_fd.status in('delivered','returned','refused','partial_delivery','failed','cancelled','not_delivered') and v_fd.status<>v_doc_outcome then
+      raise exception 'Documento possui resultado final divergente' using errcode='23514'; end if;
+    if v_doc_outcome in('delivered','partial_delivery') then
+      v_pod:=public._prepare_delivery_proof(v_stop.tenant_id,v_fd.id,v_trip.id,_stop_id);
+      update public.proof_of_delivery set load_id=v_fd.load_id,dispatch_trip_id=v_trip.id,dispatch_stop_id=_stop_id,
+       proof_type='receiver_confirmation',status='uploaded',storage_bucket='receipts',storage_path=v_signature,
+       receiver_name=v_receiver,receiver_document=nullif(btrim(_details->>'receiver_document'),''),
+       receiver_role=nullif(btrim(_details->>'receiver_role'),''),received_at=clock_timestamp(),
+       metadata=jsonb_build_object('photo_paths',v_photos,'signature_path',v_signature,'event_id',v_event,'outcome',v_doc_outcome),
+       created_by=auth.uid(),updated_at=clock_timestamp() where id=v_pod;
+      v_pods:=array_append(v_pods,v_pod);
+    end if;
+    v_applied:=array_append(v_applied,v_fd.id);
+    update public.fiscal_documents set status=v_doc_outcome,
+      updated_at=clock_timestamp() where id=v_fd.id and tenant_id=v_stop.tenant_id;
+    perform public._log_entity_audit(v_stop.tenant_id,'fiscal_document',v_fd.id,'status_change_by_driver',
+      jsonb_build_object('status',v_fd.status),jsonb_build_object('status',v_doc_outcome,'stop_id',_stop_id),'delivery_outcome');
+  end loop;
+  v_stop_outcome:=_outcome;
+  if cardinality(v_preserved)>0 then
+    select public._delivery_result_from_statuses(array_agg(case when f.status='not_delivered' then 'failed' else f.status end))
+      into v_stop_outcome from public.dispatch_stop_documents d join public.fiscal_documents f on f.id=d.fiscal_document_id
+      where d.dispatch_stop_id=_stop_id;
+    if v_stop_outcome is null then raise exception 'Parada ainda possui notas sem resultado' using errcode='23514';end if;
+    update public.operational_events set payload=payload||jsonb_build_object('delivery_outcome',v_stop_outcome,
+      'preserved_document_ids',to_jsonb(v_preserved),'applied_document_ids',to_jsonb(v_applied)) where id=v_occurrence;
+  end if;
+  update public.dispatch_stops set status=v_stop_outcome,notes=coalesce(v_notes,notes),
+    actual_departure_at=case when actual_arrival_at is not null then coalesce(actual_departure_at,clock_timestamp()) else actual_departure_at end,
+    updated_at=clock_timestamp() where id=_stop_id and tenant_id=v_stop.tenant_id;
+  perform public._log_entity_audit(v_stop.tenant_id,'dispatch_stop',_stop_id,'status_change',
+    jsonb_build_object('status',v_stop.status),jsonb_build_object('status',v_stop_outcome,'event_id',v_event),'delivery_outcome');
+  perform public._derive_driver_delivery_result(v_stop.tenant_id,v_trip.id);
+  v_result:=jsonb_build_object('event_id',v_event,'operational_event_id',v_occurrence,'pod_ids',to_jsonb(v_pods),
+    'updated_stop_id',_stop_id,'updated_document_ids',coalesce(to_jsonb(v_docs),'[]'::jsonb),
+    'updated_load_ids',coalesce(to_jsonb(v_loads),'[]'::jsonb),
+    'preserved_document_ids',to_jsonb(v_preserved),'applied_document_ids',to_jsonb(v_applied),'stop_outcome',v_stop_outcome,
+    'trip_completed',(select status='completed' from public.dispatch_trips where id=v_trip.id),'replayed',false);
+  update public.dispatch_events set event_type=case when v_stop_outcome='delivered' then 'delivery_delivered' else 'stop_'||v_stop_outcome end,
+    payload=payload || jsonb_build_object('delivery_result',v_result,'actual_stop_outcome',v_stop_outcome) where id=v_event;
+  return v_result;
+end;
+$fn$;
+
+
+
+create or replace function public.record_operation_document_outcome(_payload jsonb)
+returns jsonb language plpgsql security definer set search_path=''
+as $fn$
+declare v_tenant uuid;v_load uuid;v_doc uuid;v_stop uuid;v_request uuid;v_actor uuid:=auth.uid();v_trip uuid;
+ v_outcome text;v_reason text;v_receiver text;v_time timestamptz;v_key text;v_hash text;v_context jsonb;v_result jsonb;
+ v_cache public.idempotency_keys%rowtype;v_fd public.fiscal_documents%rowtype;v_s public.dispatch_stops%rowtype;
+ v_event uuid;v_history uuid;v_pod uuid;v_stop_result text;
+begin
+ if _payload ? 'correction_of' or _payload ? 'returned_items' then raise exception 'operation_outcome_requires_correction_api' using errcode='22023';end if;
+ if jsonb_typeof(_payload) is distinct from 'object' or octet_length(_payload::text)>16384 then raise exception 'invalid_operation_outcome' using errcode='22023';end if;
+ if exists(select 1 from jsonb_each(_payload) p where p.key in('tenant_id','load_id','document_id','stop_id','request_id','occurred_at','outcome','reason','receiver_name','revision')
+  and jsonb_typeof(p.value)<>'string') or coalesce(_payload->>'occurred_at','')!~*'(Z|[+-][0-9]{2}:[0-9]{2})$' then
+  raise exception 'invalid_operation_outcome' using errcode='22023';end if;
+ v_tenant:=(_payload->>'tenant_id')::uuid;v_load:=(_payload->>'load_id')::uuid;v_doc:=(_payload->>'document_id')::uuid;
+ v_stop:=(_payload->>'stop_id')::uuid;v_request:=(_payload->>'request_id')::uuid;v_time:=(_payload->>'occurred_at')::timestamptz;
+ v_outcome:=_payload->>'outcome';v_reason:=btrim(_payload->>'reason');v_receiver:=nullif(btrim(_payload->>'receiver_name'),'');
+ if v_actor is null or not coalesce(public.is_tenant_operator_or_admin(v_tenant),false) then raise exception 'not_authorized' using errcode='42501';end if;
+ if v_load is null or v_doc is null or v_stop is null or v_request is null or v_time is null or not isfinite(v_time)
+  or v_outcome is null or v_outcome not in('delivered','returned','refused','failed','not_delivered')
+  or coalesce(length(v_reason),0)<5 or length(v_reason)>2000
+  or (v_outcome='delivered' and (coalesce(length(v_receiver),0)<2 or length(v_receiver)>160))
+  or coalesce(_payload->>'revision','')!~'^[0-9a-f]{64}$' then raise exception 'invalid_operation_outcome' using errcode='22023';end if;
+ v_key:='record_operation_document_outcome:'||v_actor::text||':'||v_request::text;
+ v_hash:=encode(sha256(convert_to((_payload-'request_id')::text,'UTF8')),'hex');
+ perform pg_advisory_xact_lock(hashtext('record_operation_document_outcome'),hashtext(v_tenant::text||':'||v_key));
+ perform tenant_id from public.tenant_memberships where tenant_id=v_tenant and user_id=v_actor and active and role::text in('owner','admin','operator') for share nowait;
+ if not found then raise exception 'not_authorized' using errcode='42501';end if;
+ select * into v_cache from public.idempotency_keys where tenant_id=v_tenant and key_value=v_key;
+ if found then
+  if v_cache.operation is distinct from 'record_operation_document_outcome' or v_cache.payload_hash is distinct from v_hash then raise exception 'operation_outcome_key_mismatch' using errcode='22023';end if;
+  if v_cache.response_body->>'request_id' is distinct from v_request::text then raise exception 'operation_outcome_reconciliation_required' using errcode='23514';end if;
+  return v_cache.response_body;
+ end if;
+ select trip_id into v_trip from public.loads where id=v_load and tenant_id=v_tenant;
+ if v_trip is null then raise exception 'operation_outcome_requires_started_trip' using errcode='23514';end if;
+ perform public._lock_delivery_trip_graph(v_tenant,v_trip);
+ if not exists(select 1 from public.dispatch_trips where id=v_trip and actual_start_at is not null and status in('in_transit','in_progress')) then
+  raise exception 'operation_outcome_requires_started_trip' using errcode='23514';end if;
+ v_context:=public._operation_document_context(v_tenant,v_load,v_doc);
+ if v_context is null or encode(sha256(convert_to(v_context::text,'UTF8')),'hex') is distinct from _payload->>'revision' then
+  raise exception 'operation_outcome_context_changed' using errcode='40001';end if;
+ select * into strict v_fd from public.fiscal_documents where id=v_doc and tenant_id=v_tenant;
+ select * into v_s from public.dispatch_stops where id=v_stop and dispatch_trip_id=v_trip and tenant_id=v_tenant;
+ if not found or not exists(select 1 from public.dispatch_stop_documents where dispatch_stop_id=v_stop and fiscal_document_id=v_doc and load_id=v_load and tenant_id=v_tenant) then
+  raise exception 'operation_outcome_invalid_stop' using errcode='23514';end if;
+ if v_s.actual_arrival_at is null or v_s.status is null or v_s.status=any(public.stop_terminal_statuses()) then
+  raise exception 'operation_outcome_requires_arrival' using errcode='23514';end if;
+ if v_time<v_s.actual_arrival_at or v_time>clock_timestamp()+interval '2 minutes' then raise exception 'operation_outcome_invalid_time' using errcode='22023';end if;
+ if v_fd.status in('delivered','partial_delivery','returned','refused','failed','cancelled','not_delivered') or exists(select 1 from public.current_delivery_document_outcomes h where h.fiscal_document_id=v_doc and h.dispatch_stop_id=v_stop) then
+  raise exception 'operation_outcome_requires_correction' using errcode='23514';end if;
+ perform id from public.load_items where fiscal_document_id=v_doc order by id for share nowait;
+ if not exists(select 1 from public.load_items where fiscal_document_id=v_doc and load_id=v_load and tenant_id=v_tenant)
+  or exists(select 1 from public.load_items where fiscal_document_id=v_doc and (load_id<>v_load or tenant_id<>v_tenant)) then
+  raise exception 'operation_outcome_invalid_items' using errcode='23514';end if;
+ perform id from public.proof_of_delivery where fiscal_document_id=v_doc order by id for update nowait;
+ if exists(select 1 from public.proof_of_delivery where fiscal_document_id=v_doc and (tenant_id<>v_tenant or (is_active and (status not in('pending','missing')
+  or storage_path is not null or photo_url is not null or signature_url is not null or received_at is not null or metadata<>'{}'::jsonb
+  or dispatch_stop_id is not null and dispatch_stop_id<>v_stop or dispatch_trip_id is not null and dispatch_trip_id<>v_trip)))) then
+  raise exception 'operation_outcome_proof_requires_review' using errcode='23514';end if;
+ insert into public.dispatch_events(tenant_id,dispatch_trip_id,dispatch_stop_id,event_type,notes,payload,created_by,event_at)
+  values(v_tenant,v_trip,v_stop,'operation_document_outcome',v_reason,jsonb_build_object('source','operation','document_id',v_doc,
+   'outcome',v_outcome,'occurred_at',v_time,'request_id',v_request,'manual_attestation',true),v_actor,clock_timestamp()) returning id into v_event;
+ if v_outcome='delivered' then
+  v_pod:=public._prepare_delivery_proof(v_tenant,v_doc,v_trip,v_stop);
+  update public.proof_of_delivery set load_id=v_load,dispatch_trip_id=v_trip,dispatch_stop_id=v_stop,
+   proof_type='manual_receipt',status='pending',receiver_name=v_receiver,
+   metadata=jsonb_build_object('source','operation','manual_attestation',true,'attested_at',v_time,'event_id',v_event,'reason',v_reason),
+   created_by=v_actor,updated_at=clock_timestamp() where id=v_pod;
+ end if;
+ update public.fiscal_documents set status=v_outcome,delivery_meta=coalesce(delivery_meta,'{}'::jsonb)||jsonb_build_object(
+  'ne',v_outcome<>'delivered','ne_reason',case when v_outcome<>'delivered' then v_reason else '' end,
+  'delivery_at',case when v_outcome='delivered' then to_jsonb(v_time) else 'null'::jsonb end,
+  'ne_at',case when v_outcome<>'delivered' then to_jsonb(v_time) else 'null'::jsonb end),updated_at=clock_timestamp() where id=v_doc;
+ v_history:=public._snapshot_delivery_document_outcome(v_event,v_doc,'operation',v_time);
+ perform public._log_entity_audit(v_tenant,'fiscal_document',v_doc,'operation_delivery_outcome',to_jsonb(v_fd),
+  jsonb_build_object('status',v_outcome,'history_id',v_history,'event_id',v_event),'operation_document_outcome');
+ select public._delivery_result_from_statuses(array_agg(case when f.status='not_delivered' then 'failed' else f.status end)) into v_stop_result
+  from public.dispatch_stop_documents d join public.fiscal_documents f on f.id=d.fiscal_document_id where d.dispatch_stop_id=v_stop;
+ if v_stop_result is not null then
+  update public.dispatch_stops set status=v_stop_result,updated_at=clock_timestamp() where id=v_stop;
+  -- Do not invent a departure time: document confirmation is not physical departure.
+  perform public._derive_driver_delivery_result(v_tenant,v_trip);
+ end if;
+ v_result:=jsonb_build_object('request_id',v_request,'tenant_id',v_tenant,'load_id',v_load,'document_id',v_doc,'stop_id',v_stop,
+  'outcome',v_outcome,'event_id',v_event,'history_id',v_history,'pod_id',v_pod,'proof_pending',v_outcome='delivered',
+  'stop_status',(select status from public.dispatch_stops where id=v_stop),'trip_completed',(select status='completed' from public.dispatch_trips where id=v_trip));
+ insert into public.idempotency_keys(tenant_id,key_value,operation,idempotency_key,payload_hash,result_id,response_body)
+  values(v_tenant,v_key,'record_operation_document_outcome',v_request::text,v_hash,v_history,v_result);
+ return v_result;
+exception when lock_not_available then raise exception 'operation_outcome_concurrent_change' using errcode='40001';
+end;
+$fn$;

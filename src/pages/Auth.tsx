@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from '@/components/ui/sonner';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { Truck, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -61,6 +61,7 @@ export default function Auth() {
 }
 
 function LoginForm({ loading, setLoading }: { loading: boolean; setLoading: (v: boolean) => void }) {
+  const toast = useSonnerToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 

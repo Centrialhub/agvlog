@@ -1,3 +1,6 @@
+import { ListFilterBar } from '@/components/ui/list-filter-bar';
+import { useListFilters } from '@/hooks/useListFilters';
+import { matchesSearch } from '@/lib/listFilters';
 import { useState, useMemo } from 'react';
 import { useMaintenanceOrders, useCreateMaintenanceOrder, useUpdateMaintenanceOrder, MaintenanceOrder, MAINT_TYPES, MAINT_TYPE_LABELS, MAINT_STATUSES, MAINT_STATUS_LABELS } from '@/hooks/useMaintenanceOrders';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -11,18 +14,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, Wrench, Edit } from 'lucide-react';
-import { toast } from '@/components/ui/sonner';
+import { Plus, Wrench, Edit } from 'lucide-react';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { getErrorMessage } from '@/lib/errors';
 
 export default function MaintenanceOrdersPage() {
+  const toast = useSonnerToast();
   const { data: orders = [], isLoading } = useMaintenanceOrders();
   const { data: vehicles = [] } = useVehicles();
   const { data: employees = [] } = useEmployees();
   const createOrder = useCreateMaintenanceOrder();
   const updateOrder = useUpdateMaintenanceOrder();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', type: 'all', priority: 'all' });
+  const { search, status: statusFilter } = filters;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<MaintenanceOrder | undefined>();
 
@@ -33,15 +37,12 @@ export default function MaintenanceOrdersPage() {
     services_performed: '', notes: '', status: 'open' as string,
   });
 
-  const filtered = useMemo(() => {
-    let list = orders;
-    if (statusFilter !== 'all') list = list.filter(o => o.status === statusFilter);
-    if (search) {
-      const s = search.toLowerCase();
-      list = list.filter(o => o.order_number.toLowerCase().includes(s) || o.reported_problem?.toLowerCase().includes(s) || o.vehicles?.plate?.toLowerCase().includes(s));
-    }
-    return list;
-  }, [orders, search, statusFilter]);
+  const filtered = useMemo(() => orders.filter(order =>
+    matchesSearch(search, order.order_number, order.reported_problem, order.vehicles?.plate, order.supplier_vendor) &&
+    (statusFilter === 'all' || order.status === statusFilter) &&
+    (filters.type === 'all' || order.maintenance_type === filters.type) &&
+    (filters.priority === 'all' || order.priority === filters.priority)
+  ), [orders, search, statusFilter, filters.type, filters.priority]);
 
   const openCreate = () => {
     setEditing(undefined);
@@ -114,12 +115,12 @@ export default function MaintenanceOrdersPage() {
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Horas Parado</p><p className="text-lg font-bold">{kpis.downtime.toFixed(1)}h</p></CardContent></Card>
       </div>
 
-      <div className="flex gap-2">
-        <div className="relative flex-1 max-w-xs"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8 h-9" placeholder="Buscar OS, placa..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">Todos Status</SelectItem>{MAINT_STATUSES.map(s => <SelectItem key={s} value={s}>{MAINT_STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
+      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={orders.length} loading={isLoading} description="Os indicadores acima mostram todas as ordens." fields={[
+        { key: 'search', label: 'Busca', type: 'search', placeholder: 'Número, problema, placa ou fornecedor', value: search, onChange: value => setFilter('search', value) },
+        { key: 'status', label: 'Situação', value: statusFilter, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, ...MAINT_STATUSES.map(value => ({ value, label: MAINT_STATUS_LABELS[value] }))] },
+        { key: 'type', label: 'Tipo de manutenção', value: filters.type, onChange: value => setFilter('type', value), options: [{ value: 'all', label: 'Todos os tipos' }, ...MAINT_TYPES.map(value => ({ value, label: MAINT_TYPE_LABELS[value] }))] },
+        { key: 'priority', label: 'Prioridade', value: filters.priority, onChange: value => setFilter('priority', value), options: [{ value: 'all', label: 'Todas as prioridades' }, { value: 'low', label: 'Baixa' }, { value: 'medium', label: 'Média' }, { value: 'high', label: 'Alta' }, { value: 'critical', label: 'Crítica' }] },
+      ]} />
 
       <Card><CardContent className="p-0">
         <Table><TableHeader><TableRow>

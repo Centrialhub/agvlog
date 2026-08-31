@@ -66,7 +66,8 @@ export default function DriverEvents() {
         (e) =>
           e.stopName.toLowerCase().includes(q) ||
           e.invoice?.toLowerCase().includes(q) ||
-          e.label.toLowerCase().includes(q),
+          e.label.toLowerCase().includes(q) ||
+          e.observation?.toLowerCase().includes(q),
       );
     }
     return list;
@@ -81,8 +82,10 @@ export default function DriverEvents() {
 
 
       <div className="relative">
+        <label htmlFor="driver-event-search" className="sr-only">Buscar eventos</label>
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
+          id="driver-event-search"
           placeholder="Buscar por cliente, NF ou evento..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -144,15 +147,17 @@ export default function DriverEvents() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium truncate">{evt.label}</span>
-                      <Badge variant="outline" className="text-[10px] py-0 h-4">
-                        {evt.code}
-                      </Badge>
                       {evt.invoice && (
                         <Badge variant="secondary" className="text-[10px] py-0 h-4">
                           NF {evt.invoice}
                         </Badge>
                       )}
                     </div>
+                    {evt.observation && (
+                      <p className="text-xs text-foreground/80 mt-1 line-clamp-2">
+                        {evt.observation}
+                      </p>
+                    )}
                     <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5">
                       <MapPin className="h-3 w-3 shrink-0" />
                       <span className="truncate">{evt.stopName}</span>
