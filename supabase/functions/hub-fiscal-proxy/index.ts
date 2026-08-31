@@ -1,3 +1,4 @@
+import { decryptFiscalCredential } from '../_shared/fiscal-credential-crypto.ts';
 import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 import { dispatchFiscalEmission } from '../_shared/fiscal-dispatch.ts';
 import { corsHeaders } from '../_shared/cors.ts';
@@ -14,22 +15,6 @@ const MANAGERSAAS_AUTH = Deno.env.get('MANAGERSAAS_AUTH') || '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ENC_KEY = Deno.env.get('AGVLOG_ENCRYPTION_KEY') || '';
-
-function hexToBytes(hex: string): Uint8Array {
-  const b = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < b.length; i++) b[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return b;
-}
-async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
-  const parts = encrypted.split(':');
-  if (parts.length !== 4) throw new Error('Invalid encrypted format');
-  const keyBytes = hexToBytes(keyHex.padEnd(64, '0').slice(0, 64));
-  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
-  const iv = hexToBytes(parts[2]);
-  const ct = hexToBytes(parts[3]);
-  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
-  return new TextDecoder().decode(pt);
-}
 
 type Action =
   | 'emit' | 'get' | 'sync' | 'cancel' | 'cce'
@@ -380,7 +365,7 @@ Deno.serve(withFiscalCors(async (req) => {
           throw err;
         }
         try {
-          const token = await decryptAesGcm(match.secret_ciphertext, ENC_KEY);
+          const token = await decryptFiscalCredential(match.secret_ciphertext, ENC_KEY);
           if (!token) {
             const err: any = new Error('Token decriptado vazio.');
             err.code = 'HUB_CREDENTIAL_DECRYPT_FAILED';
@@ -390,7 +375,7 @@ Deno.serve(withFiscalCors(async (req) => {
           return { token, source: 'ciphertext', emitter_id: emId, scope_matched: match.doc_scope, environment: wantedEnv };
         } catch (e: any) {
           if (e?.code === 'HUB_CREDENTIAL_DECRYPT_FAILED' || e?.code === 'HUB_CREDENTIAL_ENC_KEY_MISSING') throw e;
-          const err: any = new Error('Falha ao decriptar credencial do emitente.');
+          const err: any = new Error('A credencial salva não pode ser lida com a chave atual do AGV Log. Um administrador deve recadastrar o token em Configurações > Emitentes > Credenciais, no mesmo ambiente. Nenhum documento foi enviado ao Hub Fiscal por esta tentativa.');
           err.code = 'HUB_CREDENTIAL_DECRYPT_FAILED';
           throw err;
         }

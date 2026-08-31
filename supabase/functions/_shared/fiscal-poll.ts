@@ -1,3 +1,4 @@
+import { decryptFiscalCredential } from './fiscal-credential-crypto.ts';
 import { requireHubEnvironment, selectScopedHubCredential } from './fiscal-environment.ts';
 
 const MAX_POLL_AGE_MS = 15 * 60 * 1000;
@@ -72,27 +73,6 @@ function safeText(value: unknown, maxLength = 300): string | null {
   return text.slice(0, maxLength);
 }
 
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let index = 0; index < bytes.length; index++) {
-    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
-  }
-  return bytes;
-}
-
-async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
-  const parts = encrypted.split(':');
-  if (parts.length !== 4) throw new Error('Invalid encrypted format');
-  const keyBytes = hexToBytes(keyHex.padEnd(64, '0').slice(0, 64));
-  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
-  const plaintext = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: hexToBytes(parts[2]) },
-    key,
-    hexToBytes(parts[3]),
-  );
-  return new TextDecoder().decode(plaintext);
-}
-
 export function selectHubFiscalCredential(
   credentials: HubFiscalCredential[],
   scope: FiscalDocumentScope,
@@ -126,7 +106,7 @@ export async function resolveHubFiscalToken(admin: any, input: ResolveHubFiscalT
   if (credential.secret_ciphertext) {
     if (!input.encryptionKey) return '';
     try {
-      return await decryptAesGcm(credential.secret_ciphertext, input.encryptionKey);
+      return await decryptFiscalCredential(credential.secret_ciphertext, input.encryptionKey);
     } catch {
       return '';
     }

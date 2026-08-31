@@ -1,3 +1,5 @@
+import { withFiscalCors } from '../_shared/fiscal-cors.ts';
+import { encryptFiscalCredential } from '../_shared/fiscal-credential-crypto.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
 
@@ -12,24 +14,9 @@ function json(status: number, payload: unknown) {
   });
 }
 
-function hexToBytes(hex: string): Uint8Array {
-  const b = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < b.length; i++) b[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return b;
-}
-function bytesToHex(b: Uint8Array): string {
-  return Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join('');
-}
-async function encrypt(plaintext: string, keyHex: string): Promise<string> {
-  const keyBytes = hexToBytes(keyHex.padEnd(64, '0').slice(0, 64));
-  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
-  return `enc:v1:${bytesToHex(iv)}:${bytesToHex(new Uint8Array(ct))}`;
-}
-
-Deno.serve(async (req) => {
+Deno.serve(withFiscalCors(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return json(405, { error: 'METHOD_NOT_ALLOWED' });
   try {
     if (!ENC_KEY) return json(500, { error: 'AGVLOG_ENCRYPTION_KEY não configurada no backend' });
 
@@ -81,7 +68,7 @@ Deno.serve(async (req) => {
       return json(403, { error: 'FORBIDDEN' });
     }
     const clean = token.trim();
-    const ciphertext = await encrypt(clean, ENC_KEY);
+    const ciphertext = await encryptFiscalCredential(clean, ENC_KEY);
     const hint = clean.length > 4 ? `••••${clean.slice(-4)}` : '••••';
 
     const payload: Record<string, unknown> = {
@@ -118,4 +105,4 @@ Deno.serve(async (req) => {
     console.error('[hub-fiscal-credential-save] fatal', e);
     return json(500, { error: e?.message || 'INTERNAL_ERROR' });
   }
-});
+}));
