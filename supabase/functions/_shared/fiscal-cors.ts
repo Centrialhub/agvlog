@@ -1,13 +1,15 @@
 import { appOrigin, corsHeaders } from './cors.ts';
 
-// Explicitly approved billing preview. Remove when this deployment is retired.
-// Never trust an entire hosting domain: other customers can publish there.
+// Explicitly approved billing origins. Never trust an entire hosting domain:
+// other customers can publish there.
+const BILLING_PRODUCTION_ORIGIN = 'https://agvlogistica.vercel.app';
+// Remove this preview when its deployment is retired.
 const BILLING_PREVIEW_ORIGIN = 'https://agvlog-preview-thomaz-20260831.veituma.chatgpt.site';
 
 function allowedFiscalOrigins(): Set<string> {
   // An invalid primary configuration must remain fail-closed.
   if (!appOrigin) return new Set();
-  const allowed = new Set([appOrigin]);
+  const allowed = new Set([appOrigin, BILLING_PRODUCTION_ORIGIN]);
   const configured = Deno.env.get('AGVLOG_FISCAL_PREVIEW_ORIGINS') ?? BILLING_PREVIEW_ORIGIN;
   for (const candidate of configured.split(',')) {
     const origin = candidate.trim();
