@@ -1,3 +1,4 @@
+import { fiscalHubBaseUrl, requireFiscalTransport } from '../_shared/fiscal-transport.ts';
 import { decryptFiscalCredential } from '../_shared/fiscal-credential-crypto.ts';
 import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 import { dispatchFiscalEmission } from '../_shared/fiscal-dispatch.ts';
@@ -6,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { requireIntegrationCapability } from '../_shared/capabilities.ts';
 import { FiscalCredentialError, requireHubEnvironment, selectScopedHubCredential, type HubEnvironment } from '../_shared/fiscal-environment.ts';
 
-const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') || '').trim().replace(/\/$/, '');
+const HUB_BASE = fiscalHubBaseUrl(Deno.env.get('HUB_FISCAL_BASE_URL'));
 const HUB_API_VERSION = Deno.env.get('HUB_FISCAL_API_VERSION') || '2026-08-27';
 const MANAGERSAAS_BASE = (Deno.env.get('MANAGERSAAS_BASE_URL') || '').trim().replace(/\/$/, '');
 const MANAGERSAAS_GROUP = Deno.env.get('MANAGERSAAS_GROUP') || '';
@@ -430,6 +431,8 @@ Deno.serve(withFiscalCors(async (req) => {
           ? normalizeCteEmissionBody(bodyWithIntegration)
           : bodyWithIntegration;
         const resolved = await resolveToken(type, payload.emitterId);
+        // Reject local configuration/header failures before creating a durable dispatch intent.
+        requireFiscalTransport(HUB_BASE, resolved.token);
         const result = await dispatchFiscalEmission({
           admin, tenant: tenantId, actor: userId, emitter: resolved.emitter_id,
           type, environment: resolved.environment, body,
@@ -1099,7 +1102,7 @@ Deno.serve(withFiscalCors(async (req) => {
   } catch (e: any) {
     console.error('[hub-fiscal-proxy] fatal', e);
     const code = e?.code || 'INTERNAL_ERROR';
-    const status = code.startsWith('HUB_CREDENTIAL_') ? 400 : 500;
+    const status = code.startsWith('HUB_CREDENTIAL_') || code.startsWith('HUB_BASE_URL_') ? 400 : 500;
     return json(status, { success: false, error: { code, message: e?.message } });
   }
 }));

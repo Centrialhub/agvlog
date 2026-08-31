@@ -45,7 +45,11 @@ export async function dispatchFiscalEmission(input: DispatchInput) {
  // Save the receipt separately so a failure in the mirror transaction is recoverable with GET.
  const receipt=record(result.data).document;
  if(emission.hub_document_id && record(receipt).id && record(receipt).id!==emission.hub_document_id)return uncertain(emission.id);
- if(result.status<400 && typeof record(receipt).id==='string') {
+ // An error response can still contain a durable Hub document. Bind it to the
+ // persisted request before retaining the receipt; this only enables later GETs.
+ const receiptMatches = record(receipt).idIntegracao===emission.request_payload.idIntegracao
+  && record(receipt).environment===environment && record(receipt).emitterCnpj===emission.request_payload.emitterCnpj;
+ if((result.status<400 || receiptMatches) && typeof record(receipt).id==='string' && record(receipt).id) {
   const received=await admin.from('hub_fiscal_emissions').update({hub_document_id:record(receipt).id,last_response:record(result.data)})
    .eq('id',emission.id).eq('tenant_id',tenant).select('id').single();
   if(received.error||!received.data)return uncertain(emission.id);

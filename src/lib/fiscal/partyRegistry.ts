@@ -100,14 +100,16 @@ export function buildClientIndex(clients: RegistryClient[] = []): ClientIndex {
   return { byId, byCnpj, byName };
 }
 
-/** Acha o cadastro correspondente à parte (id > CNPJ > nome). */
+/** Com documento informado, só usa cadastro do mesmo estabelecimento. */
 export function findRegistryClient(
   index: ClientIndex,
   party: { id?: string | null; cnpj?: string | null; name?: string | null },
 ): RegistryClient | null {
-  if (party.id && index.byId.has(String(party.id))) return index.byId.get(String(party.id))!;
   const k = digitsOnly(party.cnpj);
-  if (k && index.byCnpj.has(k)) return index.byCnpj.get(k)!;
+  const byId = party.id ? index.byId.get(String(party.id)) : undefined;
+  // A NF pode estar vinculada a outra filial: nunca combinar seu CNPJ com a IE dela.
+  if (k) return (byId && digitsOnly(byId.tax_id) === k ? byId : index.byCnpj.get(k)) || null;
+  if (byId) return byId;
   const nk = normalizeName(party.name);
   if (nk && index.byName.has(nk)) return index.byName.get(nk)!;
   return null;

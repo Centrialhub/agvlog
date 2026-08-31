@@ -45,3 +45,15 @@ it('a second session reaching the same in-flight intent cannot submit another do
  expect((await dispatchFiscalEmission(args)).status).toBe(409);release(response());expect((await first).status).toBe(200);expect(args.call).toHaveBeenCalledOnce();
 });
 
+
+it('retains a matching Hub receipt on an error response and only GETs on the next attempt',async()=>{
+ const args=await input();args.call.mockImplementation(async(_method,_path,_query,body)=>({status:502,data:{success:false,error:{code:'CTE_EXCEPTION'},document:{id:'hub-error',status:'error',idIntegracao:body?.idIntegracao,environment:args.environment,emitterCnpj:body?.emitterCnpj}}}));
+ expect((await dispatchFiscalEmission(args)).status).toBe(409);
+ expect((await context.db.query('select hub_document_id,status from hub_fiscal_emissions')).rows[0]).toEqual({hub_document_id:'hub-error',status:'pending'});
+ await dispatchFiscalEmission(args);expect(args.call.mock.calls.map(call=>call[0])).toEqual(['POST','GET']);
+});
+it('does not attach an unrelated receipt from an error response',async()=>{
+ const args=await input();args.call.mockResolvedValue({status:502,data:{document:{id:'wrong-hub',status:'error',idIntegracao:'other',environment:args.environment,emitterCnpj:'wrong'}}});
+ await dispatchFiscalEmission(args);await dispatchFiscalEmission(args);
+ expect((await context.db.query('select hub_document_id from hub_fiscal_emissions')).rows[0]).toEqual({hub_document_id:null});expect(args.call).toHaveBeenCalledOnce();
+});

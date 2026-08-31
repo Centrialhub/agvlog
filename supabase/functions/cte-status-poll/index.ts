@@ -1,3 +1,4 @@
+import { fiscalHubBaseUrl, inspectFiscalTransport, lookupFiscalOperation } from '../_shared/fiscal-transport.ts';
 import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 // Consulta periódica de status dos CT-e que ficaram "processando" no provedor.
 // Invocada pelo pg_cron (a cada 1 min) e também sob demanda pela UI.
@@ -18,7 +19,7 @@ import {
   terminalizeFiscalPoll,
 } from '../_shared/fiscal-poll.ts';
 
-const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') || '').trim().replace(/\/$/, '');
+const HUB_BASE = fiscalHubBaseUrl(Deno.env.get('HUB_FISCAL_BASE_URL'));
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -42,7 +43,7 @@ Deno.serve(withFiscalCors(async (req) => {
   if (req.method !== 'POST') return json(405, { success: false, error: { code: 'METHOD_NOT_ALLOWED' } });
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-  const body = await req.json().catch(() => ({})) as { document_id?: string; tenant_id?: string };
+  const body = await req.json().catch(() => ({})) as { document_id?: string; tenant_id?: string; action?: string };
 
   try {
     const isCron = await isCronRequest(req, SUPABASE_URL, SERVICE_KEY);
@@ -84,6 +85,30 @@ Deno.serve(withFiscalCors(async (req) => {
       const capabilityResponse = await requireIntegrationCapability(admin, effectiveTenantId, 'fiscal');
       if (capabilityResponse) return capabilityResponse;
     }
+
+    // Read-only maintenance diagnostic under the SAME authenticated user/cron checks.
+    // diagnose performs no provider request; lookup performs GET only. Neither writes or retries.
+    if (body.action === 'diagnose' || body.action === 'lookup') {
+      if (!body.document_id || !effectiveTenantId) return json(400, { success: false, error: { code: 'DOCUMENT_REQUIRED' } });
+      if (isCron) {
+        const blocked = await requireIntegrationCapability(admin, effectiveTenantId, 'fiscal');
+        if (blocked) return blocked;
+      }
+      const { data: emission, error: lookupError } = await admin.from('hub_fiscal_emissions')
+        .select('id,emitter_id,environment,dispatch_state,hub_document_id,id_integracao')
+        .eq('fiscal_document_id', body.document_id).eq('tenant_id', effectiveTenantId)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (lookupError) throw lookupError;
+      if (!emission) return json(404, { success: false, error: { code: 'EMISSION_NOT_FOUND' } });
+      const token = await resolveHubFiscalToken(admin, { tenantId: effectiveTenantId, emitterId: emission.emitter_id,
+        environment: emission.environment, scope: 'cte', encryptionKey: ENC_KEY, getSecret: name => Deno.env.get(name) });
+      const lookup = body.action === 'lookup'
+        ? await lookupFiscalOperation(HUB_BASE, token, emission.id_integracao, emission.environment) : undefined;
+      return json(200, { success: true, lookup, emissionId: emission.id, environment: emission.environment,
+        dispatchState: emission.dispatch_state, hasProviderReference: !!emission.hub_document_id,
+        transport: inspectFiscalTransport(HUB_BASE, token) });
+    }
+    if (body.action) return json(400, { success: false, error: { code: 'UNKNOWN_ACTION' } });
 
     let q = admin.from('fiscal_documents')
       .select('id, tenant_id, emitter_id, status, invoice_number, status_check_attempts, created_at')

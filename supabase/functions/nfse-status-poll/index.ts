@@ -1,3 +1,4 @@
+import { fiscalHubBaseUrl } from '../_shared/fiscal-transport.ts';
 import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 // Consulta periódica de status das NFS-e que ficaram "processando" no provedor.
 // Invocada pelo pg_cron (a cada 5 min) e também sob demanda pela UI.
@@ -18,7 +19,7 @@ import {
   terminalizeFiscalPoll,
 } from '../_shared/fiscal-poll.ts';
 
-const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') || '').trim().replace(/\/$/, '');
+const HUB_BASE = fiscalHubBaseUrl(Deno.env.get('HUB_FISCAL_BASE_URL'));
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;

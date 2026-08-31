@@ -144,3 +144,22 @@ describe('partyRegistry', () => {
     expect(out.recipientIe).toBe('');
   });
 });
+
+
+describe('fiscal establishment identity',()=>{
+ const index=buildClientIndex([
+  {id:'head',company_name:'SUPERMERCADO AVIAO LTDA',tax_id:'20.560.843/0001-50',state_registration:'1882510110074'},
+  {id:'branch',company_name:'SUPERMERCADO AVIAO LTDA',tax_id:'20.560.843/0002-30',state_registration:'1882510110155'},
+ ]);
+ it('uses the invoice CNPJ even if the linked client belongs to another branch',()=>{
+  const party=resolveParty(index,{id:'branch',name:'SUPERMERCADO AVIAO LTDA',cnpj:'20560843000150'});
+  expect(party).toMatchObject({cnpj:'20560843000150',ie:'1882510110074'});
+ });
+ it('does not borrow IE by name or ID when the invoice CNPJ has no registry match',()=>{
+  expect(resolveParty(index,{id:'branch',name:'SUPERMERCADO AVIAO LTDA',cnpj:'20560843000311'})?.ie).toBeNull();
+ });
+ it('prefills the preview with the IE belonging to the invoice establishment',()=>{
+  const {item}=fillPartyFieldsFromRegistry({clientId:'branch',recipientName:'SUPERMERCADO AVIAO LTDA',recipientCnpj:'20560843000150',recipientIe:'',recipientCity:'',recipientState:'',remitterName:'',remitterCnpj:'',remitterIe:''},index);
+  expect(item.recipientIe).toBe('1882510110074');expect(item.recipientCnpj).toBe('20560843000150');
+ });
+});
