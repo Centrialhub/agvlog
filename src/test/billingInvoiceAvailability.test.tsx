@@ -268,3 +268,30 @@ it('reserves NFS-e timeouts and paginates durable reservations beyond the API li
   await waitFor(() => expect(result.current.isSuccess).toBe(true));
   expect(result.current.data?.map(d => d.id)).toEqual(['local-free']);
 });
+
+it('excludes legacy authorized CT-e links with no timestamp, reservation or catalog row', async () => {
+  const cases = ['authorized', 'processing', 'rejected', 'cancelled', 'draft', 'homologation', 'other-tenant'];
+  state.rows.fiscal_documents = cases.map(id => invoice(id, {cte_emitted_outbound_id: 'out-' + id}));
+  state.rows.hub_fiscal_emissions = cases.map(id => ({id, fiscal_document_id: 'out-' + id, dispatch_key: null, dispatch_state: 'legacy',
+    status: ['homologation', 'other-tenant'].includes(id) ? 'authorized' : id,
+    environment: id === 'homologation' ? 'homologation' : 'production', tenant_id: id === 'other-tenant' ? 'other' : 'tenant'}));
+  const {result} = renderHook(() => useBillingDocuments({onlySpecificInvoices: cases}, 'cte'), {wrapper: Wrapper});
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(result.current.data?.map(d => d.id)).toEqual(['rejected', 'cancelled', 'draft', 'homologation', 'other-tenant']);
+});
+
+it('allows an audited legacy release once, then hides the source when its new operation starts', async () => {
+  state.rows.fiscal_documents = [invoice('released', {cte_emitted_outbound_id: null,
+    delivery_meta: {operator_reported_cte_cancellation: {previous_outbound_id: 'old', reconciliation_pending: true}}}),
+    invoice('still-linked', {cte_emitted_outbound_id: 'old'})];
+  state.rows.hub_fiscal_emissions = [{id: 'old-receipt', fiscal_document_id: 'old', status: 'authorized',
+    dispatch_state: 'legacy', dispatch_key: null, environment: 'production', tenant_id: 'tenant'}];
+  const {result} = renderHook(() => useBillingDocuments({}, 'cte'), {wrapper: Wrapper});
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(result.current.data?.map(d => d.id)).toEqual(['released']);
+  state.rows.fiscal_source_reservations = [{source_id: 'released', outbound_id: 'new', environment: 'production', tenant_id: 'tenant'}];
+  state.rows.hub_fiscal_emissions.push({id: 'new-receipt', fiscal_document_id: 'new', status: 'processing',
+    dispatch_state: 'in_flight', environment: 'production', tenant_id: 'tenant'});
+  await act(async () => {await result.current.refetch();});
+  await waitFor(() => expect(result.current.data).toEqual([]));
+});

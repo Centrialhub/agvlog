@@ -71,6 +71,7 @@ export interface FiscalDocument {
   client_load_source: Json | null;
   reference_number?: string | null;
   delivery_meta?: Json | null;
+  cte_emitted_outbound_id?: string | null;
   insurer_name?: string | null;
   insurer_cnpj?: string | null;
   insurer_policy?: string | null;

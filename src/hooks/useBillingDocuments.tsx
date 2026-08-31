@@ -141,7 +141,7 @@ export function useBillingDocuments(filters: BillingDocumentFilters, target: 'al
           .eq('environment', 'production').order('source_id').range(start, end)),
         readAllPages((start, end) => supabase.from('hub_fiscal_emissions')
           .select('fiscal_document_id,nfse_document_id,dispatch_state,status').eq('tenant_id', currentTenant.id)
-          .eq('environment', 'production').not('dispatch_key', 'is', null).order('id').range(start, end)),
+          .eq('environment', 'production').order('id').range(start, end)),
       ]);
 
       const emittedIds = new Set<string>();
@@ -181,7 +181,9 @@ export function useBillingDocuments(filters: BillingDocumentFilters, target: 'al
 
 
       return docs.filter(d => {
-        if (emittedIds.has(d.id)) return false;
+        // Legacy CT-e linked the NF directly, without a reservation or catalog row.
+        // A missing timestamp does not undo an existing production authorization.
+        if (emittedIds.has(d.id) || reservedOperations.has(d.cte_emitted_outbound_id || '')) return false;
         if (f.recipientCity && !normalizeCity(d.recipient_city).includes(normalizeCity(f.recipientCity as string))) return false;
         const sameCity = !!emitter && isSameFiscalMunicipality(
           { city: d.recipient_city, state: d.recipient_state },
