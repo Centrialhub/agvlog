@@ -770,7 +770,7 @@ export default function Loads() {
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Por página</span>
               <Select value={String(pageSize)} onValueChange={v => setPageSize(Number(v))}>
-                <SelectTrigger className="h-8 w-20 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 w-20 text-xs" aria-label="Cargas por página"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {[10, 25, 50, 100, 200].map(n => (
                     <SelectItem key={n} value={String(n)}>{n}</SelectItem>

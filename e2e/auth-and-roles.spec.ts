@@ -14,7 +14,7 @@ test("@critical public auth is invite-only and protected routes redirect", async
 test("@critical operator reaches the internal operations center", async ({ page }) => {
   await loginThroughUi(page, accounts.operator);
   await expect(page.getByRole("heading", { name: /operator/i })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: "Cargas" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Cargas", exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: /operator/i })).toBeVisible({ timeout: 20_000 });
 });

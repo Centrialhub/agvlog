@@ -267,12 +267,12 @@ test("load registry filters before server pagination and restores its URL state"
 
   await page.getByPlaceholder("Buscar carga, placa ou destino...").fill("E2E-BULK-A-125");
   await expect(page).toHaveURL(/q=E2E-BULK-A-125/, { timeout: 5_000 });
-  await expect(page.getByRole("button", { name: "E2E-BULK-A-125" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "E2E-BULK-A-125", exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Mostrando 1–1 de 1")).toBeVisible();
 
   await page.reload();
   await expect(page.getByPlaceholder("Buscar carga, placa ou destino...")).toHaveValue("E2E-BULK-A-125");
-  await expect(page.getByRole("button", { name: "E2E-BULK-A-125" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "E2E-BULK-A-125", exact: true })).toBeVisible({ timeout: 20_000 });
 });
 
 test("client portal reports an RPC failure and retries instead of showing zero KPIs", async ({ page }) => {

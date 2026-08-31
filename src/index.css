@@ -15,7 +15,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 25% 10%;
 
-    --primary: 215 80% 48%;
+    --primary: 215 85% 25%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 210 18% 93%;
@@ -36,12 +36,12 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --info: 215 80% 48%;
+    --info: 215 80% 36%;
     --info-foreground: 0 0% 100%;
 
     --border: 214 20% 88%;
     --input: 214 20% 88%;
-    --ring: 215 80% 48%;
+    --ring: 215 80% 36%;
 
     --radius: 0.5rem;
 
@@ -55,7 +55,7 @@
     --sidebar-ring: 215 80% 55%;
     --sidebar-muted: 220 15% 25%;
 
-    --chart-1: 215 80% 48%;
+    --chart-1: 215 80% 36%;
     --chart-2: 142 64% 38%;
     --chart-3: 38 92% 50%;
     --chart-4: 280 65% 60%;
@@ -110,5 +110,11 @@
 @layer utilities {
   .text-gradient {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-[hsl(var(--chart-4))];
+  }
+
+  .leaflet-control-attribution a {
+    color: #004c6d;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 }

@@ -25,12 +25,12 @@ describe("release observability contract", () => {
   });
 
   it("keeps telemetry private and automatically expires old events", () => {
-    const migration = read("supabase/migrations/20260828212454_application_error_telemetry.sql").toLowerCase();
+    const migration = read("supabase/migrations/20260829143948_add_production_application_error_telemetry.sql").toLowerCase();
     expect(migration).toContain("enable row level security");
     expect(migration).toContain("revoke all on table public.application_error_events from public, anon, authenticated");
     expect(migration).toContain("interval '30 days'");
     expect(migration).toContain("agvlog-application-error-retention");
-    const vitalsMigration = read("supabase/migrations/20260828214259_application_web_vitals.sql").toLowerCase();
+    const vitalsMigration = read("supabase/migrations/20260829143955_add_production_application_web_vitals.sql").toLowerCase();
     expect(vitalsMigration).toContain("application_web_vitals");
     expect(vitalsMigration).toContain("interval '30 days'");
   });
