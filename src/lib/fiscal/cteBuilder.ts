@@ -15,6 +15,7 @@
 
 import { validateInsurance } from './insuranceValidation';
 import { normalizeStateRegistration } from '../fiscalNormalization';
+import { restoreStateRegistrationLeadingZeros } from '../stateRegistrationZeros';
 
 export type CteTakerRole =
   | 'remetente'
@@ -280,7 +281,7 @@ function serializeParty(p: CteParty | null | undefined) {
     nome: p.name,
     cnpj: cnpj || undefined,
     cpf: cpf && !cnpj ? cpf : undefined,
-    ie: p.ie || undefined,
+    ie: (restoreStateRegistrationLeadingZeros(p.ie, p.address?.state) ?? p.ie) || undefined,
     endereco: p.address
       ? {
           logradouro: p.address.street || undefined,

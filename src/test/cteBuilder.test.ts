@@ -363,3 +363,16 @@ describe('recipient contributor IE validation', () => {
     expect(result.ok).toBe(true);
   });
 });
+
+it('restores MG leading zeros in the transmitted party fields, including a manual override', () => {
+  const input = baseInput({recipient: {name: 'Contribuinte QA', cnpj: '31459273000122', ie: '32718520035', ieIndicator: 'Contribuinte ICMS', address: {state: 'MG'}},
+    remitter: {name: 'Remetente QA', cnpj: '11222333000181', ie: '623079040081', address: {state: 'MG'}}});
+  const result = buildCtePayload(input);
+  expect(result.ok).toBe(true);
+  expect(result.payload).toMatchObject({payload: {destinatario: {ie: '0032718520035'}, remetente: {ie: '0623079040081'}}});
+  expect(input.recipient?.ie).toBe('32718520035');
+  const overridden = buildCtePayload({...input, overrides: {recipient: {ie: '15556230072'}}});
+  expect(overridden.payload).toMatchObject({payload: {destinatario: {ie: '0015556230072'}}});
+  const invalid = buildCtePayload({...input, overrides: {recipient: {ie: '32718520036'}}});
+  expect(invalid.ok).toBe(false);
+});

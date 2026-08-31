@@ -1,3 +1,5 @@
+import { restoreStateRegistrationLeadingZeros } from './stateRegistrationZeros';
+
 /**
  * Normalização e validação básica de Inscrição Estadual (IE) e Indicador de IE
  * usadas no auto-cadastro de clientes durante a importação de XML/ORT.
@@ -52,9 +54,11 @@ export function normalizeStateRegistration(
   if (isIsento(raw)) return { value: 'ISENTO', unknown: false, isento: true };
   const digits = String(raw || '').replace(/\D/g, '');
   if (!digits) return { value: null, unknown: false, isento: false };
-  if (typeof confidence === 'number' && confidence > 0 && confidence < 0.5) {
+  if (typeof confidence === 'number' && confidence >= 0 && confidence < 0.5) {
     return { value: FISCAL_UNKNOWN, unknown: true, isento: false };
   }
+  const restored = restoreStateRegistrationLeadingZeros(raw, uf);
+  if (restored) return { value: restored, unknown: false, isento: false };
   const ufKey = (uf || '').trim().toUpperCase();
   const allowed = IE_LENGTH_BY_UF[ufKey];
   if (allowed && allowed.length && !allowed.includes(digits.length)) {

@@ -1,3 +1,5 @@
+import { restoreStateRegistrationLeadingZeros } from '../stateRegistrationZeros';
+
 /**
  * Resolução de partes do CT-e (remetente, destinatário, consignatário, etc.)
  * contra o cadastro local de clientes/fornecedores.
@@ -159,7 +161,7 @@ export function resolveParty(
   const name = (party.name || '').trim() || (c?.company_name || c?.legal_name || '').trim();
   if (!name) return null;
   const cnpj = digitsOnly(party.cnpj) || digitsOnly(c?.tax_id) || null;
-  const ie = sanitizeIe(party.ie) || sanitizeIe(c?.state_registration);
+  let ie = sanitizeIe(party.ie) || sanitizeIe(c?.state_registration);
   const fromClient = addressFromClient(c);
   const fallback: PartyAddress | null = fallbackAddress
     ? {
@@ -183,6 +185,8 @@ export function resolveParty(
           state: fromClient.state || fallback.state,
         }
       : fromClient || fallback;
+  const rawIe = sanitizeIe(party.ie) ? party.ie : c?.state_registration;
+  ie = restoreStateRegistrationLeadingZeros(rawIe, address?.state) ?? ie;
   return { name, cnpj, ie, address, ieIndicator: c?.ie_indicator || null };
 }
 
@@ -256,7 +260,8 @@ export function fillPartyFieldsFromRegistry<T extends PartyFields>(
     const currentValue = mutable[key];
     const current = typeof currentValue === 'string' ? currentValue.trim() : '';
     if (!current) continue;
-    const clean = sanitizeIe(current) || '';
+    const state = key === 'recipientIe' ? next.recipientState || rec?.address_state : String(mutable.remitterState || rem?.address_state || '');
+    const clean = restoreStateRegistrationLeadingZeros(current, state) ?? sanitizeIe(current) ?? '';
     if (clean !== current) {
       mutable[key] = clean;
       changed = true;
