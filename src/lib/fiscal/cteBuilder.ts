@@ -14,6 +14,7 @@
  */
 
 import { validateInsurance } from './insuranceValidation';
+import { normalizeStateRegistration } from '../fiscalNormalization';
 
 export type CteTakerRole =
   | 'remetente'
@@ -27,6 +28,7 @@ export interface CteParty {
   cnpj?: string | null;
   cpf?: string | null;
   ie?: string | null;
+  ieIndicator?: string | null;
   address?: {
     street?: string | null;
     number?: string | null;
@@ -519,6 +521,14 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
   if (!input.recipient) missing.push('Destinatário');
   else if (!digits(input.recipient.cnpj) && !digits(input.recipient.cpf)) {
     missing.push('CNPJ/CPF do destinatário');
+  }
+  const recipient = mergePartyOverride(input.recipient, input.overrides?.recipient);
+  const recipientIndicator = String(recipient?.ieIndicator || '').trim().toUpperCase();
+  if (['1', 'C', 'CONTRIBUINTE', 'CONTRIBUINTE ICMS'].includes(recipientIndicator)) {
+    const ie = normalizeStateRegistration(recipient?.ie, recipient?.address?.state);
+    if (!ie.value || ie.unknown || ie.isento) {
+      missing.push('IE válida do destinatário contribuinte ICMS (confira o XML da NF ou o cadastro)');
+    }
   }
   // Motorista e veículo não bloqueiam a transmissão — quando ausentes,
   // o CT-e é emitido com "." (compatível com o TMS legado). Emite aviso.

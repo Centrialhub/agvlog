@@ -976,7 +976,16 @@ export default function Ingestion() {
                     : null),
                 delivery_meta: (() => {
                   const src = doc.source;
-                  const sourceMeta = { ingestion_source: src.sourceKind || 'xml' };
+                  const sourceMeta = {
+                    ingestion_source: src.sourceKind || 'xml',
+                    // Preserve source evidence even when normalization requires review.
+                    recipient_fiscal: {
+                      cnpj: src.recipientCnpj || null,
+                      state_registration: src.recipientStateRegistration || null,
+                      ie_indicator: src.recipientIeIndicator || null,
+                      uf: src.recipientState || null,
+                    },
+                  };
                   if (src.paymentMethod) {
                     return {
                       ...sourceMeta,
@@ -1160,7 +1169,16 @@ export default function Ingestion() {
                 : null),
           delivery_meta: (() => {
             const src = doc.source;
-            const sourceMeta = { ingestion_source: src.sourceKind || 'xml' };
+            const sourceMeta = {
+                    ingestion_source: src.sourceKind || 'xml',
+                    // Preserve source evidence even when normalization requires review.
+                    recipient_fiscal: {
+                      cnpj: src.recipientCnpj || null,
+                      state_registration: src.recipientStateRegistration || null,
+                      ie_indicator: src.recipientIeIndicator || null,
+                      uf: src.recipientState || null,
+                    },
+                  };
             if (src.paymentMethod) {
               return {
                 ...sourceMeta,
@@ -1311,7 +1329,16 @@ export default function Ingestion() {
                     : null),
                 delivery_meta: (() => {
                   const src = doc.source;
-                  const sourceMeta = { ingestion_source: src.sourceKind || 'xml' };
+                  const sourceMeta = {
+                    ingestion_source: src.sourceKind || 'xml',
+                    // Preserve source evidence even when normalization requires review.
+                    recipient_fiscal: {
+                      cnpj: src.recipientCnpj || null,
+                      state_registration: src.recipientStateRegistration || null,
+                      ie_indicator: src.recipientIeIndicator || null,
+                      uf: src.recipientState || null,
+                    },
+                  };
                   if (src.paymentMethod) {
                     return {
                       ...sourceMeta,

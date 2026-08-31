@@ -345,3 +345,21 @@ describe('cteBuilder — campos aceitos pela API v1 do Hub', () => {
     expect(p.seguro.seguradora).toBeDefined();
   });
 });
+
+
+describe('recipient contributor IE validation', () => {
+  it.each([null, '', 'UNKNOWN', '12345', 'ISENTO'])('blocks a registered contributor with IE %s before dispatch', ie => {
+    const result = buildCtePayload(baseInput({recipient: {name: 'Contribuinte QA', cnpj: '11222333000181', ie, ieIndicator: 'Contribuinte ICMS', address: {state: 'MG'}}}));
+    expect(result.ok).toBe(false);
+    expect(result.missing.join(' ')).toContain('IE válida do destinatário');
+  });
+  it('accepts an explicit valid-length IE correction preserving leading zeroes', () => {
+    const result = buildCtePayload(baseInput({recipient: {name: 'Contribuinte QA', cnpj: '11222333000181', ie: null, ieIndicator: 'Contribuinte ICMS', address: {state: 'MG'}}, overrides: {recipient: {ie: '0012345678901'}}}));
+    expect(result.ok).toBe(true);
+    expect(result.payload).toMatchObject({payload: {destinatario: {ie: '0012345678901'}}});
+  });
+  it('does not impose a contributor IE on a registered non-contributor', () => {
+    const result = buildCtePayload(baseInput({recipient: {name: 'Nao contribuinte QA', cnpj: '11222333000181', ie: null, ieIndicator: 'Não Contribuinte'}}));
+    expect(result.ok).toBe(true);
+  });
+});

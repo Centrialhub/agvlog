@@ -1,3 +1,4 @@
+import { normalizeStateRegistration } from '@/lib/fiscalNormalization';
 import type { ValidatedDocument } from '@/lib/ingestionValidator';
 import type { IngestionReport, OrtReviewDocument, ReviewItem } from '@/lib/ingestion/types';
 
@@ -80,7 +81,7 @@ export function buildIngestionReport(args: BuildIngestionReportArgs): IngestionR
 
   const needsReviewDocs =
     ortReviewDocs.filter((doc) => doc.needsReview).length
-    + docs.filter((doc) => Number((doc.source as ReportSource).confidence ?? 1) < reviewThreshold).length;
+    + docs.filter((doc) => Number((doc.source as ReportSource).confidence ?? 1) < reviewThreshold || normalizeStateRegistration(doc.source.recipientStateRegistration, doc.source.recipientState).unknown).length;
   const unresolved = docs.filter((doc) => !doc.matchedClientId).length;
 
   const issueDates = docs
@@ -130,6 +131,8 @@ export function buildIngestionReport(args: BuildIngestionReportArgs): IngestionR
       reasons.push(`Baixa confiança (${Math.round(confidence * 100)}%)`);
     }
 
+    const ie = normalizeStateRegistration(source.recipientStateRegistration, source.recipientState);
+    if (ie.unknown) reasons.push('IE do destinatário incompatível com a UF ou ilegível; confira o XML antes de faturar');
     const missing: string[] = [];
     if (!isFilled(source.recipientCnpj)) missing.push('CNPJ');
     if (!isFilled(source.recipientStateRegistration)) missing.push('IE');

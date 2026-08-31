@@ -19,7 +19,7 @@ function makeSource(overrides: Partial<ReportSource> = {}): ReportSource {
     recipientName: 'Cliente',
     recipientCnpj: '11222333000144',
     recipientFantasyName: '',
-    recipientStateRegistration: '123456789',
+    recipientStateRegistration: '123456789012',
     recipientMunicipalRegistration: '987654',
     recipientIeIndicator: '1',
     recipientPhone: '11999999999',
@@ -146,6 +146,7 @@ describe('ingestion report', () => {
       confidence: 0.7,
       reasons: [
         'Baixa confiança (70%)',
+        'IE do destinatário incompatível com a UF ou ilegível; confira o XML antes de faturar',
         'Mapeamento incompleto: CNPJ, IE, endereço, cliente',
       ],
     })]);
@@ -182,4 +183,11 @@ describe('ingestion report', () => {
       reasons: ['Baixa confiança OCR (60%)', 'Campos não mapeados: recipientCnpj'],
     }]);
   });
+});
+
+
+it('requires IE review for an XML with incompatible registration even at full confidence', () => {
+  const report = buildIngestionReport({...baseArgs, docs: [makeDocument({source: makeSource({recipientState: 'MG', recipientStateRegistration: '12345678', confidence: 1})})], ortReviewDocs: []});
+  expect(report.needsReviewDocs).toBe(1);
+  expect(report.reviewItems?.[0].reasons.join(' ')).toContain('IE do destinatário incompatível');
 });

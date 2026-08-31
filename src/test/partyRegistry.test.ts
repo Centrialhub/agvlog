@@ -163,3 +163,9 @@ describe('fiscal establishment identity',()=>{
   expect(item.recipientIe).toBe('1882510110074');expect(item.recipientCnpj).toBe('20560843000150');
  });
 });
+
+it('carries contributor classification only from the matching establishment', () => {
+  const index = buildClientIndex([{id: 'qa', tax_id: '11222333000181', company_name: 'QA', state_registration: null, ie_indicator: 'Contribuinte ICMS'}]);
+  expect(resolveParty(index, {cnpj: '11222333000181', name: 'QA'})).toMatchObject({ie: null, ieIndicator: 'Contribuinte ICMS'});
+  expect(resolveParty(index, {cnpj: '11222333000262', name: 'QA'})?.ieIndicator).toBeNull();
+});

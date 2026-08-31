@@ -15,6 +15,7 @@ export interface RegistryClient {
   trade_name?: string | null;
   tax_id?: string | null;
   state_registration?: string | null;
+  ie_indicator?: string | null;
   address_street?: string | null;
   address_number?: string | null;
   address_complement?: string | null;
@@ -40,6 +41,7 @@ export interface ResolvedParty {
   name: string;
   cnpj: string | null;
   ie: string | null;
+  ieIndicator?: string | null;
   address: PartyAddress | null;
 }
 
@@ -181,7 +183,7 @@ export function resolveParty(
           state: fromClient.state || fallback.state,
         }
       : fromClient || fallback;
-  return { name, cnpj, ie, address };
+  return { name, cnpj, ie, address, ieIndicator: c?.ie_indicator || null };
 }
 
 /** Campos das partes editáveis no diálogo de emissão. */
