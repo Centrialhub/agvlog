@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { readCtePayloadRecipient } from '@/lib/fiscal/ctePayload';
+import { readCtePayloadRecipient, readCtePayloadInvoiceNumbers } from '@/lib/fiscal/ctePayload';
 import { matchesCteSearchFilters } from '@/lib/fiscal/cteListFilters';
 import { localDayBoundary } from '@/lib/listFilters';
 import { useTenant } from './useTenant';
@@ -93,6 +93,16 @@ export interface CteSearchRow {
   xml_url: string | null;
 }
 
+async function readSearchPages<T>(read: (start: number, end: number) => PromiseLike<{data: T[] | null; error: unknown}>): Promise<T[]> {
+  const rows: T[] = [];
+  for (let start = 0; ; start += 500) {
+    const {data, error} = await read(start, start + 499);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < 500) return rows;
+  }
+}
+
 function nz(v?: string) {
   if (!v) return null;
   const t = v.trim();
@@ -138,7 +148,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
 
       const f = filters;
 
-      const docNumber = nz(f.docNumber); if (docNumber) q = q.ilike('cte_number', `%${docNumber}%`);
+      // Number filters run after enriching catalog rows with their original NF payload.
       const internal = nz(f.internalNumber); if (internal) q = q.ilike('internal_number', `%${internal}%`);
       const ref = nz(f.referenceNumber); if (ref) q = q.ilike('reference_number', `%${ref}%`);
       const accessKey = nz(f.accessKey); if (accessKey) q = q.ilike('access_key', `%${accessKey.replace(/\D/g, '')}%`);
@@ -155,7 +165,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
       const ins = nz(f.insuranceCompany); if (ins) q = q.ilike('insurance_company', `%${ins}%`);
       const contract = nz(f.contractNumber); if (contract) q = q.ilike('contract_number', `%${contract}%`);
       const trip = nz(f.tripNumber); if (trip) q = q.ilike('trip_number', `%${trip}%`);
-      const invoice = nz(f.invoiceNumber); if (invoice) q = q.ilike('invoice_numbers', `%${invoice}%`);
+
       const romexp = nz(f.romexpNumber); if (romexp) q = q.ilike('romexp_number', `%${romexp}%`);
 
       if (f.issueDateStart) q = q.or(`issued_at.gte.${localDayBoundary(f.issueDateStart)},and(issued_at.is.null,created_at.gte.${localDayBoundary(f.issueDateStart)})`);
@@ -170,12 +180,11 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
       const af = bool(f.autonomousFreight); if (af !== null) q = q.eq('autonomous_freight', af);
       const cd = bool(f.complementaryDoc); if (cd !== null) q = q.eq('complementary_doc', cd);
 
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await readSearchPages((start, end) => q.order('id').range(start, end));
 
       // As CT-e realmente transmitidas ficam em `fiscal_documents` (saída) e são
       // as únicas com id no Hub Fiscal — sem esse merge a consulta não permitia baixar arquivos.
-      const { data: outboundData, error: outErr } = await supabase
+      const outbound = await readSearchPages((start, end) => supabase
         .from('fiscal_documents')
         .select(
           'id, invoice_number, access_key, sefaz_status, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
@@ -183,10 +192,15 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
         .eq('is_duplicate', false)
-        .eq('document_type', 'outbound');
-      
-      if (outErr) throw outErr;
-      const outbound = outboundData || [];
+        .eq('document_type', 'outbound').order('id').range(start, end));
+      const receipts = await readSearchPages((start, end) => supabase.from('hub_fiscal_emissions')
+        .select('id,fiscal_document_id,number,series,created_at').eq('tenant_id', currentTenant.id)
+        .eq('doc_type', 'cte').order('created_at', {ascending: false}).order('id').range(start, end));
+      const receiptById = new Map<string, (typeof receipts)[number]>();
+      for (const receipt of receipts) {
+        if (receipt.fiscal_document_id && !receiptById.has(receipt.fiscal_document_id)) receiptById.set(receipt.fiscal_document_id, receipt);
+      }
+      const outboundById = new Map(outbound.map(row => [row.id, row]));
 
       const hubByKey = new Map<string, (typeof outbound)[number]>();
       for (const d of outbound) {
@@ -196,7 +210,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
 
       const usedHubIds = new Set<string>();
       const draftRows: CteSearchRow[] = (data || []).map((r) => {
-        const match = r.access_key ? hubByKey.get(r.access_key) : null;
+        const match = outboundById.get(r.id) ?? (r.access_key ? hubByKey.get(r.access_key) : null);
         if (match) usedHubIds.add(match.id);
         const payloadRecipient = readCtePayloadRecipient(match?.cte_payload);
         
@@ -206,8 +220,8 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           ...r,
           id: match?.id ?? r.id,
           source: match ? 'hub' : 'draft',
-          cte_number: r.cte_number ?? null,
-          cte_series: r.cte_series ?? null,
+          cte_number: (match ? receiptById.get(match.id)?.number : null) ?? r.cte_number ?? null,
+          cte_series: (match ? receiptById.get(match.id)?.series : null) ?? r.cte_series ?? null,
           cte_type: r.cte_type ?? 'normal',
           access_key: r.access_key ?? null,
           sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status) : r.sefaz_status ?? 'pending',
@@ -221,7 +235,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           recipient_state: payloadRecipient.state ?? r.recipient_state ?? null,
           vehicle_plate: r.vehicle_plate ?? null,
           driver_name: r.driver_name ?? null,
-          invoice_numbers: r.invoice_numbers ?? null,
+          invoice_numbers: [r.invoice_numbers, readCtePayloadInvoiceNumbers(match?.cte_payload)].filter(Boolean).join(', ') || null,
           freight_value: Number(r.freight_value ?? 0),
           cargo_value: Number(r.cargo_value ?? 0),
           hub_document_id: match?.hub_document_id ?? null,
@@ -238,8 +252,8 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           return {
           id: d.id,
           source: 'hub',
-          cte_number: d.invoice_number ?? null,
-          cte_series: null,
+          cte_number: receiptById.get(d.id)?.number ?? d.invoice_number ?? null,
+          cte_series: receiptById.get(d.id)?.series ?? null,
           cte_type: 'normal',
           access_key: d.access_key ?? null,
           sefaz_status: mapOutboundStatus(d.status, d.sefaz_status),
@@ -253,7 +267,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           recipient_state: payloadRecipient.state ?? d.recipient_state ?? null,
           vehicle_plate: null,
           driver_name: null,
-          invoice_numbers: d.invoice_number ?? null,
+          invoice_numbers: readCtePayloadInvoiceNumbers(d.cte_payload),
           freight_value: Number(d.freight_value ?? d.value ?? 0),
           cargo_value: Number(d.value ?? 0),
           hub_document_id: d.hub_document_id ?? null,

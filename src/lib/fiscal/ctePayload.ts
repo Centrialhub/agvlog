@@ -67,3 +67,17 @@ export function readAuthorizedCteHubDetails(value: Json | null | undefined): Aut
     },
   };
 }
+
+/** Read the immutable source NF numbers, independent of later release/cancellation links. */
+export function readCtePayloadInvoiceNumbers(value: Json | null | undefined): string | null {
+  const root = asObject(value);
+  const payload = asObject(root?.payload) ?? root;
+  const invoices = payload?.notasFiscais;
+  if (!Array.isArray(invoices)) return null;
+  const numbers = invoices.flatMap(invoice => {
+    const raw = asObject(invoice)?.numero;
+    const number = typeof raw === 'number' ? String(raw) : asText(raw);
+    return number ? [number.trim()] : [];
+  });
+  return [...new Set(numbers)].join(', ') || null;
+}

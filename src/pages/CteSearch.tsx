@@ -134,7 +134,7 @@ export default function CteSearch() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
-  const { data: rowsData = [], isLoading, isFetching, refetch } = useCteSearch(filters);
+  const { data: rowsData = [], isLoading, isFetching, error: searchError, refetch } = useCteSearch(filters);
   const { sortedItems: rows, requestSort, sortConfig } = useSortableData(rowsData);
 
   // Polling automático para documentos em cancelamento ou transmissão
@@ -487,6 +487,8 @@ export default function CteSearch() {
           </div>
         )}
       </Card>
+
+      {searchError && <Card role="alert" className="p-3 text-destructive">Não foi possível consultar os CT-e: {errorMessage(searchError)}. Tente atualizar a consulta.</Card>}
 
       {/* Totais */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
