@@ -954,15 +954,22 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   }
 
   function handleTransmitClick() {
-    const hasLocalDestination = items.some((item) => {
+    const localDestinations = items.filter((item) => {
       const emitter = selectActiveEmitterById(emitters, item.emitterId);
       return emitter && isSameFiscalMunicipality(
         {city: item.recipientCity, state: item.recipientState, code: item.recipientCityIbge},
         {city: emitter.endereco?.municipio, state: emitter.endereco?.uf, code: emitter.city_code},
       );
     });
-    if (hasLocalDestination) {
-      toast.error('NFs com destino no município da transportadora devem ser faturadas pela lista de NFS-e. Revise o emitente e as notas selecionadas.');
+    if (localDestinations.length > 0) {
+      const details = localDestinations.map(item => {
+        const notes = item.invoices.map(invoice => invoice.number).filter(Boolean).join(', ');
+        return 'NF ' + (notes || 'sem número') + ': ' + item.recipientCity + '/' + item.recipientState;
+      }).join(' • ');
+      toast.error('NFs com destino no município da transportadora devem ser faturadas pela lista de NFS-e.', {
+        description: details,
+        duration: 10000,
+      });
       return;
     }
     void transmit();

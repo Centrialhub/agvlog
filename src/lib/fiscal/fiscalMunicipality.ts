@@ -11,10 +11,13 @@ export interface FiscalMunicipality {
 export function isSameFiscalMunicipality(a: FiscalMunicipality, b: FiscalMunicipality): boolean {
   const aCode = normalizeIbgeCity(a.code);
   const bCode = normalizeIbgeCity(b.code);
-  if (aCode && bCode) return aCode === bCode;
   const aState = normalizeUf(a.state);
   const bState = normalizeUf(b.state);
   const aCity = normalizeCity(normalizeCityName(a.city));
   const bCity = normalizeCity(normalizeCityName(b.city));
-  return !!aState && aState === bState && !!aCity && aCity === bCity;
+  // Use the same explicit city/UF destination as the availability lists.
+  // A stale registry IBGE code must not turn a different named city into local freight.
+  if (aState && bState && aCity && bCity) return aState === bState && aCity === bCity;
+  if (aState && bState && aState !== bState) return false;
+  return !!aCode && !!bCode && aCode === bCode;
 }
