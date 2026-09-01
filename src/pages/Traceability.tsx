@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { AlertCircle, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, FileSearch, History, Lightbulb, PackageCheck, Search, Truck } from 'lucide-react';
@@ -22,6 +22,8 @@ import { Progress } from '@/components/ui/progress';
 import { analyzeObservations, type AnalyzerResult } from '@/lib/observationPatternAnalyzer';
 import { CLIENT_LOAD_OBSERVATION_RULES } from '@/lib/documentParsers';
 import { useSortableData } from '@/hooks/useSortableData';
+import { useCreateOperationalEvent } from '@/hooks/useOperationalEvents';
+import { getErrorMessage } from '@/lib/errors';
 
 type SiatStatus = 'pending' | 'in_transit' | 'delivered';
 
@@ -199,12 +201,12 @@ const DEFAULT_SLA_THRESHOLD_H = 72;
 export default function Traceability() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const registerEvent = useCreateOperationalEvent();
   const [filters, setFilters] = useState({
     invoice: '', loadNumber: '', clientRef: '', client: '', supplier: '', plate: '', driver: '', start: '', end: '', deliveryStart: '', deliveryEnd: '', importStart: '', importEnd: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '', payment: '', importBatch: 'all',
   });
   const [selectedRow, setSelectedRow] = useState<TraceRow | null>(null);
-  const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', status: 'no_change', description: '' });
+  const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', description: '' });
   const [slaThresholdH, setSlaThresholdH] = useState<number>(() => {
     if (typeof window === 'undefined') return DEFAULT_SLA_THRESHOLD_H;
     const raw = window.localStorage.getItem(SLA_THRESHOLD_KEY);
@@ -443,40 +445,34 @@ export default function Traceability() {
     };
   }, [filteredRows, counts.fromObservation, counts.missingLoad]);
 
-  const registerEvent = useMutation({
-    mutationFn: async () => {
-      if (!currentTenant || !selectedRow) return;
-      if (!eventForm.description.trim()) throw new Error('Informe a descrição da ocorrência');
-      // Entidade primária é sempre o documento fiscal selecionado.
-      // A RPC propaga o efeito para a carga quando todas as NFs estiverem terminais.
-      const entityType = 'fiscal_document';
-      const entityId = selectedRow.doc.id;
-      const newStatus = eventForm.status === 'no_change' ? null : eventForm.status;
-      const { error } = await supabase.rpc('record_operational_event_with_status', {
-        _tenant_id: currentTenant.id,
-        _entity_type: entityType,
-        _entity_id: entityId,
-        _event_type: eventForm.type,
-        _description: eventForm.description,
-        _severity: eventForm.severity,
-        _new_status: newStatus ?? undefined,
-        _visible_to_client: false,
+  const resetEventForm = () => setEventForm({ type: 'other', severity: 'medium', description: '' });
+  const handleRegisterEvent = async () => {
+    if (!selectedRow) return;
+    if (eventForm.description.trim().length < 5) {
+      toast({ title: 'Descrição insuficiente', description: 'Informe ao menos 5 caracteres.', variant: 'destructive' }); return;
+    }
+    try {
+      await registerEvent.mutateAsync({
+        event_type: eventForm.type,
+        severity: eventForm.severity,
+        description: eventForm.description,
+        financial_impact: 0,
+        visible_to_client: false,
+        client_action_required: false,
+        fiscal_document_id: selectedRow.doc.id,
+        load_id: selectedRow.doc.load_id,
+        client_id: selectedRow.doc.client_id,
       });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast({ title: 'Rastreabilidade atualizada' });
-      setEventForm({ type: 'other', severity: 'medium', status: 'no_change', description: '' });
-      queryClient.invalidateQueries({ queryKey: ['traceability'] });
-      queryClient.invalidateQueries({ queryKey: ['operational_events'] });
-      queryClient.invalidateQueries({ queryKey: ['loads'] });
-    },
-    onError: (error: unknown) => toast({
-      title: 'Erro',
-      description: error instanceof Error ? error.message : 'Não foi possível registrar o evento.',
-      variant: 'destructive',
-    }),
-  });
+      toast({ title: 'Ocorrência registrada', description: 'A situação da carga não foi alterada automaticamente.' });
+      resetEventForm();
+    } catch (error) {
+      toast({ title: 'Ocorrência não confirmada', description: getErrorMessage(error), variant: 'destructive' });
+    }
+  };
+  const handleRecoverEvent = async () => {
+    try { await registerEvent.recoverAsync(); toast({ title: 'Solicitação recuperada e confirmada' }); resetEventForm(); }
+    catch (error) { toast({ title: 'Recuperação pendente', description: getErrorMessage(error), variant: 'destructive' }); }
+  };
 
   const exportCsv = () => {
     const headers = [
@@ -1156,14 +1152,20 @@ export default function Traceability() {
               </div>
 
               <div className="rounded-md border border-border p-4">
-                <h3 className="mb-3 flex items-center gap-2 font-semibold"><CheckCircle2 className="h-4 w-4" /> Registrar ocorrência / atualizar situação</h3>
-                <div className="grid gap-3 md:grid-cols-4">
-                  <div><Label>Tipo</Label><Select value={eventForm.type} onValueChange={type => setEventForm(f => ({ ...f, type }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="other">Outro</SelectItem><SelectItem value="partial_delivery">Entrega parcial</SelectItem><SelectItem value="client_refused">Recusa</SelectItem><SelectItem value="damaged">Avaria</SelectItem><SelectItem value="wrong_address">Endereço errado</SelectItem></SelectContent></Select></div>
-                  <div><Label>Severidade</Label><Select value={eventForm.severity} onValueChange={severity => setEventForm(f => ({ ...f, severity }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Baixa</SelectItem><SelectItem value="medium">Média</SelectItem><SelectItem value="high">Alta</SelectItem><SelectItem value="critical">Crítica</SelectItem></SelectContent></Select></div>
-                  <div><Label>Nova situação</Label><Select value={eventForm.status} onValueChange={status => setEventForm(f => ({ ...f, status }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="no_change">Não alterar</SelectItem><SelectItem value="planned">Pendente</SelectItem><SelectItem value="in_transit">Em trânsito</SelectItem><SelectItem value="delivered">Entregue</SelectItem></SelectContent></Select></div>
-                  <div className="flex items-end"><Button className="w-full" onClick={() => registerEvent.mutate()} disabled={registerEvent.isPending}>Registrar</Button></div>
+                <h3 className="mb-3 flex items-center gap-2 font-semibold"><CheckCircle2 className="h-4 w-4" /> Registrar ocorrência</h3>
+                {(registerEvent.pendingCommand || registerEvent.recoveryError) && (
+                  <div role="alert" className="mb-3 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
+                    <p>{registerEvent.recoveryError || 'Existe uma solicitação sem confirmação. Recupere-a antes de registrar outra ocorrência.'}</p>
+                    {registerEvent.pendingCommand && <Button className="mt-2" size="sm" variant="outline" onClick={handleRecoverEvent} disabled={registerEvent.isPending}>Recuperar solicitação</Button>}
+                  </div>
+                )}
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div><Label>Tipo</Label><Select disabled={!!registerEvent.pendingCommand} value={eventForm.type} onValueChange={type => setEventForm(f => ({ ...f, type }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="other">Outro</SelectItem><SelectItem value="partial_delivery">Entrega parcial</SelectItem><SelectItem value="client_refused">Recusa</SelectItem><SelectItem value="damaged">Avaria</SelectItem><SelectItem value="wrong_address">Endereço errado</SelectItem></SelectContent></Select></div>
+                  <div><Label>Severidade</Label><Select disabled={!!registerEvent.pendingCommand} value={eventForm.severity} onValueChange={severity => setEventForm(f => ({ ...f, severity }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Baixa</SelectItem><SelectItem value="medium">Média</SelectItem><SelectItem value="high">Alta</SelectItem><SelectItem value="critical">Crítica</SelectItem></SelectContent></Select></div>
+                  <div className="flex items-end"><Button className="w-full" onClick={handleRegisterEvent} disabled={registerEvent.isPending || !!registerEvent.pendingCommand}>{registerEvent.isPending ? 'Registrando…' : 'Registrar'}</Button></div>
                 </div>
-                <div className="mt-3"><Label>Descrição</Label><Textarea value={eventForm.description} onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))} placeholder="Ex.: Entrega realizada normalmente, canhoto recebido, divergência encontrada..." /></div>
+                <div className="mt-3"><Label>Descrição</Label><Textarea disabled={!!registerEvent.pendingCommand} value={eventForm.description} onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))} placeholder="Ex.: divergência encontrada durante a conferência..." /></div>
+                <p className="mt-2 text-xs text-muted-foreground">O registro da ocorrência não altera automaticamente o estado da carga, viagem ou documento.</p>
               </div>
             </div>
           )}

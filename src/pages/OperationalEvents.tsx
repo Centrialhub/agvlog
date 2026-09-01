@@ -129,6 +129,8 @@ export default function OperationalEvents() {
   const { data: clients = [] } = useClients();
   const createEvent = useCreateOperationalEvent();
   const updateEvent = useUpdateOperationalEvent();
+  const pendingCommand = createEvent.pendingCommand || updateEvent.pendingCommand;
+  const commandRecoveryError = createEvent.recoveryError || updateEvent.recoveryError;
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<NonNullable<OperationalEventsFilters['status']>>('open');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -805,10 +807,23 @@ export default function OperationalEvents() {
 
   const handleResolve = async (evt: OperationalEvent) => {
     try {
-      await updateEvent.mutateAsync({ id: evt.id, resolved_at: new Date().toISOString(), resolution: 'Resolvido' });
+      await updateEvent.mutateAsync({ id: evt.id, resolution: 'Resolvido pela operação' });
       toast({ title: 'Ocorrência resolvida' });
     } catch (e: unknown) {
       toast({ title: 'Erro', description: getErrorMessage(e), variant: 'destructive' });
+    }
+  };
+
+  const handleRecoverCommand = async () => {
+    try {
+      const result = await createEvent.recoverAsync();
+      toast({ title: result.action === 'resolve' ? 'Resolução recuperada e confirmada' : 'Ocorrência recuperada e confirmada' });
+      if (result.action === 'create') {
+        setDialogOpen(false);
+        setForm({ event_type: 'missing_goods', severity: 'medium', load_id: '', client_id: '', driver_id: '', description: '', financial_impact: 0 });
+      }
+    } catch (error) {
+      toast({ title: 'Recuperação pendente', description: getErrorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -859,7 +874,7 @@ export default function OperationalEvents() {
           </Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> Nova Ocorrência</Button>
+            <Button disabled={!!pendingCommand}><Plus className="h-4 w-4 mr-2" /> Nova Ocorrência</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle>Registrar Ocorrência</DialogTitle></DialogHeader>
@@ -918,6 +933,15 @@ export default function OperationalEvents() {
         </Dialog>
         </div>
       </div>
+
+      {(pendingCommand || commandRecoveryError) && (
+        <Card role="alert" className="border-warning/30 bg-warning/10">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+            <span>{commandRecoveryError || `Existe uma ${pendingCommand?.action === 'resolve' ? 'resolução' : 'ocorrência'} sem confirmação. Recupere o mesmo pedido antes de continuar.`}</span>
+            {pendingCommand && <Button size="sm" variant="outline" onClick={handleRecoverCommand} disabled={createEvent.isPending || updateEvent.isPending}>Recuperar solicitação</Button>}
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1931,7 +1955,7 @@ export default function OperationalEvents() {
                         <MessageSquare className="h-4 w-4 text-primary" />
                       </Button>
                       {!e.resolved_at && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleResolve(e)} title="Resolver">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleResolve(e)} title="Resolver" disabled={updateEvent.isPending || !!pendingCommand}>
                           <CheckCircle className="h-4 w-4 text-success" />
                         </Button>
                       )}
@@ -1986,6 +2010,7 @@ export default function OperationalEvents() {
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}
         onResolve={handleResolve}
+        isResolving={updateEvent.isPending || !!pendingCommand}
       />
 
       <DriverChatDrawer
@@ -2007,7 +2032,7 @@ function KpiCard({ label, value, accent }: { label: string; value: string | numb
   );
 }
 
-function EventDetailDrawer({ event, onClose, onResolve }: { event: OperationalEvent | null; onClose: () => void; onResolve: (e: OperationalEvent) => void }) {
+function EventDetailDrawer({ event, onClose, onResolve, isResolving }: { event: OperationalEvent | null; onClose: () => void; onResolve: (e: OperationalEvent) => void; isResolving: boolean }) {
   const isOpen = !!event;
   return (
     <Sheet open={isOpen} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -2028,8 +2053,8 @@ function EventDetailDrawer({ event, onClose, onResolve }: { event: OperationalEv
                   </SheetDescription>
                 </div>
                 {!event.resolved_at && (
-                  <Button size="sm" variant="outline" onClick={() => onResolve(event)}>
-                    <CheckCircle className="h-4 w-4 mr-1 text-success" /> Resolver
+                  <Button size="sm" variant="outline" onClick={() => onResolve(event)} disabled={isResolving}>
+                    <CheckCircle className="h-4 w-4 mr-1 text-success" /> {isResolving ? 'Resolvendo…' : 'Resolver'}
                   </Button>
                 )}
               </div>

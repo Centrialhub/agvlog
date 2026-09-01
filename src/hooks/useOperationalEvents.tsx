@@ -1,8 +1,15 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
-import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import type { Tables } from '@/integrations/supabase/types';
+import { requestWithDeadline } from '@/lib/requestWithDeadline';
+import { callOperatorEventRpc, operationalEventError, operationalEventReadError, parseOperationalEventCreateContext, parseOperationalEventResolveContext,
+  type OperationalEventBindings, type OperationalEventCommandResult, type OperationalEventCreateResult,
+  type OperationalEventCreateCommand, type OperationalEventResolveCommand, type OperationalEventResolveResult } from '@/lib/operationalEvents/operatorEventCommands';
+import { createOperationalEventOutbox, OPERATIONAL_EVENT_COMMAND_CHANGED,
+  pendingOperationalEventCommand } from '@/lib/operationalEvents/operatorEventOutbox';
 
 export const EVENT_TYPES = [
   'missing_goods', 'missing_goods_fractional', 'wrong_quantity', 'client_refused', 'no_order',
@@ -45,8 +52,24 @@ export type OperationalEvent = Omit<Tables<'operational_events'>, 'event_type'> 
   vehicles?: { plate: string } | null;
 };
 
-export type OperationalEventCreate = Omit<TablesInsert<'operational_events'>, 'tenant_id' | 'created_by'>;
-export type OperationalEventUpdate = Omit<TablesUpdate<'operational_events'>, 'id'> & { id: string };
+export type OperationalEventCreate = {
+  event_type: string;
+  severity: string;
+  description: string;
+  financial_impact?: number | null;
+  visible_to_client?: boolean;
+  client_action_required?: boolean;
+  load_id?: string | null;
+  order_id?: string | null;
+  vehicle_id?: string | null;
+  driver_id?: string | null;
+  client_id?: string | null;
+  dispatch_trip_id?: string | null;
+  dispatch_stop_id?: string | null;
+  fiscal_document_id?: string | null;
+  proof_of_delivery_id?: string | null;
+};
+export type OperationalEventUpdate = { id: string; resolution: string };
 
 export function useOperationalEvents() {
   const { currentTenant } = useTenant();
@@ -150,36 +173,115 @@ export function useOperationalEventsFiltered(filters: OperationalEventsFilters) 
 }
 
 export function useCreateOperationalEvent() {
-  const { currentTenant } = useTenant();
-  const { user } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (values: OperationalEventCreate) => {
-      const payload: TablesInsert<'operational_events'> = {
-        ...values,
-        tenant_id: currentTenant!.id,
-        created_by: user?.id,
-      };
-      const { data, error } = await supabase.from('operational_events').insert(payload).select().single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['operational_events'] }),
-  });
+  const commands = useOperationalEventCommandTransport();
+  const mutation = useMutation({ mutationFn: commands.create });
+  return { ...mutation, pendingCommand: commands.pending, recoveryError: commands.recoveryError, recoverAsync: commands.recover };
 }
 
 export function useUpdateOperationalEvent() {
+  const commands = useOperationalEventCommandTransport();
+  const mutation = useMutation({ mutationFn: commands.resolve });
+  return { ...mutation, pendingCommand: commands.pending, recoveryError: commands.recoveryError, recoverAsync: commands.recover };
+}
+
+const commandInvalidations = ['operational_events', 'operational_events_filtered', 'traceability', 'pod-history'];
+const bindingKeys = ['load_id','order_id','vehicle_id','driver_id','client_id','dispatch_trip_id','dispatch_stop_id','fiscal_document_id','proof_of_delivery_id'] as const;
+
+function useOperationalEventCommandTransport() {
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, ...values }: OperationalEventUpdate) => {
-      const payload: TablesUpdate<'operational_events'> = {
-        ...values,
-        updated_at: new Date().toISOString(),
-      };
-      const { data, error } = await supabase.from('operational_events').update(payload).eq('id', id).select().single();
-      if (error) throw error;
-      return data;
+  const tenant = currentTenant?.id;
+  const actor = user?.id;
+  const latest = useRef({ tenant, actor });
+  latest.current = { tenant, actor };
+  const alive = useRef(true);
+  const busy = useRef(false);
+  const [isPending, setPending] = useState(false);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    alive.current = true;
+    const changed = () => setRevision(value => value + 1);
+    window.addEventListener('storage', changed);
+    window.addEventListener(OPERATIONAL_EVENT_COMMAND_CHANGED, changed);
+    return () => {
+      alive.current = false;
+      window.removeEventListener('storage', changed);
+      window.removeEventListener(OPERATIONAL_EVENT_COMMAND_CHANGED, changed);
+    };
+  }, []);
+
+  const assertContext = useCallback(() => {
+    if (!alive.current || latest.current.tenant !== tenant || latest.current.actor !== actor) {
+      throw new Error('A sessão ou empresa mudou. Recupere a ocorrência na sessão original.');
+    }
+  }, [actor, tenant]);
+
+  const outbox = useMemo(() => createOperationalEventOutbox({
+    get storage() { return window.localStorage; },
+    uuid: () => crypto.randomUUID(),
+    assertContext,
+    changed: () => window.dispatchEvent(new Event(OPERATIONAL_EVENT_COMMAND_CHANGED)),
+    lock: async (key, work) => {
+      if (!navigator.locks) throw new Error('Use um navegador atualizado em conexão segura para alterar ocorrências.');
+      return navigator.locks.request(key, work);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['operational_events'] }),
-  });
+    send: (action, payload) => requestWithDeadline(signal => action === 'create'
+      ? callOperatorEventRpc('create_operational_event_v1', { _payload: payload as OperationalEventCreateCommand }, signal)
+      : callOperatorEventRpc('resolve_operational_event_v1', { _payload: payload as OperationalEventResolveCommand }, signal)),
+  }), [assertContext]);
+
+  const recovery = useMemo(() => {
+    try { return { revision, pending: tenant && actor ? pendingOperationalEventCommand(window.localStorage, tenant, actor) : null, error: null }; }
+    catch (cause) { return { revision, pending: null, error: operationalEventError(cause) }; }
+  }, [tenant, actor, revision]);
+
+  const run = useCallback(async <Result extends OperationalEventCommandResult>(work: () => Promise<Result>) => {
+    if (!tenant || !actor) throw new Error('Entre com uma sessão válida e selecione a empresa.');
+    if (busy.current) throw new Error('Aguarde a solicitação de ocorrência em andamento.');
+    assertContext(); busy.current = true; setPending(true);
+    try { const result = await work(); assertContext(); return result; }
+    catch (cause) { throw new Error(operationalEventError(cause)); }
+    finally {
+      try { await Promise.all(commandInvalidations.map(key => qc.invalidateQueries({ queryKey: [key] }))); }
+      finally { busy.current = false; if (alive.current) setPending(false); }
+    }
+  }, [actor, assertContext, qc, tenant]);
+
+  const create = useCallback((values: OperationalEventCreate) => run<OperationalEventCreateResult>(async () => {
+    if (pendingOperationalEventCommand(window.localStorage, tenant!, actor!)) throw new Error('Há uma ocorrência sem confirmação. Recupere o pedido existente antes de iniciar outro.');
+    const bindings = Object.fromEntries(bindingKeys.flatMap(key => values[key] ? [[key, values[key]]] : [])) as OperationalEventBindings;
+    let contextResponse;
+    try { contextResponse = await requestWithDeadline(signal => callOperatorEventRpc(
+      'get_operational_event_create_context', { _tenant_id: tenant!, _bindings: bindings }, signal,
+    )); } catch (cause) { throw new Error(operationalEventReadError(cause, 'Não foi possível obter o contexto atualizado. Tente novamente.')); }
+    if (contextResponse.error) throw new Error(operationalEventReadError(contextResponse.error, 'Não foi possível obter o contexto atualizado. Tente novamente.'));
+    const context = parseOperationalEventCreateContext(contextResponse.data, tenant!, actor!);
+    return outbox.submitCreate(tenant!, actor!, {
+      expected_revision: context.revision,
+      event_type: values.event_type,
+      severity: values.severity as 'low'|'medium'|'high'|'critical',
+      description: values.description,
+      financial_impact_cents: Math.round(Number(values.financial_impact || 0) * 100),
+      visible_to_client: values.visible_to_client ?? false,
+      client_action_required: values.client_action_required ?? false,
+      bindings: context.bindings,
+    });
+  }), [actor, outbox, run, tenant]);
+
+  const resolve = useCallback((values: OperationalEventUpdate) => run<OperationalEventResolveResult>(async () => {
+    if (pendingOperationalEventCommand(window.localStorage, tenant!, actor!)) throw new Error('Há uma ocorrência sem confirmação. Recupere o pedido existente antes de iniciar outro.');
+    let contextResponse;
+    try { contextResponse = await requestWithDeadline(signal => callOperatorEventRpc(
+      'get_operational_event_context', { _tenant_id: tenant!, _event_id: values.id }, signal,
+    )); } catch (cause) { throw new Error(operationalEventReadError(cause, 'Não foi possível obter o contexto atualizado. Tente novamente.')); }
+    if (contextResponse.error) throw new Error(operationalEventReadError(contextResponse.error, 'Não foi possível obter o contexto atualizado. Tente novamente.'));
+    const context = parseOperationalEventResolveContext(contextResponse.data, tenant!, actor!, values.id);
+    if (!context.can_resolve) throw new Error('Esta ocorrência já foi resolvida. Atualize a listagem.');
+    return outbox.submitResolve(tenant!, actor!, { event_id: values.id, expected_revision: context.revision, resolution: values.resolution });
+  }), [actor, outbox, run, tenant]);
+
+  const recover = useCallback(() => run(() => outbox.recover(tenant!, actor!)), [actor, outbox, run, tenant]);
+  return { create, resolve, recover, pending: recovery.pending, recoveryError: recovery.error, isPending };
 }
