@@ -8,6 +8,36 @@ import {LoadReplanningPanel} from '@/components/loads/LoadReplanningPanel';
 import {useLoadReplanning} from '@/hooks/useLoadReplanning';
 import {createReplanningDatabase,replanningIds as i,seedReplanning,twoPlannedTrips} from './helpers/replanningDatabase';
 import {compositionRpc} from './helpers/compositionDatabase';
+vi.mock('@/components/ui/select',async()=>{
+  const React=await import('react');
+  type ChildProps={id?:string;value?:string;disabled?:boolean;children?:import('react').ReactNode};
+  const SelectTrigger=()=>null;
+  const SelectContent=()=>null;
+  const SelectItem=()=>null;
+  const SelectValue=()=>null;
+  const Select=({children,value,onValueChange,disabled}:{children?:import('react').ReactNode;value?:string;
+    onValueChange?:(value:string)=>void;disabled?:boolean})=>{
+    let id:string|undefined;const options:Array<{value:string;disabled?:boolean;text:string}>=[];
+    const textOf=(node:import('react').ReactNode):string=>React.Children.toArray(node).map(child=>
+      typeof child==='string'||typeof child==='number'?String(child):
+        React.isValidElement<ChildProps>(child)?textOf(child.props.children):'').join(' ').replace(/\s+/g,' ')
+      .replace(/\s+([:;,.])/g,'$1').trim();
+    const visit=(node:import('react').ReactNode):void=>React.Children.forEach(node,child=>{
+      if(!React.isValidElement<ChildProps>(child))return;
+      if(child.type===SelectTrigger)id=child.props.id;
+      else if(child.type===SelectItem&&child.props.value)options.push({value:child.props.value,
+        disabled:child.props.disabled,text:textOf(child.props.children)});
+      else visit(child.props.children);
+    });
+    visit(children);
+    return React.createElement('select',{id,role:'combobox',value,disabled,onChange:(event:import('react').ChangeEvent<HTMLSelectElement>)=>
+      onValueChange?.(event.currentTarget.value)},
+    React.createElement('option',{value:'',disabled:true},''),
+    ...options.map(option=>React.createElement('option',{key:option.value,value:option.value,disabled:option.disabled},option.text)));
+  };
+  return {Select,SelectTrigger,SelectContent,SelectItem,SelectValue,SelectGroup:SelectContent,
+    SelectLabel:SelectContent,SelectSeparator:()=>null,SelectScrollUpButton:()=>null,SelectScrollDownButton:()=>null};
+});
 vi.hoisted(async()=>{const {Blob,File}=await import('node:buffer');vi.stubGlobal('Blob',Blob);vi.stubGlobal('File',File);});
 const mock=vi.hoisted(()=>({rpc:vi.fn(),success:vi.fn(),error:vi.fn(),write:vi.fn(),loseReply:false}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:i.tenant}})}));
@@ -43,17 +73,28 @@ beforeEach(async()=>{
 });
 afterEach(()=>{cleanup();client.clear();});
 const show=()=>render(<QueryClientProvider client={client}><MemoryRouter><LoadReallocation/></MemoryRouter></QueryClientProvider>);
+function selectOption(select:HTMLSelectElement,value:string){
+  const option=Array.from(select.options).find(candidate=>candidate.value===value);
+  expect(option).toBeDefined();expect(option).not.toBeDisabled();option!.selected=true;fireEvent.change(select);
+}
 async function open(){
-  await waitFor(()=>expect(screen.getByLabelText('Carga Origem')).toBeInTheDocument());
-  fireEvent.keyDown(screen.getByLabelText('Carga Origem'),{key:'Enter'});fireEvent.click(await screen.findByRole('option',{name:/1001/}));
-  fireEvent.keyDown(screen.getByLabelText('Carga Destino'),{key:'Enter'});fireEvent.click(await screen.findByRole('option',{name:/1002/}));
+  await waitFor(()=>expect(Array.from((screen.getByLabelText('Carga Origem') as HTMLSelectElement).options)
+    .some(option=>option.value===i.load)).toBe(true));
+  selectOption(screen.getByLabelText('Carga Origem') as HTMLSelectElement,i.load);
+  await waitFor(()=>expect(screen.getByLabelText('Carga Origem')).toHaveValue(i.load));
+  selectOption(screen.getByLabelText('Carga Destino') as HTMLSelectElement,i.load2);
+  await waitFor(()=>{
+    expect(screen.getByLabelText('Carga Origem')).toHaveValue(i.load);
+    expect(screen.getByLabelText('Carga Destino')).toHaveValue(i.load2);
+  });
   fireEvent.click(await screen.findByRole('button',{name:/Mercadoria origem/}));
   fireEvent.click(screen.getByRole('button',{name:'Replanejar itens e paradas'}));
   const dialog=await screen.findByRole('dialog');await within(dialog).findByLabelText('Destino dos itens');return dialog;
 }
 async function choose(dialog:HTMLElement,name:RegExp){
-  fireEvent.keyDown(within(dialog).getByLabelText('Destino dos itens'),{key:'Enter'});
-  fireEvent.click(await screen.findByRole('option',{name}));
+  const select=within(dialog).getByLabelText('Destino dos itens') as HTMLSelectElement;
+  const option=Array.from(select.options).find(candidate=>name.test(candidate.textContent??''));
+  expect(option).toBeDefined();selectOption(select,option!.value);
   fireEvent.change(within(dialog).getByLabelText('Motivo do replanejamento'),{target:{value:'Transferência planejada QA'}});
 }
 const submitted=()=>mock.rpc.mock.calls.filter(([name])=>name==='replan_load_items');
