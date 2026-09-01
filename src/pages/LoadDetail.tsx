@@ -36,6 +36,7 @@ import {
   type CanonicalLoadTripLink,
 } from '@/lib/driverTrip';
 import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
+import TripOperationalEventsPanel from '@/components/control-tower/TripOperationalEventsPanel';
 
 function useLoad(id: string | undefined) {
   const { currentTenant } = useTenant();
@@ -115,11 +116,17 @@ export default function LoadDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
-  const { data: load, isLoading, refetch } = useLoad(id);
-  const { data: items = [] } = useLoadItems(id);
+  const loadQuery = useLoad(id);
+  const { data: load, isLoading, refetch } = loadQuery;
+  const itemsQuery = useLoadItems(id);
+  const items = useMemo(
+    () => itemsQuery.isError ? [] : itemsQuery.data ?? [],
+    [itemsQuery.data, itemsQuery.isError],
+  );
   const documentsQuery = useLoadDocuments(id);
   const documents = documentsQuery.data ?? [];
-  const { data: loadTripLinks = [] } = useLoadTripState(id);
+  const loadTripQuery = useLoadTripState(id);
+  const loadTripLinks = loadTripQuery.isError ? [] : loadTripQuery.data ?? [];
   const { data: vehicles = [] } = useVehicles();
   const transitionLoadStatus = useTransitionLoadStatus();
   const dispatchPlan=useDispatchRoutePlan();
@@ -236,6 +243,23 @@ export default function LoadDetail() {
     return <div className="flex items-center justify-center h-64 text-muted-foreground">Carregando carga...</div>;
   }
 
+  if (loadQuery.isError) {
+    return (
+      <div role="alert" className="flex flex-col items-center justify-center h-64 gap-4 text-center">
+        <div>
+          <p className="font-medium text-destructive">Não foi possível carregar a carga.</p>
+          <p className="text-sm text-muted-foreground">Os dados anteriores foram ocultados; isso não significa que a carga não exista.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/loads')}>
+            <ArrowLeft className="h-4 w-4 mr-2" /> Voltar para Cargas
+          </Button>
+          <Button onClick={() => { void loadQuery.refetch(); }}>Tentar novamente</Button>
+        </div>
+      </div>
+    );
+  }
+
   if (!load) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -253,8 +277,10 @@ export default function LoadDetail() {
     tripLink?.dispatch_trips?.actual_start_at,
   );
   const rawNextStatuses = getNextStatuses(load.status, 'load');
-  const nextStatuses = rawNextStatuses.filter(status => status !== 'in_transit' || tripStarted);
-  const awaitingTripStart = rawNextStatuses.includes('in_transit') && !tripStarted;
+  const tripStateConfirmed = !loadTripQuery.isPending && !loadTripQuery.isError;
+  const nextStatuses = rawNextStatuses.filter(status => status !== 'in_transit' || (tripStateConfirmed && tripStarted));
+  const awaitingTripStart = rawNextStatuses.includes('in_transit') && tripStateConfirmed && !tripStarted;
+  const confirmingTripState = rawNextStatuses.includes('in_transit') && loadTripQuery.isPending;
   const palletCapacity = vehicle?.max_pallets;
   const weightCapacity = vehicle?.max_weight_kg;
   const palletPct = palletCapacity ? Math.round((computedTotals.pallets / palletCapacity) * 100) : null;
@@ -411,6 +437,11 @@ export default function LoadDetail() {
                 : 'Crie uma viagem antes de colocar a carga em trânsito.'}
             </p>
           ) : null}
+          {confirmingTripState ? (
+            <p role="status" className="basis-full text-xs text-muted-foreground">
+              Confirmando o vínculo da carga com a viagem…
+            </p>
+          ) : null}
           {['loaded', 'in_transit', 'delivered'].includes(load.status) && (
             <Button size="sm" variant="outline" onClick={openCTePreview} disabled={generateCTe.isPending}>
               <FileText className="h-3 w-3 mr-1" /> CT-e
@@ -533,6 +564,19 @@ export default function LoadDetail() {
       <DispatchRecoveryPanel loadId={load.id} onConfirmed={()=>{
         setDispatchOpen(false);void refetch();toast({title:'Despacho confirmado'});
       }}/>
+      {loadTripQuery.isError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <p>Não foi possível confirmar o vínculo entre carga e viagem. A transição para em trânsito permanece bloqueada.</p>
+          <Button variant="outline" onClick={() => { void loadTripQuery.refetch(); }}>Tentar novamente</Button>
+        </div>
+      )}
+      {itemsQuery.isError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <p>Não foi possível carregar os itens da carga. Totais vazios não serão considerados confirmados.</p>
+          <Button variant="outline" onClick={() => { void itemsQuery.refetch(); }}>Tentar novamente</Button>
+        </div>
+      )}
+      {tripLink && <TripOperationalEventsPanel tripId={tripLink.dispatch_trip_id} />}
       {/* Capacity summary */}
       {vehicle && (palletCapacity || weightCapacity) && (
         <Card>
