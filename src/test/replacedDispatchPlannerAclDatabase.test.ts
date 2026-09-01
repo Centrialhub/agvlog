@@ -20,7 +20,7 @@ const canonical = [
 
 const targetDefinition = baseline.match(
   /CREATE OR REPLACE FUNCTION public\.plan_dispatch_trip_v2\(p_tenant_id uuid, p_driver_id uuid,[\s\S]*?\$function\$;\r?\n/,
-)?.[0];
+)?.[0].replace(/\r\n/g, '\n');
 
 const runtimeFiles = (root: string): string[] => readdirSync(root).flatMap((entry) => {
   const path = join(root, entry);
