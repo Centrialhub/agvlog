@@ -17,6 +17,10 @@ const DEFAULT_ALLOWED_HEADERS = [
   "idempotency-key",
 ].join(", ");
 
+declare const Deno: {
+  env: { get(name: string): string | undefined };
+};
+
 // This repository is deployed at this exact public origin. Keep the environment
 // override so previews/self-hosted environments can opt in explicitly, while the
 // production deployment remains fail-closed if the secret is ever missing.

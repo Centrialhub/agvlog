@@ -2,6 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
+import {
+  classifyTelemetryFreshness,
+  type TelemetryFreshness,
+} from '@/lib/telemetryFreshness';
 
 export interface PortalTrackingNextStop {
   id: string;
@@ -37,6 +41,7 @@ export interface PortalTrackingItem {
   lng: number | null;
   speed: number | null;
   captured_at: string | null;
+  telemetry_freshness: TelemetryFreshness;
   driver_name: string | null;
   driver_phone: string | null;
   actual_start_at: string | null;
@@ -61,7 +66,17 @@ export function usePortalTracking() {
       if (error) throw error;
       if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
       const items = data.items;
-      return Array.isArray(items) ? items as unknown as PortalTrackingItem[] : [];
+      if (!Array.isArray(items)) return [];
+      return (items as unknown as Omit<PortalTrackingItem, 'telemetry_freshness'>[]).map((item) => {
+        const telemetryFreshness = classifyTelemetryFreshness(item.captured_at);
+        return {
+          ...item,
+          speed: telemetryFreshness === 'fresh' && typeof item.speed === 'number' && Number.isFinite(item.speed)
+            ? item.speed
+            : null,
+          telemetry_freshness: telemetryFreshness,
+        };
+      });
     },
     enabled: !!currentTenant && !!scope.selectedClientId,
     refetchInterval: 60_000,

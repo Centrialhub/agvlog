@@ -28,11 +28,14 @@ interface PipelineStats {
   synced_units: number;
   polled_units: number;
   total_inserted: number;
+  touched_vehicles: number;
   processed_vehicles: number;
   aggregated: number;
   state_computed: number;
   state_events: number;
   state_reprocessed: number;
+  trip_live_status_updated: number;
+  trip_live_status_deferred_reason: "cron_requires_actor_jwt" | null;
   errors: string[];
   needs_attention: string[];
   steps_executed: string[];
@@ -54,6 +57,9 @@ function numberValue(value: unknown, key: string): number {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return jsonResp({ error: "Method not allowed" }, 405);
   }
 
   try {
@@ -128,11 +134,14 @@ Deno.serve(async (req) => {
       synced_units: 0,
       polled_units: 0,
       total_inserted: 0,
+      touched_vehicles: 0,
       processed_vehicles: 0,
       aggregated: 0,
       state_computed: 0,
       state_events: 0,
       state_reprocessed: 0,
+      trip_live_status_updated: 0,
+      trip_live_status_deferred_reason: null,
       errors: [] as string[],
       needs_attention: [] as string[],
       steps_executed: [] as string[],
@@ -222,6 +231,7 @@ Deno.serve(async (req) => {
           const pollResult = objectValue(pollResp);
           stats.polled_units += numberValue(pollResult, "total_units");
           stats.total_inserted += numberValue(pollResult, "total_inserted");
+          stats.touched_vehicles += numberValue(pollResult, "touched_vehicles");
 
           if (pollResult.batch_aborted === true) {
             const reason = typeof pollResult.abort_reason === "string" ? pollResult.abort_reason : "unknown";
@@ -277,6 +287,36 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ===== STEP D2: Refresh operational trip state after committed telemetry =====
+    // The Control Tower evaluator is intentionally caller-JWT-only. Forward the
+    // original JWT for an authenticated administrative run; never impersonate a
+    // user or grant service_role access when this orchestrator is running by cron.
+    const hasPersistenceFailure = stats.errors.some(error => error.includes("persistence_failure"));
+    if (stats.touched_vehicles > 0 && !hasPersistenceFailure) {
+      if (!isCron && callerId) {
+        stats.steps_executed.push("trip_live_status");
+        try {
+          const liveStatusResp = objectValue(await callEdgeFunction(
+            supabaseUrl,
+            anonKey,
+            authHeader,
+            false,
+            null,
+            "update-trip-live-status",
+            { tenant_id },
+          ));
+          if (liveStatusResp.ok !== true) {
+            throw new Error("live status refresh was not confirmed");
+          }
+          stats.trip_live_status_updated = numberValue(liveStatusResp, "processed");
+        } catch (e: unknown) {
+          stats.errors.push(`TripLiveStatus: ${errorMessage(e)}`);
+        }
+      } else {
+        stats.trip_live_status_deferred_reason = "cron_requires_actor_jwt";
+      }
+    }
+
     // ===== STEP E: Daily aggregation (only on full/manual/aggregate_only) =====
     if (mode === "full" || mode === "manual" || mode === "aggregate_only") {
       stats.steps_executed.push("daily_aggregation");
@@ -309,14 +349,17 @@ Deno.serve(async (req) => {
       const { data: tenantData } = await supabase
         .from("tenants").select("settings").eq("id", tenant_id).single();
       const tenantSettings = (tenantData?.settings as JsonObject) || {};
-      const pipelineHealth = {
+      const pipelineHealth: JsonObject = {
         ...((tenantSettings.pipeline_health && typeof tenantSettings.pipeline_health === "object")
           ? tenantSettings.pipeline_health as JsonObject
           : {}),
         last_run_at: new Date().toISOString(),
         last_run_mode: mode,
         last_run_inserted: stats.total_inserted,
+        last_run_touched_vehicles: stats.touched_vehicles,
         last_run_polled: stats.polled_units,
+        last_run_trip_live_status_updated: stats.trip_live_status_updated,
+        last_run_trip_live_status_deferred_reason: stats.trip_live_status_deferred_reason,
         last_run_errors: stats.errors.length,
         last_run_steps: stats.steps_executed,
         last_run_status: stats.errors.length === 0

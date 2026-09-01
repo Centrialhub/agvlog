@@ -4,8 +4,8 @@
  * BROADBAND-FIRST DESIGN (v10):
  * - Normal polling: 1 single request to PositionHistory WITHOUT unit filter
  * - Distributes returned positions to matching vehicles locally
- * - Vehicles not in response = heartbeat (stopped)
- * - Speed computed via haversine delta between current and previous position
+ * - A response without a point updates polling health only; it is not motion
+ * - History, monotonic latest position, cursor and queue commit atomically
  * - Per-unit discovery preserved ONLY for manual/debug runs
  */
 
@@ -24,12 +24,27 @@ import {
   type SsxErrorClass,
 } from "../_shared/ssx-utils.ts";
 
+declare const Deno: {
+  env: { get(name: string): string | undefined };
+  serve(handler: (request: Request) => Response | Promise<Response>): void;
+};
+
 const POLL_MEMO_VERSION = 10;
-const STALE_AFTER_MINUTES = 30;
+
+type TrackerBinding = {
+  link_id: string;
+  vehicle_id: string;
+  tenant_id: string;
+  start_at: string;
+  end_at: string | null;
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return jsonResp({ error: "Method not allowed" }, 405);
   }
 
   try {
@@ -55,8 +70,13 @@ Deno.serve(async (req) => {
       callerId = userData.user.id;
     }
 
+    let body: Record<string, any>;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResp({ error: "Invalid JSON body" }, 400);
+    }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const body = await req.json();
     const {
       integration_account_id,
       provider_unit_ids,
@@ -95,7 +115,7 @@ Deno.serve(async (req) => {
     }
 
     // Check account-level cooldown
-    const cooldownUntil = config.settings.poll_cooldown_until;
+    const cooldownUntil = account.poll_cooldown_until || config.settings.poll_cooldown_until;
     if (cooldownUntil && new Date(cooldownUntil) > new Date() && !manual_run) {
       const retryAfterSec = Math.ceil((new Date(cooldownUntil).getTime() - Date.now()) / 1000);
       return jsonResp({
@@ -119,28 +139,42 @@ Deno.serve(async (req) => {
 
     // Get vehicle_tracker_links for all units
     const unitIds = units.map((u: any) => u.id);
-    const { data: links } = await supabase
-      .from("vehicle_tracker_links").select("*")
+    const { data: links, error: linksError } = await supabase
+      .from("vehicle_tracker_links")
+      .select("id,provider_unit_id,vehicle_id,tenant_id,start_at,end_at")
+      .eq("tenant_id", account.tenant_id)
       .in("provider_unit_id", unitIds).eq("active", true);
+    if (linksError) {
+      return jsonResp({ error: "Failed to read tracker bindings" }, 500);
+    }
 
-    const unitToVehicle: Record<string, { vehicle_id: string; tenant_id: string }> = {};
+    const unitToVehicle: Record<string, TrackerBinding> = {};
+    const boundVehicles = new Set<string>();
     for (const link of links || []) {
-      unitToVehicle[link.provider_unit_id] = { vehicle_id: link.vehicle_id, tenant_id: link.tenant_id };
+      if (unitToVehicle[link.provider_unit_id] || boundVehicles.has(link.vehicle_id)) {
+        return jsonResp({ error: "Ambiguous active tracker binding" }, 409);
+      }
+      unitToVehicle[link.provider_unit_id] = {
+        link_id: link.id,
+        vehicle_id: link.vehicle_id,
+        tenant_id: link.tenant_id,
+        start_at: link.start_at,
+        end_at: link.end_at,
+      };
+      boundVehicles.add(link.vehicle_id);
     }
 
     // Build PositionHistory URL candidates
     const positionUrls = buildPositionHistoryUrlCandidates(config.baseUrl, config.apiVersion);
 
     const isDebugMode = provider_unit_ids?.length === 1;
-    const ON_CONFLICT_TARGET = "tenant_id,vehicle_id,provider_payload_hash";
-
     // ============================================================
     // BROADBAND-FIRST: 1 request for the entire fleet
     // ============================================================
     if (!manual_run && !isDebugMode) {
       return await broadbandPoll({
         units, unitToVehicle, positionUrls, config, supabase,
-        integration_account_id, lookback_minutes, ON_CONFLICT_TARGET,
+        integration_account_id, tenant_id: account.tenant_id, lookback_minutes,
       });
     }
 
@@ -149,13 +183,13 @@ Deno.serve(async (req) => {
     // ============================================================
     return await legacyPerUnitPoll({
       units, unitToVehicle, positionUrls, config, supabase,
-      integration_account_id, manual_run, force_rediscovery,
-      lookback_minutes, isDebugMode, ON_CONFLICT_TARGET,
+      integration_account_id, tenant_id: account.tenant_id, manual_run, force_rediscovery,
+      lookback_minutes, isDebugMode,
     });
 
   } catch (err: any) {
     console.error("[SSX:poll-positions] error:", err);
-    return jsonResp({ error: "Internal error", details: err.message }, 500);
+    return jsonResp({ error: "Internal error" }, 500);
   }
 });
 
@@ -163,16 +197,16 @@ Deno.serve(async (req) => {
 
 async function broadbandPoll(params: {
   units: any[];
-  unitToVehicle: Record<string, { vehicle_id: string; tenant_id: string }>;
+  unitToVehicle: Record<string, TrackerBinding>;
   positionUrls: string[];
   config: any;
   supabase: any;
   integration_account_id: string;
+  tenant_id: string;
   lookback_minutes?: number;
-  ON_CONFLICT_TARGET: string;
 }): Promise<Response> {
   const { units, unitToVehicle, positionUrls, config, supabase,
-    integration_account_id, lookback_minutes, ON_CONFLICT_TARGET } = params;
+    integration_account_id, tenant_id, lookback_minutes } = params;
 
   const pollWindowMin = lookback_minutes || config.pollWindowMinutes || 15;
   const timeStart = new Date(Date.now() - pollWindowMin * 60_000).toISOString();
@@ -197,18 +231,44 @@ async function broadbandPoll(params: {
   });
 
   if (resp.errorClass === "rate_limited") {
-    await setAccountCooldown(supabase, integration_account_id, config, 120);
+    const observedAt = new Date().toISOString();
+    const failure = await recordBroadbandFailure(supabase, {
+      units, unitToVehicle, integrationAccountId: integration_account_id,
+      observedAt, error: "SSX rate limited broadband polling",
+      backoffUntil: new Date(Date.now() + 120_000).toISOString(),
+    });
+    const cooldown = await setAccountCooldown(
+      supabase, tenant_id, integration_account_id, observedAt, 120,
+    );
+    if (!failure.ok || !cooldown.ok) {
+      return jsonResp({
+        success: false, batch_aborted: true, abort_reason: "persistence_failure",
+        total_units: units.length, total_inserted: 0,
+      }, 500);
+    }
     return jsonResp({
       success: false, batch_aborted: true, abort_reason: "rate_limited",
       total_units: units.length, total_inserted: 0,
-    });
+    }, 429);
   }
 
   if (!resp.ok) {
+    const observedAt = new Date().toISOString();
+    const failure = await recordBroadbandFailure(supabase, {
+      units, unitToVehicle, integrationAccountId: integration_account_id,
+      observedAt, error: `SSX broadband returned ${resp.status}`,
+      backoffUntil: new Date(Date.now() + 60_000).toISOString(),
+    });
+    if (!failure.ok) {
+      return jsonResp({
+        success: false, batch_aborted: true, abort_reason: "persistence_failure",
+        total_units: units.length, total_inserted: 0,
+      }, 500);
+    }
     return jsonResp({
       success: false, error: `SSX returned ${resp.status}`,
       total_units: units.length, total_inserted: 0,
-    });
+    }, 502);
   }
 
   const allItems = extractResponseItems(resp.parsed);
@@ -229,192 +289,113 @@ async function broadbandPoll(params: {
   // Distribute positions to vehicles
   const vehiclePositions: Map<string, { unit: any; mapping: any; points: any[] }> = new Map();
   let unmatched = 0;
+  let ambiguous = 0;
+  let outsideBindingWindow = 0;
 
   for (const item of allItems) {
     const normalized = normalizePosition(item);
     if (!normalized) continue;
 
     const telemetry = { ...item };
-    let matched = false;
-
-    for (const { unit, mapping, identifiers } of unitIdentifierSets) {
-      if (isPointFromCurrentUnit(telemetry, identifiers)) {
-        const key = mapping.vehicle_id;
-        if (!vehiclePositions.has(key)) {
-          vehiclePositions.set(key, { unit, mapping, points: [] });
-        }
-        vehiclePositions.get(key)!.points.push(item);
-        matched = true;
-        break; // Each point belongs to exactly one unit
-      }
+    const matches = unitIdentifierSets.filter(({ identifiers }) =>
+      isPointFromCurrentUnitBroadband(telemetry, identifiers)
+    );
+    if (matches.length !== 1) {
+      unmatched++;
+      if (matches.length > 1) ambiguous++;
+      continue;
     }
-
-    if (!matched) unmatched++;
+    const { unit, mapping } = matches[0];
+    if (!isWithinBindingWindow(normalized.captured_at, mapping)) {
+      outsideBindingWindow++;
+      continue;
+    }
+    const key = mapping.vehicle_id;
+    if (!vehiclePositions.has(key)) {
+      vehiclePositions.set(key, { unit, mapping, points: [] });
+    }
+    vehiclePositions.get(key)!.points.push(item);
   }
 
-  console.log(`[SSX:poll-positions] BROADBAND distributed: ${vehiclePositions.size} vehicles matched, ${unmatched} unmatched points`);
+  console.log(`[SSX:poll-positions] BROADBAND distributed: ${vehiclePositions.size} vehicles matched, ${unmatched} unmatched points, ${ambiguous} ambiguous`);
 
   // Process each vehicle's positions
   let totalInserted = 0;
   let totalDuplicates = 0;
   let totalFailed = 0;
-  const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
+  let touchedVehicles = 0;
   const results: any[] = [];
   let persistenceFailed = false;
 
   for (const [vehicleId, { unit, mapping, points }] of vehiclePositions) {
-    // Normalize, hash, and prepare rows
-    const rows: any[] = [];
-    let latestNormalized: any = null;
-
-    for (const point of points) {
-      const normalized = normalizePosition(point);
-      if (!normalized) continue;
-
-      if (!latestNormalized || new Date(normalized.captured_at) > new Date(latestNormalized.captured_at)) {
-        latestNormalized = normalized;
-      }
-
-      const telemetry = normalized.telemetry || {};
-      const trackedUnitForHash = String(
-        telemetry.TrackedUnit ?? telemetry.trackedUnit ?? telemetry.IdTrackedUnit ?? telemetry.idTrackedUnit ?? ""
-      );
-      const hashInput = `${unit.external_code}|${trackedUnitForHash}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
-      const hash = simpleHash(hashInput);
-
-      rows.push({
-        tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
-        captured_at: normalized.captured_at, lat: normalized.lat, lng: normalized.lng,
-        speed: normalized.speed, heading: normalized.heading,
-        telemetry: normalized.telemetry, provider_payload_hash: hash,
-      });
-    }
-
+    const rows = await buildPersistenceRows(points, unit, mapping.link_id);
     if (rows.length === 0) continue;
-
-    // Insert into positions_raw
-    let inserted = 0;
-    let duplicates = 0;
-
-    const CHUNK = 100;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const chunk = rows.slice(i, i + CHUNK);
-      const { data: insertedRows, error: insertErr } = await supabase
-        .from("positions_raw").upsert(chunk, {
-          onConflict: ON_CONFLICT_TARGET,
-          ignoreDuplicates: true,
-        })
-        .select("id");
-
-      if (insertErr) {
-        persistenceFailed = true;
-        totalFailed += chunk.length;
-        console.error(`[SSX:poll-positions] PERSISTENCE_FAILURE | vehicle=${vehicleId} | error=${insertErr.message}`);
-        break;
-      } else {
-        const ins = insertedRows?.length || 0;
-        inserted += ins;
-        duplicates += chunk.length - ins;
-      }
-    }
-
-    totalInserted += inserted;
-    totalDuplicates += duplicates;
-
-    // Update positions_last with computed speed
-    if (latestNormalized && !persistenceFailed) {
-      await updatePositionsLast(supabase, mapping, unit, latestNormalized, "broadband");
-
-      if (inserted > 0) {
-        touchedVehicles.push({
-          tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
-          captured_at: latestNormalized.captured_at,
-        });
-      }
-    }
-
-    // Update cursor
-    const now = new Date();
-    if (!persistenceFailed) {
-      await upsertCursor(supabase, {
-        tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
-        last_polled_at: now.toISOString(),
-        last_error: null, backoff_until: null,
-        last_success_at: latestNormalized?.captured_at || now.toISOString(),
-        poll_memo: {
-          memo_version: POLL_MEMO_VERSION,
-          poll_mode: "broadband",
-          last_success_run: now.toISOString(),
-        },
+    const receivedAt = new Date().toISOString();
+    const commit = await commitPositionBatch(supabase, {
+      integrationAccountId: integration_account_id,
+      unit, mapping, rows, receivedAt,
+      pollMemo: {
+        memo_version: POLL_MEMO_VERSION,
+        poll_mode: "broadband",
+        combo_source: "broadband",
+        last_success_run: receivedAt,
+      },
+    });
+    if (!commit.ok) {
+      persistenceFailed = true;
+      totalFailed += rows.length;
+      console.error(`[SSX:poll-positions] PERSISTENCE_FAILURE | vehicle=${vehicleId} | error=${commit.error}`);
+      results.push({
+        unit_code: unit.external_code, status: "persistence_failure",
+        positions_found: true, inserted: 0, duplicates: 0,
+        combo_source: "broadband",
       });
+      continue;
     }
+    totalInserted += commit.inserted;
+    totalDuplicates += commit.duplicates;
+    if (commit.latestApplied) touchedVehicles++;
 
     results.push({
       unit_code: unit.external_code, status: "ok",
-      positions_found: true, inserted, duplicates,
+      positions_found: true,
+      inserted: commit.inserted, duplicates: commit.duplicates,
       combo_source: "broadband",
     });
   }
 
-  // Heartbeat for vehicles with NO new positions (vehicle is stopped)
+  // A successful empty response proves connectivity, not that the vehicle is
+  // stationary. Commit polling state without touching positions_last.
   const matchedVehicleIds = new Set(vehiclePositions.keys());
   for (const { unit, mapping } of unitIdentifierSets) {
     if (matchedVehicleIds.has(mapping.vehicle_id)) continue;
-    if (persistenceFailed) continue;
-
-    // Heartbeat — update received_at and confirm stopped status
-    const heartbeatNow = new Date().toISOString();
-    const { data: existingPos } = await supabase.from("positions_last")
-      .select("speed, source, captured_at")
-      .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).single();
-
-    if (existingPos) {
-      const existingSource = (existingPos.source as Record<string, any>) || {};
-      await supabase.from("positions_last")
-        .update({
-          received_at: heartbeatNow,
-          speed: existingPos.speed ?? 0,
-          source: {
-            ...existingSource,
-            speed_source: "heartbeat",
-            movement_state: "stopped",
-          },
-        })
-        .eq("tenant_id", mapping.tenant_id)
-        .eq("vehicle_id", mapping.vehicle_id);
-    }
-
-    // Update cursor last_polled_at (no error)
-    await upsertCursor(supabase, {
-      tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
-      last_polled_at: heartbeatNow,
-      last_error: null, backoff_until: null,
-      poll_memo: {
+    const receivedAt = new Date().toISOString();
+    const commit = await commitPositionBatch(supabase, {
+      integrationAccountId: integration_account_id,
+      unit, mapping, rows: [], receivedAt,
+      pollMemo: {
         memo_version: POLL_MEMO_VERSION,
         poll_mode: "broadband",
-        last_heartbeat: heartbeatNow,
+        combo_source: "broadband_no_observation",
+        last_empty_poll: receivedAt,
       },
     });
-
+    if (!commit.ok) {
+      persistenceFailed = true;
+      totalFailed++;
+      console.error(`[SSX:poll-positions] PERSISTENCE_FAILURE | vehicle=${mapping.vehicle_id} | error=${commit.error}`);
+    }
     results.push({
-      unit_code: unit.external_code, status: "heartbeat",
+      unit_code: unit.external_code,
+      status: commit.ok ? "no_data" : "persistence_failure",
       positions_found: false, inserted: 0, duplicates: 0,
-      combo_source: "broadband_heartbeat",
+      combo_source: "broadband_no_observation",
     });
-  }
-
-  // Enqueue touched vehicles for processing
-  for (const tv of touchedVehicles) {
-    await supabase.from("vehicle_processing_queue").upsert({
-      tenant_id: tv.tenant_id, vehicle_id: tv.vehicle_id,
-      queued_at: new Date().toISOString(), last_position_at: tv.captured_at,
-      processed_at: null, attempts: 0, last_error: null,
-    }, { onConflict: "tenant_id,vehicle_id" });
   }
 
   // Log integration
   await logIntegration(supabase, {
-    tenant_id: units[0] ? unitToVehicle[units[0].id]?.tenant_id : null,
+    tenant_id,
     integration_account_id,
     action: "ssx_poll_positions_broadband",
     endpoint: broadbandUrl,
@@ -425,8 +406,10 @@ async function broadbandPoll(params: {
       mode: "broadband",
       total_positions_received: allItems.length,
       vehicles_matched: vehiclePositions.size,
-      vehicles_heartbeat: unitIdentifierSets.length - vehiclePositions.size,
+      vehicles_without_observation: unitIdentifierSets.length - vehiclePositions.size,
       unmatched_positions: unmatched,
+      ambiguous_positions: ambiguous,
+      outside_binding_window: outsideBindingWindow,
       total_inserted: totalInserted,
       total_duplicates: totalDuplicates,
       total_failed: totalFailed,
@@ -439,99 +422,68 @@ async function broadbandPoll(params: {
     total_units: units.length,
     total_positions_received: allItems.length,
     vehicles_matched: vehiclePositions.size,
-    vehicles_heartbeat: unitIdentifierSets.length - vehiclePositions.size,
+    vehicles_without_observation: unitIdentifierSets.length - vehiclePositions.size,
     unmatched_positions: unmatched,
+    ambiguous_positions: ambiguous,
+    outside_binding_window: outsideBindingWindow,
     total_inserted: totalInserted,
     total_duplicates: totalDuplicates,
     total_failed: totalFailed,
     batch_aborted: persistenceFailed,
     abort_reason: persistenceFailed ? "persistence_failure" : null,
-    touched_vehicles: touchedVehicles.length,
+    touched_vehicles: touchedVehicles,
     results,
-  });
+  }, persistenceFailed ? 500 : 200);
 }
 
-// ==================== Update positions_last with computed speed ====================
-
-async function updatePositionsLast(
-  supabase: any,
-  mapping: { vehicle_id: string; tenant_id: string },
-  unit: any,
-  latestNormalized: any,
-  comboSource: string,
-) {
-  const ln = latestNormalized;
-  const { data: currentLast } = await supabase
-    .from("positions_last").select("captured_at,lat,lng,speed")
-    .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).single();
-
-  const shouldUpdate = !currentLast || new Date(ln.captured_at) >= new Date(currentLast.captured_at);
-  if (!shouldUpdate) return;
-
-  // Compute speed from position delta (haversine)
-  let computedSpeed: number | null = ln.speed;
-  const speedSource: "provider" | "computed" = ln.speed != null ? "provider" : "computed";
-  let distanceFromPreviousM: number | null = null;
-  let timeSincePreviousS: number | null = null;
-  let movementState: "moving" | "stopped" = "stopped";
-
-  if (currentLast) {
-    distanceFromPreviousM = haversineMeters(currentLast.lat, currentLast.lng, ln.lat, ln.lng);
-    timeSincePreviousS = (new Date(ln.captured_at).getTime() - new Date(currentLast.captured_at).getTime()) / 1000;
-
-    if (ln.speed == null) {
-      if (timeSincePreviousS <= 0 || distanceFromPreviousM < 50) {
-        // Same position or same timestamp → stationary
-        computedSpeed = 0;
-      } else {
-        computedSpeed = Math.round((distanceFromPreviousM / timeSincePreviousS) * 3.6 * 10) / 10;
-      }
-    }
-    const effectiveSpeed = computedSpeed ?? ln.speed ?? 0;
-    movementState = effectiveSpeed > 3 ? "moving" : "stopped";
-  } else if (ln.speed != null) {
-    movementState = ln.speed > 3 ? "moving" : "stopped";
-  } else {
-    computedSpeed = 0;
+async function recordBroadbandFailure(supabase: any, input: {
+  units: any[];
+  unitToVehicle: Record<string, TrackerBinding>;
+  integrationAccountId: string;
+  observedAt: string;
+  error: string;
+  backoffUntil: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  for (const unit of input.units) {
+    const mapping = input.unitToVehicle[unit.id];
+    if (!mapping) continue;
+    const recorded = await recordPollError(supabase, {
+      integrationAccountId: input.integrationAccountId,
+      unit,
+      mapping,
+      observedAt: input.observedAt,
+      error: input.error,
+      backoffUntil: input.backoffUntil,
+      pollMemo: {
+        memo_version: POLL_MEMO_VERSION,
+        cleared: true,
+        cleared_reason: "broadband_provider_error",
+        cleared_at: input.observedAt,
+      },
+    });
+    if (!recorded.ok) return recorded;
   }
-
-  const staleMinutes = (Date.now() - new Date(ln.captured_at).getTime()) / 60000;
-  await supabase.from("positions_last").upsert({
-    tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
-    lat: ln.lat, lng: ln.lng,
-    speed: computedSpeed, heading: ln.heading,
-    captured_at: ln.captured_at, received_at: new Date().toISOString(),
-    telemetry_snapshot: ln.telemetry || {},
-    source: {
-      provider: "SSX", unit_code: unit.external_code,
-      stale: staleMinutes > STALE_AFTER_MINUTES,
-      combo_source: comboSource,
-      speed_source: speedSource,
-      movement_state: movementState,
-      distance_from_previous_m: distanceFromPreviousM != null ? Math.round(distanceFromPreviousM) : null,
-      time_since_previous_s: timeSincePreviousS != null ? Math.round(timeSincePreviousS) : null,
-    },
-  }, { onConflict: "tenant_id,vehicle_id" });
+  return { ok: true };
 }
 
 // ==================== LEGACY PER-UNIT POLL (manual/debug only) ====================
 
 async function legacyPerUnitPoll(params: {
   units: any[];
-  unitToVehicle: Record<string, { vehicle_id: string; tenant_id: string }>;
+  unitToVehicle: Record<string, TrackerBinding>;
   positionUrls: string[];
   config: any;
   supabase: any;
   integration_account_id: string;
+  tenant_id: string;
   manual_run: boolean;
   force_rediscovery: boolean;
   lookback_minutes?: number;
   isDebugMode: boolean;
-  ON_CONFLICT_TARGET: string;
 }): Promise<Response> {
   const { units, unitToVehicle, positionUrls, config, supabase,
-    integration_account_id, manual_run, force_rediscovery,
-    lookback_minutes, isDebugMode, ON_CONFLICT_TARGET } = params;
+    integration_account_id, tenant_id, manual_run, force_rediscovery,
+    lookback_minutes, isDebugMode } = params;
 
   const timeProps = ["EventDate", "UpdateDate"];
   const requestSpacingMs = config.settings.request_spacing_ms ?? 400;
@@ -545,7 +497,7 @@ async function legacyPerUnitPoll(params: {
   let totalInserted = 0;
   let totalDuplicates = 0;
   let totalFailed = 0;
-  const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
+  let touchedVehicles = 0;
   let batchAborted = false;
   let abortReason = "";
 
@@ -583,15 +535,20 @@ async function legacyPerUnitPoll(params: {
       ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000)
       : null;
 
-    const timeStart = incrementalStart && !force_rediscovery
+    const cursorTimeStart = incrementalStart && !force_rediscovery
       ? new Date(Math.max(incrementalStart.getTime(), maxLookbackStart.getTime())).toISOString()
       : maxLookbackStart.toISOString();
+    const bindingStartMs = Date.parse(mapping.start_at);
+    const timeStart = Number.isFinite(bindingStartMs)
+      ? new Date(Math.max(Date.parse(cursorTimeStart), bindingStartMs)).toISOString()
+      : cursorTimeStart;
 
     const meta = (unit as any).metadata || {};
     const identifierCandidates = buildIdentifierCandidates(unit.external_code, meta);
 
     const cursorMemo = (cursor?.poll_memo || {}) as Record<string, any>;
-    const memoValid = cursorMemo.memo_version === POLL_MEMO_VERSION && !force_rediscovery;
+    const memoValid = cursorMemo.memo_version === POLL_MEMO_VERSION &&
+      cursorMemo.cleared !== true && !force_rediscovery;
 
     const unitResult = await pollSingleUnit({
       unit, mapping, identifierCandidates, timeProps, positionUrls,
@@ -606,7 +563,16 @@ async function legacyPerUnitPoll(params: {
       batchAborted = true;
       abortReason = unitResult.abortReason || "rate_limited";
       if (unitResult.abortReason === "rate_limited") {
-        await setAccountCooldown(supabase, integration_account_id, config, 120);
+        const cooldown = await setAccountCooldown(
+          supabase, tenant_id, integration_account_id, now.toISOString(), 120,
+        );
+        if (!cooldown.ok) {
+          unitResult.persistenceFailed = true;
+          unitResult.rows_failed = 1;
+          unitResult.error = cooldown.error;
+          unitResult.abortReason = "persistence_failure";
+          abortReason = "persistence_failure";
+        }
       }
     }
 
@@ -614,7 +580,7 @@ async function legacyPerUnitPoll(params: {
       scoutHint = unitResult.workingCombo;
     }
 
-    if (unitResult.workingCombo && !unitResult.persistenceFailed) {
+    if (unitResult.workingCombo && !unitResult.persistenceFailed && !unitResult.persistenceCommitted) {
       const newMemo = {
         memo_version: POLL_MEMO_VERSION,
         poll_working_property: unitResult.workingCombo.property,
@@ -622,53 +588,47 @@ async function legacyPerUnitPoll(params: {
         poll_working_url: unitResult.workingCombo.url,
         poll_working_format: unitResult.workingCombo.format,
         poll_working_time_prop: unitResult.workingCombo.timeProp,
-        last_success_run: now.toISOString(),
+        combo_source: unitResult.comboSource,
+        last_empty_poll: now.toISOString(),
       };
-      const advanceCursorTo = unitResult.latestCapturedAt || cursor?.last_success_at || null;
-      await upsertCursor(supabase, {
-        tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
-        last_polled_at: now.toISOString(),
-        last_error: null, backoff_until: null,
-        last_success_at: advanceCursorTo,
-        poll_memo: newMemo,
+      const commit = await commitPositionBatch(supabase, {
+        integrationAccountId: integration_account_id,
+        unit, mapping, rows: [], receivedAt: now.toISOString(),
+        pollMemo: newMemo,
       });
-    } else {
-      await upsertCursor(supabase, {
-        tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
-        last_polled_at: now.toISOString(),
-        last_error_at: unitResult.positions_found ? null : now.toISOString(),
-        last_error: unitResult.positions_found ? null : (unitResult.error || "No combination returned positions"),
-        backoff_until: unitResult.positions_found ? null : new Date(Date.now() + 60000).toISOString(),
-        poll_memo: { memo_version: POLL_MEMO_VERSION, cleared: true, cleared_reason: unitResult.comboSource || "no_working_combo", cleared_at: now.toISOString() },
+      if (!commit.ok) {
+        unitResult.persistenceFailed = true;
+        unitResult.rows_failed = 1;
+        unitResult.error = commit.error;
+        unitResult.abortBatch = true;
+        unitResult.abortReason = "persistence_failure";
+        batchAborted = true;
+        abortReason = "persistence_failure";
+      } else {
+        unitResult.persistenceCommitted = true;
+      }
+    } else if (!unitResult.persistenceCommitted && !unitResult.persistenceFailed) {
+      const observedAt = now.toISOString();
+      const recorded = await recordPollError(supabase, {
+        integrationAccountId: integration_account_id,
+        unit, mapping, observedAt,
+        error: unitResult.error || "No combination returned positions",
+        backoffUntil: new Date(now.getTime() + 60_000).toISOString(),
+        pollMemo: {
+          memo_version: POLL_MEMO_VERSION,
+          cleared: true,
+          cleared_reason: unitResult.comboSource || "no_working_combo",
+          cleared_at: observedAt,
+        },
       });
-    }
-
-    if (!unitResult.persistenceFailed) {
-      await invalidateMismatchedPositionLast(supabase, mapping, unit);
-    }
-
-    if (unitResult.latestNormalized && !unitResult.persistenceFailed) {
-      await updatePositionsLast(supabase, mapping, unit, unitResult.latestNormalized, unitResult.comboSource);
-    } else if (!unitResult.latestNormalized && unitResult.workingCombo && !unitResult.persistenceFailed) {
-      const heartbeatNow = new Date().toISOString();
-      const { data: existingPos } = await supabase.from("positions_last")
-        .select("speed, source")
-        .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).single();
-
-      if (existingPos) {
-        const existingSource = (existingPos?.source as Record<string, any>) || {};
-        await supabase.from("positions_last")
-          .update({
-            received_at: heartbeatNow,
-            speed: existingPos?.speed ?? 0,
-            source: {
-              ...existingSource,
-              speed_source: "heartbeat",
-              movement_state: "stopped",
-            },
-          })
-          .eq("tenant_id", mapping.tenant_id)
-          .eq("vehicle_id", mapping.vehicle_id);
+      if (!recorded.ok) {
+        unitResult.persistenceFailed = true;
+        unitResult.rows_failed = 1;
+        unitResult.error = recorded.error;
+        unitResult.abortBatch = true;
+        unitResult.abortReason = "persistence_failure";
+        batchAborted = true;
+        abortReason = "persistence_failure";
       }
     }
 
@@ -676,12 +636,7 @@ async function legacyPerUnitPoll(params: {
     totalDuplicates += unitResult.duplicates;
     totalFailed += unitResult.rows_failed || 0;
 
-    if (unitResult.inserted > 0) {
-      touchedVehicles.push({
-        tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
-        captured_at: unitResult.latestCapturedAt || now.toISOString(),
-      });
-    }
+    if (unitResult.latestApplied) touchedVehicles++;
 
     results.push({
       unit_code: unit.external_code,
@@ -694,27 +649,20 @@ async function legacyPerUnitPoll(params: {
     });
   }
 
-  for (const tv of touchedVehicles) {
-    await supabase.from("vehicle_processing_queue").upsert({
-      tenant_id: tv.tenant_id, vehicle_id: tv.vehicle_id,
-      queued_at: new Date().toISOString(), last_position_at: tv.captured_at,
-      processed_at: null, attempts: 0, last_error: null,
-    }, { onConflict: "tenant_id,vehicle_id" });
-  }
-
   return jsonResp({
-    success: !batchAborted, mode: "legacy_per_unit",
+    success: !batchAborted && totalFailed === 0, mode: "legacy_per_unit",
     total_units: units.length,
     total_inserted: totalInserted, total_duplicates: totalDuplicates,
     total_failed: totalFailed,
-    on_conflict_target: ON_CONFLICT_TARGET,
-    touched_vehicles: touchedVehicles.length,
+    touched_vehicles: touchedVehicles,
     scout_hint: scoutHint ? `${scoutHint.property}:${scoutHint.value_source}@${scoutHint.url}` : null,
     batch_aborted: batchAborted,
     abort_reason: abortReason || null,
     manual_run, force_rediscovery: params.force_rediscovery,
     results,
-  });
+  }, batchAborted
+    ? (abortReason === "rate_limited" ? 429 : 500)
+    : (totalFailed > 0 ? 500 : 200));
 }
 
 // ==================== Identifier Candidates Builder ====================
@@ -776,17 +724,20 @@ interface PollUnitResult {
   abortBatch: boolean;
   abortReason?: string;
   persistenceFailed: boolean;
+  persistenceCommitted?: boolean;
+  latestApplied?: boolean;
   error?: string;
   attemptCount: number;
   attemptMatrix: string[];
   crossUnitFiltered?: number;
+  outsideBindingWindow?: number;
   totalReceived?: number;
   rejectedByCrossUnitFilter?: boolean;
 }
 
 async function pollSingleUnit(params: {
   unit: any;
-  mapping: { vehicle_id: string; tenant_id: string };
+  mapping: TrackerBinding;
   identifierCandidates: IdentifierCandidate[];
   timeProps: string[];
   positionUrls: string[];
@@ -809,7 +760,7 @@ async function pollSingleUnit(params: {
   const MAX_ATTEMPTS = isDebugMode ? 24 : 8;
 
   async function tryCombo(
-    property: string, value: string, valueSource: string,
+    property: string, value: string, _valueSource: string,
     url: string, format: "array" | "wrapped", timeProp: string,
     type: string,
   ): Promise<{ items: any[]; resp: any; abort: boolean; abortReason?: string } | null> {
@@ -957,21 +908,20 @@ async function pollSingleUnit(params: {
 // ==================== Process Positions ====================
 
 async function processPositions(
-  positions: any[], resp: any, unit: any,
-  mapping: { vehicle_id: string; tenant_id: string },
-  supabase: any, config: any,
+  positions: any[], _resp: any, unit: any,
+  mapping: TrackerBinding,
+  supabase: any, _config: any,
   combo: { property: string; value_source: string; url: string; format: string; timeProp: string },
   comboSource: string,
   attempts: PollingAttemptLog[], attemptCount: number,
-  _integration_account_id: string,
+  integration_account_id: string,
 ): Promise<PollUnitResult> {
-  let inserted = 0;
-  let duplicates = 0;
   let latestNormalized: any = null;
 
   const meta = (unit as any).metadata || {};
   const unitIdentifiers = buildUnitIdentifierSet(unit, meta);
   let crossUnitFiltered = 0;
+  let outsideBindingWindow = 0;
 
   const rows: any[] = [];
   for (const point of positions) {
@@ -982,24 +932,16 @@ async function processPositions(
       crossUnitFiltered++;
       continue;
     }
+    if (!isWithinBindingWindow(normalized.captured_at, mapping)) {
+      outsideBindingWindow++;
+      continue;
+    }
 
     if (!latestNormalized || new Date(normalized.captured_at) > new Date(latestNormalized.captured_at)) {
       latestNormalized = normalized;
     }
 
-    const telemetry = normalized.telemetry || {};
-    const trackedUnitForHash = String(
-      telemetry.TrackedUnit ?? telemetry.trackedUnit ?? telemetry.IdTrackedUnit ?? telemetry.idTrackedUnit ?? ""
-    );
-    const hashInput = `${unit.external_code}|${trackedUnitForHash}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
-    const hash = simpleHash(hashInput);
-
-    rows.push({
-      tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
-      captured_at: normalized.captured_at, lat: normalized.lat, lng: normalized.lng,
-      speed: normalized.speed, heading: normalized.heading,
-      telemetry: normalized.telemetry, provider_payload_hash: hash,
-    });
+    rows.push(await toPersistenceRow(normalized, unit, mapping.link_id));
   }
 
   const rejectedByCrossUnitFilter = rows.length === 0 && crossUnitFiltered > 0;
@@ -1018,61 +960,42 @@ async function processPositions(
     };
   }
 
-  const CHUNK = 100;
-  let persistenceFailed = false;
-  let rowsFailed = 0;
-
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK);
-    const { data: insertedRows, error: insertErr } = await supabase
-      .from("positions_raw").upsert(chunk, {
-        onConflict: "tenant_id,vehicle_id,provider_payload_hash",
-        ignoreDuplicates: true,
-      })
-      .select("id");
-
-    if (insertErr) {
-      persistenceFailed = true;
-      rowsFailed += chunk.length;
-      console.error(`[SSX:poll-positions] PERSISTENCE_FAILURE | unit=${unit.external_code} | error=${insertErr.message}`);
-      break;
-    } else {
-      const ins = insertedRows?.length || 0;
-      inserted += ins;
-      duplicates += chunk.length - ins;
-    }
+  const receivedAt = new Date().toISOString();
+  const commit = await commitPositionBatch(supabase, {
+    integrationAccountId: integration_account_id,
+    unit, mapping, rows, receivedAt,
+    pollMemo: {
+      memo_version: POLL_MEMO_VERSION,
+      poll_working_property: combo.property,
+      poll_working_value_source: combo.value_source,
+      poll_working_url: combo.url,
+      poll_working_format: combo.format,
+      poll_working_time_prop: combo.timeProp,
+      combo_source: comboSource,
+      last_success_run: receivedAt,
+    },
+  });
+  const persistenceFailed = !commit.ok;
+  if (!commit.ok) {
+    console.error(`[SSX:poll-positions] PERSISTENCE_FAILURE | unit=${unit.external_code} | error=${commit.error}`);
   }
 
   return {
-    positions_found: true, inserted, duplicates,
-    rows_attempted: rows.length, rows_failed: rowsFailed,
+    positions_found: true,
+    inserted: commit.ok ? commit.inserted : 0,
+    duplicates: commit.ok ? commit.duplicates : 0,
+    rows_attempted: rows.length, rows_failed: commit.ok ? 0 : rows.length,
     latestCapturedAt: latestNormalized?.captured_at || null,
     latestNormalized,
     workingCombo: combo, comboSource,
     abortBatch: persistenceFailed, abortReason: persistenceFailed ? "persistence_failure" : undefined,
     persistenceFailed,
+    persistenceCommitted: commit.ok,
+    latestApplied: commit.ok && commit.latestApplied,
     attemptCount, attemptMatrix: summarizePollingAttemptsV2(attempts),
-    crossUnitFiltered, totalReceived: positions.length,
+    crossUnitFiltered, outsideBindingWindow, totalReceived: positions.length,
     rejectedByCrossUnitFilter: false,
   };
-}
-
-async function invalidateMismatchedPositionLast(
-  supabase: any, mapping: { vehicle_id: string; tenant_id: string }, unit: any,
-) {
-  const { data: currentLast } = await supabase
-    .from("positions_last").select("telemetry_snapshot")
-    .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).maybeSingle();
-
-  if (!currentLast?.telemetry_snapshot) return;
-
-  const meta = (unit as any).metadata || {};
-  const unitIdentifiers = buildUnitIdentifierSet(unit, meta);
-  if (!isPointFromCurrentUnit(currentLast.telemetry_snapshot || {}, unitIdentifiers)) {
-    await supabase.from("positions_last").delete()
-      .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id);
-    console.log(`[SSX:poll-positions] INVALIDATED_STALE_POSITION_LAST | unit=${unit.external_code}`);
-  }
 }
 
 function buildAbortResult(reason: string, attempts: PollingAttemptLog[], attemptCount: number): PollUnitResult {
@@ -1092,6 +1015,14 @@ interface UnitIdentifierSet {
   normalizedStrict: Set<string>;
   normalizedContains: Set<string>;
   numericIds: Set<string>;
+}
+
+function isWithinBindingWindow(capturedAt: string, mapping: TrackerBinding): boolean {
+  const capturedMs = Date.parse(capturedAt);
+  const startMs = Date.parse(mapping.start_at);
+  const endMs = mapping.end_at ? Date.parse(mapping.end_at) : Number.POSITIVE_INFINITY;
+  return Number.isFinite(capturedMs) && Number.isFinite(startMs) &&
+    capturedMs >= startMs && capturedMs < endMs;
 }
 
 function normalizeIdentifier(value: unknown): string {
@@ -1178,6 +1109,29 @@ function isPointFromCurrentUnit(telemetry: Record<string, any>, unitIds: UnitIde
   return false;
 }
 
+function isPointFromCurrentUnitBroadband(
+  telemetry: Record<string, any>,
+  unitIds: UnitIdentifierSet,
+): boolean {
+  const textIdentifiers = [
+    telemetry.TrackedUnit, telemetry.trackedUnit,
+    telemetry.Plate, telemetry.plate,
+    telemetry.VehicleIntegrationCode, telemetry.vehicleIntegrationCode,
+    telemetry.TrackedUnitIntegrationCode, telemetry.trackedUnitIntegrationCode,
+    telemetry.TrackerIntegrationCode, telemetry.trackerIntegrationCode,
+  ].map((value) => normalizeIdentifier(value)).filter(Boolean);
+  const numericIdentifiers = [
+    telemetry.IdTrackedUnit, telemetry.idTrackedUnit,
+    telemetry.IdTracker, telemetry.idTracker,
+  ].map((value) => normalizeNumericIdentifier(value)).filter(Boolean);
+
+  if (textIdentifiers.length === 0 && numericIdentifiers.length === 0) return false;
+  if (unitIds.numericIds.size > 0 && numericIdentifiers.length > 0) {
+    return numericIdentifiers.some((identifier) => unitIds.numericIds.has(identifier));
+  }
+  return textIdentifiers.some((identifier) => unitIds.normalizedStrict.has(identifier));
+}
+
 // ==================== Position Normalizer ====================
 
 function normalizePosition(point: any): {
@@ -1201,11 +1155,14 @@ function normalizePosition(point: any): {
   if (lat == null || lng == null || !dateStr) return null;
   const parsedLat = typeof lat === "string" ? parseFloat(lat) : lat;
   const parsedLng = typeof lng === "string" ? parseFloat(lng) : lng;
-  if (isNaN(parsedLat) || isNaN(parsedLng)) return null;
+  if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) return null;
+  if (parsedLat < -90 || parsedLat > 90 || parsedLng < -180 || parsedLng > 180) return null;
   if (parsedLat === 0 && parsedLng === 0) return null;
 
   let captured_at: string;
   try { captured_at = new Date(dateStr).toISOString(); } catch { return null; }
+  const capturedMs = Date.parse(captured_at);
+  if (capturedMs < Date.UTC(2000, 0, 1) || capturedMs > Date.now() + 5 * 60_000) return null;
 
   const knownFields = new Set([
     "Latitude", "latitude", "Lat", "lat", "Y", "y",
@@ -1222,15 +1179,168 @@ function normalizePosition(point: any): {
     if (!knownFields.has(key) && val != null) telemetry[key] = val;
   }
 
+  const parsedSpeed = speed == null ? null : (typeof speed === "string" ? parseFloat(speed) : speed);
+  const parsedHeading = heading == null ? null : (typeof heading === "string" ? parseFloat(heading) : heading);
   return {
     lat: parsedLat, lng: parsedLng,
-    speed: speed != null ? (typeof speed === "string" ? parseFloat(speed) : speed) : null,
-    heading: heading != null ? (typeof heading === "string" ? parseFloat(heading) : heading) : null,
+    speed: Number.isFinite(parsedSpeed) && parsedSpeed >= 0 && parsedSpeed <= 300 ? parsedSpeed : null,
+    heading: Number.isFinite(parsedHeading) && parsedHeading >= 0 && parsedHeading <= 360 ? parsedHeading : null,
     captured_at, telemetry,
   };
 }
 
 // ==================== Helpers ====================
+
+type PositionPersistenceRow = {
+  captured_at: string;
+  lat: number;
+  lng: number;
+  speed: number | null;
+  heading: number | null;
+  telemetry: Record<string, any>;
+  provider_payload_hash: string;
+};
+
+async function toPersistenceRow(
+  normalized: ReturnType<typeof normalizePosition> & object,
+  unit: any,
+  trackerLinkId: string,
+): Promise<PositionPersistenceRow> {
+  const telemetry = normalized.telemetry || {};
+  const trackedUnitForHash = String(
+    telemetry.TrackedUnit ?? telemetry.trackedUnit ??
+    telemetry.IdTrackedUnit ?? telemetry.idTrackedUnit ?? ""
+  );
+  const hashInput = canonicalJson({
+    unit_external_code: unit.external_code,
+    tracker_link_id: trackerLinkId,
+    tracked_unit: trackedUnitForHash,
+    captured_at: normalized.captured_at,
+    lat: normalized.lat,
+    lng: normalized.lng,
+    speed: normalized.speed,
+    heading: normalized.heading,
+    telemetry,
+  });
+  return {
+    captured_at: normalized.captured_at,
+    lat: normalized.lat,
+    lng: normalized.lng,
+    speed: normalized.speed,
+    heading: normalized.heading,
+    telemetry,
+    provider_payload_hash: await sha256Hex(hashInput),
+  };
+}
+
+async function buildPersistenceRows(
+  points: any[],
+  unit: any,
+  trackerLinkId: string,
+): Promise<PositionPersistenceRow[]> {
+  const normalized = points
+    .map((point) => normalizePosition(point))
+    .filter((position): position is NonNullable<typeof position> => position !== null);
+  const rows = await Promise.all(normalized.map((position) =>
+    toPersistenceRow(position, unit, trackerLinkId)
+  ));
+  return rows.sort((a, b) => a.captured_at.localeCompare(b.captured_at));
+}
+
+function splitPersistenceRows(rows: PositionPersistenceRow[]): PositionPersistenceRow[][] {
+  if (rows.length === 0) return [[]];
+  if (rows.length > 5000) throw new Error("ssx_position_batch_too_large");
+  const bytes = new TextEncoder().encode(JSON.stringify(rows)).byteLength;
+  if (bytes > 7_500_000) throw new Error("ssx_position_batch_too_large");
+  return [rows];
+}
+
+type CommitPositionResult =
+  | { ok: true; inserted: number; duplicates: number; latestApplied: boolean }
+  | { ok: false; error: string };
+
+async function commitPositionBatch(supabase: any, input: {
+  integrationAccountId: string;
+  unit: any;
+  mapping: TrackerBinding;
+  rows: PositionPersistenceRow[];
+  receivedAt: string;
+  pollMemo: Record<string, any>;
+}): Promise<CommitPositionResult> {
+  let batches: PositionPersistenceRow[][];
+  try {
+    batches = splitPersistenceRows(input.rows);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "ssx_position_payload_invalid" };
+  }
+  let inserted = 0;
+  let duplicates = 0;
+  let latestApplied = false;
+  for (const rows of batches) {
+    const { data, error } = await supabase.rpc("commit_ssx_position_batch_v1", {
+      _tenant_id: input.mapping.tenant_id,
+      _integration_account_id: input.integrationAccountId,
+      _provider_unit_id: input.unit.id,
+      _tracker_link_id: input.mapping.link_id,
+      _vehicle_id: input.mapping.vehicle_id,
+      _received_at: input.receivedAt,
+      _positions: rows,
+      _poll_memo: input.pollMemo,
+    });
+    if (error) return { ok: false, error: error.message || "ssx_position_commit_failed" };
+    const receipt = Array.isArray(data) ? data[0] : data;
+    if (!receipt || receipt.version !== 1 ||
+        receipt.tenant_id !== input.mapping.tenant_id ||
+        receipt.integration_account_id !== input.integrationAccountId ||
+        receipt.provider_unit_id !== input.unit.id ||
+        receipt.tracker_link_id !== input.mapping.link_id ||
+        receipt.vehicle_id !== input.mapping.vehicle_id ||
+        !Number.isInteger(receipt.attempted) || receipt.attempted !== rows.length ||
+        !Number.isInteger(receipt.inserted) || receipt.inserted < 0 ||
+        !Number.isInteger(receipt.duplicates) || receipt.duplicates < 0 ||
+        receipt.inserted + receipt.duplicates !== receipt.attempted ||
+        typeof receipt.latest_applied !== "boolean") {
+      return { ok: false, error: "ssx_position_commit_receipt_invalid" };
+    }
+    inserted += receipt.inserted;
+    duplicates += receipt.duplicates;
+    latestApplied ||= receipt.latest_applied;
+  }
+  return { ok: true, inserted, duplicates, latestApplied };
+}
+
+async function recordPollError(supabase: any, input: {
+  integrationAccountId: string;
+  unit: any;
+  mapping: TrackerBinding;
+  observedAt: string;
+  error: string;
+  backoffUntil: string;
+  pollMemo: Record<string, any>;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data, error } = await supabase.rpc("record_ssx_poll_error_v1", {
+    _tenant_id: input.mapping.tenant_id,
+    _integration_account_id: input.integrationAccountId,
+    _provider_unit_id: input.unit.id,
+    _tracker_link_id: input.mapping.link_id,
+    _vehicle_id: input.mapping.vehicle_id,
+    _observed_at: input.observedAt,
+    _error: input.error.slice(0, 500),
+    _backoff_until: input.backoffUntil,
+    _poll_memo: input.pollMemo,
+  });
+  if (error) return { ok: false, error: error.message || "ssx_poll_error_commit_failed" };
+  const receipt = Array.isArray(data) ? data[0] : data;
+  if (!receipt || receipt.version !== 1 ||
+      receipt.tenant_id !== input.mapping.tenant_id ||
+      receipt.integration_account_id !== input.integrationAccountId ||
+      receipt.provider_unit_id !== input.unit.id ||
+      receipt.tracker_link_id !== input.mapping.link_id ||
+      receipt.vehicle_id !== input.mapping.vehicle_id) {
+    return { ok: false, error: "ssx_poll_error_receipt_invalid" };
+  }
+  return { ok: true };
+}
 
 function summarizePollingAttemptsV2(attempts: PollingAttemptLog[]): string[] {
   return attempts.map(a =>
@@ -1238,45 +1348,49 @@ function summarizePollingAttemptsV2(attempts: PollingAttemptLog[]): string[] {
   );
 }
 
-function simpleHash(input: string): string {
-  let h = 0;
-  for (let i = 0; i < input.length; i++) {
-    h = ((h << 5) - h + input.charCodeAt(i)) | 0;
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) =>
+    `${JSON.stringify(key)}:${canonicalJson(record[key])}`
+  ).join(",")}}`;
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function setAccountCooldown(
+  supabase: any,
+  tenantId: string,
+  accountId: string,
+  observedAt: string,
+  cooldownSeconds: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const cooldownUntil = new Date(
+    new Date(observedAt).getTime() + cooldownSeconds * 1000,
+  ).toISOString();
+  const { data, error } = await supabase.rpc("record_ssx_account_cooldown_v1", {
+    _tenant_id: tenantId,
+    _integration_account_id: accountId,
+    _observed_at: observedAt,
+    _cooldown_until: cooldownUntil,
+    _error: "Rate limited by SSX (429)",
+  });
+  if (error) return { ok: false, error: error.message || "ssx_account_cooldown_failed" };
+  const receipt = Array.isArray(data) ? data[0] : data;
+  if (!receipt || receipt.version !== 1 || receipt.tenant_id !== tenantId ||
+      receipt.integration_account_id !== accountId ||
+      typeof receipt.cooldown_until !== "string") {
+    return { ok: false, error: "ssx_account_cooldown_receipt_invalid" };
   }
-  const hex = (h >>> 0).toString(16).padStart(8, "0");
-  let sum = 0;
-  for (let i = 0; i < input.length; i++) sum += input.charCodeAt(i);
-  const extra = ((sum * 31) >>> 0).toString(16).padStart(8, "0");
-  return `sh_${hex}${extra}_${input.length}`;
-}
-
-async function upsertCursor(supabase: any, data: Record<string, any>) {
-  await supabase.from("ingestion_cursors").upsert(data, { onConflict: "provider_unit_id,tenant_id" });
-}
-
-async function setAccountCooldown(supabase: any, accountId: string, config: any, cooldownSeconds: number) {
-  const cooldownUntil = new Date(Date.now() + cooldownSeconds * 1000).toISOString();
-  const { data: currentAccount } = await supabase
-    .from("integration_accounts").select("settings").eq("id", accountId).single();
-  const currentSettings = currentAccount?.settings || {};
-  await supabase.from("integration_accounts").update({
-    settings: { ...currentSettings, poll_cooldown_until: cooldownUntil },
-    last_error: "Rate limited by SSX (429)",
-    updated_at: new Date().toISOString(),
-  }).eq("id", accountId);
+  return { ok: true };
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000;
-  const toRad = (d: number) => d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function jsonResp(body: any, status = 200): Response {

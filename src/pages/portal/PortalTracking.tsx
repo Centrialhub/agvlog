@@ -146,7 +146,7 @@ function TrackingCard({
         <div className="text-xs text-muted-foreground flex items-center gap-1">
           <span className="font-mono">{item.plate}</span>
           {item.vehicle_nickname && <span>· {item.vehicle_nickname}</span>}
-          {typeof item.speed === 'number' && (
+          {item.telemetry_freshness === 'fresh' && typeof item.speed === 'number' && (
             <span className="ml-auto flex items-center gap-1">
               <Navigation className="h-3 w-3" />
               {Math.round(item.speed)} km/h

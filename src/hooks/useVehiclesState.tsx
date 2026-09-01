@@ -1,16 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { classifyTelemetryFreshness } from '@/lib/telemetryFreshness';
+import {
+  resolvePositionTelemetry,
+  type TelemetryMovementState,
+} from '@/lib/positionTelemetry';
 
-export type MovementState = 'moving' | 'stopped' | 'idle' | 'offline' | 'unknown';
+export type MovementState = TelemetryMovementState;
 
 export interface VehicleState {
   vehicle_id: string;
   tenant_id: string;
   lat: number | null;
   lng: number | null;
-  speed: number;
+  speed: number | null;
   heading: number | null;
   movement_state: MovementState;
   last_movement_at: string | null;
@@ -27,16 +30,32 @@ export function useFleetState() {
     queryKey: ['vehicles_state', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('vehicles_state')
-        .select('*')
-        .eq('tenant_id', currentTenant.id);
-      if (error) throw error;
-      return ((data || []) as VehicleState[]).map((state) => {
-        const freshness = classifyTelemetryFreshness(state.last_position_at);
-        if (freshness === 'offline') return { ...state, movement_state: 'offline' as const };
-        if (freshness === 'unknown') return { ...state, movement_state: 'unknown' as const };
-        return state;
+      const [statesResult, positionsResult] = await Promise.all([
+        supabase.from('vehicles_state').select('*').eq('tenant_id', currentTenant.id),
+        supabase.from('positions_last')
+          .select('vehicle_id, captured_at, lat, lng, speed, heading')
+          .eq('tenant_id', currentTenant.id),
+      ]);
+      if (statesResult.error) throw statesResult.error;
+      if (positionsResult.error) throw positionsResult.error;
+      const positionByVehicle = new Map(
+        (positionsResult.data || []).map((position) => [position.vehicle_id, position]),
+      );
+      return ((statesResult.data || []) as VehicleState[]).map((state) => {
+        const position = positionByVehicle.get(state.vehicle_id);
+        const telemetry = resolvePositionTelemetry(position, state);
+        const isStopped = telemetry.movementState === 'stopped' || telemetry.movementState === 'idle';
+        return {
+          ...state,
+          lat: position?.lat ?? null,
+          lng: position?.lng ?? null,
+          heading: position?.heading ?? null,
+          speed: telemetry.speed,
+          movement_state: telemetry.movementState,
+          last_position_at: telemetry.capturedAt,
+          stopped_since: isStopped ? state.stopped_since : null,
+          stopped_duration_seconds: isStopped ? state.stopped_duration_seconds : 0,
+        };
       });
     },
     enabled: !!currentTenant,
@@ -51,19 +70,36 @@ export function useVehicleState(vehicleId: string | null) {
     queryKey: ['vehicle_state', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return null;
-      const { data, error } = await supabase
-        .from('vehicles_state')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('vehicle_id', vehicleId)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-      const state = data as VehicleState;
-      const freshness = classifyTelemetryFreshness(state.last_position_at);
-      if (freshness === 'offline') return { ...state, movement_state: 'offline' as const };
-      if (freshness === 'unknown') return { ...state, movement_state: 'unknown' as const };
-      return state;
+      const [stateResult, positionResult] = await Promise.all([
+        supabase.from('vehicles_state')
+          .select('*')
+          .eq('tenant_id', currentTenant.id)
+          .eq('vehicle_id', vehicleId)
+          .maybeSingle(),
+        supabase.from('positions_last')
+          .select('captured_at, lat, lng, speed, heading')
+          .eq('tenant_id', currentTenant.id)
+          .eq('vehicle_id', vehicleId)
+          .maybeSingle(),
+      ]);
+      if (stateResult.error) throw stateResult.error;
+      if (positionResult.error) throw positionResult.error;
+      if (!stateResult.data) return null;
+      const state = stateResult.data as VehicleState;
+      const position = positionResult.data;
+      const telemetry = resolvePositionTelemetry(position, state);
+      const isStopped = telemetry.movementState === 'stopped' || telemetry.movementState === 'idle';
+      return {
+        ...state,
+        lat: position?.lat ?? null,
+        lng: position?.lng ?? null,
+        heading: position?.heading ?? null,
+        speed: telemetry.speed,
+        movement_state: telemetry.movementState,
+        last_position_at: telemetry.capturedAt,
+        stopped_since: isStopped ? state.stopped_since : null,
+        stopped_duration_seconds: isStopped ? state.stopped_duration_seconds : 0,
+      };
     },
     enabled: !!currentTenant && !!vehicleId,
     refetchInterval: 30000,

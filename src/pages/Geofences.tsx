@@ -2,6 +2,7 @@ import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { isFreshPositionObservation } from '@/lib/positionTelemetry';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -90,10 +91,10 @@ export default function Geofences() {
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data, error } = await supabase.from('positions_last')
-        .select('vehicle_id, lat, lng, vehicles(plate)')
+        .select('vehicle_id, lat, lng, captured_at, vehicles(plate)')
         .eq('tenant_id', currentTenant.id);
       if (error) throw error;
-      return data || [];
+      return (data || []).filter((position) => isFreshPositionObservation(position));
     },
     enabled: !!currentTenant,
   });
@@ -125,7 +126,9 @@ export default function Geofences() {
   const filtered = geofences.filter(row => matchesSearch(filters.search, row.name, getCategoryConfig(row.category || 'general').label) && (filters.category === 'all' || row.category === filters.category) && (filters.status === 'all' || row.enabled === (filters.status === 'active')));
 
   const activeCount = geofences.filter((g) => g.enabled).length;
-  const vehiclesInside = states.length;
+  const freshVehicleIds = new Set(positions.map((position) => position.vehicle_id));
+  const currentStates = states.filter((state) => freshVehicleIds.has(state.vehicle_id));
+  const vehiclesInside = currentStates.length;
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -241,7 +244,7 @@ export default function Geofences() {
       )}
 
       {/* Vehicles inside geofences right now */}
-      {states.length > 0 && (
+      {currentStates.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -250,7 +253,7 @@ export default function Geofences() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {states.map((s, i) => (
+              {currentStates.map((s, i) => (
                 <Badge key={i} variant="outline" className="text-xs gap-1">
                   <Truck className="h-3 w-3" />
                   {s.vehicles?.plate || '—'}
@@ -282,7 +285,7 @@ export default function Geofences() {
               {filtered.map((g) => {
                 const config = getCategoryConfig(g.category || 'general');
                 const Icon = config.icon;
-                const insideCount = states.filter((s) => s.geofence_id === g.id).length;
+                const insideCount = currentStates.filter((s) => s.geofence_id === g.id).length;
 
                 return (
                   <div key={g.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors">

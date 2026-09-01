@@ -8,6 +8,7 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 
 describe("tenant integration capabilities", () => {
   const migration = read("supabase/migrations/20260829142707_restore_production_integration_capabilities.sql");
+  const hardened = read("supabase/migrations/20260831211632_make_ssx_position_ingestion_monotonic.sql");
 
   it("creates fail-closed SSX/fiscal flags and independent kill switches", () => {
     for (const key of ["ssx_enabled", "fiscal_enabled", "ssx_kill_switch", "fiscal_kill_switch"]) {
@@ -23,6 +24,13 @@ describe("tenant integration capabilities", () => {
     expect(migration).toContain("Existing production RLS policies are already consolidated as agvlog_*");
     expect(migration).toContain("grant execute on function public.assert_tenant_integration_capability_v1(uuid, text) to service_role");
     expect(migration).toContain("revoke all on function public.assert_tenant_integration_capability_v1(uuid, text) from public, anon, authenticated");
+  });
+
+  it("requires both enabled and kill-switch rows before any provider guard succeeds", () => {
+    expect(hardened).toContain("v_policy_rows <> 2");
+    expect(hardened).toContain("coalesce(bool_or(policy.enabled) filter (");
+    expect(hardened).toContain("_capability || '_kill_switch'");
+    expect(hardened).toContain("security invoker");
   });
 
   it.each([

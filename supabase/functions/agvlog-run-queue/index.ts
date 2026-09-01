@@ -1,10 +1,25 @@
 import { createClient } from "@supabase/supabase-js";
 import { isCronRequest } from "../_shared/cron-auth.ts";
+import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return String(error);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -60,18 +75,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    const batchLimit = Math.min(maxItems || 20, 50);
+    const capabilityResponse = await requireIntegrationCapability(supabase, tenant_id, "ssx");
+    if (capabilityResponse) return capabilityResponse;
 
-    // Fetch unprocessed items, skip backoff (attempts >= 5 and recent error)
+    const requestedLimit = Number(maxItems);
+    const batchLimit = Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 50)
+      : 20;
+
+    // Atomically claim queue rows. The RPC is service-only/SECURITY INVOKER and
+    // returns a short lease token bound to the current last_position_at.
     const { data: queue, error: qErr } = await supabase
-      .from("vehicle_processing_queue")
-      .select("*")
-      .eq("tenant_id", tenant_id)
-      .is("processed_at", null)
-      .order("queued_at", { ascending: true })
-      .limit(batchLimit);
+      .rpc("claim_vehicle_processing_queue_v1", {
+        _tenant_id: tenant_id,
+        _limit: batchLimit,
+      });
 
-    if (qErr || !queue || queue.length === 0) {
+    if (qErr) {
+      console.error("[agvlog-run-queue] claim failed", { code: qErr.code });
+      return new Response(
+        JSON.stringify({ success: false, error: "Queue claim failed" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (!queue || queue.length === 0) {
       return new Response(
         JSON.stringify({ success: true, processed: 0, message: "Queue empty" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -102,6 +129,7 @@ Deno.serve(async (req) => {
 
     let processed = 0;
     let errors = 0;
+    let superseded = 0;
     const stats = {
       positions_analyzed: 0,
       trips_created: 0,
@@ -116,10 +144,29 @@ Deno.serve(async (req) => {
     };
 
     for (const item of queue) {
-      if (item.attempts >= 5) continue;
-
       try {
         const result = await processVehicle(supabase, tenant_id, item.vehicle_id, settings, tenantTimezone, mappingMap, routeTemplates || []);
+
+        const { data: acknowledged, error: ackError } = await supabase.rpc(
+          "ack_vehicle_processing_queue_v1",
+          {
+            _tenant_id: tenant_id,
+            _vehicle_id: item.vehicle_id,
+            _claim_token: item.claim_token,
+            _last_position_at: item.last_position_at,
+            _success: true,
+            _error: null,
+          },
+        );
+        if (ackError) {
+          console.error(`[agvlog-run-queue] ACK failed for ${item.vehicle_id}`, { code: ackError.code });
+          errors++;
+          continue;
+        }
+        if (acknowledged !== true) {
+          superseded++;
+          continue;
+        }
 
         stats.positions_analyzed += result.positions_analyzed || 0;
         stats.trips_created += result.trips_created || 0;
@@ -132,26 +179,38 @@ Deno.serve(async (req) => {
         stats.fuel_events_created += result.fuel_events_created || 0;
         stats.route_runs_created += result.route_runs_created || 0;
 
-        await supabase.from("vehicle_processing_queue").update({
-          processed_at: new Date().toISOString(),
-          attempts: item.attempts + 1,
-          last_error: null,
-        }).eq("tenant_id", tenant_id).eq("vehicle_id", item.vehicle_id);
-
         processed++;
-      } catch (e: any) {
-        console.error(`Process error for vehicle ${item.vehicle_id}:`, e);
-        await supabase.from("vehicle_processing_queue").update({
-          attempts: item.attempts + 1,
-          last_error: e.message?.substring(0, 500),
-        }).eq("tenant_id", tenant_id).eq("vehicle_id", item.vehicle_id);
-        errors++;
+      } catch (e: unknown) {
+        const message = errorMessage(e);
+        console.error(`Process error for vehicle ${item.vehicle_id}:`, message);
+        const { data: acknowledged, error: ackError } = await supabase.rpc(
+          "ack_vehicle_processing_queue_v1",
+          {
+            _tenant_id: tenant_id,
+            _vehicle_id: item.vehicle_id,
+            _claim_token: item.claim_token,
+            _last_position_at: item.last_position_at,
+            _success: false,
+            _error: message,
+          },
+        );
+        if (ackError) {
+          console.error(`[agvlog-run-queue] failure ACK failed for ${item.vehicle_id}`, { code: ackError.code });
+          errors++;
+        } else if (acknowledged !== true) {
+          superseded++;
+        } else {
+          errors++;
+        }
       }
     }
 
     return new Response(
-      JSON.stringify({ success: true, processed, errors, stats }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: errors === 0, processed, errors, superseded, stats }),
+      {
+        status: errors === 0 ? 200 : 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (err: any) {
     console.error("agvlog-run-queue error:", err);

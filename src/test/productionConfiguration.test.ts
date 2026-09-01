@@ -20,7 +20,7 @@ describe("production configuration contract", () => {
       })
       .map((entry) => entry.name);
 
-    expect(functionNames).toHaveLength(31);
+    expect(functionNames).toHaveLength(33);
 
     for (const name of functionNames) {
       const source = read("supabase", "functions", name, "index.ts");
@@ -172,11 +172,11 @@ describe("production configuration contract", () => {
       "agvlog-aggregate-daily", "agvlog-compute-state", "agvlog-integration-upsert",
       "agvlog-pipeline-run", "agvlog-process-vehicle", "agvlog-run-queue",
       "clients-merge-contacts-addresses", "create-team-member", "cte-sefaz-callback",
-      "cte-status-poll", "emit-nfse", "frontend-error-report", "get-client-pod-signed-url",
+      "cte-status-poll", "emit-nfse", "fiscal-certificate-manage", "frontend-error-report", "get-client-pod-signed-url",
       "hub-fiscal-credential-save", "hub-fiscal-proxy", "hub-fiscal-webhook-in",
       "list-tenant-members", "nfse-status-poll", "search-users-by-email", "secure-upload",
       "ssx-diagnostic", "ssx-insert-person", "ssx-insert-person-client", "ssx-login",
-      "ssx-poll-positions", "ssx-sync-telemetry", "ssx-sync-units", "update-team-member",
+      "ssx-poll-positions", "ssx-sync-telemetry", "ssx-sync-units", "tax-registry-consult", "update-team-member",
       "update-trip-live-status",
     ].sort());
     for (const name of ["calculate-trip-route", "update-trip-live-status"]) {

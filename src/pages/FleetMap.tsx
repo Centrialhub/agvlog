@@ -17,6 +17,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { resolvePositionTelemetry } from '@/lib/positionTelemetry';
+
+interface PipelineHealth {
+  last_run_at?: string;
+  last_successful_poll_at?: string;
+  last_rate_limit_at?: string;
+  last_persistence_failure_at?: string;
+  consecutive_failures?: number;
+}
 
 function createVehicleIcon(state: MovementState) {
   const color = stateColor(state);
@@ -33,7 +42,11 @@ function PipelineHealthBanner({ tenantId }: { tenantId: string }) {
     queryKey: ['tenant_health', tenantId],
     queryFn: async () => {
       const { data } = await supabase.from('tenants').select('settings').eq('id', tenantId).single();
-      return (data?.settings as any)?.pipeline_health || null;
+      const settings = data?.settings;
+      if (!settings || Array.isArray(settings) || typeof settings !== 'object') return null;
+      const health = (settings as Record<string, unknown>).pipeline_health;
+      if (!health || Array.isArray(health) || typeof health !== 'object') return null;
+      return health as PipelineHealth;
     },
     enabled: !!tenantId,
     refetchInterval: 60000,
@@ -133,24 +146,31 @@ export default function FleetMap() {
     for (const s of vehicleStates) map[s.vehicle_id] = s;
     return map;
   }, [vehicleStates]);
+  const positionMap = useMemo(
+    () => new Map(positions.map((position) => [position.vehicle_id, position])),
+    [positions],
+  );
 
   // Enrich vehicles: combine vehicle info + state + position
   const enriched = useMemo(() => {
     return vehicles.map(v => {
       const state = stateMap[v.id];
-      const pos = positions.find(p => p.vehicle_id === v.id);
+      const pos = positionMap.get(v.id);
+      const telemetry = resolvePositionTelemetry(pos, state);
       return {
         vehicle: v,
-        state: state?.movement_state || ('unknown' as MovementState),
-        speed: state?.speed ?? 0,
-        stoppedDuration: state?.stopped_duration_seconds ?? 0,
-        lastPositionAt: state?.last_position_at || pos?.captured_at || null,
-        lat: state?.lat ?? pos?.lat ?? null,
-        lng: state?.lng ?? pos?.lng ?? null,
-        heading: state?.heading ?? pos?.heading ?? null,
+        state: telemetry.movementState,
+        speed: telemetry.speed,
+        stoppedDuration: telemetry.movementState === 'stopped' || telemetry.movementState === 'idle'
+          ? state?.stopped_duration_seconds ?? 0
+          : 0,
+        lastPositionAt: telemetry.capturedAt,
+        lat: pos?.lat ?? null,
+        lng: pos?.lng ?? null,
+        heading: pos?.heading ?? null,
       };
     });
-  }, [vehicles, stateMap, positions]);
+  }, [vehicles, stateMap, positionMap]);
 
   const filtered = useMemo(() => {
     return enriched.filter(e => {
@@ -258,7 +278,7 @@ export default function FleetMap() {
                   <p className="text-xs text-muted-foreground mt-0.5 ml-5">{e.vehicle.nickname}</p>
                 )}
                 <div className="flex items-center gap-3 mt-1 ml-5 text-xs text-muted-foreground">
-                  {e.state === 'moving' && (
+                  {e.state === 'moving' && e.speed != null && (
                     <span className="flex items-center gap-1">
                       <Gauge className="h-3 w-3" /> {Math.round(e.speed)} km/h
                     </span>
@@ -306,7 +326,7 @@ export default function FleetMap() {
                   {e.vehicle.nickname && <p className="text-xs text-gray-500">{e.vehicle.nickname}</p>}
                   <div className="mt-2 space-y-1 text-xs">
                     <p>Status: <strong>{stateLabel(e.state)}</strong></p>
-                    <p>Velocidade: <strong>{Math.round(e.speed)} km/h</strong></p>
+                    <p>Velocidade: <strong>{e.speed != null ? `${Math.round(e.speed)} km/h` : 'indisponível'}</strong></p>
                     {e.heading != null && <p>Direção: {Math.round(e.heading)}°</p>}
                     {(e.state === 'stopped' || e.state === 'idle') && e.stoppedDuration > 0 && (
                       <p>Parado há: <strong>{formatStoppedDuration(e.stoppedDuration)}</strong></p>

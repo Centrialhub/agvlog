@@ -3,6 +3,10 @@ import { corsHeaders } from "./cors.ts";
 
 export { corsHeaders };
 
+declare const Deno: {
+  env: { get(name: string): string | undefined };
+};
+
 /**
  * SSX Integration Shared Utilities
  * 
@@ -836,7 +840,7 @@ export async function decryptAesGcm(encrypted: string, keyHex: string): Promise<
   return new TextDecoder().decode(decrypted);
 }
 
-function hexToBytes(hex: string): Uint8Array {
+function hexToBytes(hex: string) {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
@@ -846,12 +850,12 @@ function hexToBytes(hex: string): Uint8Array {
 
 // ======================== Internal Helpers ========================
 
-function pickFirst(obj: any, keys: string[]): string | number | null {
+function pickFirst(obj: any, keys: string[]): string | null {
   for (const key of keys) {
     const val = obj[key];
     if (val != null && val !== "") {
       if (typeof val === "string" && val.trim()) return val.trim();
-      if (typeof val === "number") return val;
+      if (typeof val === "number") return String(val);
     }
   }
   return null;

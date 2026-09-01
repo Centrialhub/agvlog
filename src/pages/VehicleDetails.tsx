@@ -31,6 +31,7 @@ import FuelingTab from '@/components/fleet/FuelingTab';
 import OdometerTab from '@/components/fleet/OdometerTab';
 import type { Json, Tables } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
+import { resolvePositionTelemetry } from '@/lib/positionTelemetry';
 
 type Trip = Tables<'trips'>;
 type ConsolidatedTrip = Trip & { _merged_count: number; max_speed_kmh: number };
@@ -213,7 +214,8 @@ export default function VehicleDetails() {
     enabled: !!currentTenant,
   });
 
-  const movementState = vehicleState?.movement_state || 'unknown';
+  const currentTelemetry = resolvePositionTelemetry(positionLast, vehicleState);
+  const movementState = currentTelemetry.movementState;
   const historyPath = useMemo(() => history.map((p: PositionRaw) => [p.lat, p.lng] as [number, number]), [history]);
   const telemetry = jsonRecord(positionLast?.telemetry_snapshot);
   const hasFuel = capabilities?.fuel === true;
@@ -327,23 +329,21 @@ export default function VehicleDetails() {
             {vehicle?.plate || '...'} {vehicle?.nickname && <span className="text-sm font-normal text-muted-foreground">({vehicle.nickname})</span>}
           </h1>
           <div className="flex items-center gap-2 mt-0.5">
-            {vehicleState ? (
+            {currentTelemetry.hasObservation ? (
               <>
                 <Badge variant="outline" className={stateBadgeClasses(movementState)}>
                   {stateLabel(movementState)}
                 </Badge>
-                {vehicleState.speed > 0 && (
-                  <span className="text-xs text-muted-foreground">{Math.round(vehicleState.speed)} km/h</span>
+                {currentTelemetry.speed != null && (
+                  <span className="text-xs text-muted-foreground">{Math.round(currentTelemetry.speed)} km/h</span>
                 )}
-                {(movementState === 'stopped' || movementState === 'idle') && vehicleState.stopped_duration_seconds > 0 && (
-                  <span className="text-xs text-muted-foreground">Parado há {formatStoppedDuration(vehicleState.stopped_duration_seconds)}</span>
+                {(movementState === 'stopped' || movementState === 'idle') && (vehicleState?.stopped_duration_seconds ?? 0) > 0 && (
+                  <span className="text-xs text-muted-foreground">Parado há {formatStoppedDuration(vehicleState?.stopped_duration_seconds ?? 0)}</span>
                 )}
-                {vehicleState.last_position_at && (
-                  <span className="text-xs text-muted-foreground">Atualizado {formatDistanceToNow(new Date(vehicleState.last_position_at), { addSuffix: true, locale: ptBR })}</span>
+                {currentTelemetry.capturedAt && (
+                  <span className="text-xs text-muted-foreground">Posição observada {formatDistanceToNow(new Date(currentTelemetry.capturedAt), { addSuffix: true, locale: ptBR })}</span>
                 )}
               </>
-            ) : positionLast ? (
-              <span className="text-xs text-muted-foreground">Atualizado {formatDistanceToNow(new Date(positionLast.captured_at), { addSuffix: true, locale: ptBR })}</span>
             ) : <Badge variant="outline">Sem posição registrada</Badge>}
           </div>
         </div>
@@ -392,7 +392,7 @@ export default function VehicleDetails() {
                 </CardContent>
               </Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Gauge className="h-4 w-4 text-primary" />Velocidade</CardTitle></CardHeader>
-                <CardContent><div className="text-3xl font-bold text-foreground">{Math.round(vehicleState?.speed ?? positionLast?.speed ?? 0)} <span className="text-sm font-normal text-muted-foreground">km/h</span></div></CardContent>
+                <CardContent><div className="text-3xl font-bold text-foreground">{currentTelemetry.speed != null ? <>{Math.round(currentTelemetry.speed)} <span className="text-sm font-normal text-muted-foreground">km/h</span></> : <span className="text-base font-normal text-muted-foreground">Indisponível</span>}</div></CardContent>
               </Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Clock className="h-4 w-4 text-primary" />Última Atualização</CardTitle></CardHeader>
                 <CardContent className="text-sm">{positionLast ? <><p className="font-medium">{format(new Date(positionLast.captured_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</p><p className="text-xs text-muted-foreground mt-1">{formatDistanceToNow(new Date(positionLast.captured_at), { addSuffix: true, locale: ptBR })}</p></> : <p className="text-muted-foreground text-xs">Sem dados</p>}</CardContent>
