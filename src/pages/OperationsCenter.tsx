@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { resolvePositionTelemetry } from '@/lib/positionTelemetry';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useFleetPositions } from '@/hooks/usePositions';
@@ -69,8 +70,15 @@ const SEVERITY_COLORS: Record<string, string> = {
   low: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400',
 };
 
+function requireExactCount(count: number | null, label: string): number {
+  if (typeof count !== 'number' || !Number.isFinite(count) || count < 0) {
+    throw new Error(`A contagem exata de ${label} não foi confirmada.`);
+  }
+  return count;
+}
+
 export default function OperationsCenter() {
-  const { currentTenant } = useTenant();
+  const { currentTenant, loading: tenantLoading } = useTenant();
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -136,28 +144,59 @@ export default function OperationsCenter() {
   const dailyQuote = MOTIVATIONAL_QUOTES[dayOfYear % MOTIVATIONAL_QUOTES.length];
 
 
-  const { data: loads = [] } = useQuery({
+  const loadsQuery = useQuery({
     queryKey: ['ops_loads', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('loads')
-        .select('*, vehicles(plate, nickname), drivers(name)')
-        .eq('tenant_id', currentTenant.id)
-        .order('updated_at', { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return data || [];
+      if (!currentTenant) throw new Error('Empresa operacional não selecionada.');
+      const delayedBefore = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const [rowsResult, activeResult, inTransitResult, delayedResult] = await Promise.all([
+        supabase
+          .from('loads')
+          .select('*, vehicles(plate, nickname), drivers(name)')
+          .eq('tenant_id', currentTenant.id)
+          .order('updated_at', { ascending: false })
+          .limit(200),
+        supabase
+          .from('loads')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', currentTenant.id)
+          .not('status', 'in', '("delivered","cancelled")'),
+        supabase
+          .from('loads')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', currentTenant.id)
+          .eq('status', 'in_transit'),
+        supabase
+          .from('loads')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', currentTenant.id)
+          .not('status', 'in', '("delivered","cancelled")')
+          .lt('updated_at', delayedBefore),
+      ]);
+      if (rowsResult.error) throw rowsResult.error;
+      if (activeResult.error) throw activeResult.error;
+      if (inTransitResult.error) throw inTransitResult.error;
+      if (delayedResult.error) throw delayedResult.error;
+      return {
+        rows: rowsResult.data || [],
+        activeCount: requireExactCount(activeResult.count, 'cargas ativas'),
+        inTransitCount: requireExactCount(inTransitResult.count, 'cargas em trânsito'),
+        delayedCount: requireExactCount(delayedResult.count, 'cargas atrasadas'),
+      };
     },
     enabled: !!currentTenant,
     refetchInterval: 30000,
   });
+  const loads = useMemo(
+    () => loadsQuery.isError ? [] : loadsQuery.data?.rows ?? [],
+    [loadsQuery.data, loadsQuery.isError],
+  );
 
   // ── Fiscal Documents ──
-  const { data: fiscalDocs = [] } = useQuery({
+  const fiscalQuery = useQuery({
     queryKey: ['ops_fiscal', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
+      if (!currentTenant) throw new Error('Empresa operacional não selecionada.');
       const { data, error } = await supabase
         .from('fiscal_documents')
         .select('id, document_type, value, weight_kg, pallet_count, status, created_at, issue_date, freight_value')
@@ -169,53 +208,91 @@ export default function OperationsCenter() {
     },
     enabled: !!currentTenant,
   });
+  const fiscalDocs = useMemo(
+    () => fiscalQuery.isError ? [] : fiscalQuery.data ?? [],
+    [fiscalQuery.data, fiscalQuery.isError],
+  );
 
   // ── Alert Instances ──
-  const { data: alerts = [] } = useQuery({
+  const alertsQuery = useQuery({
     queryKey: ['ops_alerts', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
+      if (!currentTenant) throw new Error('Empresa operacional não selecionada.');
+      const { data, error, count } = await supabase
         .from('alert_instances')
-        .select('*, alert_rules(rule_type, params), vehicles(plate, nickname)')
+        .select('*, alert_rules(rule_type, params), vehicles(plate, nickname)', { count: 'exact' })
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'open')
         .order('opened_at', { ascending: false })
         .limit(20);
       if (error) throw error;
-      return data || [];
+      return { rows: data || [], total: requireExactCount(count, 'alertas ativos') };
     },
     enabled: !!currentTenant,
     refetchInterval: 30000,
   });
+  const alerts = useMemo(
+    () => alertsQuery.isError ? [] : alertsQuery.data?.rows ?? [],
+    [alertsQuery.data, alertsQuery.isError],
+  );
 
   // ── Incidents ──
-  const { data: incidents = [] } = useQuery({
+  const incidentsQuery = useQuery({
     queryKey: ['ops_incidents', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('incidents')
-        .select('id, status, severity, title, incident_type, created_at, occurred_at')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data || [];
+      if (!currentTenant) throw new Error('Empresa operacional não selecionada.');
+      const [rowsResult, criticalResult] = await Promise.all([
+        supabase
+          .from('incidents')
+          .select('id, status, severity, title, incident_type, created_at, occurred_at', { count: 'exact' })
+          .eq('tenant_id', currentTenant.id)
+          .not('status', 'in', '("closed","resolved","cancelled")')
+          .order('created_at', { ascending: false })
+          .limit(50),
+        supabase
+          .from('incidents')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', currentTenant.id)
+          .not('status', 'in', '("closed","resolved","cancelled")')
+          .in('severity', ['critical', 'high']),
+      ]);
+      if (rowsResult.error) throw rowsResult.error;
+      if (criticalResult.error) throw criticalResult.error;
+      return {
+        rows: rowsResult.data || [],
+        openCount: requireExactCount(rowsResult.count, 'incidentes abertos'),
+        criticalCount: requireExactCount(criticalResult.count, 'incidentes críticos'),
+      };
     },
     enabled: !!currentTenant,
   });
+  const incidents = useMemo(
+    () => incidentsQuery.isError ? [] : incidentsQuery.data?.rows ?? [],
+    [incidentsQuery.data, incidentsQuery.isError],
+  );
 
   // ── Fleet ──
-  const { data: vehicles = [] } = useVehicles();
-  const { data: vehicleStates = [] } = useFleetState();
-  const { data: positions = [] } = useFleetPositions();
+  const vehiclesQuery = useVehicles();
+  const vehicleStatesQuery = useFleetState();
+  const positionsQuery = useFleetPositions();
+  const vehicles = useMemo(
+    () => vehiclesQuery.isError ? [] : vehiclesQuery.data ?? [],
+    [vehiclesQuery.data, vehiclesQuery.isError],
+  );
+  const vehicleStates = useMemo(
+    () => vehicleStatesQuery.isError ? [] : vehicleStatesQuery.data ?? [],
+    [vehicleStatesQuery.data, vehicleStatesQuery.isError],
+  );
+  const positions = useMemo(
+    () => positionsQuery.isError ? [] : positionsQuery.data ?? [],
+    [positionsQuery.data, positionsQuery.isError],
+  );
 
   // ── Drivers ──
-  const { data: drivers = [] } = useQuery({
+  const driversQuery = useQuery({
     queryKey: ['ops_drivers', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
+      if (!currentTenant) throw new Error('Empresa operacional não selecionada.');
       const { data, error } = await supabase
         .from('drivers')
         .select('id, active, name, current_vehicle_id')
@@ -225,55 +302,85 @@ export default function OperationsCenter() {
     },
     enabled: !!currentTenant,
   });
+  const drivers = useMemo(
+    () => driversQuery.isError ? [] : driversQuery.data ?? [],
+    [driversQuery.data, driversQuery.isError],
+  );
 
   // ── Pending expenses ──
-  const { data: pendingExpenses = 0 } = useQuery({
+  const expensesQuery = useQuery({
     queryKey: ['ops_expenses_count', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return 0;
+      if (!currentTenant) throw new Error('Empresa operacional não selecionada.');
       const { count, error } = await supabase
         .from('driver_expenses')
         .select('*', { count: 'exact', head: true })
         .eq('tenant_id', currentTenant.id)
         .eq('approval_status', 'pending');
       if (error) throw error;
-      return count || 0;
+      return requireExactCount(count, 'despesas pendentes');
     },
     enabled: !!currentTenant,
   });
+  const pendingExpenses = expensesQuery.isError ? null : expensesQuery.data ?? null;
 
   // ── Maintenance ──
-  const { data: openMaintenance = 0 } = useQuery({
+  const maintenanceQuery = useQuery({
     queryKey: ['ops_maintenance', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return 0;
+      if (!currentTenant) throw new Error('Empresa operacional não selecionada.');
       const { count, error } = await supabase
         .from('maintenance_orders')
         .select('*', { count: 'exact', head: true })
         .eq('tenant_id', currentTenant.id)
         .not('status', 'in', '("closed","completed")');
       if (error) throw error;
-      return count || 0;
+      return requireExactCount(count, 'ordens de manutenção abertas');
     },
     enabled: !!currentTenant,
   });
+  const openMaintenance = maintenanceQuery.isError ? null : maintenanceQuery.data ?? null;
 
   // ── Dispatch Trips ──
-  const { data: activeTrips = [] } = useQuery({
+  const tripsQuery = useQuery({
     queryKey: ['ops_trips', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
+      if (!currentTenant) throw new Error('Empresa operacional não selecionada.');
+      const { data, error, count } = await supabase
         .from('dispatch_trips')
-        .select('id, status, vehicle_id, driver_id, load_id, planned_start_at, actual_start_at')
+        .select('id, status, vehicle_id, driver_id, load_id, planned_start_at, actual_start_at', { count: 'exact' })
         .eq('tenant_id', currentTenant.id)
         .in('status', ['planned', 'in_progress'])
         .limit(50);
       if (error) throw error;
-      return data || [];
+      return { rows: data || [], total: requireExactCount(count, 'viagens ativas') };
     },
     enabled: !!currentTenant,
   });
+  const tenantUnavailable = !tenantLoading && !currentTenant;
+  const loadsPending = tenantLoading || (!!currentTenant && loadsQuery.isPending);
+  const loadsUnavailable = tenantUnavailable || loadsQuery.isError;
+  const fiscalPending = tenantLoading || (!!currentTenant && fiscalQuery.isPending);
+  const fiscalUnavailable = tenantUnavailable || fiscalQuery.isError;
+  const alertsPending = tenantLoading || (!!currentTenant && alertsQuery.isPending);
+  const alertsUnavailable = tenantUnavailable || alertsQuery.isError;
+  const incidentsPending = tenantLoading || (!!currentTenant && incidentsQuery.isPending);
+  const incidentsUnavailable = tenantUnavailable || incidentsQuery.isError;
+  const driversPending = tenantLoading || (!!currentTenant && driversQuery.isPending);
+  const driversUnavailable = tenantUnavailable || driversQuery.isError;
+  const expensesPending = tenantLoading || (!!currentTenant && expensesQuery.isPending);
+  const expensesUnavailable = tenantUnavailable || expensesQuery.isError;
+  const maintenancePending = tenantLoading || (!!currentTenant && maintenanceQuery.isPending);
+  const maintenanceUnavailable = tenantUnavailable || maintenanceQuery.isError;
+  const tripsPending = tenantLoading || (!!currentTenant && tripsQuery.isPending);
+  const tripsUnavailable = tenantUnavailable || tripsQuery.isError;
+  const fleetPending = tenantLoading || (!!currentTenant && (
+    vehiclesQuery.isPending || vehicleStatesQuery.isPending || positionsQuery.isPending
+  ));
+  const fleetUnavailable = tenantUnavailable
+    || vehiclesQuery.isError
+    || vehicleStatesQuery.isError
+    || positionsQuery.isError;
 
   // ── Fleet Map Data ──
   const stateMap = useMemo(() => {
@@ -281,22 +388,29 @@ export default function OperationsCenter() {
     for (const s of vehicleStates) map[s.vehicle_id] = s;
     return map;
   }, [vehicleStates]);
+  const positionMap = useMemo(
+    () => new Map(positions.map((position) => [position.vehicle_id, position])),
+    [positions],
+  );
 
   const enrichedVehicles = useMemo(() => {
     return vehicles.map(v => {
       const state = stateMap[v.id];
-      const pos = positions.find((position) => position.vehicle_id === v.id);
+      const pos = positionMap.get(v.id);
+      const telemetry = resolvePositionTelemetry(pos, state);
       return {
         vehicle: v,
-        state: (state?.movement_state || 'unknown') as MovementState,
-        lat: state?.lat ?? pos?.lat ?? null,
-        lng: state?.lng ?? pos?.lng ?? null,
-        speed: state?.speed ?? 0,
-        stoppedDuration: state?.stopped_duration_seconds ?? 0,
-        lastPositionAt: state?.last_position_at || pos?.captured_at || null,
+        state: telemetry.movementState,
+        lat: pos?.lat ?? null,
+        lng: pos?.lng ?? null,
+        speed: telemetry.speed,
+        stoppedDuration: telemetry.movementState === 'stopped' || telemetry.movementState === 'idle'
+          ? state?.stopped_duration_seconds ?? 0
+          : 0,
+        lastPositionAt: telemetry.capturedAt,
       };
     });
-  }, [vehicles, stateMap, positions]);
+  }, [vehicles, stateMap, positionMap]);
 
   const vehiclesWithPosition = useMemo(() =>
     enrichedVehicles.filter(e => e.lat != null && e.lng != null),
@@ -318,16 +432,9 @@ export default function OperationsCenter() {
 
   // ── Computed Stats ──
   const stats = useMemo(() => {
-    const activeLoads = loads.filter((load) => !['delivered', 'cancelled'].includes(load.status));
-    const inTransit = loads.filter((load) => load.status === 'in_transit');
-    const delivered = loads.filter((load) => load.status === 'delivered');
-    const delayed = loads.filter((load) => {
-      if (load.status === 'delivered' || load.status === 'cancelled') return false;
-      const hoursSince = (Date.now() - new Date(load.updated_at).getTime()) / 3600000;
-      return hoursSince > 24;
-    });
-    const totalWeightActive = activeLoads.reduce((sum, load) => sum + (Number(load.total_weight_kg) || 0), 0);
-    const totalPalletsActive = activeLoads.reduce((sum, load) => sum + (Number(load.total_pallet_count) || 0), 0);
+    const activeLoadSample = loads.filter((load) => !['delivered', 'cancelled'].includes(load.status));
+    const totalWeightActive = activeLoadSample.reduce((sum, load) => sum + (Number(load.total_weight_kg) || 0), 0);
+    const totalPalletsActive = activeLoadSample.reduce((sum, load) => sum + (Number(load.total_pallet_count) || 0), 0);
 
     // Documentos válidos seguindo lógica fiscal centralizada
     const nfes = fiscalDocs.filter((document) => document.document_type === 'inbound' && !isVoidFiscalStatus(document.status));
@@ -341,14 +448,10 @@ export default function OperationsCenter() {
 
     const activeDrivers = drivers.filter((driver) => driver.active);
     const driversWithVehicle = drivers.filter((driver) => driver.active && driver.current_vehicle_id);
-    const openIncidents = incidents.filter((incident) => !['closed', 'resolved', 'cancelled'].includes(incident.status));
-    const criticalIncidents = openIncidents.filter((incident) => incident.severity === 'critical' || incident.severity === 'high');
-
     return {
-      activeLoads: activeLoads.length,
-      inTransit: inTransit.length,
-      delivered: delivered.length,
-      delayed: delayed.length,
+      activeLoads: loadsQuery.data?.activeCount ?? 0,
+      inTransit: loadsQuery.data?.inTransitCount ?? 0,
+      delayed: loadsQuery.data?.delayedCount ?? 0,
       totalWeightActive,
       totalPalletsActive,
       nfeCount: nfes.length,
@@ -358,11 +461,11 @@ export default function OperationsCenter() {
       totalFreight,
       activeDrivers: activeDrivers.length,
       driversWithVehicle: driversWithVehicle.length,
-      openIncidents: openIncidents.length,
-      criticalIncidents: criticalIncidents.length,
-      activeTrips: activeTrips.length,
+      openIncidents: incidentsQuery.data?.openCount ?? 0,
+      criticalIncidents: incidentsQuery.data?.criticalCount ?? 0,
+      activeTrips: tripsQuery.data?.total ?? 0,
     };
-  }, [loads, fiscalDocs, drivers, incidents, activeTrips]);
+  }, [loads, loadsQuery.data, fiscalDocs, drivers, incidentsQuery.data, tripsQuery.data]);
 
   // ── Chart Data ──
   const destChart = useMemo(() => {
@@ -408,6 +511,11 @@ export default function OperationsCenter() {
 
   const fmtCurrency = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   const fmtWeight = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}t` : `${v.toFixed(0)}kg`;
+  const displayValue = (pending: boolean, unavailable: boolean, value: string | number) =>
+    pending ? '…' : unavailable ? '—' : value;
+  const hasDelayedLoads = !loadsPending && !loadsUnavailable && stats.delayed > 0;
+  const hasOpenIncidents = !incidentsPending && !incidentsUnavailable && stats.openIncidents > 0;
+  const alertTotal = alertsQuery.data?.total ?? 0;
 
   return (
     <div className="animate-fade-in space-y-5">
@@ -483,14 +591,19 @@ export default function OperationsCenter() {
               </div>
               <Badge variant="secondary" className="text-[10px] font-medium">ativas</Badge>
             </div>
-            <p className="text-3xl font-extrabold text-foreground tracking-tight">{stats.activeLoads}</p>
-            <p className="text-xs text-muted-foreground mt-1">Cargas em operação</p>
-            <div className="flex gap-3 mt-3 text-[10px]">
+            <p className="text-3xl font-extrabold text-foreground tracking-tight">
+              {displayValue(loadsPending, loadsUnavailable, stats.activeLoads)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Cargas em operação · {loadsPending ? 'consultando' : loadsUnavailable ? 'indisponível' : 'total exato'}
+            </p>
+            <p className="mt-3 text-[9px] text-muted-foreground">Peso e paletes no recorte de até 200 cargas recentes:</p>
+            <div className="flex gap-3 mt-1 text-[10px]">
               <span className="flex items-center gap-1 text-muted-foreground">
-                <Scale className="h-3 w-3" /> {fmtWeight(stats.totalWeightActive)}
+                <Scale className="h-3 w-3" /> {displayValue(loadsPending, loadsUnavailable, fmtWeight(stats.totalWeightActive))}
               </span>
               <span className="flex items-center gap-1 text-muted-foreground">
-                <Package className="h-3 w-3" /> {stats.totalPalletsActive} pal
+                <Package className="h-3 w-3" /> {displayValue(loadsPending, loadsUnavailable, `${stats.totalPalletsActive} pal`)}
               </span>
             </div>
           </CardContent>
@@ -509,57 +622,70 @@ export default function OperationsCenter() {
               </div>
               <Badge variant="secondary" className="text-[10px] font-medium">trânsito</Badge>
             </div>
-            <p className="text-3xl font-extrabold text-foreground tracking-tight">{stats.inTransit}</p>
-            <p className="text-xs text-muted-foreground mt-1">Em trânsito agora</p>
+            <p className="text-3xl font-extrabold text-foreground tracking-tight">
+              {displayValue(loadsPending, loadsUnavailable, stats.inTransit)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Em trânsito agora · {loadsPending ? 'consultando' : loadsUnavailable ? 'indisponível' : 'total exato'}
+            </p>
             <div className="flex gap-3 mt-3 text-[10px]">
               <span className="flex items-center gap-1 text-muted-foreground">
-                <Navigation className="h-3 w-3" /> {stats.activeTrips} viagens
+                <Navigation className="h-3 w-3" />
+                {tripsPending ? 'consultando viagens' : tripsUnavailable ? 'viagens indisponíveis' : `${stats.activeTrips} viagens ativas`}
               </span>
             </div>
           </CardContent>
         </Card>
 
         <Card
-          className={`relative overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 group ${stats.delayed > 0 ? 'border-destructive/30' : 'border-border'}`}
+          className={`relative overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 group ${hasDelayedLoads ? 'border-destructive/30' : 'border-border'}`}
         >
-          <div className={`absolute inset-0 ${stats.delayed > 0 ? 'bg-gradient-to-br from-destructive/8 via-destructive/4 to-transparent' : ''}`} />
+          <div className={`absolute inset-0 ${hasDelayedLoads ? 'bg-gradient-to-br from-destructive/8 via-destructive/4 to-transparent' : ''}`} />
           <CardContent className="p-5 relative">
             <div className="flex items-center justify-between mb-3">
-              <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${stats.delayed > 0 ? 'bg-destructive/10' : 'bg-muted'}`}>
-                <Clock className={`h-5 w-5 ${stats.delayed > 0 ? 'text-destructive' : 'text-muted-foreground'}`} />
+              <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${hasDelayedLoads ? 'bg-destructive/10' : 'bg-muted'}`}>
+                <Clock className={`h-5 w-5 ${hasDelayedLoads ? 'text-destructive' : 'text-muted-foreground'}`} />
               </div>
-              {stats.delayed > 0 && (
+              {hasDelayedLoads && (
                 <span className="relative flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-destructive" />
                 </span>
               )}
             </div>
-            <p className="text-3xl font-extrabold text-foreground tracking-tight">{stats.delayed}</p>
-            <p className="text-xs text-muted-foreground mt-1">Atrasadas (&gt;24h)</p>
+            <p className="text-3xl font-extrabold text-foreground tracking-tight">
+              {displayValue(loadsPending, loadsUnavailable, stats.delayed)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Atrasadas (&gt;24h) · {loadsPending ? 'consultando' : loadsUnavailable ? 'indisponível' : 'total exato'}
+            </p>
           </CardContent>
         </Card>
 
         <Card
-          className={`relative overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 group ${stats.openIncidents > 0 ? 'border-warning/30' : 'border-border'}`}
+          className={`relative overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 group ${hasOpenIncidents ? 'border-warning/30' : 'border-border'}`}
           onClick={() => navigate('/incidents')}
         >
-          <div className={`absolute inset-0 ${stats.openIncidents > 0 ? 'bg-gradient-to-br from-warning/8 via-warning/4 to-transparent' : ''}`} />
+          <div className={`absolute inset-0 ${hasOpenIncidents ? 'bg-gradient-to-br from-warning/8 via-warning/4 to-transparent' : ''}`} />
           <CardContent className="p-5 relative">
             <div className="flex items-center justify-between mb-3">
-              <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${stats.openIncidents > 0 ? 'bg-warning/10' : 'bg-muted'}`}>
-                <ShieldAlert className={`h-5 w-5 ${stats.openIncidents > 0 ? 'text-warning' : 'text-muted-foreground'}`} />
+              <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${hasOpenIncidents ? 'bg-warning/10' : 'bg-muted'}`}>
+                <ShieldAlert className={`h-5 w-5 ${hasOpenIncidents ? 'text-warning' : 'text-muted-foreground'}`} />
               </div>
-              {stats.openIncidents > 0 && (
+              {hasOpenIncidents && (
                 <span className="relative flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75" />
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-warning" />
                 </span>
               )}
             </div>
-            <p className="text-3xl font-extrabold text-foreground tracking-tight">{stats.openIncidents}</p>
-            <p className="text-xs text-muted-foreground mt-1">Incidentes abertos</p>
-            {stats.criticalIncidents > 0 && (
+            <p className="text-3xl font-extrabold text-foreground tracking-tight">
+              {displayValue(incidentsPending, incidentsUnavailable, stats.openIncidents)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Incidentes abertos · {incidentsPending ? 'consultando' : incidentsUnavailable ? 'indisponível' : 'total exato'}
+            </p>
+            {!incidentsPending && !incidentsUnavailable && stats.criticalIncidents > 0 && (
               <p className="text-[10px] text-destructive font-medium mt-1">{stats.criticalIncidents} crítico(s)</p>
             )}
           </CardContent>
@@ -569,13 +695,13 @@ export default function OperationsCenter() {
       {/* ── Secondary KPIs ── */}
       <div className="grid grid-cols-3 lg:grid-cols-7 gap-3">
         {[
-          { icon: FileText, label: 'NF-es', value: stats.nfeCount, sub: fmtCurrency(stats.totalNfeValue), color: 'text-blue-500', path: '/fiscal-documents' },
-          { icon: Receipt, label: 'CT-es', value: stats.cteCount, sub: stats.cteCount > 0 ? fmtCurrency(stats.totalCteValue) : '—', color: 'text-emerald-500', path: '/fiscal-documents' },
-          { icon: Truck, label: 'Frota', value: fleetStats.total, sub: `${fleetStats.online} online`, color: 'text-indigo-500', path: '/vehicles' },
-          { icon: Users, label: 'Motoristas', value: stats.activeDrivers, sub: `${stats.driversWithVehicle} alocados`, color: 'text-teal-500', path: '/drivers' },
-          { icon: Wrench, label: 'Manutenção', value: openMaintenance, sub: 'OS abertas', color: 'text-orange-500', path: '/maintenance-orders', warn: openMaintenance > 0 },
-          { icon: Receipt, label: 'Despesas', value: pendingExpenses, sub: 'pendentes', color: 'text-amber-500', path: '/expense-approval', warn: pendingExpenses > 0 },
-          { icon: Bell, label: 'Alertas', value: alerts.length, sub: 'ativos', color: 'text-red-500', path: '/alerts', warn: alerts.length > 0 },
+          { icon: FileText, label: 'NF-es (recorte)', value: displayValue(fiscalPending, fiscalUnavailable, stats.nfeCount), sub: fiscalPending ? 'consultando' : fiscalUnavailable ? 'indisponível' : `até 1.000 docs · ${fmtCurrency(stats.totalNfeValue)}`, color: 'text-blue-500', path: '/fiscal-documents' },
+          { icon: Receipt, label: 'CT-es (recorte)', value: displayValue(fiscalPending, fiscalUnavailable, stats.cteCount), sub: fiscalPending ? 'consultando' : fiscalUnavailable ? 'indisponível' : `até 1.000 docs · ${stats.cteCount > 0 ? fmtCurrency(stats.totalCteValue) : '—'}`, color: 'text-emerald-500', path: '/fiscal-documents' },
+          { icon: Truck, label: 'Frota', value: displayValue(fleetPending, fleetUnavailable, fleetStats.total), sub: fleetPending ? 'consultando' : fleetUnavailable ? 'indisponível' : `${fleetStats.online} online`, color: 'text-indigo-500', path: '/vehicles' },
+          { icon: Users, label: 'Motoristas', value: displayValue(driversPending, driversUnavailable, stats.activeDrivers), sub: driversPending ? 'consultando' : driversUnavailable ? 'indisponível' : `${stats.driversWithVehicle} alocados`, color: 'text-teal-500', path: '/drivers' },
+          { icon: Wrench, label: 'Manutenção', value: displayValue(maintenancePending, maintenanceUnavailable, openMaintenance ?? 0), sub: maintenancePending ? 'consultando' : maintenanceUnavailable ? 'indisponível' : 'OS abertas · total exato', color: 'text-orange-500', path: '/maintenance-orders', warn: !maintenancePending && !maintenanceUnavailable && (openMaintenance ?? 0) > 0 },
+          { icon: Receipt, label: 'Despesas', value: displayValue(expensesPending, expensesUnavailable, pendingExpenses ?? 0), sub: expensesPending ? 'consultando' : expensesUnavailable ? 'indisponível' : 'pendentes · total exato', color: 'text-amber-500', path: '/expense-approval', warn: !expensesPending && !expensesUnavailable && (pendingExpenses ?? 0) > 0 },
+          { icon: Bell, label: 'Alertas', value: displayValue(alertsPending, alertsUnavailable, alertTotal), sub: alertsPending ? 'consultando' : alertsUnavailable ? 'indisponível' : 'ativos · total exato', color: 'text-red-500', path: '/alerts', warn: !alertsPending && !alertsUnavailable && alertTotal > 0 },
         ].map(({ icon: Icon, label, value, sub, color, path, warn }) => (
           <Card
             key={label}
@@ -605,9 +731,9 @@ export default function OperationsCenter() {
               </CardTitle>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                  <span className="flex items-center gap-1"><CircleDot className="h-2.5 w-2.5 text-green-500" /> {fleetStats.moving}</span>
-                  <span className="flex items-center gap-1"><CircleDot className="h-2.5 w-2.5 text-amber-500" /> {fleetStats.stopped}</span>
-                  <span className="flex items-center gap-1"><CircleDot className="h-2.5 w-2.5 text-slate-400" /> {fleetStats.offline}</span>
+                  <span className="flex items-center gap-1"><CircleDot className="h-2.5 w-2.5 text-green-500" /> {displayValue(fleetPending, fleetUnavailable, fleetStats.moving)}</span>
+                  <span className="flex items-center gap-1"><CircleDot className="h-2.5 w-2.5 text-amber-500" /> {displayValue(fleetPending, fleetUnavailable, fleetStats.stopped)}</span>
+                  <span className="flex items-center gap-1"><CircleDot className="h-2.5 w-2.5 text-slate-400" /> {displayValue(fleetPending, fleetUnavailable, fleetStats.offline)}</span>
                 </div>
                 <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => navigate('/fleet-map')}>
                   <Eye className="h-3 w-3 mr-1" /> Expandir
@@ -616,7 +742,16 @@ export default function OperationsCenter() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="h-[320px] w-full">
+            {fleetPending ? (
+              <div role="status" className="flex h-[320px] items-center justify-center text-sm text-muted-foreground">
+                Carregando telemetria da frota…
+              </div>
+            ) : fleetUnavailable ? (
+              <div role="alert" className="flex h-[320px] items-center justify-center px-6 text-center text-sm text-destructive">
+                Telemetria indisponível. O mapa e os estados anteriores foram ocultados.
+              </div>
+            ) : (
+              <div className="h-[320px] w-full">
               <MapContainer
                 center={mapPoints[0] ?? DEFAULT_BRAZIL_MAP_CENTER}
                 zoom={4}
@@ -642,7 +777,7 @@ export default function OperationsCenter() {
                         {e.vehicle.nickname && <p className="text-xs text-gray-500">{e.vehicle.nickname}</p>}
                         <div className="mt-2 space-y-1 text-xs">
                           <p>Status: <strong>{stateLabel(e.state)}</strong></p>
-                          <p>Velocidade: <strong>{Math.round(e.speed)} km/h</strong></p>
+                          <p>Velocidade: <strong>{e.speed != null ? `${Math.round(e.speed)} km/h` : 'indisponível'}</strong></p>
                           {(e.state === 'stopped' || e.state === 'idle') && e.stoppedDuration > 0 && (
                             <p>Parado há: <strong>{formatStoppedDuration(e.stoppedDuration)}</strong></p>
                           )}
@@ -661,20 +796,21 @@ export default function OperationsCenter() {
                   </Marker>
                 ))}
               </MapContainer>
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Alerts + Incidents */}
         <div className="lg:col-span-2 space-y-4">
           {/* Active Alerts */}
-          <Card className={`${alerts.length > 0 ? 'border-destructive/20' : ''}`}>
+          <Card className={`${!alertsPending && !alertsUnavailable && alertTotal > 0 ? 'border-destructive/20' : ''}`}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Bell className="h-4 w-4 text-destructive" /> Alertas Ativos
-                  {alerts.length > 0 && (
-                    <Badge variant="destructive" className="text-[9px] h-4 px-1.5">{alerts.length}</Badge>
+                  {!alertsPending && !alertsUnavailable && alertTotal > 0 && (
+                    <Badge variant="destructive" className="text-[9px] h-4 px-1.5">{alertTotal}</Badge>
                   )}
                 </CardTitle>
                 <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => navigate('/alerts')}>
@@ -683,7 +819,17 @@ export default function OperationsCenter() {
               </div>
             </CardHeader>
             <CardContent className="space-y-1.5 max-h-[140px] overflow-y-auto">
-              {alerts.slice(0, 6).map((alert) => (
+              {alertsPending ? (
+                <p role="status" className="text-xs text-muted-foreground text-center py-4">Carregando alertas ativos…</p>
+              ) : alertsUnavailable ? (
+                <p role="alert" className="text-xs text-destructive text-center py-4">
+                  Alertas indisponíveis. Não é possível afirmar que não há alertas ativos.
+                </p>
+              ) : alerts.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">Nenhum alerta ativo ✓</p>
+              ) : (
+                <>
+                {alerts.slice(0, 6).map((alert) => (
                 <div key={alert.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-muted/30 hover:bg-muted/60 transition-colors">
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-medium truncate">
@@ -695,15 +841,17 @@ export default function OperationsCenter() {
                   </div>
                   <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 ml-2" />
                 </div>
-              ))}
-              {alerts.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-4">Nenhum alerta ativo ✓</p>
+                ))}
+                <p className="pt-1 text-center text-[9px] text-muted-foreground">
+                  Exibindo até 6 de {alertTotal} alerta(s) ativo(s).
+                </p>
+                </>
               )}
             </CardContent>
           </Card>
 
           {/* Recent Incidents */}
-          <Card className={`${stats.openIncidents > 0 ? 'border-warning/20' : ''}`}>
+          <Card className={`${hasOpenIncidents ? 'border-warning/20' : ''}`}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -715,7 +863,17 @@ export default function OperationsCenter() {
               </div>
             </CardHeader>
             <CardContent className="space-y-1.5 max-h-[120px] overflow-y-auto">
-              {incidents.filter((incident) => !['closed', 'resolved'].includes(incident.status)).slice(0, 5).map((inc) => (
+              {incidentsPending ? (
+                <p role="status" className="text-xs text-muted-foreground text-center py-4">Carregando incidentes…</p>
+              ) : incidentsUnavailable ? (
+                <p role="alert" className="text-xs text-destructive text-center py-4">
+                  Incidentes indisponíveis. Nenhum estado vazio foi presumido.
+                </p>
+              ) : incidents.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">Sem incidentes abertos ✓</p>
+              ) : (
+                <>
+                {incidents.slice(0, 5).map((inc) => (
                 <div key={inc.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-muted/30">
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] font-medium truncate">{inc.title}</p>
@@ -725,9 +883,11 @@ export default function OperationsCenter() {
                     {inc.severity}
                   </Badge>
                 </div>
-              ))}
-              {stats.openIncidents === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-4">Sem incidentes abertos ✓</p>
+                ))}
+                <p className="pt-1 text-center text-[9px] text-muted-foreground">
+                  Exibindo até 5 de {stats.openIncidents} incidente(s) aberto(s).
+                </p>
+                </>
               )}
             </CardContent>
           </Card>
@@ -739,12 +899,23 @@ export default function OperationsCenter() {
         {/* Loads by Destination */}
         <Card className="lg:col-span-2 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-primary" /> Distribuição por Destino
-            </CardTitle>
+            <div>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" /> Distribuição por Destino
+              </CardTitle>
+              <p className="mt-1 text-[10px] text-muted-foreground">Recorte de até 200 cargas recentes.</p>
+            </div>
           </CardHeader>
           <CardContent>
-            {destChart.length > 0 ? (
+            {loadsPending ? (
+              <div role="status" className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+                Carregando distribuição de cargas…
+              </div>
+            ) : loadsUnavailable ? (
+              <div role="alert" className="flex h-[220px] items-center justify-center px-6 text-center text-sm text-destructive">
+                Distribuição indisponível. A falha não foi apresentada como ausência de destinos.
+              </div>
+            ) : destChart.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={destChart} margin={{ left: -10, right: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -772,12 +943,23 @@ export default function OperationsCenter() {
         {/* Status Pie */}
         <Card className="shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Layers className="h-4 w-4 text-primary" /> Status das Cargas
-            </CardTitle>
+            <div>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Layers className="h-4 w-4 text-primary" /> Status das Cargas
+              </CardTitle>
+              <p className="mt-1 text-[10px] text-muted-foreground">Distribuição no recorte de até 200 cargas recentes.</p>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
-            {statusChart.length > 0 ? (
+            {loadsPending ? (
+              <div role="status" className="flex h-[180px] items-center justify-center text-sm text-muted-foreground">
+                Carregando status das cargas…
+              </div>
+            ) : loadsUnavailable ? (
+              <div role="alert" className="flex h-[180px] items-center justify-center px-6 text-center text-sm text-destructive">
+                Status das cargas indisponível.
+              </div>
+            ) : statusChart.length > 0 ? (
               <>
                 <ResponsiveContainer width="100%" height={170}>
                   <PieChart>
@@ -813,23 +995,37 @@ export default function OperationsCenter() {
       </div>
 
       {/* ── NF-e Flow ── */}
-      {nfeByDay.length > 0 && (
-        <Card className="shadow-sm hover:shadow-md transition-shadow">
+      <Card className="shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-primary" /> Fluxo de NF-es Recebidas
               </CardTitle>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-[10px]">{stats.nfeCount} total</Badge>
-                {stats.totalFreight > 0 && (
+                <Badge variant="secondary" className="text-[10px]">
+                  {displayValue(fiscalPending, fiscalUnavailable, `${stats.nfeCount} no recorte`)}
+                </Badge>
+                {!fiscalPending && !fiscalUnavailable && stats.totalFreight > 0 && (
                   <Badge variant="outline" className="text-[10px]">Frete: {fmtCurrency(stats.totalFreight)}</Badge>
                 )}
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={150}>
+            {fiscalPending ? (
+              <div role="status" className="flex h-[150px] items-center justify-center text-sm text-muted-foreground">
+                Carregando fluxo documental…
+              </div>
+            ) : fiscalUnavailable ? (
+              <div role="alert" className="flex h-[150px] items-center justify-center px-6 text-center text-sm text-destructive">
+                Fluxo documental indisponível.
+              </div>
+            ) : nfeByDay.length === 0 ? (
+              <div className="flex h-[150px] items-center justify-center text-sm text-muted-foreground">
+                Sem NF-es no recorte de até 1.000 documentos recentes.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={150}>
               <AreaChart data={nfeByDay} margin={{ left: -10, right: 10 }}>
                 <defs>
                   <linearGradient id="nfeGrad" x1="0" y1="0" x2="0" y2="1">
@@ -843,10 +1039,10 @@ export default function OperationsCenter() {
                 <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, background: 'hsl(var(--card))' }} />
                 <Area type="monotone" dataKey="qty" stroke="hsl(var(--primary))" fill="url(#nfeGrad)" strokeWidth={2} name="NF-es" />
               </AreaChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
-      )}
 
       {/* ── Bottom: Loads + Quick Actions ── */}
       <div className="grid lg:grid-cols-5 gap-4">
@@ -864,7 +1060,15 @@ export default function OperationsCenter() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
-              {loads.slice(0, 8).map((load) => {
+              {loadsPending ? (
+                <p role="status" className="text-xs text-muted-foreground text-center py-8">Carregando cargas recentes…</p>
+              ) : loadsUnavailable ? (
+                <p role="alert" className="text-xs text-destructive text-center py-8">
+                  Cargas indisponíveis. Nenhum estado vazio foi presumido.
+                </p>
+              ) : loads.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-8">Nenhuma carga encontrada. Importe NF-es para começar.</p>
+              ) : loads.slice(0, 8).map((load) => {
                 const vehicle = load.vehicles;
                 const driver = load.drivers;
                 return (
@@ -902,9 +1106,6 @@ export default function OperationsCenter() {
                   </div>
                 );
               })}
-              {loads.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-8">Nenhuma carga encontrada. Importe NF-es para começar.</p>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -919,6 +1120,8 @@ export default function OperationsCenter() {
             </CardHeader>
             <CardContent className="space-y-2">
               {[
+                { icon: Eye, label: 'Torre de Controle', path: '/operations-control', color: 'text-cyan-600' },
+                { icon: ShieldAlert, label: 'Ocorrências Operacionais', path: '/events', color: 'text-orange-600' },
                 { icon: FileText, label: 'Importar NF-es', path: '/ingestion', color: 'text-blue-500' },
                 { icon: MapPin, label: 'Planejar Rotas', path: '/route-planning', color: 'text-emerald-500' },
                 { icon: Receipt, label: 'Documentos Fiscais', path: '/fiscal-documents', color: 'text-purple-500' },
@@ -934,16 +1137,24 @@ export default function OperationsCenter() {
                   <Icon className={`h-3.5 w-3.5 mr-2 ${color}`} /> {label}
                 </Button>
               ))}
-              {pendingExpenses > 0 && (
+              {expensesPending ? (
+                <p role="status" className="px-2 text-[10px] text-muted-foreground">Consultando despesas pendentes…</p>
+              ) : expensesUnavailable ? (
+                <p role="alert" className="px-2 text-[10px] text-destructive">Despesas pendentes indisponíveis.</p>
+              ) : (pendingExpenses ?? 0) > 0 ? (
                 <Button variant="outline" size="sm" className="w-full justify-start text-xs h-8 border-warning/40 text-warning" onClick={() => navigate('/expense-approval')}>
                   <Receipt className="h-3.5 w-3.5 mr-2" /> {pendingExpenses} despesa(s) pendente(s)
                 </Button>
-              )}
-              {openMaintenance > 0 && (
+              ) : null}
+              {maintenancePending ? (
+                <p role="status" className="px-2 text-[10px] text-muted-foreground">Consultando ordens de manutenção…</p>
+              ) : maintenanceUnavailable ? (
+                <p role="alert" className="px-2 text-[10px] text-destructive">Ordens de manutenção indisponíveis.</p>
+              ) : (openMaintenance ?? 0) > 0 ? (
                 <Button variant="outline" size="sm" className="w-full justify-start text-xs h-8 border-orange-400/40 text-orange-600" onClick={() => navigate('/maintenance-orders')}>
                   <Wrench className="h-3.5 w-3.5 mr-2" /> {openMaintenance} OS de manutenção
                 </Button>
-              )}
+              ) : null}
             </CardContent>
           </Card>
 
@@ -955,6 +1166,14 @@ export default function OperationsCenter() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              {fleetPending ? (
+                <p role="status" className="py-4 text-center text-xs text-muted-foreground">Carregando resumo da frota…</p>
+              ) : fleetUnavailable ? (
+                <p role="alert" className="py-4 text-center text-xs text-destructive">
+                  Resumo da frota indisponível.
+                </p>
+              ) : (
+                <>
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: 'Movendo', count: fleetStats.moving, dot: 'bg-green-500' },
@@ -977,6 +1196,8 @@ export default function OperationsCenter() {
                   </div>
                   <Progress value={fleetStats.total > 0 ? (fleetStats.online / fleetStats.total) * 100 : 0} className="h-1.5" />
                 </div>
+              )}
+                </>
               )}
             </CardContent>
           </Card>
