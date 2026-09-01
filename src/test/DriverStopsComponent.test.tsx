@@ -57,7 +57,7 @@ describe('driver stops rendered frontend',()=>{
     expect(screen.getByRole('button',{name:'Tentar novamente'})).toBeInTheDocument();
   });
   it('scopes explicit-trip and stop reads to tenant and driver',async()=>{
-    mocks.selected='selected-trip';renderPage();await screen.findByText('Cliente QA');
+    mocks.selected='selected-trip';renderPage();await screen.findAllByText('Cliente QA');
     expect(mocks.eq).toHaveBeenCalledWith('dispatch_trips','id','selected-trip');
     expect(mocks.eq).toHaveBeenCalledWith('dispatch_trips','driver_id','driver');
     expect(mocks.eq).toHaveBeenCalledWith('dispatch_trips','tenant_id','tenant');

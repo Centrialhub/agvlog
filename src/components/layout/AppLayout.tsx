@@ -6,9 +6,10 @@ import { useTenantCapabilities, type IntegrationCapability } from '@/hooks/useTe
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Truck, LogOut, ChevronLeft, ChevronRight, Menu, Search, X } from 'lucide-react';
+import { LogOut, ChevronLeft, ChevronRight, Menu, Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { SidebarNavigation } from './SidebarNavigation';
+import { IntegraLabsCredit } from '@/components/branding/IntegraLabsCredit';
 import { PageBreadcrumbs } from './PageBreadcrumbs';
 import { findNavigationPage } from './navigation';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -70,9 +71,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               {logoUrl ? (
                 <img src={logoUrl} alt="" className="h-7 w-7 rounded-md object-contain bg-sidebar-primary/10" />
               ) : (
-                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-primary">
-                  <Truck className="h-3.5 w-3.5 text-sidebar-primary-foreground" />
-                </span>
+                <img src="/icons/agvlog-192.png" alt="" className="h-7 w-7 rounded-md object-contain" />
               )}
               <span className="truncate">{brandName}</span>
             </SheetTitle>
@@ -100,6 +99,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </SheetHeader>
           <div className="px-3 pt-3"><Input aria-label="Buscar páginas" placeholder="Buscar página, nota, carga..." value={pageQuery} onChange={event => setPageQuery(event.target.value)} className="border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground" /></div>
           <SidebarNavigation query={pageQuery} capabilityAvailable={capabilityAvailable} onNavigate={() => setMobileOpen(false)} />
+          <IntegraLabsCredit tone="sidebar" className="mx-3 border-t border-sidebar-border/60 py-2 opacity-70" />
           <Button variant="ghost" onClick={() => { setMobileOpen(false); void signOut(); }} className="m-2 shrink-0 justify-start"><LogOut className="mr-2 h-4 w-4" />Sair</Button>
         </SheetContent>
       </Sheet>
@@ -117,9 +117,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               className="h-7 w-7 shrink-0 rounded-md object-contain bg-sidebar-primary/10"
             />
           ) : (
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sidebar-primary">
-              <Truck className="h-3.5 w-3.5 text-sidebar-primary-foreground" />
-            </div>
+            <img src="/icons/agvlog-192.png" alt={collapsed ? brandName : ''} className="h-7 w-7 shrink-0 rounded-md object-contain" />
           )}
           {!collapsed && (
             <span className="font-bold text-sm text-sidebar-primary-foreground tracking-tight truncate">{brandName}</span>
@@ -137,6 +135,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         {/* Footer */}
         <div className="border-t border-sidebar-border p-1.5 space-y-0.5">
+          {!collapsed ? (
+            <IntegraLabsCredit tone="sidebar" className="px-1 pb-2 pt-1 opacity-70" />
+          ) : null}
           {!collapsed && memberships.length > 1 ? (
             <label className="block space-y-1 px-1 pb-1 text-[10px] text-sidebar-foreground/60">
               <span>Empresa ativa</span>

@@ -3,6 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useChecklistStatus } from '@/hooks/useChecklistStatus';
 import { useDriverHomeVehiclePosition } from '@/hooks/useDriverHomeVehiclePosition';
+import { useAuth } from '@/hooks/useAuth';
+import { useTenant } from '@/hooks/useTenant';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,19 +13,24 @@ import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangl
 import { useNavigate } from 'react-router-dom';
 
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
 import { TRIP_ACTIVE_STATUSES, tripStatusLabel, LOAD_ACTIVE_STATUSES } from '@/lib/status';
 import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
 import { useDriverTripActions } from '@/hooks/useDriverTripActions';
 import { DRIVER_TRIP_SELECT, driverTripNeedsReconciliation, isDriverTripStarted, normalizeDriverTrip, resolveCanonicalTripLink } from '@/lib/driverTrip';
+import { NextDestinationCard } from '@/components/driver/NextDestinationCard';
+import { getNextDriverStop, getPendingDriverStops, readDriverRouteSnapshot, saveDriverRouteSnapshot } from '@/lib/driver/offlineRouteSnapshot';
 
 
 
 
 export default function DriverHome() {
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
+  const { user } = useAuth();
+  const { currentTenant } = useTenant();
+  const isOnline = useOnlineStatus();
   const navigate = useNavigate();
   const queryClient = useTanstackQueryClient();
   const { accessTrip, isStartingTrip } = useDriverTripActions();
@@ -108,13 +116,13 @@ export default function DriverHome() {
 
   // Paradas + posição do veículo para o mapa quando houver viagem real.
   const primaryTrip = activeTrips[0];
-  const { data: realStops = [] } = useQuery({
+  const homeStopsQuery = useQuery({
     queryKey: ['driver_home_stops', primaryTrip?.id],
     queryFn: async () => {
       if (!primaryTrip?.id) return [];
       const { data, error } = await supabase
         .from('dispatch_stops')
-        .select('id, stop_order, destination, status, latitude, longitude, clients(company_name)')
+        .select('id, stop_order, destination, status, latitude, longitude, notes, clients(company_name)')
         .eq('dispatch_trip_id', primaryTrip.id)
         .order('stop_order', { ascending: true });
       if (error) throw error;
@@ -122,6 +130,7 @@ export default function DriverHome() {
     },
     enabled: !!primaryTrip?.id,
   });
+  const { data: realStops = [] } = homeStopsQuery;
 
   const {
     data: vehiclePos,
@@ -207,13 +216,60 @@ export default function DriverHome() {
       ? { lat: Number(vehiclePos.lat), lng: Number(vehiclePos.lng), plate: primaryTrip?.vehicles?.plate || '' }
       : null;
   const showRealMap = realMapStops.length > 0;
+  const [cachedSnapshot, setCachedSnapshot] = useState(() => (
+    readDriverRouteSnapshot(currentTenant?.id, user?.id)
+  ));
+
+  useEffect(() => {
+    setCachedSnapshot(readDriverRouteSnapshot(currentTenant?.id, user?.id));
+  }, [currentTenant?.id, user?.id]);
+
+  useEffect(() => {
+    if (!currentTenant?.id || !user?.id || !driver || !primaryTrip || homeStopsQuery.isError || homeStopsQuery.isPending) return;
+    const savedSnapshot = saveDriverRouteSnapshot({
+      tenantId: currentTenant.id,
+      userId: user.id,
+      driver: { id: driver.id, name: driver.name },
+      trip: {
+        id: primaryTrip.id,
+        status: primaryTrip.status,
+        actual_start_at: primaryTrip.actual_start_at ?? null,
+        loads: primaryTrip.loads ? { load_number: primaryTrip.loads.load_number } : null,
+      },
+      stops: realStops.map((stop) => ({
+        id: stop.id,
+        stop_order: stop.stop_order,
+        destination: stop.destination,
+        status: stop.status,
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        notes: stop.notes,
+        clients: stop.clients ? { company_name: stop.clients.company_name } : null,
+      })),
+    });
+    if (savedSnapshot) setCachedSnapshot(savedSnapshot);
+  }, [currentTenant?.id, driver, homeStopsQuery.isError, homeStopsQuery.isPending, primaryTrip, realStops, user?.id]);
+
+  const cachedRouteMatches = !!cachedSnapshot && (!primaryTrip || cachedSnapshot.trip.id === primaryTrip.id);
+  const useCachedRoute = cachedRouteMatches && (!primaryTrip || homeStopsQuery.isError || !isOnline);
+  const destinationStops = useCachedRoute ? cachedSnapshot?.stops ?? [] : realStops;
+  const nextStop = getNextDriverStop(destinationStops);
+  const pendingStops = getPendingDriverStops(destinationStops);
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-bold">Olá, {driver?.name || 'Motorista'}</h1>
-        <p className="text-sm text-muted-foreground">Comunicação com a Operação</p>
+        <h1 className="text-lg font-bold">Olá, {driver?.name || cachedSnapshot?.driver.name || 'Motorista'}</h1>
+        <p className="text-sm text-muted-foreground">Seu roteiro de hoje</p>
       </div>
+
+      {nextStop && (
+        <NextDestinationCard
+          stop={nextStop}
+          remainingStops={pendingStops.length}
+          offline={useCachedRoute}
+        />
+      )}
 
       {!loading && hasDataError && (
         <Card className="border-destructive/50">

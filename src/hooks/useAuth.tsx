@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {resetNotificationScope} from '@/lib/notificationScope';
+import { clearDriverRouteSnapshots } from '@/lib/driver/offlineRouteSnapshot';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resetNotificationScope();
       if (initialized.current) {
         try { localStorage.removeItem('agvlog_tenant_id'); } catch { /* optional preference */ }
+        clearDriverRouteSnapshots();
       }
     }
     initialized.current = true;
