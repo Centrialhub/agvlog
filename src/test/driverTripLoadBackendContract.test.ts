@@ -42,7 +42,7 @@ describe('trip/load transit database invariant', () => {
     expect(repair).toContain("authorized_reconciliation:load_1003_no_start_evidence");
     expect(repair).toContain("set status='ready'");
     expect(repair).toContain("if not exists(");
-    expect(repair).toMatch(/then\r?\n    return;/);
+    expect(repair).toMatch(/then\r?\n {4}return;/);
     expect(repair).not.toMatch(/update\s+public\.dispatch_trips/i);
     expect(repair).not.toMatch(/actual_start_at\s*=/i);
     expect(repair).not.toMatch(/delete\s+from|truncate/i);
