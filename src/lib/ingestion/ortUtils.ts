@@ -80,15 +80,26 @@ export function toOrtAuditPayload(ort: OrtReviewDocument): Record<string, unknow
 export function mapOrtItems(ort: OrtReviewDocument) {
   const extractedItems = (ort.items || [])
     .filter((item) => item.description?.trim())
-    .map((item) => ({
-      description: item.description.trim(),
-      quantity: Number(item.quantity) || 0,
-      unit: item.unit || '',
-      unitPrice: Number(item.unitPrice) || Number(item.totalPrice) || 0,
-      totalPrice: Number(item.totalPrice) || Number(item.unitPrice) || 0,
-      ncm: '',
-      cfop: '',
-    }));
+    .map((item) => {
+      const quantity = Number(item.quantity) || 0;
+      const informedUnitPrice = Number(item.unitPrice) || 0;
+      const informedTotalPrice = Number(item.totalPrice) || 0;
+      const unitPrice = informedUnitPrice || (quantity > 0 && informedTotalPrice > 0
+        ? informedTotalPrice / quantity
+        : 0);
+      const totalPrice = informedTotalPrice || (quantity > 0 && informedUnitPrice > 0
+        ? informedUnitPrice * quantity
+        : 0);
+      return {
+        description: item.description.trim(),
+        quantity,
+        unit: item.unit || '',
+        unitPrice,
+        totalPrice,
+        ncm: '',
+        cfop: '',
+      };
+    });
 
   return extractedItems;
 }
@@ -97,8 +108,12 @@ export function getChangedOrtFields(ort: OrtReviewDocument): string[] {
   const extracted = ort.extractedPayload || {};
   const reviewed = toOrtAuditPayload(ort);
 
+  const comparable = (value: unknown) => value && typeof value === 'object'
+    ? JSON.stringify(value)
+    : String(value ?? '');
+
   return Object.keys(reviewed).filter(
-    (key) => String(extracted[key] ?? '') !== String(reviewed[key] ?? ''),
+    (key) => comparable(extracted[key]) !== comparable(reviewed[key]),
   );
 }
 

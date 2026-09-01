@@ -20,6 +20,7 @@ export function calculateNfeAccessKeyCheckDigit(firstFortyThreeDigits: string): 
 export function isValidNfeAccessKey(value: unknown): boolean {
   const digits = normalizeNfeAccessKey(value);
   if (digits.length !== 44) return false;
+  if (/^0{44}$/.test(digits)) return false;
   const expected = calculateNfeAccessKeyCheckDigit(digits.slice(0, 43));
   return expected !== null && expected === Number(digits[43]);
 }

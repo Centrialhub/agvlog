@@ -897,11 +897,18 @@ export default function Ingestion() {
           if (savedId) {
             // Já salvo no upload — vincula à carga via RPC oficial.
             if (loadId && currentTenant) {
-              await supabase.rpc('assign_fiscal_documents_to_load_v2', {
+              const { data: assignmentResult, error: assignmentError } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
                 _tenant_id: currentTenant.id,
                 _load_id: loadId,
                 _document_ids: [savedId],
               });
+              if (assignmentError) {
+                throw new Error(`Falha ao vincular NF ${doc.source.invoiceNumber}: ${assignmentError.message}`);
+              }
+              const updatedCount = getJsonNumber(assignmentResult, 'updated') ?? 1;
+              if (updatedCount !== 1) {
+                throw new Error(`Vínculo da NF ${doc.source.invoiceNumber} não foi confirmado pelo servidor.`);
+              }
             }
             results.push(`✅ NF ${doc.source.invoiceNumber} ${loadId ? 'vinculada à carga' : '(já salva)'}`);
           } else {

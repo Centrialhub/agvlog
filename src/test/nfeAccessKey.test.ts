@@ -21,5 +21,6 @@ describe('NF-e access key', () => {
   it('rejeita chave ausente ou com tamanho inválido', () => {
     expect(isValidNfeAccessKey('')).toBe(false);
     expect(isValidNfeAccessKey('123')).toBe(false);
+    expect(isValidNfeAccessKey('0'.repeat(44))).toBe(false);
   });
 });

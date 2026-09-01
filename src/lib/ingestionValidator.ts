@@ -3,7 +3,7 @@ import { ParsedOrderRow } from '@/lib/documentParsers';
 import { FiscalDocument } from '@/hooks/useFiscalDocuments';
 import { Client } from '@/hooks/useClients';
 import { normalizeFiscalNumber, normalizeTaxId } from '@/lib/fiscalDocuments/fiscalIdentity';
-import { isValidNfeAccessKey } from '@/lib/fiscalDocuments/nfeAccessKey';
+import { isValidNfeAccessKey, normalizeNfeAccessKey } from '@/lib/fiscalDocuments/nfeAccessKey';
 
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 
@@ -54,6 +54,9 @@ export interface ValidationIndexes {
   docByInvoiceNumber: Map<string, FiscalDocument>;
   /** existing doc por identidade fiscal composta: fornecedor + modelo + série + número */
   docByCompositeIdentity: Map<string, FiscalDocument>;
+  /** Identidades vistas no arquivo/lote atual; não inclui o banco. */
+  batchAccessKeys: Set<string>;
+  batchCompositeIdentities: Set<string>;
 }
 
 
@@ -75,6 +78,35 @@ function fiscalCompositeKey(input: {
   return [cnpj, model, series, number].join(':');
 }
 
+const UNKNOWN_IDENTITY = /^(?:UNKNOWN|DESCONHECID[OA]|ILEG[IÍ]VEL|N\/?I|N\/?A|NAO INFORMAD[OA]|NÃO INFORMAD[OA]|-+|\?+|0+)$/i;
+
+function isUsableIdentity(value: unknown): boolean {
+  const normalized = String(value ?? '').trim();
+  return normalized.length > 0 && !UNKNOWN_IDENTITY.test(normalized);
+}
+
+function normalizedNumericIdentity(value: unknown): string {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits.replace(/^0+(?=\d)/, '');
+}
+
+function nfeAccessKeyConflicts(nfe: ParsedNFe): string[] {
+  const key = normalizeNfeAccessKey(nfe.accessKey);
+  if (!isValidNfeAccessKey(key)) return [];
+  const conflicts: string[] = [];
+  const compare = (label: string, actual: unknown, encoded: string) => {
+    const normalized = normalizedNumericIdentity(actual);
+    const expected = normalizedNumericIdentity(encoded);
+    if (normalized && normalized !== expected) conflicts.push(label);
+  };
+  const emitter = normalizeTaxId(nfe.emitterCnpj);
+  if (emitter && emitter !== key.slice(6, 20)) conflicts.push('CNPJ do emitente');
+  compare('modelo', nfe.model, key.slice(20, 22));
+  compare('série', nfe.series, key.slice(22, 25));
+  compare('número', nfe.invoiceNumber, key.slice(25, 34));
+  return conflicts;
+}
+
 export function buildValidationIndexes(existingDocs: FiscalDocument[], clients: Client[]): ValidationIndexes {
   const accessKeySet = new Set<string>();
   const invoiceNumberSet = new Set<string>();
@@ -83,8 +115,9 @@ export function buildValidationIndexes(existingDocs: FiscalDocument[], clients: 
   const docByCompositeIdentity = new Map<string, FiscalDocument>();
   for (const d of existingDocs) {
     if (d.access_key) {
-      accessKeySet.add(d.access_key);
-      docByAccessKey.set(d.access_key, d);
+      const accessKey = normalizeNfeAccessKey(d.access_key);
+      accessKeySet.add(accessKey);
+      docByAccessKey.set(accessKey, d);
     }
     const compositeKey = fiscalCompositeKey(d);
     if (compositeKey && !docByCompositeIdentity.has(compositeKey)) {
@@ -108,7 +141,17 @@ export function buildValidationIndexes(existingDocs: FiscalDocument[], clients: 
       clientByNameCity.set(key, c);
     }
   }
-  return { accessKeySet, invoiceNumberSet, clientByTaxId, clientByNameCity, docByAccessKey, docByInvoiceNumber, docByCompositeIdentity };
+  return {
+    accessKeySet,
+    invoiceNumberSet,
+    clientByTaxId,
+    clientByNameCity,
+    docByAccessKey,
+    docByInvoiceNumber,
+    docByCompositeIdentity,
+    batchAccessKeys: new Set<string>(),
+    batchCompositeIdentities: new Set<string>(),
+  };
 
 }
 
@@ -123,11 +166,17 @@ export function validateNFe(
   const idx = indexes || buildValidationIndexes(existingDocs, clients);
   const validations: ValidationResult[] = [];
 
-  const hasDuplicateAccessKey = !!nfe.accessKey && idx.accessKeySet.has(nfe.accessKey);
-  const existingByKey = nfe.accessKey ? idx.docByAccessKey.get(nfe.accessKey) : undefined;
+  const normalizedAccessKey = normalizeNfeAccessKey(nfe.accessKey);
+  const hasDuplicateAccessKey = !!normalizedAccessKey && idx.accessKeySet.has(normalizedAccessKey);
+  const existingByKey = normalizedAccessKey ? idx.docByAccessKey.get(normalizedAccessKey) : undefined;
   const nfeCompositeKey = fiscalCompositeKey(nfe);
   const existingByComposite = !existingByKey && nfeCompositeKey ? idx.docByCompositeIdentity.get(nfeCompositeKey) : undefined;
-  const existingByNumber = !existingByKey && !existingByComposite && nfe.invoiceNumber ? idx.docByInvoiceNumber.get(nfe.invoiceNumber) : undefined;
+  // Número isolado é apenas um indício legado e nunca pode selecionar outra
+  // nota quando a entrada já traz chave ou identidade composta confiável.
+  const canUseLegacyNumber = !normalizedAccessKey && !nfeCompositeKey;
+  const existingByNumber = canUseLegacyNumber && nfe.invoiceNumber
+    ? idx.docByInvoiceNumber.get(nfe.invoiceNumber)
+    : undefined;
   const existing = existingByKey || existingByComposite || existingByNumber;
   const existingDocumentId = existing?.id || null;
   // Órfão reutilizável: NF já existe no banco mas ainda não foi vinculada a
@@ -167,7 +216,19 @@ export function validateNFe(
     });
   }
 
-  const isDuplicate = hasDuplicateAccessKey || duplicateByComposite || duplicateByLegacyNumber;
+  const duplicateInBatch = !existing && (
+    (!!normalizedAccessKey && idx.batchAccessKeys.has(normalizedAccessKey)) ||
+    (!!nfeCompositeKey && idx.batchCompositeIdentities.has(nfeCompositeKey))
+  );
+  if (duplicateInBatch) {
+    validations.push({
+      field: 'fiscalIdentity',
+      message: `NF-e ${nfe.invoiceNumber || 'sem número'} duplicada neste lote de importação`,
+      severity: 'error',
+    });
+  }
+
+  const isDuplicate = hasDuplicateAccessKey || duplicateByComposite || duplicateByLegacyNumber || duplicateInBatch;
 
   if (!nfe.invoiceNumber) {
     validations.push({ field: 'invoiceNumber', message: 'Número da NF não encontrado', severity: 'error' });
@@ -181,7 +242,20 @@ export function validateNFe(
       severity: 'error',
     });
   }
-  if (!nfe.recipientName && !nfe.recipientCnpj) {
+  if (nfe.sourceKind !== 'scan_ort' && isValidNfeAccessKey(nfe.accessKey)) {
+    const conflicts = nfeAccessKeyConflicts(nfe);
+    if (conflicts.length > 0) {
+      validations.push({
+        field: 'accessKeyIdentity',
+        message: `Chave de acesso diverge de: ${conflicts.join(', ')}`,
+        severity: 'error',
+      });
+    }
+  }
+  if (!isUsableIdentity(nfe.emitterName) && !isUsableIdentity(nfe.emitterCnpj)) {
+    validations.push({ field: 'emitter', message: 'Emitente não identificado', severity: 'error' });
+  }
+  if (!isUsableIdentity(nfe.recipientName) && !isUsableIdentity(nfe.recipientCnpj)) {
     validations.push({ field: 'recipient', message: 'Destinatário não identificado', severity: 'error' });
   }
   if (!nfe.issueDate) {
@@ -231,7 +305,9 @@ export function validateNFe(
   let matchedClientId: string | null = null;
   let matchedClientName: string | null = null;
   
-  const recipientDoc = (nfe.recipientCnpj || '').replace(/\D/g, '');
+  const recipientDoc = isUsableIdentity(nfe.recipientCnpj)
+    ? (nfe.recipientCnpj || '').replace(/\D/g, '')
+    : '';
   const recipientCity = (nfe.recipientCity || '').toUpperCase().trim();
   
   // 1. Tenta por CNPJ
@@ -254,7 +330,7 @@ export function validateNFe(
   }
 
   // 2. Se não achou ou para reforçar por Nome + Cidade (filiais com nomes diferentes ou erro de CNPJ raiz)
-  if (nfe.recipientName) {
+  if (!matchedClientId && !recipientDoc && isUsableIdentity(nfe.recipientName)) {
     const city = recipientCity;
     const normName = nfe.recipientName.toLowerCase().trim();
     const nameKey = `${normName}|${city}`;
@@ -290,6 +366,9 @@ export function validateNFe(
       });
     }
   });
+
+  if (normalizedAccessKey) idx.batchAccessKeys.add(normalizedAccessKey);
+  if (nfeCompositeKey) idx.batchCompositeIdentities.add(nfeCompositeKey);
 
   const hasErrors = validations.some(v => v.severity === 'error');
   const hasWarnings = validations.some(v => v.severity === 'warning');

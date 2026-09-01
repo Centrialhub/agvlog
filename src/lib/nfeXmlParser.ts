@@ -15,15 +15,18 @@ export type ParsedFiscalXml = {
   description: string | null;
 };
 
+function descendants(root: Document | Element, localName: string): Element[] {
+  return Array.from(root.getElementsByTagName('*')).filter((element) => element.localName === localName);
+}
+
 function text(node: Element | null | undefined, tag: string): string | null {
   if (!node) return null;
-  const el = node.getElementsByTagName(tag)[0];
-  return el?.textContent?.trim() || null;
+  return descendants(node, tag)[0]?.textContent?.trim() || null;
 }
 
 function findFirst(root: Document | Element, tags: string[]): Element | null {
   for (const t of tags) {
-    const el = root.getElementsByTagName(t)[0];
+    const el = descendants(root, t)[0];
     if (el) return el;
   }
   return null;
@@ -41,7 +44,22 @@ function normalizeDate(v: string | null): string | null {
 
 function toNumber(v: string | null): number | null {
   if (!v) return null;
-  const clean = v.replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '');
+  const numeric = v.trim().replace(/[^0-9,.-]/g, '');
+  if (!numeric) return null;
+  const lastComma = numeric.lastIndexOf(',');
+  const lastDot = numeric.lastIndexOf('.');
+  let clean: string;
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decimal = lastComma > lastDot ? ',' : '.';
+    const thousands = decimal === ',' ? /\./g : /,/g;
+    clean = numeric.replace(thousands, '').replace(decimal, '.');
+  } else if (lastComma >= 0) {
+    clean = numeric.replace(/\./g, '').replace(',', '.');
+  } else {
+    // XML Schema decimals use a dot. Do not interpret it as a thousands
+    // separator: doing so multiplied every NF-e/NFS-e amount by 100.
+    clean = numeric.replace(/,/g, '');
+  }
   const n = parseFloat(clean);
   return isNaN(n) ? null : n;
 }
@@ -62,7 +80,7 @@ function parseNfe(doc: Document): ParsedFiscalXml {
 
   const chNFe = infNFe?.getAttribute('Id')?.replace(/^NFe/, '') || null;
 
-  const dupls = cobr ? Array.from(cobr.getElementsByTagName('dup')) : [];
+  const dupls = cobr ? descendants(cobr, 'dup') : [];
   const installments = dupls.map(d => ({
     number: text(d, 'nDup'),
     due_date: normalizeDate(text(d, 'dVenc')),
@@ -94,7 +112,7 @@ function parseNfse(doc: Document): ParsedFiscalXml {
   const prestador = findFirst(doc, ['PrestadorServico', 'Prestador']) as Element | null;
   const tomador   = findFirst(doc, ['TomadorServico', 'Tomador']) as Element | null;
   const servico   = findFirst(doc, ['Servico']) as Element | null;
-  const valores   = servico ? servico.getElementsByTagName('Valores')[0] as Element | undefined : undefined;
+  const valores   = servico ? descendants(servico, 'Valores')[0] : undefined;
 
   const emitterName = text(prestador, 'RazaoSocial') || text(prestador, 'NomeFantasia');
   const recipientName = text(tomador, 'RazaoSocial') || text(tomador, 'NomeFantasia');
@@ -130,14 +148,14 @@ export async function parseFiscalXml(file: File): Promise<ParsedFiscalXml> {
   const raw = await file.text();
   const parser = new DOMParser();
   const doc = parser.parseFromString(raw, 'application/xml');
-  const err = doc.getElementsByTagName('parsererror')[0];
+  const err = descendants(doc, 'parsererror')[0];
   if (err) throw new Error('XML inválido: ' + (err.textContent || 'não foi possível ler o arquivo'));
 
-  if (doc.getElementsByTagName('infNFe').length > 0) return parseNfe(doc);
+  if (descendants(doc, 'infNFe').length > 0) return parseNfe(doc);
   if (
-    doc.getElementsByTagName('InfNfse').length > 0 ||
-    doc.getElementsByTagName('infNfse').length > 0 ||
-    doc.getElementsByTagName('Rps').length > 0
+    descendants(doc, 'InfNfse').length > 0 ||
+    descendants(doc, 'infNfse').length > 0 ||
+    descendants(doc, 'Rps').length > 0
   ) return parseNfse(doc);
 
   return {

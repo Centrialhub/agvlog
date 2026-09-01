@@ -127,10 +127,16 @@ export interface ParsedNFe {
   productSummary?: string | null;
 }
 
-function getTagText(parent: Element, tagName: string): string {
-  const el = parent.getElementsByTagName(tagName)[0]
-    || parent.getElementsByTagName(`nfe:${tagName}`)[0];
-  return el?.textContent?.trim() || '';
+function elementsByLocalName(root: Document | Element, localName: string): Element[] {
+  return Array.from(root.getElementsByTagName('*')).filter((element) => element.localName === localName);
+}
+
+function firstByLocalName(root: Document | Element | null | undefined, localName: string): Element | undefined {
+  return root ? elementsByLocalName(root, localName)[0] : undefined;
+}
+
+function getTagText(parent: Element | null | undefined, tagName: string): string {
+  return firstByLocalName(parent, tagName)?.textContent?.trim() || '';
 }
 
 /** Mapa tPag (NF-e v4) -> valor interno usado no sistema. */
@@ -168,37 +174,35 @@ type RecipientFields = Pick<ParsedNFe,
   | 'recipientZip' | 'recipientCountry' | 'recipientCountryCode'>;
 
 function extractRecipient(infNFe: Element): RecipientFields {
-  const dest = infNFe.getElementsByTagName('dest')[0];
-  const enderDest = dest?.getElementsByTagName('enderDest')[0];
-  const ctx = dest || infNFe;
-  const addr = enderDest || infNFe;
+  const dest = firstByLocalName(infNFe, 'dest');
+  const enderDest = firstByLocalName(dest, 'enderDest');
   return {
-    recipientName: getTagText(ctx, 'xNome'),
-    recipientCnpj: normalizeCpfCnpj(getTagText(ctx, 'CNPJ') || getTagText(ctx, 'CPF')) ?? '',
-    recipientFantasyName: getTagText(ctx, 'xFant'),
-    recipientStateRegistration: getTagText(ctx, 'IE'),
-    recipientMunicipalRegistration: getTagText(ctx, 'IM'),
-    recipientIeIndicator: getTagText(ctx, 'indIEDest'),
-    recipientEmail: getTagText(ctx, 'email'),
-    recipientPhone: normalizePhone(getTagText(addr, 'fone') || getTagText(ctx, 'fone')) || '',
-    recipientCity: getTagText(addr, 'xMun'),
-    recipientCityCode: normalizeIbgeCity(getTagText(addr, 'cMun')) ?? '',
-    recipientState: normalizeUf(getTagText(addr, 'UF')) || getTagText(addr, 'UF'),
-    recipientNeighborhood: getTagText(addr, 'xBairro'),
-    recipientAddress: getTagText(addr, 'xLgr'),
-    recipientAddressNumber: getTagText(addr, 'nro'),
-    recipientAddressComplement: getTagText(addr, 'xCpl'),
-    recipientZip: normalizeCep(getTagText(addr, 'CEP')) || getTagText(addr, 'CEP'),
-    recipientCountry: getTagText(addr, 'xPais') || 'BRASIL',
-    recipientCountryCode: getTagText(addr, 'cPais') || '1058',
+    recipientName: getTagText(dest, 'xNome'),
+    recipientCnpj: normalizeCpfCnpj(getTagText(dest, 'CNPJ') || getTagText(dest, 'CPF')) ?? '',
+    recipientFantasyName: getTagText(dest, 'xFant'),
+    recipientStateRegistration: getTagText(dest, 'IE'),
+    recipientMunicipalRegistration: getTagText(dest, 'IM'),
+    recipientIeIndicator: getTagText(dest, 'indIEDest'),
+    recipientEmail: getTagText(dest, 'email'),
+    recipientPhone: normalizePhone(getTagText(enderDest, 'fone') || getTagText(dest, 'fone')) || '',
+    recipientCity: getTagText(enderDest, 'xMun'),
+    recipientCityCode: normalizeIbgeCity(getTagText(enderDest, 'cMun')) ?? '',
+    recipientState: normalizeUf(getTagText(enderDest, 'UF')) || getTagText(enderDest, 'UF'),
+    recipientNeighborhood: getTagText(enderDest, 'xBairro'),
+    recipientAddress: getTagText(enderDest, 'xLgr'),
+    recipientAddressNumber: getTagText(enderDest, 'nro'),
+    recipientAddressComplement: getTagText(enderDest, 'xCpl'),
+    recipientZip: normalizeCep(getTagText(enderDest, 'CEP')) || getTagText(enderDest, 'CEP'),
+    recipientCountry: getTagText(enderDest, 'xPais') || (dest ? 'BRASIL' : ''),
+    recipientCountryCode: getTagText(enderDest, 'cPais') || (dest ? '1058' : ''),
 
   };
 }
 
-function extractItems(detElements: HTMLCollectionOf<Element>): ParsedNFeItem[] {
+function extractItems(detElements: Element[]): ParsedNFeItem[] {
   const items: ParsedNFeItem[] = [];
   for (let i = 0; i < detElements.length; i++) {
-    const prod = detElements[i].getElementsByTagName('prod')[0];
+    const prod = firstByLocalName(detElements[i], 'prod');
     if (!prod) continue;
     items.push({
       description: getTagText(prod, 'xProd'),
@@ -214,11 +218,11 @@ function extractItems(detElements: HTMLCollectionOf<Element>): ParsedNFeItem[] {
 }
 
 function extractTransportTotals(infNFe: Element): { totalWeight: number; totalVolume: number } {
-  const transp = infNFe.getElementsByTagName('transp')[0];
-  const volElements = transp?.getElementsByTagName('vol');
+  const transp = firstByLocalName(infNFe, 'transp');
+  const volElements = transp ? elementsByLocalName(transp, 'vol') : [];
   let totalWeight = 0;
   let totalVolume = 0;
-  if (volElements && volElements.length > 0) {
+  if (volElements.length > 0) {
     for (let i = 0; i < volElements.length; i++) {
       const v = volElements[i];
       totalWeight += parseFloat(getTagText(v, 'pesoB')) || parseFloat(getTagText(v, 'pesoL')) || 0;
@@ -229,13 +233,13 @@ function extractTransportTotals(infNFe: Element): { totalWeight: number; totalVo
 }
 
 function extractClientLoad(
-  detElements: HTMLCollectionOf<Element>,
+  detElements: Element[],
   observation: string,
 ): { clientLoadNumber: string; clientLoadSource: 'xPed' | 'observation' | 'none'; clientLoadRuleId?: string; clientLoadRuleLabel?: string } {
   // Source 1: <xPed> (campo estruturado em cada item)
   let xPedCandidate = '';
   for (let i = 0; i < detElements.length; i++) {
-    const prod = detElements[i].getElementsByTagName('prod')[0];
+    const prod = firstByLocalName(detElements[i], 'prod');
     if (!prod) continue;
     const xPed = getTagText(prod, 'xPed');
     if (xPed) { xPedCandidate = xPed.trim(); break; }
@@ -284,10 +288,10 @@ function extractPayment(infNFe: Element, ide: Element | undefined, observation: 
   let paymentMethodSource: ParsedNFe['paymentMethodSource'] = null;
 
   // Camada 1: <pag>/<detPag>/<tPag>
-  const pag = infNFe.getElementsByTagName('pag')[0];
+  const pag = firstByLocalName(infNFe, 'pag');
   let xPagText = '';
   if (pag) {
-    const detPagList = Array.from(pag.getElementsByTagName('detPag'));
+    const detPagList = elementsByLocalName(pag, 'detPag');
     const candidates = detPagList.length ? detPagList : [pag];
     const xPagPieces: string[] = [];
     for (const detPag of candidates) {
@@ -311,8 +315,8 @@ function extractPayment(infNFe: Element, ide: Element | undefined, observation: 
     if (r.value) { paymentMethod = r.value; paymentMethodSource = 'xpag'; }
   }
   // Camada 3: <cobr>/<dup> — duplicatas (sempre extrai parcelas)
-  const cobr = infNFe.getElementsByTagName('cobr')[0];
-  const dups = cobr ? Array.from(cobr.getElementsByTagName('dup')) : [];
+  const cobr = firstByLocalName(infNFe, 'cobr');
+  const dups = cobr ? elementsByLocalName(cobr, 'dup') : [];
   let installmentCount: number | null = null;
   let firstDueDate: string | null = null;
   let averageDueDays: number | null = null;
@@ -368,30 +372,30 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   const parseError = doc.querySelector('parsererror');
   if (parseError) throw new Error('XML inválido: ' + parseError.textContent);
 
-  const infNFe = doc.getElementsByTagName('infNFe')[0] || doc.getElementsByTagName('nfe:infNFe')[0];
+  const infNFe = firstByLocalName(doc, 'infNFe');
   if (!infNFe) throw new Error('Estrutura de NF-e não encontrada no XML');
 
   const accessKey = normalizeNfeAccessKey((infNFe.getAttribute('Id') || '').replace(/^NFe/, ''));
-  const ide = infNFe.getElementsByTagName('ide')[0];
+  const ide = firstByLocalName(infNFe, 'ide');
   const invoiceNumber = getTagText(ide || infNFe, 'nNF');
   const series = getTagText(ide || infNFe, 'serie');
   const model = getTagText(ide || infNFe, 'mod') || '55';
   const issueDate = (getTagText(ide || infNFe, 'dhEmi') || getTagText(ide || infNFe, 'dEmi') || '').substring(0, 10);
 
-  const emit = infNFe.getElementsByTagName('emit')[0];
-  const emitterName = getTagText(emit || infNFe, 'xNome');
-  const emitterCnpj = getTagText(emit || infNFe, 'CNPJ');
-  const emitterStateRegistration = getTagText(emit || infNFe, 'IE');
+  const emit = firstByLocalName(infNFe, 'emit');
+  const emitterName = getTagText(emit, 'xNome');
+  const emitterCnpj = normalizeCpfCnpj(getTagText(emit, 'CNPJ') || getTagText(emit, 'CPF')) ?? '';
+  const emitterStateRegistration = getTagText(emit, 'IE');
 
   const recipient = extractRecipient(infNFe);
-  const detElements = infNFe.getElementsByTagName('det');
+  const detElements = elementsByLocalName(infNFe, 'det');
   const items = extractItems(detElements);
 
-  const infAdic = infNFe.getElementsByTagName('infAdic')[0];
+  const infAdic = firstByLocalName(infNFe, 'infAdic');
   const observation = getTagText(infAdic || infNFe, 'infCpl') || getTagText(infAdic || infNFe, 'infAdFisco') || '';
   const clientLoad = extractClientLoad(detElements, observation);
 
-  const total = infNFe.getElementsByTagName('ICMSTot')[0];
+  const total = firstByLocalName(infNFe, 'ICMSTot');
   const totalValue = parseFloat(getTagText(total || infNFe, 'vNF')) || 0;
   const { totalWeight, totalVolume } = extractTransportTotals(infNFe);
   const estimatedPallets = totalWeight > 0 ? Math.ceil(totalWeight / 800) : 0;
