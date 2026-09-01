@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { expenseReceiptUpload } from "./expense-receipt.ts";
+import { secureCleanup } from "./secure-cleanup.ts";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const JSON_HEADERS = { ...corsHeaders, "Content-Type": "application/json" };
@@ -153,15 +154,12 @@ Deno.serve(async (request) => {
       if (bucket === "receipts" && paths.some(path => path.split("/")[1] === "expense-receipts")) {
         return response(403, { error: "expense_receipt_retention_required" });
       }
-      if (!await authorizeUpload(adminClient, user.id, tenantId, bucket)) {
-        return response(403, { error: "tenant_or_role_denied" });
-      }
-      if (!await consumeQuota(adminClient, fingerprint, "cleanup")) {
-        return response(429, { error: "upload_rate_limited", correlation_id: correlationId });
-      }
-      const { error: cleanupError } = await adminClient.storage.from(bucket).remove(paths);
-      if (cleanupError) return response(503, { error: "cleanup_unavailable", correlation_id: correlationId });
-      return response(200, { removed: paths.length, correlation_id: correlationId });
+      const cleanupResult = await secureCleanup({tenant:tenantId,actor:user.id,bucket,paths,correlationId},{
+        authorize: args => callerClient.rpc("authorize_secure_upload_cleanup_v1",args),
+        consumeQuota: () => consumeQuota(adminClient,fingerprint,"cleanup"),
+        remove: (targetBucket,targetPaths) => adminClient.storage.from(targetBucket).remove(targetPaths),
+      });
+      return response(cleanupResult.status,cleanupResult.body);
     }
 
     const form = await request.formData();
