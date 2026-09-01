@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { VEHICLE_SAFE_SELECT } from '@/integrations/supabase/selects';
 import { useTenant } from '@/hooks/useTenant';
-import { useVehicleHistory, PositionRaw } from '@/hooks/usePositions';
+import { useVehicleHistory, useVehiclePosition, PositionRaw } from '@/hooks/usePositions';
 import { useVehicleState, stateLabel, stateBadgeClasses, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -21,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   ArrowLeft, MapPin, Clock, Gauge, Navigation, Activity, AlertTriangle, Info,
-  Route, StopCircle, Bell, Hexagon, Fuel, Moon, Save, Wrench,
+  Route, StopCircle, Bell, Hexagon, Fuel, Moon, Save, Wrench, RefreshCw,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -78,19 +78,10 @@ export default function VehicleDetails() {
     enabled: !!currentTenant && !!vehicleId,
   });
 
-  const { data: vehicleState } = useVehicleState(vehicleId || null);
-
-  const { data: positionLast } = useQuery({
-    queryKey: ['position_last', currentTenant?.id, vehicleId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('positions_last').select('*')
-        .eq('tenant_id', currentTenant!.id).eq('vehicle_id', vehicleId!).maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant && !!vehicleId,
-    refetchInterval: 30000,
-  });
+  const vehicleStateQuery = useVehicleState(vehicleId || null);
+  const vehicleState = vehicleStateQuery.error ? undefined : vehicleStateQuery.data;
+  const positionQuery = useVehiclePosition(vehicleId || null);
+  const positionLast = positionQuery.error ? undefined : positionQuery.data;
 
   // Today metrics for overview KPIs
   const { data: todayMetrics } = useQuery({
@@ -107,7 +98,12 @@ export default function VehicleDetails() {
 
   const today = new Date().toISOString().split('T')[0];
   const [historyDate, setHistoryDate] = useState(today);
-  const { data: history = [], isLoading: historyLoading } = useVehicleHistory(vehicleId || null, `${historyDate}T00:00:00Z`, `${historyDate}T23:59:59Z`);
+  const historyQuery = useVehicleHistory(vehicleId || null, `${historyDate}T00:00:00Z`, `${historyDate}T23:59:59Z`);
+  const history = useMemo(
+    () => (historyQuery.error ? [] : (historyQuery.data ?? [])),
+    [historyQuery.error, historyQuery.data],
+  );
+  const { isLoading: historyLoading } = historyQuery;
 
   const { data: trips = [] } = useQuery({
     queryKey: ['vehicle_trips', currentTenant?.id, vehicleId, historyDate],
@@ -217,9 +213,9 @@ export default function VehicleDetails() {
   const currentTelemetry = resolvePositionTelemetry(positionLast, vehicleState);
   const movementState = currentTelemetry.movementState;
   const historyPath = useMemo(() => history.map((p: PositionRaw) => [p.lat, p.lng] as [number, number]), [history]);
-  const telemetry = jsonRecord(positionLast?.telemetry_snapshot);
   const hasFuel = capabilities?.fuel === true;
   const hasSpeed = history.some(p => p.speed != null);
+  const telemetryReadError = positionQuery.error || vehicleStateQuery.error || historyQuery.error;
 
   const fmtHours = (s: number | null) => { if (!s) return '—'; return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; };
 
@@ -348,6 +344,30 @@ export default function VehicleDetails() {
           </div>
         </div>
       </div>
+
+      {telemetryReadError && (
+        <Card className="border-destructive/40 bg-destructive/5" role="alert">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Telemetria indisponível. Nenhuma ausência de dados foi inferida desta falha.
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void positionQuery.refetch();
+                void vehicleStateQuery.refetch();
+                void historyQuery.refetch();
+              }}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="flex-wrap">
@@ -782,19 +802,26 @@ export default function VehicleDetails() {
 
         {/* Telemetry */}
         <TabsContent value="telemetry" className="space-y-4">
-          <Card><CardHeader><CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4 text-primary" />Snapshot de Telemetria</CardTitle></CardHeader>
+          <Card><CardHeader><CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4 text-primary" />Telemetria normalizada</CardTitle></CardHeader>
             <CardContent>
-              {telemetry && Object.keys(telemetry).length > 0 ? (
+              {positionLast ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {Object.entries(telemetry).map(([key, val]) => (
-                    <div key={key} className="rounded-lg border border-border p-3">
-                      <p className="text-xs text-muted-foreground font-mono">{key}</p>
-                      <p className="text-sm font-medium text-foreground mt-1">{String(val)}</p>
+                  {[
+                    ['Estado', stateLabel(movementState)],
+                    ['Latitude', positionLast.lat.toFixed(6)],
+                    ['Longitude', positionLast.lng.toFixed(6)],
+                    ['Velocidade', positionLast.speed == null ? 'Indisponível' : `${Math.round(positionLast.speed)} km/h`],
+                    ['Direção', positionLast.heading == null ? 'Indisponível' : `${Math.round(positionLast.heading)}°`],
+                    ['Capturada em', format(new Date(positionLast.captured_at), 'dd/MM/yyyy HH:mm:ss', { locale: ptBR })],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg border border-border p-3">
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="text-sm font-medium text-foreground mt-1">{value}</p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground flex items-center gap-2"><AlertTriangle className="h-4 w-4" />Nenhuma telemetria adicional disponível.</p>
+                <p className="text-sm text-muted-foreground flex items-center gap-2"><AlertTriangle className="h-4 w-4" />Nenhuma telemetria normalizada disponível.</p>
               )}
             </CardContent>
           </Card>

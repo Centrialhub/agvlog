@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { INTEGRATION_ACCOUNT_SAFE_SELECT } from '@/integrations/supabase/selects';
@@ -5,11 +6,13 @@ import { useTenant, useIsAdmin } from '@/hooks/useTenant';
 import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Activity, CheckCircle, XCircle, AlertTriangle, Clock, Truck, Radio, Database } from 'lucide-react';
 import { summarizeTelemetryFreshness } from '@/lib/telemetryFreshness';
 import { IntegrationUnavailable } from '@/components/integrations/IntegrationUnavailable';
+import { useFleetPositions } from '@/hooks/usePositions';
 
 function formatTime(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -21,6 +24,7 @@ export default function IntegrationHealth() {
   const isAdmin = useIsAdmin();
   const { isEnabled, isLoading: capabilitiesLoading, error: capabilitiesError, refetch: refetchCapabilities } = useTenantCapabilities();
   const ssxEnabled = isEnabled('ssx');
+  const positionsQuery = useFleetPositions(isAdmin && ssxEnabled);
 
   const { data: tenant } = useQuery({
     queryKey: ['tenant_health_detail', currentTenant?.id],
@@ -45,27 +49,41 @@ export default function IntegrationHealth() {
     enabled: !!currentTenant && isAdmin && ssxEnabled,
   });
 
-  const { data: positionStats } = useQuery({
-    queryKey: ['position_freshness', currentTenant?.id],
+  const activeVehiclesQuery = useQuery({
+    queryKey: ['active_vehicles_for_position_freshness', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return null;
-      const [vehiclesResult, positionsResult] = await Promise.all([
-        supabase.from('vehicles').select('id').eq('tenant_id', currentTenant.id).eq('active', true),
-        supabase.from('positions_last').select('vehicle_id, captured_at').eq('tenant_id', currentTenant.id),
-      ]);
-      if (vehiclesResult.error) throw vehiclesResult.error;
-      if (positionsResult.error) throw positionsResult.error;
-
-      const timestampByVehicle = new Map(
-        (positionsResult.data || []).map((position) => [position.vehicle_id, position.captured_at]),
-      );
-      return summarizeTelemetryFreshness(
-        (vehiclesResult.data || []).map((vehicle) => timestampByVehicle.get(vehicle.id) ?? null),
-      );
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('id')
+        .eq('tenant_id', currentTenant.id)
+        .eq('active', true)
+        .order('id')
+        .limit(5_000);
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!currentTenant && isAdmin && ssxEnabled,
-    refetchInterval: 30000,
   });
+  const positionStats = useMemo(() => {
+    if (positionsQuery.error || activeVehiclesQuery.error || positionsQuery.isLoading || activeVehiclesQuery.isLoading) {
+      return null;
+    }
+    const timestampByVehicle = new Map(
+      (positionsQuery.data || []).map((position) => [position.vehicle_id, position.captured_at]),
+    );
+    return summarizeTelemetryFreshness(
+      (activeVehiclesQuery.data || []).map((vehicle) => timestampByVehicle.get(vehicle.id) ?? null),
+    );
+  }, [
+    activeVehiclesQuery.data,
+    activeVehiclesQuery.error,
+    activeVehiclesQuery.isLoading,
+    positionsQuery.data,
+    positionsQuery.error,
+    positionsQuery.isLoading,
+  ]);
+  const positionStatsError = positionsQuery.error || activeVehiclesQuery.error;
 
   const { data: mappingConflicts = [] } = useQuery({
     queryKey: ['mapping_conflicts', currentTenant?.id],
@@ -168,7 +186,22 @@ export default function IntegrationHealth() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {positionStats ? (
+          {positionStatsError ? (
+            <div className="flex flex-wrap items-center justify-between gap-3" role="alert">
+              <p className="text-sm text-destructive">Não foi possível calcular o frescor das posições.</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  void positionsQuery.refetch();
+                  void activeVehiclesQuery.refetch();
+                }}
+              >
+                Tentar novamente
+              </Button>
+            </div>
+          ) : positionStats ? (
             <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-5">
               <div>
                 <div className="text-2xl font-bold">{positionStats.total}</div>

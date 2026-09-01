@@ -7,6 +7,8 @@ import { useFleetState } from '@/hooks/useVehiclesState';
 const mock = vi.hoisted(() => ({
   tenantId: '20000000-0000-4000-8000-000000000001',
   filters: [] as Array<{ table: string; column: string; value: unknown }>,
+  selects: [] as Array<{ table: string; columns: string }>,
+  limits: [] as Array<{ table: string; value: number }>,
   states: [] as Record<string, unknown>[],
   positions: [] as Record<string, unknown>[],
 }));
@@ -23,11 +25,21 @@ vi.mock('@/integrations/supabase/client', () => ({
         error: null,
       });
       const builder = {
-        select: () => builder,
+        select: (columns: string) => {
+          mock.selects.push({ table, columns });
+          return builder;
+        },
         eq: (column: string, value: unknown) => {
           mock.filters.push({ table, column, value });
           return builder;
         },
+        order: () => builder,
+        gt: () => builder,
+        limit: (value: number) => {
+          mock.limits.push({ table, value });
+          return builder;
+        },
+        abortSignal: () => builder,
         then: <TResult1 = unknown, TResult2 = never>(
           onFulfilled?: ((value: Awaited<ReturnType<typeof result>>) => TResult1 | PromiseLike<TResult1>) | null,
           onRejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
@@ -47,6 +59,8 @@ function Wrapper({ children }: PropsWithChildren) {
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   mock.filters = [];
+  mock.selects = [];
+  mock.limits = [];
   mock.states = [{
     vehicle_id: '50000000-0000-4000-8000-000000000001',
     tenant_id: mock.tenantId,
@@ -77,6 +91,20 @@ describe('SSX position consumers in React', () => {
     expect(mock.filters).toEqual(expect.arrayContaining([
       { table: 'vehicles_state', column: 'tenant_id', value: mock.tenantId },
       { table: 'positions_last', column: 'tenant_id', value: mock.tenantId },
+    ]));
+    expect(mock.selects).toEqual(expect.arrayContaining([
+      {
+        table: 'vehicles_state',
+        columns: expect.not.stringContaining('last_position_id'),
+      },
+      {
+        table: 'positions_last',
+        columns: expect.not.stringContaining('telemetry_snapshot'),
+      },
+    ]));
+    expect(mock.limits).toEqual(expect.arrayContaining([
+      { table: 'vehicles_state', value: 500 },
+      { table: 'positions_last', value: 500 },
     ]));
   });
 

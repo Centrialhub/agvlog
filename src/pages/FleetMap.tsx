@@ -96,14 +96,25 @@ export default function FleetMap() {
   const { currentTenant } = useTenant();
   const { isEnabled } = useTenantCapabilities();
   const ssxEnabled = isEnabled('ssx');
-  const { data: positions = [], isLoading: posLoading, refetch } = useFleetPositions();
+  const {
+    data: positions = [],
+    isLoading: posLoading,
+    error: positionsError,
+    refetch: refetchPositions,
+  } = useFleetPositions();
   const { data: vehicles = [] } = useVehicles();
-  const { data: vehicleStates = [] } = useFleetState();
+  const {
+    data: vehicleStates = [],
+    isLoading: statesLoading,
+    error: statesError,
+    refetch: refetchStates,
+  } = useFleetState();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'unknown'>('all');
   const navigate = useNavigate();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
+  const telemetryUnavailable = Boolean(positionsError || statesError);
 
   const { data: accounts = [] } = useQuery({
     queryKey: ['integration_accounts_brief', currentTenant?.id],
@@ -136,19 +147,24 @@ export default function FleetMap() {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles_state'] });
       queryClient.invalidateQueries({ queryKey: ['tenant_health'] });
-      refetch();
+      void refetchPositions();
     },
   });
 
   // Build state map from vehicles_state table
   const stateMap = useMemo(() => {
     const map: Record<string, VehicleState> = {};
+    if (telemetryUnavailable) return map;
     for (const s of vehicleStates) map[s.vehicle_id] = s;
     return map;
-  }, [vehicleStates]);
+  }, [telemetryUnavailable, vehicleStates]);
   const positionMap = useMemo(
-    () => new Map(positions.map((position) => [position.vehicle_id, position])),
-    [positions],
+    () => new Map(
+      telemetryUnavailable
+        ? []
+        : positions.map((position) => [position.vehicle_id, position] as const),
+    ),
+    [positions, telemetryUnavailable],
   );
 
   // Enrich vehicles: combine vehicle info + state + position
@@ -213,15 +229,15 @@ export default function FleetMap() {
               <div>Total</div>
             </button>
             <button onClick={() => setStatusFilter('online')} className={`rounded-md p-1.5 text-xs transition-colors ${statusFilter === 'online' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-              <div className="font-bold text-sm text-success">{stats.online}</div>
+              <div className="font-bold text-sm text-success">{telemetryUnavailable ? '—' : stats.online}</div>
               <div>Online</div>
             </button>
             <button onClick={() => setStatusFilter('offline')} className={`rounded-md p-1.5 text-xs transition-colors ${statusFilter === 'offline' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-              <div className="font-bold text-sm text-destructive">{stats.offline}</div>
+              <div className="font-bold text-sm text-destructive">{telemetryUnavailable ? '—' : stats.offline}</div>
               <div>Offline</div>
             </button>
             <button onClick={() => setStatusFilter('unknown')} className={`rounded-md p-1.5 text-xs transition-colors ${statusFilter === 'unknown' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-              <div className="font-bold text-sm text-muted-foreground">{stats.unknown}</div>
+              <div className="font-bold text-sm text-muted-foreground">{telemetryUnavailable ? '—' : stats.unknown}</div>
               <div>S/ dados</div>
             </button>
           </div>
@@ -236,7 +252,10 @@ export default function FleetMap() {
             />
           </div>
 
-          <Button variant="outline" size="sm" className="w-full" onClick={() => { refetch(); queryClient.invalidateQueries({ queryKey: ['vehicles_state'] }); }}>
+          <Button variant="outline" size="sm" className="w-full" onClick={() => {
+            void refetchPositions();
+            void refetchStates();
+          }}>
             <RefreshCw className="h-4 w-4 mr-2" /> Recarregar
           </Button>
           {isAdmin && ssxEnabled && accounts.length > 0 && (
@@ -251,7 +270,27 @@ export default function FleetMap() {
 
         {/* Vehicle list */}
         <div className="flex-1 overflow-y-auto">
-          {posLoading ? (
+          {positionsError || statesError ? (
+            <div className="m-3 rounded-md border border-destructive/40 bg-destructive/5 p-3" role="alert">
+              <div className="flex items-start gap-2 text-sm text-destructive">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>Não foi possível consultar a telemetria. Os totais e o mapa não representam a frota.</span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full"
+                onClick={() => {
+                  void refetchPositions();
+                  void refetchStates();
+                }}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Tentar novamente
+              </Button>
+            </div>
+          ) : posLoading || statesLoading ? (
             <div className="p-4 text-sm text-muted-foreground">Carregando...</div>
           ) : filtered.length === 0 ? (
             <div className="p-4 text-sm text-muted-foreground">

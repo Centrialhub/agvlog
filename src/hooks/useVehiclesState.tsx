@@ -5,6 +5,7 @@ import {
   resolvePositionTelemetry,
   type TelemetryMovementState,
 } from '@/lib/positionTelemetry';
+import { fetchFleetPositionPages } from './usePositions';
 
 export type MovementState = TelemetryMovementState;
 
@@ -23,25 +24,66 @@ export interface VehicleState {
   updated_at: string;
 }
 
+const VEHICLE_STATE_SAFE_SELECT =
+  'vehicle_id, tenant_id, lat, lng, speed, heading, movement_state, last_movement_at, last_position_at, stopped_since, stopped_duration_seconds, updated_at';
+const POSITION_LAST_SAFE_SELECT =
+  'vehicle_id, captured_at, lat, lng, speed, heading';
+const TELEMETRY_PAGE_SIZE = 500;
+const MAX_FLEET_STATES = 5_000;
+
+async function fetchFleetStatePages(tenantId: string, signal: AbortSignal): Promise<VehicleState[]> {
+  const rows: VehicleState[] = [];
+  let afterVehicleId: string | null = null;
+
+  for (let pageIndex = 0; pageIndex <= MAX_FLEET_STATES / TELEMETRY_PAGE_SIZE; pageIndex += 1) {
+    const isOverflowProbe = pageIndex === MAX_FLEET_STATES / TELEMETRY_PAGE_SIZE;
+    const pageSize = isOverflowProbe ? 1 : TELEMETRY_PAGE_SIZE;
+    let query = supabase
+      .from('vehicles_state')
+      .select(VEHICLE_STATE_SAFE_SELECT)
+      .eq('tenant_id', tenantId)
+      .order('vehicle_id', { ascending: true })
+      .limit(pageSize);
+    if (afterVehicleId) query = query.gt('vehicle_id', afterVehicleId);
+    const { data, error } = await query
+      .abortSignal(signal);
+
+    if (error) throw error;
+    const page = (data || []) as VehicleState[];
+    if (isOverflowProbe) {
+      if (page.length > 0) {
+        throw new Error('A frota excede o limite seguro de 5.000 estados de telemetria.');
+      }
+      return rows;
+    }
+
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+    const lastVehicleId = page.at(-1)?.vehicle_id;
+    if (!lastVehicleId || lastVehicleId === afterVehicleId) {
+      throw new Error('O cursor de estados da frota não avançou.');
+    }
+    afterVehicleId = lastVehicleId;
+  }
+
+  return rows;
+}
+
 export function useFleetState() {
   const { currentTenant } = useTenant();
 
   return useQuery({
     queryKey: ['vehicles_state', currentTenant?.id],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!currentTenant) return [];
       const [statesResult, positionsResult] = await Promise.all([
-        supabase.from('vehicles_state').select('*').eq('tenant_id', currentTenant.id),
-        supabase.from('positions_last')
-          .select('vehicle_id, captured_at, lat, lng, speed, heading')
-          .eq('tenant_id', currentTenant.id),
+        fetchFleetStatePages(currentTenant.id, signal),
+        fetchFleetPositionPages(currentTenant.id, signal),
       ]);
-      if (statesResult.error) throw statesResult.error;
-      if (positionsResult.error) throw positionsResult.error;
       const positionByVehicle = new Map(
-        (positionsResult.data || []).map((position) => [position.vehicle_id, position]),
+        positionsResult.map((position) => [position.vehicle_id, position]),
       );
-      return ((statesResult.data || []) as VehicleState[]).map((state) => {
+      return statesResult.map((state) => {
         const position = positionByVehicle.get(state.vehicle_id);
         const telemetry = resolvePositionTelemetry(position, state);
         const isStopped = telemetry.movementState === 'stopped' || telemetry.movementState === 'idle';
@@ -68,18 +110,20 @@ export function useVehicleState(vehicleId: string | null) {
 
   return useQuery({
     queryKey: ['vehicle_state', currentTenant?.id, vehicleId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!currentTenant || !vehicleId) return null;
       const [stateResult, positionResult] = await Promise.all([
         supabase.from('vehicles_state')
-          .select('*')
+          .select(VEHICLE_STATE_SAFE_SELECT)
           .eq('tenant_id', currentTenant.id)
           .eq('vehicle_id', vehicleId)
+          .abortSignal(signal)
           .maybeSingle(),
         supabase.from('positions_last')
-          .select('captured_at, lat, lng, speed, heading')
+          .select(POSITION_LAST_SAFE_SELECT)
           .eq('tenant_id', currentTenant.id)
           .eq('vehicle_id', vehicleId)
+          .abortSignal(signal)
           .maybeSingle(),
       ]);
       if (stateResult.error) throw stateResult.error;

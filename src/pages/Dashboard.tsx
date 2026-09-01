@@ -4,8 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useFleetState } from '@/hooks/useVehiclesState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Truck, TruckIcon, AlertTriangle, Clock, Route, MapPin, Gauge, Zap, Activity } from 'lucide-react';
+import { Truck, TruckIcon, AlertTriangle, Clock, Route, MapPin, Gauge, Zap, Activity, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { formatDistanceToNow } from 'date-fns';
@@ -15,7 +16,8 @@ import { classifyTelemetryFreshness, summarizeTelemetryFreshness } from '@/lib/t
 export default function Dashboard() {
   const { currentTenant } = useTenant();
   const navigate = useNavigate();
-  const { data: fleetState = [] } = useFleetState();
+  const fleetStateQuery = useFleetState();
+  const { data: fleetState = [], isLoading: fleetStateLoading, error: fleetStateError } = fleetStateQuery;
 
   const { data: vehicleCount = 0 } = useQuery({
     queryKey: ['dashboard_vehicles', currentTenant?.id],
@@ -126,10 +128,14 @@ export default function Dashboard() {
     enabled: !!currentTenant,
   });
 
+  const reliableFleetState = useMemo(
+    () => (fleetStateError ? [] : fleetState),
+    [fleetStateError, fleetState],
+  );
   const activeFleetState = useMemo(() => {
-    const stateByVehicle = new Map(fleetState.map((state) => [state.vehicle_id, state]));
+    const stateByVehicle = new Map(reliableFleetState.map((state) => [state.vehicle_id, state]));
     return vehiclesForChart.map((vehicle) => stateByVehicle.get(vehicle.id) ?? null);
-  }, [fleetState, vehiclesForChart]);
+  }, [reliableFleetState, vehiclesForChart]);
   const telemetryStats = useMemo(
     () => summarizeTelemetryFreshness(activeFleetState.map((state) => state?.last_position_at)),
     [activeFleetState],
@@ -172,11 +178,11 @@ export default function Dashboard() {
 
   // Offline vehicles from state engine
   const offlineVehicles = useMemo(() => {
-    return fleetState
+    return reliableFleetState
       .filter((s) => classifyTelemetryFreshness(s.last_position_at) === 'offline')
       .sort((a, b) => (a.last_position_at || '').localeCompare(b.last_position_at || ''))
       .slice(0, 5);
-  }, [fleetState]);
+  }, [reliableFleetState]);
 
   const fmtHours = (s: number) => `${Math.floor(s / 3600)}h${Math.floor((s % 3600) / 60)}m`;
 
@@ -187,11 +193,26 @@ export default function Dashboard() {
         <p className="text-sm text-muted-foreground">{currentTenant?.name} — Visão geral da frota</p>
       </div>
 
+      {fleetStateError && (
+        <Card className="border-destructive/40 bg-destructive/5" role="alert">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Telemetria indisponível. Os indicadores online e offline não foram calculados.
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => void fleetStateQuery.refetch()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard title="Veículos" value={vehicleCount} subtitle="Cadastrados" icon={<Truck className="h-5 w-5" />} onClick={() => navigate('/vehicles')} />
-        <StatCard title="Online" value={onlineCount} subtitle={`≤ 25 min · ${telemetryStats.fresh} frescos`} icon={<TruckIcon className="h-5 w-5" />} variant="success" onClick={() => navigate('/fleet-map')} />
-        <StatCard title="Offline" value={offlineCount} subtitle={`> 25 min · ${unknownCount} sem dados`} icon={<Clock className="h-5 w-5" />} variant="destructive" onClick={() => navigate('/fleet-map')} />
+        <StatCard title="Online" value={fleetStateLoading || fleetStateError ? '—' : onlineCount} subtitle={fleetStateError ? 'Telemetria indisponível' : `≤ 25 min · ${telemetryStats.fresh} frescos`} icon={<TruckIcon className="h-5 w-5" />} variant="success" onClick={() => navigate('/fleet-map')} />
+        <StatCard title="Offline" value={fleetStateLoading || fleetStateError ? '—' : offlineCount} subtitle={fleetStateError ? 'Telemetria indisponível' : `> 25 min · ${unknownCount} sem dados`} icon={<Clock className="h-5 w-5" />} variant="destructive" onClick={() => navigate('/fleet-map')} />
         <StatCard title="Alertas" value={openAlerts} subtitle="Abertos" icon={<AlertTriangle className="h-5 w-5" />} variant="warning" onClick={() => navigate('/alerts')} />
         <StatCard title="Km hoje" value={todayMetrics ? Math.round(todayMetrics.km) : 0} subtitle="Via GPS" icon={<Route className="h-5 w-5" />} />
         <StatCard title="Viagens hoje" value={todayMetrics?.trips || 0} subtitle="Detectadas" icon={<MapPin className="h-5 w-5" />} />
@@ -300,7 +321,9 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Clock className="h-4 w-4 text-destructive" />Veículos Offline</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            {offlineVehicles.length === 0 ? (
+            {fleetStateError ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Telemetria indisponível</p>
+            ) : offlineVehicles.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Nenhum veículo está offline</p>
             ) : offlineVehicles.map((state) => {
               const vehicle = vehiclesForChart.find((candidate) => candidate.id === state.vehicle_id);

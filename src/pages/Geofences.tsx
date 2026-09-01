@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { isFreshPositionObservation } from '@/lib/positionTelemetry';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
+import { useFleetPositions } from '@/hooks/usePositions';
+import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   Hexagon, Plus, Trash2, MapPin, Shield, Truck, Building2,
-  Info, ArrowDownUp, Eye, EyeOff, HelpCircle
+  Info, ArrowDownUp, Eye, EyeOff, HelpCircle, AlertTriangle, RefreshCw
 } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -86,18 +88,15 @@ export default function Geofences() {
     enabled: !!currentTenant,
   });
 
-  const { data: positions = [] } = useQuery({
-    queryKey: ['positions_last_geo', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('positions_last')
-        .select('vehicle_id, lat, lng, captured_at, vehicles(plate)')
-        .eq('tenant_id', currentTenant.id);
-      if (error) throw error;
-      return (data || []).filter((position) => isFreshPositionObservation(position));
-    },
-    enabled: !!currentTenant,
-  });
+  const positionsQuery = useFleetPositions();
+  const vehiclesQuery = useVehicles();
+  const plateByVehicle = new Map((vehiclesQuery.data || []).map((vehicle) => [vehicle.id, vehicle.plate]));
+  const positions = (positionsQuery.error ? [] : (positionsQuery.data || []))
+    .filter((position) => isFreshPositionObservation(position))
+    .map((position) => ({
+      ...position,
+      plate: plateByVehicle.get(position.vehicle_id) || 'Veículo',
+    }));
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
@@ -171,11 +170,26 @@ export default function Geofences() {
         </Card>
         <Card className="bg-muted/30">
           <CardContent className="pt-4 pb-3 text-center">
-            <div className="text-2xl font-bold text-primary">{vehiclesInside}</div>
+            <div className="text-2xl font-bold text-primary">{positionsQuery.error ? '—' : vehiclesInside}</div>
             <div className="text-xs text-muted-foreground">Veículos dentro agora</div>
           </CardContent>
         </Card>
       </div>
+
+      {positionsQuery.error && (
+        <Card className="border-destructive/40 bg-destructive/5" role="alert">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Posições indisponíveis. O mapa e o total de veículos dentro das cercas foram ocultados.
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => void positionsQuery.refetch()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Empty state with onboarding */}
       {geofences.length === 0 && !isLoading && (
@@ -234,7 +248,7 @@ export default function Geofences() {
                 {positions.map((p) => (
                   <CircleMarker key={p.vehicle_id} center={[p.lat, p.lng]} radius={6}
                     pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8 }}>
-                    <Popup><strong>{p.vehicles?.plate || 'Veículo'}</strong></Popup>
+                    <Popup><strong>{p.plate}</strong></Popup>
                   </CircleMarker>
                 ))}
               </MapContainer>
