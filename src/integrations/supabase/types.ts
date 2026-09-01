@@ -15835,6 +15835,8 @@ export type Database = {
       apply_receivable_financial_command: { Args: { _payload: Json }; Returns: Json }
       apply_load_payment_command: { Args: { _payload: Json }; Returns: Json }
       apply_driver_monitor_command: { Args: { _payload: Json }; Returns: Json }
+      apply_load_import_command: { Args: { _payload: Json }; Returns: Json }
+      apply_load_aggregate_command: { Args: { _payload: Json }; Returns: Json }
       get_closing_report_action_context: {
         Args: { _tenant_id: string; _report_id: string }
         Returns: Json

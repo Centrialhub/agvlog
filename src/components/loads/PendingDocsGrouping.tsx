@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
-import { useCreateLoad, getNextLoadNumberFromExisting } from '@/hooks/useLoads';
+import { useCreateLoad } from '@/hooks/useLoads';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -211,22 +211,15 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     let errors = 0;
 
     try {
-      // Sequential numbering starting from current max+1 (e.g., 1001, 1002...)
-      let nextSeq = currentTenant
-        ? Number(await getNextLoadNumberFromExisting(currentTenant.id))
-        : Date.now();
       const errorMessages: string[] = [];
 
       for (const group of selected) {
         let createdLoadId: string | null = null;
         try {
-          const loadNumber = String(nextSeq);
-          nextSeq += 1;
           const vehicleId = vehicleAssignments.get(group.routeName) || null;
           const driverId = driverAssignments.get(group.routeName) || null;
 
           const createdLoad = await createLoad.mutateAsync({
-            load_number: loadNumber,
             destination: group.routeName,
             vehicle_id: vehicleId,
             driver_id: driverId,
@@ -251,18 +244,11 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
 
           created++;
         } catch (error: unknown) {
-          if (createdLoadId && currentTenant) {
-            try {
-              await supabase.rpc('delete_load_safely', {
-                _tenant_id: currentTenant.id,
-                _load_id: createdLoadId,
-              });
-            } catch {
-              /* mantém apenas o erro original para o usuário */
-            }
-          }
           errors++;
-          errorMessages.push(`${group.routeName}: ${getErrorMessage(error, 'falha ao criar carga')}`);
+          errorMessages.push(
+            `${group.routeName}: ${getErrorMessage(error, 'falha ao criar carga')}`
+            + (createdLoadId ? ` A carga ${createdLoadId} foi preservada para recuperação segura.` : ''),
+          );
         }
       }
 

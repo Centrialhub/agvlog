@@ -4,7 +4,7 @@ import { isBillableFiscalDoc } from '@/lib/fiscal/documentStatus';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useUpdateLoad, type Load } from '@/hooks/useLoads';
+import { useHoldLoad, useUnholdLoad, useUpdateLoad, type Load } from '@/hooks/useLoads';
 import type { LoadItem } from '@/hooks/useLoadItems';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -24,6 +24,7 @@ import CTeWorkbench from './CTeWorkbench';
 import NFSePanel from './NFSePanel';
 import ManifestPanel from './ManifestPanel';
 import LoadNotesPanel from './LoadNotesPanel';
+import LoadAggregateRecoveryAlert from './LoadAggregateRecoveryAlert';
 import {
   FileText, DollarSign, Package, TrendingUp, FileSignature,
   HandCoins, ShieldCheck, Boxes, Files, Truck, Save, Plus,
@@ -91,6 +92,8 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
   const { currentTenant } = useTenant();
   const { data: vehicles = [] } = useVehicles();
   const updateLoad = useUpdateLoad();
+  const holdLoad = useHoldLoad();
+  const unholdLoad = useUnholdLoad();
   const navigate = useNavigate();
 
   const { data: drivers = [] } = useQuery({
@@ -229,6 +232,8 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
     try {
       await updateLoad.mutateAsync({
         id: load.id,
+        expectedVersion: load.version,
+        reason: 'Cabeçalho do romaneio atualizado pelo operador.',
         driver_id: form.driver_id !== '__none__' ? form.driver_id : null,
         vehicle_id: form.vehicle_id !== '__none__' ? form.vehicle_id : null,
         trailer_plate: form.trailer_plate || null,
@@ -237,21 +242,9 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
           : null,
         origin: form.origin || null,
         destination: form.destination || null,
-        actual_load_at: fromLocalDT(form.actual_load_at),
         estimated_arrival_at: fromLocalDT(form.estimated_arrival_at),
-        gate_departure_at: fromLocalDT(form.gate_departure_at),
-        arrival_at: fromLocalDT(form.arrival_at),
         ciot: form.ciot || null,
-        monitored: form.monitored,
-        dedicated_vehicle: form.dedicated_vehicle,
-        monitor_responsible: form.monitor_responsible || null,
-        sm_manager: form.sm_manager || null,
-        sm_release: form.sm_release || null,
-        driver_type: form.driver_type || null,
         merchandise_value: form.merchandise_value ? Number(form.merchandise_value) : null,
-        total_pallet_count: form.total_pallet_count ? Number(form.total_pallet_count) : null,
-        total_weight_kg: form.total_weight_kg ? Number(form.total_weight_kg) : null,
-        total_volume_m3: form.total_volume_m3 ? Number(form.total_volume_m3) : null,
         notes: form.notes || null,
         distribution_manifest: form.distribution_manifest || null,
         shipment_manifest: form.shipment_manifest || null,
@@ -269,12 +262,12 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
       label: 'Motivo do bloqueio',
     });
     if (!reason) return;
+    if (reason.trim().length < 5) {
+      toast.error('Informe um motivo com pelo menos 5 caracteres.');
+      return;
+    }
     try {
-      const { error } = await supabase.rpc('hold_load', {
-        _load_id: load.id,
-        _reason: reason,
-      });
-      if (error) throw error;
+      await holdLoad.mutateAsync({ id: load.id, expectedVersion: load.version, reason: reason.trim() });
       toast.success('Carga bloqueada operacionalmente');
       onSaved?.();
     } catch (error: unknown) {
@@ -284,8 +277,7 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
 
   const handleUnhold = async () => {
     try {
-      const { error } = await supabase.rpc('unhold_load', { _load_id: load.id });
-      if (error) throw error;
+      await unholdLoad.mutateAsync({ id: load.id, expectedVersion: load.version });
       toast.success('Carga liberada para operação');
       onSaved?.();
     } catch (error: unknown) {
@@ -295,6 +287,7 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
 
   return (
     <Card className="overflow-hidden">
+      <div className="p-2"><LoadAggregateRecoveryAlert /></div>
       {/* Barra de ações rápidas (replica do sistema legado, com cores) */}
       <div className="flex flex-wrap items-center gap-1.5 px-2 py-2 border-b bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
         {([
@@ -448,7 +441,7 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
               </div>
               <div>
                 <Label className="text-[10px]">Data do Carregamento</Label>
-                <Input type="datetime-local" className="h-8 text-xs" value={form.actual_load_at} onChange={e => setForm({ ...form, actual_load_at: e.target.value })} />
+                <Input type="datetime-local" className="h-8 text-xs" value={form.actual_load_at} disabled title="Data efetiva controlada pelos eventos operacionais" />
               </div>
               <div>
                 <Label className="text-[10px]">Data Previsão Chegada</Label>
@@ -456,11 +449,11 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
               </div>
               <div>
                 <Label className="text-[10px]">Data Saída (Portaria)</Label>
-                <Input type="datetime-local" className="h-8 text-xs" value={form.gate_departure_at} onChange={e => setForm({ ...form, gate_departure_at: e.target.value })} />
+                <Input type="datetime-local" className="h-8 text-xs" value={form.gate_departure_at} disabled title="Saída efetiva controlada pelos eventos operacionais" />
               </div>
               <div>
                 <Label className="text-[10px]">Data de Chegada</Label>
-                <Input type="datetime-local" className="h-8 text-xs" value={form.arrival_at} onChange={e => setForm({ ...form, arrival_at: e.target.value })} />
+                <Input type="datetime-local" className="h-8 text-xs" value={form.arrival_at} disabled title="Chegada efetiva controlada pelos eventos operacionais" />
               </div>
             </div>
 
@@ -490,16 +483,16 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[10px]">Peso Total (kg)</Label>
-                  <Input type="number" step="0.01" className="h-8 text-xs" value={form.total_weight_kg} onChange={e => setForm({ ...form, total_weight_kg: e.target.value })} />
+                  <Input type="number" step="0.01" className="h-8 text-xs" value={load.total_weight_kg ?? 0} disabled title="Total calculado a partir dos itens atuais" />
                 </div>
                 <div>
                   <Label className="text-[10px]">Volume M³</Label>
-                  <Input type="number" step="0.001" className="h-8 text-xs" value={form.total_volume_m3} onChange={e => setForm({ ...form, total_volume_m3: e.target.value })} />
+                  <Input type="number" step="0.001" className="h-8 text-xs" value={load.total_volume_m3 ?? 0} disabled title="Total calculado a partir dos itens atuais" />
                 </div>
               </div>
               <div>
                 <Label className="text-[10px]">Paletes</Label>
-                <Input type="number" className="h-8 text-xs" value={form.total_pallet_count} onChange={e => setForm({ ...form, total_pallet_count: e.target.value })} />
+                <Input type="number" className="h-8 text-xs" value={load.total_pallet_count ?? 0} disabled title="Total calculado a partir dos itens atuais" />
               </div>
               <div>
                 <Label className="text-[10px]">Valor CT-e Bruto (auto)</Label>
@@ -534,15 +527,15 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
               </div>
               <div>
                 <Label className="text-[10px]">Tipo Motorista</Label>
-                <Input className="h-8 text-xs" value={form.driver_type} onChange={e => setForm({ ...form, driver_type: e.target.value })} placeholder="Próprio / Agregado / Terceiro" />
+                <Input className="h-8 text-xs" value={form.driver_type} disabled title="Gerenciado pelo fluxo de monitoramento" />
               </div>
               <div>
                 <Label className="text-[10px]">Resp. Monitoramento</Label>
-                <Input className="h-8 text-xs" value={form.monitor_responsible} onChange={e => setForm({ ...form, monitor_responsible: e.target.value })} />
+                <Input className="h-8 text-xs" value={form.monitor_responsible} disabled title="Gerenciado pelo fluxo de monitoramento" />
               </div>
               <div className="flex items-center justify-between p-2 border rounded-md">
                 <Label className="text-xs">Monitorado</Label>
-                <Switch checked={form.monitored} onCheckedChange={v => setForm({ ...form, monitored: v })} />
+                <Switch checked={form.monitored} disabled />
               </div>
             </div>
           </div>
@@ -687,10 +680,10 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
         {/* ===================== RISCO ===================== */}
         <TabsContent value="risco" className="p-4 m-0 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div><Label className="text-[10px]">Gerenciadora SM</Label><Input className="h-8 text-xs" value={form.sm_manager} onChange={e => setForm({ ...form, sm_manager: e.target.value })} /></div>
-            <div><Label className="text-[10px]">Liberação SM</Label><Input className="h-8 text-xs" value={form.sm_release} onChange={e => setForm({ ...form, sm_release: e.target.value })} /></div>
-            <div><Label className="text-[10px]">Resp. Monitoramento</Label><Input className="h-8 text-xs" value={form.monitor_responsible} onChange={e => setForm({ ...form, monitor_responsible: e.target.value })} /></div>
-            <div className="flex items-center justify-between p-2 border rounded-md"><Label className="text-xs">Monitorado</Label><Switch checked={form.monitored} onCheckedChange={v => setForm({ ...form, monitored: v })} /></div>
+            <div><Label className="text-[10px]">Gerenciadora SM</Label><Input className="h-8 text-xs" value={form.sm_manager} disabled /></div>
+            <div><Label className="text-[10px]">Liberação SM</Label><Input className="h-8 text-xs" value={form.sm_release} disabled /></div>
+            <div><Label className="text-[10px]">Resp. Monitoramento</Label><Input className="h-8 text-xs" value={form.monitor_responsible} disabled /></div>
+            <div className="flex items-center justify-between p-2 border rounded-md"><Label className="text-xs">Monitorado</Label><Switch checked={form.monitored} disabled /></div>
           </div>
           <div className="flex justify-end"><Button onClick={handleSave} size="sm"><Save className="h-3 w-3 mr-1" />Salvar</Button></div>
         </TabsContent>
@@ -722,7 +715,7 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
         <TabsContent value="ciot" className="p-4 m-0 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div><Label className="text-[10px]">CIOT</Label><Input className="h-8 text-xs font-mono" value={form.ciot} onChange={e => setForm({ ...form, ciot: e.target.value })} placeholder="000000000000" /></div>
-            <div><Label className="text-[10px]">Tipo Motorista</Label><Input className="h-8 text-xs" value={form.driver_type} onChange={e => setForm({ ...form, driver_type: e.target.value })} placeholder="Próprio / Agregado / Terceiro" /></div>
+            <div><Label className="text-[10px]">Tipo Motorista</Label><Input className="h-8 text-xs" value={form.driver_type} disabled /></div>
             <div><Label className="text-[10px]">Placa Cavalo</Label><Input className="h-8 text-xs" disabled value={vehicle?.plate || '—'} /></div>
             <div><Label className="text-[10px]">Placa Carreta</Label><Input className="h-8 text-xs" value={form.trailer_plate} onChange={e => setForm({ ...form, trailer_plate: e.target.value.toUpperCase() })} /></div>
           </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getNextLoadNumberFromExisting, useCreateLoadWithNextNumber } from '@/hooks/useLoads';
+import { useCreateLoadWithNextNumber } from '@/hooks/useLoads';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -86,7 +86,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [recentDocsOpen, setRecentDocsOpen] = useState(false);
   const emptyForm = { load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', neighborhood: '', invoice_number: '', client_id: '', client_name: '', supplier: '', notes: '' };
   const [form, setForm] = useState(emptyForm);
-  const [loadNumberTouched, setLoadNumberTouched] = useState(false);
   const [driverAutoSuggested, setDriverAutoSuggested] = useState(false);
   const { preference: docPreference, isLoaded: isDocPreferenceLoaded, savePreference: saveDocPreference } = useUserUiPreference('new_load_doc_filters', defaultDocPreference);
   const [docFilters, setDocFilters] = useState(emptyDocFilters);
@@ -145,15 +144,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     enabled: !!currentTenant && open,
   });
 
-  const { data: nextLoadNumber = '', isFetching: isFetchingNextLoadNumber } = useQuery({
-    queryKey: ['next_load_number_preview', currentTenant?.id, open],
-    queryFn: async () => {
-      if (!currentTenant) return '';
-      return getNextLoadNumberFromExisting(currentTenant.id);
-    },
-    enabled: !!currentTenant && open,
-  });
-
   const { data: linkedLoads = [] } = useQuery({
     queryKey: ['new_load_linked_load_lookup', currentTenant?.id],
     queryFn: async () => {
@@ -170,14 +160,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   });
 
   const linkedLoadById = useMemo(() => new Map(linkedLoads.map(load => [load.id, load])), [linkedLoads]);
-  const isDocsUpdating = isFetchingFiscalDocs || isFetchingNextLoadNumber || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
+  const isDocsUpdating = isFetchingFiscalDocs || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
 
   const getLinkedLoad = (doc: AvailableFiscalDocument) => doc.loads || (doc.load_id ? linkedLoadById.get(doc.load_id) : null) || null;
-
-  useEffect(() => {
-    if (!open || loadNumberTouched || !nextLoadNumber) return;
-    setForm(f => ({ ...f, load_number: nextLoadNumber }));
-  }, [loadNumberTouched, nextLoadNumber, open]);
 
   useEffect(() => {
     if (!isDocPreferenceLoaded) return;
@@ -242,13 +227,13 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     }), { pallets: 0, weight: 0 });
 
     return {
-      number: form.load_number || nextLoadNumber || '—',
+      number: form.load_number || 'Gerado ao salvar',
       destination: form.destination || form.neighborhood || 'Sem destino definido',
       docsCount: selectedDocs.length,
       pallets: totals.pallets,
       weight: totals.weight,
     };
-  }, [form.destination, form.load_number, form.neighborhood, nextLoadNumber, selectedDocs]);
+  }, [form.destination, form.load_number, form.neighborhood, selectedDocs]);
 
   const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
   const visibleRecentDocs = useMemo(() => recentDocs.slice(0, visibleRecentDocCount), [recentDocs, visibleRecentDocCount]);
@@ -488,7 +473,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       ].filter(Boolean).join('\n');
 
       const load = await createLoad.mutateAsync({
-        load_number: form.load_number.trim() || nextLoadNumber,
+        load_number: form.load_number.trim(),
         origin: form.origin || null,
         destination: form.destination || form.neighborhood || null,
         notes: notes || null,
@@ -595,7 +580,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       toast({ title: 'Carga criada' });
       setOpen(false);
       setForm(emptyForm);
-      setLoadNumberTouched(false);
       setSelectedDocIds(new Set());
       setDocAutofillSnapshots({});
       setPreviewDoc(null);
@@ -618,7 +602,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
           <div className="flex-1 space-y-3 overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Nº Carga *</Label><Input value={form.load_number} onChange={e => { setLoadNumberTouched(true); setForm(f => ({ ...f, load_number: e.target.value })); }} placeholder={nextLoadNumber || 'Sequência automática'} /></div>
+            <div><Label className="text-xs">Nº Carga</Label><Input value={form.load_number} onChange={e => setForm(f => ({ ...f, load_number: e.target.value }))} placeholder="Gerado automaticamente se vazio" /></div>
             <div>
               <Label className="text-xs">Veículo</Label>
               <Select value={form.vehicle_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, vehicle_id: v === '__none__' ? '' : v }))}>
@@ -882,8 +866,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           </div>
           </div>
           <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-border pt-4">
-            <Button variant="outline" onClick={() => { setOpen(false); setLoadNumberTouched(false); }}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!form.load_number.trim() || createLoad.isPending}>Criar</Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={createLoad.isPending}>Criar</Button>
           </div>
           <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
             <DialogContent className="flex h-[min(88vh,760px)] max-w-4xl flex-col overflow-hidden p-0">

@@ -27,6 +27,7 @@ import NewLoadDialog from '@/components/loads/NewLoadDialog';
 import BatchReimportDialog from '@/components/loads/BatchReimportDialog';
 import LoadAdvancedFilters from '@/components/loads/LoadAdvancedFilters';
 import AppliedFiltersChips from '@/components/loads/AppliedFiltersChips';
+import LoadAggregateRecoveryAlert from '@/components/loads/LoadAggregateRecoveryAlert';
 import {
   buildAppliedLoadFilterChips,
   EMPTY_LOAD_ADVANCED_FILTERS,
@@ -263,8 +264,13 @@ export default function Loads() {
   // Delete handlers
   const handleDeleteOne = async () => {
     if (!confirmDeleteId) return;
+    const target = loads.find(load => load.id === confirmDeleteId);
+    if (!target) {
+      toast({ title: 'Carga desatualizada', description: 'Atualize a lista antes de excluir.', variant: 'destructive' });
+      return;
+    }
     try {
-      await deleteOne.mutateAsync(confirmDeleteId);
+      await deleteOne.mutateAsync({ id: target.id, expectedVersion: target.version });
       toast({ title: 'Carga excluída' });
       setSelected(prev => { const n = new Set(prev); n.delete(confirmDeleteId); return n; });
     } catch (error: unknown) {
@@ -277,8 +283,13 @@ export default function Loads() {
   const handleBulkDelete = async () => {
     const ids = Array.from(selected);
     if (!ids.length) return;
+    const targets = ids.map(id => loads.find(load => load.id === id)).filter((load): load is Load => !!load);
+    if (targets.length !== ids.length) {
+      toast({ title: 'Seleção desatualizada', description: 'Atualize a lista antes de excluir.', variant: 'destructive' });
+      return;
+    }
     try {
-      await deleteBulk.mutateAsync(ids);
+      await deleteBulk.mutateAsync(targets.map(load => ({ id: load.id, expectedVersion: load.version })));
       toast({ title: `${ids.length} carga(s) excluída(s)` });
       exitSelectionMode();
     } catch (error: unknown) {
@@ -417,8 +428,12 @@ export default function Loads() {
 
   const submitHold = async () => {
     if (!holdTarget) return;
+    if (holdReason.trim().length < 5) {
+      toast({ title: 'Informe o motivo', description: 'Use pelo menos 5 caracteres.', variant: 'destructive' });
+      return;
+    }
     try {
-      await holdMut.mutateAsync({ id: holdTarget.id, reason: holdReason.trim() || undefined });
+      await holdMut.mutateAsync({ id: holdTarget.id, expectedVersion: holdTarget.version, reason: holdReason.trim() });
       toast({ title: 'Carga colocada em espera' });
       setHoldTarget(null);
       setHoldReason('');
@@ -427,9 +442,9 @@ export default function Loads() {
     }
   };
 
-  const doUnhold = async (id: string) => {
+  const doUnhold = async (load: Load) => {
     try {
-      await unholdMut.mutateAsync(id);
+      await unholdMut.mutateAsync({ id: load.id, expectedVersion: load.version });
       toast({ title: 'Carga retomada' });
     } catch (error: unknown) {
       toast({ title: 'Erro ao retomar', description: getErrorMessage(error), variant: 'destructive' });
@@ -438,6 +453,7 @@ export default function Loads() {
 
   return (
     <div className="animate-fade-in space-y-5">
+      <LoadAggregateRecoveryAlert />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -733,7 +749,7 @@ export default function Loads() {
                               <RouteIcon className="h-4 w-4 mr-2" /> Reanalisar na Roteirização
                             </DropdownMenuItem>
                             {l.on_hold ? (
-                              <DropdownMenuItem onClick={e => { e.stopPropagation(); doUnhold(l.id); }}>
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); doUnhold(l); }}>
                                 <PlayCircle className="h-4 w-4 mr-2" /> Retomar
                               </DropdownMenuItem>
                             ) : (
@@ -852,7 +868,7 @@ export default function Loads() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">Motivo (opcional)</label>
+            <label className="text-xs text-muted-foreground">Motivo</label>
             <Textarea
               value={holdReason}
               onChange={e => setHoldReason(e.target.value)}

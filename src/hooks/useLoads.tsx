@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { useAuth } from './useAuth';
-import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import type { Json, Tables } from '@/integrations/supabase/types';
 import { invalidateTripLoadQueries, isConfirmedLoadTransition, tripMutationError } from '@/lib/tripMutation';
+import { useLoadAggregateCommand } from './useLoadAggregateCommand';
+import type { LoadHeaderChanges } from '@/lib/loads/loadAggregateCommands';
 
 import type { LoadStatus } from '@/lib/status/loadStatus';
 export { LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
@@ -14,6 +15,21 @@ export type Load = Omit<Tables<'loads'>, 'status'> & {
   vehicles?: { plate: string; nickname: string | null } | null;
   drivers?: { name: string } | null;
 };
+
+const LOAD_HEADER_KEYS = [
+  'load_number', 'origin', 'destination', 'notes', 'operation_type',
+  'scheduled_load_at', 'estimated_arrival_at', 'trailer_plate', 'ciot',
+  'distribution_manifest', 'shipment_manifest', 'driver_id', 'vehicle_id',
+  'merchandise_value', 'payment_method',
+] as const;
+
+function loadHeaderChanges(values: Partial<Load>): LoadHeaderChanges {
+  return Object.fromEntries(LOAD_HEADER_KEYS.flatMap(key => (
+    values[key] === undefined || (key === 'load_number' && !String(values[key]).trim())
+      ? []
+      : [[key, values[key]]]
+  ))) as LoadHeaderChanges;
+}
 
 export function useLoads() {
   const { currentTenant } = useTenant();
@@ -76,22 +92,13 @@ export function useLoadsPage(input: {
 }
 
 export function useCreateLoad() {
-  const { currentTenant } = useTenant();
-  const { user } = useAuth();
-  const qc = useQueryClient();
+  const command = useLoadAggregateCommand();
   return useMutation({
-    mutationFn: async (values: Partial<Load> & Pick<Load, 'load_number'>) => {
-      const payload: TablesInsert<'loads'> = {
-        ...values,
-        load_number: values.load_number,
-        tenant_id: currentTenant!.id,
-        created_by: user?.id,
-      };
-      const { data, error } = await supabase.from('loads').insert(payload).select().single();
-      if (error) throw error;
-      return data;
+    mutationFn: async (values: Partial<Load>) => {
+      const result = await command.submit({ action: 'create', changes: loadHeaderChanges(values) });
+      if (!('load' in result)) throw new Error('Criação da carga sem confirmação.');
+      return result.load as unknown as Load;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
 }
 
@@ -113,47 +120,30 @@ export async function getNextLoadNumberFromExisting(tenantId: string) {
 }
 
 export function useCreateLoadWithNextNumber() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
+  const command = useLoadAggregateCommand();
   return useMutation({
     mutationFn: async (values: Partial<Load>) => {
-      if (!currentTenant) throw new Error('Tenant não selecionado');
-      const loadNumber = values.load_number || await getNextLoadNumberFromExisting(currentTenant.id);
-      const payload: TablesInsert<'loads'> = {
-        load_number: loadNumber,
-        tenant_id: currentTenant.id,
-        origin: values.origin ?? null,
-        destination: values.destination ?? null,
-        vehicle_id: values.vehicle_id ?? null,
-        driver_id: values.driver_id ?? null,
-        trip_id: values.trip_id ?? null,
-        notes: values.notes ?? null,
-        status: values.status ?? 'planned',
-      };
-      const { data, error } = await supabase.from('loads').insert(payload).select().single();
-      if (error) throw error;
-      return data as Load;
+      const result = await command.submit({ action: 'create', changes: loadHeaderChanges(values) });
+      if (!('load' in result)) throw new Error('Criação da carga sem confirmação.');
+      return result.load as unknown as Load;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
 }
 
 export function useUpdateLoad() {
-  const qc = useQueryClient();
+  const command = useLoadAggregateCommand();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<Load> & { id: string }) => {
+    mutationFn: async ({ id, expectedVersion, reason, ...values }: Partial<Load> & { id: string; expectedVersion: number; reason?: string }) => {
       if ('status' in values) {
         throw new Error('Mudança de status deve passar por transition_load_status_v1.');
       }
-      const payload: TablesUpdate<'loads'> = {
-        ...values,
-        updated_at: new Date().toISOString(),
-      };
-      const { data, error } = await supabase.from('loads').update(payload).eq('id', id).select().single();
-      if (error) throw error;
-      return data;
+      const result = await command.submit({
+        action: 'update', load_id: id, expected_version: expectedVersion,
+        changes: loadHeaderChanges(values), reason,
+      });
+      if (!('load' in result)) throw new Error('Atualização da carga sem confirmação.');
+      return result.load as unknown as Load;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
 }
 
@@ -180,71 +170,58 @@ export function useTransitionLoadStatus() {
 }
 
 export function useDeleteLoad() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
+  const command = useLoadAggregateCommand();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc('delete_load_safely', {
-        _tenant_id: currentTenant!.id,
-        _load_id: id,
+    mutationFn: async ({ id, expectedVersion, reason }: { id: string; expectedVersion: number; reason?: string }) => {
+      const result = await command.submit({
+        action: 'delete', load_id: id, expected_version: expectedVersion,
+        reason: reason || 'Exclusão solicitada pelo operador.',
       });
-      if (error) throw error;
+      if (!('deleted_load_ids' in result) || !result.deleted_load_ids.includes(id)) {
+        throw new Error('Exclusão da carga sem confirmação.');
+      }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
 }
 
 export function useDeleteLoads() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
+  const command = useLoadAggregateCommand();
   return useMutation({
-    mutationFn: async (ids: string[]) => {
-      const { data, error } = await supabase.rpc('delete_loads_safely', {
-        _tenant_id: currentTenant!.id,
-        _load_ids: ids,
+    mutationFn: async (loads: Array<{ id: string; expectedVersion: number }>) => {
+      const result = await command.submit({
+        action: 'delete_many',
+        targets: loads.map(load => ({ load_id: load.id, expected_version: load.expectedVersion })),
+        reason: 'Exclusão em lote solicitada pelo operador.',
       });
-      if (error) throw error;
-      const failed = Array.isArray(data)
-        ? data.filter((result): result is Record<string, Json> => isJsonRecord(result) && result.ok === false)
-        : [];
-      if (failed.length > 0) {
-        throw new Error(
-          `Não foi possível excluir ${failed.length} carga(s): ` +
-            failed.map((failure) => `${String(failure.load_id ?? '')}: ${String(failure.error ?? '')}`).join('; ')
-        );
+      if (!('deleted_load_ids' in result) || result.deleted_load_ids.length !== loads.length) {
+        throw new Error('Exclusão em lote sem confirmação integral.');
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
 }
 
 export function useHoldLoad() {
-  const qc = useQueryClient();
+  const command = useLoadAggregateCommand();
   return useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
-      const { error } = await supabase.rpc('hold_load', {
-        _load_id: id,
-        _reason: reason ?? undefined,
+    mutationFn: async ({ id, expectedVersion, reason }: { id: string; expectedVersion: number; reason: string }) => {
+      const result = await command.submit({
+        action: 'hold', load_id: id, expected_version: expectedVersion, reason,
       });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loads'] });
-      qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
+      if (!('load' in result)) throw new Error('Bloqueio da carga sem confirmação.');
+      return result.load as unknown as Load;
     },
   });
 }
 
 export function useUnholdLoad() {
-  const qc = useQueryClient();
+  const command = useLoadAggregateCommand();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc('unhold_load', { _load_id: id });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loads'] });
-      qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
+    mutationFn: async ({ id, expectedVersion }: { id: string; expectedVersion: number }) => {
+      const result = await command.submit({
+        action: 'unhold', load_id: id, expected_version: expectedVersion,
+      });
+      if (!('load' in result)) throw new Error('Liberação da carga sem confirmação.');
+      return result.load as unknown as Load;
     },
   });
 }

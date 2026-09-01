@@ -46,8 +46,14 @@ export default function LoadsKanban({ loads }: Props) {
 
   const submitHold = async () => {
     if (!holdTarget) return;
+    if (holdReason.trim().length < 5) {
+      toast({ title: 'Informe o motivo', description: 'Use pelo menos 5 caracteres.', variant: 'destructive' });
+      return;
+    }
     try {
-      await holdMut.mutateAsync({ id: holdTarget.id, reason: holdReason.trim() || undefined });
+      await holdMut.mutateAsync({
+        id: holdTarget.id, expectedVersion: holdTarget.version, reason: holdReason.trim(),
+      });
       toast({ title: 'Carga colocada em espera' });
       setHoldTarget(null);
       setHoldReason('');
@@ -58,7 +64,7 @@ export default function LoadsKanban({ loads }: Props) {
 
   const doUnhold = async (l: Load) => {
     try {
-      await unholdMut.mutateAsync(l.id);
+      await unholdMut.mutateAsync({ id: l.id, expectedVersion: l.version });
       toast({ title: 'Carga retomada' });
     } catch (error: unknown) {
       toast({ title: 'Erro ao retomar', description: getErrorMessage(error), variant: 'destructive' });
@@ -183,7 +189,7 @@ export default function LoadsKanban({ loads }: Props) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">Motivo (opcional)</label>
+            <label className="text-xs text-muted-foreground">Motivo</label>
             <Textarea
               value={holdReason}
               onChange={e => setHoldReason(e.target.value)}
