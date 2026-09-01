@@ -8742,40 +8742,49 @@ export type Database = {
         Row: {
           amount: number
           bank_account_id: string | null
+          bank_transaction_id: string | null
           created_at: string
           created_by: string | null
           id: string
           load_id: string
+          load_payment_command_id: string | null
           notes: string | null
           payment_date: string
           payment_method: string | null
           receivable_id: string | null
+          receivable_payment_id: string | null
           tenant_id: string
         }
         Insert: {
           amount: number
           bank_account_id?: string | null
+          bank_transaction_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           load_id: string
+          load_payment_command_id?: string | null
           notes?: string | null
           payment_date: string
           payment_method?: string | null
           receivable_id?: string | null
+          receivable_payment_id?: string | null
           tenant_id: string
         }
         Update: {
           amount?: number
           bank_account_id?: string | null
+          bank_transaction_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           load_id?: string
+          load_payment_command_id?: string | null
           notes?: string | null
           payment_date?: string
           payment_method?: string | null
           receivable_id?: string | null
+          receivable_payment_id?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -15815,6 +15824,7 @@ export type Database = {
       apply_client_invoice_command: { Args: { _payload: Json }; Returns: Json }
       get_receivable_financial_context: { Args: { _tenant_id: string; _receivable_id: string }; Returns: Json }
       apply_receivable_financial_command: { Args: { _payload: Json }; Returns: Json }
+      apply_load_payment_command: { Args: { _payload: Json }; Returns: Json }
       get_closing_report_action_context: {
         Args: { _tenant_id: string; _report_id: string }
         Returns: Json

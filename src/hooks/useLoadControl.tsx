@@ -1,12 +1,15 @@
-import { useScopedAlerts } from '@/hooks/useAlertStore';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
 import { computeFinancialStatus, type FinancialStatus } from '@/lib/loadImports/loadImportNormalizer';
 import type { ParsedSpreadsheet } from '@/lib/loadImports/spreadsheetLoadImport';
 import type { ParsedNfe, ParsedCte } from '@/lib/loadImports/xmlLoadImport';
 import type { Json } from '@/integrations/supabase/types';
 import { getErrorMessage } from '@/lib/errors';
+import { loadPaymentError, type LoadPaymentCommandInput, type LoadPaymentResult } from '@/lib/loadPayments/loadPaymentCommands';
+import { createLoadPaymentOutbox, LOAD_PAYMENT_COMMAND_CHANGED, pendingLoadPaymentCommand } from '@/lib/loadPayments/loadPaymentOutbox';
 
 export interface LoadControlRow {
   id: string;
@@ -166,83 +169,96 @@ export function useImportBatches() {
 // ---- Mutations ----------------------------------------------------
 
 export function useRegisterPayment() {
-  const { confirmAction } = useScopedAlerts();
   const qc = useQueryClient();
   const { currentTenant } = useTenant();
-  return useMutation({
-    mutationFn: async (p: {
-      loadId: string;
-      amount: number;
-      paymentDate: string;
-      method?: string | null;
-      notes?: string | null;
-    }) => {
-      const tenantId = currentTenant!.id;
-      const { data: load, error: le } = await supabase.from('loads')
-        .select('freight_amount, received_amount, operational_status, expected_payment_date, payment_status')
-        .eq('id', p.loadId).single();
-      if (le) throw le;
-      if ((load.operational_status || '').toLowerCase() === 'cancelled')
-        throw new Error('Carga cancelada não pode receber pagamento.');
-      const newReceived = Number(load.received_amount || 0) + Number(p.amount || 0);
-      if (newReceived > Number(load.freight_amount || 0) * 1.001 && !await confirmAction('Pagamento maior que o valor de frete. Confirmar?', {
-        title: 'Confirmar pagamento excedente',
-      }))
-        throw new Error('Pagamento maior que o valor de frete — cancelado.');
+  const { user } = useAuth();
+  const actor = user?.id;
+  const tenant = currentTenant?.id;
+  const latest = useRef({ actor, tenant });
+  latest.current = { actor, tenant };
+  const alive = useRef(true);
+  const busy = useRef(false);
+  const [isPending, setPending] = useState(false);
+  const [revision, setRevision] = useState(0);
 
-      const { error: pe } = await supabase.from('load_payments').insert({
-        tenant_id: tenantId, load_id: p.loadId,
-        amount: p.amount, payment_date: p.paymentDate,
-        payment_method: p.method || null, notes: p.notes || null,
-      });
-      if (pe) throw pe;
+  useEffect(() => {
+    alive.current = true;
+    const changed = () => setRevision(value => value + 1);
+    window.addEventListener('storage', changed);
+    window.addEventListener(LOAD_PAYMENT_COMMAND_CHANGED, changed);
+    return () => {
+      alive.current = false;
+      window.removeEventListener('storage', changed);
+      window.removeEventListener(LOAD_PAYMENT_COMMAND_CHANGED, changed);
+    };
+  }, []);
 
-      const newStatus = computeFinancialStatus({
-        freight_amount: Number(load.freight_amount || 0),
-        received_amount: newReceived,
-        expected_payment_date: load.expected_payment_date,
-        operational_status: load.operational_status,
-      });
+  const assertContext = useCallback(() => {
+    if (!alive.current || latest.current.actor !== actor || latest.current.tenant !== tenant) {
+      throw new Error('A sessão ou empresa mudou. Recupere o pagamento na sessão original.');
+    }
+  }, [actor, tenant]);
 
-      const { error: ue } = await supabase.from('loads').update({
-        received_amount: newReceived,
-        payment_status: newStatus,
-        payment_date: newStatus === 'paid' ? p.paymentDate : null,
-      }).eq('id', p.loadId);
-      if (ue) throw ue;
-
-      await supabase.from('load_status_history').insert({
-        tenant_id: tenantId, load_id: p.loadId,
-        field_name: 'payment_status', old_value: load.payment_status,
-        new_value: newStatus, reason: `Pagamento ${p.amount}`,
-      });
+  const outbox = useMemo(() => createLoadPaymentOutbox({
+    get storage() { return window.localStorage; },
+    uuid: () => crypto.randomUUID(),
+    assertContext,
+    changed: () => window.dispatchEvent(new Event(LOAD_PAYMENT_COMMAND_CHANGED)),
+    lock: async (key, work) => {
+      if (!navigator.locks) throw new Error('Use um navegador atualizado em conexão segura para confirmar o pagamento.');
+      return navigator.locks.request(key, work);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['load-control'] }); },
-  });
-}
+    send: async payload => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      try {
+        return await supabase.rpc('apply_load_payment_command', {
+          _payload: JSON.parse(JSON.stringify(payload)),
+        }).abortSignal(controller.signal);
+      } finally { clearTimeout(timeout); }
+    },
+  }), [assertContext]);
 
-export function useMarkUnpaid() {
-  const qc = useQueryClient();
-  const { currentTenant } = useTenant();
-  return useMutation({
-    mutationFn: async (loadId: string) => {
-      const tenantId = currentTenant!.id;
-      const { data: pays } = await supabase.from('load_payments')
-        .select('id').eq('tenant_id', tenantId).eq('load_id', loadId).limit(1);
-      if ((pays || []).length > 0) {
-        throw new Error('Existem pagamentos registrados. Lance um estorno via ajuste para reabrir a carga.');
+  const recovery = useMemo(() => {
+    try {
+      return { revision, pending: tenant && actor ? pendingLoadPaymentCommand(window.localStorage, tenant, actor) : null, error: null };
+    } catch (cause) {
+      return { revision, pending: null, error: loadPaymentError(cause) };
+    }
+  }, [tenant, actor, revision]);
+
+  const run = async (work: () => Promise<LoadPaymentResult>) => {
+    if (!tenant || !actor) throw new Error('Entre com uma sessão válida e selecione a empresa.');
+    if (busy.current) throw new Error('Aguarde o pagamento em andamento.');
+    assertContext();
+    busy.current = true;
+    setPending(true);
+    try {
+      const result = await work();
+      assertContext();
+      return result;
+    } catch (cause) {
+      throw new Error(loadPaymentError(cause));
+    } finally {
+      try {
+        await Promise.all([
+          'load-control', 'load_payments', 'load-status-history', 'receivables',
+          'receivables_payments', 'bank_transactions', 'closing-reports', 'client_invoices',
+        ].map(key => qc.invalidateQueries({ queryKey: [key] })));
+      } finally {
+        busy.current = false;
+        if (alive.current) setPending(false);
       }
-      const { error } = await supabase.from('loads')
-        .update({ payment_status: 'unpaid', payment_date: null, received_amount: 0 })
-        .eq('id', loadId);
-      if (error) throw error;
-      await supabase.from('load_status_history').insert({
-        tenant_id: tenantId, load_id: loadId, field_name: 'payment_status',
-        old_value: 'paid', new_value: 'unpaid', reason: 'Reabertura manual',
-      });
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['load-control'] }); },
-  });
+    }
+  };
+
+  return {
+    isPending,
+    pending: recovery.pending,
+    recoveryError: recovery.error,
+    submit: (input: LoadPaymentCommandInput) => run(() => outbox.submit(tenant!, actor!, input)),
+    recover: () => run(() => outbox.recover(tenant!, actor!)),
+  };
 }
 
 // ---- Import runners ----------------------------------------------

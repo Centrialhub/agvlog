@@ -8,13 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Download, Printer, Upload, Search, RefreshCw, FileText, CheckCircle2, Undo2 } from 'lucide-react';
+import { Download, Printer, Upload, Search, RefreshCw, FileText, CheckCircle2 } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   useLoadControlList, useLoadDocuments, useUnloadingCharges, useImportBatches,
-  useRegisterPayment, useMarkUnpaid, commitSpreadsheetImport, commitXmlImport,
+  useRegisterPayment, commitSpreadsheetImport, commitXmlImport,
   PAYMENT_STATUS_LABELS, OPERATIONAL_STATUS_LABELS,
   type LoadControlRow, type LoadControlFilters,
 } from '@/hooks/useLoadControl';
@@ -28,9 +28,12 @@ import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 import { getErrorMessage } from '@/lib/errors';
 import type { ImportPreview } from '@/hooks/useLoadControl';
 import type { ReactNode } from 'react';
+import { useBankAccounts } from '@/hooks/useBankReconciliation';
+import { loadPaymentError, parseMoneyCents } from '@/lib/loadPayments/loadPaymentCommands';
 
 const brl = (value: number | string | null | undefined) => 'R$ ' + Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = (v?: string | null) => v ? v.slice(0, 10).split('-').reverse().join('/') : '—';
+const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   paid: 'default', partially_paid: 'secondary', unpaid: 'outline',
@@ -47,9 +50,11 @@ export default function LoadControl() {
   const { data: rows = [], isLoading, refetch } = useLoadControlList(applied);
   const [detailRow, setDetailRow] = useState<LoadControlRow | null>(null);
   const [payDlg, setPayDlg] = useState<LoadControlRow | null>(null);
-  const [payForm, setPayForm] = useState({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'pix', notes: '' });
+  const [payForm, setPayForm] = useState({ amount: '', date: today(), method: 'pix', notes: '', bankAccountId: '' });
+  const [payError, setPayError] = useState('');
   const regPay = useRegisterPayment();
-  const markUnpaid = useMarkUnpaid();
+  const bankAccountsQuery = useBankAccounts();
+  const bankAccounts = (bankAccountsQuery.data || []).filter(account => account.active);
   const { data: batches = [] } = useImportBatches();
 
   const kpis = useMemo(() => {
@@ -74,19 +79,38 @@ export default function LoadControl() {
   const doClear = () => { setFilters({}); setApplied({}); };
 
   const openPay = (r: LoadControlRow) => {
+    if (!r.receivable_id) {
+      toast.error('A carga não possui recebível vinculado. Regularize o vínculo antes de registrar pagamento.');
+      return;
+    }
     setPayForm({ amount: String(Math.max(0, Number(r.freight_amount || 0) - Number(r.received_amount || 0)).toFixed(2)),
-                 date: new Date().toISOString().slice(0, 10), method: 'pix', notes: '' });
+                 date: today(), method: 'pix', notes: '', bankAccountId: bankAccounts[0]?.id || '' });
+    setPayError('');
     setPayDlg(r);
   };
   const submitPay = async () => {
-    if (!payDlg) return;
+    if (!payDlg?.receivable_id || regPay.pending) return;
+    setPayError('');
     try {
-      await regPay.mutateAsync({
-        loadId: payDlg.id, amount: Number(payForm.amount.replace(',', '.')),
-        paymentDate: payForm.date, method: payForm.method, notes: payForm.notes,
+      await regPay.submit({
+        load_id: payDlg.id,
+        receivable_id: payDlg.receivable_id,
+        amount_cents: parseMoneyCents(payForm.amount),
+        effective_date: payForm.date,
+        bank_account_id: payForm.bankAccountId,
+        method: payForm.method as 'pix' | 'boleto' | 'ted' | 'doc' | 'dinheiro' | 'cartao' | 'debito_automatico' | 'other',
+        notes: payForm.notes || null,
       });
       toast.success('Pagamento registrado'); setPayDlg(null);
-    } catch (error: unknown) { toast.error(getErrorMessage(error, 'Falha')); }
+    } catch (error: unknown) { setPayError(loadPaymentError(error)); }
+  };
+  const recoverPayment = async () => {
+    setPayError('');
+    try {
+      const result = await regPay.recover();
+      toast.success('Pagamento recuperado e confirmado');
+      if (payDlg?.id === result.load_id) setPayDlg(null);
+    } catch (error: unknown) { setPayError(loadPaymentError(error)); }
   };
 
   const [reportKind, setReportKind] = useState<LoadReportKind>('summary');
@@ -123,6 +147,17 @@ export default function LoadControl() {
         <Kpi label="Vencidas" value={kpis.overdue} tone="destructive" />
         <Kpi label="Frete total" value={brl(kpis.freight)} />
       </div>
+
+      {regPay.pending ? (
+        <Card role="alert"><CardContent className="p-3 flex flex-wrap items-center justify-between gap-2">
+          <p>Há um pagamento sem confirmação para a carga {regPay.pending.payload.load_id}. Recupere o mesmo pedido antes de registrar outro.</p>
+          <Button variant="outline" disabled={regPay.isPending} onClick={() => void recoverPayment()}>
+            {regPay.isPending ? 'Recuperando…' : 'Recuperar pagamento'}
+          </Button>
+        </CardContent></Card>
+      ) : null}
+      {regPay.recoveryError ? <p role="alert">{regPay.recoveryError}</p> : null}
+      {payError && !payDlg ? <p role="alert">{payError}</p> : null}
 
       <Tabs defaultValue="loads">
         <TabsList>
@@ -197,10 +232,11 @@ export default function LoadControl() {
                         <TableCell>{dt(r.expected_payment_date)}</TableCell>
                         <TableCell className="text-right">{brl(Number(r.freight_amount || 0) - Number(r.received_amount || 0))}</TableCell>
                         <TableCell onClick={e => e.stopPropagation()} className="whitespace-nowrap">
-                          {r.payment_status === 'paid' ? (
-                            <Button size="sm" variant="ghost" onClick={() => markUnpaid.mutate(r.id)} title="Marcar como não pago"><Undo2 className="h-4 w-4" /></Button>
-                          ) : (
-                            <Button size="sm" variant="ghost" onClick={() => openPay(r)} title="Marcar como pago"><CheckCircle2 className="h-4 w-4" /></Button>
+                          {r.payment_status === 'paid' ? <span className="text-xs text-muted-foreground">Quitada</span> : (
+                            <Button size="sm" variant="ghost" onClick={() => openPay(r)} disabled={!r.receivable_id || !!regPay.pending}
+                              title={r.receivable_id ? 'Registrar pagamento' : 'Recebível não vinculado'} aria-label={`Registrar pagamento da carga ${r.external_load_number || r.load_number}`}>
+                              <CheckCircle2 className="h-4 w-4" />
+                            </Button>
                           )}
                         </TableCell>
                       </TableRow>
@@ -268,15 +304,23 @@ export default function LoadControl() {
       </Tabs>
 
       {/* Payment dialog */}
-      <Dialog open={!!payDlg} onOpenChange={o => !o && setPayDlg(null)}>
+      <Dialog open={!!payDlg} onOpenChange={o => !o && !regPay.isPending && setPayDlg(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Registrar pagamento — {payDlg?.external_load_number}</DialogTitle></DialogHeader>
-          <div className="grid gap-3">
-            <div><Label>Valor</Label><Input value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} /></div>
-            <div><Label>Data</Label><Input type="date" value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value }))} /></div>
-            <div><Label>Método</Label>
+          <DialogHeader><DialogTitle>Registrar pagamento — {payDlg?.external_load_number || payDlg?.load_number}</DialogTitle>
+            <DialogDescription>Registra um valor já recebido; não inicia transferência nem emite documento fiscal.</DialogDescription>
+          </DialogHeader>
+          <fieldset disabled={regPay.isPending || bankAccountsQuery.isPending || bankAccountsQuery.isError || !!regPay.pending} className="grid gap-3">
+            <div><Label htmlFor="load-payment-amount">Valor recebido (R$)</Label><Input id="load-payment-amount" inputMode="decimal" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} /></div>
+            <div><Label htmlFor="load-payment-date">Data do recebimento</Label><Input id="load-payment-date" type="date" max={today()} value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value }))} /></div>
+            <div><Label htmlFor="load-payment-account">Conta bancária</Label>
+              <select id="load-payment-account" className="h-10 w-full rounded-md border bg-background px-3" value={payForm.bankAccountId} onChange={e => setPayForm(f => ({ ...f, bankAccountId: e.target.value }))}>
+                <option value="">Selecione</option>
+                {bankAccounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+              </select>
+            </div>
+            <div><Label htmlFor="load-payment-method">Método</Label>
               <Select value={payForm.method} onValueChange={v => setPayForm(f => ({ ...f, method: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="load-payment-method"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pix">PIX</SelectItem>
                   <SelectItem value="ted">TED</SelectItem>
@@ -285,11 +329,20 @@ export default function LoadControl() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Observação</Label><Input value={payForm.notes} onChange={e => setPayForm(f => ({ ...f, notes: e.target.value }))} /></div>
-          </div>
+            <div><Label htmlFor="load-payment-notes">Observação</Label><Input id="load-payment-notes" maxLength={2000} value={payForm.notes} onChange={e => setPayForm(f => ({ ...f, notes: e.target.value }))} /></div>
+          </fieldset>
+          {bankAccountsQuery.isPending ? <p role="status">Consultando contas bancárias…</p> : null}
+          {bankAccountsQuery.isError ? <p role="alert">Não foi possível confirmar as contas bancárias. Atualize antes de registrar.</p> : null}
+          {!bankAccountsQuery.isPending && !bankAccountsQuery.isError && !bankAccounts.length ? <p role="alert">Cadastre uma conta bancária ativa antes de registrar o pagamento.</p> : null}
+          {payError ? <p role="alert">{payError}</p> : null}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setPayDlg(null)}>Cancelar</Button>
-            <Button onClick={submitPay} disabled={regPay.isPending}>Confirmar</Button>
+            <Button variant="ghost" onClick={() => setPayDlg(null)} disabled={regPay.isPending}>Cancelar</Button>
+            {regPay.pending ? <Button variant="outline" onClick={() => void recoverPayment()} disabled={regPay.isPending}>
+              {regPay.isPending ? 'Recuperando…' : 'Recuperar pagamento'}
+            </Button> : null}
+            <Button onClick={() => void submitPay()} disabled={regPay.isPending || !!regPay.pending || bankAccountsQuery.isPending || bankAccountsQuery.isError || !bankAccounts.length || !payForm.bankAccountId}>
+              {regPay.isPending ? 'Registrando…' : 'Confirmar pagamento'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
