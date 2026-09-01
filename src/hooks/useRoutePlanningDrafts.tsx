@@ -5,6 +5,13 @@ import { useAuth } from './useAuth';
 import { useRef } from 'react';
 import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import type { RouteStopDraft, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
+import {
+  callRouteDraftRpc,
+  parseRouteDraftDeleteContext,
+  parseRouteDraftDeleteResult,
+  routeDraftDeleteCommandSchema,
+  type RouteDraftDeleteResult,
+} from '@/lib/route-planning/draftDeleteCommand';
 
 export class DraftConflictError extends Error {
   constructor(public routeId: string, public expected: string | null, public actual: string | null) {
@@ -121,54 +128,28 @@ export function useSavePlanSnapshot() {
   });
 }
 
-export function useSaveDraft() {
-  const { currentTenant } = useTenant();
-  const { user } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, name, orderIds, vehicleId, notes }: {
-      id?: string; name: string; orderIds: string[]; vehicleId?: string | null; notes?: string;
-    }) => {
-      if (id) {
-        const payload: TablesUpdate<'route_planning_drafts'> = {
-          name,
-          order_ids: orderIds,
-          vehicle_id: vehicleId || null,
-          notes: notes || null,
-          updated_at: new Date().toISOString(),
-        };
-        const { data, error } = await supabase.from('route_planning_drafts').update(payload).eq('id', id).select().single();
-        if (error) throw error;
-        return data;
-      } else {
-        const payload: TablesInsert<'route_planning_drafts'> = {
-          tenant_id: currentTenant!.id,
-          name,
-          order_ids: orderIds,
-          vehicle_id: vehicleId || null,
-          notes: notes || null,
-          status: 'draft',
-          created_by: user?.id,
-        };
-        const { data, error } = await supabase.from('route_planning_drafts').insert(payload).select().single();
-        if (error) throw error;
-        return data;
-      }
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['route_planning_drafts'] }),
-  });
-}
-
 export function useDeleteDraft() {
   const qc = useQueryClient();
   const {currentTenant}=useTenant();
+  const {user}=useAuth();
   return useMutation({
-    mutationFn: async (id: string) => {
-      if(!currentTenant)throw new Error('Tenant não selecionado');
-      const { error } = await supabase.from('route_planning_drafts').delete().eq('id', id)
-        .eq('tenant_id',currentTenant.id).eq('status','draft');
-      if (error) throw error;
+    mutationFn: async ({id,requestId}:{id:string;requestId:string}):Promise<RouteDraftDeleteResult> => {
+      if(!currentTenant||!user)throw new Error('Sessão não autenticada');
+      const contextResponse=await callRouteDraftRpc('get_route_planning_draft_delete_context_v1',{
+        _tenant_id:currentTenant.id,_draft_id:id,
+      });
+      if(contextResponse.error)throw contextResponse.error;
+      const context=parseRouteDraftDeleteContext(contextResponse.data,currentTenant.id,user.id,id);
+      if(context.exists&&!context.can_delete)throw new DraftConflictError(id,context.revision,context.revision);
+      const payload=routeDraftDeleteCommandSchema.parse({version:1,tenant_id:currentTenant.id,actor_id:user.id,
+        request_id:requestId,draft_id:id,expected_revision:context.revision});
+      const send=()=>callRouteDraftRpc('delete_route_planning_draft_v1',{_payload:payload});
+      let response=await send();
+      if(response.error&&/fetch|network|connection|timeout/i.test(String((response.error as {message?:unknown})?.message??response.error)))response=await send();
+      if(response.error)throw response.error;
+      return parseRouteDraftDeleteResult(response.data,payload);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['route_planning_drafts'] }),
+    onError: () => qc.invalidateQueries({ queryKey: ['route_planning_drafts'] }),
   });
 }

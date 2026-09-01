@@ -43,6 +43,7 @@ import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from
 import { normalizeCity } from '@/lib/utils/normalizeCity';
 import type { Json } from '@/integrations/supabase/types';
 import { getErrorMessage } from '@/lib/errors';
+import { routeDraftDeleteError } from '@/lib/route-planning/draftDeleteCommand';
 
 /* ────────────── types ────────────── */
 const recipientCollator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
@@ -115,6 +116,8 @@ interface RoutePlan {
   dispatching?: boolean;
   /** Última tentativa de despacho falhou (mensagem). */
   lastDispatchError?: string;
+  /** Exclusão remota em confirmação; também pausa o autosave desta rota. */
+  deleting?: boolean;
 }
 
 const routeSnapshot = (value: Json | null): RoutePlanSnapshot =>
@@ -425,11 +428,28 @@ export default function RoutePlanning() {
     }));
   };
 
-  const removeRoute = (routeId: string) => {
-    setRoutes(prev => prev.filter(r => r.id !== routeId));
-    // Best-effort: remove draft persistido. Erros silenciosos.
-    savePlanSnapshot.forgetVersion(routeId);
-    deleteDraft.mutate(routeId, { onError: () => {/* draft pode não existir ainda */} });
+  const removeRoute = async (routeId: string) => {
+    const route = routes.find(candidate => candidate.id === routeId);
+    if (!route || route.deleting || deleteDraft.isPending) return;
+    if (savePlanSnapshot.isPending) {
+      toast.error('Aguarde a confirmação do salvamento antes de excluir a rota.');
+      return;
+    }
+    if (!await confirmAction(`Excluir a rota planejada “${route.name}”?`, {
+      title: 'Excluir rascunho de rota',
+      confirmLabel: 'Excluir',
+    })) return;
+
+    setRoutes(previous => previous.map(candidate => candidate.id === routeId ? { ...candidate, deleting: true } : candidate));
+    try {
+      const result = await deleteDraft.mutateAsync({ id: routeId, requestId: crypto.randomUUID() });
+      savePlanSnapshot.forgetVersion(routeId);
+      setRoutes(previous => previous.filter(candidate => candidate.id !== routeId));
+      toast.success(result.deleted ? 'Rascunho excluído' : 'Rota local removida');
+    } catch (error) {
+      setRoutes(previous => previous.map(candidate => candidate.id === routeId ? { ...candidate, deleting: false } : candidate));
+      toast.error(routeDraftDeleteError(error));
+    }
   };
 
   const toggleRouteCollapse = (routeId: string) => {
@@ -627,7 +647,6 @@ export default function RoutePlanning() {
         // remove on success
         setRoutes(prev => prev.filter(x => x.id !== r.id));
         savePlanSnapshot.forgetVersion(r.id);
-        deleteDraft.mutate(r.id, { onError: () => {} });
       } catch (error: unknown) {
         fail++;
         const msg = getErrorMessage(error);
@@ -973,7 +992,13 @@ export default function RoutePlanning() {
                           </Button>
                         );
                       })()}
-                      <Button size="sm" variant="ghost" onClick={() => removeRoute(route.id)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void removeRoute(route.id)}
+                        disabled={route.deleting || deleteDraft.isPending || savePlanSnapshot.isPending}
+                        aria-label={`Excluir rascunho da rota ${route.name}`}
+                      >
                         <Trash2 className="h-3 w-3 text-destructive" />
                       </Button>
                     </div>

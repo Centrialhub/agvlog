@@ -36,6 +36,7 @@ import { DriverConversation, EventConversation } from '@/components/driver/Drive
 
 const SEVERITY_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 import { useAuth } from '@/hooks/useAuth';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { formatOccurrenceReport } from '@/lib/occurrenceTemplate';
 import { Copy } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
@@ -151,6 +152,7 @@ export default function OperationalEvents() {
   const [chatDriver, setChatDriver] = useState<{ id: string; name: string } | null>(null);
   type DriverSort = 'total' | 'critical' | 'severity' | 'name';
   const [driverSort, setDriverSort] = useState<DriverSort>('total');
+  const debouncedSearch = useDebouncedValue(search, 300);
   // Filtros aplicados no servidor (Supabase) — performance para frotas grandes
   const {
     data: tableEvents = [],
@@ -172,6 +174,8 @@ export default function OperationalEvents() {
     impactMin: impactMin === '' ? null : Number(impactMin),
     impactMax: impactMax === '' ? null : Number(impactMax),
     hasImpact: hasImpactOnly,
+    search: debouncedSearch,
+    responsibility: respFilter,
   });
   type SortKey = 'created_at' | 'event_type' | 'severity' | 'load_number' | 'client' | 'driver' | 'financial_impact';
   const SORT_STORAGE_KEY = 'opEvents.sort.v1';
@@ -595,22 +599,9 @@ export default function OperationalEvents() {
     financial_impact: 0,
   });
 
-  // Filtros estruturais (status/tipo/severidade/veículo/datas) já vieram do Supabase em `tableEvents`.
-  // Aqui aplicamos apenas a busca textual sobre o resultado já reduzido.
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return tableEvents.filter(e => {
-      if (q) {
-        const hay = `${e.description || ''} ${e.loads?.load_number || ''} ${e.drivers?.name || ''} ${e.clients?.company_name || ''}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      if (respFilter !== 'all') {
-        const r = RESPONSIBILITY_MAP[e.event_type] || 'transporte';
-        if (r !== respFilter) return false;
-      }
-      return true;
-    });
-  }, [tableEvents, search, respFilter]);
+  // O reader só libera `tableEvents` depois de percorrer o cursor até o fim.
+  // Busca e responsabilidade também são vinculadas ao escopo do cursor no servidor.
+  const filtered = tableEvents;
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -1839,7 +1830,11 @@ export default function OperationalEvents() {
         </Button>
         <span className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
           {(isTableFetching && !isTableLoading) && <Loader2 className="h-3 w-3 animate-spin" />}
-          {isTableError ? 'Resultados indisponíveis' : isTableLoading ? 'Consultando resultados…' : `${sorted.length} resultado(s)`}
+          {isTableError
+            ? 'Resultados indisponíveis'
+            : isTableLoading
+              ? 'Consultando todas as páginas…'
+              : `${sorted.length} resultado(s) · fim da consulta confirmado`}
         </span>
       </div>
 

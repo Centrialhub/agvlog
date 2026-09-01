@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Tables } from '@/integrations/supabase/types';
@@ -10,6 +9,7 @@ import { callOperatorEventRpc, operationalEventError, operationalEventReadError,
   type OperationalEventCreateCommand, type OperationalEventResolveCommand, type OperationalEventResolveResult } from '@/lib/operationalEvents/operatorEventCommands';
 import { createOperationalEventOutbox, OPERATIONAL_EVENT_COMMAND_CHANGED,
   pendingOperationalEventCommand } from '@/lib/operationalEvents/operatorEventOutbox';
+import { callOperationalEventPage, readAllOperationalEventPages } from '@/lib/operationalEvents/operatorEventPagination';
 
 export const EVENT_TYPES = [
   'missing_goods', 'missing_goods_fractional', 'wrong_quantity', 'client_refused', 'no_order',
@@ -73,19 +73,24 @@ export type OperationalEventUpdate = { id: string; resolution: string };
 
 export function useOperationalEvents() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['operational_events', currentTenant?.id],
+    queryKey: ['operational_events', currentTenant?.id, user?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('operational_events')
-        .select('*, loads(load_number), drivers(id, name), clients(company_name), vehicles(plate)')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as unknown as OperationalEvent[];
+      if (!currentTenant || !user) return [];
+      const rows = await readAllOperationalEventPages(
+        cursor => callOperationalEventPage({
+          _tenant_id: currentTenant.id,
+          _filters: { status: 'all' },
+          _limit: 500,
+          _cursor: cursor,
+        }),
+        currentTenant.id,
+        user.id,
+      );
+      return rows as unknown as OperationalEvent[];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
   });
 }
 
@@ -102,6 +107,35 @@ export interface OperationalEventsFilters {
   impactMin?: number | null;
   impactMax?: number | null;
   hasImpact?: boolean;    // true => only impact > 0
+  search?: string;
+  responsibility?: 'all' | 'deposito' | 'transporte';
+}
+
+function operationalEventFilters(filters: OperationalEventsFilters): Record<string, unknown> {
+  const result: Record<string, unknown> = { status: filters.status ?? 'all' };
+  if (filters.type && filters.type !== 'all') result.type = filters.type;
+  if (filters.severity && filters.severity !== 'all') result.severity = filters.severity;
+  if (filters.vehicleId && filters.vehicleId !== 'all') result.vehicle_id = filters.vehicleId;
+  if (filters.driverId && filters.driverId !== 'all') result.driver_id = filters.driverId;
+  if (filters.clientId && filters.clientId !== 'all') result.client_id = filters.clientId;
+  if (filters.loadId && filters.loadId !== 'all') result.load_id = filters.loadId;
+  if (typeof filters.impactMin === 'number' && Number.isFinite(filters.impactMin)) result.impact_min = filters.impactMin;
+  if (typeof filters.impactMax === 'number' && Number.isFinite(filters.impactMax)) result.impact_max = filters.impactMax;
+  if (filters.hasImpact) result.has_impact = true;
+  if (filters.dateFrom) {
+    const value = new Date(filters.dateFrom);
+    value.setHours(0, 0, 0, 0);
+    result.date_from = value.toISOString();
+  }
+  if (filters.dateTo) {
+    const value = new Date(filters.dateTo);
+    value.setHours(23, 59, 59, 999);
+    result.date_to = value.toISOString();
+  }
+  const search = filters.search?.trim();
+  if (search) result.search = search;
+  if (filters.responsibility && filters.responsibility !== 'all') result.responsibility = filters.responsibility;
+  return result;
 }
 
 /**
@@ -111,6 +145,7 @@ export interface OperationalEventsFilters {
  */
 export function useOperationalEventsFiltered(filters: OperationalEventsFilters) {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const fromKey = filters.dateFrom ? filters.dateFrom.toISOString().slice(0, 10) : null;
   const toKey = filters.dateTo ? filters.dateTo.toISOString().slice(0, 10) : null;
   return useQuery({
@@ -127,48 +162,28 @@ export function useOperationalEventsFiltered(filters: OperationalEventsFilters) 
       filters.impactMin ?? null,
       filters.impactMax ?? null,
       filters.hasImpact ? 1 : 0,
+      filters.search?.trim() ?? '',
+      filters.responsibility ?? 'all',
       fromKey,
       toKey,
+      user?.id,
     ],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      let q = supabase
-        .from('operational_events')
-        .select('*, loads(load_number), drivers(id, name), clients(company_name), vehicles(plate)')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false })
-        .limit(2000);
-
-      if (filters.status === 'open') q = q.is('resolved_at', null);
-      else if (filters.status === 'resolved') q = q.not('resolved_at', 'is', null);
-
-      if (filters.type && filters.type !== 'all') q = q.eq('event_type', filters.type);
-      if (filters.severity && filters.severity !== 'all') q = q.eq('severity', filters.severity);
-      if (filters.vehicleId && filters.vehicleId !== 'all') q = q.eq('vehicle_id', filters.vehicleId);
-      if (filters.driverId && filters.driverId !== 'all') q = q.eq('driver_id', filters.driverId);
-      if (filters.clientId && filters.clientId !== 'all') q = q.eq('client_id', filters.clientId);
-      if (filters.loadId && filters.loadId !== 'all') q = q.eq('load_id', filters.loadId);
-      if (filters.hasImpact) q = q.gt('financial_impact', 0);
-      if (typeof filters.impactMin === 'number' && !isNaN(filters.impactMin)) q = q.gte('financial_impact', filters.impactMin);
-      if (typeof filters.impactMax === 'number' && !isNaN(filters.impactMax)) q = q.lte('financial_impact', filters.impactMax);
-
-      if (filters.dateFrom) {
-        const d = new Date(filters.dateFrom);
-        d.setHours(0, 0, 0, 0);
-        q = q.gte('created_at', d.toISOString());
-      }
-      if (filters.dateTo) {
-        const d = new Date(filters.dateTo);
-        d.setHours(23, 59, 59, 999);
-        q = q.lte('created_at', d.toISOString());
-      }
-
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []) as unknown as OperationalEvent[];
+      if (!currentTenant || !user) return [];
+      const pageFilters = operationalEventFilters(filters);
+      const rows = await readAllOperationalEventPages(
+        cursor => callOperationalEventPage({
+          _tenant_id: currentTenant.id,
+          _filters: pageFilters,
+          _limit: 500,
+          _cursor: cursor,
+        }),
+        currentTenant.id,
+        user.id,
+      );
+      return rows as unknown as OperationalEvent[];
     },
-    enabled: !!currentTenant,
-    placeholderData: (prev) => prev,
+    enabled: !!currentTenant && !!user,
   });
 }
 

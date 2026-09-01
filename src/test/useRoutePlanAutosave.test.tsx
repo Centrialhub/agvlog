@@ -31,6 +31,10 @@ describe('route autosave lifecycle',()=>{
     renderHook(()=>useRoutePlanAutosave([route],[{scope:'route'} as PendingDispatch],{current:true},saver,conflict));
     act(()=>vi.advanceTimersByTime(2000));expect(mutate).not.toHaveBeenCalled();
   });
+  it('does not recreate a route while its CAS deletion is being confirmed',()=>{
+    renderHook(()=>useRoutePlanAutosave([{...route,deleting:true}],[],{current:true},saver,conflict));
+    act(()=>vi.advanceTimersByTime(2000));expect(mutate).not.toHaveBeenCalled();
+  });
   it('reports a conditional-write conflict and forgets only the affected version',()=>{
     renderHook(()=>useRoutePlanAutosave([route],[],{current:true},saver,conflict));act(()=>vi.advanceTimersByTime(1500));
     act(()=>mutate.mock.calls[0][1].onError(new DraftConflictError('route','old','new')));
