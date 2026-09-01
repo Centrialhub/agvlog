@@ -131,7 +131,9 @@ export async function readCertificateBundle(ciphertext: string): Promise<{ certi
 }
 
 export async function sha256Hex(value: string | Uint8Array): Promise<string> {
-  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
+  const bytes = typeof value === 'string'
+    ? new TextEncoder().encode(value)
+    : Uint8Array.from(value);
   const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
   return Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('');
 }

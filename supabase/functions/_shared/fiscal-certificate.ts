@@ -100,7 +100,7 @@ function bytesToBinary(bytes: Uint8Array): string {
 
 
 
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
+async function sha256Hex(bytes: BufferSource): Promise<string> {
   const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
   return Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('');
 }

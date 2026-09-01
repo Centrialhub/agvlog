@@ -1,6 +1,6 @@
 // enc:v1 remains compatible with existing records. Do not rotate the shared
 // project key to repair one emitter: other integrations depend on that key.
-function hexToBytes(hex: string): Uint8Array {
+function hexToBytes(hex: string) {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   return bytes;
