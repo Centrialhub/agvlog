@@ -1,5 +1,23 @@
 -- Unpublished candidate. Direct chat only; no messages leave this database.
 set local lock_timeout='3s';set local statement_timeout='30s';
+do $preflight$
+begin
+ if to_regclass('public.driver_direct_messages') is null or to_regclass('public.drivers') is null
+  or to_regclass('public.tenant_memberships') is null or to_regclass('public.profiles') is null
+  or to_regprocedure('auth.jwt()') is null then
+  raise exception 'Driver chat prerequisites are missing';end if;
+ if to_regnamespace('driver_chat_private') is not null
+  or to_regprocedure('public.get_driver_chat_context(uuid,uuid)') is not null
+  or to_regprocedure('public.list_driver_chat_messages(uuid,uuid,jsonb)') is not null
+  or to_regprocedure('public.send_driver_chat_message(jsonb)') is not null
+  or exists(select 1 from information_schema.columns where table_schema='public' and table_name='driver_direct_messages'
+   and column_name in('client_request_id','request_hash','conversation_user_id')) then
+  raise exception 'Driver chat rollout is already installed or partial';end if;
+ if not exists(select 1 from pg_class where oid='public.driver_direct_messages'::regclass and relrowsecurity)
+  or not exists(select 1 from information_schema.columns where table_schema='public' and table_name='driver_direct_messages' and column_name='attachment_url')
+  or not exists(select 1 from information_schema.columns where table_schema='public' and table_name='drivers' and column_name='user_id') then
+  raise exception 'Driver chat legacy contract changed';end if;
+end;$preflight$;
 create schema driver_chat_private;
 revoke all on schema driver_chat_private from public,anon,authenticated,service_role;
 grant usage on schema driver_chat_private to authenticated;

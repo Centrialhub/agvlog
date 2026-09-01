@@ -13,7 +13,7 @@ begin
     ('public.derive_trip_and_load_status_v1(uuid,uuid)','8c2b9d7ee1dbac08dc3a80fab68aff59'),
     ('public.transition_stop_status_v1(uuid,uuid,text,uuid,text,text,jsonb)','4aaa78a290e6ad9e8ce1ced7396f374d')
   ) expected(signature,hash) loop
-    if md5(pg_get_functiondef(to_regprocedure(v_contract.signature))) is distinct from v_contract.hash then
+    if md5(replace(pg_get_functiondef(to_regprocedure(v_contract.signature)),chr(13),'')) is distinct from v_contract.hash then
       raise exception 'Restore/verify legacy contracts before additive recovery: %',v_contract.signature;
     end if;
   end loop;

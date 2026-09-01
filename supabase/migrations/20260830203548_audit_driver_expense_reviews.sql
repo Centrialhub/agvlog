@@ -1,8 +1,24 @@
 -- Candidate local. Reviews are bookkeeping, never a bank/fiscal/SSX request.
 set local lock_timeout='3s';set local statement_timeout='30s';
-do $guard$ begin
- if to_regprocedure('public._guard_delivery_correction_finance()') is null or to_regclass('public.driver_expense_reviews') is not null then
-  raise exception 'Expense review requires financial review guards and an unapplied migration';end if;
+do $guard$
+declare
+ v_corrections regclass:=to_regclass('public.delivery_document_corrections');
+ v_finance_guard regprocedure:=to_regprocedure('public._guard_delivery_correction_finance()');
+ v_delivery_outcome regprocedure:=to_regprocedure('public.driver_record_delivery_outcome(uuid,text,jsonb,uuid,text)');
+begin
+ if to_regclass('public.driver_expense_reviews') is not null then
+  raise exception 'Expense review migration is already installed';end if;
+ -- Expense review can be released before the separate document-correction
+ -- feature. Accept only the two complete states: correction history together
+ -- with its finance guard, or neither object while the known atomic delivery
+ -- writer is still installed. A partial correction rollout remains fatal.
+ if (v_corrections is null) is distinct from (v_finance_guard is null) then
+  raise exception 'Expense review found a partial delivery-correction rollout';end if;
+ if v_corrections is null and (
+  v_delivery_outcome is null or
+  md5(replace(pg_get_functiondef(v_delivery_outcome),E'\r\n',E'\n'))<>'381e01547f4b7b67d1945018151ff3e2'
+ ) then
+  raise exception 'Expense review requires the known atomic delivery contract';end if;
 end;$guard$;
 create unique index driver_expenses_tenant_id_unique on public.driver_expenses(tenant_id,id);
 create table public.driver_expense_reviews(
@@ -17,7 +33,13 @@ alter table public.driver_expense_reviews enable row level security;
 revoke all on public.driver_expense_reviews from public,anon,authenticated,service_role;
 grant select on public.driver_expense_reviews to authenticated;
 create policy expense_review_operator_read on public.driver_expense_reviews for select to authenticated using(public.is_tenant_operator_or_admin(tenant_id));
-create trigger expense_reviews_append_only before update or delete on public.driver_expense_reviews for each row execute function public._preserve_closing_creation();
+create function public._preserve_driver_expense_command() returns trigger
+ language plpgsql security invoker set search_path='' as $fn$
+begin
+ raise exception 'Driver expense command history is append-only' using errcode='55000';
+end;$fn$;
+revoke all on function public._preserve_driver_expense_command() from public,anon,authenticated,service_role;
+create trigger expense_reviews_append_only before update or delete on public.driver_expense_reviews for each row execute function public._preserve_driver_expense_command();
 alter table public.driver_expenses add column review_command_id uuid,
  add constraint expense_review_command_fkey foreign key(tenant_id,review_command_id) references public.driver_expense_reviews(tenant_id,id) deferrable initially deferred;
 -- Keep the existing read policies/driver create RPC. Public review writes must

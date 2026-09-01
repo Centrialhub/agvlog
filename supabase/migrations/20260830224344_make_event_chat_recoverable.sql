@@ -1,5 +1,25 @@
 -- Unpublished event-chat candidate, after the direct-chat contract.
 set local lock_timeout='3s';set local statement_timeout='30s';
+do $preflight$
+begin
+ if to_regnamespace('driver_chat_private') is null
+  or to_regprocedure('public.send_driver_chat_message(jsonb)') is null
+  or to_regclass('public.operational_events') is null
+  or to_regclass('public.operational_event_messages') is null then
+  raise exception 'Event chat requires the recoverable direct-chat contract';end if;
+ if to_regprocedure('public.get_event_chat_context(uuid,uuid)') is not null
+  or to_regprocedure('public.list_event_chat_messages(uuid,uuid,jsonb)') is not null
+  or to_regprocedure('public.send_event_chat_message(jsonb)') is not null
+  or to_regprocedure('driver_chat_private.event_row_can_read(uuid,uuid)') is not null
+  or exists(select 1 from information_schema.columns where table_schema='public' and table_name='operational_event_messages'
+   and column_name in('client_request_id','request_hash','conversation_driver_id','conversation_user_id')) then
+  raise exception 'Event chat rollout is already installed or partial';end if;
+ if not exists(select 1 from pg_class where oid='public.operational_events'::regclass and relrowsecurity)
+  or not exists(select 1 from pg_class where oid='public.operational_event_messages'::regclass and relrowsecurity)
+  or not exists(select 1 from information_schema.columns where table_schema='public' and table_name='operational_events' and column_name='driver_id')
+  or not exists(select 1 from information_schema.columns where table_schema='public' and table_name='operational_event_messages' and column_name='sender_id') then
+  raise exception 'Event chat legacy contract changed';end if;
+end;$preflight$;
 alter table public.operational_event_messages add column client_request_id uuid,add column request_hash text,add column conversation_driver_id uuid,add column conversation_user_id uuid;
 create unique index event_chat_event_scope on public.operational_events(tenant_id,id);
 alter table public.operational_event_messages add constraint event_chat_event_scope_fkey foreign key(tenant_id,event_id) references public.operational_events(tenant_id,id) on delete restrict not valid;
@@ -31,6 +51,15 @@ create function driver_chat_private.event_can_access(_tenant uuid,_event uuid) r
   where m.tenant_id=_tenant and m.user_id=auth.uid() and m.active and e.id=_event and
    (m.role::text='operator' or (m.role::text in('owner','admin') and coalesce(auth.jwt()->>'aal','aal1')='aal2')
     or (m.role::text='driver' and exists(select 1 from public.drivers d where d.tenant_id=_tenant and d.id=(driver_chat_private.event_binding(_tenant,_event)->>'driver_id')::uuid and d.user_id=auth.uid() and d.active))));
+$fn$;
+create function driver_chat_private.event_row_can_read(_tenant uuid,_event uuid) returns boolean
+ language sql stable security definer set search_path='' as $fn$
+ select exists(select 1 from public.tenant_memberships m join public.operational_events e on e.tenant_id=m.tenant_id
+  where m.tenant_id=_tenant and m.user_id=auth.uid() and m.active and e.id=_event and
+   (m.role::text in('owner','admin','operator') or
+    (m.role::text='driver' and exists(select 1 from public.drivers d where d.tenant_id=_tenant
+      and d.id=(driver_chat_private.event_binding(_tenant,_event)->>'driver_id')::uuid
+      and d.user_id=auth.uid() and d.active))));
 $fn$;
 create function driver_chat_private.event_can_read(_tenant uuid,_event uuid,_driver uuid,_recipient uuid) returns boolean
  language sql stable security definer set search_path='' as $fn$
@@ -140,6 +169,8 @@ revoke all on function driver_chat_private.event_message_json(public.operational
 revoke all on function driver_chat_private.event_guard() from public,anon,authenticated,service_role;
 revoke all on function driver_chat_private.event_can_access(uuid,uuid) from public,anon,authenticated,service_role;
 grant execute on function driver_chat_private.event_can_access(uuid,uuid) to authenticated;
+revoke all on function driver_chat_private.event_row_can_read(uuid,uuid) from public,anon,authenticated,service_role;
+grant execute on function driver_chat_private.event_row_can_read(uuid,uuid) to authenticated;
 revoke all on function driver_chat_private.event_can_read(uuid,uuid,uuid,uuid) from public,anon,authenticated,service_role;
 grant execute on function driver_chat_private.event_can_read(uuid,uuid,uuid,uuid) to authenticated;
 revoke all on function driver_chat_private.event_context(uuid,uuid) from public,anon,authenticated,service_role;
@@ -164,4 +195,4 @@ create policy event_chat_read_boundary on public.operational_event_messages as r
 create policy event_chat_no_direct_insert on public.operational_event_messages as restrictive for insert to authenticated with check(false);
 create policy event_chat_no_direct_update on public.operational_event_messages as restrictive for update to authenticated using(false) with check(false);
 create policy event_chat_no_direct_delete on public.operational_event_messages as restrictive for delete to authenticated using(false);
-create policy event_chat_event_read_boundary on public.operational_events as restrictive for select to authenticated using(driver_chat_private.event_can_access(tenant_id,id));
+create policy event_chat_event_read_boundary on public.operational_events as restrictive for select to authenticated using(driver_chat_private.event_row_can_read(tenant_id,id));

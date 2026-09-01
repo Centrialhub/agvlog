@@ -1,6 +1,6 @@
 # Carga/viagem — concorrência, espelhos e recuperação
 
-Estado em 30/08/2026: **correções locais; nenhuma publicação deste lote**.
+Estado em 31/08/2026: **candidata publicada e inconsistência histórica reconciliada**.
 
 ## Problema reproduzido e correção
 
@@ -43,11 +43,18 @@ Testes renderizados usam backend simulado: não equivalem a E2E autenticado nem 
 
 ## Artefatos e próximos critérios
 
-- Candidata: `supabase/migrations/20260830002627_enforce_trip_load_transit_invariant.sql`.
+- Publicada como `supabase/migrations/20260831230903_enforce_trip_load_transit_invariant.sql`.
 - Captura anterior: `TRIP-LOAD-ROLLOUT-CONTRACTS-2026-08-30.json`.
 - Recuperação guardada: `TRIP-LOAD-RECOVERY-2026-08-30.sql`.
 - Critérios de promoção e limites: `ENSAIO-CARGA-VIAGEM-2026-08-30.md`.
 
 Antes de promover: revisar e ensaiar `dispatch_planned_route`, escritores legados e reatribuição de paradas/documentos com o schema/RLS reais; validar cliente antigo e novo; testar motorista/operação autenticados; reconciliar dados antigos explicitamente. `plan_dispatch_start_trip_v1` foi conferida no destino: execução negada a `anon`/`authenticated`, disponível a `service_role`; não foi confirmado bypass público nessa função.
 
-A carga 1003 continua inconsistente na leitura desta etapa. Não foi transformado horário de teste em horário histórico. Fiscal real e SSX permanecem desativados para QA, sem contratação ou gasto adicional.
+A carga 1003 foi reconciliada em produção pela versão
+20260831230957_reconcile_load_1003_no_start_evidence: load.status=ready,
+viagem planned e actual_start_at nulo. A decisão foi baseada na ausência de
+eventos de início, provas, histórico operacional e documentos ativos; uma
+auditoria explícita foi gravada. Nenhum horário de teste foi convertido em
+horário histórico. Após a correção, a contagem global de violações ficou em
+zero. Fiscal real e SSX permaneceram inativos durante o QA, sem contratação
+ou gasto adicional.

@@ -22,7 +22,7 @@ export async function runTripLoadConcurrency(ctx){
     create trigger trg_dispatch_trip_loads_outdate after insert or update or delete on public.dispatch_trip_loads
       for each row execute function public._tg_mark_outdated_trip_loads();
   `);
-  await query(legacyTripLoadSchema+'begin;'+readFileSync('supabase/migrations/20260830002627_enforce_trip_load_transit_invariant.sql','utf8')+'commit;');
+  await query(legacyTripLoadSchema+'begin;'+readFileSync('supabase/migrations/20260831230903_enforce_trip_load_transit_invariant.sql','utf8')+'commit;');
   const start=`select public.driver_start_trip(${q(i.trip)})`;
   const tripLock=`select id from public.dispatch_trips where id=${q(i.trip)} for update`;
   const transition=`select public.transition_load_status_v1(${q(i.tenant)},${q(i.load)},'in_transit',null)`;

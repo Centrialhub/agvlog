@@ -23,7 +23,7 @@ begin
   ('public._expense_review_snapshot(uuid,uuid)','3dae734b95ddb3f40d3953f5613a4bf6',false,'s','["search_path=\"\""]'::jsonb,false,false),
   ('public._guard_expense_creation_contract()','96186c8c4136fbf40f90b22bad07b9df',true,'v','["search_path=\"\""]'::jsonb,false,false),
   ('public._guard_expense_creation_release()','291807b6b324778c388654e629f43f8d',false,'v','["search_path=\"\""]'::jsonb,false,false),
-  ('public._preserve_closing_creation()','cbec10d7a4e8d29acff2c8916d5a8d35',false,'v','["search_path=\"\""]'::jsonb,false,false),
+  ('public._preserve_driver_expense_command()','0e1be5733a3feef5111263e9cae91882',false,'v','["search_path=\"\""]'::jsonb,false,false),
   ('public._tg_mark_outdated_expense()','4fe2453ada9862a50d9512ea5a62bb6f',true,'v','["search_path=\"\""]'::jsonb,false,false),
   ('public.create_driver_expense_command(jsonb)','55d17f0322a521183a1faf66df7555d9',false,'v','["search_path=\"\""]'::jsonb,true,false),
   ('public.get_expense_creation_context(uuid,text,uuid)','f1258010a1eef808edced6c5f06cdca5',false,'v','["search_path=\"\""]'::jsonb,true,false),
@@ -56,7 +56,7 @@ begin
  end loop;
  for c in select * from(values
   ('check_expense_creation_ack','public.driver_expenses','a5ba51aaac1fe75469729336df0f7115'),
-  ('expense_creations_append_only','public.driver_expense_creations','6c81b25332ecc88a3309d850d1c88ca6'),
+  ('expense_creations_append_only','public.driver_expense_creations','874d33f18c78b282fa5f83f44e3f8365'),
   ('guard_expense_creation_contract','public.driver_expenses','9e08d67fa8340f8f775ae94d472bba78')
 ) expected(name,relation,hash) loop
   if (select count(*) from pg_trigger where tgname=c.name and tgrelid=to_regclass(c.relation) and tgenabled='O' and md5(pg_get_triggerdef(oid))=c.hash)<>1 then
@@ -85,7 +85,7 @@ CASE
     ELSE false
 END)')
  ) expected(relation,name,expression) loop
-  if not exists(select 1 from pg_policy policy_row where policy_row.polrelid=to_regclass(c.relation) and policy_row.polname=c.name and not policy_row.polpermissive and policy_row.polcmd='r' and policy_row.polroles=array['authenticated'::regrole::oid] and pg_get_expr(policy_row.polqual,policy_row.polrelid)=c.expression) then
+  if not exists(select 1 from pg_policy policy_row where policy_row.polrelid=to_regclass(c.relation) and policy_row.polname=c.name and not policy_row.polpermissive and policy_row.polcmd='r' and policy_row.polroles=array['authenticated'::regrole::oid] and replace(pg_get_expr(policy_row.polqual,policy_row.polrelid),E'\r\n',E'\n')=replace(c.expression,E'\r\n',E'\n')) then
    raise exception 'Expense MFA release refused: read boundary changed %',c.name;end if;
  end loop;
  execute 'revoke all on function public.create_driver_expense_command(jsonb) from public,anon,authenticated,service_role';

@@ -4,7 +4,11 @@ set local lock_timeout = '3s';
 set local statement_timeout = '20s';
 do $preflight$
 begin
-  if md5(pg_get_functiondef('public.driver_register_departure(uuid,text)'::regprocedure))
+  if md5(replace(
+        pg_get_functiondef('public.driver_register_departure(uuid,text)'::regprocedure),
+        chr(13),
+        ''
+      ))
       is distinct from '5cc34d5bc716417299f3ab437e75a2f6' then
     raise exception 'driver_register_departure changed; recapture contract before deploying';
   end if;

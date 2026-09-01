@@ -665,12 +665,13 @@ select results_eq(
   $$select
       dispatch_stop_id::text,
       client_id::text,
+      load_id::text,
       fiscal_document_id::text,
       visible_to_client
     from public.operational_events
     where description = 'pgTAP trip-level occurrence'$$,
-  $$values (null::text, null::text, null::text, false)$$,
-  'trip-level occurrence does not infer stop, client, fiscal document, or portal visibility'
+  $$values (null::text, null::text, null::text, null::text, false)$$,
+  'trip-level occurrence does not infer stop, client, load, fiscal document, or portal visibility'
 );
 
 select lives_ok(
@@ -689,6 +690,7 @@ select results_eq(
   $$select
       dispatch_stop_id::text,
       client_id::text,
+      load_id::text,
       fiscal_document_id::text,
       visible_to_client
     from public.operational_events
@@ -696,6 +698,7 @@ select results_eq(
   $$values (
     '82000000-0000-4000-8000-000000000001'::text,
     '40000000-0000-4000-8000-000000000001'::text,
+    '70000000-0000-4000-8000-000000000001'::text,
     '90000000-0000-4000-8000-000000000001'::text,
     false
   )$$,

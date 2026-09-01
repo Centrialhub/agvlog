@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
-export const tripLoadMigration='20260830002627_enforce_trip_load_transit_invariant.sql';
+export const tripLoadMigration='20260831230903_enforce_trip_load_transit_invariant.sql';
 export const tripLoadCandidateSql=readFileSync(`supabase/migrations/${tripLoadMigration}`,'utf8');
 export interface TripLoadContract {signature:string;definition:string;hash:string;anon:boolean;authenticated:boolean;service_role:boolean;comment:string|null}
 export const tripLoadRolloutContracts=JSON.parse(readFileSync('docs/qa/TRIP-LOAD-ROLLOUT-CONTRACTS-2026-08-30.json','utf8')) as {

@@ -6,9 +6,12 @@ import {expenseMfaRelease} from './helpers/expenseMfaRelease';
 import {expenseCreationRelease} from './helpers/expenseCreationRelease';
 import {manualSettlement,creationCommand,creationPayload,creationContext} from './helpers/expenseCreationDatabase';
 import {operationIds as i,operationRpc} from './helpers/operationOutcomeDatabase';
-let db:PGlite;
-beforeAll(async()=>{({db}=await expenseMfaDatabase());},30000);
-afterAll(async()=>{await db?.close();});
+let db:PGlite;let legacyDb:PGlite;
+beforeAll(async()=>{
+ ({db}=await expenseMfaDatabase());
+ ({db:legacyDb}=await expenseMfaDatabase(false));
+},30000);
+afterAll(async()=>{await db?.close();await legacyDb?.close();});
 beforeEach(async()=>{await db.exec('begin');await expenseMfaActor(db);});
 afterEach(async()=>{await db.exec('rollback');});
 describe('MFA-preserving expense containment',()=>{
@@ -39,14 +42,11 @@ describe('MFA-preserving expense containment',()=>{
   expect((await creationContext(db,await manualSettlement(db),'settlement')).can_create).toBe(true);
  });
  it('does not use installation as an implicit resume of a contained previous version',async()=>{
-  const old=await expenseMfaDatabase(false);
-  try{
-   await old.db.exec('begin');await expenseCreationRelease(old.db,'contain');await old.db.exec('savepoint install_mfa');
-   await expect(old.db.exec(expenseMfaSql())).rejects.toThrow(/release\/grants changed/);
-   await old.db.exec('rollback to savepoint install_mfa;release savepoint install_mfa');
-   expect((await old.db.query<{absent:boolean}>("select to_regnamespace('expense_creation_private') is null absent")).rows[0].absent).toBe(true);
-   expect((await old.db.query<{allowed:boolean}>("select has_function_privilege('authenticated','public.create_driver_expense_command(jsonb)','execute') allowed")).rows[0].allowed).toBe(false);
-   await old.db.exec('rollback');
-  }finally{await old.db.close();}
+  await legacyDb.exec('begin');await expenseCreationRelease(legacyDb,'contain');await legacyDb.exec('savepoint install_mfa');
+  await expect(legacyDb.exec(expenseMfaSql())).rejects.toThrow(/release\/grants changed/);
+  await legacyDb.exec('rollback to savepoint install_mfa;release savepoint install_mfa');
+  expect((await legacyDb.query<{absent:boolean}>("select to_regnamespace('expense_creation_private') is null absent")).rows[0].absent).toBe(true);
+  expect((await legacyDb.query<{allowed:boolean}>("select has_function_privilege('authenticated','public.create_driver_expense_command(jsonb)','execute') allowed")).rows[0].allowed).toBe(false);
+  await legacyDb.exec('rollback');
  });
 });

@@ -1,14 +1,34 @@
-/*
- * Superseded before publication. This historical candidate is intentionally
- * inert because it dropped the one-argument RPC before the GPS frontend could
- * be deployed. The preserved SQL below documents the rejected rollout; the
- * additive replacement is 20260831232458_add_gps_driver_arrival_rpc.sql.
- *
--- Arrival is a physical event. Remove the legacy one-argument RPC so no caller
--- can bypass location capture, then expose the GPS-aware replacement.
-revoke all privileges on function public.driver_mark_arrival(uuid)
-  from public, anon, authenticated, service_role;
-drop function public.driver_mark_arrival(uuid);
+-- Additive phase: install the GPS-aware overload while preserving the legacy
+-- one-argument RPC until the matching frontend has been published and smoked.
+-- Remote ledger version: 20260831232458.
+do $arrival_additive_preflight$
+declare
+  v_legacy_oid oid := pg_catalog.to_regprocedure('public.driver_mark_arrival(uuid)');
+  v_legacy_hash text;
+begin
+  if v_legacy_oid is null then
+    raise exception 'Arrival additive preflight failed: legacy RPC is missing';
+  end if;
+
+  select pg_catalog.md5(pg_catalog.replace(pg_catalog.pg_get_functiondef(v_legacy_oid), pg_catalog.chr(13), ''))
+    into v_legacy_hash;
+  if v_legacy_hash <> '71506404e6bafbaeb3dc17a3e2530a1c' then
+    raise exception 'Arrival additive preflight failed: legacy RPC hash changed (%)', v_legacy_hash;
+  end if;
+
+  if pg_catalog.has_function_privilege('anon', v_legacy_oid, 'execute')
+    or not pg_catalog.has_function_privilege('authenticated', v_legacy_oid, 'execute')
+    or not pg_catalog.has_function_privilege('service_role', v_legacy_oid, 'execute') then
+    raise exception 'Arrival additive preflight failed: legacy RPC ACL changed';
+  end if;
+
+  if pg_catalog.to_regprocedure(
+    'public.driver_mark_arrival(uuid,double precision,double precision,double precision)'
+  ) is not null then
+    raise exception 'Arrival additive preflight failed: GPS RPC already exists';
+  end if;
+end;
+$arrival_additive_preflight$;
 
 create function public.driver_mark_arrival(
   _stop_id uuid,
@@ -52,8 +72,6 @@ begin
     raise exception 'Parada não encontrada' using errcode = 'P0002';
   end if;
 
-  -- Discovery does not lock the stop. All writers must acquire trip before stop
-  -- to avoid a cycle with delivery/start, then revalidate the stop assignment.
   perform public._assert_driver_owns_trip(v_stop.dispatch_trip_id);
 
   select trip.*
@@ -177,5 +195,4 @@ grant execute
   to authenticated;
 
 comment on function public.driver_mark_arrival(uuid, double precision, double precision, double precision) is
-  'Records an assigned driver arrival only after GPS accuracy and a 500 m stop-radius check.';
-*/
+  'Records an assigned driver arrival only after GPS accuracy and a 500 m stop-radius check. The legacy overload remains during the additive rollout phase.';

@@ -18,7 +18,7 @@ export const deliveryIds = {
   request: 'a0000000-0000-4000-8000-000000000001',
 };
 export const deliveryMigration = '20260830050226_enforce_delivery_outcome_atomicity.sql';
-export const deliveryCutoverMigration = '20260830050348_cutover_legacy_driver_delivery_writers.sql';
+export const deliveryCutoverMigration = '20260901002245_cutover_legacy_driver_delivery_writers.sql';
 export interface LegacyDeliveryContract {
   signature:string;definition:string;definition_hash:string;authenticated:boolean;service_role:boolean;anon:boolean;
 }

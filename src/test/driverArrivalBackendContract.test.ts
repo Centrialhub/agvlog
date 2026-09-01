@@ -2,19 +2,44 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const migration = readFileSync(join(
+const superseded = readFileSync(join(
   process.cwd(),
   'supabase',
   'migrations',
   '20260830003721_require_driver_arrival_geolocation.sql',
 ), 'utf8');
+const migration = readFileSync(join(
+  process.cwd(),
+  'supabase',
+  'migrations',
+  '20260831232458_add_gps_driver_arrival_rpc.sql',
+), 'utf8');
+const cutover = readFileSync(join(
+  process.cwd(),
+  'docs',
+  'qa',
+  'DRIVER-ARRIVAL-GPS-CUTOVER-2026-08-31.sql',
+), 'utf8');
 
 describe('driver arrival backend contract', () => {
-  it('removes the location-free RPC and requires GPS inputs', () => {
-    expect(migration).toContain('drop function public.driver_mark_arrival(uuid)');
+  it('keeps the rejected destructive migration inert and adds GPS as an overload', () => {
+    expect(superseded).toContain('Superseded before publication');
+    expect(superseded.trimStart()).toMatch(/^\/\*/);
+    expect(migration).not.toContain('drop function public.driver_mark_arrival(uuid)');
+    expect(migration).toContain("to_regprocedure('public.driver_mark_arrival(uuid)')");
+    expect(migration).toContain('71506404e6bafbaeb3dc17a3e2530a1c');
     expect(migration).toContain('_latitude double precision');
     expect(migration).toContain('_longitude double precision');
     expect(migration).toContain('_accuracy_m double precision');
+  });
+
+  it('stages the legacy removal outside the automatic migration chain', () => {
+    expect(cutover).toContain('deliberately outside supabase/migrations');
+    expect(cutover).toContain('74a957d4c16ef52847b8c7c6859f5e20');
+    expect(cutover).toContain('drop function public.driver_mark_arrival(uuid)');
+    expect(cutover.indexOf('GPS RPC hash changed')).toBeLessThan(
+      cutover.indexOf('drop function public.driver_mark_arrival(uuid)'),
+    );
   });
 
   it('checks trip state, GPS accuracy, and stop proximity', () => {

@@ -246,7 +246,7 @@ describe('journey RPC executed by PostgreSQL', () => {
     };
     try {
       await db.exec(readFileSync(join(process.cwd(),'docs/qa/JOURNEY-RECOVERY-2026-08-30.sql'),'utf8'));
-      const restored = await db.query<{proname:string;definition_hash:string}>(`select proname,md5(pg_get_functiondef(oid)) definition_hash
+      const restored = await db.query<{proname:string;definition_hash:string}>(`select proname,md5(replace(pg_get_functiondef(oid),chr(13),'')) definition_hash
         from pg_proc where pronamespace='public'::regnamespace and proname in ('_assert_driver_owns_trip','driver_create_event','driver_save_checklist') order by proname`);
       expect(restored.rows).toEqual(snapshot.functions.map(({proname,definition_hash})=>({proname,definition_hash})));
       expect((await db.query('select id,event_type,payload from public.dispatch_events order by event_at,id')).rows).toEqual(before.rows);

@@ -16,7 +16,7 @@ begin
     ('public.derive_trip_and_load_status_v1(uuid,uuid)','8c2b9d7ee1dbac08dc3a80fab68aff59'),
     ('public.transition_stop_status_v1(uuid,uuid,text,uuid,text,text,jsonb)','4aaa78a290e6ad9e8ce1ced7396f374d')
   ) expected(signature,hash) loop
-    if md5(pg_get_functiondef(to_regprocedure(v_contract.signature))) is distinct from v_contract.hash then
+    if md5(replace(pg_get_functiondef(to_regprocedure(v_contract.signature)),chr(13),'')) is distinct from v_contract.hash then
       raise exception 'Legacy contract changed: %; recapture before cutover',v_contract.signature;
     end if;
   end loop;
@@ -30,7 +30,7 @@ begin
     ('public.driver_record_delivery_note(uuid,text,jsonb,uuid)','65c6456a38ade57bb4c7137bc81d1f16'),
     ('public.driver_record_delivery_outcome(uuid,text,jsonb,uuid,text)','381e01547f4b7b67d1945018151ff3e2')
   ) expected(signature,hash) loop
-    if md5(replace(pg_get_functiondef(to_regprocedure(v_contract.signature)),E'\r\n',E'\n')) is distinct from v_contract.hash then
+    if md5(replace(pg_get_functiondef(to_regprocedure(v_contract.signature)),chr(13),'')) is distinct from v_contract.hash then
       raise exception 'Staged API contract changed: %; recapture before cutover',v_contract.signature;
     end if;
   end loop;

@@ -1,3 +1,4 @@
+-- Remote ledger version 20260831230903.
 -- A load is in transit only when an associated dispatch trip has actually
 -- started. The trip is the aggregate root for departure.
 

@@ -14,7 +14,7 @@ Estado: **etapa aditiva instalada em produção; APIs novas privadas; corte lega
 | Fase | Estado | Efeito |
 | --- | --- | --- |
 | Aditiva privada | Publicada e verificada | Instala as novas funções sem expor dois caminhos de escrita simultâneos. APIs antigas continuam intactas. |
-| Corte legado | Apenas local: `20260830050348_cutover_legacy_driver_delivery_writers.sql` | Na mesma transação, troca os wrappers, retira os agregadores implícitos e libera as duas APIs novas. Verifica hashes dos cinco contratos antigos e dos seis novos antes de executar. |
+| Corte legado | Publicado em produção: `20260901002245_cutover_legacy_driver_delivery_writers.sql` | Na mesma transação, troca os wrappers, retira os agregadores implícitos e libera as duas APIs novas. Verifica hashes dos cinco contratos antigos e dos seis novos antes de executar. |
 | Frontend compatível | Pendente | Exige resolver contratos GPS/carga/viagem, uploads e recuperação de envio, testar preview e estabelecer atualização dos clientes antigos antes da liberação coordenada. |
 
 O alias de serviço `finalize_driver_delivery` ignorava `_fiscal_document_id`. O corte local agora exige correspondência exata quando um documento é informado, sem ampliar uma requisição de nota única para a parada inteira. O alias continua restrito a serviço e exige identidade de motorista no corpo.

@@ -26,7 +26,7 @@ afterAll(async()=>{await db?.close();});
 async function expectLegacyRestored(quarantined=false) {
   for(const contract of legacyDeliveryContracts){
     const actual=(await db.query<{hash:string;anon:boolean;authenticated:boolean;service_role:boolean}>(`select
-      md5(pg_get_functiondef($1::regprocedure)) hash,has_function_privilege('anon',$1,'execute') anon,
+      md5(replace(pg_get_functiondef($1::regprocedure),chr(13),'')) hash,has_function_privilege('anon',$1,'execute') anon,
       has_function_privilege('authenticated',$1,'execute') authenticated,
       has_function_privilege('service_role',$1,'execute') service_role`,[`public.${contract.signature}`])).rows[0];
     expect(actual).toEqual({hash:contract.definition_hash,anon:quarantined?false:contract.anon,
@@ -104,7 +104,7 @@ describe('delivery phased rollout and recovery',()=>{
       returns void language plpgsql as $$begin return;end;$$;`);
     await expect(db.exec(cutover)).rejects.toThrow('Legacy contract changed');
     const untouched=legacyDeliveryContracts.find(c=>c.signature.startsWith('driver_finalize_delivery('))!;
-    expect((await db.query<{hash:string}>('select md5(pg_get_functiondef($1::regprocedure)) hash',[`public.${untouched.signature}`])).rows[0].hash).toBe(untouched.definition_hash);
+    expect((await db.query<{hash:string}>("select md5(replace(pg_get_functiondef($1::regprocedure),chr(13),'')) hash",[`public.${untouched.signature}`])).rows[0].hash).toBe(untouched.definition_hash);
   });
   it('retires the implicit aggregate/transition APIs, including service execution',async()=>{
     await db.exec(cutover);

@@ -20,7 +20,7 @@ revoke all on public.driver_expense_creations from public,anon,authenticated,ser
 grant select on public.driver_expense_creations to authenticated;
 create policy expense_creation_actor_read on public.driver_expense_creations for select to authenticated
  using(actor_id=(select auth.uid()) and exists(select 1 from public.tenant_memberships m where m.tenant_id=driver_expense_creations.tenant_id and m.user_id=(select auth.uid()) and m.active));
-create trigger expense_creations_append_only before update or delete on public.driver_expense_creations for each row execute function public._preserve_closing_creation();
+create trigger expense_creations_append_only before update or delete on public.driver_expense_creations for each row execute function public._preserve_driver_expense_command();
 alter table public.driver_expenses add constraint expense_creation_command_fkey foreign key(tenant_id,creation_command_id)
  references public.driver_expense_creations(tenant_id,id) deferrable initially deferred;
 

@@ -5,6 +5,30 @@ Referência temporal: 29 a 31/08/2026 em São Paulo; versões de migração usam
 
 ## Plano de conclusão e condição de custo
 
+Checkpoint de produção de 31/08: o P1 carga↔viagem foi publicado nas versões
+20260831230903 e 20260831230957. A carga 1003 foi reconciliada para ready, a
+viagem permaneceu planned sem horário inventado e a contagem global de
+violações ficou em zero. O ensaio autenticado de início e replay passou em
+transação revertida. A ocorrência 0cff2aa3-... teve também o load_id removido
+e auditado pela versão 20260831232156; a RPC agora deixa parada, cliente,
+carga e documento nulos quando a seleção é vazia. A chegada GPS foi instalada
+aditivamente em 20260831232458, com 500 m e precisão máxima de 150 m, mantendo
+temporariamente a assinatura legada. O commit Lovable contém a chamada de
+quatro argumentos e o deploy foi solicitado sem créditos de IA, porém a URL
+pública ainda servia o chunk anterior, que chamava a assinatura de um
+argumento. Por isso o cutover permanece suspenso. Todos os smokes de banco
+terminaram em rollback; nenhuma emissão fiscal, pagamento, SSX ou provedor
+externo foi acionado. Evidência consolidada:
+[P1/P2 em produção](P1-P2-PRODUCAO-2026-08-31.md).
+
+Checkpoint local do operador de 31/08: ocorrências do motorista agora aparecem
+no detalhe da viagem na Torre e no detalhe da carga; erros de leitura não são
+mais convertidos em falso estado vazio/inexistente e a transição para
+in_transit fica bloqueada até confirmar o vínculo. Foram 21 de 21 testes
+focados aprovados, além de regressão da Torre, lint e whitespace. Publicação
+permanece pendente. Evidência:
+[operador e ocorrências](OPERADOR-OCORRENCIAS-2026-08-31.md).
+
 Checkpoint mais recente de 31/08: [rotas recuperáveis e estimativa financeira](TORRE-ROTAS-RECUPERAVEIS-2026-08-31.md). Corrigidos GPS antigo, omissão de paradas e gravação após mudança de contexto; preparação/commit serializados, replay durável, timeout com recuperação e geometria vinculada ao plano atual. O trecho restante não substitui mais a estimativa completa no acerto; pagamentos preservados e quilometragem desconhecida explicitada na tela. **Gate final: 2.619 testes/221 arquivos**, tipos/lint/qualidade/42 sintaxes Edge/build/scanner aprovados; **313 cenários PostgreSQL nativos aprovados** e servidor descartável parado. Contenção/retomada preservaram hashes de rotas e recibos. Hash de 1.064 arquivos igual antes/depois. **Nada publicado neste bloco.** Consulta agregada confirmou SSX efetivo em zero tenants e ausência das novas APIs/colunas em produção. Próximo: ingestão monotônica e encadeamento SSX inativo; demais P1/P2, release coordenado e E2E autenticado do motorista; depois prontidão integral do operador. Docker CLI e configuração local de testes autenticados continuam indisponíveis. O gate anterior de 2.616 testes precedeu apenas o ajuste final de timeout; tentativas encerradas em erros de tipo/lint não foram contadas como aprovação.
 
 Checkpoint de 31/08: [Torre de Controle — avaliação transacional](TORRE-CONTROLE-TRANSACOES-2026-08-31.md). Status e alertas calculados/gravados juntos no banco, replay sem duplicação, geometria por segmentos e invalidação de métricas/alertas por mudança de contexto. A Edge usa JWT do usuário; função pública INVOKER e implementação privada com papel/MFA/tenant/capacidade revalidados após locks. **27 testes novos; 2.558 testes/216 arquivos aprovados**, tipos/lint/qualidade/42 sintaxes Edge/build/scanner aprovados; **301 cenários PostgreSQL nativos aprovados** e servidor descartável parado. Hash de 1.055 arquivos idêntico antes/depois. **Nada publicado.** Produção ainda sem a nova API/schema e com leitores legados; SSX efetivamente habilitado em zero tenants. Próximo: rotas, ingestão monotônica e encadeamento SSX inativo, demais P1/P2 e liberação autenticada do motorista. **Após o motorista, concluir todos os fluxos do operador para produção**, conforme objetivo ampliado; nenhum desses critérios foi reduzido aos testes locais. A primeira execução geral foi interrompida, sem aprovação; o resultado citado é da execução posterior concluída.

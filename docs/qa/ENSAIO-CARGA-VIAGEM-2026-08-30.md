@@ -1,10 +1,10 @@
 # Ensaio e recuperação — invariantes de carga/viagem
 
-**Estado: concorrência e recuperação ensaiadas localmente; pilha Supabase completa e publicação pendentes.** A tentativa anterior foi bloqueada pela revisão automática; estes novos ensaios não contornam essa decisão nem autorizam o rollout por si só.
+**Estado em 31/08/2026: concorrência e recuperação ensaiadas; publicação e reconciliação concluídas.** A candidata passou por preflight de hashes/ACLs, execução completa em transação no schema real, rollback independente, publicação e smoke autenticado revertido.
 
 ## Alvo e impacto
 
-Migração candidata: `supabase/migrations/20260830002627_enforce_trip_load_transit_invariant.sql`.
+Migração publicada: `supabase/migrations/20260831230903_enforce_trip_load_transit_invariant.sql`.
 
 Substitui quatro funções: as RPCs `driver_start_trip(uuid)` e `transition_load_status_v1(uuid,uuid,text,text)`, o espelhamento `sync_trip_load_mirrors()` e o marcador de recálculo `_tg_mark_outdated_trip_loads()`. Adiciona cinco triggers e quatro helpers internos, além de substituir o trigger de espelhamento para cobrir UPDATE. Rejeita carga em trânsito sem vínculo canônico com viagem iniciada e impede encerramento/desvinculação que deixe carga em trânsito. Não cria horários históricos nem altera automaticamente dados antigos.
 
@@ -55,4 +55,11 @@ Executar o pgTAP completo, testes de frontend/backend e os E2E críticos nas tr�
 - Frontend: 13 testes do hook de início, quatro da tela de cargas, seis do hook de transição e 12 dos contratos/respostas: **35 aprovados**. Incluem conflitos sem retry automático, atualização das consultas, resposta incerta e cliques duplicados.
 - Os testes anteriores da carga 1003 em produção usaram RPCs publicadas e rollback, não a candidata. Nova consulta somente leitura confirmou viagem planejada, carga em trânsito e ausência de evidência de início em histórico/eventos; nenhum horário foi presumido.
 
-Há agora evidência de concorrência nativa e recuperação local, mas não da pilha Supabase completa nem do frontend autenticado. Reatribuição com migração de documentos/paradas e todos os escritores operacionais ainda precisam de ensaio integrado. O lote não está liberado para produção.
+Além da evidência nativa, a candidata foi executada contra o schema hospedado
+em uma transação revertida e depois publicada como 20260831230903. A carga
+1003 foi reconciliada separadamente como 20260831230957, sem criar
+actual_start_at; o início e o replay autenticados passaram em nova transação
+revertida. Consulta independente confirmou ready/planned, zero eventos
+transitórios e zero violações globais. Reatribuição ampla com migração de
+documentos/paradas ainda exige E2E operacional completo; isso não invalida o
+contrato carga↔viagem já promovido.

@@ -26,6 +26,7 @@ import { runClosingSourcesNative } from './test-closing-sources-native-cases.mjs
 import { runClosingDraftsNative } from './test-closing-drafts-native-cases.mjs';
 import { runClosingLifecycleNative } from './test-closing-lifecycle-native-cases.mjs';
 import { runControlTowerNative } from './test-control-tower-native-cases.mjs';
+import { runSsxPositionNative } from './test-ssx-position-native-cases.mjs';
 
 // Disposable native PostgreSQL; never connects to a configured application database.
 // Run with Node 22: node --experimental-strip-types scripts/test-delivery-concurrency.mjs
@@ -273,6 +274,8 @@ try {
   }
   const towerCount=await runControlTowerNative({query,contested,literal,session,finish,waitForMarker});
   console.log(`${towerCount} additional Control Tower native tests passed.`);
+  const ssxCount=await runSsxPositionNative({query,contested,literal});
+  console.log(`${ssxCount} additional SSX position native tests passed.`);
 } catch (error) {
   // Keep the original assertion visible even if cleanup has a second failure.
   console.error('Native PostgreSQL suite failed before cleanup:', error);

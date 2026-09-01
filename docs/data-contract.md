@@ -41,7 +41,7 @@ Fontes de verdade obrigatórias para toda mudança operacional. Telas que tocam 
 
 - `operational_events` deve apontar, quando aplicável, para:
   `dispatch_trip_id`, `dispatch_stop_id`, `fiscal_document_id`, `load_id`, `client_id`, `driver_id`, `vehicle_id`.
-- Ocorrências do motorista entram por `driver_create_operational_occurrence` — deriva trip/stop/document automaticamente.
+- Ocorrências do motorista entram por `driver_create_operational_occurrence`: a viagem é obrigatória; parada/cliente/nota/carga só são associados quando há parada explícita. A seleção vazia permanece no escopo da viagem, interna e sem esses vínculos.
 - Ocorrências do cliente entram por `create_client_occurrence` — valida acesso ao cliente.
 - Ocorrências do operador, com mudança de status, entram por `record_operational_event_with_status`.
 

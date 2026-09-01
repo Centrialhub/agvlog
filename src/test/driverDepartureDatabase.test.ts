@@ -104,7 +104,7 @@ describe('physical departure executed in PostgreSQL',()=>{
   it('restores the captured body and ACL without deleting recorded departures',async()=>{
     await depart();
     await db.exec(readFileSync('docs/qa/DEPARTURE-RECOVERY-2026-08-30.sql','utf8'));
-    expect((await db.query<{hash:string}>("select md5(pg_get_functiondef('public.driver_register_departure(uuid,text)'::regprocedure)) hash")).rows[0].hash).toBe(original.definition_hash);
+    expect((await db.query<{hash:string}>("select md5(replace(pg_get_functiondef('public.driver_register_departure(uuid,text)'::regprocedure),chr(13),'')) hash")).rows[0].hash).toBe(original.definition_hash);
     const grants=(await db.query(`select has_function_privilege('anon','public.driver_register_departure(uuid,text)','execute') anon,
       has_function_privilege('authenticated','public.driver_register_departure(uuid,text)','execute') authenticated,
       has_function_privilege('service_role','public.driver_register_departure(uuid,text)','execute') service`)).rows[0];
