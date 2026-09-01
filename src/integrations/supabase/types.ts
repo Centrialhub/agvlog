@@ -15788,6 +15788,7 @@ export type Database = {
       }
     }
     Functions: {
+      driver_list_load_fiscal_catalog: { Args: { _tenant_id: string; _load_id: string }; Returns: Json }
       filter_billable_fiscal_sources: { Args: { _tenant: string; _type: string; _ids: string[] }; Returns: string[] }
       prepare_cte_issue: { Args: { _tenant_id: string; _emitter_id: string; _environment: string; _source_ids: string[]; _snapshot: Json }; Returns: Json }
 
