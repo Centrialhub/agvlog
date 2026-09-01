@@ -4231,10 +4231,12 @@ export type Database = {
           action: string
           created_at: string
           created_by: string | null
+          driver_monitor_command_id: string | null
           field_name: string | null
           id: string
           metadata: Json
           monitor_id: string
+          monitor_revision: number | null
           new_value: string | null
           old_value: string | null
           reason: string | null
@@ -4244,10 +4246,12 @@ export type Database = {
           action: string
           created_at?: string
           created_by?: string | null
+          driver_monitor_command_id?: string | null
           field_name?: string | null
           id?: string
           metadata?: Json
           monitor_id: string
+          monitor_revision?: number | null
           new_value?: string | null
           old_value?: string | null
           reason?: string | null
@@ -4257,10 +4261,12 @@ export type Database = {
           action?: string
           created_at?: string
           created_by?: string | null
+          driver_monitor_command_id?: string | null
           field_name?: string | null
           id?: string
           metadata?: Json
           monitor_id?: string
+          monitor_revision?: number | null
           new_value?: string | null
           old_value?: string | null
           reason?: string | null
@@ -4367,6 +4373,7 @@ export type Database = {
           planned_route_text: string | null
           remaining_cities: Json
           remaining_deliveries: number
+          revision: number
           return_deadline_days: number | null
           route_id: string | null
           source_type: string
@@ -4403,6 +4410,7 @@ export type Database = {
           planned_route_text?: string | null
           remaining_cities?: Json
           remaining_deliveries?: number
+          revision?: number
           return_deadline_days?: number | null
           route_id?: string | null
           source_type?: string
@@ -4439,6 +4447,7 @@ export type Database = {
           planned_route_text?: string | null
           remaining_cities?: Json
           remaining_deliveries?: number
+          revision?: number
           return_deadline_days?: number | null
           route_id?: string | null
           source_type?: string
@@ -15825,6 +15834,7 @@ export type Database = {
       get_receivable_financial_context: { Args: { _tenant_id: string; _receivable_id: string }; Returns: Json }
       apply_receivable_financial_command: { Args: { _payload: Json }; Returns: Json }
       apply_load_payment_command: { Args: { _payload: Json }; Returns: Json }
+      apply_driver_monitor_command: { Args: { _payload: Json }; Returns: Json }
       get_closing_report_action_context: {
         Args: { _tenant_id: string; _report_id: string }
         Returns: Json

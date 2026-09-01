@@ -8,12 +8,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertTriangle, CheckCircle2, Clock, Download, FileSpreadsheet, MapPin, Truck, Upload, Users } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
-  useDriverMonitorsList, useCreateMonitor, useAddProgressUpdate, useAddForecast,
-  useUpdateMonitorStatus, useMonitorUpdates, useMonitorForecasts,
+  useDriverMonitorsList, useDriverMonitorCommand, useAddProgressUpdate, useAddForecast,
+  useMonitorUpdates, useMonitorForecasts,
   useImportDriverMonitoringWorkbook, type DriverMonitorRow,
   type DriverMonitoringFilters,
 } from '@/hooks/useDriverMonitoring';
@@ -24,6 +24,7 @@ import { driversInRoutePdf, deliveriesByDriverPdf, arrivalForecastsPdf, delaysPd
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { useTenant } from '@/hooks/useTenant';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
+import { driverMonitorCommandError } from '@/lib/driverMonitoring/driverMonitorCommands';
 
 const dt = (v?: string | null) => (v ? v.slice(0, 10).split('-').reverse().join('/') : '—');
 
@@ -34,6 +35,16 @@ const STATUS_VARIANT: Record<string, NonNullable<BadgeProps['variant']>> = {
 };
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Falha inesperada';
+const emptyMonitorForm = {
+  driver_name: '', plate: '', total: 0, deadline: 0, planned_route: '', notes: '',
+};
+
+function expectedReturnDate(startedAt: string, deadline: number): string | null {
+  if (deadline <= 0) return null;
+  const started = new Date(startedAt);
+  started.setUTCDate(started.getUTCDate() + deadline);
+  return started.toISOString().slice(0, 10);
+}
 
 export default function DriverMonitoring() {
   const toast = useSonnerToast();
@@ -49,10 +60,10 @@ export default function DriverMonitoring() {
   const { data: openUpdates = [] } = useMonitorUpdates(openRow?.id);
 
   const [createDlg, setCreateDlg] = useState(false);
-  const createMut = useCreateMonitor();
-  const [createForm, setCreateForm] = useState({
-    driver_name: '', plate: '', total: 0, deadline: 0, planned_route: '', notes: '',
-  });
+  const [editRow, setEditRow] = useState<DriverMonitorRow | null>(null);
+  const monitorCommand = useDriverMonitorCommand();
+  const [monitorError, setMonitorError] = useState('');
+  const [createForm, setCreateForm] = useState(emptyMonitorForm);
 
   const [progDlg, setProgDlg] = useState<DriverMonitorRow | null>(null);
   const progMut = useAddProgressUpdate();
@@ -67,8 +78,6 @@ export default function DriverMonitoring() {
     forecast_date: new Date().toISOString().slice(0, 10), forecast_time: '',
     current_city: '', forecast_text: '', remaining_cities_text: '', observation: '',
   });
-
-  const updMut = useUpdateMonitorStatus();
 
   const importMut = useImportDriverMonitoringWorkbook();
   const [parsed, setParsed] = useState<ParsedDriverMonitoringWorkbook | null>(null);
@@ -97,6 +106,92 @@ export default function DriverMonitoring() {
 
   const applyFilters = () => setApplied({ ...filters });
   const clearFilters = () => { setFilters({}); setApplied({}); };
+  const openNewMonitor = () => {
+    setEditRow(null);
+    setCreateForm(emptyMonitorForm);
+    setMonitorError('');
+    setCreateDlg(true);
+  };
+  const openEditMonitor = (row: DriverMonitorRow) => {
+    setEditRow(row);
+    setCreateForm({
+      driver_name: row.driver_name_snapshot || '',
+      plate: row.vehicle_plate_snapshot || '',
+      total: row.total_deliveries,
+      deadline: row.return_deadline_days || 0,
+      planned_route: row.planned_route_text || '',
+      notes: row.notes || '',
+    });
+    setMonitorError('');
+    setCreateDlg(true);
+  };
+  const recoverMonitor = async () => {
+    setMonitorError('');
+    try {
+      await monitorCommand.recover();
+      toast.success('Monitoramento recuperado e confirmado');
+      setCreateDlg(false);
+      setEditRow(null);
+    } catch (error: unknown) {
+      setMonitorError(driverMonitorCommandError(error));
+    }
+  };
+  const arriveMonitor = async (row: DriverMonitorRow) => {
+    setMonitorError('');
+    try {
+      await monitorCommand.submit({
+        action: 'update',
+        monitor_id: row.id,
+        expected_revision: row.revision,
+        reason: 'Chegada confirmada pela operação',
+        changes: { status: 'arrived', actual_returned_at: new Date().toISOString() },
+      });
+      toast.success('Chegada confirmada');
+    } catch (error: unknown) {
+      setMonitorError(driverMonitorCommandError(error));
+    }
+  };
+  const saveMonitor = async () => {
+    if (!createForm.driver_name.trim() || monitorCommand.pending) {
+      setMonitorError('Informe o motorista e recupere qualquer alteração pendente.');
+      return;
+    }
+    setMonitorError('');
+    const startedAt = editRow?.started_at || new Date().toISOString();
+    const changes = {
+      driver_name_snapshot: createForm.driver_name.trim(),
+      vehicle_plate_snapshot: createForm.plate.trim() || null,
+      total_deliveries: createForm.total,
+      return_deadline_days: createForm.deadline || null,
+      expected_return_date: expectedReturnDate(startedAt, createForm.deadline),
+      planned_route_text: createForm.planned_route.trim() || null,
+      planned_cities: createForm.planned_route
+        ? createForm.planned_route.split(/[,\n;/]/).map(value => value.trim()).filter(Boolean)
+        : [],
+      notes: createForm.notes.trim() || null,
+    };
+    try {
+      await monitorCommand.submit(editRow ? {
+        action: 'update',
+        monitor_id: editRow.id,
+        expected_revision: editRow.revision,
+        reason: 'Cadastro do monitoramento editado pela operação',
+        changes,
+      } : {
+        action: 'create',
+        monitor_id: null,
+        expected_revision: null,
+        reason: 'Monitoramento cadastrado pela operação',
+        changes: { ...changes, started_at: startedAt },
+      });
+      toast.success(editRow ? 'Monitoramento atualizado' : 'Monitoramento criado');
+      setCreateDlg(false);
+      setEditRow(null);
+      setCreateForm(emptyMonitorForm);
+    } catch (error: unknown) {
+      setMonitorError(driverMonitorCommandError(error));
+    }
+  };
 
   const filterSummary = useMemo(() => {
     const parts: string[] = [];
@@ -141,8 +236,23 @@ export default function DriverMonitoring() {
           <h1 className="text-2xl font-bold">Monitoramento de Motoristas</h1>
           <p className="text-sm text-muted-foreground">Acompanhe rotas ativas, entregas realizadas e previsão de chegada.</p>
         </div>
-        <Button onClick={() => setCreateDlg(true)}><Truck className="h-4 w-4 mr-1" />Novo Monitoramento</Button>
+        <Button onClick={openNewMonitor} disabled={monitorCommand.isPending || !!monitorCommand.pending}>
+          <Truck className="h-4 w-4 mr-1" />Novo Monitoramento
+        </Button>
       </div>
+
+      {monitorCommand.pending ? (
+        <Card role="alert">
+          <CardContent className="p-3 flex flex-wrap items-center justify-between gap-2">
+            <p>Há uma alteração de monitoramento sem confirmação. Recupere o mesmo pedido antes de continuar.</p>
+            <Button variant="outline" onClick={() => void recoverMonitor()} disabled={monitorCommand.isPending}>
+              {monitorCommand.isPending ? 'Recuperando…' : 'Recuperar alteração'}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+      {monitorCommand.recoveryError ? <p role="alert">{monitorCommand.recoveryError}</p> : null}
+      {monitorError && !createDlg ? <p role="alert">{monitorError}</p> : null}
 
       <Tabs defaultValue="panel">
         <TabsList>
@@ -163,7 +273,9 @@ export default function DriverMonitoring() {
             <KpiCard icon={<MapPin className="h-4 w-4" />} label="Entregas restantes" value={kpis.remaining} />
             <KpiCard icon={<Truck className="h-4 w-4" />} label="Retornos atrasados" value={kpis.lateReturn} />
           </div>
-          <MonitorsTable rows={rows} isLoading={isLoading} onOpen={setOpenRow} onProgress={setProgDlg} onForecast={setForecastDlg} onUpdate={updMut} />
+          <MonitorsTable rows={rows} isLoading={isLoading} onOpen={setOpenRow} onProgress={setProgDlg}
+            onForecast={setForecastDlg} onEdit={openEditMonitor} onArrive={arriveMonitor}
+            commandBlocked={monitorCommand.isPending || !!monitorCommand.pending} />
         </TabsContent>
 
         <TabsContent value="routes" className="space-y-3">
@@ -194,12 +306,16 @@ export default function DriverMonitoring() {
               </div>
             </CardContent>
           </Card>
-          <MonitorsTable rows={rows} isLoading={isLoading} onOpen={setOpenRow} onProgress={setProgDlg} onForecast={setForecastDlg} onUpdate={updMut} />
+          <MonitorsTable rows={rows} isLoading={isLoading} onOpen={setOpenRow} onProgress={setProgDlg}
+            onForecast={setForecastDlg} onEdit={openEditMonitor} onArrive={arriveMonitor}
+            commandBlocked={monitorCommand.isPending || !!monitorCommand.pending} />
         </TabsContent>
 
         <TabsContent value="daily" className="space-y-3">
           <div className="text-sm text-muted-foreground">Selecione uma rota para registrar entregas do dia por cidade.</div>
-          <MonitorsTable rows={rows} isLoading={isLoading} onOpen={setOpenRow} onProgress={setProgDlg} onForecast={setForecastDlg} onUpdate={updMut} compact />
+          <MonitorsTable rows={rows} isLoading={isLoading} onOpen={setOpenRow} onProgress={setProgDlg}
+            onForecast={setForecastDlg} onEdit={openEditMonitor} onArrive={arriveMonitor}
+            commandBlocked={monitorCommand.isPending || !!monitorCommand.pending} compact />
         </TabsContent>
 
         <TabsContent value="arrival" className="space-y-3">
@@ -269,41 +385,42 @@ export default function DriverMonitoring() {
         </TabsContent>
       </Tabs>
 
-      {/* Create monitor */}
-      <Dialog open={createDlg} onOpenChange={setCreateDlg}>
+      {/* Create/edit monitor */}
+      <Dialog open={createDlg} onOpenChange={(open) => {
+        if (!open && !monitorCommand.isPending) {
+          setCreateDlg(false);
+          setEditRow(null);
+        }
+      }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Novo Monitoramento</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Motorista</Label><Input value={createForm.driver_name} onChange={(e) => setCreateForm({ ...createForm, driver_name: e.target.value })} /></div>
+          <DialogHeader>
+            <DialogTitle>{editRow ? 'Editar Monitoramento' : 'Novo Monitoramento'}</DialogTitle>
+            <DialogDescription>
+              A alteração só será concluída após confirmação atômica do registro e do histórico.
+            </DialogDescription>
+          </DialogHeader>
+          <fieldset disabled={monitorCommand.isPending || !!monitorCommand.pending} className="space-y-3">
+            <div><Label htmlFor="monitor-driver-name">Motorista</Label><Input id="monitor-driver-name" value={createForm.driver_name} onChange={(e) => setCreateForm({ ...createForm, driver_name: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Placa</Label><Input value={createForm.plate} onChange={(e) => setCreateForm({ ...createForm, plate: e.target.value })} /></div>
-              <div><Label>Total entregas</Label><Input type="number" value={createForm.total} onChange={(e) => setCreateForm({ ...createForm, total: Number(e.target.value) })} /></div>
-              <div><Label>Prazo retorno (dias)</Label><Input type="number" value={createForm.deadline} onChange={(e) => setCreateForm({ ...createForm, deadline: Number(e.target.value) })} /></div>
+              <div><Label htmlFor="monitor-plate">Placa</Label><Input id="monitor-plate" value={createForm.plate} onChange={(e) => setCreateForm({ ...createForm, plate: e.target.value })} /></div>
+              <div><Label htmlFor="monitor-total">Total entregas</Label><Input id="monitor-total" type="number" min={0} value={createForm.total} onChange={(e) => setCreateForm({ ...createForm, total: Number(e.target.value) })} /></div>
+              <div><Label htmlFor="monitor-deadline">Prazo retorno (dias)</Label><Input id="monitor-deadline" type="number" min={0} max={3650} value={createForm.deadline} onChange={(e) => setCreateForm({ ...createForm, deadline: Number(e.target.value) })} /></div>
             </div>
-            <div><Label>Rota planejada</Label><Textarea value={createForm.planned_route} onChange={(e) => setCreateForm({ ...createForm, planned_route: e.target.value })} /></div>
-            <div><Label>Observações</Label><Textarea value={createForm.notes} onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })} /></div>
-          </div>
+            <div><Label htmlFor="monitor-route">Rota planejada</Label><Textarea id="monitor-route" maxLength={8000} value={createForm.planned_route} onChange={(e) => setCreateForm({ ...createForm, planned_route: e.target.value })} /></div>
+            <div><Label htmlFor="monitor-notes">Observações</Label><Textarea id="monitor-notes" maxLength={4000} value={createForm.notes} onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })} /></div>
+          </fieldset>
+          {monitorError ? <p role="alert">{monitorError}</p> : null}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setCreateDlg(false)}>Cancelar</Button>
-            <Button onClick={async () => {
-              if (!createForm.driver_name) { toast.error('Informe o motorista'); return; }
-              const exp = createForm.deadline > 0
-                ? new Date(Date.now() + createForm.deadline * 86400000).toISOString().slice(0, 10)
-                : null;
-              await createMut.mutateAsync({
-                driver_name_snapshot: createForm.driver_name,
-                vehicle_plate_snapshot: createForm.plate || null,
-                total_deliveries: createForm.total,
-                return_deadline_days: createForm.deadline || null,
-                expected_return_date: exp,
-                planned_route_text: createForm.planned_route,
-                planned_cities: createForm.planned_route ? createForm.planned_route.split(/[,\n;/]/).map((s) => s.trim()).filter(Boolean) : [],
-                notes: createForm.notes,
-              });
-              toast.success('Monitoramento criado');
-              setCreateDlg(false);
-              setCreateForm({ driver_name: '', plate: '', total: 0, deadline: 0, planned_route: '', notes: '' });
-            }}>Criar</Button>
+            <Button variant="ghost" onClick={() => setCreateDlg(false)} disabled={monitorCommand.isPending}>Cancelar</Button>
+            {monitorCommand.pending ? (
+              <Button variant="outline" onClick={() => void recoverMonitor()} disabled={monitorCommand.isPending}>
+                {monitorCommand.isPending ? 'Recuperando…' : 'Recuperar alteração'}
+              </Button>
+            ) : null}
+            <Button onClick={() => void saveMonitor()}
+              disabled={monitorCommand.isPending || !!monitorCommand.pending || !createForm.driver_name.trim()}>
+              {monitorCommand.isPending ? 'Salvando…' : editRow ? 'Salvar alterações' : 'Criar monitoramento'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -443,16 +560,19 @@ function ReportCard({ title, onCsv, onPdf, disabled, disabledHint }: { title: st
   );
 }
 
-function MonitorsTable({ rows, isLoading, onOpen, onProgress, onForecast, onUpdate, compact }: {
+function MonitorsTable({
+  rows, isLoading, onOpen, onProgress, onForecast, onEdit, onArrive, commandBlocked, compact,
+}: {
   rows: DriverMonitorRow[];
   isLoading: boolean;
   onOpen: (r: DriverMonitorRow) => void;
   onProgress: (r: DriverMonitorRow) => void;
   onForecast: (r: DriverMonitorRow) => void;
-  onUpdate: ReturnType<typeof useUpdateMonitorStatus>;
+  onEdit: (r: DriverMonitorRow) => void;
+  onArrive: (r: DriverMonitorRow) => Promise<void>;
+  commandBlocked: boolean;
   compact?: boolean;
 }) {
-  const toast = useSonnerToast();
   return (
     <Card>
       <CardContent className="p-0">
@@ -491,13 +611,12 @@ function MonitorsTable({ rows, isLoading, onOpen, onProgress, onForecast, onUpda
                 <TableCell><Badge variant={STATUS_VARIANT[r.status] || 'outline'}>{STATUS_LABELS[r.status as DriverMonitorStatus] || r.status}</Badge></TableCell>
                 {!compact && (
                   <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
-                    <Button size="sm" variant="outline" onClick={() => onProgress(r)}>Registrar</Button>
-                    <Button size="sm" variant="outline" onClick={() => onForecast(r)}>Previsão</Button>
+                    <Button size="sm" variant="outline" onClick={() => onEdit(r)} disabled={commandBlocked}>Editar</Button>
+                    <Button size="sm" variant="outline" onClick={() => onProgress(r)} disabled={commandBlocked}>Registrar</Button>
+                    <Button size="sm" variant="outline" onClick={() => onForecast(r)} disabled={commandBlocked}>Previsão</Button>
                     {r.status !== 'completed' && r.status !== 'cancelled' && (
-                      <Button size="sm" variant="ghost" onClick={async () => {
-                        await onUpdate.mutateAsync({ id: r.id, status: 'arrived', actual_returned_at: new Date().toISOString() });
-                        toast.success('Chegada confirmada');
-                      }}>Chegou</Button>
+                      <Button size="sm" variant="ghost" disabled={commandBlocked}
+                        onClick={() => void onArrive(r)}>Chegou</Button>
                     )}
                   </TableCell>
                 )}

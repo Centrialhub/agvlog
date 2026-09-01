@@ -1,7 +1,9 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database, Json } from '@/integrations/supabase/types';
 import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
 import {
   calculateCompletedDeliveries, calculateProgressPercent, calculateRemainingDeliveries,
   calculateDriverStatus, type DriverMonitorStatus,
@@ -9,9 +11,18 @@ import {
 import type {
   ParsedDriverMonitoringWorkbook, ParsedMonitor, ParsedForecast,
 } from '@/lib/driverMonitoring/driverMonitoringSpreadsheetImport';
+import {
+  driverMonitorCommandError,
+  type DriverMonitorCommandInput,
+  type DriverMonitorCommandResult,
+} from '@/lib/driverMonitoring/driverMonitorCommands';
+import {
+  createDriverMonitorOutbox,
+  DRIVER_MONITOR_COMMAND_CHANGED,
+  pendingDriverMonitorCommand,
+} from '@/lib/driverMonitoring/driverMonitorOutbox';
 
 type DriverMonitorDbRow = Database['public']['Tables']['driver_route_monitors']['Row'];
-type DriverMonitorUpdate = Database['public']['Tables']['driver_route_monitors']['Update'];
 type DriverMonitorQueryRow = DriverMonitorDbRow & {
   drivers: { name: string } | null;
   vehicles: { plate: string } | null;
@@ -50,6 +61,7 @@ export interface DriverMonitorRow {
   status: DriverMonitorStatus | string;
   last_update_at: string | null;
   notes: string | null;
+  revision: number;
   updated_at: string;
 }
 
@@ -128,6 +140,7 @@ function toRow(m: DriverMonitorQueryRow): DriverMonitorRow {
     status: m.status,
     last_update_at: m.last_update_at,
     notes: m.notes,
+    revision: m.revision,
     updated_at: m.updated_at,
   };
 }
@@ -202,46 +215,106 @@ export function useMonitorForecasts(monitorId?: string | null) {
   });
 }
 
-export function useCreateMonitor() {
-  const { currentTenant } = useTenant();
+export function useDriverMonitorCommand() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payload: Partial<DriverMonitorRow> & { monitor_number?: string }) => {
-      if (!currentTenant) throw new Error('Tenant não selecionado');
-      const tenantId = currentTenant.id;
-      const monitor_number = payload.monitor_number || `MON-${Date.now().toString(36).toUpperCase()}`;
-      const { data, error } = await supabase.from('driver_route_monitors').insert({
-        tenant_id: tenantId,
-        monitor_number,
-        driver_id: payload.driver_id || null,
-        vehicle_id: payload.vehicle_id || null,
-        load_id: payload.load_id || null,
-        driver_name_snapshot: payload.driver_name_snapshot || null,
-        vehicle_plate_snapshot: payload.vehicle_plate_snapshot || null,
-        planned_route_text: payload.planned_route_text || null,
-        planned_cities: payload.planned_cities || [],
-        started_at: payload.started_at || new Date().toISOString(),
-        expected_return_date: payload.expected_return_date || null,
-        return_deadline_days: payload.return_deadline_days || null,
-        total_deliveries: payload.total_deliveries || 0,
-        completed_deliveries: 0,
-        remaining_deliveries: payload.total_deliveries || 0,
-        current_city: payload.current_city || null,
-        next_city: payload.next_city || null,
-        notes: payload.notes || null,
-        status: 'active',
-        source_type: 'manual',
-      }).select().single();
-      if (error) throw error;
-      const { error: historyError } = await supabase.from('driver_monitoring_history').insert({
-        tenant_id: tenantId, monitor_id: data.id, action: 'created',
-        new_value: monitor_number,
-      });
-      if (historyError) throw historyError;
-      return data;
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
+  const tenant = currentTenant?.id;
+  const actor = user?.id;
+  const latest = useRef({ tenant, actor });
+  latest.current = { tenant, actor };
+  const alive = useRef(true);
+  const busy = useRef(false);
+  const [isPending, setPending] = useState(false);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    alive.current = true;
+    const changed = () => setRevision(value => value + 1);
+    window.addEventListener('storage', changed);
+    window.addEventListener(DRIVER_MONITOR_COMMAND_CHANGED, changed);
+    return () => {
+      alive.current = false;
+      window.removeEventListener('storage', changed);
+      window.removeEventListener(DRIVER_MONITOR_COMMAND_CHANGED, changed);
+    };
+  }, []);
+
+  const assertContext = useCallback(() => {
+    if (!alive.current || latest.current.tenant !== tenant || latest.current.actor !== actor) {
+      throw new Error('A sessão ou empresa mudou. Recupere o monitoramento na sessão original.');
+    }
+  }, [tenant, actor]);
+
+  const outbox = useMemo(() => createDriverMonitorOutbox({
+    get storage() { return window.localStorage; },
+    uuid: () => crypto.randomUUID(),
+    assertContext,
+    changed: () => window.dispatchEvent(new Event(DRIVER_MONITOR_COMMAND_CHANGED)),
+    lock: async (key, work) => {
+      if (!navigator.locks) {
+        throw new Error('Use um navegador atualizado em conexão segura para alterar o monitoramento.');
+      }
+      return navigator.locks.request(key, work);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['driver-monitors'] }),
-  });
+    send: async payload => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      try {
+        return await supabase.rpc('apply_driver_monitor_command', {
+          _payload: JSON.parse(JSON.stringify(payload)),
+        }).abortSignal(controller.signal);
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+  }), [assertContext]);
+
+  const recovery = useMemo(() => {
+    try {
+      return {
+        revision,
+        pending: tenant && actor
+          ? pendingDriverMonitorCommand(window.localStorage, tenant, actor)
+          : null,
+        error: null,
+      };
+    } catch (cause) {
+      return { revision, pending: null, error: driverMonitorCommandError(cause) };
+    }
+  }, [tenant, actor, revision]);
+
+  const run = async (work: () => Promise<DriverMonitorCommandResult>) => {
+    if (!tenant || !actor) throw new Error('Entre com uma sessão válida e selecione a empresa.');
+    if (busy.current) throw new Error('Aguarde o comando de monitoramento em andamento.');
+    assertContext();
+    busy.current = true;
+    setPending(true);
+    try {
+      const result = await work();
+      assertContext();
+      return result;
+    } catch (cause) {
+      throw new Error(driverMonitorCommandError(cause));
+    } finally {
+      try {
+        await Promise.all([
+          'driver-monitors', 'driver-monitoring-history',
+        ].map(key => qc.invalidateQueries({ queryKey: [key] })));
+      } finally {
+        busy.current = false;
+        if (alive.current) setPending(false);
+      }
+    }
+  };
+
+  return {
+    isPending,
+    pending: recovery.pending,
+    recoveryError: recovery.error,
+    submit: (input: DriverMonitorCommandInput) => run(() => outbox.submit(tenant!, actor!, input)),
+    recover: () => run(() => outbox.recover(tenant!, actor!)),
+  };
 }
 
 export function useAddProgressUpdate() {
@@ -367,31 +440,6 @@ export function useAddForecast() {
       qc.invalidateQueries({ queryKey: ['driver-monitors'] });
       qc.invalidateQueries({ queryKey: ['driver-arrival-forecasts'] });
     },
-  });
-}
-
-export function useUpdateMonitorStatus() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, status, reason, actual_returned_at }: {
-      id: string; status: string; reason?: string; actual_returned_at?: string;
-    }) => {
-      if (!currentTenant) throw new Error('Tenant não selecionado');
-      const patch: DriverMonitorUpdate = { status };
-      if (actual_returned_at) patch.actual_returned_at = actual_returned_at;
-      const { error } = await supabase.from('driver_route_monitors')
-        .update(patch)
-        .eq('id', id)
-        .eq('tenant_id', currentTenant.id);
-      if (error) throw error;
-      const { error: historyError } = await supabase.from('driver_monitoring_history').insert({
-        tenant_id: currentTenant.id, monitor_id: id, action: 'status_changed',
-        new_value: status, reason: reason || null,
-      });
-      if (historyError) throw historyError;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['driver-monitors'] }),
   });
 }
 
