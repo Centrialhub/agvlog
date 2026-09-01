@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { calculateTripRoute } from '@/lib/controlTower/routeCalculation';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
+import TripOperationalEventsPanel from '@/components/control-tower/TripOperationalEventsPanel';
 
 function fmtTime(iso?: string | null) {
   if (!iso) return '—';
@@ -151,6 +152,10 @@ export default function TripDetailsDrawer({
             </ul>
           </section>
         )}
+
+        <Separator className="my-4" />
+
+        <TripOperationalEventsPanel tripId={trip.trip_id} />
 
         <Separator className="my-4" />
 

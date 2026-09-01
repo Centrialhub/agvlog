@@ -11,6 +11,7 @@ const state=vi.hoisted(()=>({rpc:vi.fn(),invoke:vi.fn(),toast:vi.fn(),ssx:false}
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:(...args:unknown[])=>state.rpc(...args),functions:{invoke:(...args:unknown[])=>state.invoke(...args)}}}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'10000000-0000-4000-8000-000000000001'}})}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'20000000-0000-4000-8000-000000000001'}})}));
+vi.mock('@/hooks/useTripOperationalEvents',()=>({useTripOperationalEvents:()=>({data:[],isPending:false,isError:false,refetch:vi.fn()})}));
 vi.mock('@/hooks/useTenantCapabilities',()=>({useTenantCapabilities:()=>({isEnabled:()=>state.ssx,isError:false})}));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:state.toast})}));
 // Only the tile/map renderer is replaced: page, hooks, drawer, validators and SQL are real.

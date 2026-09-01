@@ -14,6 +14,7 @@ vi.mock('@supabase/supabase-js',()=>({createClient:()=>state.client()}));
 vi.mock('../../supabase/functions/_shared/osrm.ts',()=>({calculateOsrmRoute:(...args:unknown[])=>state.route(...args)}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'10000000-0000-4000-8000-000000000001'}})}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'20000000-0000-4000-8000-000000000001'}})}));
+vi.mock('@/hooks/useTripOperationalEvents',()=>({useTripOperationalEvents:()=>({data:[],isPending:false,isError:false,refetch:vi.fn()})}));
 vi.mock('@/hooks/useTenantCapabilities',()=>({useTenantCapabilities:()=>({isEnabled:()=>false,isError:false})}));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:state.toast})}));
 vi.mock('@/components/control-tower/ControlTowerMap',()=>({default:()=> <div aria-label="Mapa sem rede"/>}));
