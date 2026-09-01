@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -55,7 +55,6 @@ export interface UnloadingChargeRow {
 
 export interface LoadControlFilters {
   loadNumber?: string | null;
-  clientId?: string | null;
   paymentStatus?: string | null;
   operationalStatus?: string | null;
   billingStatus?: string | null;
@@ -66,46 +65,139 @@ export interface LoadControlFilters {
   batchId?: string | null;
 }
 
+export interface LoadControlSummary {
+  paid: number;
+  unpaid: number;
+  overdue: number;
+  billed: number;
+  freight: number;
+  open: number;
+  weight: number;
+  nfs: number;
+  ctes: number;
+}
+
+export interface LoadControlCursor {
+  scope: string;
+  snapshot_at: string;
+  created_at: string;
+  id: string;
+}
+
+interface LoadControlPage {
+  rows: LoadControlRow[];
+  totalCount: number;
+  summary: LoadControlSummary;
+  nextCursor: LoadControlCursor | null;
+}
+
+export const LOAD_CONTROL_PAGE_SIZE = 250;
+
+export function normalizeLoadControlFilters(filters: LoadControlFilters): Record<string, string> {
+  return Object.fromEntries(Object.entries(filters).flatMap(([key, value]) => {
+    const normalized = typeof value === 'string' ? value.trim() : '';
+    return normalized ? [[key, normalized]] : [];
+  }));
+}
+
+export function parseLoadControlPage(
+  payload: unknown,
+  tenantId: string,
+  actorId: string,
+): LoadControlPage {
+  if (!isRecord(payload)
+    || payload.version !== 1
+    || payload.tenant_id !== tenantId
+    || payload.actor_id !== actorId
+    || !Array.isArray(payload.items)
+    || !Number.isInteger(Number(payload.total_count))
+    || Number(payload.total_count) < 0
+    || !isRecord(payload.summary)) {
+    throw new Error('A resposta do controle de cargas não pôde ser confirmada.');
+  }
+
+  const rows = payload.items.map((item): LoadControlRow => {
+    if (!isRecord(item)
+      || typeof item.id !== 'string'
+      || item.tenant_id !== tenantId
+      || typeof item.load_number !== 'string'
+      || typeof item.payment_status !== 'string') {
+      throw new Error('A resposta do controle de cargas contém uma carga fora do escopo.');
+    }
+    return item as unknown as LoadControlRow;
+  });
+  const totalCount = Number(payload.total_count);
+  if (rows.length > totalCount || rows.length > LOAD_CONTROL_PAGE_SIZE) {
+    throw new Error('A paginação do controle de cargas retornou uma contagem incompatível.');
+  }
+
+  const summaryKeys: Array<keyof LoadControlSummary> = [
+    'paid', 'unpaid', 'overdue', 'billed', 'freight', 'open', 'weight', 'nfs', 'ctes',
+  ];
+  const rawSummary = payload.summary as Record<string, unknown>;
+  const summary = Object.fromEntries(summaryKeys.map(key => {
+    const value = Number(rawSummary[key]);
+    if (!Number.isFinite(value) || value < 0) {
+      throw new Error('Os totais do controle de cargas não puderam ser confirmados.');
+    }
+    return [key, value];
+  })) as unknown as LoadControlSummary;
+
+  let nextCursor: LoadControlCursor | null = null;
+  if (payload.next_cursor !== null) {
+    if (!isRecord(payload.next_cursor)
+      || typeof payload.next_cursor.scope !== 'string'
+      || typeof payload.next_cursor.snapshot_at !== 'string'
+      || typeof payload.next_cursor.created_at !== 'string'
+      || typeof payload.next_cursor.id !== 'string') {
+      throw new Error('O cursor do controle de cargas é inválido.');
+    }
+    nextCursor = payload.next_cursor as unknown as LoadControlCursor;
+  }
+
+  return { rows, totalCount, summary, nextCursor };
+}
+
 export function useLoadControlList(filters: LoadControlFilters = {}) {
   const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['load-control', currentTenant?.id, filters],
-    enabled: !!currentTenant?.id,
-    queryFn: async () => {
-      let q = supabase.from('loads')
-        .select(`id, tenant_id, load_number, external_load_number, load_date, arrival_date,
-                 gross_cargo_value, freight_amount, freight_percent, total_weight_kg,
-                 invoice_count, cte_count, operational_status, billing_status, payment_status,
-                 expected_payment_date, payment_date, received_amount, legacy_status_text,
-                 receivable_id, client_invoice_id, doccob_export_id,
-                 origin, destination, status,
-                 trailer_plate,
-                 drivers:driver_id(name),
-                 vehicles:vehicle_id(plate)`)
-        .eq('tenant_id', currentTenant!.id)
-        .order('load_date', { ascending: false, nullsFirst: false })
-        .limit(500);
+  const { user } = useAuth();
+  const tenantId = currentTenant?.id;
+  const actorId = user?.id;
+  const normalizedFilters = useMemo(() => normalizeLoadControlFilters(filters), [filters]);
+  const latestScope = useRef({ tenantId, actorId });
+  latestScope.current = { tenantId, actorId };
 
-      if (filters.loadNumber) q = q.or(`external_load_number.ilike.%${filters.loadNumber}%,load_number.ilike.%${filters.loadNumber}%`);
-      if (filters.paymentStatus) q = q.eq('payment_status', filters.paymentStatus);
-      if (filters.operationalStatus) q = q.eq('operational_status', filters.operationalStatus);
-      if (filters.billingStatus) q = q.eq('billing_status', filters.billingStatus);
-      if (filters.loadDateFrom) q = q.gte('load_date', filters.loadDateFrom);
-      if (filters.loadDateTo) q = q.lte('load_date', filters.loadDateTo);
-      if (filters.expectedPayFrom) q = q.gte('expected_payment_date', filters.expectedPayFrom);
-      if (filters.expectedPayTo) q = q.lte('expected_payment_date', filters.expectedPayTo);
-      if (filters.batchId) q = q.eq('last_import_batch_id', filters.batchId);
-
-      const { data, error } = await q;
+  const query = useInfiniteQuery({
+    queryKey: ['load-control', 'cursor', tenantId, actorId, normalizedFilters],
+    enabled: !!tenantId && !!actorId,
+    retry: false,
+    initialPageParam: null as LoadControlCursor | null,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data, error } = await supabase.rpc('list_load_control_page_v2', {
+        _tenant_id: tenantId!,
+        _filters: normalizedFilters,
+        _limit: LOAD_CONTROL_PAGE_SIZE,
+        _cursor: pageParam as unknown as Json,
+      }).abortSignal(signal);
       if (error) throw error;
-      return (data || []).map((r) => ({
-        ...r,
-        client_name: r.origin || r.destination || null,
-        driver_name: r.drivers?.name || null,
-        plate: r.vehicles?.plate || r.trailer_plate || null,
-      })) as LoadControlRow[];
+      if (latestScope.current.tenantId !== tenantId || latestScope.current.actorId !== actorId) {
+        throw new Error('A sessão ou empresa mudou durante a consulta.');
+      }
+      return parseLoadControlPage(data, tenantId!, actorId!);
     },
+    getNextPageParam: page => page.nextCursor ?? undefined,
   });
+
+  const pages = query.data?.pages;
+  const rows = useMemo(() => pages?.flatMap(page => page.rows) ?? [], [pages]);
+  const firstPage = pages?.[0];
+  return {
+    ...query,
+    data: rows,
+    loadedCount: rows.length,
+    totalCount: firstPage?.totalCount ?? 0,
+    summary: firstPage?.summary,
+  };
 }
 
 export function useLoadDocuments(loadId: string | null) {
@@ -270,3 +362,7 @@ export const BILLING_STATUS_LABELS: Record<string, string> = {
   not_invoiced: 'Sem fatura', invoice_pending: 'Pendente', invoiced: 'Faturada',
   doccob_generated: 'DOCCOB gerado', sent_to_client: 'Enviada', cancelled: 'Cancelada',
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

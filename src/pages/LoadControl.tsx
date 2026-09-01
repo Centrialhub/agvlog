@@ -50,7 +50,11 @@ export default function LoadControl() {
   const { data: companyProfile } = useCompanyProfile();
   const [filters, setFilters] = useState<LoadControlFilters>({});
   const [applied, setApplied] = useState<LoadControlFilters>({});
-  const { data: rows = [], isLoading, refetch } = useLoadControlList(applied);
+  const loadControl = useLoadControlList(applied);
+  const {
+    data: rows = [], isPending: isLoading, isError, error, refetch,
+    fetchNextPage, hasNextPage, isFetchingNextPage, totalCount, summary,
+  } = loadControl;
   const [detailRow, setDetailRow] = useState<LoadControlRow | null>(null);
   const [payDlg, setPayDlg] = useState<LoadControlRow | null>(null);
   const [payForm, setPayForm] = useState({ amount: '', date: today(), method: 'pix', notes: '', bankAccountId: '' });
@@ -60,7 +64,7 @@ export default function LoadControl() {
   const bankAccounts = (bankAccountsQuery.data || []).filter(account => account.active);
   const { data: batches = [] } = useImportBatches();
 
-  const kpis = useMemo(() => {
+  const loadedKpis = useMemo(() => {
     const acc = { total: rows.length, paid: 0, unpaid: 0, overdue: 0, billed: 0, freight: 0, open: 0, weight: 0, nfs: 0, ctes: 0 };
     for (const r of rows) {
       if (r.payment_status === 'paid') acc.paid++;
@@ -75,6 +79,13 @@ export default function LoadControl() {
     }
     return acc;
   }, [rows]);
+  const kpis = summary
+    ? { ...summary, total: totalCount }
+    : (!isLoading && !isError ? loadedKpis : null);
+  const visibleTotal = totalCount || rows.length;
+  const allRowsLoaded = !hasNextPage && rows.length === visibleTotal;
+  const completeDatasetAvailable = !isLoading && allRowsLoaded && !isError;
+  const readError = error instanceof Error ? error.message : 'Não foi possível consultar o controle de cargas.';
 
   const set = (key: keyof LoadControlFilters, value: string | null) => setFilters(filters => ({ ...filters, [key]: value === '' ? null : value }));
 
@@ -118,6 +129,10 @@ export default function LoadControl() {
 
   const [reportKind, setReportKind] = useState<LoadReportKind>('summary');
   const runReport = async () => {
+    if (!completeDatasetAvailable) {
+      toast.error('Carregue todas as cargas do filtro antes de gerar o relatório.');
+      return;
+    }
     if (!rows.length) { toast.error('Sem dados no filtro atual.'); return; }
     if (rows.length > 5000 && !await confirmAction(`${rows.length} linhas serão incluídas. Continuar?`, {
       title: 'Gerar relatório extenso',
@@ -138,17 +153,22 @@ export default function LoadControl() {
           <p className="text-sm text-muted-foreground">Consolidação operacional e financeira das cargas recebidas.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-1" />Atualizar</Button>
-          <Button variant="outline" onClick={() => exportLoadControlCsv(rows)}><Download className="h-4 w-4 mr-1" />CSV</Button>
+          <Button variant="outline" onClick={() => void refetch()} disabled={isLoading || isFetchingNextPage}>
+            <RefreshCw className="h-4 w-4 mr-1" />Atualizar
+          </Button>
+          <Button variant="outline" onClick={() => exportLoadControlCsv(rows)} disabled={!completeDatasetAvailable}
+            title={completeDatasetAvailable ? 'Exportar todas as cargas filtradas' : 'Carregue todas as cargas filtradas antes de exportar'}>
+            <Download className="h-4 w-4 mr-1" />CSV
+          </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-        <Kpi label="Cargas" value={kpis.total} />
-        <Kpi label="Pagas" value={kpis.paid} />
-        <Kpi label="Em aberto" value={kpis.unpaid} tone="warning" />
-        <Kpi label="Vencidas" value={kpis.overdue} tone="destructive" />
-        <Kpi label="Frete total" value={brl(kpis.freight)} />
+        <Kpi label="Cargas" value={kpis?.total ?? '—'} />
+        <Kpi label="Pagas" value={kpis?.paid ?? '—'} />
+        <Kpi label="Em aberto" value={kpis?.unpaid ?? '—'} tone="warning" />
+        <Kpi label="Vencidas" value={kpis?.overdue ?? '—'} tone="destructive" />
+        <Kpi label="Frete total" value={kpis ? brl(kpis.freight) : '—'} />
       </div>
 
       {regPay.pending ? (
@@ -196,6 +216,24 @@ export default function LoadControl() {
           </Card>
 
           <Card>
+            <CardHeader className="py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                {!isLoading && !(isError && rows.length === 0) ? (
+                  <span role="status">Exibindo {rows.length.toLocaleString('pt-BR')} de {visibleTotal.toLocaleString('pt-BR')} cargas filtradas.</span>
+                ) : <span role="status">Consultando cargas e totais…</span>}
+                {!completeDatasetAvailable && rows.length > 0 ? (
+                  <span className="text-xs text-muted-foreground">Exportações e relatórios são liberados após carregar todas as páginas.</span>
+                ) : null}
+              </div>
+              {isError && rows.length > 0 ? (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">
+                  <span>A próxima página não foi carregada: {readError}</span>
+                  <Button type="button" size="sm" variant="outline" disabled={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+                    {isFetchingNextPage ? 'Tentando novamente…' : 'Tentar carregar próxima página'}
+                  </Button>
+                </div>
+              ) : null}
+            </CardHeader>
             <CardContent className="p-0 overflow-auto">
               <Table>
                 <TableHeader>
@@ -218,6 +256,12 @@ export default function LoadControl() {
                 </TableHeader>
                 <TableBody>
                   {isLoading ? <TableRow><TableCell colSpan={14}>Carregando…</TableCell></TableRow> :
+                    isError && rows.length === 0 ? <TableRow><TableCell colSpan={14}>
+                      <div role="alert" className="flex flex-wrap items-center justify-between gap-2 p-3">
+                        <span>Não foi possível consultar as cargas: {readError}</span>
+                        <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>Tentar novamente</Button>
+                      </div>
+                    </TableCell></TableRow> :
                     rows.length === 0 ? <TableRow><TableCell colSpan={14}>Nenhuma carga.</TableCell></TableRow> :
                     rows.map(r => (
                       <TableRow key={r.id} className="cursor-pointer" onClick={() => setDetailRow(r)}>
@@ -247,6 +291,19 @@ export default function LoadControl() {
                 </TableBody>
               </Table>
             </CardContent>
+            {!isLoading && !isError && rows.length > 0 ? (
+              <div className="flex justify-center border-t p-3">
+                {hasNextPage ? (
+                  <Button type="button" variant="outline" disabled={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+                    {isFetchingNextPage ? 'Carregando próxima página…' : 'Carregar mais cargas'}
+                  </Button>
+                ) : (
+                  <span role="status" className="text-sm text-muted-foreground">
+                    Todas as {visibleTotal.toLocaleString('pt-BR')} cargas filtradas foram carregadas.
+                  </span>
+                )}
+              </div>
+            ) : null}
           </Card>
         </TabsContent>
 
@@ -296,13 +353,19 @@ export default function LoadControl() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={runReport}><Printer className="h-4 w-4 mr-1" />Gerar PDF</Button>
-            <Button variant="outline" onClick={() => exportLoadControlCsv(rows)}><Download className="h-4 w-4 mr-1" />CSV</Button>
+            <Button onClick={runReport} disabled={!completeDatasetAvailable}
+              title={completeDatasetAvailable ? 'Gerar relatório com todo o filtro' : 'Carregue todas as cargas filtradas antes de gerar'}>
+              <Printer className="h-4 w-4 mr-1" />Gerar PDF
+            </Button>
+            <Button variant="outline" onClick={() => exportLoadControlCsv(rows)} disabled={!completeDatasetAvailable}
+              title={completeDatasetAvailable ? 'Exportar todo o filtro' : 'Carregue todas as cargas filtradas antes de exportar'}>
+              <Download className="h-4 w-4 mr-1" />CSV
+            </Button>
           </CardContent></Card>
         </TabsContent>
 
         <TabsContent value="pending">
-          <PendingPanel rows={rows} />
+          <PendingPanel rows={rows} complete={completeDatasetAvailable} totalCount={visibleTotal} />
         </TabsContent>
       </Tabs>
 
@@ -495,7 +558,7 @@ function UnloadingTab() {
   );
 }
 
-function PendingPanel({ rows }: { rows: LoadControlRow[] }) {
+function PendingPanel({ rows, complete, totalCount }: { rows: LoadControlRow[]; complete: boolean; totalCount: number }) {
   const today = new Date().toISOString().slice(0, 10);
   const pending = rows.filter(r =>
     (r.expected_payment_date && r.expected_payment_date < today && r.payment_status !== 'paid') ||
@@ -503,12 +566,17 @@ function PendingPanel({ rows }: { rows: LoadControlRow[] }) {
   ).slice(0, 200);
   return (
     <Card><CardContent className="p-0 overflow-auto">
+      {!complete ? (
+        <div role="alert" className="border-b border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          Pendências ainda incompletas: foram avaliadas {rows.length.toLocaleString('pt-BR')} de {totalCount.toLocaleString('pt-BR')} cargas. Carregue todas as páginas na aba Cargas.
+        </div>
+      ) : null}
       <Table>
         <TableHeader><TableRow>
           <TableHead>Tipo</TableHead><TableHead>Carga</TableHead><TableHead>Mensagem</TableHead>
         </TableRow></TableHeader>
         <TableBody>
-          {pending.length === 0 ? <TableRow><TableCell colSpan={3}>Nenhuma pendência detectada.</TableCell></TableRow> :
+          {pending.length === 0 ? <TableRow><TableCell colSpan={3}>{complete ? 'Nenhuma pendência detectada.' : 'Nenhuma pendência nas páginas já carregadas.'}</TableCell></TableRow> :
             pending.map(r => (
               <TableRow key={r.id}>
                 <TableCell>{!r.expected_payment_date ? 'Sem previsão' : r.invoice_count === 0 ? 'Sem NF' : 'Vencida'}</TableCell>

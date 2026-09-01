@@ -17070,6 +17070,15 @@ export type Database = {
           total_count: number
         }[]
       }
+      list_load_control_page_v2: {
+        Args: {
+          _cursor?: Json
+          _filters?: Json
+          _limit?: number
+          _tenant_id: string
+        }
+        Returns: Json
+      }
       list_loads_page_v1: {
         Args: {
           _filters?: Json
