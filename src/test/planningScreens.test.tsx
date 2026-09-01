@@ -1,11 +1,13 @@
 import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import userEvent from '@testing-library/user-event';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import LoadDetail from '@/pages/LoadDetail';
 import RoutePlanning from '@/pages/RoutePlanning';
 import {createDispatchOutbox,type DispatchWirePayload} from '@/lib/route-planning/dispatchOutbox';
 
 const mock=vi.hoisted(()=>({rpc:vi.fn(),toast:vi.fn(),navigate:vi.fn(),tripId:null as string|null,
+  loadError:false,tripLinksError:false,itemsError:false,itemRefetch:vi.fn(),
   load:{id:'load',load_number:'QA',tenant_id:'tenant',status:'ready',driver_id:'driver',vehicle_id:'vehicle',destination:'Destino QA'},
   items:[{id:'item-1',fiscal_document_id:'doc-1',pallet_count:1,weight_kg:10,volume_m3:1},
     {id:'item-2',fiscal_document_id:'doc-2',pallet_count:1,weight_kg:20,volume_m3:1}]}));
@@ -13,21 +15,26 @@ vi.mock('react-router-dom',()=>({useParams:()=>({id:'load'}),useNavigate:()=>moc
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'tenant'}})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'actor'}})}));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:mock.toast})}));
-vi.mock('@/hooks/useLoadItems',()=>({useLoadItems:()=>({data:mock.items})}));
+vi.mock('@/hooks/useLoadItems',()=>({useLoadItems:()=>({data:mock.items,isError:mock.itemsError,refetch:mock.itemRefetch})}));
 vi.mock('@/hooks/useVehicles',()=>({useVehicles:()=>({data:[{id:'vehicle',plate:'QA-0001',active:true}]})}));
 vi.mock('@/hooks/useGenerateCTe',()=>({useGenerateCTe:()=>({isPending:false,mutateAsync:()=>{throw new Error('No fiscal calls during planning QA');}})}));
 vi.mock('@/hooks/useOperationalRoutes',()=>({useOperationalRoutes:()=>({data:[]})}));
 vi.mock('@/hooks/route-planning/useCustomerDeliveryWindowsForRouting',()=>({useCustomerDeliveryWindowsForRouting:()=>({data:[]})}));
 vi.mock('@/components/loads/LoadRomaneioTabs',()=>({default:()=>null}));
+vi.mock('@/components/control-tower/TripOperationalEventsPanel',()=>({default:()=>null}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mock.rpc,from:(table:string)=>{
   const rows=table==='fiscal_documents'?[{id:'doc-1',invoice_number:'1'},{id:'doc-2',invoice_number:'2'}]:table==='drivers'?[{id:'driver',name:'Motorista QA',active:true}]:[];
   const query={select:()=>query,eq:()=>query,is:()=>query,in:()=>query,order:()=>query,
-    maybeSingle:async()=>({data:table==='loads'?{...mock.load,trip_id:mock.tripId}:null,error:null}),
-    then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:rows,error:null}).then(resolve)};
+    maybeSingle:async()=>table==='loads' && mock.loadError
+      ? {data:null,error:new Error('QA load read failure')}
+      : {data:table==='loads'?{...mock.load,trip_id:mock.tripId}:null,error:null},
+    then:(resolve:(value:unknown)=>unknown)=>Promise.resolve(table==='dispatch_trip_loads' && mock.tripLinksError
+      ? {data:null,error:new Error('QA trip link failure')}
+      : {data:rows,error:null}).then(resolve)};
   return query;
 }}}));
 const trip='80000000-0000-4000-8000-000000000001';let client:QueryClient;
-beforeEach(()=>{vi.clearAllMocks();localStorage.clear();mock.tripId=null;
+beforeEach(()=>{vi.clearAllMocks();localStorage.clear();mock.tripId=null;mock.loadError=false;mock.tripLinksError=false;mock.itemsError=false;mock.load.status='ready';
   Object.defineProperty(Element.prototype,'scrollIntoView',{configurable:true,value:vi.fn()});
   Object.defineProperty(navigator,'locks',{configurable:true,value:{request:(_key:string,work:()=>Promise<unknown>)=>work()}});
   mock.rpc.mockImplementation((name:string)=>({abortSignal:()=>Promise.resolve({data:name==='get_load_operational_documents'
@@ -44,6 +51,16 @@ async function seedPending(){
   await expect(outbox.dispatch('tenant','actor','load:load',body)).rejects.toThrow('Offline');
 }
 describe('real planning screens with isolated transport (not authenticated browser E2E)',()=>{
+  it('does not report a failed load read as a missing load',async()=>{
+    mock.loadError=true;show('load');expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar a carga');
+    expect(screen.queryByText('Carga não encontrada')).not.toBeInTheDocument();
+  });
+  it('does not infer that there is no trip when the canonical link read fails',async()=>{
+    mock.load.status='loaded';mock.tripLinksError=true;show('load');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível confirmar o vínculo entre carga e viagem');
+    expect(screen.queryByRole('button',{name:'Em Trânsito'})).not.toBeInTheDocument();
+    expect(screen.queryByText('Crie uma viagem antes de colocar a carga em trânsito.')).not.toBeInTheDocument();
+  });
   it('LoadDetail sends every document through the shared durable dispatch client',async()=>{
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));
     const dialog=await screen.findByRole('dialog');expect(within(dialog).getByLabelText('Motorista')).toHaveAttribute('role','combobox');
@@ -72,11 +89,13 @@ describe('real planning screens with isolated transport (not authenticated brows
     await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith({title:'Despacho confirmado'}));
   });
   it('LoadDetail assigns separate documents to two stops using the actual selector',async()=>{
+    const user=userEvent.setup();
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button',{name:'+ Parada'}));
     fireEvent.change(within(dialog).getByLabelText('Destino parada 2'),{target:{value:'Segundo destino'}});
-    fireEvent.keyDown(within(dialog).getByLabelText('Documento 2'),{key:'Enter'});
-    fireEvent.click(await screen.findByRole('option',{name:'Parada 2: Segundo destino'}));
+    await user.click(within(dialog).getByLabelText('Documento 2'));
+    await user.click(await screen.findByRole('option',{name:'Parada 2: Segundo destino'}));
+    await waitFor(()=>expect(screen.queryByRole('option',{name:'Parada 2: Segundo destino'})).not.toBeInTheDocument());
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 2/}));
     await waitFor(()=>expect(dispatchCalls()).toHaveLength(1));
     expect(dispatchCalls()[0][1]._payload.stops.map((stop:{fiscal_document_ids:string[]})=>stop.fiscal_document_ids))

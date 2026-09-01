@@ -27,7 +27,7 @@ import { isStopTerminal, stopStatusLabel } from '@/lib/status/stopStatus';
 import { isDocumentTerminal } from '@/lib/status/documentStatus';
 import { readDriverDeliveryItems } from '@/lib/driver/driverDeliveryItems';
 import { validateUploadFile } from '@/lib/uploadPolicy';
-import { createDeliverySubmission, deliveryOutcome, deliveryErrorMessage, invalidateDeliveryQueries } from '@/lib/driver/driverDeliverySubmission';
+import { createDeliverySubmission, deliveryOutcome, deliveryErrorMessage, invalidateDeliveryQueries, replayPendingDeliverySubmissions } from '@/lib/driver/driverDeliverySubmission';
 import { DRIVER_TRIP_SELECT, normalizeDriverTrip, isDriverTripStarted } from '@/lib/driverTrip';
 import { markDriverArrival } from '@/lib/driver/driverArrival';
 import type { Tables } from '@/integrations/supabase/types';
@@ -130,6 +130,18 @@ export default function DriverDeliveries() {
   const submissionRef = useRef<ReturnType<typeof createDeliverySubmission> | null>(null);
   const [submissionLocked, setSubmissionLocked] = useState(false);
   const [lastEventId, setLastEventId] = useState<string | null>(null);
+  const outboxReplayQuery = useQuery({
+    queryKey:['driver_delivery_outbox_replay',currentTenant?.id,user?.id],
+    enabled:!!currentTenant?.id && !!user?.id,
+    retry:false,
+    staleTime:Infinity,
+    queryFn:() => replayPendingDeliverySubmissions(currentTenant!.id,user!.id),
+  });
+  useEffect(() => {
+    if (!outboxReplayQuery.data || (!outboxReplayQuery.data.confirmed && !outboxReplayQuery.data.cleaned)) return;
+    toast({title:outboxReplayQuery.data.confirmed ? 'Envio pendente confirmado' : 'Anexos pendentes recuperados'});
+    void invalidateDeliveryQueries(qc);
+  }, [outboxReplayQuery.data,qc,toast]);
 
   const [tab, setTab] = useState<'em_rota' | 'concluidas'>('em_rota');
   const [search, setSearch] = useState('');
@@ -294,7 +306,7 @@ export default function DriverDeliveries() {
         if (!def) throw new Error('Evento inválido.');
         const reason = [notes.trim(),returnReason.trim(),discountReason.trim(),boletoNote.trim()].filter(Boolean).join('\n');
         const positiveItems = Object.fromEntries(Object.entries(returnedItems).filter(([,qty]) => qty>0));
-        submissionRef.current = createDeliverySubmission({tenantId:currentTenant.id,tripId:trip.id,stopId:eventForm.stop.id,
+        submissionRef.current = createDeliverySubmission({tenantId:currentTenant.id,actorId:user!.id,tripId:trip.id,stopId:eventForm.stop.id,
           expectedStatus:currentFormStop!.status,eventKey:def.key,photos,signatureDataUrl,details:{
             event_subtype:def.key,event_label:def.label,notes:reason,return_reason:returnReason.trim() || null,
             receiver_name:receiverName.trim() || null,receiver_document:receiverDoc.trim() || null,
@@ -322,12 +334,12 @@ export default function DriverDeliveries() {
     onError: error => toast({title:'Envio não confirmado',description:deliveryErrorMessage(error),variant:'destructive'}),
   });
 
-  const pageError = driverQuery.error ?? tripQuery.error ?? stopsQuery.error;
+  const pageError = outboxReplayQuery.error ?? driverQuery.error ?? tripQuery.error ?? stopsQuery.error;
   if (pageError) return <Card><CardContent className="py-8 space-y-3" role="alert">
     <p>{deliveryErrorMessage(pageError)}</p>
-    <Button onClick={() => { void driverQuery.refetch(); void tripQuery.refetch(); if (trip?.id) void stopsQuery.refetch(); }}>Tentar novamente</Button>
+    <Button onClick={() => { void outboxReplayQuery.refetch(); void driverQuery.refetch(); void tripQuery.refetch(); if (trip?.id) void stopsQuery.refetch(); }}>Tentar novamente</Button>
   </CardContent></Card>;
-  if (driverQuery.isLoading || (!!driver && tripQuery.isLoading) || (!!trip && stopsQuery.isLoading)) {
+  if (outboxReplayQuery.isLoading || driverQuery.isLoading || (!!driver && tripQuery.isLoading) || (!!trip && stopsQuery.isLoading)) {
     return <p role="status">Carregando entregas...</p>;
   }
 

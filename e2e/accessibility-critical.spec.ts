@@ -28,6 +28,24 @@ test("driver critical workspaces have no serious axe violations", async ({ page 
   await loginThroughUi(page, accounts.driver);
   await expectNoSeriousAxeViolations(page, "/driver");
   await expectNoSeriousAxeViolations(page, "/driver/loads");
+  await expectNoSeriousAxeViolations(page, "/driver/expenses");
+
+  await page.getByRole("button", { name: "Nova despesa" }).click();
+  const source = page.getByRole("combobox", { name: "Viagem da despesa" });
+  await expect(source).toBeVisible();
+  const firstTrip = await source.locator("option").nth(1).getAttribute("value");
+  expect(firstTrip).toBeTruthy();
+  if (!firstTrip) throw new Error("The isolated driver fixture must expose an expense trip.");
+  await source.selectOption(firstTrip);
+  await expect(page.getByLabel("Valor (R$)")).toBeVisible();
+
+  const dialogResults = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+    .analyze();
+  expect(
+    dialogResults.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? "")),
+  ).toEqual([]);
 });
 
 test("client critical workspaces have no serious axe violations", async ({ page }) => {

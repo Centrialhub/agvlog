@@ -4,6 +4,7 @@ import {MemoryRouter,Route,Routes} from 'react-router-dom';
 import type {PGlite} from '@electric-sql/pglite';
 import {afterAll,afterEach,beforeAll,beforeEach,describe,expect,it,vi} from 'vitest';
 import DriverEventDetail from '@/pages/driver/DriverEventDetail';
+import DriverEvents from '@/pages/driver/DriverEvents';
 import DriverIssues from '@/pages/driver/DriverIssues';
 import {EventConversation} from '@/components/driver/DriverConversation';
 import {ChatRecoveryPanel} from '@/components/driver/ChatRecoveryPanel';
@@ -25,7 +26,7 @@ beforeEach(async()=>{
  Object.defineProperty(navigator,'locks',{configurable:true,value:{request:async(_key:string,work:()=>Promise<unknown>)=>work()}});
  const enqueue=(actor:string,work:()=>Promise<unknown>)=>{const task=async()=>{try{await chatActor(db,actor);return {data:await work(),error:null};}catch(error){return {data:null,error};}};const p=transport.then(task,task);transport=p;return p;};
  mock.from.mockImplementation((table:string)=>{if(table!=='operational_events')throw Error('Unexpected table');const filters:Record<string,string>={},actor=mock.actor;
-  return {select(){return this;},eq(key:string,value:string){filters[key]=value;return this;},order(){return this;},limit:()=>enqueue(actor,async()=>{if(mock.readError)throw Error('QA leitura indisponível');return (await operationRpc(db,'select * from operational_events where tenant_id=$1 and driver_id=$2 order by created_at desc limit 20',[filters.tenant_id,filters.driver_id])).rows;}),maybeSingle:()=>enqueue(actor,async()=>{if(mock.readError)throw Error('QA leitura indisponível');return (await operationRpc(db,'select id,event_type,report_details,payload,description,created_at from operational_events where id=$1 and tenant_id=$2',[filters.id,filters.tenant_id])).rows[0]??null;})};
+  return {select(){return this;},eq(key:string,value:string){filters[key]=value;return this;},order(){return this;},limit:()=>enqueue(actor,async()=>{if(mock.readError)throw Error('QA leitura indisponível');return (await operationRpc(db,'select * from operational_events where tenant_id=$1 and driver_id=$2 order by created_at desc limit 20',[filters.tenant_id??mock.tenant,filters.driver_id])).rows;}),maybeSingle:()=>enqueue(actor,async()=>{if(mock.readError)throw Error('QA leitura indisponível');return (await operationRpc(db,'select id,event_type,report_details,payload,description,created_at from operational_events where id=$1 and tenant_id=$2 and driver_id=$3',[filters.id,filters.tenant_id,filters.driver_id])).rows[0]??null;})};
  });
  mock.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>{const actor=mock.actor;let pending:Promise<unknown>|undefined;
   const run=()=>{if(pending)return pending;pending=enqueue(actor,async()=>{
@@ -41,7 +42,7 @@ beforeEach(async()=>{
  });
 });
 afterEach(async()=>{cleanup();client.clear();await transport;await db.exec('rollback');localStorage.clear();vi.restoreAllMocks();});
-function Story({operation=false,issues=false,event=i.event,show=true}:{operation?:boolean;issues?:boolean;event?:string;show?:boolean}){return <QueryClientProvider client={client}><ChatRecoveryPanel/>{show?(operation?<EventConversation eventId={event}/>:issues?<DriverIssues/>:<MemoryRouter initialEntries={['/driver/events/'+event]}><Routes><Route path="/driver/events/:id" element={<DriverEventDetail/>}/></Routes></MemoryRouter>):null}</QueryClientProvider>;}
+function Story({operation=false,issues=false,events=false,event=i.event,show=true}:{operation?:boolean;issues?:boolean;events?:boolean;event?:string;show?:boolean}){return <QueryClientProvider client={client}><ChatRecoveryPanel/>{show?(operation?<EventConversation eventId={event}/>:issues?<DriverIssues/>:events?<MemoryRouter><DriverEvents/></MemoryRouter>:<MemoryRouter initialEntries={['/driver/events/'+event]}><Routes><Route path="/driver/events/:id" element={<DriverEventDetail/>}/></Routes></MemoryRouter>):null}</QueryClientProvider>;}
 const sends=()=>mock.rpc.mock.calls.filter(([name])=>name==='send_event_chat_message');
 async function compose(text='Mensagem pelo detalhe da ocorrência'){await screen.findByLabelText('Mensagem');fireEvent.change(screen.getByLabelText('Mensagem'),{target:{value:text}});await waitFor(()=>expect(screen.getByRole('button',{name:'Enviar mensagem'})).toBeEnabled());}
 describe('event chat frontend connected to actual SQL',{timeout:15000},()=>{
@@ -51,6 +52,10 @@ describe('event chat frontend connected to actual SQL',{timeout:15000},()=>{
  });
  it('does not call a failed occurrence listing an empty success and can retry it',async()=>{
   mock.readError=true;render(<Story issues/>);await screen.findByText('Não foi possível consultar as ocorrências.');expect(screen.queryByText('Nenhuma ocorrência registrada.')).not.toBeInTheDocument();mock.readError=false;fireEvent.click(screen.getByRole('button',{name:'Tentar novamente'}));await screen.findByRole('button',{name:/Ocorrência QA/});
+ });
+ it('does not call a failed event history an empty success and can retry it',async()=>{
+  mock.readError=true;render(<Story events/>);await screen.findByText('Não foi possível consultar os eventos.');expect(screen.queryByText('Nenhum evento encontrado')).not.toBeInTheDocument();
+  mock.readError=false;fireEvent.click(screen.getByRole('button',{name:'Tentar novamente'}));await screen.findByText('Ocorrência QA');
  });
  it('sends from the actual driver event detail and receives an operation reply on the same event',async()=>{
   const view=render(<Story/>);await compose();fireEvent.click(screen.getByRole('button',{name:'Enviar mensagem'}));await screen.findByText('Mensagem registrada no servidor. Isso não confirma a leitura.');expect(sends()[0][1]._payload).toMatchObject({event_id:i.event,driver_id:i.driver});

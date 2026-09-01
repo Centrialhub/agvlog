@@ -2,6 +2,7 @@ import { useQuery, useQueryClient as useTanstackQueryClient } from '@tanstack/re
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useChecklistStatus } from '@/hooks/useChecklistStatus';
+import { useDriverHomeVehiclePosition } from '@/hooks/useDriverHomeVehiclePosition';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -122,19 +123,12 @@ export default function DriverHome() {
     enabled: !!primaryTrip?.id,
   });
 
-  const { data: vehiclePos } = useQuery({
-    queryKey: ['driver_home_vehicle_pos', primaryTrip?.vehicle_id],
-    queryFn: async () => {
-      if (!primaryTrip?.vehicle_id) return null;
-      const { data } = await supabase
-        .from('positions_last')
-        .select('lat, lng')
-        .eq('vehicle_id', primaryTrip.vehicle_id)
-        .maybeSingle();
-      return data;
-    },
-    enabled: !!primaryTrip?.vehicle_id,
-  });
+  const {
+    data: vehiclePos,
+    isError: vehiclePositionFailed,
+    isFetching: vehiclePositionFetching,
+    refetch: refetchVehiclePosition,
+  } = useDriverHomeVehiclePosition(primaryTrip?.vehicle_id);
 
   // Realtime: refresh assigned loads/trips whenever the driver assignment or status changes.
   useEffect(() => {
@@ -242,6 +236,31 @@ export default function DriverHome() {
               }}
             >
               Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && primaryTrip?.vehicle_id && vehiclePositionFailed && (
+        <Card className="border-destructive/50">
+          <CardContent className="p-4 space-y-3" role="alert">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Posição do veículo indisponível</p>
+                <p className="text-xs text-muted-foreground">
+                  Não foi possível atualizar a localização. As paradas e demais dados da viagem continuam disponíveis.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={vehiclePositionFetching}
+              onClick={() => { void refetchVehiclePosition(); }}
+            >
+              {vehiclePositionFetching ? 'Atualizando posição…' : 'Tentar atualizar posição'}
             </Button>
           </CardContent>
         </Card>

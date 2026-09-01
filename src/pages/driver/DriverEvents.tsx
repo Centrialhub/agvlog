@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, CheckCircle2, AlertTriangle, FileText, ChevronRight, Clock, MapPin } from 'lucide-react';
@@ -18,11 +19,26 @@ export default function DriverEvents() {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'finalizador' | 'informativo'>('all');
   
-  const { data: driver } = useCurrentDriver();
-  const { data: trip } = useActiveTrip(driver?.id);
+  const {
+    data: driver,
+    isPending: driverLoading,
+    error: driverError,
+    refetch: refetchDriver,
+  } = useCurrentDriver();
+  const {
+    data: trip,
+    isPending: tripLoading,
+    error: tripError,
+    refetch: refetchTrip,
+  } = useActiveTrip(driver?.id);
   const qc = useQueryClient();
 
-  const { data: realEvents = [] } = useQuery({
+  const {
+    data: realEvents = [],
+    isPending: eventsLoading,
+    error: eventsError,
+    refetch: refetchEvents,
+  } = useQuery({
     queryKey: ['driver_events', driver?.id, trip?.id],
     queryFn: async () => {
       if (!driver?.id) return [] as DriverEventView[];
@@ -37,7 +53,8 @@ export default function DriverEvents() {
       if (error) throw error;
       return (data || []).map(mapOperationalEventToDriverEvent);
     },
-    enabled: !!driver?.id,
+    enabled: !!driver?.id && !tripLoading && !tripError,
+    retry: false,
   });
 
   useEffect(() => {
@@ -56,6 +73,8 @@ export default function DriverEvents() {
   }, [driver?.id, qc]);
 
   const events: DriverEventView[] = realEvents;
+  const loading = driverLoading || (!!driver?.id && (tripLoading || eventsLoading));
+  const readError = driverError || tripError || eventsError;
 
   const filtered = useMemo(() => {
     let list = events;
@@ -80,6 +99,30 @@ export default function DriverEvents() {
         <p className="text-sm text-muted-foreground">Histórico de eventos da viagem</p>
       </div>
 
+      {loading ? (
+        <Card>
+          <CardContent className="py-8 text-center" role="status">
+            <p className="text-sm font-medium">Carregando eventos...</p>
+          </CardContent>
+        </Card>
+      ) : readError ? (
+        <Card>
+          <CardContent className="py-8 text-center space-y-3">
+            <p role="alert" className="text-sm font-medium">Não foi possível consultar os eventos.</p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (driverError) void refetchDriver();
+                if (tripError) void refetchTrip();
+                if (eventsError) void refetchEvents();
+              }}
+            >
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
 
       <div className="relative">
         <label htmlFor="driver-event-search" className="sr-only">Buscar eventos</label>
@@ -180,6 +223,8 @@ export default function DriverEvents() {
             );
           })}
         </div>
+      )}
+        </>
       )}
     </div>
   );

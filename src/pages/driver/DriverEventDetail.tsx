@@ -41,6 +41,7 @@ export default function DriverEventDetail() {
         .select('id,event_type,report_details,payload,description,created_at')
         .eq('id', id)
         .eq('tenant_id', currentTenant.id)
+        .eq('driver_id', driver.id)
         .maybeSingle();
       if (error) throw error;
       return data;

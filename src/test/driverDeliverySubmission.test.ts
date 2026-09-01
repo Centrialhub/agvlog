@@ -1,15 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
-import { createDeliverySubmission, deliveryOutcome, invalidateDeliveryQueries, type DeliverySubmissionInput } from '@/lib/driver/driverDeliverySubmission';
+import { createDeliverySubmission, deliveryOutcome, invalidateDeliveryQueries, replayPendingDeliverySubmissions, type DeliverySubmissionInput } from '@/lib/driver/driverDeliverySubmission';
 const mocks = vi.hoisted(() => ({rpc:vi.fn(),upload:vi.fn(),remove:vi.fn()}));
 vi.mock('@/integrations/supabase/client', () => ({supabase:{rpc:mocks.rpc}}));
 vi.mock('@/lib/secureUpload', () => ({uploadSecureFile:mocks.upload,removeSecureFiles:mocks.remove}));
 const result = {event_id:'10000000-0000-4000-8000-000000000001',operational_event_id:'20000000-0000-4000-8000-000000000001',replayed:false};
 const file = () => new File([new Uint8Array(16)],'photo.png',{type:'image/png'});
-const input = (): DeliverySubmissionInput => ({tenantId:'tenant',tripId:'trip',stopId:'stop',expectedStatus:'arrived',eventKey:'entregue',
+const input = (): DeliverySubmissionInput => ({tenantId:'tenant',actorId:'driver-user',tripId:'trip',stopId:'stop',expectedStatus:'arrived',eventKey:'entregue',
   photos:[file()],signatureDataUrl:'data:image/png;base64,AA==',details:{receiver_name:'Recebedor',notes:'Entregue'}});
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   mocks.rpc.mockResolvedValue({data:result,error:null}); mocks.upload.mockResolvedValue('tenant/path.png'); mocks.remove.mockResolvedValue(undefined);
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue({blob:async () => new Blob([new Uint8Array(16)],{type:'image/png'})}));
 });
@@ -30,6 +31,26 @@ describe('delivery frontend submission contract', () => {
     await attempt.submit();
     expect(mocks.rpc.mock.calls[1]).toEqual(mocks.rpc.mock.calls[0]);
     expect(mocks.upload).toHaveBeenCalledTimes(2); expect(mocks.remove).not.toHaveBeenCalled();
+  });
+  it('replays an uncertain submission after a page reload without reuploading evidence', async () => {
+    mocks.rpc.mockResolvedValueOnce({data:null,error:{message:'Network lost'}});
+    const attempt=createDeliverySubmission(input());
+    await expect(attempt.submit()).rejects.toMatchObject({message:'Network lost'});
+    const firstCall=mocks.rpc.mock.calls[0];
+    expect(localStorage.length).toBe(1);
+    mocks.rpc.mockResolvedValueOnce({data:{...result,replayed:true},error:null});
+    await expect(replayPendingDeliverySubmissions('tenant','driver-user')).resolves.toEqual({confirmed:1,cleaned:0});
+    expect(mocks.rpc.mock.calls[1]).toEqual(firstCall);
+    expect(mocks.upload).toHaveBeenCalledTimes(2);
+    expect(localStorage.length).toBe(0);
+  });
+  it('does not replay another actor or tenant outbox', async () => {
+    mocks.rpc.mockResolvedValueOnce({data:null,error:{message:'Network lost'}});
+    await expect(createDeliverySubmission(input()).submit()).rejects.toBeTruthy();
+    await expect(replayPendingDeliverySubmissions('tenant','other-driver')).resolves.toEqual({confirmed:0,cleaned:0});
+    await expect(replayPendingDeliverySubmissions('other-tenant','driver-user')).resolves.toEqual({confirmed:0,cleaned:0});
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(localStorage.length).toBe(1);
   });
   it('deduplicates concurrent button submissions', async () => {
     const attempt=createDeliverySubmission(input()); const first=attempt.submit(); const second=attempt.submit();

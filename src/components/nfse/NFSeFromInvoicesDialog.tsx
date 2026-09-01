@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -421,6 +421,9 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             <FileText className="h-4 w-4" />
             Emitir NFS-e a partir de NFs {step === 1 ? '— 1. Selecionar notas' : step === 2 ? '— 2. Valores por NF' : '— 3. Dados fiscais e emissão'}
           </DialogTitle>
+          <DialogDescription>
+            Selecione as notas, revise os valores e informe os dados fiscais antes de emitir.
+          </DialogDescription>
         </DialogHeader>
 
         <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issue.isPending || create.isPending} />

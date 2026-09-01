@@ -219,6 +219,9 @@ it('renders precisely the 11 local NFS-e sources and restores them after clearin
   const local = state.rows.fiscal_documents.filter(row => row.recipient_city === 'MONTES CLAROS');
   const other = state.rows.fiscal_documents.filter(row => row.recipient_city !== 'MONTES CLAROS');
   render(<MemoryRouter><Wrapper><NFSeFromInvoicesDialog open onOpenChange={vi.fn()} /></Wrapper></MemoryRouter>);
+  expect(screen.getByRole('dialog', {name: /Emitir NFS-e a partir de NFs/})).toHaveAccessibleDescription(
+    'Selecione as notas, revise os valores e informe os dados fiscais antes de emitir.',
+  );
   await waitFor(() => expect(screen.getByRole('cell', {name: String(local[0].invoice_number)})).toBeInTheDocument());
   const cells = new Set(Array.from(document.querySelectorAll('td')).map(cell => cell.textContent?.trim()));
   for (const row of local) expect(cells.has(String(row.invoice_number))).toBe(true);
