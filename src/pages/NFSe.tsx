@@ -400,7 +400,15 @@ export default function NFSePage() {
           </CardContent>
         </Card>
 
-        <NFSeFormDialog open={formOpen} onOpenChange={setFormOpen} initial={editing} />
+        <NFSeFormDialog
+          open={formOpen}
+          onOpenChange={(next) => {
+            setFormOpen(next);
+            if (!next) setEditing(null);
+          }}
+          initial={editing}
+          onSaved={() => setEditing(null)}
+        />
         <NFSeFromInvoicesDialog open={fromInvoicesOpen} onOpenChange={setFromInvoicesOpen} />
     </div>
   );

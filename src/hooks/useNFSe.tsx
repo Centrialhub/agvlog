@@ -243,19 +243,32 @@ export function useCreateNFSe() {
 
 export function useUpdateNFSe() {
   const qc = useQueryClient();
+  const { currentTenant } = useTenant();
   return useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<NFSeDoc> }) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const { data, error } = await supabase
         .from('nfse_documents')
         .update({ ...patch, items: patch.items as Json | undefined } as NFSeUpdate)
+        .eq('tenant_id', currentTenant.id)
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('RPS não encontrada para atualizar.');
       return normalizeNFSeDocument(data);
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['nfse'] });
+    onSuccess: (saved) => {
+      const tenantId = currentTenant?.id;
+      if (tenantId) {
+        qc.setQueriesData<NFSeDoc[] | undefined>(
+          { queryKey: ['nfse', tenantId], exact: false },
+          (old) => old?.map((doc) => (doc.id === saved.id ? saved : doc)),
+        );
+        qc.invalidateQueries({ queryKey: ['nfse', tenantId], exact: false });
+      } else {
+        qc.invalidateQueries({ queryKey: ['nfse'] });
+      }
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
     },
