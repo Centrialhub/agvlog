@@ -394,7 +394,7 @@ describe("production configuration contract", () => {
     expect(migration).toContain("CHECK (NOT is_default OR active)");
     expect(migration).toContain("SECURITY INVOKER");
     expect(migration).toContain("public.is_tenant_admin(_tenant_id)");
-    expect(migration).toMatch(/ORDER BY emitter\.id\r?\n  FOR UPDATE/);
+    expect(migration).toMatch(/ORDER BY emitter\.id\r?\n {2}FOR UPDATE/);
     expect(migration).toContain("AND emitter.active");
     expect(migration).toContain("FROM PUBLIC, anon, authenticated, service_role");
     expect(emitterHook).toContain("supabase.rpc('set_default_tenant_emitter'");
