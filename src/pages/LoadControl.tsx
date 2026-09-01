@@ -14,7 +14,7 @@ import { Download, Printer, Upload, Search, RefreshCw, FileText, CheckCircle2 } 
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   useLoadControlList, useLoadDocuments, useUnloadingCharges, useImportBatches,
-  useRegisterPayment, commitSpreadsheetImport, commitXmlImport,
+  useRegisterPayment,
   PAYMENT_STATUS_LABELS, OPERATIONAL_STATUS_LABELS,
   type LoadControlRow, type LoadControlFilters,
 } from '@/hooks/useLoadControl';
@@ -25,8 +25,11 @@ import { downloadLoadControlPdf, type LoadReportKind } from '@/lib/loadReports/l
 import { exportLoadControlCsv } from '@/lib/loadReports/loadControlCsv';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
-import { getErrorMessage } from '@/lib/errors';
-import type { ImportPreview } from '@/hooks/useLoadControl';
+import { useLoadImportCommand } from '@/hooks/useLoadImportCommand';
+import {
+  buildSpreadsheetLoadImport, buildXmlLoadImport, loadImportError,
+  type ImportPreview,
+} from '@/lib/loadImports/loadImportCommands';
 import type { ReactNode } from 'react';
 import { useBankAccounts } from '@/hooks/useBankReconciliation';
 import { loadPaymentError, parseMoneyCents } from '@/lib/loadPayments/loadPaymentCommands';
@@ -374,58 +377,82 @@ function Kpi({ label, value, tone }: { label: string; value: ReactNode; tone?: '
 
 function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => void }) {
   const toast = useSonnerToast();
-  const [busy, setBusy] = useState(false);
+  const command = useLoadImportCommand();
+  const [parsing, setParsing] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [importError, setImportError] = useState('');
+  const busy = parsing || command.isPending;
 
   const onXlsx = async (file: File) => {
     if (!tenantId) return;
-    setBusy(true);
+    setParsing(true); setImportError(''); setPreview(null);
     try {
       const buf = await file.arrayBuffer();
       const parsed = parseLoadSpreadsheet(buf);
-      const { preview: p } = await commitSpreadsheetImport(tenantId, file.name, parsed);
-      setPreview(p); onDone();
+      const result = await command.submit(buildSpreadsheetLoadImport(file.name, parsed));
+      setPreview(result.preview); onDone();
       toast.success('Planilha importada');
-    } catch (error: unknown) { toast.error(getErrorMessage(error, 'Falha ao importar')); }
-    finally { setBusy(false); }
+    } catch (error: unknown) {
+      const message = loadImportError(error); setImportError(message); toast.error(message);
+    } finally { setParsing(false); }
   };
 
   const onXml = async (files: FileList) => {
     if (!tenantId) return;
-    setBusy(true);
+    setParsing(true); setImportError(''); setPreview(null);
     try {
       const docs: Array<ParsedNfe | ParsedCte> = [];
-      let unsupported = 0;
       for (const f of Array.from(files)) {
         const txt = await f.text();
         const r = parseFiscalXml(txt);
-        if (r.kind === 'unsupported') { unsupported++; continue; }
+        if (r.kind === 'unsupported') throw new Error(`${f.name}: ${r.reason}`);
         docs.push(r);
       }
-      if (unsupported) toast.warning(`${unsupported} arquivo(s) fora do escopo ignorado(s).`);
-      const { preview: p } = await commitXmlImport(tenantId, `xmls-${files.length}`, docs);
-      setPreview(p); onDone();
+      const result = await command.submit(buildXmlLoadImport(`xmls-${files.length}`, docs));
+      setPreview(result.preview); onDone();
       toast.success('XMLs importados');
-    } catch (error: unknown) { toast.error(getErrorMessage(error, 'Falha')); }
-    finally { setBusy(false); }
+    } catch (error: unknown) {
+      const message = loadImportError(error); setImportError(message); toast.error(message);
+    } finally { setParsing(false); }
+  };
+
+  const recover = async () => {
+    setImportError('');
+    try {
+      const result = await command.recover();
+      setPreview(result.preview); onDone(); toast.success('Importação recuperada e confirmada');
+    } catch (error: unknown) {
+      const message = loadImportError(error); setImportError(message); toast.error(message);
+    }
   };
 
   return (
     <Card><CardContent className="p-3 space-y-3">
+      {(command.recoveryError || importError) && <div role="alert" className="rounded border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">{command.recoveryError || importError}</div>}
+      {command.pending && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
+          <span>Existe uma importação sem confirmação ({command.pending.payload.file_name}). Recupere o mesmo pedido antes de selecionar outro arquivo.</span>
+          <Button type="button" size="sm" variant="outline" disabled={busy || !!command.recoveryError} onClick={recover}>
+            {command.isPending ? 'Recuperando…' : 'Recuperar importação'}
+          </Button>
+        </div>
+      )}
+      {!tenantId && <div role="alert" className="rounded border p-2 text-sm">Selecione uma empresa antes de importar.</div>}
       <div className="grid gap-3 md:grid-cols-2">
         <div className="border rounded p-3">
           <div className="flex items-center gap-2 mb-2"><FileText className="h-4 w-4" /><span className="font-medium">Planilha legada (.xlsx)</span></div>
-          <Input type="file" accept=".xlsx" disabled={busy}
+          <Input aria-label="Selecionar planilha de cargas" type="file" accept=".xlsx" disabled={busy || !!command.pending || !tenantId || !!command.recoveryError}
                  onChange={e => e.target.files?.[0] && onXlsx(e.target.files[0])} />
           <p className="text-xs text-muted-foreground mt-1">Detecta automaticamente Resumo / Detalhada / Descarga.</p>
         </div>
         <div className="border rounded p-3">
           <div className="flex items-center gap-2 mb-2"><Upload className="h-4 w-4" /><span className="font-medium">XMLs (NF-e / CT-e)</span></div>
-          <Input type="file" accept=".xml" multiple disabled={busy}
+          <Input aria-label="Selecionar XMLs fiscais" type="file" accept=".xml" multiple disabled={busy || !!command.pending || !tenantId || !!command.recoveryError}
                  onChange={e => e.target.files && onXml(e.target.files)} />
-          <p className="text-xs text-muted-foreground mt-1">Vários arquivos. XMLs fora do escopo são ignorados.</p>
+          <p className="text-xs text-muted-foreground mt-1">O lote inteiro é recusado se algum XML estiver inválido ou fora do escopo.</p>
         </div>
       </div>
+      {busy && <div role="status" className="text-sm text-muted-foreground">Validando e confirmando o lote completo…</div>}
       {preview && (
         <div className="text-xs bg-muted p-2 rounded">
           <div>Cargas novas: <b>{preview.newLoads}</b> • Atualizadas: <b>{preview.updatedLoads}</b> • Documentos: <b>{preview.newDocuments}</b> • Duplicados: <b>{preview.duplicated}</b> • Pendências: <b>{preview.pending}</b> • Erros: <b>{preview.errors.length}</b></div>
