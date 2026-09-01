@@ -21,7 +21,7 @@ const baseEvent = {
 
 describe('TripOperationalEventsPanel', () => {
   it('shows retryable failure without calling it an empty trip', () => {
-    state.query = { isError: true, isPending: false, data: undefined, refetch: state.refetch };
+    state.query = { isError: true, isPending: false, isFetching: false, data: undefined, refetch: state.refetch };
     open();
     expect(screen.getByRole('alert')).toHaveTextContent('Nenhum estado vazio foi presumido');
     expect(screen.queryByText('Nenhuma ocorrência registrada para esta viagem.')).not.toBeInTheDocument();
@@ -29,15 +29,23 @@ describe('TripOperationalEventsPanel', () => {
     expect(state.refetch).toHaveBeenCalledOnce();
   });
 
+  it('blocks duplicate retries while the failed read is being retried', () => {
+    state.query = { isError: true, isPending: false, isFetching: true, data: undefined, refetch: state.refetch };
+    open();
+    expect(screen.getByRole('button', { name: 'Tentando novamente…' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Tentando novamente…' }));
+    expect(state.refetch).not.toHaveBeenCalled();
+  });
+
   it('shows an explicit empty state after a successful read', () => {
-    state.query = { isError: false, isPending: false, data: [], refetch: state.refetch };
+    state.query = { isError: false, isPending: false, isFetching: false, data: [], refetch: state.refetch };
     open();
     expect(screen.getByText('Nenhuma ocorrência registrada para esta viagem.')).toBeInTheDocument();
   });
 
   it('translates driver events and makes portal visibility explicit to the operator', () => {
     state.query = {
-      isError: false, isPending: false, refetch: state.refetch,
+      isError: false, isPending: false, isFetching: false, refetch: state.refetch,
       data: [
         baseEvent,
         { ...baseEvent, id: 'event-2', event_type: 'damaged', severity: 'critical',

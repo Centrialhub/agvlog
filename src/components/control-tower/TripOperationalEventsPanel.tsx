@@ -50,8 +50,8 @@ export default function TripOperationalEventsPanel({ tripId }: { tripId: string 
       ) : query.isError ? (
         <div role="alert" className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs">
           <p className="text-destructive">Não foi possível consultar as ocorrências. Nenhum estado vazio foi presumido.</p>
-          <Button size="sm" variant="outline" onClick={() => { void query.refetch(); }}>
-            Tentar novamente
+          <Button size="sm" variant="outline" disabled={query.isFetching} onClick={() => { void query.refetch(); }}>
+            {query.isFetching ? 'Tentando novamente…' : 'Tentar novamente'}
           </Button>
         </div>
       ) : events.length === 0 ? (

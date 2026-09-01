@@ -35,6 +35,17 @@ afterEach(async()=>{cleanup();client.clear();await serial;await db.exec('rollbac
 function open(){render(<QueryClientProvider client={client}><MemoryRouter><OperationsControl/></MemoryRouter></QueryClientProvider>);}
 async function loaded(){await screen.findByRole('button',{name:/QA-1234/});}
 describe('Control Tower page → actual read hooks → PostgreSQL',()=>{
+  it('does not present zero counts or a blank map before the first reads finish',()=>{
+    state.rpc.mockImplementation(()=>({abortSignal:()=>new Promise(()=>{})}));
+    open();
+    expect(screen.getByText('Viagens (—)')).toBeInTheDocument();
+    expect(screen.getByText('Alertas (—)')).toBeInTheDocument();
+    expect(screen.getByText('Carregando indicadores…')).toBeInTheDocument();
+    expect(screen.getByText('Carregando alertas…')).toBeInTheDocument();
+    expect(screen.getByText('Carregando viagens…')).toBeInTheDocument();
+    expect(screen.getByText('Carregando mapa operacional…')).toBeInTheDocument();
+    expect(screen.queryByText('Nenhuma viagem ativa.')).not.toBeInTheDocument();
+  });
   it('shows transit/loads/stops and keeps SSX disabled without a background Edge write',async()=>{
     open();await loaded();expect(state.invoke).not.toHaveBeenCalled();expect(screen.getByRole('button',{name:'Reavaliar rastreamento'})).toBeDisabled();
     fireEvent.click(screen.getByRole('button',{name:/QA-1234/}));
@@ -59,6 +70,12 @@ describe('Control Tower page → actual read hooks → PostgreSQL',()=>{
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByText('Nenhuma viagem ativa.')).not.toBeInTheDocument();
     expect(screen.queryByText('Nenhum alerta aberto.')).not.toBeInTheDocument();
+    expect(screen.getByText('Viagens (—)')).toBeInTheDocument();
+    expect(screen.getByText('Alertas (—)')).toBeInTheDocument();
+    expect(screen.getByText('Indicadores indisponíveis.')).toBeInTheDocument();
+    expect(screen.getByText('Alertas indisponíveis.')).toBeInTheDocument();
+    expect(screen.getByText('Viagens indisponíveis.')).toBeInTheDocument();
+    expect(screen.getByText(/Mapa indisponível porque as viagens/)).toBeInTheDocument();
   });
   it('validates a response tenant before rendering it',async()=>{
     const foreign=await towerRead<Record<string,unknown>[]>(db);

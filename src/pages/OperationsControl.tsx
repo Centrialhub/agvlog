@@ -30,6 +30,8 @@ export default function OperationsControl() {
   const { isLoading, dataUpdatedAt, refetch, isFetching } = tripQuery;
   const trips = tripQuery.isError ? [] : tripQuery.data ?? [];
   const alerts = alertQuery.isError ? [] : alertQuery.data ?? [];
+  const tripCount = tripQuery.isPending || tripQuery.isError ? '—' : trips.length;
+  const alertCount = alertQuery.isPending || alertQuery.isError ? '—' : alerts.length;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedTrip = trips.find(t => t.trip_id === selectedId) ?? null;
   const setSelectedTrip = (trip: ActiveTripLive | null) => setSelectedId(trip?.trip_id ?? null);
@@ -96,11 +98,11 @@ export default function OperationsControl() {
           </div>
         </div>
         <div className="flex items-center gap-3 ml-auto text-xs">
-          <Metric label="Viagens ativas" value={tripQuery.isError ? '—' : trips.length} />
-          <Metric label="Alertas críticos" value={alertQuery.isError ? '—' : criticalCount} tone={criticalCount > 0 ? 'text-red-600' : ''} />
+          <Metric label="Viagens ativas" value={tripCount} />
+          <Metric label="Alertas críticos" value={alertQuery.isPending || alertQuery.isError ? '—' : criticalCount} tone={criticalCount > 0 ? 'text-red-600' : ''} />
           <Metric label="Última consulta válida" value={!tripQuery.isError && lastUpdateAge != null ? `${lastUpdateAge}s atrás` : '—'} />
           <Button size="sm" variant="ghost" aria-label="Atualizar torre" onClick={() => { void refetch(); void alertQuery.refetch(); }} disabled={isFetching || alertQuery.isFetching}>
-            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching || alertQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
           <Button size="sm" variant="ghost" aria-label="Alternar tela cheia" onClick={goFullscreen}>
             <Maximize2 className="h-3.5 w-3.5" />
@@ -120,20 +122,32 @@ export default function OperationsControl() {
         {/* Sidebar */}
         <aside className="w-72 border-r bg-card flex flex-col overflow-hidden">
           <div className="p-3 border-b">
-            {!tripQuery.isError && <KpiCards trips={trips} />}
+            {tripQuery.isPending ? (
+              <p role="status" className="py-2 text-center text-xs text-muted-foreground">Carregando indicadores…</p>
+            ) : tripQuery.isError ? (
+              <p className="py-2 text-center text-xs text-destructive">Indicadores indisponíveis.</p>
+            ) : (
+              <KpiCards trips={trips} />
+            )}
           </div>
 
           <div className="p-3 border-b">
             <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              Alertas ({alerts.length})
+              Alertas ({alertCount})
             </h3>
-            {!alertQuery.isError && !alertQuery.isPending && <AlertsPanel alerts={alerts} trips={trips} onSelectTrip={setSelectedTrip} />}
+            {alertQuery.isPending ? (
+              <p role="status" className="py-2 text-center text-xs text-muted-foreground">Carregando alertas…</p>
+            ) : alertQuery.isError ? (
+              <p className="py-2 text-center text-xs text-destructive">Alertas indisponíveis.</p>
+            ) : (
+              <AlertsPanel alerts={alerts} trips={trips} onSelectTrip={setSelectedTrip} />
+            )}
           </div>
 
           <div className="flex-1 overflow-hidden flex flex-col">
             <div className="px-3 pt-2 pb-1 flex items-center justify-between">
               <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Viagens ({trips.length})
+                Viagens ({tripCount})
               </h3>
               <Button
                 size="sm"
@@ -150,7 +164,10 @@ export default function OperationsControl() {
             <ScrollArea className="flex-1">
               <div className="px-2 pb-3 space-y-1">
                 {isLoading && (
-                  <p className="text-xs text-muted-foreground text-center py-4">Carregando…</p>
+                  <p role="status" className="text-xs text-muted-foreground text-center py-4">Carregando viagens…</p>
+                )}
+                {!isLoading && tripQuery.isError && (
+                  <p className="text-xs text-destructive text-center py-4">Viagens indisponíveis.</p>
                 )}
                 {!isLoading && !tripQuery.isError && trips.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">Nenhuma viagem ativa.</p>
@@ -178,8 +195,18 @@ export default function OperationsControl() {
         </aside>
 
         {/* Map */}
-        <main className="flex-1 p-3">
+        <main className="relative flex-1 p-3">
           <ControlTowerMap trips={trips} onSelectTrip={setSelectedTrip} />
+          {tripQuery.isPending && (
+            <div role="status" className="absolute inset-3 flex items-center justify-center rounded-lg bg-background/80 text-sm text-muted-foreground backdrop-blur-[1px]">
+              Carregando mapa operacional…
+            </div>
+          )}
+          {tripQuery.isError && (
+            <div className="absolute inset-3 flex items-center justify-center rounded-lg bg-background/85 px-6 text-center text-sm text-destructive backdrop-blur-[1px]">
+              Mapa indisponível porque as viagens não puderam ser confirmadas.
+            </div>
+          )}
         </main>
       </div>
 

@@ -112,7 +112,13 @@ const DRIVER_BAR_COLORS = {
 export default function OperationalEvents() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
-  const { data: events = [], error } = useOperationalEvents();
+  const {
+    data: events = [],
+    error: eventsError,
+    isPending: isEventsPending,
+    isError: isEventsError,
+    refetch: refetchEvents,
+  } = useOperationalEvents();
 
   // Scroll callback para o botão da torre
   const scrollToDetail = useCallback(() => {
@@ -148,6 +154,7 @@ export default function OperationalEvents() {
     data: tableEvents = [],
     isLoading: isTableLoading,
     isError: isTableError,
+    error: tableError,
     isFetching: isTableFetching,
     refetch: refetchTable,
   } = useOperationalEventsFiltered({
@@ -816,6 +823,7 @@ export default function OperationalEvents() {
   const criticalCount = events.filter(e => !e.resolved_at && (e.severity === 'high' || e.severity === 'critical')).length;
   const last24hCount = events.filter(e => Date.now() - new Date(e.created_at).getTime() < 24 * 3600 * 1000).length;
   const totalImpact = events.reduce((s, e) => s + (Number(e.financial_impact) || 0), 0);
+  const totalsUnavailable = isEventsPending || isEventsError;
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -823,11 +831,27 @@ export default function OperationalEvents() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <AlertOctagon className="h-6 w-6 text-destructive" /> Ocorrências
-            <Badge variant="outline" className="ml-2 gap-1 text-[10px] font-normal text-success border-success/30">
-              <Wifi className="h-3 w-3" /> sincronizado
+            <Badge
+              variant="outline"
+              className={cn(
+                'ml-2 gap-1 text-[10px] font-normal',
+                isEventsError ? 'border-destructive/30 text-destructive' : 'border-success/30 text-success',
+              )}
+            >
+              {isEventsPending
+                ? <><Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" /> consultando</>
+                : isEventsError
+                  ? <><AlertTriangle aria-hidden="true" className="h-3 w-3" /> indisponível</>
+                  : <><Wifi aria-hidden="true" className="h-3 w-3" /> sincronizado</>}
             </Badge>
           </h1>
-          <p className="text-sm text-muted-foreground">{openCount} abertas · {events.length} total · sincronia em tempo real com o app do motorista</p>
+          <p className="text-sm text-muted-foreground">
+            {isEventsPending
+              ? 'Consultando o histórico integrado com o app do motorista…'
+              : isEventsError
+                ? 'Totais indisponíveis. A falha não foi interpretada como ausência de ocorrências.'
+                : `${openCount} abertas · ${events.length} total · sincronia em tempo real com o app do motorista`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={scrollToDetail}>
@@ -897,10 +921,10 @@ export default function OperationalEvents() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="Abertas" value={openCount} accent="bg-destructive/10 text-destructive" />
-        <KpiCard label="Críticas / Altas" value={criticalCount} accent="bg-orange-500/10 text-orange-500" />
-        <KpiCard label="Últimas 24h" value={last24hCount} accent="bg-primary/10 text-primary" />
-        <KpiCard label="Impacto financeiro" value={`R$ ${totalImpact.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} accent="bg-warning/10 text-warning" />
+        <KpiCard label="Abertas" value={totalsUnavailable ? '—' : openCount} accent="bg-destructive/10 text-destructive" />
+        <KpiCard label="Críticas / Altas" value={totalsUnavailable ? '—' : criticalCount} accent="bg-orange-500/10 text-orange-500" />
+        <KpiCard label="Últimas 24h" value={totalsUnavailable ? '—' : last24hCount} accent="bg-primary/10 text-primary" />
+        <KpiCard label="Impacto financeiro" value={totalsUnavailable ? '—' : `R$ ${totalImpact.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} accent="bg-warning/10 text-warning" />
       </div>
 
       {/* Filtros Avançados (recolhível) */}
@@ -1146,7 +1170,19 @@ export default function OperationalEvents() {
           </div>
         </CardHeader>
         <CardContent>
-          {chartTypes.length === 0 ? (
+          {isEventsPending ? (
+            <div role="status" className="h-64 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> Carregando histórico de ocorrências…
+            </div>
+          ) : isEventsError ? (
+            <div role="alert" className="h-64 flex flex-col items-center justify-center gap-3 px-6 text-center">
+              <p className="text-sm text-destructive">Histórico indisponível. Nenhum gráfico vazio foi presumido.</p>
+              <p className="text-xs text-muted-foreground">{getErrorMessage(eventsError, 'Verifique sua conexão.')}</p>
+              <Button size="sm" variant="outline" onClick={() => { void refetchEvents(); }}>
+                <RefreshCw aria-hidden="true" className="h-3.5 w-3.5 mr-2" /> Tentar novamente
+              </Button>
+            </div>
+          ) : chartTypes.length === 0 ? (
             <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
               Sem dados nos últimos 12 meses
             </div>
@@ -1246,7 +1282,15 @@ export default function OperationalEvents() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {respTotal === 0 ? (
+            {isTableLoading ? (
+              <div role="status" className="h-64 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> Carregando responsabilidade…
+              </div>
+            ) : isTableError ? (
+              <div className="h-64 flex items-center justify-center px-6 text-center text-sm text-destructive">
+                Responsabilidade indisponível enquanto a consulta não puder ser confirmada.
+              </div>
+            ) : respTotal === 0 ? (
               <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
                 Sem dados no período
               </div>
@@ -1300,7 +1344,15 @@ export default function OperationalEvents() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {sepTotal === 0 ? (
+            {isTableLoading ? (
+              <div role="status" className="h-64 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> Carregando linhas de separação…
+              </div>
+            ) : isTableError ? (
+              <div className="h-64 flex items-center justify-center px-6 text-center text-sm text-destructive">
+                Linhas de separação indisponíveis enquanto a consulta não puder ser confirmada.
+              </div>
+            ) : sepTotal === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center text-sm text-muted-foreground gap-1">
                 <span>Sem dados de linha de separação no período</span>
                 <span className="text-xs">Drivers/operadores devem informar a linha ao registrar a ocorrência.</span>
@@ -1344,7 +1396,7 @@ export default function OperationalEvents() {
               Ocorrências por Motorista{periodLabel !== 'período selecionado' ? ` ${periodLabel}` : ''}
             </CardTitle>
             <CardDescription className="text-[11px]">
-              Total de motoristas: {driverStats.rows.length}
+              Total de motoristas: {isTableLoading || isTableError ? '—' : driverStats.rows.length}
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -1372,7 +1424,15 @@ export default function OperationalEvents() {
           </div>
         </CardHeader>
         <CardContent>
-          {filteredDriverRows.length === 0 ? (
+          {isTableLoading ? (
+            <div role="status" className="h-32 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> Carregando ocorrências por motorista…
+            </div>
+          ) : isTableError ? (
+            <div className="h-32 flex items-center justify-center px-6 text-center text-sm text-destructive">
+              Ocorrências por motorista indisponíveis enquanto a consulta não puder ser confirmada.
+            </div>
+          ) : filteredDriverRows.length === 0 ? (
             <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">
               {driverStats.rows.length === 0 ? 'Sem ocorrências no período' : 'Nenhum motorista corresponde à busca'}
             </div>
@@ -1755,7 +1815,7 @@ export default function OperationalEvents() {
         </Button>
         <span className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
           {(isTableFetching && !isTableLoading) && <Loader2 className="h-3 w-3 animate-spin" />}
-          {sorted.length} resultado(s)
+          {isTableError ? 'Resultados indisponíveis' : isTableLoading ? 'Consultando resultados…' : `${sorted.length} resultado(s)`}
         </span>
       </div>
 
@@ -1797,7 +1857,7 @@ export default function OperationalEvents() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-foreground">Não foi possível carregar as ocorrências</p>
-                        <p className="text-xs text-muted-foreground mt-1">{getErrorMessage(error, 'Erro desconhecido. Verifique sua conexão.')}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{getErrorMessage(tableError, 'Erro desconhecido. Verifique sua conexão.')}</p>
                       </div>
                       <Button size="sm" variant="outline" onClick={() => refetchTable()}>
                         <RefreshCw className="h-3.5 w-3.5 mr-2" /> Tentar novamente
@@ -1812,7 +1872,7 @@ export default function OperationalEvents() {
                       <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                         <Inbox className="h-6 w-6 text-muted-foreground" />
                       </div>
-                      {events.length === 0 ? (
+                      {!isEventsPending && !isEventsError && events.length === 0 ? (
                         <>
                           <div>
                             <p className="text-sm font-medium text-foreground">Nenhuma ocorrência registrada</p>
@@ -1828,9 +1888,15 @@ export default function OperationalEvents() {
                         <>
                           <div>
                             <p className="text-sm font-medium text-foreground">Nenhum resultado para os filtros aplicados</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Existem {events.length} ocorrência(s) no total. Ajuste os filtros para visualizá-las.
-                            </p>
+                            {!isEventsPending && !isEventsError ? (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Existem {events.length} ocorrência(s) no total. Ajuste os filtros para visualizá-las.
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                A consulta filtrada foi concluída, mas o total geral ainda não está disponível.
+                              </p>
+                            )}
                           </div>
                           {activeFiltersCount > 0 && (
                             <Button size="sm" variant="outline" onClick={clearAllFilters}>
