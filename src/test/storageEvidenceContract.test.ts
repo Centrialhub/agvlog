@@ -17,7 +17,7 @@ describe('linked Storage evidence rollout contract',()=>{
   expect(sql).toContain('drop policy if exists receipts_tenant_delete on storage.objects');
   expect(sql).toContain('before delete on storage.objects for each row');
   expect(sql).toContain("raise exception 'storage_evidence_retention_required'");
-  expect(sql).toContain('grant execute on function public.authorize_secure_upload_cleanup_v1(uuid,text,text[])\n  to authenticated');
+  expect(sql).toMatch(/grant execute on function public\.authorize_secure_upload_cleanup_v1\(uuid,text,text\[\]\)\r?\n\s{2}to authenticated/);
   expect(sql).toContain('from public,anon,authenticated,service_role');
   expect(sql).not.toMatch(/grant execute on function public\.authorize_secure_upload_cleanup_v1[\s\S]*to (anon|service_role)/);
  });
