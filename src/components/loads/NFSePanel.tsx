@@ -19,7 +19,7 @@ interface Props {
 
 export default function NFSePanel({ loadId, loadNumber, destination, defaultClientName, defaultClientCnpj, freightTotal }: Props) {
   const { data: notes = [] } = useNFSeList({ loadId });
-  const [environment, setEnvironment] = useState<HubEnvironment>('homologation');
+  const [environment, setEnvironment] = useState<HubEnvironment>('production');
   const issue = useIssueNFSe(environment);
   const [open, setOpen] = useState(false);
 
@@ -61,6 +61,9 @@ export default function NFSePanel({ loadId, loadNumber, destination, defaultClie
 
         <NFSeFormDialog
           open={open}
+          environment={environment}
+          onEnvironmentChange={setEnvironment}
+          issuing={issue.isPending}
           onOpenChange={setOpen}
           loadId={loadId}
           initial={{

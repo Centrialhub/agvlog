@@ -49,7 +49,7 @@ export default function NFSePage() {
   const { promptAction, confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const { data: docs = [], isLoading } = useNFSeList();
-  const [environment, setEnvironment] = useState<HubEnvironment>('homologation');
+  const [environment, setEnvironment] = useState<HubEnvironment>('production');
   const issue = useIssueNFSe(environment);
   const cancel = useCancelNFSe();
   const del = useDeleteNFSe();
@@ -199,7 +199,8 @@ export default function NFSePage() {
             <h1 className="text-2xl font-semibold">NFS-e — Notas Fiscais de Serviço</h1>
             <p className="text-sm text-muted-foreground">Emissão de RPS / NFS-e (estrutura preparada para integração fiscal)</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issue.isPending} />
             <Button variant="outline" onClick={() => sync.mutate({})} disabled={sync.isPending}>
               <RefreshCw className={`h-4 w-4 mr-1 ${sync.isPending ? 'animate-spin' : ''}`} /> Consultar status
             </Button>
@@ -218,7 +219,6 @@ export default function NFSePage() {
             <Input className="max-w-xs" placeholder="Buscar nº, cliente, CNPJ…" value={search} onChange={e => setSearch(e.target.value)} />
           </CardHeader>
           <CardContent>
-            <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issue.isPending} />
             {/* Filtros de seleção para download em massa */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
               <div className="flex flex-col gap-1">
@@ -402,6 +402,9 @@ export default function NFSePage() {
 
         <NFSeFormDialog
           open={formOpen}
+          environment={environment}
+          onEnvironmentChange={setEnvironment}
+          issuing={issue.isPending}
           onOpenChange={(next) => {
             setFormOpen(next);
             if (!next) setEditing(null);

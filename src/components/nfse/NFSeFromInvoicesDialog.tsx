@@ -51,7 +51,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const { data: clients = [] } = useClients();
   const { data: emitters = [] } = useEmitters();
   const create = useCreateNFSe();
-  const [environment, setEnvironment] = useState<HubEnvironment>('homologation');
+  const [environment, setEnvironment] = useState<HubEnvironment>('production');
   const issue = useIssueNFSe(environment);
   const recalcFreight = useRecalculateInboundFreight();
   const { data: insuranceProfile } = useInsuranceProfile();

@@ -22,6 +22,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
+import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
+import type { HubEnvironment } from '../../../supabase/functions/_shared/fiscal-environment';
 import { fiscalDocumentText } from '@/lib/fiscal/fiscalDocumentContact';
 
 interface NFSeItem {
@@ -83,6 +85,9 @@ interface NFSeFormState {
 }
 
 interface Props {
+  environment: HubEnvironment;
+  onEnvironmentChange: (environment: HubEnvironment) => void;
+  issuing?: boolean;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial?: Partial<NFSeDoc> | null;
@@ -112,7 +117,7 @@ const EMPTY_FORM: NFSeFormState = {
   related_cte_ids: [],
 };
 
-export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, onSaved }: Props) {
+export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvironmentChange, issuing, initial, loadId, onSaved }: Props) {
   const toast = useSonnerToast();
   const create = useCreateNFSe();
   const update = useUpdateNFSe();
@@ -433,6 +438,17 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
         <DialogHeader>
           <DialogTitle>{editing ? 'Editar NFS-e (RPS)' : 'Nova NFS-e (RPS)'}</DialogTitle>
         </DialogHeader>
+
+        <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+          <FiscalEnvironmentSelect
+            value={environment}
+            onChange={onEnvironmentChange}
+            disabled={issuing || create.isPending || update.isPending}
+          />
+          <p className="text-xs text-muted-foreground">
+            Ambiente para emitir nesta tela. Salvar o RPS cria um rascunho; para transmitir, use Emitir após salvar.
+          </p>
+        </div>
 
         <Tabs defaultValue="gerais">
           <TabsList>
