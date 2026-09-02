@@ -13,7 +13,7 @@ import { Plus, Trash2, Search, Loader2, UserSearch } from 'lucide-react';
 import { useCreateNFSe, useUpdateNFSe, type NFSeDoc } from '@/hooks/useNFSe';
 import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { useEmitters } from '@/hooks/useEmitters';
-import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normalizePhone } from '@/lib/fiscal/fiscalAddress';
+import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normalizePhone, onlyDigits } from '@/lib/fiscal/fiscalAddress';
 import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
 import { useClients } from '@/hooks/useClients';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -118,7 +118,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const update = useUpdateNFSe();
   const editing = !!initial?.id;
   const { data: emitters = [] } = useEmitters();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [], isPending: clientsLoading, isError: clientsError, refetch: refetchClients } = useClients();
 
   const [form, setForm] = useState<NFSeFormState>(EMPTY_FORM);
   const [items, setItems] = useState<NFSeItem[]>([]);
@@ -211,16 +211,19 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   }, [clients]);
 
   const filteredClientOptions = useMemo(() => {
-    const search = clientSearchTerm.trim().toLowerCase();
+    const search = clientSearchTerm.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     if (!search) return clientOptions;
+    const documentSearch = /^[\d\s./-]+$/.test(search) ? onlyDigits(search) : '';
     return clientOptions.filter((opt) => {
-      const text = `${opt.label} ${opt.raw.tax_id || ''}`.toLowerCase();
-      return text.includes(search);
+      const text = opt.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return text.includes(search) || (documentSearch !== '' && onlyDigits(opt.raw.tax_id).includes(documentSearch));
     });
   }, [clientOptions, clientSearchTerm]);
 
   useEffect(() => {
     if (!open) return;
+    setClientSearchOpen(false);
+    setClientSearchTerm('');
     setForm({
       branch_code: initial?.branch_code || 'MATRIZ',
       emitter_id: initial?.emitter_id ?? null,
@@ -565,9 +568,11 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
               <div className="flex items-center justify-between pt-2">
                 <h4 className="font-semibold text-sm text-primary">Tomador (Cliente)</h4>
                 <Popover
+                  modal
                   open={clientSearchOpen}
                   onOpenChange={(v) => {
                     setClientSearchOpen(v);
+                    if (v && clientsError) void refetchClients();
                     if (!v) setClientSearchTerm('');
                   }}
                 >
@@ -582,21 +587,32 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
                       <CommandInput
                         placeholder="Buscar por nome ou CNPJ..."
                         value={clientSearchTerm}
-                        onChange={(e) => setClientSearchTerm(e.target.value)}
+                        onValueChange={setClientSearchTerm}
                       />
                       <CommandList>
-                        <CommandEmpty>Nenhum registro encontrado.</CommandEmpty>
+                        {clientsLoading ? (
+                          <div role="status" className="py-6 text-center text-sm">Carregando clientes e fornecedores...</div>
+                        ) : clientsError ? (
+                          <div role="alert" className="p-4 text-center text-sm">
+                            Não foi possível carregar os clientes e fornecedores.
+                            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void refetchClients()}>
+                              Tentar novamente
+                            </Button>
+                          </div>
+                        ) : (
+                          <CommandEmpty>Nenhum registro encontrado.</CommandEmpty>
+                        )}
                         <CommandGroup>
                           {filteredClientOptions.map((opt) => (
                             <CommandItem
                               key={opt.value}
-                              value={`${opt.label} ${opt.raw.tax_id || ''}`}
+                              value={opt.value}
                               onSelect={() => handleSelectClient(opt.value)}
                             >
                               <Check
                                 className={cn(
                                   "mr-2 h-4 w-4",
-                                  form.cliente_cnpj === opt.raw.tax_id ? "opacity-100" : "opacity-0"
+                                  form.cliente_id === opt.value ? "opacity-100" : "opacity-0"
                                 )}
                               />
                               {opt.label}
