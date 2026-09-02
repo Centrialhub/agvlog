@@ -18,7 +18,7 @@ import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
 import { useClients } from '@/hooks/useClients';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
@@ -32,6 +32,7 @@ interface NFSeItem {
 }
 
 interface NFSeFormState {
+  cliente_id: string | null;
   branch_code: string;
   emitter_id: string | null;
   regime_tributario: string;
@@ -96,6 +97,7 @@ function errorMessage(error: unknown): string {
 }
 
 const EMPTY_FORM: NFSeFormState = {
+  cliente_id: null,
   branch_code: 'MATRIZ', emitter_id: null, regime_tributario: '3', series: '1',
   doc_type: 'NFS', situacao_doc: '00', is_preview: false,
   issue_date: new Date().toISOString().slice(0, 10), cond_pagamento: '', tipo_ctrc: '',
@@ -198,8 +200,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const { data: allDocs = [] } = useFiscalDocuments();
 
   const clientOptions = useMemo(() => {
-    return clients
-      .filter(c => c.active && (c.is_client || c.is_supplier))
+    return clients.filter(c => c.active && (c.is_client !== false || c.is_supplier !== false))
       .map(c => ({
         value: c.id,
         label: `${c.company_name} (${c.tax_id || 'S/CNPJ'}) ${c.is_supplier && !c.is_client ? '[Fornecedor]' : ''}`,
@@ -218,6 +219,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       situacao_doc: initial?.situacao_doc || '00',
       is_preview: initial?.is_preview ?? false,
       issue_date: initial?.issue_date || new Date().toISOString().slice(0, 10),
+      cliente_id: initial?.cliente_id || null,
       cond_pagamento: initial?.cond_pagamento || '',
       tipo_ctrc: initial?.tipo_ctrc || '',
       reference_number: initial?.reference_number || '',
@@ -315,6 +317,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       // Preenche os dados do tomador
       setForm(prev => ({
         ...prev,
+        cliente_id: doc.client_id || prev.cliente_id,
         cliente_nome: doc.remitter || doc.clients?.company_name || prev.cliente_nome,
         cliente_cnpj: doc.remitter_cnpj || prev.cliente_cnpj,
         cliente_municipio: doc.recipient_city || prev.cliente_municipio,
@@ -356,6 +359,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
 
     setForm(prev => ({
       ...prev,
+      cliente_id: client.id,
       cliente_nome: client.company_name,
       cliente_cnpj: client.tax_id || '',
       cliente_ie: sanitizeIe(client.state_registration) || '',
@@ -558,24 +562,26 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
                   <PopoverContent className="p-0 w-[400px]" align="end">
                     <Command>
                       <CommandInput placeholder="Buscar por nome ou CNPJ..." />
-                      <CommandEmpty>Nenhum registro encontrado.</CommandEmpty>
-                      <CommandGroup className="max-h-[300px] overflow-y-auto">
-                        {clientOptions.map((opt) => (
-                          <CommandItem
-                            key={opt.value}
-                            value={opt.label}
-                            onSelect={() => handleSelectClient(opt.value)}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                form.cliente_cnpj === opt.raw.tax_id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {opt.label}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                      <CommandList>
+                        <CommandEmpty>Nenhum registro encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {clientOptions.map((opt) => (
+                            <CommandItem
+                              key={opt.value}
+                              value={`${opt.label} ${opt.raw.tax_id || ''}`}
+                              onSelect={() => handleSelectClient(opt.value)}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  form.cliente_cnpj === opt.raw.tax_id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {opt.label}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
                     </Command>
                   </PopoverContent>
                 </Popover>
