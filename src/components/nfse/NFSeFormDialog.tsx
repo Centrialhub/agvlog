@@ -125,6 +125,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [invoiceSearch, setInvoiceSearch] = useState('');
   const [clientSearchOpen, setClientSearchOpen] = useState(false);
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState({ invoice: '', recipient: '' });
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
@@ -200,13 +201,23 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const { data: allDocs = [] } = useFiscalDocuments();
 
   const clientOptions = useMemo(() => {
-    return clients.filter(c => c.active && (c.is_client !== false || c.is_supplier !== false))
+    return clients
+      .filter(c => c.is_client !== false || c.is_supplier !== false)
       .map(c => ({
         value: c.id,
         label: `${c.company_name} (${c.tax_id || 'S/CNPJ'}) ${c.is_supplier && !c.is_client ? '[Fornecedor]' : ''}`,
         raw: c
       }));
   }, [clients]);
+
+  const filteredClientOptions = useMemo(() => {
+    const search = clientSearchTerm.trim().toLowerCase();
+    if (!search) return clientOptions;
+    return clientOptions.filter((opt) => {
+      const text = `${opt.label} ${opt.raw.tax_id || ''}`.toLowerCase();
+      return text.includes(search);
+    });
+  }, [clientOptions, clientSearchTerm]);
 
   useEffect(() => {
     if (!open) return;
@@ -376,6 +387,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       cliente_telefone: normalizePhone(client.phone) || '',
     }));
     setClientSearchOpen(false);
+    setClientSearchTerm('');
     toast.info('Dados do tomador preenchidos');
   };
 
@@ -552,7 +564,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between pt-2">
                 <h4 className="font-semibold text-sm text-primary">Tomador (Cliente)</h4>
-                <Popover open={clientSearchOpen} onOpenChange={setClientSearchOpen}>
+                <Popover
+                  open={clientSearchOpen}
+                  onOpenChange={(v) => {
+                    setClientSearchOpen(v);
+                    if (!v) setClientSearchTerm('');
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="h-8 gap-2">
                       <UserSearch className="h-4 w-4" />
@@ -560,12 +578,16 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="p-0 w-[400px]" align="end">
-                    <Command>
-                      <CommandInput placeholder="Buscar por nome ou CNPJ..." />
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Buscar por nome ou CNPJ..."
+                        value={clientSearchTerm}
+                        onChange={(e) => setClientSearchTerm(e.target.value)}
+                      />
                       <CommandList>
                         <CommandEmpty>Nenhum registro encontrado.</CommandEmpty>
                         <CommandGroup>
-                          {clientOptions.map((opt) => (
+                          {filteredClientOptions.map((opt) => (
                             <CommandItem
                               key={opt.value}
                               value={`${opt.label} ${opt.raw.tax_id || ''}`}
