@@ -70,6 +70,17 @@ describe('driver stops rendered frontend',()=>{
     await waitFor(()=>expect(mocks.arrival).toHaveBeenCalledWith('stop'));
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
+  it('surfaces a GPS/geofence rejection and permits an identical retry',async()=>{
+    mocks.stop={...mocks.stop,status:'pending',actual_arrival_at:null};
+    mocks.arrival.mockRejectedValueOnce({code:'23514',message:'Você está fora do raio permitido para esta parada'});
+    renderPage();fireEvent.click(await screen.findByRole('button',{name:'Cheguei'}));
+    await waitFor(()=>expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
+      description:'Você está fora do raio permitido para esta parada',variant:'destructive',
+    })));
+    fireEvent.click(screen.getByRole('button',{name:'Cheguei'}));
+    await waitFor(()=>expect(mocks.arrival).toHaveBeenCalledTimes(2));
+    expect(mocks.arrival.mock.calls[1]).toEqual(mocks.arrival.mock.calls[0]);
+  });
   it('disables departure before a real start and before arrival',async()=>{
     mocks.started=false;renderPage();expect(await screen.findByRole('button',{name:'Registrar saída'})).toBeDisabled();
     expect(screen.getByRole('alert')).toHaveTextContent('Inicie a viagem');expect(mocks.rpc).not.toHaveBeenCalled();

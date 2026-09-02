@@ -1,401 +1,517 @@
-import { useMemo, useState } from 'react';
-import { isBillableFiscalDoc } from '@/lib/fiscal/documentStatus';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  AlertTriangle, CheckCircle2, Download, FileCheck2, FileSignature,
+  Loader2, RefreshCw, Send, ShieldCheck, Truck, User, XCircle,
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useTenant } from '@/hooks/useTenant';
-import { useAuth } from '@/hooks/useAuth';
+import type { Load } from '@/hooks/useLoads';
+import { useAuthorizedCteList } from '@/hooks/useAuthorizedCteList';
+import { useEmitters, useHubCredentials } from '@/hooks/useEmitters';
+import { useVehicles } from '@/hooks/useVehicles';
+import { useInsuranceProfile } from '@/hooks/useInsuranceProfile';
+import {
+  downloadMdfeFile, useCloseMdfe, useIssueMdfe, useLoadMdfe, useSyncMdfe,
+} from '@/hooks/useMdfe';
+import { buildMdfePayload, type BuildMdfePayloadInput } from '@/lib/fiscal/mdfeBuilder';
+import { deriveMdfePredominantProduct } from '@/lib/fiscal/mdfePredominantProduct';
+import {
+  canCloseMdfe, canDownloadMdfe, MDFE_STATUS_LABELS, normalizeMdfeStatus,
+} from '@/lib/fiscal/mdfeStatus';
+import { getErrorMessage } from '@/lib/errors';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FileSignature, Send, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
-import { useSonnerToast } from '@/hooks/useSonnerToast';
-import { Download } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import type { Tables } from '@/integrations/supabase/types';
+import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
+import {
+  selectScopedHubCredential, type HubEnvironment,
+} from '../../../supabase/functions/_shared/fiscal-environment';
+import type { EmitParams } from '@/lib/fiscal/hubFiscalClient';
 
 interface Props {
-  loadId: string;
-  loadNumber: string;
-  origin?: string | null;
-  destination?: string | null;
+  load: Load;
 }
 
-const UF_LIST = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+interface FormState {
+  emitterId: string;
+  environment: HubEnvironment;
+  vehicleTara: string;
+  rntrc: string;
+  ciot: string;
+  ciotResponsible: string;
+  endorsements: string;
+  originCity: string;
+  originIbge: string;
+  originUf: string;
+  destinationCity: string;
+  destinationIbge: string;
+  destinationUf: string;
+}
 
-type Manifest = Tables<'load_manifests'>;
-type PdfWithLastTable = jsPDF & { lastAutoTable: { finalY: number } };
-const tableEndY = (document: jsPDF) => (document as PdfWithLastTable).lastAutoTable.finalY;
+const EMPTY_FORM: FormState = {
+  emitterId: '',
+  environment: 'production',
+  vehicleTara: '',
+  rntrc: '',
+  ciot: '',
+  ciotResponsible: '',
+  endorsements: '',
+  originCity: '',
+  originIbge: '',
+  originUf: '',
+  destinationCity: '',
+  destinationIbge: '',
+  destinationUf: '',
+};
 
-export default function ManifestPanel({ loadId, loadNumber, origin, destination }: Props) {
+const digits = (value: unknown) => String(value ?? '').replace(/\D/g, '');
+const stateFromIbge = (value: unknown) => digits(value).slice(0, 2);
+const statusTone: Record<string, string> = {
+  draft: 'bg-muted text-muted-foreground',
+  processing: 'bg-info/10 text-info border-info/30',
+  provider_unknown: 'bg-warning/10 text-warning border-warning/30',
+  authorized: 'bg-success/10 text-success border-success/30',
+  rejected: 'bg-destructive/10 text-destructive border-destructive/30',
+  closing: 'bg-info/10 text-info border-info/30',
+  closed: 'bg-success/10 text-success border-success/30',
+  cancelled: 'bg-muted text-muted-foreground',
+};
+
+function readVehicleTara(tags: unknown): string {
+  if (!tags || typeof tags !== 'object' || Array.isArray(tags)) return '';
+  const record = tags as Record<string, unknown>;
+  const value = record.tara_kg ?? record.taraKg ?? record.tara;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : '';
+}
+
+function returnedLoad(load: Load) {
+  return Boolean(load.arrival_at) ||
+    ['delivered', 'partial_delivery', 'returned', 'refused', 'failed'].includes(load.status);
+}
+
+export default function ManifestPanel({ load }: Props) {
   const toast = useSonnerToast();
-  const { currentTenant } = useTenant();
-  const { user } = useAuth();
-  const qc = useQueryClient();
+  const initializedLoad = useRef<string | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [downloading, setDownloading] = useState<'pdf' | 'xml' | null>(null);
 
-  // Load CT-es for this load
-  const { data: ctes = [] } = useQuery({
-    queryKey: ['load_ctes', loadId],
+  const { data: manifest, isLoading: manifestLoading, refetch: refetchManifest } = useLoadMdfe(load.id);
+  const { data: allCtes = [], isLoading: ctesLoading, refetch: refetchCtes } = useAuthorizedCteList(load.id);
+  const { data: emitters = [], isLoading: emittersLoading } = useEmitters();
+  const { data: vehicles = [], isLoading: vehiclesLoading } = useVehicles();
+  const { data: insurance } = useInsuranceProfile();
+  const { data: credentials = [] } = useHubCredentials(form.emitterId);
+  const issueMdfe = useIssueMdfe();
+  const syncMdfe = useSyncMdfe();
+  const closeMdfe = useCloseMdfe();
+
+  const { data: driver, isLoading: driverLoading } = useQuery({
+    queryKey: ['mdfe', 'driver', load.tenant_id, load.driver_id],
+    enabled: !!load.driver_id,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('cte_documents')
-        .select('id, cte_number, cte_series, access_key, fiscal_document_ids, recipient, recipient_city, recipient_state, freight_value, cargo_value, weight_kg, status, is_voided')
-        .contains('load_ids', [loadId]);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!loadId,
-  });
-
-  // NF-e ids referenced by CT-es (exclude ORT-only / non-fiscal)
-  const nfeIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of ctes) {
-      if (c.is_voided) continue;
-      for (const id of (c.fiscal_document_ids || [])) set.add(id);
-    }
-    return Array.from(set);
-  }, [ctes]);
-
-  const { data: nfes = [] } = useQuery({
-    queryKey: ['manifest_nfes', loadId, nfeIds],
-    enabled: nfeIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('fiscal_documents')
-        .select('id, invoice_number, access_key, recipient, recipient_city, recipient_state, weight_kg, value, pallet_count, operation_type, status, sefaz_status')
-        .in('id', nfeIds);
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
-  // ORT count for awareness
-  const { data: ortCount = 0 } = useQuery({
-    queryKey: ['load_ort_count', loadId],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from('fiscal_documents')
-        .select('id', { count: 'exact', head: true })
-        .eq('load_id', loadId)
-        .eq('document_type', 'inbound');
-      if (error) throw error;
-      const totalNfe = count || 0;
-      return Math.max(0, totalNfe - nfeIds.length);
-    },
-  });
-
-  const { data: existing } = useQuery({
-    queryKey: ['load_manifest', loadId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('load_manifests')
-        .select('*')
-        .eq('load_id', loadId)
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .from('drivers')
+        .select('id,name,cpf')
+        .eq('tenant_id', load.tenant_id)
+        .eq('id', load.driver_id!)
         .maybeSingle();
-      return data;
-    },
-  });
-
-  const [form, setForm] = useState({
-    manifest_number: '',
-    responsible_name: '',
-    responsible_cnpj: '',
-    responsible_ie: '',
-    responsible_address: '',
-    responsible_neighborhood: '',
-    responsible_city: '',
-    receipt_number: '',
-    toll_value: '',
-    origin: origin || '',
-    destination: destination || '',
-    uf_route: '',
-    observations: '',
-  });
-
-  const totals = useMemo(() => ({
-    nfeCount: nfes.filter(document => isBillableFiscalDoc(document)).length,
-    cteCount: ctes.filter(document => !document.is_voided).length,
-    value: nfes.filter(document => isBillableFiscalDoc(document)).reduce((sum, document) => sum + Number(document.value || 0), 0),
-    weight: nfes.filter(document => isBillableFiscalDoc(document)).reduce((sum, document) => sum + Number(document.weight_kg || 0), 0),
-    pallets: nfes.filter(document => isBillableFiscalDoc(document)).reduce((sum, document) => sum + Number(document.pallet_count || 0), 0),
-    freight: ctes.filter(document => !document.is_voided).reduce((sum, document) => sum + Number(document.freight_value || 0), 0),
-  }), [nfes, ctes]);
-
-  const generateMutation = useMutation({
-    mutationFn: async () => {
-      if (!currentTenant) throw new Error('Tenant não definido');
-      if (totals.nfeCount === 0) throw new Error('Nenhuma NF-e com CT-e vinculada para emitir o manifesto');
-      const manifest_number = form.manifest_number || `MDF-${loadNumber}-${Date.now().toString(36).toUpperCase().slice(-5)}`;
-      const uf_route = form.uf_route.split(/[,;\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
-      const { data, error } = await supabase.from('load_manifests').insert({
-        tenant_id: currentTenant.id,
-        load_id: loadId,
-        manifest_number,
-        responsible_name: form.responsible_name || null,
-        responsible_cnpj: form.responsible_cnpj || null,
-        responsible_ie: form.responsible_ie || null,
-        responsible_address: form.responsible_address || null,
-        responsible_neighborhood: form.responsible_neighborhood || null,
-        responsible_city: form.responsible_city || null,
-        receipt_number: form.receipt_number || null,
-        toll_value: form.toll_value ? Number(form.toll_value) : null,
-        origin: form.origin || null,
-        destination: form.destination || null,
-        uf_route,
-        observations: form.observations || null,
-        fiscal_document_ids: nfeIds,
-        cte_document_ids: ctes.filter(document => !document.is_voided).map(document => document.id),
-        status: 'issued',
-        created_by: user?.id ?? null,
-      }).select().single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      toast.success('Manifesto gerado com sucesso');
-      qc.invalidateQueries({ queryKey: ['load_manifest', loadId] });
-      setForm(f => ({ ...f, manifest_number: '' }));
-    },
-    onError: (error: Error) => toast.error(error.message),
   });
 
-  const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  const ctes = useMemo(
+    () => allCtes.filter(document => document.load_ids.includes(load.id)),
+    [allCtes, load.id],
+  );
+  const vehicle = useMemo(
+    () => vehicles.find(candidate => candidate.id === load.vehicle_id) || null,
+    [vehicles, load.vehicle_id],
+  );
+  const emitter = useMemo(
+    () => emitters.find(candidate => candidate.id === form.emitterId) || null,
+    [emitters, form.emitterId],
+  );
+  const predominantProduct = useMemo(() => deriveMdfePredominantProduct(ctes), [ctes]);
+  const totals = useMemo(() => ({
+    ctes: ctes.length,
+    value: ctes.reduce((total, document) => total + Number(document.cargo_value || 0), 0),
+    weight: ctes.reduce((total, document) => total + Number(document.cargo_weight || 0), 0),
+  }), [ctes]);
+  const credential = useMemo(
+    () => selectScopedHubCredential(credentials, 'mdfe', form.environment),
+    [credentials, form.environment],
+  );
 
-  const downloadPDF = (manifest?: Manifest | null) => {
-    const m = manifest || existing;
-    const number = m?.manifest_number || form.manifest_number || `MDF-${loadNumber}`;
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-    const pageW = doc.internal.pageSize.getWidth();
-    let y = 40;
-
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('MANIFESTO DE CARGA / MDF-e', pageW / 2, y, { align: 'center' });
-    y += 18;
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-    doc.text(`Nº ${number}`, pageW / 2, y, { align: 'center' });
-    y += 8;
-    doc.setFontSize(8); doc.setTextColor(120);
-    doc.text(`Emitido em ${new Date(m?.created_at || Date.now()).toLocaleString('pt-BR')} · Carga ${loadNumber}`, pageW / 2, y, { align: 'center' });
-    doc.setTextColor(0);
-    y += 16;
-
-    const info: Array<[string, string]> = [
-      ['Responsável', m?.responsible_name || form.responsible_name || '—'],
-      ['CNPJ', m?.responsible_cnpj || form.responsible_cnpj || '—'],
-      ['IE', m?.responsible_ie || form.responsible_ie || '—'],
-      ['Endereço', m?.responsible_address || form.responsible_address || '—'],
-      ['Bairro', m?.responsible_neighborhood || form.responsible_neighborhood || '—'],
-      ['Município', m?.responsible_city || form.responsible_city || '—'],
-      ['Origem', m?.origin || form.origin || '—'],
-      ['Destino', m?.destination || form.destination || '—'],
-      ['UFs do Percurso', Array.isArray(m?.uf_route) ? m.uf_route.join(', ') : form.uf_route || '—'],
-      ['Nº Comprovante', m?.receipt_number || form.receipt_number || '—'],
-      ['Valor Pedágio', m?.toll_value != null ? fmt(Number(m.toll_value)) : (form.toll_value ? fmt(Number(form.toll_value)) : '—')],
-    ];
-    autoTable(doc, {
-      startY: y,
-      body: info,
-      theme: 'plain',
-      styles: { fontSize: 8, cellPadding: 2 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 110 } },
-      margin: { left: 30, right: 30 },
+  useEffect(() => {
+    if (
+      initializedLoad.current === load.id || emittersLoading || vehiclesLoading ||
+      ctesLoading || driverLoading || !emitters.length
+    ) return;
+    const defaultEmitter = emitters.find(candidate => candidate.active && candidate.is_default)
+      || emitters.find(candidate => candidate.active)
+      || null;
+    const first = ctes[0];
+    const selectedVehicle = vehicles.find(candidate => candidate.id === load.vehicle_id);
+    const originIbge = digits(defaultEmitter?.city_code);
+    const destinationIbge = digits(first?.recipient_city_ibge);
+    setForm({
+      emitterId: defaultEmitter?.id || '',
+      environment: 'production',
+      vehicleTara: readVehicleTara(selectedVehicle?.tags),
+      rntrc: digits(defaultEmitter?.rntrc || defaultEmitter?.endereco?.rntrc),
+      ciot: digits(load.ciot),
+      ciotResponsible: digits(first?.taker_document),
+      endorsements: [...new Set(ctes.flatMap(document => document.insurance_endorsements))].join(', '),
+      originCity: defaultEmitter?.endereco?.municipio || load.origin || '',
+      originIbge,
+      originUf: stateFromIbge(originIbge),
+      destinationCity: first?.recipient_city || load.destination || '',
+      destinationIbge,
+      destinationUf: first?.recipient_state || stateFromIbge(destinationIbge),
     });
-    y = tableEndY(doc) + 10;
+    initializedLoad.current = load.id;
+  }, [ctes, ctesLoading, driverLoading, emitters, emittersLoading, load, vehicles, vehiclesLoading]);
 
-    autoTable(doc, {
-      startY: y,
-      head: [['NF', 'Chave', 'Destinatário', 'Cidade/UF', 'Valor', 'Peso (kg)']],
-      body: nfes.map(document => [
-        document.invoice_number || '—',
-        document.access_key || '—',
-        document.recipient || '—',
-        `${document.recipient_city || ''}${document.recipient_state ? '-' + document.recipient_state : ''}`,
-        document.value ? fmt(Number(document.value)) : '—',
-        String(document.weight_kg || 0),
-      ]),
-      styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
-      headStyles: { fillColor: [37, 99, 235], textColor: 255 },
-      margin: { left: 30, right: 30 },
-    });
-    y = tableEndY(doc) + 10;
+  const lifecycle = normalizeMdfeStatus(manifest?.status);
+  const canRetry = !manifest || ['rejected', 'cancelled'].includes(lifecycle);
+  const canIssueLoad = ['ready', 'loading', 'loaded', 'in_transit'].includes(load.status);
+  const readyToIssue = Boolean(
+    canRetry && canIssueLoad && ctes.length && driver?.name && digits(driver?.cpf).length === 11 &&
+    vehicle?.plate && form.emitterId && credential && Number(form.vehicleTara) > 0 &&
+    digits(form.rntrc).length === 8 && digits(form.ciot).length === 12 &&
+    [11, 14].includes(digits(form.ciotResponsible).length) &&
+    form.originIbge.length === 7 && form.destinationIbge.length === 7 &&
+    predominantProduct && insurance?.name && insurance?.cnpj && insurance?.policy &&
+    form.endorsements.trim(),
+  );
 
-    autoTable(doc, {
-      startY: y,
-      head: [['CT-e', 'Série', 'Chave', 'Destinatário', 'Frete']],
-      body: ctes.filter(document => !document.is_voided).map(document => [
-        document.cte_number || '—',
-        document.cte_series || '—',
-        document.access_key || '—',
-        `${document.recipient || ''}${document.recipient_city ? ' / ' + document.recipient_city : ''}${document.recipient_state ? '-' + document.recipient_state : ''}`,
-        document.freight_value ? fmt(Number(document.freight_value)) : '—',
-      ]),
-      styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
-      headStyles: { fillColor: [37, 99, 235], textColor: 255 },
-      margin: { left: 30, right: 30 },
-    });
-    y = tableEndY(doc) + 14;
+  const update = (key: keyof FormState, value: string) =>
+    setForm(previous => ({ ...previous, [key]: value }));
 
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-    doc.text('Totais', 30, y); y += 4;
-    autoTable(doc, {
-      startY: y,
-      body: [
-        ['NF-es', String(totals.nfeCount), 'CT-es', String(totals.cteCount)],
-        ['Paletes', String(totals.pallets), 'Peso Total', `${totals.weight.toLocaleString('pt-BR')} kg`],
-        ['Valor Mercadoria', fmt(totals.value), 'Frete CT-es', fmt(totals.freight)],
-      ],
-      theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 3 },
-      columnStyles: { 0: { fontStyle: 'bold' }, 2: { fontStyle: 'bold' } },
-      margin: { left: 30, right: 30 },
-    });
-    y = tableEndY(doc) + 14;
-
-    const obs = m?.observations || form.observations;
-    if (obs) {
-      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-      doc.text('Observações', 30, y); y += 10;
-      doc.setFont('helvetica', 'normal');
-      const lines = doc.splitTextToSize(String(obs), pageW - 60);
-      doc.text(lines, 30, y);
-      y += lines.length * 10 + 10;
+  const handleIssue = async () => {
+    if (!emitter || !vehicle || !driver || !predominantProduct) {
+      toast.error('A carga ainda não possui todos os dados fiscais necessários.');
+      return;
     }
+    const takers = Array.from(new Map(
+      ctes.map(document => [digits(document.taker_document), {
+        document: document.taker_document || '',
+        name: document.taker_name || '',
+        ie: document.taker_ie || 'ISENTO',
+        address: {
+          street: document.taker_street,
+          number: document.taker_number,
+          neighborhood: document.taker_neighborhood,
+          city_ibge: document.taker_city_ibge,
+          city_name: document.taker_city,
+          state: document.taker_state,
+          zip: document.taker_zip,
+        },
+      }]),
+    ).values()).filter(taker => digits(taker.document));
 
-    if (y > 700) { doc.addPage(); y = 60; }
-    doc.setFontSize(8);
-    doc.text('_______________________________________', 30, y + 30);
-    doc.text('Assinatura do Responsável', 30, y + 42);
-    doc.text('_______________________________________', pageW - 230, y + 30);
-    doc.text('Assinatura do Motorista', pageW - 230, y + 42);
+    const input: BuildMdfePayloadInput = {
+      emitter: {
+        cnpj: emitter.cnpj,
+        name: emitter.razao_social,
+        environment: form.environment,
+      },
+      driver: { name: driver.name, cpf: driver.cpf || '' },
+      vehicle: {
+        plate: vehicle.plate,
+        state: vehicle.uf || emitter.endereco?.uf || '',
+        tara: Number(form.vehicleTara) || 0,
+        rntrc: digits(form.rntrc),
+        renavam: vehicle.renavam || '',
+      },
+      origin: {
+        city_ibge: form.originIbge,
+        city_name: form.originCity,
+        state: form.originUf,
+      },
+      destination: {
+        city_ibge: form.destinationIbge,
+        city_name: form.destinationCity,
+        state: form.destinationUf,
+      },
+      documents: ctes.map(document => ({
+        key: document.access_key || '',
+        type: 'cte',
+        insuranceEndorsements: document.insurance_endorsements,
+        destination: document.recipient_city_ibge ? {
+          city_ibge: document.recipient_city_ibge,
+          city_name: document.recipient_city || form.destinationCity,
+          state: document.recipient_state || form.destinationUf,
+        } : undefined,
+      })),
+      insurance: {
+        providerName: insurance?.name || '',
+        providerCnpj: insurance?.cnpj || '',
+        policyNumber: insurance?.policy || '',
+        endorsementNumbers: form.endorsements.split(/[,;\n]/).map(value => value.trim()).filter(Boolean),
+      },
+      valCarga: totals.value,
+      pesoBruto: totals.weight,
+      predominantProduct,
+      cMone: '098',
+      ciot: { number: form.ciot, responsibleDoc: form.ciotResponsible },
+      takers,
+    };
 
-    doc.save(`manifesto-${number}.pdf`);
+    const built = buildMdfePayload(input);
+    if (!built.ok) {
+      toast.error(`Revise antes de emitir: ${built.missing.join(', ')}`);
+      return;
+    }
+    try {
+      await issueMdfe.mutateAsync({
+        loadId: load.id,
+        emitterId: emitter.id,
+        environment: form.environment,
+        cteIds: ctes.map(document => document.id),
+        snapshot: built.payload as EmitParams['body'],
+      });
+      toast.success('MDF-e enviado ao Hub Fiscal. Use Sincronizar até a autorização.');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Não foi possível emitir o MDF-e.'));
+    }
   };
+
+  const handleSync = async () => {
+    if (!manifest) return;
+    try {
+      await syncMdfe.mutateAsync(manifest);
+      await refetchManifest();
+      toast.success('Situação do MDF-e sincronizada.');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Falha ao sincronizar o MDF-e.'));
+    }
+  };
+
+  const handleClose = async () => {
+    if (!manifest) return;
+    try {
+      await closeMdfe.mutateAsync(manifest);
+      await refetchManifest();
+      toast.success('Encerramento solicitado. Sincronize até o estado Encerrado.');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Falha ao solicitar o encerramento.'));
+    }
+  };
+
+  const handleDownload = async (format: 'pdf' | 'xml') => {
+    if (!manifest) return;
+    setDownloading(format);
+    try {
+      await downloadMdfeFile(manifest, format);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, `Não foi possível baixar o ${format.toUpperCase()}.`));
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  if (manifestLoading || ctesLoading || emittersLoading || vehiclesLoading || driverLoading) {
+    return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Carregando ciclo MDF-e…</CardContent></Card>;
+  }
 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <FileSignature className="h-4 w-4" /> Manifesto / MDF-e (SEFAZ)
-          {existing && <Badge variant="outline" className="text-[10px]">Nº {existing.manifest_number}</Badge>}
-        </CardTitle>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileSignature className="h-4 w-4" /> MDF-e da carga
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Um documento fiscal por carga, com emissão, arquivos e encerramento vinculados à viagem.
+            </p>
+          </div>
+          {manifest && (
+            <Badge variant="outline" className={statusTone[lifecycle]}>
+              {MDFE_STATUS_LABELS[lifecycle]}
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {ortCount > 0 && (
-          <div className="flex items-start gap-2 p-2 rounded-md bg-info/10 border border-info/30 text-xs">
-            <Info className="h-3.5 w-3.5 text-info shrink-0 mt-0.5" />
-            <span>
-              <strong>{ortCount}</strong> NF(s) marcadas como ORT (organização interna) foram excluídas do manifesto — não possuem valor fiscal e não vão ao SEFAZ.
-            </span>
-          </div>
-        )}
-
-        {totals.nfeCount === 0 ? (
-          <div className="flex items-center gap-2 p-3 rounded-md bg-warning/10 border border-warning/30 text-sm">
-            <AlertTriangle className="h-4 w-4 text-warning" />
-            Nenhuma NF-e com CT-e vinculada. Gere CT-es antes de emitir o manifesto.
-          </div>
+        {manifest && !canRetry ? (
+          <>
+            <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 text-sm md:grid-cols-4">
+              <div><span className="text-xs text-muted-foreground">Número</span><p className="font-semibold">{manifest.document_number || manifest.manifest_number}</p></div>
+              <div><span className="text-xs text-muted-foreground">Série</span><p className="font-semibold">{manifest.document_series || '—'}</p></div>
+              <div><span className="text-xs text-muted-foreground">Protocolo</span><p className="break-all font-mono text-xs">{manifest.authorization_protocol || 'Aguardando'}</p></div>
+              <div><span className="text-xs text-muted-foreground">Ambiente</span><p className="font-semibold">{manifest.environment === 'production' ? 'Produção' : manifest.environment}</p></div>
+            </div>
+            {manifest.access_key && (
+              <div className="rounded-md border p-3">
+                <p className="text-xs text-muted-foreground">Chave de acesso</p>
+                <p className="break-all font-mono text-xs">{manifest.access_key}</p>
+              </div>
+            )}
+            {manifest.status_message && lifecycle !== 'authorized' && lifecycle !== 'closed' && (
+              <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <span>{manifest.status_message}</span>
+              </div>
+            )}
+            {lifecycle === 'closed' && (
+              <div className="flex items-start gap-2 rounded-md border border-success/30 bg-success/10 p-3 text-sm">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                <span>
+                  Manifesto encerrado{manifest.closed_at ? ` em ${new Date(manifest.closed_at).toLocaleString('pt-BR')}` : ''}.
+                  {manifest.closure_protocol ? ` Protocolo: ${manifest.closure_protocol}.` : ''}
+                </span>
+              </div>
+            )}
+            {lifecycle === 'provider_unknown' && (
+              <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <span>O resultado precisa ser conciliado. Sincronize este documento; não gere outro MDF-e para a carga.</span>
+              </div>
+            )}
+            <div className="flex flex-wrap justify-end gap-2">
+              {manifest.hub_document_id && (
+                <Button variant="outline" onClick={handleSync} disabled={syncMdfe.isPending}>
+                  <RefreshCw className={`mr-1 h-4 w-4 ${syncMdfe.isPending ? 'animate-spin' : ''}`} />
+                  Sincronizar
+                </Button>
+              )}
+              {canDownloadMdfe(lifecycle) && (
+                <>
+                  <Button variant="outline" onClick={() => handleDownload('xml')} disabled={downloading !== null}>
+                    <Download className="mr-1 h-4 w-4" /> XML
+                  </Button>
+                  <Button variant="outline" onClick={() => handleDownload('pdf')} disabled={downloading !== null}>
+                    {downloading === 'pdf' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileCheck2 className="mr-1 h-4 w-4" />}
+                    PDF para motorista
+                  </Button>
+                </>
+              )}
+              {canCloseMdfe(lifecycle) && (
+                <Button onClick={handleClose} disabled={!returnedLoad(load) || closeMdfe.isPending}>
+                  <CheckCircle2 className="mr-1 h-4 w-4" />
+                  {closeMdfe.isPending ? 'Solicitando…' : 'Encerrar manifesto'}
+                </Button>
+              )}
+            </div>
+            {canCloseMdfe(lifecycle) && !returnedLoad(load) && (
+              <p className="text-right text-xs text-muted-foreground">
+                O encerramento será liberado quando a carga registrar retorno/chegada ou um estado final de entrega.
+              </p>
+            )}
+          </>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 p-3 rounded-md bg-muted/40 border text-xs">
-              <div><span className="text-muted-foreground">NF-es</span><div className="font-semibold text-base">{totals.nfeCount}</div></div>
-              <div><span className="text-muted-foreground">CT-es</span><div className="font-semibold text-base">{totals.cteCount}</div></div>
-              <div><span className="text-muted-foreground">Paletes</span><div className="font-semibold text-base">{totals.pallets}</div></div>
-              <div><span className="text-muted-foreground">Peso</span><div className="font-semibold text-base">{totals.weight.toLocaleString('pt-BR')} kg</div></div>
-              <div><span className="text-muted-foreground">Frete CT-es</span><div className="font-semibold text-base">{fmt(totals.freight)}</div></div>
+            {manifest && lifecycle === 'rejected' && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm">
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <span>{manifest.status_message || 'A emissão foi rejeitada. Corrija os campos abaixo e transmita novamente.'}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-3 md:grid-cols-5">
+              <div><span className="text-xs text-muted-foreground">Carga</span><p className="font-semibold">{load.load_number}</p></div>
+              <div><span className="text-xs text-muted-foreground">CT-es autorizados</span><p className="font-semibold">{totals.ctes}</p></div>
+              <div><span className="text-xs text-muted-foreground">Peso</span><p className="font-semibold">{totals.weight.toLocaleString('pt-BR')} kg</p></div>
+              <div><span className="text-xs text-muted-foreground">Valor da carga</span><p className="font-semibold">{totals.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div>
+              <div><span className="text-xs text-muted-foreground">Produto predominante</span><p className="truncate font-semibold" title={predominantProduct || ''}>{predominantProduct || 'Não encontrado'}</p></div>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">NF-es vinculadas via CT-e</p>
-              <div className="border rounded-md max-h-56 overflow-auto">
+            {!ctes.length && (
+              <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                Emita e autorize os CT-es desta carga antes do MDF-e.
+              </div>
+            )}
+
+            {!canIssueLoad && (
+              <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                O MDF-e só pode ser emitido quando a carga estiver pronta, carregando, carregada ou em trânsito.
+              </div>
+            )}
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <Label>Emitente</Label>
+                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={form.emitterId} onChange={event => update('emitterId', event.target.value)}>
+                  <option value="">Selecione</option>
+                  {emitters.filter(item => item.active).map(item => <option key={item.id} value={item.id}>{item.razao_social}</option>)}
+                </select>
+              </div>
+              <FiscalEnvironmentSelect value={form.environment} onChange={value => update('environment', value)} />
+              <div className="rounded-md border p-3">
+                <p className="flex items-center gap-1 text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" /> Credencial MDF-e</p>
+                <p className={`mt-1 text-sm font-medium ${credential ? 'text-success' : 'text-destructive'}`}>
+                  {credential ? 'Configurada para este ambiente' : 'Não configurada'}
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+            <div>
+              <h3 className="mb-3 text-sm font-semibold">Dados carregados da carga</h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-md border p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><User className="h-3.5 w-3.5" /> Motorista</p><p className="font-medium">{driver?.name || 'Não informado'}</p><p className="font-mono text-xs">{driver?.cpf || 'CPF ausente'}</p></div>
+                <div className="rounded-md border p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Truck className="h-3.5 w-3.5" /> Veículo</p><p className="font-medium">{vehicle?.plate || 'Não informado'}</p><p className="font-mono text-xs">RENAVAM {vehicle?.renavam || 'ausente'}</p></div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div><Label>Tara do veículo (kg)</Label><Input inputMode="numeric" value={form.vehicleTara} onChange={event => update('vehicleTara', event.target.value)} placeholder="Informe uma vez se não estiver cadastrada" /></div>
+              <div><Label>RNTRC</Label><Input inputMode="numeric" value={form.rntrc} onChange={event => update('rntrc', event.target.value)} placeholder="8 dígitos" /></div>
+              <div><Label>CIOT</Label><Input inputMode="numeric" value={form.ciot} onChange={event => update('ciot', event.target.value)} placeholder="12 dígitos" /></div>
+              <div><Label>CPF/CNPJ responsável pelo CIOT</Label><Input inputMode="numeric" value={form.ciotResponsible} onChange={event => update('ciotResponsible', event.target.value)} /></div>
+              <div className="md:col-span-2"><Label>Averbações</Label><Input value={form.endorsements} onChange={event => update('endorsements', event.target.value)} placeholder="Carregadas dos CT-es; separe por vírgula" /></div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div><Label>Origem</Label><Input value={form.originCity} onChange={event => update('originCity', event.target.value)} /></div>
+              <div><Label>IBGE origem</Label><Input value={form.originIbge} onChange={event => update('originIbge', digits(event.target.value))} /></div>
+              <div><Label>UF origem</Label><Input value={form.originUf} onChange={event => update('originUf', event.target.value.toUpperCase())} maxLength={2} /></div>
+              <div><Label>Destino</Label><Input value={form.destinationCity} onChange={event => update('destinationCity', event.target.value)} /></div>
+              <div><Label>IBGE destino</Label><Input value={form.destinationIbge} onChange={event => update('destinationIbge', digits(event.target.value))} /></div>
+              <div><Label>UF destino</Label><Input value={form.destinationUf} onChange={event => update('destinationUf', event.target.value.toUpperCase())} maxLength={2} /></div>
+            </div>
+
+            {ctes.length > 0 && (
+              <div className="max-h-56 overflow-auto rounded-md border">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">NF</TableHead>
-                      <TableHead className="text-xs">Chave</TableHead>
-                      <TableHead className="text-xs">Destinatário</TableHead>
-                      <TableHead className="text-xs text-right">Valor</TableHead>
-                      <TableHead className="text-xs text-right">Peso</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <TableHeader><TableRow><TableHead>CT-e</TableHead><TableHead>Destino</TableHead><TableHead>Chave</TableHead><TableHead className="text-right">Peso</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {nfes.map(d => (
-                      <TableRow key={d.id}>
-                        <TableCell className="text-xs font-medium">{d.invoice_number || '—'}</TableCell>
-                        <TableCell className="text-[10px] font-mono text-muted-foreground">{d.access_key ? d.access_key.slice(-12) : '—'}</TableCell>
-                        <TableCell className="text-xs">{d.recipient || '—'}{d.recipient_city ? ` / ${d.recipient_city}` : ''}{d.recipient_state ? `-${d.recipient_state}` : ''}</TableCell>
-                        <TableCell className="text-xs text-right">{d.value ? fmt(Number(d.value)) : '—'}</TableCell>
-                        <TableCell className="text-xs text-right">{d.weight_kg || 0} kg</TableCell>
+                    {ctes.map(document => (
+                      <TableRow key={document.id}>
+                        <TableCell className="font-medium">{document.cte_number || '—'}</TableCell>
+                        <TableCell>{document.recipient_city || '—'}{document.recipient_state ? `/${document.recipient_state}` : ''}</TableCell>
+                        <TableCell className="font-mono text-xs">{document.access_key?.slice(-16) || 'Sem chave'}</TableCell>
+                        <TableCell className="text-right">{Number(document.cargo_weight || 0).toLocaleString('pt-BR')} kg</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <Label className="text-xs">Nº Manifesto</Label>
-                  <Input value={form.manifest_number} onChange={e => setForm({ ...form, manifest_number: e.target.value })} placeholder="auto se vazio" />
-                </div>
-                <div className="md:col-span-2">
-                  <Label className="text-xs">Responsável (Nome)</Label>
-                  <Input value={form.responsible_name} onChange={e => setForm({ ...form, responsible_name: e.target.value })} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div><Label className="text-xs">CNPJ</Label><Input value={form.responsible_cnpj} onChange={e => setForm({ ...form, responsible_cnpj: e.target.value })} /></div>
-                <div><Label className="text-xs">IE</Label><Input value={form.responsible_ie} onChange={e => setForm({ ...form, responsible_ie: e.target.value })} /></div>
-                <div><Label className="text-xs">Bairro</Label><Input value={form.responsible_neighborhood} onChange={e => setForm({ ...form, responsible_neighborhood: e.target.value })} /></div>
-                <div><Label className="text-xs">Município</Label><Input value={form.responsible_city} onChange={e => setForm({ ...form, responsible_city: e.target.value })} /></div>
-              </div>
-              <div>
-                <Label className="text-xs">Endereço</Label>
-                <Input value={form.responsible_address} onChange={e => setForm({ ...form, responsible_address: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div><Label className="text-xs">Nº Comprovante</Label><Input value={form.receipt_number} onChange={e => setForm({ ...form, receipt_number: e.target.value })} /></div>
-                <div><Label className="text-xs">Valor Pedágio</Label><Input type="number" step="0.01" value={form.toll_value} onChange={e => setForm({ ...form, toll_value: e.target.value })} /></div>
-                <div><Label className="text-xs">Origem</Label><Input value={form.origin} onChange={e => setForm({ ...form, origin: e.target.value })} /></div>
-                <div><Label className="text-xs">Destino</Label><Input value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} /></div>
-              </div>
-              <div>
-                <Label className="text-xs">UFs do Percurso (ex: MG, SP, RJ)</Label>
-                <Input value={form.uf_route} onChange={e => setForm({ ...form, uf_route: e.target.value })} placeholder={UF_LIST.join(', ')} />
-              </div>
-              <div>
-                <Label className="text-xs">Observações</Label>
-                <Textarea rows={3} value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} />
-              </div>
-              <div className="flex justify-end gap-2">
-                {(existing || totals.nfeCount > 0) && (
-                  <Button variant="outline" onClick={() => downloadPDF()}>
-                    <Download className="h-3.5 w-3.5 mr-1" /> Baixar PDF
-                  </Button>
-                )}
-                <Button onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
-                  <Send className="h-3.5 w-3.5 mr-1" />
-                  {generateMutation.isPending ? 'Gerando...' : 'Gerar Manifesto'}
-                </Button>
-              </div>
-            </div>
-
-            {existing && (
-              <div className="flex items-center gap-2 p-2 rounded-md bg-success/10 border border-success/30 text-xs">
-                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                Último manifesto: <strong>{existing.manifest_number}</strong> · {new Date(existing.created_at).toLocaleString('pt-BR')}
-              </div>
             )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+              <Button variant="outline" onClick={() => { void refetchCtes(); void refetchManifest(); }}>
+                <RefreshCw className="mr-1 h-4 w-4" /> Recarregar dados
+              </Button>
+              <div className="text-right">
+                <Button onClick={handleIssue} disabled={!readyToIssue || issueMdfe.isPending}>
+                  {issueMdfe.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Send className="mr-1 h-4 w-4" />}
+                  {form.environment === 'production' ? 'Emitir MDF-e em produção' : 'Emitir MDF-e'}
+                </Button>
+                {!readyToIssue && <p className="mt-1 max-w-xl text-xs text-muted-foreground">Complete os campos pendentes, confirme credencial, CT-es autorizados, seguro e produto predominante.</p>}
+              </div>
+            </div>
           </>
         )}
       </CardContent>

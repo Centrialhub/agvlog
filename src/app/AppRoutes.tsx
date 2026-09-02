@@ -90,7 +90,7 @@ const OccurrenceReturnSheet = lazy(() => import("@/pages/OccurrenceReturnSheet")
 const PalletReturns = lazy(() => import("@/pages/PalletReturns"));
 const MerchandiseShortages = lazy(() => import("@/pages/MerchandiseShortages"));
 const CostCenters = lazy(() => import("@/pages/CostCenters"));
-const MdfeProvisional = lazy(() => import("@/pages/MdfeProvisional"));
+const Mdfe = lazy(() => import("@/pages/Mdfe"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const SetPassword = lazy(() => import("@/pages/SetPassword"));
 
@@ -172,7 +172,8 @@ export function AppRoutes() {
       <Route path="/ort-management" element={<ProtectedRoute><OrtManagement /></ProtectedRoute>} />
       <Route path="/product-traceability" element={<ProtectedRoute><ProductTraceability /></ProtectedRoute>} />
       <Route path="/product-history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
-      <Route path="/mdfe-provisional" element={<ProtectedRoute><CapabilityGate capability="fiscal"><MdfeProvisional /></CapabilityGate></ProtectedRoute>} />
+      <Route path="/mdfe" element={<ProtectedRoute><CapabilityGate capability="fiscal"><Mdfe /></CapabilityGate></ProtectedRoute>} />
+      <Route path="/mdfe-provisional" element={<ProtectedRoute><Navigate to="/mdfe" replace /></ProtectedRoute>} />
       <Route path="/imported-notes-summary" element={<ProtectedRoute><ImportedNotesSummary /></ProtectedRoute>} />
       <Route path="/load-control" element={<ProtectedRoute><LoadControl /></ProtectedRoute>} />
       <Route path="/closing-reports" element={<ProtectedRoute><ClosingReports /></ProtectedRoute>} />

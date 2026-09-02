@@ -28,6 +28,16 @@ import { runClosingLifecycleNative } from './test-closing-lifecycle-native-cases
 import { runControlTowerNative } from './test-control-tower-native-cases.mjs';
 import { runSsxPositionNative } from './test-ssx-position-native-cases.mjs';
 
+const arrivalBaseline = readFileSync('supabase/migrations/20260824224152_baseline.sql', 'utf8');
+const legacyArrivalDefinition = arrivalBaseline.match(
+  /CREATE OR REPLACE FUNCTION public\.driver_mark_arrival\(_stop_id uuid\)[\s\S]*?END; \$function\$;/,
+)?.[0];
+if (!legacyArrivalDefinition) throw new Error('Legacy driver_mark_arrival definition not found in baseline');
+const additiveArrivalMigration = readFileSync(
+  'supabase/migrations/20260831232458_add_gps_driver_arrival_rpc.sql',
+  'utf8',
+);
+
 // Disposable native PostgreSQL; never connects to a configured application database.
 // Run with Node 22: node --experimental-strip-types scripts/test-delivery-concurrency.mjs
 // PG_QA_BIN may point to an existing, trusted PostgreSQL 17 bin directory.
@@ -221,11 +231,14 @@ try {
   } else {
   await query(deliverySchema + legacyDeliverySchema + '\nbegin;\n' +
     [...deliveryMigrations,deliveryCutoverMigration].map((file) => readFileSync(join('supabase/migrations', file), 'utf8')).join('\n') + '\ncommit;');
+  // Install the exact legacy definition expected by the additive migration.
   // Arrival replay exercises real row locks and ownership without executing the
   // PostGIS distance branch. Distance validation still needs a PostGIS instance.
   await query(`alter table public.dispatch_stops add column latitude double precision, add column longitude double precision;
-    create function public.driver_mark_arrival(uuid) returns uuid language sql as $$select $1$$;` +
-    readFileSync('supabase/migrations/20260830003721_require_driver_arrival_geolocation.sql','utf8'));
+    ${legacyArrivalDefinition};
+    revoke all on function public.driver_mark_arrival(uuid) from public,anon,authenticated,service_role;
+    grant execute on function public.driver_mark_arrival(uuid) to authenticated,service_role;
+    ${additiveArrivalMigration}`);
   const stopContracts=JSON.parse(readFileSync('docs/qa/STOP-WRITERS-PREDEPLOYMENT-2026-08-30.json','utf8'));
   const departureOriginal=stopContracts.functions.find(f=>f.signature==='driver_register_departure(uuid,text)');
   await query(departureOriginal.definition + ';\nbegin;\n' +

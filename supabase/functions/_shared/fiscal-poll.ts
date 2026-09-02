@@ -9,6 +9,7 @@ type JsonRecord = Record<string, unknown>;
 
 export type FiscalDocumentScope = 'cte' | 'nfse';
 export type FiscalPollOutcome = 'issued' | 'rejected' | 'cancelled' | null;
+const HUB_API_VERSION = '2026-08-27';
 
 export interface HubFiscalCredential {
   doc_scope: string;
@@ -138,7 +139,11 @@ export async function getHubFiscalDocument({
   try {
     const response = await fetcher(url, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-HubFiscal-Api-Version': HUB_API_VERSION,
+      },
     });
     const text = await response.text();
     let data: unknown;
@@ -160,7 +165,7 @@ export async function getHubFiscalDocument({
 export function classifyFiscalProviderStatus(rawStatus: string): FiscalPollOutcome {
   const status = rawStatus.toLowerCase();
   if (['authorized', 'autorizado', 'concluido', 'concluído', 'issued', 'emitida'].includes(status)) return 'issued';
-  if (['rejected', 'rejeitado', 'rejeitada', 'erro', 'error', 'denied', 'denegado'].includes(status)) return 'rejected';
+  if (['rejected', 'rejeitado', 'rejeitada', 'denied', 'denegado', 'denegada'].includes(status)) return 'rejected';
   if (['cancelled', 'canceled', 'cancelado', 'cancelada'].includes(status)) return 'cancelled';
   return null;
 }

@@ -47,6 +47,7 @@ vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'actor'}})}));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:mock.toast})}));
 vi.mock('@/hooks/useLoadItems',()=>({useLoadItems:()=>({data:mock.items,isError:mock.itemsError,refetch:mock.itemRefetch})}));
 vi.mock('@/hooks/useVehicles',()=>({useVehicles:()=>({data:[{id:'vehicle',plate:'QA-0001',active:true}]})}));
+vi.mock('@/hooks/useDrivers',()=>({useDrivers:()=>({data:[{id:'driver',name:'Motorista QA',active:true}]})}));
 vi.mock('@/hooks/useGenerateCTe',()=>({useGenerateCTe:()=>({isPending:false,mutateAsync:()=>{throw new Error('No fiscal calls during planning QA');}})}));
 vi.mock('@/hooks/useOperationalRoutes',()=>({useOperationalRoutes:()=>({data:[]})}));
 vi.mock('@/hooks/route-planning/useCustomerDeliveryWindowsForRouting',()=>({useCustomerDeliveryWindowsForRouting:()=>({data:[]})}));
@@ -95,12 +96,15 @@ describe('real planning screens with isolated transport (not authenticated brows
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));
     const dialog=await screen.findByRole('dialog');expect(within(dialog).getByLabelText('Motorista')).toHaveAttribute('role','combobox');
     expect(within(dialog).getByLabelText('Veículo')).toHaveAttribute('role','combobox');
+    fireEvent.change(within(dialog).getByLabelText('Latitude parada 1'),{target:{value:'-23.55052'}});
+    fireEvent.change(within(dialog).getByLabelText('Longitude parada 1'),{target:{value:'-46.633308'}});
     fireEvent.change(within(dialog).getByLabelText('Observações da primeira parada'),{target:{value:'Descarregar na portaria'}});
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 1/}));
     await waitFor(()=>expect(dispatchCalls()).toHaveLength(1));
     expect(mock.rpc).toHaveBeenCalledWith('dispatch_planned_route',{_payload:expect.objectContaining({
       tenant_id:'tenant',idempotency_key:expect.any(String),load_ids:['load'],
-      stops:[expect.objectContaining({fiscal_document_ids:['doc-1','doc-2'],load_ids:['load'],notes:'Descarregar na portaria'})],
+      stops:[expect.objectContaining({fiscal_document_ids:['doc-1','doc-2'],load_ids:['load'],notes:'Descarregar na portaria',
+        latitude:-23.55052,longitude:-46.633308})],
     })});
     await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith({title:'Viagem criada com sucesso'}));
   });
@@ -118,10 +122,22 @@ describe('real planning screens with isolated transport (not authenticated brows
     fireEvent.click(screen.getByRole('button',{name:'Recuperar despacho'}));
     await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith({title:'Despacho confirmado'}));
   });
+  it('LoadDetail blocks dispatch before transport when the physical stop has no coordinates',async()=>{
+    show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 1/}));
+    await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({
+      description:expect.stringContaining('latitude e longitude válidas'),
+    })));
+    expect(dispatchCalls()).toHaveLength(0);
+  });
   it('LoadDetail assigns separate documents to two stops using the actual selector',async()=>{
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Latitude parada 1'),{target:{value:'-23.5'}});
+    fireEvent.change(within(dialog).getByLabelText('Longitude parada 1'),{target:{value:'-46.6'}});
     fireEvent.click(within(dialog).getByRole('button',{name:'+ Parada'}));
     fireEvent.change(within(dialog).getByLabelText('Destino parada 2'),{target:{value:'Segundo destino'}});
+    fireEvent.change(within(dialog).getByLabelText('Latitude parada 2'),{target:{value:'-22.9'}});
+    fireEvent.change(within(dialog).getByLabelText('Longitude parada 2'),{target:{value:'-43.2'}});
     fireEvent.change(within(dialog).getByLabelText('Documento 2'),{target:{value:'1'}});
     expect(within(dialog).getByLabelText('Documento 2')).toHaveValue('1');
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 2/}));

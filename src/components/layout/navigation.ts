@@ -2,7 +2,7 @@ import {
   Activity, Archive, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, Banknote,
   Barcode, Bell, BookOpenCheck, Boxes, BriefcaseBusiness, Building2, Calculator,
   ChartColumn, ChartNoAxesCombined, CircleDollarSign, ClipboardCheck, ClipboardList,
-  DatabaseZap, FileCheck2, FileClock, FileInput, FileSearch, FileSpreadsheet, FileText,
+  DatabaseZap, FileCheck2, FileInput, FileSearch, FileSpreadsheet, FileText,
   FolderClock, Gauge, History, LayoutDashboard, Map, MapPinned, Navigation, Package,
   PackageCheck, PackageMinus, PackageOpen, Plug, Receipt, ReceiptText, Route,
   ScanLine, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Sprout, Tags,
@@ -60,7 +60,7 @@ export const navigationSections: NavigationSection[] = [
     { label: 'Central CT-e', href: '/cte-hub', icon: FileSpreadsheet, capability: 'fiscal', keywords: 'faturamento emissão monitor' },
     { label: 'Consulta CT-e', href: '/cte-search', icon: FileSearch, capability: 'fiscal' },
     { label: 'NFS-e de serviços', href: '/nfse', icon: ReceiptText, capability: 'fiscal' },
-    { label: 'MDF provisório', href: '/mdfe-provisional', icon: FileClock, capability: 'fiscal', keywords: 'manifesto MDF-e' },
+    { label: 'MDF-e', href: '/mdfe', icon: FileCheck2, capability: 'fiscal', keywords: 'manifesto emissão encerramento DAMDFE' },
     { label: 'Auditoria ICMS', href: '/cte-consistency', icon: ShieldCheck, capability: 'fiscal' },
   ] },
   { id: 'finance', label: 'Financeiro', icon: Wallet, items: [

@@ -41,6 +41,7 @@ export interface MdfeDocument {
   key: string; // Chave de acesso do CT-e ou NF-e
   type: 'cte' | 'nfe';
   destination?: MdfeLocation | null;
+  insuranceEndorsements?: string[];
 }
 
 export interface MdfeLocation {
@@ -53,6 +54,7 @@ export interface MdfeInsurance {
   providerName: string;
   providerCnpj: string;
   policyNumber: string;
+  endorsementNumbers?: string[];
 }
 
 interface MdfeContractorAddressPayload {
@@ -72,6 +74,7 @@ interface MdfeMunicipalUnloadGroup {
     chCTe: string;
     infSeg?: { xSeg: string; CNPJ: string };
     nApol?: string;
+    nAver?: string[];
     nAv?: string[];
   }>;
   infNFe: Array<{ chNFe: string }>;
@@ -115,6 +118,24 @@ export interface MdfePayment {
   } | null;
 }
 
+export interface MdfeTaker {
+  /** CPF ou CNPJ do contratante/tomador. */
+  document?: string;
+  /** Compatibilidade com chamadas antigas que informavam somente CNPJ. */
+  cnpj?: string;
+  name: string;
+  ie?: string | null;
+  address?: {
+    street?: string | null;
+    number?: string | null;
+    neighborhood?: string | null;
+    city_ibge?: string | null;
+    city_name?: string | null;
+    state?: string | null;
+    zip?: string | null;
+  } | null;
+}
+
 export interface BuildMdfePayloadInput {
   emitter: MdfeEmitter;
   driver: MdfeDriver;
@@ -129,21 +150,13 @@ export interface BuildMdfePayloadInput {
   externalId?: string | null;
   valCarga?: number;
   pesoBruto?: number;
+  predominantProduct?: string;
   cMone?: string;
-  takers?: Array<{
-    cnpj: string;
-    name: string;
-    ie?: string | null;
-    address?: {
-      street?: string | null;
-      number?: string | null;
-      neighborhood?: string | null;
-      city_ibge?: string | null;
-      city_name?: string | null;
-      state?: string | null;
-      zip?: string | null;
-    } | null;
-  }>;
+  ciot?: {
+    number: string;
+    responsibleDoc: string;
+  } | null;
+  takers?: MdfeTaker[];
   payment?: MdfePayment | null;
   proprietor?: MdfeProprietor | null;
   valePedagio?: {
@@ -164,16 +177,48 @@ function digits(v?: string | null): string {
   return (v || '').replace(/\D+/g, '');
 }
 
+function validCpfCnpj(value?: string | null): boolean {
+  const normalized = digits(value);
+  return normalized.length === 11 || normalized.length === 14;
+}
+
+function contractorDocument(contractor: { document?: string; cnpj?: string }): string {
+  return digits(contractor.document || contractor.cnpj);
+}
+
+function buildContractorAddress(address?: MdfeTaker['address']): MdfeContractorAddressPayload | undefined {
+  if (!address) return undefined;
+  const cityCode = digits(address.city_ibge);
+  const zip = digits(address.zip);
+  const state = String(address.state || '').trim().toUpperCase();
+  if (!(address.street || '').trim() || !(address.neighborhood || '').trim()
+    || !(address.city_name || '').trim() || cityCode.length !== 7
+    || state.length !== 2 || zip.length !== 8) {
+    return undefined;
+  }
+  return {
+    xLgr: address.street!.trim().slice(0, 60),
+    nro: (address.number || 'SN').trim().slice(0, 60),
+    xBairro: address.neighborhood!.trim().slice(0, 60),
+    cMun: cityCode,
+    xMun: address.city_name!.trim().slice(0, 60),
+    UF: state,
+    CEP: zip,
+  };
+}
+
 /**
  * Constrói o payload para POST /hub_documents_emit?type=mdfe
  */
 export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayloadResult {
   const missing: string[] = [];
+  const rntrcNumber = digits(input.vehicle?.rntrc);
 
   if (!input.emitter?.cnpj) missing.push('CNPJ do emitente');
   if (!(input.driver?.name || '').trim()) missing.push('Nome do motorista');
   if (digits(input.driver?.cpf).length !== 11) missing.push('CPF válido do motorista');
   if (!input.vehicle?.plate) missing.push('Placa do veículo');
+  if (rntrcNumber.length !== 8) missing.push('RNTRC válido do transportador (8 dígitos)');
   if (!input.documents?.length) missing.push('Documentos vinculados (CT-e/NF-e)');
   if (input.documents?.some(document => digits(document.key).length !== 44)) {
     missing.push('Chave de acesso válida dos documentos vinculados');
@@ -193,6 +238,14 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
   if (!input.insurance?.providerCnpj) missing.push('CNPJ da Seguradora');
   if (!input.insurance?.policyNumber) missing.push('Número da Apólice');
   if (!input.insurance?.providerName) missing.push('Nome da Seguradora');
+  if (!(Number(input.valCarga) > 0)) missing.push('Valor total da carga');
+  if (!(Number(input.pesoBruto) > 0)) missing.push('Peso bruto total da carga');
+  if (!(input.predominantProduct || '').trim()) missing.push('Descrição do produto predominante');
+
+  const ciotNumber = digits(input.ciot?.number);
+  const ciotResponsibleDoc = digits(input.ciot?.responsibleDoc);
+  if (ciotNumber.length !== 12) missing.push('CIOT válido (12 dígitos)');
+  if (!validCpfCnpj(ciotResponsibleDoc)) missing.push('CPF/CNPJ do responsável pelo CIOT');
 
   if (input.valePedagio) {
     if (digits(input.valePedagio.cnpjFornecedor).length !== 14) {
@@ -211,7 +264,26 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
 
   const contractors = (input.takers && input.takers.length > 0)
     ? input.takers
-    : [{ cnpj: input.emitter.cnpj, name: input.emitter.name }];
+    : [{ document: input.emitter.cnpj, name: input.emitter.name }];
+  if (contractors.some(contractor => !validCpfCnpj(contractorDocument(contractor)))) {
+    missing.push('CPF/CNPJ válido de todos os contratantes do transporte');
+  }
+  if (contractors.some(contractor => !(contractor.name || '').trim())) {
+    missing.push('Nome de todos os contratantes do transporte');
+  }
+
+  const endorsementNumbers = [...new Set([
+    ...(input.insurance?.endorsementNumbers || []),
+    ...input.documents.flatMap(document => document.insuranceEndorsements || []),
+  ].map(value => String(value || '').trim()).filter(Boolean))];
+  if (endorsementNumbers.length === 0) missing.push('Número de averbação do seguro');
+
+  const ciotGroup = {
+    CIOT: ciotNumber,
+    ...(ciotResponsibleDoc.length === 11
+      ? { CPF: ciotResponsibleDoc }
+      : { CNPJ: ciotResponsibleDoc }),
+  };
 
   // Grupo de pagamento do tomador (infPag). Enviado apenas quando informado;
   // em carga fracionada (múltiplos CT-e) a exigência é normalmente dispensada.
@@ -286,6 +358,10 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
     environment: input.emitter.environment || 'sandbox',
     externalId: input.externalId || undefined,
     payload: {
+      modalidadeDeTransporte: '1', // 1=Rodoviário no contrato PlugNotas/Fiscal Hub
+      produtoPredominante: {
+        descricao: (input.predominantProduct || '').trim().slice(0, 120),
+      },
       ide: {
         cUF: digits(input.origin.state).slice(0, 2),
         tpEmit: '1', // 1=Prestador de serviço de transporte
@@ -295,6 +371,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       tot: {
         vCarga: input.valCarga || 0,
         cMone: input.cMone || '098', // 098=BRL
+        cUnid: '01', // 01=KG
         qCarga: input.pesoBruto || 0,
       },
       emit: {
@@ -307,9 +384,10 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
           // Grupo canônico da SEFAZ para os contratantes/tomadores do serviço
           // (obrigatório quando tpEmit=1 - Prestador de Serviço de Transporte).
           infANTT: {
-            RNTRC: input.vehicle.rntrc || 'ISENTO',
+            RNTRC: rntrcNumber,
+            infCIOT: [ciotGroup],
             infContratante: contractors.map(t => {
-              const d = digits(t.cnpj);
+              const d = contractorDocument(t);
               const party: {
                 xNome: string;
                 CPF?: string;
@@ -322,17 +400,8 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
                 IE: digits(t.ie) || 'ISENTO',
               };
 
-              if (t.address) {
-                party.enderContratante = {
-                  xLgr: (t.address.street || '').slice(0, 60),
-                  nro: (t.address.number || 'SN').slice(0, 60),
-                  xBairro: (t.address.neighborhood || '').slice(0, 60),
-                  cMun: digits(t.address.city_ibge),
-                  xMun: (t.address.city_name || '').slice(0, 60),
-                  UF: t.address.state || '',
-                  CEP: digits(t.address.zip),
-                };
-              }
+              const address = buildContractorAddress(t.address);
+              if (address) party.enderContratante = address;
 
               return party;
             }),
@@ -342,7 +411,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
             placa: input.vehicle.plate,
             UF: input.vehicle.state,
             tara: input.vehicle.tara || 0,
-            RNTRC: input.vehicle.rntrc || 'ISENTO',
+            RNTRC: rntrcNumber,
             RENAVAM: digits(input.vehicle.renavam),
             tpVeic: input.vehicle.type || '01',
             tpCar: input.vehicle.bodyType || '00',
@@ -390,7 +459,8 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
                   CNPJ: digits(input.insurance.providerCnpj),
                 },
                 nApol: input.insurance.policyNumber,
-                nAv: ['0'],
+                nAver: doc.insuranceEndorsements?.length ? doc.insuranceEndorsements : endorsementNumbers,
+                nAv: doc.insuranceEndorsements?.length ? doc.insuranceEndorsements : endorsementNumbers,
               } : {}),
             });
           } else {
@@ -438,7 +508,9 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
             CNPJ: digits(input.insurance?.providerCnpj || ''),
           },
           nApol: input.insurance?.policyNumber || '',
-          nAv: ['0'], // Conforme schema v1 exige array de strings
+          nAver: endorsementNumbers,
+          // Alias aceito pelo contrato atual do Hub; nAver é o campo canônico do MDF-e.
+          nAv: endorsementNumbers,
         },
       ],
       infToma: {
@@ -446,7 +518,12 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       },
       // Quando tpEmit=1 (Prestador), é obrigatório informar ao menos um contratante no modal rodoviário.
       modalRodoviario: {
-        rntrc: input.vehicle.rntrc || 'ISENTO',
+        rntrc: rntrcNumber,
+        infCIOT: [ciotGroup],
+        ciot: [{
+          numero: ciotNumber,
+          documentoResponsavel: ciotResponsibleDoc,
+        }],
         ...(input.valePedagio ? {
           valePed: [
             {
@@ -458,7 +535,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
           ]
         } : {}),
         contratantes: contractors.map(t => {
-          const d = digits(t.cnpj);
+          const d = contractorDocument(t);
           const c: {
             xNome: string;
             CPF?: string;
@@ -471,17 +548,8 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
             ie: digits(t.ie) || 'ISENTO',
           };
 
-          if (t.address) {
-            c.enderContratante = {
-              xLgr: (t.address.street || '').slice(0, 60),
-              nro: (t.address.number || 'SN').slice(0, 60),
-              xBairro: (t.address.neighborhood || '').slice(0, 60),
-              cMun: digits(t.address.city_ibge),
-              xMun: (t.address.city_name || '').slice(0, 60),
-              UF: t.address.state || '',
-              CEP: digits(t.address.zip),
-            };
-          }
+          const address = buildContractorAddress(t.address);
+          if (address) c.enderContratante = address;
 
           return c;
         }),

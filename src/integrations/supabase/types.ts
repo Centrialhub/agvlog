@@ -7272,6 +7272,7 @@ export type Database = {
           last_callback: Json | null
           last_response: Json | null
           last_synced_at: string | null
+          load_manifest_id: string | null
           message: string | null
           nfse_document_id: string | null
           number: string | null
@@ -7315,6 +7316,7 @@ export type Database = {
           last_callback?: Json | null
           last_response?: Json | null
           last_synced_at?: string | null
+          load_manifest_id?: string | null
           message?: string | null
           nfse_document_id?: string | null
           number?: string | null
@@ -7358,6 +7360,7 @@ export type Database = {
           last_callback?: Json | null
           last_response?: Json | null
           last_synced_at?: string | null
+          load_manifest_id?: string | null
           message?: string | null
           nfse_document_id?: string | null
           number?: string | null
@@ -7392,6 +7395,13 @@ export type Database = {
             columns: ["fiscal_document_id"]
             isOneToOne: false
             referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_fiscal_emissions_load_manifest_id_fkey"
+            columns: ["load_manifest_id"]
+            isOneToOne: false
+            referencedRelation: "load_manifests"
             referencedColumns: ["id"]
           },
           {
@@ -8534,17 +8544,36 @@ export type Database = {
       }
       load_manifests: {
         Row: {
+          access_key: string | null
+          attempt_count: number
+          authorization_protocol: string | null
+          closed_at: string | null
+          closure_dispatch_state: string | null
+          closure_protocol: string | null
+          closure_requested_at: string | null
+          closure_requested_by: string | null
           created_at: string
           created_by: string | null
           cte_document_ids: string[]
           destination: string | null
+          document_number: string | null
+          document_series: string | null
+          emitter_id: string | null
+          environment: string | null
+          external_id: string | null
           fiscal_document_ids: string[]
+          hub_document_id: string | null
+          hub_emission_id: string | null
           id: string
+          issued_at: string | null
+          last_event_response: Json | null
           load_id: string
           manifest_number: string
           observations: string | null
           origin: string | null
+          pdf_url: string | null
           receipt_number: string | null
+          request_payload: Json | null
           responsible_address: string | null
           responsible_city: string | null
           responsible_cnpj: string | null
@@ -8552,23 +8581,44 @@ export type Database = {
           responsible_name: string | null
           responsible_neighborhood: string | null
           status: string
+          status_message: string | null
           tenant_id: string
           toll_value: number | null
           uf_route: string[] | null
           updated_at: string
+          xml_url: string | null
         }
         Insert: {
+          access_key?: string | null
+          attempt_count?: number
+          authorization_protocol?: string | null
+          closed_at?: string | null
+          closure_dispatch_state?: string | null
+          closure_protocol?: string | null
+          closure_requested_at?: string | null
+          closure_requested_by?: string | null
           created_at?: string
           created_by?: string | null
           cte_document_ids?: string[]
           destination?: string | null
+          document_number?: string | null
+          document_series?: string | null
+          emitter_id?: string | null
+          environment?: string | null
+          external_id?: string | null
           fiscal_document_ids?: string[]
+          hub_document_id?: string | null
+          hub_emission_id?: string | null
           id?: string
+          issued_at?: string | null
+          last_event_response?: Json | null
           load_id: string
           manifest_number: string
           observations?: string | null
           origin?: string | null
+          pdf_url?: string | null
           receipt_number?: string | null
+          request_payload?: Json | null
           responsible_address?: string | null
           responsible_city?: string | null
           responsible_cnpj?: string | null
@@ -8576,23 +8626,44 @@ export type Database = {
           responsible_name?: string | null
           responsible_neighborhood?: string | null
           status?: string
+          status_message?: string | null
           tenant_id: string
           toll_value?: number | null
           uf_route?: string[] | null
           updated_at?: string
+          xml_url?: string | null
         }
         Update: {
+          access_key?: string | null
+          attempt_count?: number
+          authorization_protocol?: string | null
+          closed_at?: string | null
+          closure_dispatch_state?: string | null
+          closure_protocol?: string | null
+          closure_requested_at?: string | null
+          closure_requested_by?: string | null
           created_at?: string
           created_by?: string | null
           cte_document_ids?: string[]
           destination?: string | null
+          document_number?: string | null
+          document_series?: string | null
+          emitter_id?: string | null
+          environment?: string | null
+          external_id?: string | null
           fiscal_document_ids?: string[]
+          hub_document_id?: string | null
+          hub_emission_id?: string | null
           id?: string
+          issued_at?: string | null
+          last_event_response?: Json | null
           load_id?: string
           manifest_number?: string
           observations?: string | null
           origin?: string | null
+          pdf_url?: string | null
           receipt_number?: string | null
+          request_payload?: Json | null
           responsible_address?: string | null
           responsible_city?: string | null
           responsible_cnpj?: string | null
@@ -8600,12 +8671,50 @@ export type Database = {
           responsible_name?: string | null
           responsible_neighborhood?: string | null
           status?: string
+          status_message?: string | null
           tenant_id?: string
           toll_value?: number | null
           uf_route?: string[] | null
           updated_at?: string
+          xml_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "load_manifests_emitter_id_fkey"
+            columns: ["emitter_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_emitters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_manifests_hub_emission_id_fkey"
+            columns: ["hub_emission_id"]
+            isOneToOne: false
+            referencedRelation: "hub_fiscal_emissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_manifests_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_manifests_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_manifests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       load_note_audit_events: {
         Row: {
@@ -15806,9 +15915,13 @@ export type Database = {
       }
     }
     Functions: {
+      driver_get_load_fiscal_file: { Args: { _tenant_id: string; _load_id: string; _document_kind: string; _document_id: string; _format: string }; Returns: Json }
       driver_list_load_fiscal_catalog: { Args: { _tenant_id: string; _load_id: string }; Returns: Json }
+      list_driver_loads_page_v1: { Args: { _tenant_id: string; _search?: string; _status?: string; _limit?: number; _cursor?: Json }; Returns: Json }
+      list_driver_operational_events_page_v1: { Args: { _tenant_id: string; _trip_id?: string; _limit?: number; _cursor?: Json }; Returns: Json }
       filter_billable_fiscal_sources: { Args: { _tenant: string; _type: string; _ids: string[] }; Returns: string[] }
       prepare_cte_issue: { Args: { _tenant_id: string; _emitter_id: string; _environment: string; _source_ids: string[]; _snapshot: Json }; Returns: Json }
+      prepare_mdfe_issue: { Args: { _tenant_id: string; _load_id: string; _emitter_id: string; _environment: string; _cte_ids: string[]; _snapshot: Json }; Returns: Json }
 
       get_driver_settlement_adjustment_context: { Args: { _tenant_id: string; _settlement_id: string }; Returns: Json }
       apply_driver_settlement_adjustment: { Args: { _payload: Json }; Returns: Json }
@@ -16638,10 +16751,6 @@ export type Database = {
           total_weight: number
         }[]
       }
-      get_next_load_number_v1: {
-        Args: { p_tenant_id: string }
-        Returns: string
-      }
       get_open_trip_alerts: {
         Args: { _tenant_id: string }
         Returns: {
@@ -17108,6 +17217,28 @@ export type Database = {
           p_limit?: number
           p_search?: string
           p_tenant_id: string
+        }
+        Returns: Json
+      }
+      list_operator_reference_page_v1: {
+        Args: {
+          _cursor?: Json
+          _include_inactive?: boolean
+          _limit?: number
+          _resource: string
+          _tenant_id: string
+        }
+        Returns: Json
+      }
+      list_operator_clients_page_v1: {
+        Args: {
+          _cursor?: Json
+          _direction?: string
+          _kind?: string
+          _limit?: number
+          _search?: string
+          _snapshot_at?: string
+          _tenant_id: string
         }
         Returns: Json
       }

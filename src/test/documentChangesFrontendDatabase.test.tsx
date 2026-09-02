@@ -7,6 +7,36 @@ import {DocumentChangeRecoveryPanel} from '@/components/loads/DocumentChangeReco
 import {createDocumentChangeDatabase,documentChangeIds as i,seedDocumentChanges} from './helpers/documentChangesDatabase';
 import {twoPlannedTrips} from './helpers/replanningDatabase';
 import {compositionRpc} from './helpers/compositionDatabase';
+vi.mock('@/components/ui/select',async()=>{
+ const React=await import('react');
+ type ChildProps={id?:string;value?:string;disabled?:boolean;'aria-label'?:string;children?:import('react').ReactNode};
+ const SelectTrigger=()=>null;
+ const SelectContent=()=>null;
+ const SelectItem=()=>null;
+ const SelectValue=()=>null;
+ const Select=({children,value,onValueChange,disabled}:{children?:import('react').ReactNode;value?:string;
+  onValueChange?:(value:string)=>void;disabled?:boolean})=>{
+  let id:string|undefined;let ariaLabel:string|undefined;const options:Array<{value:string;disabled?:boolean;text:string}>=[];
+  const textOf=(node:import('react').ReactNode):string=>React.Children.toArray(node).map(child=>
+   typeof child==='string'||typeof child==='number'?String(child):
+    React.isValidElement<ChildProps>(child)?textOf(child.props.children):'').join(' ').replace(/\s+/g,' ')
+   .replace(/\s+([:;,.])/g,'$1').trim();
+  const visit=(node:import('react').ReactNode):void=>React.Children.forEach(node,child=>{
+   if(!React.isValidElement<ChildProps>(child))return;
+   if(child.type===SelectTrigger){id=child.props.id;ariaLabel=child.props['aria-label'];}
+   else if(child.type===SelectItem&&child.props.value)options.push({value:child.props.value,
+    disabled:child.props.disabled,text:textOf(child.props.children)});
+   else visit(child.props.children);
+  });
+  visit(children);
+  return React.createElement('select',{id,'aria-label':ariaLabel,role:'combobox',value,disabled,
+   onChange:(event:import('react').ChangeEvent<HTMLSelectElement>)=>onValueChange?.(event.currentTarget.value)},
+  React.createElement('option',{value:'',disabled:true},''),
+  ...options.map(option=>React.createElement('option',{key:option.value,value:option.value,disabled:option.disabled},option.text)));
+ };
+ return {Select,SelectTrigger,SelectContent,SelectItem,SelectValue,SelectGroup:SelectContent,
+  SelectLabel:SelectContent,SelectSeparator:()=>null,SelectScrollUpButton:()=>null,SelectScrollDownButton:()=>null};
+});
 vi.hoisted(async()=>{const {Blob,File}=await import('node:buffer');vi.stubGlobal('Blob',Blob);vi.stubGlobal('File',File);});
 const mock=vi.hoisted(()=>({rpc:vi.fn(),toast:vi.fn(),write:vi.fn(),savePreference:vi.fn(),loseReply:false}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:i.tenant}})}));
@@ -51,8 +81,9 @@ async function attachDialog(){
  fireEvent.click(await screen.findByRole('button',{name:/NF 333/}));fireEvent.click(screen.getByRole('button',{name:'Puxar NF(s)'}));
  const dialog=await screen.findByRole('dialog');await within(dialog).findByLabelText('Motivo da alteração');return dialog;
 }
-async function choose(dialog:HTMLElement,name:RegExp){fireEvent.keyDown(within(dialog).getByLabelText('Destino dos documentos'),{key:'Enter'});
- fireEvent.click(await screen.findByRole('option',{name}));fireEvent.change(within(dialog).getByLabelText('Motivo da alteração'),{target:{value:'Ajuste confirmado QA'}});}
+async function choose(dialog:HTMLElement,name:RegExp){const select=within(dialog).getByLabelText('Destino dos documentos');
+ const option=within(select).getByRole('option',{name}) as HTMLOptionElement;fireEvent.change(select,{target:{value:option.value}});
+ fireEvent.change(within(dialog).getByLabelText('Motivo da alteração'),{target:{value:'Ajuste confirmado QA'}});}
 describe('real invoice panel and SQL candidate, not HTTP/Auth E2E',()=>{
  it('requires an explicit stop and adds the selected note to that exact stop',async()=>{
   show();const dialog=await attachDialog();fireEvent.change(within(dialog).getByLabelText('Motivo da alteração'),{target:{value:'Adicionar nota'}});

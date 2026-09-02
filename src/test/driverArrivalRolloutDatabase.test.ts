@@ -118,6 +118,13 @@ describe('driver arrival additive rollout in PostgreSQL', () => {
     expect(await normalizedHash(
       'public.driver_mark_arrival(uuid,double precision,double precision,double precision)',
     )).toBe(gpsHash);
+    const access = await db.query(`select
+      has_function_privilege('authenticated','public.driver_mark_arrival(uuid,double precision,double precision,double precision)','execute') gps_authenticated,
+      has_function_privilege('service_role','public.driver_mark_arrival(uuid,double precision,double precision,double precision)','execute') gps_service,
+      has_function_privilege('anon','public.driver_mark_arrival(uuid,double precision,double precision,double precision)','execute') gps_anon`);
+    expect(access.rows).toEqual([{
+      gps_authenticated:true,gps_service:false,gps_anon:false,
+    }]);
   });
 
   it('refuses cutover if the GPS function changed and preserves the legacy RPC', async () => {

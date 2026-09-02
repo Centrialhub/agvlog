@@ -70,7 +70,7 @@ function Harness() {
   const submit = async () => {
     try {
       const result = await command.submit({ action: 'create', changes: { destination: 'Cliente React QA' } });
-      setMessage(`ok:${'load_id' in result ? result.load_id : ''}`);
+      setMessage(`ok:${'load' in result ? String(result.load.load_number) : ''}:${'load_id' in result ? result.load_id : ''}`);
     } catch (error) { setMessage((error as Error).message); }
   };
   const recover = async () => {
@@ -94,7 +94,7 @@ const renderHarness = () => render(<QueryClientProvider client={client}><Harness
 describe('load aggregate frontend backed by the real SQL command', { timeout: 15_000 }, () => {
   it('uses only the canonical RPC and accepts a compatible confirmation', async () => {
     renderHarness(); fireEvent.click(screen.getByRole('button', { name: 'Criar carga' }));
-    await waitFor(() => expect(screen.getByText(/^ok:/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/^ok:1001:/)).toBeInTheDocument());
     expect(mock.rpc).toHaveBeenCalledTimes(1);
     expect(mock.rpc.mock.calls[0][0]).toBe('apply_load_aggregate_command');
     expect((await db.query('select count(*)::int n from private.load_aggregate_commands')).rows[0]).toEqual({ n: 1 });

@@ -1,21 +1,22 @@
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
-import { matchesSearch } from '@/lib/listFilters';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useCurrentDriver } from '@/hooks/useCurrentDriver';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useDriverLoadHistory } from '@/hooks/useDriverLoadHistory';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Package, MapPin, Truck, ArrowRight, Calendar, Info, AlertCircle, RefreshCcw, AlertTriangle } from 'lucide-react';
-import { LOAD_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status/loadStatus';
+import { LOAD_STATUS_LABELS, LOAD_ACTIVE_STATUSES, type LoadStatus } from '@/lib/status/loadStatus';
 import { useDriverTripActions } from '@/hooks/useDriverTripActions';
 import { hasDriverLoadTransitMismatch, isDriverTripStarted, resolveCanonicalTripLink } from '@/lib/driverTrip';
 import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
+import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
 
 export default function DriverLoads() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const {
     data: driver,
     isLoading: driverLoading,
@@ -24,42 +25,21 @@ export default function DriverLoads() {
   } = useCurrentDriver();
   const { accessTrip, isStartingTrip } = useDriverTripActions();
 
+  const loadHistory = useDriverLoadHistory({
+    driverId: driver?.id,
+    search: debouncedSearch,
+    status: status === 'all' ? null : status as LoadStatus,
+  });
   const {
-    data: loads = [],
     isLoading: loadsLoading,
     isError: loadsFailed,
     refetch: refetchLoads,
-  } = useQuery({
-    queryKey: ['driver_all_assigned_loads', driver?.id],
-    queryFn: async () => {
-      if (!driver) return [];
-      const { data, error } = await supabase
-        .from('loads')
-        .select(`
-          id, 
-          load_number, 
-          origin, 
-          destination, 
-          status, 
-          scheduled_load_at,
-          total_pallet_count, 
-          total_weight_kg,
-          vehicles(plate, nickname),
-          dispatch_trip_loads!dispatch_trip_loads_load_id_fkey(
-            dispatch_trip_id,
-            dispatch_trips!dispatch_trip_loads_dispatch_trip_id_fkey(status, actual_start_at)
-          )
-        `)
-        .eq('driver_id', driver.id)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!driver,
-  });
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = loadHistory;
 
-  const filteredLoads = loads.filter(load => matchesSearch(search, load.load_number, load.origin, load.destination, load.vehicles?.plate) && (status === 'all' || status === load.status));
+  const loads = loadHistory.data?.items ?? [];
   const loading = driverLoading || loadsLoading;
   const failed = driverFailed || loadsFailed;
 
@@ -74,7 +54,7 @@ export default function DriverLoads() {
         <p className="text-sm text-muted-foreground">Histórico e cargas atribuídas</p>
       </div>
 
-      {!failed && <ListFilterBar activeCount={Number(Boolean(search)) + Number(status !== 'all')} onReset={() => { setSearch(''); setStatus('all'); }} resultCount={filteredLoads.length} totalCount={loads.length} loading={loading} fields={[
+      {!failed && <ListFilterBar activeCount={Number(Boolean(search)) + Number(status !== 'all')} onReset={() => { setSearch(''); setStatus('all'); }} resultCount={loads.length} loading={loading} description={hasNextPage ? 'Há mais cargas neste filtro.' : 'Histórico consultado até o fim.'} fields={[
         { key: 'search', label: 'Buscar carga', type: 'search', placeholder: 'Número, destino, origem ou placa', value: search, onChange: setSearch },
         { key: 'status', label: 'Situação da carga', value: status, onChange: setStatus, options: [{ value: 'all', label: 'Todas as cargas' }, ...Object.entries(LOAD_STATUS_LABELS).map(([value, label]) => ({ value, label }))] },
       ]} />}
@@ -100,7 +80,7 @@ export default function DriverLoads() {
             </Button>
           </CardContent>
         </Card>
-      ) : filteredLoads.length === 0 ? (
+      ) : loads.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center space-y-3">
             <Package className="h-10 w-10 text-muted-foreground mx-auto" />
@@ -114,7 +94,7 @@ export default function DriverLoads() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredLoads.map((load) => {
+          {loads.map((load) => {
             const tripLink = resolveCanonicalTripLink(load.dispatch_trip_loads, TRIP_ACTIVE_STATUSES);
             const tripStatus = tripLink?.dispatch_trips?.status ?? null;
             const tripStarted = isDriverTripStarted(
@@ -194,10 +174,27 @@ export default function DriverLoads() {
                     </Button>
                   )}
                 </div>
+                <DriverLoadNotes
+                  loadId={load.id}
+                  loadNumber={load.load_number}
+                  vehiclePlate={load.vehicles?.plate}
+                  driverName={driver?.name}
+                />
               </CardContent>
             </Card>
             );
           })}
+          {hasNextPage && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={isFetchingNextPage}
+              onClick={() => { void fetchNextPage(); }}
+            >
+              {isFetchingNextPage ? 'Carregando mais cargas…' : 'Carregar mais cargas'}
+            </Button>
+          )}
         </div>
       )}
     </div>

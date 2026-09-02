@@ -9,7 +9,6 @@ import { useFiscalDocuments, useCreateFiscalDocument } from '@/hooks/useFiscalDo
 import { useClients } from '@/hooks/useClients';
 import { useCreateOrder } from '@/hooks/useOrders';
 import { useCreateLoad, useLoads } from '@/hooks/useLoads';
-import { getNextLoadNumberFromExisting } from '@/hooks/useLoads';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
 import { useToast } from '@/hooks/use-toast';
@@ -48,6 +47,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/useTenant';
+import { useDrivers as useOperatorDrivers } from '@/hooks/useDrivers';
 import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { useAuth } from '@/hooks/useAuth';
 import { useItemPreparationWrites } from '@/hooks/useItemPreparationWrites';
@@ -129,21 +129,7 @@ function getPersistedDocumentId(doc: ValidatedDocument): string | undefined {
 }
 
 function useDrivers() {
-  const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['drivers', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('drivers')
-        .select('id, name, active')
-        .eq('tenant_id', currentTenant.id)
-        .eq('active', true);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
+  return useOperatorDrivers();
 }
 
 async function getEdgeFunctionErrorMessage(error: unknown): Promise<string> {
@@ -1396,18 +1382,13 @@ export default function Ingestion() {
         }
       }
 
-      // 3. Create loads WITH load_items linked to documents/orders
-      // Compute next sequential load number once, then increment locally per suggestion
-      let nextLoadSeq = currentTenant
-        ? Number(await getNextLoadNumberFromExisting(currentTenant.id))
-        : 1001;
+      // 3. Create loads WITH load_items linked to documents/orders. The canonical
+      // database command reserves each number atomically and returns it here.
       for (let idx = 0; idx < suggestions.length; idx++) {
         const suggestion = suggestions[idx];
         if (suggestion.totalPallets <= 0) continue;
         const assignment = assignments.get(idx);
         try {
-          const loadNumber = String(nextLoadSeq);
-          nextLoadSeq += 1;
           const docIds = suggestion.documents
             .map(d => createdDocIds.get(getValidatedDocKey(d)) || (d.isOrphanReusable ? d.existingDocumentId : null) || getPersistedDocumentId(d))
             .filter((id): id is string => !!id);
@@ -1421,7 +1402,6 @@ export default function Ingestion() {
           }
 
           const createdLoad = await createLoad.mutateAsync({
-            load_number: loadNumber,
             destination: suggestion.region,
             vehicle_id: assignment?.vehicleId || null,
             driver_id: assignment?.driverId || null,
@@ -1435,6 +1415,8 @@ export default function Ingestion() {
           });
 
           const loadId = createdLoad.id;
+          const loadNumber = createdLoad.load_number;
+          if (!loadNumber) throw new Error('Carga criada sem numeração confirmada pelo banco.');
           let itemsCreated = 0;
 
           // Vincula documentos à carga via RPC oficial (cria load_items + atualiza fiscal_documents + auditoria)

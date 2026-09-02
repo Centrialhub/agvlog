@@ -1,10 +1,17 @@
 -- Canonical, atomic commands for operator-owned load aggregate mutations.
 -- Legacy load mutation RPCs remain available until every caller is cut over.
 
+set local lock_timeout = '3s';
+set local statement_timeout = '30s';
+
 create schema if not exists private;
 
 do $$
 begin
+  if to_regprocedure('extensions.digest(bytea,text)') is null then
+    raise exception 'extensions.digest(bytea,text) is required for load command idempotency';
+  end if;
+
   if exists (
     select 1
       from public.loads l
@@ -41,35 +48,98 @@ create unique index if not exists vehicles_tenant_id_id_uidx
 create unique index if not exists dispatch_trips_tenant_id_id_uidx
   on public.dispatch_trips (tenant_id, id);
 
-alter table public.loads
-  drop constraint if exists loads_driver_id_fkey;
-alter table public.loads
-  drop constraint if exists loads_tenant_driver_fkey;
-alter table public.loads
-  add constraint loads_tenant_driver_fkey
-  foreign key (tenant_id, driver_id)
-  references public.drivers (tenant_id, id)
-  on delete set null (driver_id);
+do $tenant_foreign_keys$
+declare
+  v_edge record;
+  v_tenant_attnum smallint;
+  v_local_attnum smallint;
+  v_ref_tenant_attnum smallint;
+  v_ref_id_attnum smallint;
+  v_constraint record;
+  v_expected_exists boolean;
+begin
+  select attnum into v_tenant_attnum
+    from pg_attribute
+   where attrelid = 'public.loads'::regclass and attname = 'tenant_id'
+     and attnum > 0 and not attisdropped;
 
-alter table public.loads
-  drop constraint if exists loads_vehicle_id_fkey;
-alter table public.loads
-  drop constraint if exists loads_tenant_vehicle_fkey;
-alter table public.loads
-  add constraint loads_tenant_vehicle_fkey
-  foreign key (tenant_id, vehicle_id)
-  references public.vehicles (tenant_id, id)
-  on delete set null (vehicle_id);
+  for v_edge in
+    select * from (values
+      ('driver_id', 'drivers', 'loads_driver_id_fkey', 'loads_tenant_driver_fkey'),
+      ('vehicle_id', 'vehicles', 'loads_vehicle_id_fkey', 'loads_tenant_vehicle_fkey'),
+      ('trip_id', 'dispatch_trips', 'loads_trip_id_fkey', 'loads_tenant_trip_fkey')
+    ) as edges(local_column, referenced_table, legacy_name, expected_name)
+  loop
+    select attnum into v_local_attnum
+      from pg_attribute
+     where attrelid = 'public.loads'::regclass and attname = v_edge.local_column
+       and attnum > 0 and not attisdropped;
+    select attnum into v_ref_tenant_attnum
+      from pg_attribute
+     where attrelid = format('public.%I', v_edge.referenced_table)::regclass
+       and attname = 'tenant_id' and attnum > 0 and not attisdropped;
+    select attnum into v_ref_id_attnum
+      from pg_attribute
+     where attrelid = format('public.%I', v_edge.referenced_table)::regclass
+       and attname = 'id' and attnum > 0 and not attisdropped;
 
-alter table public.loads
-  drop constraint if exists loads_trip_id_fkey;
-alter table public.loads
-  drop constraint if exists loads_tenant_trip_fkey;
-alter table public.loads
-  add constraint loads_tenant_trip_fkey
-  foreign key (tenant_id, trip_id)
-  references public.dispatch_trips (tenant_id, id)
-  on delete set null (trip_id);
+    if v_tenant_attnum is null or v_local_attnum is null
+       or v_ref_tenant_attnum is null or v_ref_id_attnum is null then
+      raise exception 'Required tenant foreign-key columns are missing for loads.%', v_edge.local_column;
+    end if;
+
+    select c.* into v_constraint
+      from pg_constraint c
+     where c.conrelid = 'public.loads'::regclass
+       and c.conname = v_edge.expected_name;
+    v_expected_exists := found;
+    if v_expected_exists and not (
+      v_constraint.contype = 'f'
+      and v_constraint.confrelid = format('public.%I', v_edge.referenced_table)::regclass
+      and v_constraint.conkey = array[v_tenant_attnum, v_local_attnum]::smallint[]
+      and v_constraint.confkey = array[v_ref_tenant_attnum, v_ref_id_attnum]::smallint[]
+      and v_constraint.confdeltype = 'n'
+      and v_constraint.confdelsetcols = array[v_local_attnum]::smallint[]
+      and v_constraint.convalidated
+    ) then
+      raise exception 'Constraint % exists with an incompatible definition', v_edge.expected_name;
+    end if;
+
+    select c.* into v_constraint
+      from pg_constraint c
+     where c.conrelid = 'public.loads'::regclass
+       and c.conname = v_edge.legacy_name;
+    if found then
+      if not (
+        v_constraint.contype = 'f'
+        and v_constraint.confrelid = format('public.%I', v_edge.referenced_table)::regclass
+        and v_constraint.conkey = array[v_local_attnum]::smallint[]
+        and v_constraint.confkey = array[v_ref_id_attnum]::smallint[]
+      ) then
+        raise exception 'Legacy constraint % exists with an incompatible definition', v_edge.legacy_name;
+      end if;
+      execute format('alter table public.loads drop constraint %I', v_edge.legacy_name);
+    end if;
+
+    if not v_expected_exists then
+      if exists (
+        select 1 from pg_constraint c
+         where c.conrelid = 'public.loads'::regclass
+           and c.contype = 'f'
+           and c.confrelid = format('public.%I', v_edge.referenced_table)::regclass
+           and c.conkey = array[v_tenant_attnum, v_local_attnum]::smallint[]
+           and c.confkey = array[v_ref_tenant_attnum, v_ref_id_attnum]::smallint[]
+      ) then
+        raise exception 'An unexpected composite tenant foreign key already protects loads.%', v_edge.local_column;
+      end if;
+      execute format(
+        'alter table public.loads add constraint %I foreign key (tenant_id, %I) references public.%I (tenant_id, id) on delete set null (%I)',
+        v_edge.expected_name, v_edge.local_column, v_edge.referenced_table, v_edge.local_column
+      );
+    end if;
+  end loop;
+end;
+$tenant_foreign_keys$;
 
 create or replace function private.bump_load_revision()
 returns trigger
@@ -100,11 +170,45 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_bump_load_revision on public.loads;
-create trigger trg_bump_load_revision
-before update on public.loads
-for each row
-execute function private.bump_load_revision();
+do $revision_trigger$
+declare
+  v_trigger record;
+  v_expected_exists boolean;
+begin
+  select t.* into v_trigger
+    from pg_trigger t
+   where t.tgrelid = 'public.loads'::regclass
+     and t.tgname = 'trg_zz_bump_load_revision'
+     and not t.tgisinternal;
+  v_expected_exists := found;
+  if v_expected_exists and not (
+    v_trigger.tgfoid = 'private.bump_load_revision()'::regprocedure
+    and v_trigger.tgtype = 19
+    and v_trigger.tgenabled = 'O'
+  ) then
+    raise exception 'Trigger trg_zz_bump_load_revision exists with an incompatible definition';
+  end if;
+
+  select t.* into v_trigger
+    from pg_trigger t
+   where t.tgrelid = 'public.loads'::regclass
+     and t.tgname = 'trg_bump_load_revision'
+     and not t.tgisinternal;
+  if found then
+    if v_trigger.tgfoid <> 'private.bump_load_revision()'::regprocedure then
+      raise exception 'Legacy trigger trg_bump_load_revision has an incompatible function';
+    end if;
+    drop trigger trg_bump_load_revision on public.loads;
+  end if;
+
+  if not v_expected_exists then
+    create trigger trg_zz_bump_load_revision
+    before update on public.loads
+    for each row
+    execute function private.bump_load_revision();
+  end if;
+end;
+$revision_trigger$;
 
 create table if not exists private.load_aggregate_commands (
   id uuid primary key default gen_random_uuid(),
@@ -301,7 +405,7 @@ begin
   );
 
   v_hash_payload := _payload - 'request_id';
-  v_payload_hash := encode(digest(convert_to(v_hash_payload::text, 'UTF8'), 'sha256'), 'hex');
+  v_payload_hash := encode(extensions.digest(convert_to(v_hash_payload::text, 'UTF8'), 'sha256'), 'hex');
   select * into v_existing
     from private.load_aggregate_commands c
    where c.tenant_id = v_tenant_id

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicles } from '@/hooks/useVehicles';
+import { useDrivers } from '@/hooks/useDrivers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -148,21 +149,7 @@ export default function RoutePlanning() {
   const dispatchPlan = useDispatchRoutePlan();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
 
-  const { data: drivers = [] } = useQuery({
-    queryKey: ['drivers_for_routing', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('drivers')
-        .select('id, name, active, current_vehicle_id')
-        .eq('tenant_id', currentTenant.id)
-        .eq('active', true)
-        .order('name');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
+  const { data: drivers = [] } = useDrivers();
 
   // Cargas pendentes (planned, sem trip vinculada)
   const { data: pendingLoads = [], isLoading } = useQuery({

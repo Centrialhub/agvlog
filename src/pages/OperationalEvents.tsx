@@ -7,6 +7,8 @@ import {
 import type { OperationalEventsFilters } from '@/hooks/useOperationalEvents';
 import { useLoads } from '@/hooks/useLoads';
 import { useClients } from '@/hooks/useClients';
+import { useDrivers } from '@/hooks/useDrivers';
+import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +27,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { formatDistanceToNow, format, startOfMonth, subMonths, isAfter, startOfDay, subDays } from 'date-fns';
@@ -553,25 +555,8 @@ export default function OperationalEvents() {
     setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 350);
   };
 
-  const { data: drivers = [] } = useQuery({
-    queryKey: ['drivers', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data } = await supabase.from('drivers').select('id, name').eq('tenant_id', currentTenant.id).eq('active', true).order('name');
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
-
-  const { data: vehicles = [] } = useQuery({
-    queryKey: ['events_vehicles', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data } = await supabase.from('vehicles').select('id, plate').eq('tenant_id', currentTenant.id).eq('active', true).order('plate');
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
+  const { data: drivers = [] } = useDrivers();
+  const { data: vehicles = [] } = useVehicles();
 
   // Realtime sync para sincronização ida/volta com app do motorista
   useEffect(() => {

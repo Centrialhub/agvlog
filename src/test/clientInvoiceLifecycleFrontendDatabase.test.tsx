@@ -13,6 +13,36 @@ import {createInvoiceLifecycleDatabase,createInvoiceScenario,invoiceCommand,invo
 import {createClosingWithClient,closingAction,closingActionPayload} from './helpers/closingLifecycleDatabase';
 import {financialCommand,financialPayload} from './helpers/receivableFinancialDatabase';
 import {operationIds as i,operationRpc} from './helpers/operationOutcomeDatabase';
+vi.mock('@/components/ui/select',async()=>{
+ const React=await import('react');
+ type ChildProps={id?:string;value?:string;disabled?:boolean;children?:import('react').ReactNode};
+ const SelectTrigger=()=>null;
+ const SelectContent=()=>null;
+ const SelectItem=()=>null;
+ const SelectValue=()=>null;
+ const Select=({children,value,onValueChange,disabled}:{children?:import('react').ReactNode;value?:string;
+  onValueChange?:(value:string)=>void;disabled?:boolean})=>{
+  let id:string|undefined;const options:Array<{value:string;disabled?:boolean;text:string}>=[];
+  const textOf=(node:import('react').ReactNode):string=>React.Children.toArray(node).map(child=>
+   typeof child==='string'||typeof child==='number'?String(child):
+    React.isValidElement<ChildProps>(child)?textOf(child.props.children):'').join(' ').replace(/\s+/g,' ')
+   .replace(/\s+([:;,.])/g,'$1').trim();
+  const visit=(node:import('react').ReactNode):void=>React.Children.forEach(node,child=>{
+   if(!React.isValidElement<ChildProps>(child))return;
+   if(child.type===SelectTrigger)id=child.props.id;
+   else if(child.type===SelectItem&&child.props.value)options.push({value:child.props.value,
+    disabled:child.props.disabled,text:textOf(child.props.children)});
+   else visit(child.props.children);
+  });
+  visit(children);
+  return React.createElement('select',{id,role:'combobox',value,disabled,onChange:(event:import('react').ChangeEvent<HTMLSelectElement>)=>
+   onValueChange?.(event.currentTarget.value)},
+  React.createElement('option',{value:'',disabled:true},''),
+  ...options.map(option=>React.createElement('option',{key:option.value,value:option.value,disabled:option.disabled},option.text)));
+ };
+ return {Select,SelectTrigger,SelectContent,SelectItem,SelectValue,SelectGroup:SelectContent,
+  SelectLabel:SelectContent,SelectSeparator:()=>null,SelectScrollUpButton:()=>null,SelectScrollDownButton:()=>null};
+});
 vi.hoisted(async()=>{const {Blob,File}=await import('node:buffer');vi.stubGlobal('Blob',Blob);vi.stubGlobal('File',File);});
 const mock=vi.hoisted(()=>({rpc:vi.fn(),from:vi.fn(),tenant:'',actor:'',lost:false,delay:false,release:null as null|(()=>void),clients:[] as Client[],ctes:[] as Array<Record<string,unknown>>,sourceError:null as Error|null}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:mock.tenant}})}));
@@ -57,7 +87,7 @@ const admin=async()=>db.query("update tenant_memberships set role='admin' where 
 const bank=async()=>db.query('insert into bank_accounts(id,tenant_id,name) values($1,$2,$3)',['cf600000-0000-4000-8000-000000000001',i.tenant,'Banco QA']);
 async function choose(action:string){await screen.findByLabelText('Ação da fatura');set('Ação da fatura',action);set('Motivo da ação','Conferência financeira QA');if(action==='mark_sent'){set('Destinatário informado','Destinatário QA');set('Canal informado','manual');}}
 async function report(){const id=(await createClosingWithClient(db)).report.id;await closingAction(db,await closingActionPayload(db,id));return id;}
-async function wizardStart(){fireEvent.keyDown(screen.getByRole('combobox',{name:'Cliente *'}),{key:'ArrowDown'});fireEvent.click(await screen.findByRole('option',{name:'Cliente QA'}));fireEvent.click(screen.getByRole('button',{name:'Avançar'}));}
+async function wizardStart(){const select=screen.getByRole('combobox',{name:'Cliente *'});fireEvent.change(select,{target:{value:mock.clients[0].id}});await waitFor(()=>expect(select).toHaveValue(mock.clients[0].id));fireEvent.click(screen.getByRole('button',{name:'Avançar'}));}
 async function manualPreview(){await wizardStart();fireEvent.mouseDown(screen.getByRole('tab',{name:/Serviços avulsos/}),{button:0});fireEvent.click(screen.getByRole('button',{name:'Adicionar serviço avulso'}));set('Descrição','Serviço de teste');set('Bruto','100');set('Líquido','100');fireEvent.click(screen.getByRole('button',{name:'Ver prévia'}));await screen.findByText('Nova Fatura — Etapa 3 de 4');fireEvent.click(screen.getByRole('button',{name:'Avançar'}));}
 describe('invoice UI integrated with the candidate SQL',{timeout:15000},()=>{
  it('requires a reason and creates the closing invoice and receivable once',async()=>{

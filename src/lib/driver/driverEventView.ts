@@ -54,6 +54,12 @@ const humanizeEventType = (eventType: string) => {
   return generatedLabel || 'Evento operacional';
 };
 
+const eventLabel = (eventType: string, rawLabel?: string) => {
+  const label = rawLabel?.trim();
+  if (/^(other|othe)$/i.test(label ?? '')) return 'Outra ocorrência';
+  return label || humanizeEventType(eventType);
+};
+
 function jsonRecord(value: Json | null): JsonObject {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
@@ -75,11 +81,12 @@ export function mapOperationalEventToDriverEvent(
   const type: DriverEventView['type'] = FINAL_EVENT_TYPES.has(row.event_type)
     ? 'finalizador'
     : 'informativo';
+  const rawLabel = stringValue(details, 'label');
   return {
     id: row.id,
     type,
-    code: row.event_type.toUpperCase().slice(0, 4),
-    label: stringValue(details, 'label') ?? humanizeEventType(row.event_type),
+    code: row.event_type === 'other' ? '' : row.event_type.toUpperCase().slice(0, 4),
+    label: eventLabel(row.event_type, rawLabel),
     stopName: stringValue(details, 'stop_name', 'client_name')
       ?? (payload.scope === 'trip' ? 'Viagem — sem parada específica' : 'Parada não identificada'),
     invoice: stringValue(details, 'invoice', 'nf') ?? stringValue(payload, 'invoice', 'nf'),

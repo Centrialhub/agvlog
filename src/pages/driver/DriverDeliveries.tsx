@@ -594,12 +594,12 @@ export default function DriverDeliveries() {
                 <div className="space-y-2 rounded-md border border-border p-3">
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Atualização de boleto</p>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Novo vencimento sugerido</Label>
-                    <Input type="date" value={boletoDueDate} onChange={(e) => setBoletoDueDate(e.target.value)} className="h-10 text-sm" />
+                    <Label htmlFor="delivery-boleto-due-date" className="text-xs">Novo vencimento sugerido</Label>
+                    <Input id="delivery-boleto-due-date" type="date" value={boletoDueDate} onChange={(e) => setBoletoDueDate(e.target.value)} className="h-10 text-sm" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Detalhe / motivo</Label>
-                    <Textarea rows={2} value={boletoNote} onChange={(e) => setBoletoNote(e.target.value)} placeholder="Ex.: cliente pediu prorrogar 3 dias úteis" className="text-sm" />
+                    <Label htmlFor="delivery-boleto-note" className="text-xs">Detalhe / motivo</Label>
+                    <Textarea id="delivery-boleto-note" rows={2} value={boletoNote} onChange={(e) => setBoletoNote(e.target.value)} placeholder="Ex.: cliente pediu prorrogar 3 dias úteis" className="text-sm" />
                   </div>
                 </div>
               )}
@@ -608,10 +608,12 @@ export default function DriverDeliveries() {
               {def.showsDiscount && (
                 <div className="space-y-2 rounded-md border border-border p-3">
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Solicitar desconto</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button type="button" onClick={() => setDiscountKind('percent')} className={cn('text-xs h-9 rounded-md border', discountKind === 'percent' ? 'border-primary bg-primary/10 text-primary' : 'border-border')}>%</button>
-                    <button type="button" onClick={() => setDiscountKind('value')} className={cn('text-xs h-9 rounded-md border', discountKind === 'value' ? 'border-primary bg-primary/10 text-primary' : 'border-border')}>R$</button>
+                  <div role="group" aria-label="Tipo do desconto" className="grid grid-cols-3 gap-2">
+                    <button type="button" aria-label="Desconto em porcentagem" aria-pressed={discountKind === 'percent'} onClick={() => setDiscountKind('percent')} className={cn('text-xs h-9 rounded-md border', discountKind === 'percent' ? 'border-primary bg-primary/10 text-primary' : 'border-border')}>%</button>
+                    <button type="button" aria-label="Desconto em reais" aria-pressed={discountKind === 'value'} onClick={() => setDiscountKind('value')} className={cn('text-xs h-9 rounded-md border', discountKind === 'value' ? 'border-primary bg-primary/10 text-primary' : 'border-border')}>R$</button>
+                    <Label htmlFor="delivery-discount-amount" className="sr-only">Valor do desconto</Label>
                     <Input
+                      id="delivery-discount-amount"
                       value={discountAmount}
                       onChange={(e) => setDiscountAmount(e.target.value.replace(',', '.'))}
                       inputMode="decimal"
@@ -619,7 +621,9 @@ export default function DriverDeliveries() {
                       className="h-9 text-sm"
                     />
                   </div>
+                  <Label htmlFor="delivery-discount-reason" className="sr-only">Justificativa do desconto</Label>
                   <Textarea
+                    id="delivery-discount-reason"
                     rows={2}
                     value={discountReason}
                     onChange={(e) => setDiscountReason(e.target.value)}
@@ -677,8 +681,9 @@ export default function DriverDeliveries() {
                           </button>
                           {checked && (
                             <div className="flex items-center gap-2 pl-6">
-                              <Label className="text-[10px] text-muted-foreground">Devolver:</Label>
+                              <Label htmlFor={`delivery-return-quantity-${p.id}`} className="text-[10px] text-muted-foreground">Devolver:</Label>
                               <Input
+                                id={`delivery-return-quantity-${p.id}`}
                                 type="number"
                                 aria-label={`Quantidade devolvida de ${p.name}`} min={0} step="any"
                                 max={p.qty}
@@ -756,9 +761,9 @@ export default function DriverDeliveries() {
               {/* Fotos preview */}
               {photoPreviews.length > 0 && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">
+                  <p className="text-xs font-medium">
                     Fotos <span className="text-muted-foreground font-normal">({photos.length}/5)</span>
-                  </Label>
+                  </p>
                   <div className="grid grid-cols-3 gap-2">
                     {photoPreviews.map((url, i) => (
                       <div key={i} className="relative aspect-square rounded-md overflow-hidden border border-border">
@@ -779,9 +784,9 @@ export default function DriverDeliveries() {
               {/* Assinatura inline */}
               {def.requiresSignature && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">
+                  <p className="text-xs font-medium">
                     Assinatura <span className="text-destructive">*</span>
-                  </Label>
+                  </p>
                   <SignaturePad onChange={setSignatureDataUrl} />
                 </div>
               )}
@@ -816,6 +821,7 @@ export default function DriverDeliveries() {
 
               <input
                 ref={cameraInputRef}
+                aria-label="Capturar foto da entrega"
                 type="file"
                 accept="image/*"
                 capture="environment"
@@ -825,6 +831,7 @@ export default function DriverDeliveries() {
               />
               <input
                 ref={galleryInputRef}
+                aria-label="Selecionar fotos da entrega"
                 type="file"
                 accept="image/*"
                 multiple

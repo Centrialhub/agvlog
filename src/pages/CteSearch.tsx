@@ -23,6 +23,8 @@ import { useCancelCTe, useResendCte } from '@/hooks/useIssueCTe';
 import { useDeleteFailedCTe } from '@/hooks/useDeleteFailedCTe';
 import { usePollCteStatus } from '@/hooks/usePollCteStatus';
 import { useSortableData } from '@/hooks/useSortableData';
+import { calendarDay } from '@/lib/listFilters';
+import { fmtDateSafe } from '@/lib/utils/formatDate';
 import { Table, TableHead, TableHeader, TableRow, TableBody, TableCell } from '@/components/ui/table';
 
 const TONE_CLASS: Record<string, string> = {
@@ -81,10 +83,10 @@ const DEFAULT_FILTERS: CteSearchFilters = {
   complementaryDoc: 'all',
 };
 
-function isoDaysAgo(days: number) {
+function localDaysAgo(days: number) {
   const d = new Date();
   d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  return calendarDay(d.toISOString());
 }
 
 function activeFilterCount(f: CteSearchFilters) {
@@ -113,7 +115,7 @@ function toCsv(rows: CteSearchRow[]) {
     SEFAZ_STATUS_LABELS[r.sefaz_status as SefazStatus] ?? r.sefaz_status,
     CTE_TYPE_LABELS[r.cte_type as CteType] ?? r.cte_type,
     r.cte_number, r.cte_series, r.access_key,
-    r.issued_at ? new Date(r.issued_at).toLocaleDateString('pt-BR') : '',
+    fmtDateSafe(r.issued_at, ''),
     r.payer_name, r.remitter, r.recipient, r.recipient_city, r.recipient_state,
     r.vehicle_plate, r.driver_name, r.invoice_numbers,
     r.freight_value.toFixed(2).replace('.', ','), r.cargo_value.toFixed(2).replace('.', ','),
@@ -200,7 +202,7 @@ export default function CteSearch() {
 
   function setPeriod(days: number | null) {
     apply({
-      issueDateStart: days === null ? '' : isoDaysAgo(days),
+      issueDateStart: days === null ? '' : localDaysAgo(days),
       issueDateEnd: '',
     });
   }
@@ -294,7 +296,7 @@ export default function CteSearch() {
 
   function exportCsv() {
     if (rows.length === 0) return;
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = localDaysAgo(0);
     saveBlob(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), `consulta-ctes-${stamp}.csv`);
     toast.success(`CSV com ${rows.length} registro(s) gerado`);
   }
@@ -581,7 +583,7 @@ export default function CteSearch() {
                     <TableCell className="px-3 py-2 text-xs">{CTE_TYPE_LABELS[r.cte_type as CteType] ?? r.cte_type}</TableCell>
                     <TableCell className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</TableCell>
                     <TableCell className="px-3 py-2">{r.cte_series ?? '—'}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs">{r.issued_at ? new Date(r.issued_at).toLocaleDateString('pt-BR') : '—'}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs">{fmtDateSafe(r.issued_at)}</TableCell>
                     <TableCell className="px-3 py-2 text-xs truncate max-w-[150px]" title={r.remitter ?? ''}>{r.remitter ?? '—'}</TableCell>
                     <TableCell className="px-3 py-2 text-xs truncate max-w-[150px]" title={r.recipient ?? ''}>{r.recipient ?? '—'}</TableCell>
                     <TableCell className="px-3 py-2 text-xs">{[r.recipient_city, r.recipient_state].filter(Boolean).join(' / ') || '—'}</TableCell>

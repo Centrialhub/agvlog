@@ -36,6 +36,7 @@ vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({ user: { id: 'actor-1', email: 'operador@example.test', user_metadata: {} } }),
 }));
 vi.mock('@/hooks/useVehicles', () => ({ useVehicles: () => state.vehicles }));
+vi.mock('@/hooks/useDrivers', () => ({ useDrivers: () => state.queries.get('ops_drivers') }));
 vi.mock('@/hooks/useVehiclesState', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/hooks/useVehiclesState')>();
   return { ...actual, useFleetState: () => state.vehicleStates };

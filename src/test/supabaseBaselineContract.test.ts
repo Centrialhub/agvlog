@@ -149,9 +149,14 @@ describe('Supabase baseline contract', () => {
 
   it('defines and grants every RPC invoked by Edge Functions', () => {
     const invoked = new Set(captures(edgeSource, /\.rpc\(\s*['"]([^'"]+)['"]/g));
-    // This endpoint deliberately forwards the user's JWT, not service_role.
-    // Its database/Edge integration tests also assert effective ACLs and MFA.
-    const callerJwtFunctions = new Set(['evaluate_trip_live_status_v1','prepare_trip_route_v1','commit_trip_route_v1']);
+    // These endpoints deliberately forward the user's JWT, not service_role.
+    // Their focused tests also assert the effective ACLs and caller context.
+    const callerJwtFunctions = new Set([
+      'authorize_secure_upload_cleanup_v1',
+      'evaluate_trip_live_status_v1',
+      'prepare_trip_route_v1',
+      'commit_trip_route_v1',
+    ]);
     expect([...invoked].filter((name) => !functions.has(name))).toEqual([]);
     expect([...invoked].filter((name) => !(callerJwtFunctions.has(name)
       ? authenticatedFunctions : serviceFunctions).has(name))).toEqual([]);
@@ -308,6 +313,10 @@ describe('Supabase baseline contract', () => {
       join(migrationsDir, '20260828125152_harden_driver_vehicle_tenant_contract.sql'),
       'utf8',
     );
+    const operatorReader = readFileSync(
+      join(migrationsDir, '20260901211644_add_operator_cursor_readers.sql'),
+      'utf8',
+    );
     const driversPage = readFileSync(join(root, 'src', 'pages', 'Drivers.tsx'), 'utf8');
 
     expect(migration).toMatch(/foreign key \(tenant_id, current_vehicle_id\)/i);
@@ -315,7 +324,12 @@ describe('Supabase baseline contract', () => {
     expect(migration).toContain('WHERE tenant_id = NEW.tenant_id');
     expect(migration).toContain('WHERE tenant_id = OLD.tenant_id');
     expect(migration).toContain('SET search_path TO pg_catalog, public');
-    expect(driversPage).toContain('vehicles!drivers_tenant_current_vehicle_fkey');
+    expect(driversPage).toContain("resource: 'drivers'");
+    expect(driversPage).toContain('tenantId: currentTenant.id');
+    expect(operatorReader).toContain('not coalesce(public.is_tenant_operator_or_admin(_tenant_id), false)');
+    expect(operatorReader).toContain('on vehicle_row.tenant_id = driver_row.tenant_id');
+    expect(operatorReader).toContain('and vehicle_row.id = driver_row.current_vehicle_id');
+    expect(operatorReader).toContain('where driver_row.tenant_id = _tenant_id');
     expect(driversPage).not.toMatch(/\bas any\b/);
   });
 

@@ -66,7 +66,7 @@ export default function ImportedNotesSummary() {
   const { data: clients = [] } = useClients();
   const [filters, setFilters] = useState<ImportedNoteFilters>(emptyFilters);
   const [applied, setApplied] = useState<ImportedNoteFilters>(emptyFilters);
-  const { data: rowsData = [], isLoading, refetch } = useImportedNotes(applied);
+  const { data: rowsData = [], isLoading, isError, error, refetch } = useImportedNotes(applied);
   const { sortedItems: rows, requestSort, sortConfig } = useSortableData(rowsData);
 
   const [printDlgOpen, setPrintDlgOpen] = useState(false);
@@ -264,13 +264,13 @@ export default function ImportedNotesSummary() {
       <Card>
         <CardHeader><CardTitle className="text-base">Filtros</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div><Label>Nº Nota</Label><Input value={filters.invoiceNumber || ''} onChange={e => set('invoiceNumber', e.target.value)} placeholder="Ex: 12345" /></div>
+          <div><Label htmlFor="summary-invoice-number">Nº Nota</Label><Input id="summary-invoice-number" value={filters.invoiceNumber || ''} onChange={e => set('invoiceNumber', e.target.value)} placeholder="Ex: 12345" /></div>
           <div><Label>Lote Controle</Label><Input value={filters.controlLot || ''} onChange={e => set('controlLot', e.target.value)} /></div>
           <div><Label>Lote Dinâmico</Label><Input value={filters.dynamicLot || ''} onChange={e => set('dynamicLot', e.target.value)} /></div>
           <div><Label>Emissão de</Label><Input type="date" value={filters.issueFrom || ''} onChange={e => set('issueFrom', e.target.value)} /></div>
           <div><Label>Emissão até</Label><Input type="date" value={filters.issueTo || ''} onChange={e => set('issueTo', e.target.value)} /></div>
-          <div><Label>Importação de</Label><Input type="date" value={filters.importFrom || ''} onChange={e => set('importFrom', e.target.value)} /></div>
-          <div><Label>Importação até</Label><Input type="date" value={filters.importTo || ''} onChange={e => set('importTo', e.target.value)} /></div>
+          <div><Label htmlFor="summary-import-from">Importação de</Label><Input id="summary-import-from" type="date" value={filters.importFrom || ''} onChange={e => set('importFrom', e.target.value)} /></div>
+          <div><Label htmlFor="summary-import-to">Importação até</Label><Input id="summary-import-to" type="date" value={filters.importTo || ''} onChange={e => set('importTo', e.target.value)} /></div>
           <div><Label>Remetente</Label><Input value={filters.remitter || ''} onChange={e => set('remitter', e.target.value)} /></div>
           <div>
             <Label>Cliente</Label>
@@ -341,19 +341,19 @@ export default function ImportedNotesSummary() {
                 </Button>
               </div>
             )}
-            <Button variant="outline" onClick={handleCsv} disabled={rows.length === 0}><Download className="h-4 w-4 mr-2" />Exportar CSV</Button>
-            <Button variant="outline" onClick={handleXlsx} disabled={rows.length === 0}><FileSpreadsheet className="h-4 w-4 mr-2" />Exportar Excel (Cliente)</Button>
-            <Button onClick={() => setPrintDlgOpen(true)} disabled={rows.length === 0}><Printer className="h-4 w-4 mr-2" />Imprimir</Button>
+            <Button variant="outline" onClick={handleCsv} disabled={isError || rows.length === 0}><Download className="h-4 w-4 mr-2" />Exportar CSV</Button>
+            <Button variant="outline" onClick={handleXlsx} disabled={isError || rows.length === 0}><FileSpreadsheet className="h-4 w-4 mr-2" />Exportar Excel (Cliente)</Button>
+            <Button onClick={() => setPrintDlgOpen(true)} disabled={isError || rows.length === 0}><Printer className="h-4 w-4 mr-2" />Imprimir</Button>
           </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KPI label="Notas" value={String(totals.rowCount)} />
-        <KPI label="Valor NF" value={brl(totals.totalValue)} />
-        <KPI label="Peso (kg)" value={num3(totals.totalWeight)} />
-        <KPI label="Volume" value={num3(totals.totalVolume)} />
-        <KPI label="Frete CIF" value={brl(totals.totalCif)} />
+        <KPI label="Notas" value={isLoading || isError ? '—' : String(totals.rowCount)} />
+        <KPI label="Valor NF" value={isLoading || isError ? '—' : brl(totals.totalValue)} />
+        <KPI label="Peso (kg)" value={isLoading || isError ? '—' : num3(totals.totalWeight)} />
+        <KPI label="Volume" value={isLoading || isError ? '—' : num3(totals.totalVolume)} />
+        <KPI label="Frete CIF" value={isLoading || isError ? '—' : brl(totals.totalCif)} />
       </div>
 
       <Card>
@@ -388,8 +388,14 @@ export default function ImportedNotesSummary() {
             </TableHeader>
             <TableBody>
               {isLoading && <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground">Carregando...</TableCell></TableRow>}
-              {!isLoading && rows.length === 0 && <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground">Nenhuma nota encontrada.</TableCell></TableRow>}
-              {rows.map(r => (
+              {isError && <TableRow><TableCell colSpan={17}>
+                <div role="alert" className="space-y-2 text-center text-destructive">
+                  <p>Não foi possível consultar as notas. {error?.message}</p>
+                  <Button variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
+                </div>
+              </TableCell></TableRow>}
+              {!isLoading && !isError && rows.length === 0 && <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground">Nenhuma nota encontrada.</TableCell></TableRow>}
+              {!isError && rows.map(r => (
                 <TableRow 
                   key={r.id} 
                   className={`cursor-pointer hover:bg-muted/50 ${selectedIds.has(r.id) ? 'bg-primary/5' : ''}`}

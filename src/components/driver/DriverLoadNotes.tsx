@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, FileText, Loader2, Printer, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, ExternalLink, FileText, Loader2, Printer, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,8 +8,10 @@ import { useTenant } from '@/hooks/useTenant';
 import { supabase } from '@/integrations/supabase/client';
 import {
   parseDriverFiscalCatalog,
+  parseDriverFiscalFile,
   type DriverFiscalDocument,
   type DriverFiscalDocumentKind,
+  type DriverFiscalFileFormat,
 } from '@/lib/driver/fiscalCatalog';
 import { printRomaneioRoutes, type RomaneioDoc } from '@/lib/romaneioPrint';
 
@@ -44,6 +46,8 @@ function formatDate(value: DriverFiscalDocument['issued_at']) {
 
 export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driverName }: Props) {
   const [open, setOpen] = useState(false);
+  const [activeFile, setActiveFile] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const { user } = useAuth();
   const { currentTenant } = useTenant();
   const tenantId = currentTenant?.id;
@@ -60,7 +64,7 @@ export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driv
       if (error) throw error;
       return parseDriverFiscalCatalog(data, loadId);
     },
-    enabled: canQuery,
+    enabled: canQuery && open,
     retry: false,
   });
 
@@ -92,6 +96,56 @@ export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driv
     );
   };
 
+  const handleFiscalFile = async (
+    document: DriverFiscalDocument,
+    format: DriverFiscalFileFormat,
+  ) => {
+    if (document.kind === 'nfe' || !tenantId) return;
+    const requestKey = document.id + ':' + format;
+    setActiveFile(requestKey);
+    setFileError(null);
+
+    try {
+      const { data: fileData, error: fileQueryError } = await supabase.rpc(
+        'driver_get_load_fiscal_file',
+        {
+          _tenant_id: tenantId,
+          _load_id: loadId,
+          _document_kind: document.kind,
+          _document_id: document.id,
+          _format: format,
+        },
+      );
+      if (fileQueryError) throw fileQueryError;
+
+      const file = parseDriverFiscalFile(fileData, {
+        loadId,
+        kind: document.kind,
+        documentId: document.id,
+        format,
+      });
+
+      const link = window.document.createElement('a');
+      link.rel = 'noopener noreferrer';
+      if (file.source === 'url') {
+        link.href = file.url;
+        link.target = '_blank';
+      } else {
+        const objectUrl = URL.createObjectURL(new Blob([file.content], { type: 'application/xml;charset=utf-8' }));
+        link.href = objectUrl;
+        link.download = file.filename;
+        link.click();
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      link.click();
+    } catch {
+      setFileError('Não foi possível abrir o arquivo fiscal. Tente novamente.');
+    } finally {
+      setActiveFile(null);
+    }
+  };
+
   return (
     <div className="border-t pt-2 mt-2 space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -104,9 +158,11 @@ export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driv
         >
           <FileText className="h-3.5 w-3.5" />
           <span>Documentos fiscais</span>
-          <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-            {loading || isFetching ? '…' : error ? '!' : docs.length}
-          </Badge>
+          {open && (
+            <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+              {loading || isFetching ? '…' : error ? '!' : docs.length}
+            </Badge>
+          )}
           {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </button>
         <Button
@@ -174,9 +230,46 @@ export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driv
                       {document.weight_kg ? ' · ' + document.weight_kg.toLocaleString('pt-BR') + ' kg' : ''}
                       {document.volume_count ? ' · ' + document.volume_count + ' vol.' : ''}
                     </div>
+                    {(document.available_files.pdf || document.available_files.xml) && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {document.available_files.pdf && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-[10px]"
+                            disabled={activeFile !== null}
+                            aria-label={'Abrir PDF do ' + DOCUMENT_LABEL[document.kind] + ' ' + (document.number || '')}
+                            onClick={() => { void handleFiscalFile(document, 'pdf'); }}
+                          >
+                            {activeFile === document.id + ':pdf'
+                              ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              : <ExternalLink className="h-3 w-3 mr-1" />}
+                            PDF
+                          </Button>
+                        )}
+                        {document.available_files.xml && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-[10px]"
+                            disabled={activeFile !== null}
+                            aria-label={'Abrir XML do ' + DOCUMENT_LABEL[document.kind] + ' ' + (document.number || '')}
+                            onClick={() => { void handleFiscalFile(document, 'xml'); }}
+                          >
+                            {activeFile === document.id + ':xml'
+                              ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              : <Download className="h-3 w-3 mr-1" />}
+                            XML
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
+              {fileError && <p role="alert" className="text-[11px] text-destructive px-1">{fileError}</p>}
               <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
                 <span>{docs.length} documento{docs.length === 1 ? '' : 's'}</span>
                 <span>{notes.length} NF-e na carga</span>

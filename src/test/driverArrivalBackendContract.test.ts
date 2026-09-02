@@ -40,6 +40,10 @@ describe('driver arrival backend contract', () => {
     expect(cutover.indexOf('GPS RPC hash changed')).toBeLessThan(
       cutover.indexOf('drop function public.driver_mark_arrival(uuid)'),
     );
+    expect(cutover.indexOf('drop function public.driver_mark_arrival(uuid)')).toBeLessThan(
+      cutover.indexOf('Arrival cutover postcondition failed'),
+    );
+    expect(cutover).toContain("notify pgrst, 'reload schema'");
   });
 
   it('checks trip state, GPS accuracy, and stop proximity', () => {

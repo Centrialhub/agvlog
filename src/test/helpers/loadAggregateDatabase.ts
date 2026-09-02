@@ -3,7 +3,14 @@ import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
 export const loadAggregateMigration = '20260901201500_make_load_aggregate_commands_atomic.sql';
+export const atomicLoadNumberMigration = '20260902013811_enforce_atomic_load_number_allocation.sql';
+export const atomicLoadForeignKeyIndexMigration = '20260902022100_index_atomic_load_foreign_keys.sql';
 export const loadAggregateSql = () => readFileSync(`supabase/migrations/${loadAggregateMigration}`, 'utf8');
+export const atomicLoadNumberSql = () => readFileSync(`supabase/migrations/${atomicLoadNumberMigration}`, 'utf8');
+export const atomicLoadForeignKeyIndexSql = () => readFileSync(
+  `supabase/migrations/${atomicLoadForeignKeyIndexMigration}`,
+  'utf8',
+);
 export const loadAggregateIds = {
   tenant: '20000000-0000-4000-8000-000000000001',
   otherTenant: '20000000-0000-4000-8000-000000000002',
@@ -19,11 +26,15 @@ export const loadAggregateIds = {
 
 const schema = `
   create role anon; create role authenticated; create role service_role;
-  create function public.digest(bytea,text) returns bytea language sql immutable as
+  create schema extensions;
+  create function extensions.digest(bytea,text) returns bytea language sql immutable as
     $$select decode(md5($1),'hex')$$;
   create schema auth;
   create function auth.uid() returns uuid language sql stable as
     $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+  create function public.get_next_load_number_v1(uuid) returns text language sql security definer as
+    $$select '1001'::text$$;
+  grant execute on function public.get_next_load_number_v1(uuid) to authenticated,service_role;
   create table auth.users(id uuid primary key);
   create table public.tenants(id uuid primary key);
   create type public.app_role as enum('owner','admin','operator','driver','client');
@@ -59,6 +70,15 @@ const schema = `
     constraint loads_trip_id_fkey foreign key(trip_id) references public.dispatch_trips(id),
     unique(tenant_id,load_number)
   );
+  create function public.loads_autofill_driver_from_vehicle() returns trigger language plpgsql as $$begin
+    if new.driver_id is null and new.vehicle_id is not null then
+      select current_driver_id into new.driver_id from public.vehicles
+       where id=new.vehicle_id and tenant_id=new.tenant_id;
+    end if;
+    return new;
+  end$$;
+  create trigger trg_loads_autofill_driver before insert or update of vehicle_id,driver_id on public.loads
+    for each row execute function public.loads_autofill_driver_from_vehicle();
   create table public.dispatch_trip_loads(id uuid primary key default gen_random_uuid(),tenant_id uuid not null,
     dispatch_trip_id uuid not null references public.dispatch_trips(id),load_id uuid not null references public.loads(id),
     unique(dispatch_trip_id,load_id));
@@ -88,6 +108,8 @@ export async function createLoadAggregateDatabase() {
   const db = new PGlite();
   await db.exec(schema);
   await db.exec(loadAggregateSql());
+  await db.exec(atomicLoadNumberSql());
+  await db.exec(atomicLoadForeignKeyIndexSql());
   const i = loadAggregateIds;
   await db.query('insert into public.tenants values($1),($2)', [i.tenant, i.otherTenant]);
   await db.query('insert into auth.users values($1)', [i.operator]);

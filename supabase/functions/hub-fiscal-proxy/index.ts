@@ -21,7 +21,7 @@ type Action =
   | 'emit' | 'get' | 'sync' | 'cancel' | 'cce'
   | 'email' | 'file' | 'query' | 'preview' | 'ping'
   | 'desacordo' | 'cent' | 'discard' | 'import'
-  | 'deliver' | 'links' | 'cancel-nfse';
+  | 'deliver' | 'links' | 'cancel-nfse' | 'close-mdfe';
 
 interface ProxyRequest {
   action: Action;
@@ -44,6 +44,7 @@ interface ProxyRequest {
   fiscalDocumentId?: string;
   cteDocumentId?: string;
   nfseDocumentId?: string;
+  loadManifestId?: string;
   emitterId?: string;   // routes to per-emitter Hub credential
   environment?: HubEnvironment;
 }
@@ -103,6 +104,12 @@ async function callHub(method: string, path: string, qs?: Record<string, string>
 
 function onlyDigits(value: unknown): string {
   return String(value ?? '').replace(/\D+/g, '');
+}
+
+function jsonRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : { value: String(value ?? '') };
 }
 
 /**
@@ -226,6 +233,7 @@ Deno.serve(withFiscalCors(async (req) => {
       addResourceHint('fiscal_documents', 'id', payload.fiscalDocumentId),
       addResourceHint('cte_documents', 'id', payload.cteDocumentId),
       addResourceHint('nfse_documents', 'id', payload.nfseDocumentId),
+      addResourceHint('load_manifests', 'id', payload.loadManifestId),
     ]);
 
     if (payload.id) {
@@ -420,7 +428,7 @@ Deno.serve(withFiscalCors(async (req) => {
         const type = payload.type;
         if (!type) return json(400, { success: false, error: { code: 'MISSING_TYPE' } });
         const rawBody = (payload.body || {}) as Record<string, unknown>;
-        const stableLocalId = payload.fiscalDocumentId || payload.cteDocumentId || payload.nfseDocumentId;
+        const stableLocalId = payload.fiscalDocumentId || payload.cteDocumentId || payload.nfseDocumentId || payload.loadManifestId;
         const idIntegracao = String(
           rawBody.idIntegracao || rawBody.externalId || payload.idIntegracao ||
           (stableLocalId ? `agvlog-${type}-${stableLocalId}` : ''),
@@ -442,6 +450,7 @@ Deno.serve(withFiscalCors(async (req) => {
           admin, tenant: tenantId, actor: userId, emitter: resolved.emitter_id,
           type, environment: resolved.environment, body,
           fiscalId: payload.fiscalDocumentId, cteId: payload.cteDocumentId, nfseId: payload.nfseDocumentId,
+          loadManifestId: payload.loadManifestId,
           call: (method, path, query, request) => callHub(method, path, query, request, resolved.token),
         });
         return json(result.status, result.data);
@@ -589,6 +598,75 @@ Deno.serve(withFiscalCors(async (req) => {
         // transforme o resultado em FunctionsHttpError/tela de erro; a UI trata
         // `success: false` e mostra a orientação operacional ao usuário.
         return json(cancelRejected ? 200 : status, { success: status < 400, hub: data });
+      }
+
+      case 'close-mdfe': {
+        if (!payload.id || !payload.loadManifestId || !payload.emissionId) {
+          return json(400, {
+            success: false,
+            error: { code: 'MISSING_MDFE_LINK', message: 'Informe o MDF-e e o manifesto local vinculados.' },
+          });
+        }
+        const reserved = await admin.rpc('begin_mdfe_closure', {
+          _tenant: tenantId,
+          _actor: userId,
+          _load_manifest_id: payload.loadManifestId,
+        });
+        if (reserved.error) throw reserved.error;
+        if (reserved.data?.dispatch !== true) {
+          return json(200, {
+            success: true,
+            recovered: true,
+            emission: { id: payload.emissionId },
+            manifest: reserved.data?.manifest,
+          });
+        }
+        const resolved = await resolveToken('mdfe', payload.emitterId);
+        let result: { status: number; data: unknown };
+        try {
+          result = await callHub(
+            'POST',
+            '/hub_mdfe_events',
+            { id: payload.id },
+            { action: 'encerramento' },
+            resolved.token,
+          );
+        } catch {
+          result = { status: 503, data: { error: { code: 'TRANSPORT_UNCERTAIN' } } };
+        }
+        const recorded = await admin.rpc('record_mdfe_closure_response', {
+          _tenant: tenantId,
+          _load_manifest_id: payload.loadManifestId,
+          _response: jsonRecord(result.data),
+          _http_status: result.status,
+        });
+        if (recorded.error) {
+          return json(409, {
+            success: false,
+            error: {
+              code: 'FISCAL_RECONCILIATION_REQUIRED',
+              message: 'O encerramento pode ter sido recebido. Sincronize o MDF-e; não envie outro evento.',
+            },
+          });
+        }
+        if (result.status >= 400) {
+          return json(result.status === 503 ? 409 : result.status, {
+            success: false,
+            hub: result.data,
+            error: {
+              code: result.status === 503 ? 'FISCAL_RECONCILIATION_REQUIRED' : 'MDFE_CLOSURE_REJECTED',
+              message: result.status === 503
+                ? 'Resultado do encerramento pendente. Sincronize o MDF-e; não repita o evento.'
+                : 'O Hub Fiscal recusou a solicitação de encerramento.',
+            },
+          });
+        }
+        return json(200, {
+          success: true,
+          hub: result.data,
+          emission: { id: payload.emissionId },
+          manifest: recorded.data,
+        });
       }
       
       case 'cancel-nfse': {

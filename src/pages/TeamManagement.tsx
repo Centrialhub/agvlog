@@ -19,6 +19,8 @@ import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { matchesSearch } from '@/lib/listFilters';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Enums, Tables, TablesInsert } from '@/integrations/supabase/types';
+import { useDrivers } from '@/hooks/useDrivers';
+import { useClients } from '@/hooks/useClients';
 
 type AppRole = Enums<'app_role'>;
 type TeamRole = Extract<AppRole, 'admin' | 'operator' | 'driver'>;
@@ -151,16 +153,7 @@ export default function TeamManagement() {
   });
 
   // Drivers linked to users
-  const { data: drivers = [] } = useQuery({
-    queryKey: ['drivers_for_team', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('drivers').select('id, name, phone, doc').eq('tenant_id', currentTenant.id).eq('active', true);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
+  const { data: drivers = [] } = useDrivers();
 
   const updateRoleMutation = useMutation({
     mutationFn: async ({ id, role }: { id: string; role: TeamRole }) => {
@@ -462,16 +455,8 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
     enabled: !!tenantId,
   });
 
-  const { data: clients = [] } = useQuery({
-    queryKey: ['clients_for_portal_access', tenantId],
-    queryFn: async () => {
-      if (!tenantId) return [];
-      const { data, error } = await supabase.from('clients').select('id, company_name').eq('tenant_id', tenantId).eq('active', true).order('company_name');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!tenantId,
-  });
+  const { data: clientCatalog = [] } = useClients();
+  const clients: ClientOption[] = clientCatalog.filter(client => client.active);
 
   const toggleActive = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {

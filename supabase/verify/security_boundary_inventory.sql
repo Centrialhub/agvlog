@@ -124,12 +124,15 @@ $security_boundary_contract$;
 -- body version; a name alone is never treated as sufficient authorization.
 select
   procedure.oid::regprocedure::text as signature,
+  pg_get_userbyid(procedure.proowner) as owner_name,
+  language.lanname as language_name,
   md5(replace(pg_get_functiondef(procedure.oid), E'\r\n', E'\n')) as definition_md5,
   procedure.prosecdef as security_definer,
   has_function_privilege('anon', procedure.oid, 'EXECUTE') as anon_execute,
   has_function_privilege('authenticated', procedure.oid, 'EXECUTE') as authenticated_execute,
   has_function_privilege('service_role', procedure.oid, 'EXECUTE') as service_role_execute,
   coalesce(procedure.proconfig, array[]::text[]) as runtime_settings,
+  coalesce(obj_description(procedure.oid, 'pg_proc'), '') as function_comment,
   exists (
     select 1
     from pg_trigger trigger_row
@@ -148,6 +151,27 @@ select
             || quote_ident(procedure.proname)
             || '(%'
   ) as policy_text_references,
+  (
+    select coalesce(
+      array_agg(caller.oid::regprocedure::text order by caller.oid::regprocedure::text),
+      array[]::text[]
+    )
+    from pg_proc caller
+    join pg_namespace caller_namespace
+      on caller_namespace.oid = caller.pronamespace
+    where caller_namespace.nspname in ('public', 'private')
+      and caller.oid <> procedure.oid
+      and caller.prosrc ~* (
+        procedure.proname || '[[:space:]]*\('
+      )
+  ) as sql_body_callers,
+  (
+    select count(*)::integer
+    from pg_views view_row
+    where view_row.definition ~* (
+      procedure.proname || '[[:space:]]*\('
+    )
+  ) as view_text_references,
   pg_get_functiondef(procedure.oid) ~* (
     'auth\.uid\(|tenant_memberships|client_portal_access|'
     || 'is_tenant_|has_tenant_role|current_driver_id'
@@ -169,6 +193,7 @@ select
   coalesce(procedure.proacl::text, '<default>') as acl
 from pg_proc procedure
 join pg_namespace namespace on namespace.oid = procedure.pronamespace
+join pg_language language on language.oid = procedure.prolang
 where namespace.nspname in ('public', 'private')
   and procedure.prosecdef
 order by authenticated_execute desc, review_bucket, signature;

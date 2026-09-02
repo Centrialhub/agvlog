@@ -13,6 +13,10 @@ const DEFAULT_ALLOWED_HEADERS = [
   "x-webhook-secret",
   "x-webhook-id",
   "x-delivery-id",
+  "x-hubfiscal-delivery",
+  "x-hubfiscal-event",
+  "x-hubfiscal-signature",
+  "x-hubfiscal-timestamp",
   "x-correlation-id",
   "idempotency-key",
 ].join(", ");

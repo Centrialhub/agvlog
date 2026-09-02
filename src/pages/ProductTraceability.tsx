@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useDrivers } from '@/hooks/useDrivers';
 import { usePagination } from '@/hooks/usePagination';
 import { DataPagination } from '@/components/ui/data-pagination';
 
@@ -55,18 +56,7 @@ export default function ProductTraceability() {
   const pendingFilters = JSON.stringify(filters) !== JSON.stringify(appliedFilters);
   const invalidPeriod = Boolean(filters.issueFrom && filters.issueTo && filters.issueFrom > filters.issueTo);
 
-  const { data: drivers = [] } = useQuery({
-    queryKey: ['drivers-trace', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data } = await supabase.from('drivers')
-        .select('id, name')
-        .eq('tenant_id', currentTenant.id)
-        .order('name');
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
+  const { data: drivers = [] } = useDrivers({ includeInactive: true });
 
   const { data: rows = [], isLoading, refetch, isFetching, isError } = useQuery({
     queryKey: ['product-traceability', currentTenant?.id, appliedFilters],

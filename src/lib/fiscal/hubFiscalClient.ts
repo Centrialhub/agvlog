@@ -53,8 +53,32 @@ export interface EmitParams {
   fiscalDocumentId?: string;
   cteDocumentId?: string;
   nfseDocumentId?: string;
+  loadManifestId?: string;
   /** Tenant emitter id — routes the call to the correct Hub Fiscal token. */
   emitterId?: string;
+}
+
+export function readHubFiscalError(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() || null;
+  if (Array.isArray(value)) {
+    const messages = value.map(readHubFiscalError).filter((message): message is string => Boolean(message));
+    return messages.length ? messages.join(' | ') : null;
+  }
+  if (!value || typeof value !== 'object') return null;
+
+  const record = value as Record<string, unknown>;
+  const code = typeof record.code === 'string' ? record.code.trim() : '';
+  const messageKeys = ['message', 'mensagem', 'detail', 'erro'] as const;
+  const message = messageKeys
+    .map(key => typeof record[key] === 'string' ? String(record[key]).trim() : '')
+    .find(Boolean) || '';
+  if (code || message) return [code, message].filter(Boolean).join(': ');
+
+  for (const key of ['error', 'errors', 'hub', 'details']) {
+    const nested = readHubFiscalError(record[key]);
+    if (nested) return nested;
+  }
+  return null;
 }
 
 async function invoke(payload: Record<string, unknown>) {
@@ -65,16 +89,13 @@ async function invoke(payload: Record<string, unknown>) {
     if (context) {
       try {
         const response = await context.clone().json();
-        const hubError = response?.hub?.error || response?.error || response?.hub;
-        detail = [hubError?.code, hubError?.message].filter(Boolean).join(': ') || detail;
+        detail = readHubFiscalError(response) || detail;
       } catch { /* mantém a mensagem padrão */ }
     }
     throw new Error(detail);
   }
   if ((data as HubResponse | null)?.success === false) {
-    const response = data as HubResponse;
-    const hubError = response.hub?.error || response.error || response.hub;
-    throw new Error([hubError?.code, hubError?.message].filter(Boolean).join(': ') || 'Operação recusada pelo Hub Fiscal');
+    throw new Error(readHubFiscalError(data) || 'Operação recusada pelo Hub Fiscal');
   }
   return data as HubResponse;
 }
@@ -88,6 +109,7 @@ export const hubFiscal = {
       fiscalDocumentId: params.fiscalDocumentId,
       cteDocumentId: params.cteDocumentId,
       nfseDocumentId: params.nfseDocumentId,
+      loadManifestId: params.loadManifestId,
       emitterId: params.emitterId,
     });
   },
@@ -96,8 +118,16 @@ export const hubFiscal = {
     return invoke({ action: 'get', id: hubDocumentId, emissionId });
   },
 
-  sync(hubDocumentId: string, emissionId?: string, fiscalDocumentId?: string) {
-    return invoke({ action: 'sync', id: hubDocumentId, emissionId, fiscalDocumentId });
+  sync(
+    hubDocumentId: string,
+    emissionId?: string,
+    fiscalDocumentId?: string,
+    opts: { type?: HubDocType; emitterId?: string | null } = {},
+  ) {
+    return invoke({
+      action: 'sync', id: hubDocumentId, emissionId, fiscalDocumentId,
+      type: opts.type, emitterId: opts.emitterId || undefined,
+    });
   },
 
   cancel(hubDocumentId: string, justificativa: string, emissionId?: string, fiscalDocumentId?: string) {
@@ -105,6 +135,17 @@ export const hubFiscal = {
       action: 'cancel', id: hubDocumentId, emissionId,
       fiscalDocumentId,
       body: { justificativa },
+    });
+  },
+
+  closeMdfe(hubDocumentId: string, loadManifestId: string, emissionId: string, emitterId?: string | null) {
+    return invoke({
+      action: 'close-mdfe',
+      type: 'mdfe',
+      id: hubDocumentId,
+      loadManifestId,
+      emissionId,
+      emitterId: emitterId || undefined,
     });
   },
   

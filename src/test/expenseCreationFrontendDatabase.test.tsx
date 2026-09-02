@@ -74,9 +74,11 @@ describe('expense creation frontend with actual SQL',{timeout:15000},()=>{
   expect((await db.query('select count(*)::int n from driver_expenses')).rows[0]).toEqual({n:1});
  });
  it('exposes named controls and creates the exact amount through the command',async()=>{
-  render(<Story/>);await fill();
-  for(const label of ['Categoria','Valor (R$)','Data e hora da despesa','Origem do pagamento','Fornecedor','Nº documento','Cidade','UF','Hodômetro (km)','Observação'])expect(screen.getByLabelText(label)).toHaveAttribute('id');
+  render(<Story/>);await waitFor(()=>expect(screen.getByRole('button',{name:'Registrar despesa'})).toBeEnabled());
+  const expectAssociated=(label:string)=>{const control=screen.getByLabelText(label),labelElement=screen.getByText(label,{selector:'label'});expect(control.id).not.toBe('');expect(labelElement).toHaveAttribute('for',control.id);};
+  for(const label of ['Categoria','Valor (R$)','Data e hora da despesa','Origem do pagamento','Fornecedor','Nº documento','Cidade','UF','Hodômetro (km)','Observação','Comprovante (imagem ou PDF)'])expectAssociated(label);
   expect(screen.getByRole('combobox',{name:'Categoria'})).toBeInTheDocument();expect(screen.getByRole('combobox',{name:'Origem do pagamento'})).toBeInTheDocument();
+  await fill();expectAssociated('Motivo da ausência do comprovante');
   fireEvent.click(screen.getByRole('button',{name:'Registrar despesa'}));await screen.findByText('Despesa registrada e aguardando aprovação.');
   expect((await db.query('select amount::float amount,no_receipt,approval_status from driver_expenses')).rows).toEqual([{amount:25.5,no_receipt:true,approval_status:'pending'}]);
   expect(mock.invoke).not.toHaveBeenCalled();await db.exec('set constraints all immediate');

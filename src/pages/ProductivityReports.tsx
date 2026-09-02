@@ -7,35 +7,20 @@ import { useLoads } from '@/hooks/useLoads';
 import { useOperationalEvents } from '@/hooks/useOperationalEvents';
 import { useClients } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
+import { useDrivers } from '@/hooks/useDrivers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Users, AlertTriangle, Truck } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useTenant } from '@/hooks/useTenant';
-
-function useDriversAll() {
-  const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['drivers_all', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data } = await supabase.from('drivers').select('id, name, active').eq('tenant_id', currentTenant.id);
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
-}
 
 export default function ProductivityReports() {
   const { data: allLoads = [], isLoading: loadsLoading } = useLoads();
   const { data: allEvents = [], isLoading: eventsLoading } = useOperationalEvents();
   const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
-  const { data: drivers = [] } = useDriversAll();
+  const { data: drivers = [] } = useDrivers({ includeInactive: true });
 
   const { filters, setFilter, resetFilters, activeCount } = useListFilters({ driver: 'all', vehicle: 'all', from: '', to: '' });
   const loads = useMemo(() => allLoads.filter(row =>

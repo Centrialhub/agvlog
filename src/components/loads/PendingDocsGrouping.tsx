@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicles } from '@/hooks/useVehicles';
+import { useDrivers } from '@/hooks/useDrivers';
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
 import { useCreateLoad } from '@/hooks/useLoads';
 import { Button } from '@/components/ui/button';
@@ -67,21 +68,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   const [vehicleAssignments, setVehicleAssignments] = useState<Map<string, string>>(new Map());
   const [driverAssignments, setDriverAssignments] = useState<Map<string, string>>(new Map());
 
-  const { data: drivers = [] } = useQuery({
-    queryKey: ['drivers_for_grouping', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('drivers')
-        .select('id, name, user_id, current_vehicle_id, active')
-        .eq('tenant_id', currentTenant.id)
-        .eq('active', true)
-        .order('name');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant && open,
-  });
+  const { data: drivers = [] } = useDrivers({ enabled: open });
 
   const { data: pendingDocs = [], isLoading } = useQuery({
     queryKey: ['pending_fiscal_docs', currentTenant?.id],

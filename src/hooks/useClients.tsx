@@ -3,6 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Database, Json } from '@/integrations/supabase/types';
+import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
+import {
+  clearOperatorClientPageAnchors,
+  readOperatorClientPageNumber,
+} from '@/lib/operator/operatorClientPagination';
 
 export interface Client {
   id: string;
@@ -110,49 +115,35 @@ function applyClientKindFilter<T extends {
 
 export function useClientsPage({ page, pageSize, search = '', kind = 'all' }: ClientPageInput) {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const normalizedSearch = safePostgrestSearch(search);
 
   return useQuery({
-    queryKey: ['clients', 'page', currentTenant?.id, page, pageSize, normalizedSearch, kind],
+    queryKey: ['clients', 'page', currentTenant?.id, user?.id, page, pageSize, normalizedSearch, kind],
     queryFn: async (): Promise<ClientPage> => {
-      if (!currentTenant) return { rows: [], totalCount: 0 };
-
-      let query = supabase
-        .from('clients')
-        .select('*', { count: 'exact' })
-        .eq('tenant_id', currentTenant.id);
-      query = applyClientKindFilter(query, kind);
-      if (normalizedSearch) {
-        const pattern = `*${normalizedSearch}*`;
-        query = query.or([
-          `company_name.ilike.${pattern}`,
-          `legal_name.ilike.${pattern}`,
-          `trade_name.ilike.${pattern}`,
-          `tax_id.ilike.${pattern}`,
-          `internal_code.ilike.${pattern}`,
-          `sigla.ilike.${pattern}`,
-          `payer_group.ilike.${pattern}`,
-          `address_city.ilike.${pattern}`,
-        ].join(','));
-      }
-
-      const from = (page - 1) * pageSize;
-      const { data, count, error } = await query
-        .order('company_name')
-        .range(from, from + pageSize - 1);
-      if (error) throw error;
-      return { rows: (data || []) as Client[], totalCount: count || 0 };
+      if (!currentTenant || !user) return { rows: [], totalCount: 0 };
+      const result = await readOperatorClientPageNumber({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        page,
+        pageSize,
+        search: normalizedSearch,
+        kind,
+      });
+      return { rows: result.items as unknown as Client[], totalCount: result.total_count };
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
     placeholderData: previous => previous,
+    retry: false,
   });
 }
 
 export function useClientCounts() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['clients', 'counts', currentTenant?.id],
+    queryKey: ['clients', 'counts', currentTenant?.id, user?.id],
     queryFn: async () => {
       if (!currentTenant) return { clients: 0, suppliers: 0, both: 0, total: 0 };
 
@@ -175,32 +166,37 @@ export function useClientCounts() {
       ]);
       return { clients, suppliers, both, total };
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
   });
 }
 
 export function useClients() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['clients', currentTenant?.id],
+    queryKey: ['clients', currentTenant?.id, user?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('company_name');
-      if (error) throw error;
-      return (data || []) as Client[];
+      if (!currentTenant || !user) return [];
+      const rows = await readOperatorReferenceCatalog({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        resource: 'clients',
+        includeInactive: true,
+      });
+      return (rows as unknown as Client[]).sort((left, right) => (
+        left.company_name.localeCompare(right.company_name, 'pt-BR') || left.id.localeCompare(right.id)
+      ));
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
+    retry: false,
   });
 }
 
 export function useClient(id: string | null) {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['client', id],
+    queryKey: ['client', currentTenant?.id, user?.id, id],
     queryFn: async () => {
       if (!id || !currentTenant) return null;
       const { data, error } = await supabase
@@ -212,7 +208,7 @@ export function useClient(id: string | null) {
       if (error) throw error;
       return data as Client | null;
     },
-    enabled: !!id && !!currentTenant,
+    enabled: !!id && !!currentTenant && !!user,
   });
 }
 
@@ -231,7 +227,10 @@ export function useCreateClient() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['clients'] }),
+    onSuccess: () => {
+      clearOperatorClientPageAnchors(currentTenant?.id);
+      qc.invalidateQueries({ queryKey: ['clients'] });
+    },
   });
 }
 
@@ -250,6 +249,9 @@ export function useUpdateClient() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['clients'] }),
+    onSuccess: () => {
+      clearOperatorClientPageAnchors(currentTenant?.id);
+      qc.invalidateQueries({ queryKey: ['clients'] });
+    },
   });
 }

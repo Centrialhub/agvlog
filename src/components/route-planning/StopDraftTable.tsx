@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ChevronUp, ChevronDown, AlertTriangle, Wand2, CheckCircle2 } from 'lucide-react';
 import type { RouteStopDraft } from '@/lib/route-planning/routePlanningTypes';
+import { coordinateFromInput } from '@/lib/route-planning/stopCoordinates';
 
 interface Props {
   stops: RouteStopDraft[];
@@ -44,13 +45,14 @@ export default function StopDraftTable({ stops, onMove, onUpdate }: Props) {
   }
   return (
     <div className="overflow-x-auto">
-    <Table className="min-w-[1200px]">
+    <Table className="min-w-[1450px]">
       <TableHeader>
         <TableRow>
           <TableHead className="w-10">#</TableHead>
           <TableHead>Destinatário</TableHead>
           <TableHead>Cidade / Bairro</TableHead>
           <TableHead>NFs</TableHead>
+          <TableHead className="min-w-[225px]">Coordenadas da parada</TableHead>
           <TableHead className="text-right">Peso</TableHead>
           <TableHead className="text-right">Vol.</TableHead>
           <TableHead className="text-right">Valor</TableHead>
@@ -91,6 +93,33 @@ export default function StopDraftTable({ stops, onMove, onUpdate }: Props) {
               ) : (
                 <Badge variant="destructive" className="text-[10px]">sem NF</Badge>
               )}
+            </TableCell>
+            <TableCell className="text-xs align-top">
+              <div className="grid grid-cols-2 gap-1">
+                <Input
+                  type="number"
+                  step="any"
+                  min={-90}
+                  max={90}
+                  aria-label={`Latitude parada ${idx + 1}`}
+                  value={s.latitude ?? ''}
+                  onChange={(event) => onUpdate(s.id, { latitude: coordinateFromInput(event.target.value) })}
+                  placeholder="Latitude"
+                  className="h-7 text-xs px-1"
+                />
+                <Input
+                  type="number"
+                  step="any"
+                  min={-180}
+                  max={180}
+                  aria-label={`Longitude parada ${idx + 1}`}
+                  value={s.longitude ?? ''}
+                  onChange={(event) => onUpdate(s.id, { longitude: coordinateFromInput(event.target.value) })}
+                  placeholder="Longitude"
+                  className="h-7 text-xs px-1"
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">Informe o ponto físico de entrega.</p>
             </TableCell>
             <TableCell className="text-xs text-right">{fmt(s.total_weight_kg)} kg</TableCell>
             <TableCell className="text-xs text-right">{s.total_pallet_count}</TableCell>

@@ -1,4 +1,5 @@
 import type { RouteStopDraft } from './routePlanningTypes';
+import { hasValidStopCoordinates } from './stopCoordinates';
 
 export interface RouteForValidation {
   loads: Array<{
@@ -86,6 +87,9 @@ export function validateRouteConsistency(
   stops.forEach((s, idx) => {
     const i = idx + 1;
     if (!s.destination?.trim()) blocking.push(`Parada ${i}: destino obrigatório.`);
+    if (!hasValidStopCoordinates(s)) {
+      blocking.push(`Parada ${i}: informe latitude (-90 a 90) e longitude (-180 a 180) válidas.`);
+    }
     if (!s.fiscal_document_ids.length) blocking.push(`Parada ${i}: distribua os documentos desta entrega.`);
     if (!s.city) warnings.push(`Parada ${i}: sem cidade.`);
     s.load_ids.forEach((lid) => {

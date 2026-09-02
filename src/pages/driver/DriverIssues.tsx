@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -19,8 +19,9 @@ import { AlertTriangle, Plus, Clock, MessageSquare } from 'lucide-react';
 import { EventConversation } from '@/components/driver/DriverConversation';
 import { OCCURRENCE_TEMPLATES, getTemplateFields, formatOccurrenceReport } from '@/lib/occurrenceTemplate';
 import { EVENT_TYPE_LABELS, OperationalEventType } from '@/hooks/useOperationalEvents';
-import type { Tables } from '@/integrations/supabase/types';
 import { buildDriverOccurrenceRpcArgs } from '@/lib/driver/driverOccurrence';
+import { useDriverOperationalEventHistory } from '@/hooks/useDriverOperationalEventHistory';
+import type { DriverOperationalEventItem } from '@/lib/driver/driverOperationalEventHistory';
 
 // Tipos com modelo padronizado (texto pronto para o fornecedor) + tipos genéricos para casos do dia-a-dia.
 const TEMPLATE_TYPES = Object.keys(OCCURRENCE_TEMPLATES) as OperationalEventType[];
@@ -45,27 +46,24 @@ export default function DriverIssues() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
   const [open, setOpen] = useState(false);
+  const fieldPrefix = useId();
   const [form, setForm] = useState<{ event_type: string; severity: string; description: string; details: Record<string, unknown> }>({
     event_type: 'missing_goods', severity: 'medium', description: '', details: {},
   });
 
-  const { data: events = [], error: eventsError, isPending: eventsPending, refetch: refetchEvents } = useQuery({
-    queryKey: ['driver_operational_events', driver?.id, currentTenant?.id, user?.id],
-    queryFn: async () => {
-      if (!currentTenant || !driver) return [];
-      const { data, error } = await supabase
-        .from('operational_events')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('driver_id', driver.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant && !!driver && !!user,
-    retry: false,
+  const {
+    data: eventHistory,
+    error: eventsError,
+    isPending: eventsPending,
+    refetch: refetchEvents,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useDriverOperationalEventHistory({
+    driverId: driver?.id,
+    enabled: !!currentTenant && !!user,
   });
+  const events = eventHistory?.items ?? [];
 
   const { data: stops = [] } = useQuery({
     queryKey: ['driver_trip_stops_for_issues', trip?.id],
@@ -91,7 +89,7 @@ export default function DriverIssues() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'operational_events', filter: `driver_id=eq.${driver.id}` },
         () => {
-          qc.invalidateQueries({ queryKey: ['driver_operational_events', driver.id] });
+          qc.invalidateQueries({ queryKey: ['driver_operational_event_history'] });
         },
       )
       .subscribe();
@@ -133,7 +131,7 @@ export default function DriverIssues() {
       toast({ title: 'Ocorrência registrada' });
       setOpen(false);
       setForm({ event_type: 'missing_goods', severity: 'medium', description: '', details: {} });
-      qc.invalidateQueries({ queryKey: ['driver_operational_events'] });
+      qc.invalidateQueries({ queryKey: ['driver_operational_event_history'] });
     },
     onError: (error: unknown) => toast({
       title: 'Erro',
@@ -143,7 +141,7 @@ export default function DriverIssues() {
   });
 
   const effectiveEvents = driver && !eventsError ? events : [];
-  const [chatEvent, setChatEvent] = useState<Tables<'operational_events'> | null>(null);
+  const [chatEvent, setChatEvent] = useState<DriverOperationalEventItem | null>(null);
 
   const severityColors: Record<string, string> = {
     low: 'bg-muted text-muted-foreground',
@@ -179,7 +177,7 @@ export default function DriverIssues() {
             <div className="space-y-3">
               {trip && (
                 <div>
-                  <Label className="text-xs">Parada / Cliente (opcional)</Label>
+                  <Label htmlFor={`${fieldPrefix}-stop`} className="text-xs">Parada / Cliente (opcional)</Label>
                   <Select 
                     value={detailText('stop_id') || "none"}
                     onValueChange={v => {
@@ -195,7 +193,7 @@ export default function DriverIssues() {
                       }));
                     }}
                   >
-                    <SelectTrigger className="h-9">
+                    <SelectTrigger id={`${fieldPrefix}-stop`} className="h-9">
                       <SelectValue placeholder="Selecione a parada..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -210,18 +208,18 @@ export default function DriverIssues() {
                 </div>
               )}
               <div>
-                <Label className="text-xs">Tipo</Label>
+                <Label htmlFor={`${fieldPrefix}-type`} className="text-xs">Tipo</Label>
                 <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v, details: { ...f.details } }))}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={`${fieldPrefix}-type`} className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ISSUE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">Severidade</Label>
+                <Label htmlFor={`${fieldPrefix}-severity`} className="text-xs">Severidade</Label>
                 <Select value={form.severity} onValueChange={v => setForm(f => ({ ...f, severity: v }))}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={`${fieldPrefix}-severity`} className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {SEVERITY_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                   </SelectContent>
@@ -233,11 +231,14 @@ export default function DriverIssues() {
                   <div className="rounded-md border bg-muted/30 p-2 text-[10px] text-muted-foreground">
                     Preencha os campos abaixo para gerar automaticamente o texto que será enviado ao fornecedor.
                   </div>
-                  {templateFields.map(f => (
+                  {templateFields.map(f => {
+                    const fieldId = `${fieldPrefix}-detail-${f.key}`;
+                    return (
                     <div key={f.key}>
-                      <Label className="text-xs">{f.label}{f.required && ' *'}</Label>
+                      <Label htmlFor={fieldId} className="text-xs">{f.label}{f.required && ' *'}</Label>
                       {f.type === 'textarea' ? (
                         <Textarea
+                          id={fieldId}
                           rows={2}
                           className="text-sm"
                           placeholder={f.placeholder}
@@ -246,18 +247,18 @@ export default function DriverIssues() {
                         />
                       ) : f.type === 'select' ? (
                         <Select value={detailText(f.key)} onValueChange={v => setDetail(f.key, v)}>
-                          <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          <SelectTrigger id={fieldId} className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                           <SelectContent>
                             {(f.options || []).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       ) : f.type === 'date' ? (
-                        <Input type="date" className="h-9 text-sm" value={detailText(f.key)} onChange={e => setDetail(f.key, e.target.value)} />
+                        <Input id={fieldId} type="date" className="h-9 text-sm" value={detailText(f.key)} onChange={e => setDetail(f.key, e.target.value)} />
                       ) : (
-                        <Input className="h-9 text-sm" placeholder={f.placeholder} value={detailText(f.key)} onChange={e => setDetail(f.key, e.target.value)} />
+                        <Input id={fieldId} className="h-9 text-sm" placeholder={f.placeholder} value={detailText(f.key)} onChange={e => setDetail(f.key, e.target.value)} />
                       )}
                     </div>
-                  ))}
+                  );})}
                   {previewText && (
                     <div className="rounded-md border bg-background p-2">
                       <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Pré-visualização (para fornecedor)</div>
@@ -267,8 +268,8 @@ export default function DriverIssues() {
                 </>
               ) : (
                 <div>
-                  <Label className="text-xs">Descrição</Label>
-                  <Textarea rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o ocorrido..." className="text-sm" />
+                  <Label htmlFor={`${fieldPrefix}-description`} className="text-xs">Descrição</Label>
+                  <Textarea id={`${fieldPrefix}-description`} rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o ocorrido..." className="text-sm" />
                 </div>
               )}
 
@@ -334,6 +335,17 @@ export default function DriverIssues() {
               </Card>
             );
           })}
+          {hasNextPage && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={isFetchingNextPage}
+              onClick={() => void fetchNextPage()}
+            >
+              {isFetchingNextPage ? 'Carregando mais ocorrências...' : 'Carregar mais ocorrências'}
+            </Button>
+          )}
         </div>
       )}
 
@@ -346,7 +358,7 @@ export default function DriverIssues() {
 }
 
 function DriverChatSheet({ event, onClose }: {
-  event: Tables<'operational_events'> | null;
+  event: DriverOperationalEventItem | null;
   onClose: () => void;
 }) {
   const isOpen = !!event;

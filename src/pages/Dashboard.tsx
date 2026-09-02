@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useFleetState } from '@/hooks/useVehiclesState';
+import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -83,16 +84,7 @@ export default function Dashboard() {
   });
 
   // Km by vehicle (last 7 days)
-  const { data: vehiclesForChart = [] } = useQuery({
-    queryKey: ['dashboard_vehicles_list', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('vehicles').select('id, plate').eq('tenant_id', currentTenant.id).eq('active', true);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
+  const { data: vehiclesForChart = [] } = useVehicles();
 
   // Recent alerts
   const { data: recentAlerts = [] } = useQuery({

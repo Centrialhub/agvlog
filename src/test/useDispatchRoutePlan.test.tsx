@@ -12,7 +12,8 @@ vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:mock.user})}));
 const trip='80000000-0000-4000-8000-000000000001';
 const stop=(id:string,order:number):RouteStopDraft=>({id,recipient_name:id,destination:id,load_ids:['load'],
   fiscal_document_ids:[`doc-${id}`],invoice_numbers:[],total_weight_kg:1,total_volume_m3:1,total_pallet_count:1,
-  total_value:1,service_time_minutes:20,priority:0,risk_level:'normal',manual_order:order});
+  total_value:1,latitude:order===1?-23.51:-23.52,longitude:order===1?-46.61:-46.62,
+  service_time_minutes:20,priority:0,risk_level:'normal',manual_order:order});
 const payload:DispatchRoutePayload={attempt_scope:'route',vehicle_id:'vehicle',driver_id:'driver',planned_start_at:'2026-09-01T12:00:00Z',
   route_name:'Rota QA',load_ids:['load'],stops:[stop('second',2),stop('first',1)],planning_draft_id:'draft'};
 let client:QueryClient;
@@ -32,7 +33,8 @@ describe('route planning frontend contract after idempotency RLS hardening',()=>
     await act(async()=>{expect(await result.current.dispatchRoute(payload)).toBe(trip);});
     expect(mock.rpc).toHaveBeenCalledWith('dispatch_planned_route',{_payload:expect.objectContaining({
       tenant_id:'tenant',driver_id:'driver',vehicle_id:'vehicle',load_ids:['load'],planning_draft_id:'draft',
-      stops:[expect.objectContaining({destination:'first'}),expect.objectContaining({destination:'second'})],
+      stops:[expect.objectContaining({destination:'first',latitude:-23.51,longitude:-46.61}),
+        expect.objectContaining({destination:'second',latitude:-23.52,longitude:-46.62})],
     })});
     expect(mock.from).not.toHaveBeenCalled();
   });
@@ -72,6 +74,12 @@ describe('route planning frontend contract after idempotency RLS hardening',()=>
   it('does not submit a malformed schedule',async()=>{
     const {result}=renderHook(useDispatchRoutePlan,{wrapper});
     await expect(result.current.dispatchRoute({...payload,planned_start_at:'not-a-date'})).rejects.toThrow('data e hora válidas');
+    expect(mock.rpc).not.toHaveBeenCalled();expect(localStorage.length).toBe(0);
+  });
+  it('blocks a stop without valid explicit coordinates before creating an outbox request',async()=>{
+    const {result}=renderHook(useDispatchRoutePlan,{wrapper});
+    const invalid={...payload,stops:[{...payload.stops[0],latitude:null}]};
+    await expect(result.current.dispatchRoute(invalid)).rejects.toThrow('latitude e longitude válidas');
     expect(mock.rpc).not.toHaveBeenCalled();expect(localStorage.length).toBe(0);
   });
   it('retains an uncertain reply after remount and explicitly replays the original payload/key',async()=>{

@@ -8,6 +8,7 @@ import { useFleetPositions } from '@/hooks/usePositions';
 import { fiscalDocRevenue, isVoidFiscalStatus } from '@/lib/fiscal/documentStatus';
 import { useFleetState, MovementState, stateColor, stateLabel, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { useVehicles } from '@/hooks/useVehicles';
+import { useDrivers } from '@/hooks/useDrivers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -289,19 +290,7 @@ export default function OperationsCenter() {
   );
 
   // ── Drivers ──
-  const driversQuery = useQuery({
-    queryKey: ['ops_drivers', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) throw new Error('Empresa operacional não selecionada.');
-      const { data, error } = await supabase
-        .from('drivers')
-        .select('id, active, name, current_vehicle_id')
-        .eq('tenant_id', currentTenant.id);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
+  const driversQuery = useDrivers({ includeInactive: true });
   const drivers = useMemo(
     () => driversQuery.isError ? [] : driversQuery.data ?? [],
     [driversQuery.data, driversQuery.isError],

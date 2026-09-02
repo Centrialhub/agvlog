@@ -55,4 +55,21 @@ describe('fiscal frontend request contract', () => {
     expect(() => hubFiscal.query({ environment: 'production' }, 'emitter', 'homologation')).toThrow();
     expect(invoke).not.toHaveBeenCalled();
   });
+  it('surfaces the response body returned by an Edge Function HTTP error', async () => {
+    invoke.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'Edge Function returned a non-2xx status code',
+        context: new Response(JSON.stringify({
+          error: 'MDFE_MODALIDADE_OBRIGATORIA: informe modalidadeDeTransporte',
+        }), { status: 400, headers: { 'content-type': 'application/json' } }),
+      },
+    });
+
+    await expect(hubFiscal.emit({
+      type: 'mdfe',
+      emitterId: 'emitter',
+      body: { emitterCnpj: '12345678000199', environment: 'homologation', payload: {} },
+    })).rejects.toThrow('MDFE_MODALIDADE_OBRIGATORIA');
+  });
 });

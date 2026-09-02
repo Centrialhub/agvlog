@@ -28,7 +28,10 @@ const ENC_KEY = Deno.env.get('AGVLOG_ENCRYPTION_KEY') || '';
 // Somente estados realmente transitórios entram no polling automático.
 // `issued`, `cancelled`, `error` e `rejected` são terminais até que o usuário
 // solicite uma nova tentativa; repeti-los aqui sobrecarregava o provedor.
-const PENDING = ['processing', 'queued', 'submitted', 'pending', 'transmitting'];
+const PENDING = [
+  'draft', 'processing', 'provider_unknown', 'cancel_processing',
+  'queued', 'submitted', 'pending', 'transmitting', 'cancelling',
+];
 const MAX_DOCS = 50;
 
 function json(status: number, payload: unknown) {

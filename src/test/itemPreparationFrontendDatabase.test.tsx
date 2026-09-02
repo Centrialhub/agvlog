@@ -7,6 +7,36 @@ import {ItemPreparationRecoveryPanel} from '@/components/loads/ItemPreparationRe
 import {createItemWriterDatabase,itemWriterIds as i,seedItemWriter} from './helpers/loadItemWriterDatabase';
 import {compositionRpc} from './helpers/compositionDatabase';
 import {twoPlannedTrips} from './helpers/replanningDatabase';
+vi.mock('@/components/ui/select',async()=>{
+ const React=await import('react');
+ type ChildProps={id?:string;value?:string;disabled?:boolean;'aria-label'?:string;children?:import('react').ReactNode};
+ const SelectTrigger=()=>null;
+ const SelectContent=()=>null;
+ const SelectItem=()=>null;
+ const SelectValue=()=>null;
+ const Select=({children,value,onValueChange,disabled}:{children?:import('react').ReactNode;value?:string;
+  onValueChange?:(value:string)=>void;disabled?:boolean})=>{
+  let id:string|undefined;let ariaLabel:string|undefined;const options:Array<{value:string;disabled?:boolean;text:string}>=[];
+  const textOf=(node:import('react').ReactNode):string=>React.Children.toArray(node).map(child=>
+   typeof child==='string'||typeof child==='number'?String(child):
+    React.isValidElement<ChildProps>(child)?textOf(child.props.children):'').join(' ').replace(/\s+/g,' ')
+   .replace(/\s+([:;,.])/g,'$1').trim();
+  const visit=(node:import('react').ReactNode):void=>React.Children.forEach(node,child=>{
+   if(!React.isValidElement<ChildProps>(child))return;
+   if(child.type===SelectTrigger){id=child.props.id;ariaLabel=child.props['aria-label'];}
+   else if(child.type===SelectItem&&child.props.value)options.push({value:child.props.value,
+    disabled:child.props.disabled,text:textOf(child.props.children)});
+   else visit(child.props.children);
+  });
+  visit(children);
+  return React.createElement('select',{id,'aria-label':ariaLabel,role:'combobox',value,disabled,
+   onChange:(event:import('react').ChangeEvent<HTMLSelectElement>)=>onValueChange?.(event.currentTarget.value)},
+  React.createElement('option',{value:'',disabled:true},''),
+  ...options.map(option=>React.createElement('option',{key:option.value,value:option.value,disabled:option.disabled},option.text)));
+ };
+ return {Select,SelectTrigger,SelectContent,SelectItem,SelectValue,SelectGroup:SelectContent,
+  SelectLabel:SelectContent,SelectSeparator:()=>null,SelectScrollUpButton:()=>null,SelectScrollDownButton:()=>null};
+});
 vi.hoisted(async()=>{const {Blob,File}=await import('node:buffer');vi.stubGlobal('Blob',Blob);vi.stubGlobal('File',File);});
 const mock=vi.hoisted(()=>({rpc:vi.fn(),toast:vi.fn(),savePreference:vi.fn(),loseReply:false}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:i.tenant}})}));
@@ -59,17 +89,16 @@ describe('real preparation panel/hook/outbox to SQL, not HTTP/Auth E2E',()=>{
   expect(mock.rpc).not.toHaveBeenCalled();expect(within(dialog).getByLabelText('Paletes')).toHaveValue(1.5);
  });
  it('edits preparation with the expected value and leaves physical outcomes disabled',async()=>{
-  show();const select=await screen.findByRole('combobox',{name:'Preparação de Nota original'});fireEvent.keyDown(select,{key:'Enter'});
-  expect(await screen.findByRole('option',{name:/Entregue — via fluxo operacional/})).toHaveAttribute('aria-disabled','true');
-  fireEvent.click(screen.getByRole('option',{name:/^Carregado$/}));
+  show();const select=await screen.findByRole('combobox',{name:'Preparação de Nota original'});
+  expect(within(select).getByRole('option',{name:/Entregue — via fluxo operacional/})).toBeDisabled();
+  fireEvent.change(select,{target:{value:'loaded'}});
   await waitFor(()=>expect(mock.rpc).toHaveBeenCalled());await waitFor(()=>expect(localStorage.length).toBe(0));
   expect(mock.rpc.mock.calls[0][1]._payload).toMatchObject({item_id:i.item,values:{status:'loaded'},expected:{status:'pending'}});
   expect((await db.query('select status from load_items where id=$1',[i.item])).rows[0]).toEqual({status:'loaded'});
  });
  it('rejects a stale visible field and refreshes without overwriting another operator',async()=>{
   show();const select=await screen.findByRole('combobox',{name:'Preparação de Nota original'});
-  await db.query("update load_items set status='picking' where id=$1",[i.item]);fireEvent.keyDown(select,{key:'Enter'});
-  fireEvent.click(await screen.findByRole('option',{name:/^Carregado$/}));
+  await db.query("update load_items set status='picking' where id=$1",[i.item]);fireEvent.change(select,{target:{value:'loaded'}});
   await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({description:expect.stringContaining('alterado por outra operação')})));
   expect((await db.query('select status from load_items where id=$1',[i.item])).rows[0]).toEqual({status:'picking'});expect(localStorage.length).toBe(0);
  });

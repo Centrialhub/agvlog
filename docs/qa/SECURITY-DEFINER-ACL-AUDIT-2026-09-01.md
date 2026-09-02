@@ -92,3 +92,99 @@ lote. As APIs de entrega legadas permanecem por contrato de cutover. O restante
 das 130 assinaturas possui caller de frontend/Edge, dependência RLS ou contrato
 canônico/compatível comprovado; deve ser revisto domínio a domínio, com smoke
 do consumidor antes de qualquer novo corte.
+
+## Reauditoria incremental local — 2026-09-02
+
+Foram comparados novamente o frontend atual, o SHA publicado `9efaf137`, Edge
+Functions, E2E, corpos SQL e ACLs finais das migrations locais. Dois wrappers
+do corte de entregas deixaram de ter justificativa para execução pelo browser:
+
+| Assinatura | Evidência | ACL depois do lote |
+| --- | --- | --- |
+| `driver_finalize_delivery(uuid,text,text,text[],text,text,text)` | nenhum caller runtime atual ou publicado; E2E atual usa `driver_record_delivery_outcome`; o alias SQL `finalize_driver_delivery` ainda delega para ela | apenas `service_role` |
+| `driver_update_stop_status(uuid,text,text)` | nenhum caller runtime atual ou publicado; chegada, saída, resultado e notas têm RPCs separadas e testadas | apenas `service_role` |
+
+A migration `20260902010806_retire_legacy_driver_delivery_browser_acl.sql`
+valida hash, `SECURITY DEFINER`, `search_path`, ACL inicial, substitutos,
+dependências de policy/view/trigger e callers em corpos SQL antes de revogar.
+O único caller SQL aceito é o alias de serviço, também travado por hash,
+configuração e ACL. Depois valida que `anon` e `authenticated` ficaram sem
+`EXECUTE` e que `service_role` foi preservado.
+
+O E2E do SHA publicado ainda continha uma chamada ao wrapper de finalização,
+mas arquivos E2E não integram o bundle publicado. O E2E atual já usa a command
+RPC canônica. Testes de banco preservam o wrapper somente como compatibilidade
+de backend e comprovam que o navegador recebe `42501` após o novo corte.
+
+As migrations locais posteriores ao inventário também foram classificadas:
+
+- `prepare_mdfe_issue`, `driver_list_load_fiscal_catalog` e
+  `driver_get_load_fiscal_file` são APIs `SECURITY DEFINER` com consumidores
+  atuais e permanecem executáveis por `authenticated`;
+- os leitores cursorizados de ocorrências, cargas, referências do operador e
+  histórico do motorista são `SECURITY INVOKER`, portanto não ampliam o alerta;
+- nenhuma outra revogação foi selecionada apenas por ausência de string.
+
+O efeito comprovado deste lote é **menos duas assinaturas executáveis pelo
+browser**. A contagem absoluta do catálogo deve ser refeita após aplicar todas
+as migrations pendentes; o Supabase remoto e um PostgreSQL local completo não
+estavam disponíveis nesta reauditoria.
+
+### Verificação remota e portabilidade do preflight
+
+Com o projeto remoto novamente disponível, a reconsulta confirmou 130 funções
+`SECURITY DEFINER` executáveis por `authenticated` e mostrou que os três corpos
+do lote eram semanticamente idênticos aos fixtures. A diferença de hash vinha
+somente dos finais de linha: PostgreSQL remoto armazenou `LF`; PGlite no Windows
+preservou `CRLF` dentro de `prosrc`.
+
+O preflight agora normaliza apenas pares `CRLF` para `LF` antes do MD5. Isso
+aceita os dois transportes de final de linha, mas preserva um `CR` isolado e
+continua sensível a qualquer mudança de tokens, demais espaços, literais,
+chamadas ou controle de fluxo. Os hashes canônicos remotos/locais são:
+
+| Assinatura | Hash canônico de `prosrc` |
+| --- | --- |
+| `driver_finalize_delivery(uuid,text,text,text[],text,text,text)` | `b94b098acff621dddcfbfd0232565c07` |
+| `driver_update_stop_status(uuid,text,text)` | `ed77f6d5eea53eeb282edfc9a4736c50` |
+| `finalize_driver_delivery(uuid,text,text,text[],uuid)` | `0fc748c47fa464c9781d77518f2c1434` |
+
+ACL, `SECURITY DEFINER`, `search_path`, dependências, callers SQL e APIs
+substitutas permanecem gates independentes; a normalização não amplia nenhum
+deles.
+
+## Lote incremental: limpeza de reimportação sem intervalo
+
+Reconsulta somente leitura em 2026-09-02 encontrou **129** assinaturas em
+`public` que são `SECURITY DEFINER` e executáveis por `authenticated`. A
+contagem mudou durante o trabalho paralelo e deve ser lida como snapshot:
+nenhuma era executável por `anon`, nenhuma retornava `trigger`, nenhuma tinha
+nome interno iniciado por `_` e nenhuma estava sem `search_path` fixo. Só 15
+tinham comentário de contrato e 116 preservavam `service_role`.
+
+O inventário em `supabase/verify/security_boundary_inventory.sql` agora retorna
+por assinatura: owner, linguagem, hash normalizado, `search_path`/demais
+configurações, ACL efetiva, comentário, dependência de trigger/policy, callers
+em corpos SQL e referências textuais de views. As referências no repositório
+foram cruzadas separadamente com `rg` no frontend, Edge Functions, scripts,
+E2E e migrations, além de `git show` no SHA publicado `9efaf137`.
+
+Somente uma assinatura passou todos os critérios deste lote:
+
+| Assinatura | Evidência remota | Referências no repo | Decisão |
+| --- | --- | --- | --- |
+| `clear_reimport_batch_data(uuid)` | owner `postgres`; `plpgsql`; `search_path=public`; hash LF de `prosrc` `8d0b04f70eb6f935e4faff7f871242b8`; ACL explícita para `authenticated` e `service_role`, sem `PUBLIC`/`anon`; zero caller em function/policy/view/trigger | nenhuma chamada runtime com um argumento; a UI atual e o SHA publicado enviam `_tenant_id`, `_start_date` e `_end_date` após `preview_reimport_cleanup_counts` | revogar de `PUBLIC`, `anon` e `authenticated`; preservar `service_role` |
+
+O substituto limitado `clear_reimport_batch_data(uuid,date,date)` e sua prévia
+`preview_reimport_cleanup_counts(uuid,date,date)` também foram travados por
+hash (`1e0fc420e4d27711f296c4031e33307e` e
+`46c3bf0e7b28d3bcf75c4711ae24b187`), owner, linguagem, configuração e ACL.
+A migration `20260902021339_retire_unbounded_reimport_cleanup_browser_acl.sql`
+falha antes da revogação diante de drift em qualquer gate ou de novo caller
+SQL. Ela não foi aplicada remotamente.
+
+As funções de detalhe/acesso do portal, os dois geradores de número de NFS-e,
+o helper fiscal de faturamento e o overload legado de chegada não entraram
+neste lote: todos ainda têm caller frontend/fallback, dependência indireta ou
+cutover próprio. As 14 funções do lote amplo ainda pendente também não foram
+duplicadas aqui; seu rollout permanece coordenado com as command RPCs.

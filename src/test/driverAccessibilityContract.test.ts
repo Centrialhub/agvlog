@@ -7,8 +7,12 @@ const read = (...parts: string[]) => readFileSync(join(process.cwd(), ...parts),
 describe('driver accessibility contract', () => {
   it('keeps zoom enabled on mobile', () => {
     const html = read('index.html');
-    expect(html).not.toContain('maximum-scale');
-    expect(html).not.toContain('user-scalable=no');
+    const viewport = html.match(/<meta\s+name=["']viewport["']\s+content=["']([^"']+)["']/i)?.[1];
+    expect(viewport).toBeDefined();
+    expect(viewport).toContain('width=device-width');
+    expect(viewport).toContain('initial-scale=1.0');
+    expect(viewport).not.toContain('maximum-scale');
+    expect(viewport).not.toContain('user-scalable=no');
   });
 
   it('associates expense labels with controls and names both comboboxes', () => {

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClients } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useTenant } from '@/hooks/useTenant';
-import { supabase } from '@/integrations/supabase/client';
+import { useDrivers } from '@/hooks/useDrivers';
 import type { Json } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { useCreatePickupOrder, type CreatePickupOrderInput, type PickupOrder } from '@/hooks/usePickupOrders';
@@ -100,7 +98,6 @@ function errorMessage(error: unknown): string {
 }
 
 export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Props) {
-  const { currentTenant } = useTenant();
   const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { toast } = useToast();
@@ -111,18 +108,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
   const [driverId, setDriverId] = useState<string>(NONE);
   const [vehicleId, setVehicleId] = useState<string>(NONE);
 
-  const { data: drivers = [] } = useQuery({
-    queryKey: ['drivers-manual-ort', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('drivers')
-        .select('id, name, doc, active').eq('tenant_id', currentTenant.id)
-        .eq('active', true).order('name');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant && open,
-  });
+  const { data: drivers = [] } = useDrivers({ enabled: open });
 
   const setText = (k: TextFormKey, v: string) =>
     setForm(f => ({ ...f, [k]: v }));

@@ -34,6 +34,8 @@ export function regenerateStopsPreservingEdits(
       if (typeof prev.priority === 'number') s.priority = prev.priority;
       if (prev.notes) s.notes = prev.notes;
       if (typeof prev.manual_order === 'number') s.manual_order = prev.manual_order;
+      if (typeof prev.latitude === 'number') s.latitude = prev.latitude;
+      if (typeof prev.longitude === 'number') s.longitude = prev.longitude;
     });
   }
   // Reaplica o sortMode atual quando aplicável.

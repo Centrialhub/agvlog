@@ -27,6 +27,7 @@ export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof
  await db.exec(readFileSync('supabase/migrations/20260831160938_reconcile_authorized_cte_catalog.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260831161743_preserve_terminal_fiscal_receipts.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260831170755_serialize_cte_dispatch_and_reconcile_rejections.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20260901162058_adopt_hub_fiscal_status_callbacks.sql','utf8'));
  if(options.invoiceGate!==false) await db.exec(readFileSync('supabase/migrations/'+fiscalInvoiceGateMigration,'utf8'));
  const emitter='fa100000-0000-4000-8000-000000000001';
  await db.query("insert into tenant_emitters(id,tenant_id,cnpj,razao_social,active) values($1,$2,'11222333000181','Emitente QA',true)",[emitter,i.tenant]);

@@ -4,6 +4,39 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LoadReallocation from '@/pages/LoadReallocation';
 
+vi.mock('@/components/ui/select',async()=>{
+  const React=await import('react');
+  type ChildProps={id?:string;value?:string;disabled?:boolean;placeholder?:string;'aria-label'?:string;children?:import('react').ReactNode};
+  const SelectTrigger=()=>null;
+  const SelectContent=()=>null;
+  const SelectItem=()=>null;
+  const SelectValue=()=>null;
+  const Select=({children,value,onValueChange,disabled}:{children?:import('react').ReactNode;value?:string;
+    onValueChange?:(value:string)=>void;disabled?:boolean})=>{
+    let id:string|undefined;let ariaLabel:string|undefined;let placeholder='';
+    const options:Array<{value:string;disabled?:boolean;text:string}>=[];
+    const textOf=(node:import('react').ReactNode):string=>React.Children.toArray(node).map(child=>
+      typeof child==='string'||typeof child==='number'?String(child):
+        React.isValidElement<ChildProps>(child)?textOf(child.props.children):'').join(' ').replace(/\s+/g,' ')
+      .replace(/\s+([:;,.])/g,'$1').trim();
+    const visit=(node:import('react').ReactNode):void=>React.Children.forEach(node,child=>{
+      if(!React.isValidElement<ChildProps>(child))return;
+      if(child.type===SelectTrigger){id=child.props.id;ariaLabel=child.props['aria-label'];visit(child.props.children);}
+      else if(child.type===SelectValue)placeholder=child.props.placeholder??'';
+      else if(child.type===SelectItem&&child.props.value)options.push({value:child.props.value,
+        disabled:child.props.disabled,text:textOf(child.props.children)});
+      else visit(child.props.children);
+    });
+    visit(children);
+    return React.createElement('select',{id,'aria-label':ariaLabel,role:'combobox',value,disabled,
+      onChange:(event:import('react').ChangeEvent<HTMLSelectElement>)=>onValueChange?.(event.currentTarget.value)},
+    React.createElement('option',{value:'',disabled:true},placeholder),
+    ...options.map(option=>React.createElement('option',{key:option.value,value:option.value,disabled:option.disabled},option.text)));
+  };
+  return {Select,SelectTrigger,SelectContent,SelectItem,SelectValue,SelectGroup:SelectContent,
+    SelectLabel:SelectContent,SelectSeparator:()=>null,SelectScrollUpButton:()=>null,SelectScrollDownButton:()=>null};
+});
+
 const mock = vi.hoisted(() => ({ rpc: vi.fn(), success: vi.fn(), error: vi.fn(), write: vi.fn(),
   tenant: { id: 'tenant' }, sourceRemoved: false }));
 vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: mock.tenant }) }));
@@ -35,11 +68,10 @@ beforeEach(() => {
 afterEach(() => { cleanup(); client.clear(); });
 const page = () => <QueryClientProvider client={client}><MemoryRouter><LoadReallocation /></MemoryRouter></QueryClientProvider>;
 async function selectLoads() {
-  fireEvent.keyDown(screen.getByLabelText('Carga Origem'), { key: 'Enter' });
+  const source=screen.getByLabelText('Carga Origem');
   expect(screen.queryByRole('option', { name: /1003/ })).not.toBeInTheDocument();
-  fireEvent.click(await screen.findByRole('option', { name: /1001/ }));
-  fireEvent.keyDown(screen.getByLabelText('Carga Destino'), { key: 'Enter' });
-  fireEvent.click(await screen.findByRole('option', { name: /1002/ }));
+  fireEvent.change(source,{target:{value:'source'}});
+  fireEvent.change(screen.getByLabelText('Carga Destino'),{target:{value:'target'}});
   fireEvent.click(await screen.findByRole('button', { name: /Mercadoria QA/ }));
 }
 

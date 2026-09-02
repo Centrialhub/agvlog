@@ -24,6 +24,8 @@ export function tripMutationError(error:unknown):Error & {code?:string} {
     message='Os vínculos da carga com a viagem precisam de revisão pela operação. Atualize os dados antes de continuar.';
   }else if(raw.includes('trip_must_be_started_before_load')){
     message='A carga precisa estar vinculada a uma viagem iniciada. Confirme a partida ou a reatribuição com a operação.';
+  }else if(raw.includes('planned_stop_coordinates_required')){
+    message='O despacho foi bloqueado porque uma parada não possui latitude e longitude válidas. Corrija as coordenadas no planejamento.';
   }
   return Object.assign(new Error(message),{code});
 }

@@ -92,9 +92,11 @@ export default function DriverEventDetail() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-bold">{event.label}</h2>
-                <Badge variant="outline" className="text-[10px]">
-                  {event.code}
-                </Badge>
+                {event.code && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {event.code}
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5 capitalize">
                 Evento {event.type}

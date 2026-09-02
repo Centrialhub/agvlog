@@ -18,8 +18,8 @@ import { useHubCredentials } from '@/hooks/useEmitters';
 import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
 import { selectScopedHubCredential, type HubEnvironment } from '../../../supabase/functions/_shared/fiscal-environment';
 import { useVehicles } from '@/hooks/useVehicles';
+import { useDrivers } from '@/hooks/useDrivers';
 import { useClients, type Client } from '@/hooks/useClients';
-import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
 import { isSameFiscalMunicipality } from '@/lib/fiscal/fiscalMunicipality';
@@ -519,7 +519,6 @@ interface Props {
 
 export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) {
   const toast = useSonnerToast();
-  const { currentTenant } = useTenant();
   const { data: emitters = [] } = useEmitters();
   const { data: vehicles = [] } = useVehicles();
   const { data: clients = [] } = useClients();
@@ -527,7 +526,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const { data: insuranceProfile } = useInsuranceProfile();
   const saveInsuranceProfile = useUpdateInsuranceProfile();
 
-  const [drivers, setDrivers] = useState<DriverOpt[]>([]);
+  const { data: driverCatalog = [] } = useDrivers({ enabled: open });
+  const drivers = driverCatalog as DriverOpt[];
   const [items, setItems] = useState<EditableCte[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [transmitting, setTransmitting] = useState(false);
@@ -547,19 +547,6 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     () => groups.map((g) => `${g.key}:${(g.fiscal_document_ids || []).join('.')}`).join('|'),
     [groups],
   );
-
-  useEffect(() => {
-    if (!currentTenant?.id) return;
-    (async () => {
-      const { data } = await supabase
-        .from('drivers')
-        .select('id, name, cpf')
-        .eq('tenant_id', currentTenant.id)
-        .eq('active', true)
-        .order('name');
-      setDrivers(data || []);
-    })();
-  }, [currentTenant?.id]);
 
   // Inicializa sempre a partir do lote atual e então pré-preenche via RPC.
   // A consulta anterior é descartada quando a seleção muda, evitando que uma

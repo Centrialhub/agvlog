@@ -2,7 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json, Tables } from '@/integrations/supabase/types';
 import { useTenant } from './useTenant';
-import { readAuthorizedCteHubDetails } from '@/lib/fiscal/ctePayload';
+import { readAuthorizedCteHubDetails, readCteMdfeDetails, type CteTakerRole } from '@/lib/fiscal/ctePayload';
+import {
+  deriveMdfePredominantProduct,
+  groupLinkedNfeProducts,
+  type FiscalSourceReservationLink,
+  type LinkedNfeSourceRow,
+  type MdfeLinkedNfeProduct,
+} from '@/lib/fiscal/mdfePredominantProduct';
 
 type ClientAddressFallback = Pick<
   Tables<'clients'>,
@@ -38,17 +45,46 @@ export interface AuthorizedCte {
   remitter_zip: string | null;
   recipient_cnpj: string | null;
   cargo_weight: number | null;
+  predominant_product: string | null;
+  linked_nfe_products: MdfeLinkedNfeProduct[];
+  taker_role: CteTakerRole | null;
+  taker_name: string | null;
+  taker_document: string | null;
+  taker_ie: string | null;
+  taker_street: string | null;
+  taker_number: string | null;
+  taker_neighborhood: string | null;
+  taker_city: string | null;
+  taker_city_ibge: string | null;
+  taker_state: string | null;
+  taker_zip: string | null;
+  insurance_endorsements: string[];
+  load_ids: string[];
 }
 
-export function useAuthorizedCteList() {
+export function useAuthorizedCteList(loadId?: string | null) {
   const { currentTenant } = useTenant();
 
   return useQuery({
-    queryKey: ['authorized_ctes', currentTenant?.id],
+    queryKey: ['authorized_ctes', currentTenant?.id, loadId || 'recent'],
     enabled: !!currentTenant,
     queryFn: async (): Promise<AuthorizedCte[]> => {
+      // Para emissão por carga, resolvemos primeiro o catálogo canônico da carga.
+      // Isso evita perder CT-es antigos por causa do limite da consulta geral.
+      let scopedDocumentIds: string[] | null = null;
+      if (loadId) {
+        const { data: links, error: linksError } = await supabase
+          .from('cte_documents')
+          .select('id')
+          .eq('tenant_id', currentTenant!.id)
+          .contains('load_ids', [loadId]);
+        if (linksError) throw linksError;
+        scopedDocumentIds = (links || []).map(link => link.id);
+        if (!scopedDocumentIds.length) return [];
+      }
+
       // 1. Buscamos em fiscal_documents (saída) que foram autorizados
-      const { data: outbound, error } = await supabase
+      let outboundQuery = supabase
         .from('fiscal_documents')
         .select(`
           id, 
@@ -64,9 +100,12 @@ export function useAuthorizedCteList() {
           recipient_state,
           cte_driver_id,
           cte_vehicle_id,
+          cte_payload,
+          cte_taker_role,
+          insurer_endorsement,
+          insured_amount,
 
           issue_date,
-          value,
           weight_kg,
           hub_document_id
         `)
@@ -74,8 +113,11 @@ export function useAuthorizedCteList() {
         .is('deleted_at', null)
         .eq('document_type', 'outbound')
         .eq('status', 'authorized')
-        .order('issue_date', { ascending: false })
-        .limit(100);
+        .order('issue_date', { ascending: false });
+      outboundQuery = scopedDocumentIds
+        ? outboundQuery.in('id', scopedDocumentIds)
+        : outboundQuery.limit(100);
+      const { data: outbound, error } = await outboundQuery;
 
       if (error) throw error;
 
@@ -87,17 +129,63 @@ export function useAuthorizedCteList() {
         last_response: Json | null;
         created_at: string;
       }> = [];
+      const loadIdsByCte = new Map<string, string[]>();
       if (documentIds.length) {
-        const emissionResult = await supabase
-          .from('hub_fiscal_emissions')
-          .select('fiscal_document_id, access_key, last_response, created_at')
-          .eq('tenant_id', currentTenant!.id)
-          .eq('doc_type', 'cte')
-          .in('fiscal_document_id', documentIds)
-          .order('created_at', { ascending: false });
+        const [emissionResult, cteLinksResult] = await Promise.all([
+          supabase
+            .from('hub_fiscal_emissions')
+            .select('fiscal_document_id, access_key, last_response, created_at')
+            .eq('tenant_id', currentTenant!.id)
+            .eq('doc_type', 'cte')
+            .in('fiscal_document_id', documentIds)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('cte_documents')
+            .select('id, load_ids')
+            .eq('tenant_id', currentTenant!.id)
+            .in('id', documentIds),
+        ]);
         if (emissionResult.error) throw emissionResult.error;
+        if (cteLinksResult.error) throw cteLinksResult.error;
         emissions = emissionResult.data || [];
+        for (const row of cteLinksResult.data || []) loadIdsByCte.set(row.id, row.load_ids || []);
       }
+
+      let reservations: FiscalSourceReservationLink[] = [];
+      const sourceDocuments: LinkedNfeSourceRow[] = [];
+      if (documentIds.length) {
+        const reservationResult = await supabase
+          .from('fiscal_source_reservations')
+          .select('source_id, outbound_id')
+          .eq('tenant_id', currentTenant!.id)
+          .in('outbound_id', documentIds);
+        if (reservationResult.error) throw reservationResult.error;
+        reservations = reservationResult.data || [];
+
+        const sourceIds = [...new Set(reservations.map(row => row.source_id))];
+        if (sourceIds.length) {
+          const reservedSourceResult = await supabase
+            .from('fiscal_documents')
+            .select('id, cte_emitted_outbound_id, product_summary, value, weight_kg')
+            .eq('tenant_id', currentTenant!.id)
+            .eq('document_type', 'inbound')
+            .is('deleted_at', null)
+            .in('id', sourceIds);
+          if (reservedSourceResult.error) throw reservedSourceResult.error;
+          sourceDocuments.push(...(reservedSourceResult.data || []));
+        }
+
+        const legacySourceResult = await supabase
+          .from('fiscal_documents')
+          .select('id, cte_emitted_outbound_id, product_summary, value, weight_kg')
+          .eq('tenant_id', currentTenant!.id)
+          .eq('document_type', 'inbound')
+          .is('deleted_at', null)
+          .in('cte_emitted_outbound_id', documentIds);
+        if (legacySourceResult.error) throw legacySourceResult.error;
+        sourceDocuments.push(...(legacySourceResult.data || []));
+      }
+      const linkedNfeProductsByCte = groupLinkedNfeProducts(reservations, sourceDocuments);
 
       // 3. Buscamos TODOS os clientes do tenant para usar como fallback de endereço (CNPJ Match)
       const { data: clients, error: clientsError } = await supabase
@@ -154,6 +242,43 @@ export function useAuthorizedCteList() {
         const recipientCnpj = (d.recipient_cnpj || '').replace(/\D+/g, '');
         const recipientClient = clientMap.get(recipientCnpj);
         const driver = d.cte_driver_id ? driverMap.get(d.cte_driver_id) : null;
+        const mdfe = readCteMdfeDetails(d.cte_payload, d.cte_taker_role);
+        const linkedNfeProducts = linkedNfeProductsByCte.get(d.id) || [];
+        const fallbackTaker = mdfe.takerRole === 'destinatario'
+          ? {
+              name: d.recipient,
+              taxId: d.recipient_cnpj,
+              stateRegistration: recipientClient?.state_registration || null,
+              street: recipientClient?.address_street || null,
+              number: recipientClient?.address_number || null,
+              neighborhood: recipientClient?.address_neighborhood || null,
+              city: d.recipient_city || recipientClient?.address_city || null,
+              cityIbge: recipientClient?.address_city_ibge_code || null,
+              state: d.recipient_state || recipientClient?.address_state || null,
+              zip: recipientClient?.address_zip || null,
+            }
+          : mdfe.takerRole === 'remetente'
+            ? {
+                name: d.remitter,
+                taxId: d.remitter_cnpj,
+                stateRegistration: hubDetails.remitter.stateRegistration || client?.state_registration || null,
+                street: hubDetails.remitter.street || client?.address_street || null,
+                number: hubDetails.remitter.number || client?.address_number || null,
+                neighborhood: hubDetails.remitter.neighborhood || client?.address_neighborhood || null,
+                city: hubDetails.remitter.city || client?.address_city || null,
+                cityIbge: hubDetails.remitter.cityIbge || client?.address_city_ibge_code || null,
+                state: hubDetails.remitter.state || client?.address_state || null,
+                zip: hubDetails.remitter.zip || client?.address_zip || null,
+              }
+            : null;
+        const taker = mdfe.taker || fallbackTaker;
+        const insuranceEndorsements = [
+          String(d.insurer_endorsement || '').trim(),
+          ...mdfe.insuranceEndorsements,
+        ].filter(Boolean);
+        const cargoValue = mdfe.cargoValue ?? (
+          d.insured_amount == null ? null : Number(d.insured_amount)
+        );
 
         return {
           id: d.id,
@@ -183,8 +308,26 @@ export function useAuthorizedCteList() {
           driver_name: driver?.name || null,
           driver_cpf: driver?.cpf || null,
           hub_document_id: d.hub_document_id,
-          cargo_value: d.value ? Number(d.value) : 0,
+          cargo_value: cargoValue,
           cargo_weight: d.weight_kg ? Number(d.weight_kg) : 0,
+          predominant_product: deriveMdfePredominantProduct([{
+            predominant_product: mdfe.predominantProduct,
+            linked_nfe_products: linkedNfeProducts,
+          }]) || null,
+          linked_nfe_products: linkedNfeProducts,
+          taker_role: mdfe.takerRole,
+          taker_name: taker?.name || null,
+          taker_document: taker?.taxId || null,
+          taker_ie: taker?.stateRegistration || null,
+          taker_street: taker?.street || null,
+          taker_number: taker?.number || null,
+          taker_neighborhood: taker?.neighborhood || null,
+          taker_city: taker?.city || null,
+          taker_city_ibge: taker?.cityIbge || null,
+          taker_state: taker?.state || null,
+          taker_zip: taker?.zip || null,
+          insurance_endorsements: [...new Set(insuranceEndorsements)],
+          load_ids: loadIdsByCte.get(d.id) || [],
         };
       });
     }

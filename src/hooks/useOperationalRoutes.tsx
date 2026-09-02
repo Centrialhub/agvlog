@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
 
 export type RouteDestination = string | { name: string };
 export type OperationalRoute = Omit<Tables<'operational_routes'>, 'destinations'> & {
@@ -12,20 +13,23 @@ export type OperationalRoute = Omit<Tables<'operational_routes'>, 'destinations'
 export function useOperationalRoutes(options: { includeInactive?: boolean } = {}) {
   const { includeInactive = false } = options;
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['operational_routes', currentTenant?.id, includeInactive],
+    queryKey: ['operational_routes', currentTenant?.id, includeInactive, user?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      let q = supabase
-        .from('operational_routes')
-        .select('*')
-        .eq('tenant_id', currentTenant.id);
-      if (!includeInactive) q = q.eq('active', true);
-      const { data, error } = await q.order('name');
-      if (error) throw error;
-      return (data || []) as OperationalRoute[];
+      if (!currentTenant || !user) return [];
+      const rows = await readOperatorReferenceCatalog({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        resource: 'operational_routes',
+        includeInactive,
+      });
+      return (rows as unknown as OperationalRoute[]).sort((left, right) => (
+        left.name.localeCompare(right.name, 'pt-BR') || left.id.localeCompare(right.id)
+      ));
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
+    retry: false,
   });
 }
 

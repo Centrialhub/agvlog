@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLoadsPage, useDeleteLoad, useDeleteLoads, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
 import { useHoldLoad, useUnholdLoad } from '@/hooks/useLoads';
 import { useVehicles } from '@/hooks/useVehicles';
+import { useDrivers } from '@/hooks/useDrivers';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -184,15 +185,7 @@ export default function Loads() {
     enabled: !!currentTenant,
   });
 
-  const { data: drivers = [] } = useQuery({
-    queryKey: ['drivers', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data } = await supabase.from('drivers').select('id, name, user_id').eq('tenant_id', currentTenant.id).eq('active', true).order('name');
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
+  const { data: drivers = [] } = useDrivers();
 
   // Reset to first page whenever filters change result set or page size shrinks
   useEffect(() => {

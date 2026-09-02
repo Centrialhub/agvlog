@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, Pencil, Trash2, RefreshCw, Truck } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
 
 type DriverRow = Tables<'drivers'>;
 type DriverVehicle = Pick<Tables<'vehicles'>, 'id' | 'plate' | 'nickname'>;
@@ -94,28 +95,37 @@ export default function Drivers() {
   const [vehicleSearch, setVehicleSearch] = useState<Record<string, string>>({});
 
   const { data: drivers = [], isLoading } = useQuery({
-    queryKey: ['drivers', currentTenant?.id],
+    queryKey: ['drivers', 'registry', currentTenant?.id, user?.id],
     queryFn: async (): Promise<DriverWithVehicle[]> => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('drivers')
-        .select('*, current_vehicle:vehicles!drivers_tenant_current_vehicle_fkey(id, plate, nickname)')
-        .eq('tenant_id', currentTenant.id).order('name');
-      if (error) throw error;
-      return (data || []) as DriverWithVehicle[];
+      if (!currentTenant || !user) return [];
+      const rows = await readOperatorReferenceCatalog({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        resource: 'drivers',
+        includeInactive: true,
+      });
+      return (rows as unknown as DriverWithVehicle[]).sort((left, right) => (
+        left.name.localeCompare(right.name, 'pt-BR') || left.id.localeCompare(right.id)
+      ));
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
+    retry: false,
   });
 
   const { data: vehicles = [] } = useQuery({
-    queryKey: ['vehicles_for_assign', currentTenant?.id],
+    queryKey: ['vehicles_for_assign', currentTenant?.id, user?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('vehicles').select('id, plate, nickname, current_driver_id')
-        .eq('tenant_id', currentTenant.id).eq('active', true).order('plate');
-      if (error) throw error;
-      return data || [];
+      if (!currentTenant || !user) return [];
+      const rows = await readOperatorReferenceCatalog({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        resource: 'vehicles',
+      });
+      return (rows as unknown as Array<Pick<Tables<'vehicles'>, 'id' | 'plate' | 'nickname' | 'current_driver_id'>>)
+        .sort((left, right) => left.plate.localeCompare(right.plate, 'pt-BR') || left.id.localeCompare(right.id));
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
+    retry: false,
   });
 
   // Usuários da tenant que têm role 'driver' (candidatos a vincular a um motorista)

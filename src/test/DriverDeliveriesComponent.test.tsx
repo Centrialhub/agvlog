@@ -7,6 +7,7 @@ import DriverDeliveries from '@/pages/driver/DriverDeliveries';
 const mocks=vi.hoisted(() => ({
   stops:[] as Record<string,unknown>[], status:'in_transit', started:true, pending:false, readError:false,
   submit:vi.fn(),create:vi.fn(),toast:vi.fn(),navigate:vi.fn(),params:vi.fn(),invalidate:vi.fn(),eq:vi.fn(),rpc:vi.fn(),
+  arrival:vi.fn(),
   selectedTrip:null as string|null,
   documents:[] as Record<string,unknown>[],items:[] as Record<string,unknown>[],
 }));
@@ -23,6 +24,7 @@ vi.mock('@/lib/driver/driverDeliverySubmission',async importOriginal=>({
   ...await importOriginal<typeof import('@/lib/driver/driverDeliverySubmission')>(),
   createDeliverySubmission:mocks.create,invalidateDeliveryQueries:mocks.invalidate,
 }));
+vi.mock('@/lib/driver/driverArrival',()=>({markDriverArrival:mocks.arrival}));
 vi.mock('@/components/driver/SignaturePad',()=>({default:({onChange}:{onChange:(value:string)=>void})=>
   <button onClick={()=>onChange('data:image/png;base64,AA==')}>Assinar teste</button>}));
 vi.mock('@/components/ui/sheet',()=>({
@@ -50,6 +52,7 @@ beforeEach(()=>{
   mocks.stops=[{id:'stop',dispatch_trip_id:'trip',status:'arrived',destination:'Rua QA',actual_arrival_at:'2026-08-29T12:00:00Z',actual_departure_at:null,
     planned_arrival_at:null,dispatch_stop_documents:[],clients:{company_name:'Cliente QA'}}];
   mocks.submit.mockResolvedValue({event_id:'event',operational_event_id:'occurrence',replayed:false});
+  mocks.arrival.mockResolvedValue('arrival-event');
   mocks.rpc.mockImplementation((name:string)=>({abortSignal:async()=>{
     if(name!=='get_driver_delivery_items')throw new Error('Unexpected RPC '+name);
     return {data:{tenant_id:'tenant',actor_id:'driver-user',trip_id:'trip',stop_id:'stop',items:mocks.items.map(item=>({...item,
@@ -66,6 +69,10 @@ async function openDelivery(){
   renderPage(); fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));
   fireEvent.click(screen.getByRole('button',{name:'TudoEntregue'}));
 }
+async function openEvent(label:string){
+  renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));
+  fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));fireEvent.click(screen.getByRole('button',{name:label}));
+}
 function fillProof(){
   fireEvent.change(screen.getByLabelText(/Recebedor/),{target:{value:'Recebedor QA'}});
   const fileInput=document.querySelector<HTMLInputElement>('input[type=file]')!;
@@ -74,6 +81,25 @@ function fillProof(){
 }
 
 describe('driver deliveries rendered frontend',()=>{
+  it('associates boleto fields with their visible labels',async()=>{
+    await openEvent('ATUALIZAR BOLETO');
+    for(const label of ['Novo vencimento sugerido','Detalhe / motivo']){
+      const control=screen.getByLabelText(label),labelElement=screen.getByText(label,{selector:'label'});
+      expect(control.id).not.toBe('');expect(labelElement).toHaveAttribute('for',control.id);
+    }
+  });
+  it('names discount controls and exposes their selected state',async()=>{
+    await openEvent('SOLICITAR DESCONTO');
+    expect(screen.getByRole('group',{name:'Tipo do desconto'})).toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'Desconto em porcentagem'})).toHaveAttribute('aria-pressed','true');
+    expect(screen.getByRole('button',{name:'Desconto em reais'})).toHaveAttribute('aria-pressed','false');
+    for(const label of ['Valor do desconto','Justificativa do desconto']){
+      const control=screen.getByLabelText(label),labelElement=screen.getByText(label,{selector:'label'});
+      expect(control.id).not.toBe('');expect(labelElement).toHaveAttribute('for',control.id);
+    }
+    expect(screen.getByLabelText('Capturar foto da entrega')).toHaveAttribute('type','file');
+    expect(screen.getByLabelText('Selecionar fotos da entrega')).toHaveAttribute('type','file');
+  });
   it.each(['delivered','partial_delivery','returned','refused','failed','cancelled','not_delivered'])('excludes %s note items from a total return while preserving the remaining quantities',async(status)=>{
     mocks.documents=[{fiscal_document_id:'completed-doc',fiscal_documents:{status}},{fiscal_document_id:'pending-doc',fiscal_documents:{status:'in_transit'}}];
     mocks.items=[{id:'completed-item',item_description:'Item já concluído',quantity:2,fiscal_document_id:'completed-doc'},
@@ -102,6 +128,17 @@ describe('driver deliveries rendered frontend',()=>{
     mocks.stops[0].actual_arrival_at=null;await openDelivery();fillProof();
     expect(screen.getByText('Registre a chegada antes do resultado da entrega.')).toBeInTheDocument();
     expect(screen.getByRole('button',{name:'Lançar evento'})).toBeDisabled();
+  });
+  it('routes the arrival event through the shared GPS flow and refreshes the trip',async()=>{
+    mocks.stops[0]={...mocks.stops[0],status:'pending',actual_arrival_at:null};
+    renderPage();fireEvent.click(await screen.findByRole('button',{name:/Cliente QA/}));
+    fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));
+    fireEvent.click(screen.getByRole('button',{name:'CHEGADA NO CLIENTE'}));
+    fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));
+    await waitFor(()=>expect(mocks.arrival).toHaveBeenCalledWith('stop'));
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.invalidate).toHaveBeenCalled();
+    expect(mocks.toast).toHaveBeenCalledWith({title:'Chegada registrada'});
   });
   it('submits one snapshot, pins its trip and links to the actual operation event',async()=>{
     await openDelivery();expect(screen.getByRole('button',{name:'Lançar evento'})).toBeDisabled();fillProof();

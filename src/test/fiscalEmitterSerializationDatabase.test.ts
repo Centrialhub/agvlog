@@ -35,8 +35,8 @@ it('accepts an identity-bound rejected status on HTTP502 and releases the lane',
  const response=await serviceFiscal<{result:{confirmed:boolean;status:string}}>(db,'select complete_hub_fiscal_emission($1,$2,$3::jsonb,502) result',[i.tenant,a.emission.id,JSON.stringify({success:false,error:{code:'CTE_EXCEPTION'},document})]);
  expect(response.rows[0].result).toMatchObject({confirmed:true,status:'rejected'});expect((await claimFiscal(db,emitter,second.id,'production')).dispatch).toBe(true);
 });
-it('does not interpret provider_unknown duplication as authorization or release it',async()=>{
+it('records provider_unknown without interpreting it as authorization or releasing the lane',async()=>{
  const {db,emitter}=context;const {first,second}=await pair();const a=await claimFiscal(db,emitter,first.id,'production');
- const response=await serviceFiscal<{result:{confirmed:boolean}}>(db,'select complete_hub_fiscal_emission($1,$2,$3::jsonb,200) result',[i.tenant,a.emission.id,JSON.stringify({document:{id:'hub-qa',status:'provider_unknown',message:'Duplicidade de CT-e com outra chave',raw_response_json:{managersaas:{parsed:{exceptionClass:'EspdManCTeRejeicaoEnvioException'}}}}})]);
- expect(response.rows[0].result.confirmed).toBe(false);await expect(claimFiscal(db,emitter,second.id,'production')).rejects.toThrow('fiscal_emitter_busy');
+ const response=await serviceFiscal<{result:{confirmed:boolean;status:string}}>(db,'select complete_hub_fiscal_emission($1,$2,$3::jsonb,200) result',[i.tenant,a.emission.id,JSON.stringify({document:{id:'hub-qa',status:'provider_unknown',message:'Duplicidade de CT-e com outra chave',raw_response_json:{managersaas:{parsed:{exceptionClass:'EspdManCTeRejeicaoEnvioException'}}}}})]);
+ expect(response.rows[0].result).toMatchObject({confirmed:true,status:'provider_unknown'});await expect(claimFiscal(db,emitter,second.id,'production')).rejects.toThrow('fiscal_emitter_busy');
 });

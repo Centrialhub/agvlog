@@ -98,6 +98,8 @@ export default function SignaturePad({ onChange, height = 180 }: SignaturePadPro
       >
         <canvas
           ref={canvasRef}
+          role="img"
+          aria-label="Área para desenhar a assinatura"
           className="w-full h-full touch-none"
           onPointerDown={start}
           onPointerMove={move}

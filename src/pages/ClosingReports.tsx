@@ -18,7 +18,7 @@ import {
 } from '@/hooks/useClosingReports';
 import { useClients } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useQuery } from '@tanstack/react-query';
+import { useDrivers } from '@/hooks/useDrivers';
 import { supabase } from '@/integrations/supabase/client';
 import { type BuiltItem, type SummaryLine } from '@/lib/closingReports/closingReportBuilder';
 import { downloadClosingReportPdf } from '@/lib/closingReports/closingReportPdf';
@@ -68,17 +68,7 @@ function ClosingReportsScreen() {
   const { data: companyProfile } = useCompanyProfile();
   const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
-  const { data: drivers = [] } = useQuery({
-    queryKey: ['drivers-min', currentTenant?.id],
-    enabled: !!currentTenant?.id,
-    queryFn: async () => {
-      const tenantId = currentTenant?.id;
-      if (!tenantId) return [];
-      const { data, error } = await supabase.from('drivers').select('id, name').eq('tenant_id', tenantId).order('name');
-      if (error) throw error;
-      return (data ?? []) as { id: string; name: string }[];
-    },
-  });
+  const { data: drivers = [] } = useDrivers({ includeInactive: true });
 
   const [payDlg, setPayDlg] = useState<ClosingReportRow | null>(null);
 

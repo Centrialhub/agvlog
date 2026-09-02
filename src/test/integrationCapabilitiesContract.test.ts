@@ -63,10 +63,24 @@ describe("tenant integration capabilities", () => {
 
   it("does not schedule disabled integration crons", () => {
     const cron = read("supabase/bootstrap/cron_jobs.sql");
+    const reconcile = read("supabase/migrations/20260902022000_reconcile_disabled_ssx_cron.sql");
     expect(cron).toContain("IF ssx_effective THEN");
     expect(cron).toContain("IF fiscal_effective THEN");
     expect(cron).toContain("'ssx_kill_switch'");
     expect(cron).toContain("'fiscal_kill_switch'");
+    expect(cron.indexOf("'agvlog-daily-aggregate'")).toBeLessThan(
+      cron.indexOf("END IF;", cron.indexOf("IF ssx_effective THEN")),
+    );
+    expect(reconcile).toContain("count(*) = 2");
+    expect(reconcile).toContain("if not coalesce(ssx_effective, false) then");
+    for (const job of [
+      "agvlog-poll-positions-3min",
+      "agvlog-full-sync-6h",
+      "agvlog-daily-aggregate",
+    ]) {
+      expect(reconcile).toContain(`'${job}'`);
+    }
+    expect(reconcile).toContain("perform cron.unschedule(job.jobid)");
   });
 
   it("gates fiscal routes and uses honest disabled copy", () => {

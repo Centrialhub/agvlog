@@ -14,6 +14,9 @@ export const VOID_FISCAL_STATUSES = new Set([
   'denegada',
   'denegado',
   'inutilizada',
+  'inutilizado',
+  'inutilized',
+  'interrupted',
   'error',
   'erro',
   'failed',
@@ -63,6 +66,9 @@ export const PENDING_FISCAL_STATUSES = new Set([
   'processing',
   'processando',
   'submitted',
+  'provider_unknown',
+  'cancel_processing',
+  'cancelling',
 ]);
 
 /** Documento fiscal confirmado (não anulado e não em trânsito) — usar em receita. */

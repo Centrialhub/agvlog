@@ -29,7 +29,7 @@ Fontes de verdade obrigatórias para toda mudança operacional. Telas que tocam 
 - **Fonte de verdade operacional:** `dispatch_stops.status`.
 - Lista canônica de status **terminais** vive em `public.stop_terminal_statuses()` e no frontend em `src/lib/status/stopStatus.ts` (`STOP_TERMINAL_STATUSES`).
 - Lista canônica de status **ativos** vive em `src/lib/status/stopStatus.ts` (`STOP_ACTIVE_STATUSES`).
-- Mudança de status do motorista vai por `driver_update_stop_status(_stop_id, _new_status, _reason)` — atualiza `dispatch_stops`, `fiscal_documents` vinculados e `loads` quando todas as paradas forem terminais.
+- O motorista usa comandos físicos e de entrega separados: chegada por `driver_mark_arrival` com GPS, saída por `driver_register_departure`, resultado por `driver_record_delivery_outcome` e notas por `driver_record_delivery_note`. Os wrappers genéricos legados não são APIs de browser.
 
 ## Status público da mercadoria
 

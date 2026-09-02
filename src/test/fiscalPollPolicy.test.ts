@@ -55,6 +55,8 @@ describe('fiscal polling terminal policy', () => {
     expect(classifyFiscalProviderStatus('emitida')).toBe('issued');
     expect(classifyFiscalProviderStatus('denegado')).toBe('rejected');
     expect(classifyFiscalProviderStatus('cancelada')).toBe('cancelled');
+    expect(classifyFiscalProviderStatus('error')).toBeNull();
+    expect(classifyFiscalProviderStatus('provider_unknown')).toBeNull();
     expect(classifyFiscalProviderStatus('processing')).toBeNull();
   });
 
@@ -131,6 +133,7 @@ describe('fiscal polling terminal policy', () => {
     const [url, init] = fetcher.mock.calls[0];
     expect(String(url)).toBe('https://hub.example.test/hub_documents_get?id=cte+id%2F1');
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer secret-token' });
+    expect(init?.headers).toMatchObject({ 'X-HubFiscal-Api-Version': '2026-08-27' });
   });
 
   it('terminaliza e enfileira em uma única RPC restrita ao service role', () => {

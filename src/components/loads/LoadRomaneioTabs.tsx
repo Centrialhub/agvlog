@@ -1,13 +1,13 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useEffect, useMemo, useState } from 'react';
 import { isBillableFiscalDoc } from '@/lib/fiscal/documentStatus';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useHoldLoad, useUnholdLoad, useUpdateLoad, type Load } from '@/hooks/useLoads';
 import type { LoadItem } from '@/hooks/useLoadItems';
-import { useTenant } from '@/hooks/useTenant';
 import { useVehicles } from '@/hooks/useVehicles';
+import { useDrivers } from '@/hooks/useDrivers';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -74,6 +74,11 @@ const OP_TYPES = [
   { value: 'devolucao', label: 'Devolução' },
 ];
 
+const ROMANEIO_TABS = new Set([
+  'geral', 'despesas', 'dados', 'rent', 'manifesto',
+  'adiant', 'risco', 'paletes', 'docs', 'ciot',
+]);
+
 const toLocalDT = (v?: string | null) => {
   if (!v) return '';
   const d = new Date(v);
@@ -89,27 +94,22 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
   const { promptAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const currentDocuments = documents.filter(document => !document.is_historical);
-  const { currentTenant } = useTenant();
   const { data: vehicles = [] } = useVehicles();
   const updateLoad = useUpdateLoad();
   const holdLoad = useHoldLoad();
   const unholdLoad = useUnholdLoad();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(() =>
+    requestedTab && ROMANEIO_TABS.has(requestedTab) ? requestedTab : 'geral',
+  );
 
-  const { data: drivers = [] } = useQuery({
-    queryKey: ['drivers_picker', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data } = await supabase
-        .from('drivers')
-        .select('id, name, current_vehicle_id')
-        .eq('tenant_id', currentTenant.id)
-        .eq('active', true)
-        .order('name');
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
+  useEffect(() => {
+    if (requestedTab && ROMANEIO_TABS.has(requestedTab)) setActiveTab(requestedTab);
+  }, [requestedTab]);
+
+  const { data: drivers = [] } = useDrivers();
 
   const [form, setForm] = useState({
     driver_id: load.driver_id || '__none__',
@@ -321,6 +321,8 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
             onClick: () => navigate(`/cte-hub?tab=consulta&load=${load.load_number}`) },
           { icon: Files, label: 'ORT', color: 'text-orange-600',
             onClick: () => navigate('/ort-management') },
+          { icon: FileSignature, label: 'MDF-e', color: 'text-indigo-600',
+            onClick: () => setActiveTab('manifesto') },
           { icon: FilePlus, label: 'Novo Doc.', color: 'text-teal-600',
             onClick: () => navigate(`/fiscal-documents?load=${load.id}`) },
           { icon: Key, label: 'Chave Acesso', color: 'text-yellow-600',
@@ -354,13 +356,13 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
           );
         })}
       </div>
-      <Tabs defaultValue="geral" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full justify-start rounded-none border-b bg-muted/40 h-auto flex-wrap p-0">
           <TabsTrigger value="geral" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><FileText className="h-3 w-3 mr-1" />Geral</TabsTrigger>
           <TabsTrigger value="despesas" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><DollarSign className="h-3 w-3 mr-1" />Despesas/Custo Extra</TabsTrigger>
           <TabsTrigger value="dados" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><Package className="h-3 w-3 mr-1" />Dados da Carga</TabsTrigger>
           <TabsTrigger value="rent" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><TrendingUp className="h-3 w-3 mr-1" />Rentabilidade</TabsTrigger>
-          <TabsTrigger value="manifesto" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><FileSignature className="h-3 w-3 mr-1" />Manifesto/Pedágio</TabsTrigger>
+          <TabsTrigger value="manifesto" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><FileSignature className="h-3 w-3 mr-1" />MDF-e</TabsTrigger>
           <TabsTrigger value="adiant" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><HandCoins className="h-3 w-3 mr-1" />Adiantamentos</TabsTrigger>
           <TabsTrigger value="risco" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><ShieldCheck className="h-3 w-3 mr-1" />Gerenciadora de Risco</TabsTrigger>
           <TabsTrigger value="paletes" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><Boxes className="h-3 w-3 mr-1" />Mov. Paletes</TabsTrigger>
@@ -640,12 +642,7 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
 
         {/* ===================== MANIFESTO ===================== */}
         <TabsContent value="manifesto" className="p-4 m-0">
-          <ManifestPanel
-            loadId={load.id}
-            loadNumber={load.load_number}
-            origin={load.origin}
-            destination={load.destination}
-          />
+          <ManifestPanel load={load} />
         </TabsContent>
 
         {/* ===================== ADIANTAMENTOS ===================== */}

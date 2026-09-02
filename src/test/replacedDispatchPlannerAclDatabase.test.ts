@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const migration = readFileSync(join(
   process.cwd(),
@@ -34,23 +34,28 @@ const runtimeSource = [join(process.cwd(), 'src'), join(process.cwd(), 'supabase
   .map((path) => readFileSync(path, 'utf8'))
   .join('\n');
 
-async function database() {
-  const db = new PGlite();
+let db: PGlite;
+
+beforeAll(async () => {
+  db = new PGlite();
   await db.exec(`
     create role anon;
     create role authenticated;
     create role service_role;
     create schema if not exists public;
   `);
+});
+
+beforeEach(async () => {
   if (!targetDefinition) throw new Error('baseline dispatch planner definition not found');
   await db.exec(targetDefinition);
   await db.exec(`
     revoke all on function public.${target} from public, anon, authenticated, service_role;
     grant execute on function public.${target} to authenticated, service_role;
 
-    create function public.dispatch_planned_route(payload jsonb) returns uuid
+    create or replace function public.dispatch_planned_route(payload jsonb) returns uuid
       language sql set search_path='' as $$select null::uuid$$;
-    create function public.plan_dispatch_trip_v3(
+    create or replace function public.plan_dispatch_trip_v3(
       tenant_id uuid, request_id text, driver_id uuid, vehicle_id uuid,
       route_name text, load_ids uuid[], stops jsonb
     ) returns uuid language sql set search_path='' as $$select null::uuid$$;
@@ -61,76 +66,64 @@ async function database() {
       public.plan_dispatch_trip_v3(uuid,text,uuid,uuid,text,uuid[],jsonb)
       to authenticated, service_role;
   `);
-  return db;
-}
+});
+
+afterAll(async () => {
+  await db.close();
+});
 
 describe('replaced dispatch planner ACL closure', () => {
   it('revokes only the exact v2 browser surface and preserves service/canonical access', async () => {
-    const db = await database();
-    try {
-      await db.exec(migration);
-      const result = await db.query<{
-        anon: boolean;
-        authenticated: boolean;
-        service: boolean;
-      }>(`
-        select
-          has_function_privilege('anon','public.${target}','execute') anon,
-          has_function_privilege('authenticated','public.${target}','execute') authenticated,
-          has_function_privilege('service_role','public.${target}','execute') service
-      `);
-      expect(result.rows[0]).toEqual({ anon: false, authenticated: false, service: true });
+    await db.exec(migration);
+    const result = await db.query<{
+      anon: boolean;
+      authenticated: boolean;
+      service: boolean;
+    }>(`
+      select
+        has_function_privilege('anon','public.${target}','execute') anon,
+        has_function_privilege('authenticated','public.${target}','execute') authenticated,
+        has_function_privilege('service_role','public.${target}','execute') service
+    `);
+    expect(result.rows[0]).toEqual({ anon: false, authenticated: false, service: true });
 
-      for (const signature of canonical) {
-        const allowed = await db.query<{ allowed: boolean }>(`
-          select has_function_privilege(
-            'authenticated', 'public.${signature}', 'execute'
-          ) allowed
-        `);
-        expect(allowed.rows[0].allowed, signature).toBe(true);
-      }
-    } finally {
-      await db.close();
+    for (const signature of canonical) {
+      const allowed = await db.query<{ allowed: boolean }>(`
+        select has_function_privilege(
+          'authenticated', 'public.${signature}', 'execute'
+        ) allowed
+      `);
+      expect(allowed.rows[0].allowed, signature).toBe(true);
     }
   });
 
   it('fails before revocation when a canonical replacement is unavailable', async () => {
-    const db = await database();
-    try {
-      await db.exec('drop function public.dispatch_planned_route(jsonb)');
-      await expect(db.exec(migration)).rejects.toThrow('Canonical dispatch planner is not ready');
-      const result = await db.query<{ allowed: boolean }>(`
-        select has_function_privilege(
-          'authenticated', 'public.${target}', 'execute'
-        ) allowed
-      `);
-      expect(result.rows[0].allowed).toBe(true);
-    } finally {
-      await db.close();
-    }
+    await db.exec('drop function public.dispatch_planned_route(jsonb)');
+    await expect(db.exec(migration)).rejects.toThrow('Canonical dispatch planner is not ready');
+    const result = await db.query<{ allowed: boolean }>(`
+      select has_function_privilege(
+        'authenticated', 'public.${target}', 'execute'
+      ) allowed
+    `);
+    expect(result.rows[0].allowed).toBe(true);
   });
 
   it('fails before revocation when the legacy implementation drifted', async () => {
-    const db = await database();
-    try {
-      await db.exec(`
-        create or replace function public.plan_dispatch_trip_v2(
-          p_tenant_id uuid, p_driver_id uuid, p_vehicle_id uuid,
-          p_route_name text, p_load_ids uuid[], p_stops jsonb,
-          p_idempotency_key text default null
-        ) returns uuid language plpgsql security definer set search_path=public
-          as $$begin return null; end$$
-      `);
-      await expect(db.exec(migration)).rejects.toThrow('Legacy dispatch planner changed');
-      const result = await db.query<{ allowed: boolean }>(`
-        select has_function_privilege(
-          'authenticated', 'public.${target}', 'execute'
-        ) allowed
-      `);
-      expect(result.rows[0].allowed).toBe(true);
-    } finally {
-      await db.close();
-    }
+    await db.exec(`
+      create or replace function public.plan_dispatch_trip_v2(
+        p_tenant_id uuid, p_driver_id uuid, p_vehicle_id uuid,
+        p_route_name text, p_load_ids uuid[], p_stops jsonb,
+        p_idempotency_key text default null
+      ) returns uuid language plpgsql security definer set search_path=public
+        as $$begin return null; end$$
+    `);
+    await expect(db.exec(migration)).rejects.toThrow('Legacy dispatch planner changed');
+    const result = await db.query<{ allowed: boolean }>(`
+      select has_function_privilege(
+        'authenticated', 'public.${target}', 'execute'
+      ) allowed
+    `);
+    expect(result.rows[0].allowed).toBe(true);
   });
 
   it('is explicit and has no runtime caller in the repository', () => {

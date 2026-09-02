@@ -34,6 +34,17 @@ beforeEach(async()=>{
    if(name==='get_event_chat_context')data=(await operationRpc(db,'select get_event_chat_context($1,$2) r',[args._tenant_id,args._event_id])).rows[0].r;
    else if(name==='list_event_chat_messages')data=(await operationRpc(db,'select list_event_chat_messages($1,$2,$3::jsonb) r',[args._tenant_id,args._event_id,JSON.stringify(args._before)])).rows[0].r;
    else if(name==='send_event_chat_message')data=(await operationRpc(db,'select send_event_chat_message($1::jsonb) r',[JSON.stringify(args._payload)])).rows[0].r;
+   else if(name==='list_driver_operational_events_page_v1'){
+    const driverId=actor==='10000000-0000-4000-8000-000000000004'?'60000000-0000-4000-8000-000000000002':'60000000-0000-4000-8000-000000000001';
+    const rows=(await operationRpc<{item:Record<string,unknown>}>(db,`select jsonb_build_object(
+        'id',id,'tenant_id',tenant_id,'driver_id',driver_id,'dispatch_trip_id',dispatch_trip_id,
+        'dispatch_stop_id',dispatch_stop_id,'event_type',event_type,'severity',severity,
+        'description',description,'report_details',report_details,'payload',payload,'created_at',created_at
+      ) item
+      from operational_events where tenant_id=$1 and driver_id=$2 and ($3::uuid is null or dispatch_trip_id=$3)
+      order by created_at desc,id desc limit 50`,[args._tenant_id,driverId,args._trip_id??null])).rows.map(row=>row.item);
+    data={version:1,tenant_id:args._tenant_id,actor_id:actor,driver_id:driverId,trip_id:args._trip_id??null,items:rows,next_cursor:null};
+   }
    else throw Error('Unexpected event chat RPC '+name);
    if(name==='send_event_chat_message'&&mock.lost){mock.lost=false;throw Error('Resposta perdida após registro QA');}
    if(name==='send_event_chat_message'&&mock.wrong){mock.wrong=false;data={...data as Record<string,unknown>,event_id:i.peerEvent};}
@@ -50,12 +61,23 @@ describe('event chat frontend connected to actual SQL',{timeout:15000},()=>{
   mock.lost=true;render(<Story issues/>);fireEvent.click(await screen.findByRole('button',{name:/Ocorrência QA/}));expect(screen.getByRole('dialog',{name:'Comunicação com a operação'})).toHaveAccessibleDescription('Ocorrência QA');await compose('Mensagem pelo painel de ocorrências');fireEvent.click(screen.getByRole('button',{name:'Enviar mensagem'}));await screen.findByText('Resposta perdida após registro QA');
   fireEvent.click(screen.getByRole('button',{name:'Recuperar envio desta conversa'}));await screen.findByText('Mensagem registrada no servidor. Isso não confirma a leitura.');expect(screen.getByLabelText('Mensagem')).toHaveValue('');expect((await db.query<{n:number}>('select count(*)::int n from operational_event_messages')).rows[0].n).toBe(1);
  });
+ it('associates every rendered occurrence label and names its comboboxes',async()=>{
+  render(<Story issues/>);fireEvent.click(await screen.findByRole('button',{name:'Nova'}));await screen.findByRole('dialog',{name:'Nova Ocorrência'});
+  const expectAssociated=(label:RegExp)=>{const control=screen.getByLabelText(label),labelElement=screen.getByText(label,{selector:'label'});expect(control.id).not.toBe('');expect(labelElement).toHaveAttribute('for',control.id);};
+  for(const label of [/^Tipo$/,/^Severidade$/,/^Nota/,/^Razão Social/,/^Cidade/,/^Item \(cód \+ descrição \+ QTD\)/,/^Solução/])expectAssociated(label);
+  expect(screen.getByRole('combobox',{name:'Tipo'})).toBeInTheDocument();expect(screen.getByRole('combobox',{name:'Severidade'})).toBeInTheDocument();expect(screen.getByRole('combobox',{name:/^Solução/})).toBeInTheDocument();
+ });
  it('does not call a failed occurrence listing an empty success and can retry it',async()=>{
   mock.readError=true;render(<Story issues/>);await screen.findByText('Não foi possível consultar as ocorrências.');expect(screen.queryByText('Nenhuma ocorrência registrada.')).not.toBeInTheDocument();mock.readError=false;fireEvent.click(screen.getByRole('button',{name:'Tentar novamente'}));await screen.findByRole('button',{name:/Ocorrência QA/});
  });
  it('does not call a failed event history an empty success and can retry it',async()=>{
   mock.readError=true;render(<Story events/>);await screen.findByText('Não foi possível consultar os eventos.');expect(screen.queryByText('Nenhum evento encontrado')).not.toBeInTheDocument();
   mock.readError=false;fireEvent.click(screen.getByRole('button',{name:'Tentar novamente'}));await screen.findByText('Ocorrência QA');
+ });
+ it('shows a human title and enough context when the stored event label is technical',async()=>{
+  await db.query('update operational_events set report_details=$1::jsonb,description=$2 where id=$3',[JSON.stringify({label:'OTHE',stop_name:'Cliente Sul',invoice:'1003'}),'Cliente pediu nova previsão de entrega.',i.event]);
+  const view=render(<Story events/>);await screen.findByText('Outra ocorrência');expect(screen.queryByText(/^other$/i)).not.toBeInTheDocument();expect(screen.queryByText(/^othe$/i)).not.toBeInTheDocument();expect(screen.getByText('Cliente pediu nova previsão de entrega.')).toBeInTheDocument();expect(screen.getByText('Cliente Sul')).toBeInTheDocument();expect(screen.getByText('NF 1003')).toBeInTheDocument();
+  view.unmount();render(<Story/>);await screen.findByRole('heading',{name:'Outra ocorrência'});expect(screen.queryByText(/^othe$/i)).not.toBeInTheDocument();
  });
  it('sends from the actual driver event detail and receives an operation reply on the same event',async()=>{
   const view=render(<Story/>);await compose();fireEvent.click(screen.getByRole('button',{name:'Enviar mensagem'}));await screen.findByText('Mensagem registrada no servidor. Isso não confirma a leitura.');expect(sends()[0][1]._payload).toMatchObject({event_id:i.event,driver_id:i.driver});

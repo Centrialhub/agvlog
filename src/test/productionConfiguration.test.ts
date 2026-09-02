@@ -301,7 +301,10 @@ describe("production configuration contract", () => {
     );
     expect(hubCallback).toContain("Deno.env.get('HUB_FISCAL_WEBHOOK_SECRET')");
     expect(hubCallback).toMatch(/if \(!SHARED_SECRET\)[\s\S]*?status: 503/);
-    expect(hubCallback).toMatch(/if \(provided !== SHARED_SECRET\)[\s\S]*?status: 403/);
+    expect(hubCallback).toContain('verifyHubFiscalWebhookSignature');
+    expect(hubCallback).toContain("req.headers.get('x-hubfiscal-signature')");
+    expect(hubCallback).toContain("req.headers.get('x-hubfiscal-timestamp')");
+    expect(hubCallback).not.toContain("req.headers.get('x-webhook-secret')");
   });
 
   it("does not fall back to public or legacy routing/fiscal endpoints", () => {
@@ -352,12 +355,14 @@ describe("production configuration contract", () => {
     expect(clientSync).toContain('["owner", "admin", "operator"]');
   });
 
-  it("does not embed operational identities or vehicle guesses in the MDF-e form", () => {
-    const mdfePage = read("src", "pages", "MdfeProvisional.tsx");
+  it("loads MDF-e operational identities from the selected load without hardcoded guesses", () => {
+    const mdfePanel = read("src", "components", "loads", "ManifestPanel.tsx");
 
-    expect(mdfePage).toContain("deriveMdfeDialogDefaults");
-    expect(mdfePage).not.toMatch(/useState\(["']\d{11,14}["']\)/);
-    expect(mdfePage).not.toMatch(
+    expect(mdfePanel).toContain("load.driver_id");
+    expect(mdfePanel).toContain("load.vehicle_id");
+    expect(mdfePanel).toContain("document.load_ids.includes(load.id)");
+    expect(mdfePanel).not.toMatch(/useState\(["']\d{11,14}["']\)/);
+    expect(mdfePanel).not.toMatch(
       /plate\?\.toUpperCase\(\)\s*===\s*["'][A-Z]{3}[0-9A-Z][0-9]{2}[0-9A-Z]["']/,
     );
   });
@@ -408,7 +413,13 @@ describe("production configuration contract", () => {
       "migrations",
       "20260829142719_restore_production_frontend_pagination_contracts.sql",
     );
+    const cursorMigration = read(
+      "supabase",
+      "migrations",
+      "20260901211644_add_operator_cursor_readers.sql",
+    );
     const clientsHook = read("src", "hooks", "useClients.tsx");
+    const clientsCursor = read("src", "lib", "operator", "operatorClientPagination.ts");
     const fiscalHook = read("src", "hooks", "useFiscalDocuments.tsx");
     const loadsHook = read("src", "hooks", "useLoads.tsx");
     const clientsPage = read("src", "pages", "Clients.tsx");
@@ -419,7 +430,13 @@ describe("production configuration contract", () => {
     expect(migration).toContain("public.get_fiscal_document_summary_v1");
     expect(migration).toContain("public.list_loads_page_v1");
     expect(migration).toMatch(/revoke execute[\s\S]*?from public, anon/);
-    expect(clientsHook).toContain(".range(from, from + pageSize - 1)");
+    expect(cursorMigration).toContain("public.list_operator_clients_page_v1");
+    expect(cursorMigration).toContain("security invoker");
+    expect(cursorMigration).toMatch(/revoke all on function public\.list_operator_clients_page_v1[\s\S]*?from public, anon, authenticated, service_role/);
+    expect(clientsHook).toContain("readOperatorClientPageNumber");
+    expect(clientsHook).not.toContain(".range(from, from + pageSize - 1)");
+    expect(clientsCursor).toContain("list_operator_clients_page_v1");
+    expect(clientsCursor).toContain("direction: 'next' | 'previous'");
     expect(fiscalHook).toContain(".range(from, from + pageSize - 1)");
     expect(fiscalHook).toContain("rpc('get_fiscal_document_summary_v1'");
     expect(loadsHook).toContain("rpc('list_loads_page_v1'");

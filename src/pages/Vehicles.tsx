@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { VEHICLE_SAFE_SELECT } from '@/integrations/supabase/selects';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -35,6 +34,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Pencil, Trash2, User } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
+import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
 
 type VehicleRow = Omit<Tables<'vehicles'>, 'tracker_password'> & {
   current_driver: Pick<Tables<'drivers'>, 'id' | 'name'> | null;
@@ -55,30 +55,34 @@ export default function Vehicles() {
   const [editingVehicle, setEditingVehicle] = useState<VehicleRow | null>(null);
 
   const { data: vehicles = [], isLoading } = useQuery({
-    queryKey: ['vehicles', currentTenant?.id],
+    queryKey: ['vehicles', 'registry', currentTenant?.id, user?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('vehicles')
-        .select(`${VEHICLE_SAFE_SELECT}, current_driver:drivers!vehicles_current_driver_id_fkey(id, name)`)
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as unknown as VehicleRow[];
+      if (!currentTenant || !user) return [];
+      return await readOperatorReferenceCatalog({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        resource: 'vehicles',
+        includeInactive: true,
+      }) as unknown as VehicleRow[];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
+    retry: false,
   });
 
   const { data: drivers = [] } = useQuery({
-    queryKey: ['drivers_for_assign', currentTenant?.id],
+    queryKey: ['drivers_for_assign', currentTenant?.id, user?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('drivers').select('id, name, current_vehicle_id')
-        .eq('tenant_id', currentTenant.id).eq('active', true).order('name');
-      if (error) throw error;
-      return data || [];
+      if (!currentTenant || !user) return [];
+      const rows = await readOperatorReferenceCatalog({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        resource: 'drivers',
+      });
+      return (rows as unknown as Array<Pick<Tables<'drivers'>, 'id' | 'name' | 'current_vehicle_id'>>)
+        .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR') || left.id.localeCompare(right.id));
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
+    retry: false,
   });
 
   const assignMutation = useMutation({

@@ -7,6 +7,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    // PGlite/WASM suites are CPU-heavy; keeping worker fan-out bounded prevents
+    // Vitest's coordinator RPC from starving while preserving file isolation.
+    maxWorkers: 4,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     coverage: {

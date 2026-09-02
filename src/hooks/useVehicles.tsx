@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { VEHICLE_SAFE_SELECT } from '@/integrations/supabase/selects';
 import { useTenant } from './useTenant';
+import { useAuth } from './useAuth';
 import type { Json } from '@/integrations/supabase/types';
+import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
 
 export interface Vehicle {
   id: string;
@@ -24,20 +24,22 @@ export interface Vehicle {
 
 export function useVehicles() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['vehicles', currentTenant?.id],
+    queryKey: ['vehicles', currentTenant?.id, user?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('vehicles')
-        .select(VEHICLE_SAFE_SELECT)
-        .eq('tenant_id', currentTenant.id)
-        .eq('active', true)
-        .order('plate');
-      if (error) throw error;
-      return (data || []) as Vehicle[];
+      if (!currentTenant || !user) return [];
+      const rows = await readOperatorReferenceCatalog({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        resource: 'vehicles',
+      });
+      return (rows as unknown as Vehicle[]).sort((left, right) => (
+        left.plate.localeCompare(right.plate, 'pt-BR') || left.id.localeCompare(right.id)
+      ));
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
+    retry: false,
   });
 }

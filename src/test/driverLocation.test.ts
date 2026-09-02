@@ -44,4 +44,14 @@ describe('driver arrival location', () => {
       'não oferece localização',
     );
   });
+
+  it('fails closed before the RPC when the device returns non-finite coordinates', async () => {
+    const getCurrentPosition = vi.fn((success: PositionCallback) => success({
+      coords: { latitude: Number.NaN, longitude: -43.313, accuracy: 10 },
+    } as GeolocationPosition));
+
+    await expect(getCurrentDriverLocation({ getCurrentPosition })).rejects.toThrow(
+      'localização inválida',
+    );
+  });
 });

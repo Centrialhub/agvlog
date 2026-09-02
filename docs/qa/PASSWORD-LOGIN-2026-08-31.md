@@ -39,21 +39,53 @@ Nenhum usuário, fator TOTP, sessão, arquivo ou dado financeiro foi apagado.
   Todas foram reproduzidas exportando HEAD para uma cópia isolada, sem esta
   alteração (126 casos aprovados nos arquivos reexecutados).
 
-## Publicação pendente
+## Publicação verificada — 31/08/2026
 
-A conexão Supabase recusou leitura do banco e execução dos advisors com
-`You do not have permission to perform this action`. Nenhuma alteração foi
-aplicada ao projeto hospedado e nenhum deploy foi realizado.
+Após a reconexão, o projeto Supabase `qcvnsdrbcchaxvawcngk` respondeu normalmente.
+A inspeção do catálogo mostrou que o banco hospedado já não exigia AAL2:
+nenhuma função de aplicação nem política RLS com exigência MFA foi encontrada.
+Os schemas privados de parte dos candidatos locais ainda não existem no destino.
 
-Após restabelecer acesso ao projeto `qcvnsdrbcchaxvawcngk`:
+Por isso, a migração local NÃO foi aplicada ao banco remoto: fazê-lo publicaria
+dependências de outros recursos ainda não instalados. Ela continua versionada
+para a sequência completa de migrações locais; não é uma pendência para liberar
+o login na versão atualmente hospedada.
 
-1. Validar o estado do destino e aplicar a migração em staging; repetir advisors.
-2. Publicar em conjunto a migração, o frontend e as Edge Functions
-   `secure-upload`, `calculate-trip-route` e `update-trip-live-status`.
-3. Sincronizar as opções TOTP do Auth hospedado; não excluir fatores ou sessões.
-4. Repetir login real por senha para owner/admin com fator existente e os
-   controles negativos de empresa/perfil, além do smoke operacional.
+Foram publicadas as três Edge Functions preservando todos os arquivos hospedados,
+exceto as verificações explícitas de MFA já removidas e testadas localmente.
+A releitura confirmou conteúdo idêntico ao esperado, status ACTIVE e
+`verify_jwt=true`. Versões observadas na verificação final:
 
-Os testes de autenticação usam transporte sintético com o SDK real; não
-substituem um ensaio no serviço Auth hospedado. A migração completa ainda
-precisa ser aplicada ao destino antes de declarar a alteração ativa em produção.
+- `secure-upload`: 9.
+- `calculate-trip-route`: 57.
+- `update-trip-live-status`: 57.
+
+O frontend de produção está READY na Vercel:
+
+- Commit: `4a3595a7919c812f08ddd91bc9f5bbf69a424546`.
+- Deployment: `dpl_7hf4yzJ17hC8AH8NxN5LBhUxJqBc`.
+- URL: https://agvlogistica.vercel.app/auth
+- Bundle servido: `/assets/index-BsWgn2xe.js`, HTTP 200, sem os textos do
+  formulário removido de cadastro/desafio do autenticador.
+
+## Verificações hospedadas
+
+- Transação somente de verificação, finalizada com ROLLBACK: memberships
+  privilegiadas reais aceitas pelos helpers com claim `aal1`; tenant alheio
+  rejeitado; ausência de usuário não expõe empresas.
+- As três Edge Functions retornaram HTTP 401 para chamadas sem autenticação.
+- Advisors executados: três avisos informativos de RLS sem políticas em tabelas
+  de backend, 142 avisos SECURITY DEFINER e proteção contra senha vazada desativada.
+  Nenhum schema, grant ou RLS foi alterado nesta publicação.
+  Referências: [funções privilegiadas](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)
+  e [proteção de senhas](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+
+A configuração Auth hospedada de cadastro/verificação TOTP não foi alterada:
+o conector não oferece essa operação. Isso não impõe segundo fator ao login;
+não há mais gate no frontend, nas funções publicadas ou nas regras do banco.
+Fatores e sessões existentes foram preservados.
+
+Não foi digitada senha de usuário nem realizada uma nova entrada manual em uma
+conta. A inspeção visual do navegador ficou indisponível por falha de inicialização
+do sandbox; a verificação final usou o deployment Vercel, o artefato HTTP servido,
+as funções hospedadas e os testes SQL transacionais.

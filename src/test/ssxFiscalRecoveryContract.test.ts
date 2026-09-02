@@ -50,9 +50,12 @@ describe('Fiscal polling contract', () => {
     ['CT-e', ctePoll],
     ['NFS-e', nfsePoll],
   ])('polls only transient %s states', (_label, poller) => {
-    expect(poller).toContain("const PENDING = ['processing', 'queued', 'submitted', 'pending', 'transmitting']");
-    expect(poller).not.toMatch(/const PENDING\s*=.*authorized/);
-    expect(poller).not.toMatch(/const PENDING\s*=.*issued/);
-    expect(poller).not.toMatch(/const PENDING\s*=.*rejected/);
+    const pending = poller.match(/const PENDING\s*=\s*\[([\s\S]*?)\];/)?.[1] || '';
+    for (const status of [
+      'draft', 'processing', 'provider_unknown', 'cancel_processing',
+      'queued', 'submitted', 'pending', 'transmitting', 'cancelling',
+    ]) expect(pending).toContain(`'${status}'`);
+    for (const terminal of ['authorized', 'issued', 'rejected', 'denied', 'cancelled', 'error'])
+      expect(pending).not.toContain(`'${terminal}'`);
   });
 });

@@ -46,6 +46,7 @@ async function sha256(value: unknown): Promise<string> {
 function readDeliveryId(request: Request, explicitDeliveryId?: string): string | undefined {
   return (
     explicitDeliveryId ||
+    request.headers.get("x-hubfiscal-delivery") ||
     request.headers.get("x-webhook-id") ||
     request.headers.get("x-delivery-id") ||
     request.headers.get("idempotency-key") ||

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
+import { buildImportedAtFilter, normalizeImportedNoteFilters } from '@/lib/importedNotesFilters';
 
 export type NoteOperationalStatus =
   | 'not_processed' | 'not_processed_redispatch' | 'processed'
@@ -130,8 +131,9 @@ export function resolveNoteStatus(row: Partial<ImportedNoteRow>): NoteOperationa
   return 'not_processed';
 }
 
-export function useImportedNotes(filters: ImportedNoteFilters) {
+export function useImportedNotes(inputFilters: ImportedNoteFilters) {
   const { currentTenant } = useTenant();
+  const filters = normalizeImportedNoteFilters(inputFilters);
   return useQuery({
     queryKey: ['imported_notes_summary', currentTenant?.id, filters],
     enabled: !!currentTenant,
@@ -160,8 +162,8 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
       if (filters.dynamicLot) q = q.ilike('dynamic_lot', `%${filters.dynamicLot}%`);
       if (filters.issueFrom) q = q.gte('issue_date', filters.issueFrom);
       if (filters.issueTo) q = q.lte('issue_date', filters.issueTo);
-      if (filters.importFrom) q = q.gte('imported_at', filters.importFrom);
-      if (filters.importTo) q = q.lte('imported_at', filters.importTo + 'T23:59:59');
+      const importedAtFilter = buildImportedAtFilter(filters);
+      if (importedAtFilter) q = q.or(importedAtFilter);
       if (filters.remitter) q = q.ilike('remitter', `%${filters.remitter}%`);
       if (filters.invoiceNumber) q = q.ilike('invoice_number', `%${filters.invoiceNumber}%`);
       if (filters.clientId) q = q.eq('client_id', filters.clientId);

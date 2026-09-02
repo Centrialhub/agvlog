@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
+import { useAuth } from './useAuth';
 import type { Json, Tables } from '@/integrations/supabase/types';
 import { invalidateTripLoadQueries, isConfirmedLoadTransition, tripMutationError } from '@/lib/tripMutation';
 import { useLoadAggregateCommand } from './useLoadAggregateCommand';
 import type { LoadHeaderChanges } from '@/lib/loads/loadAggregateCommands';
+import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
 
 import type { LoadStatus } from '@/lib/status/loadStatus';
 export { LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
@@ -33,19 +35,20 @@ function loadHeaderChanges(values: Partial<Load>): LoadHeaderChanges {
 
 export function useLoads() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['loads', currentTenant?.id],
+    queryKey: ['loads', currentTenant?.id, user?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('loads')
-        .select('*, vehicles(plate, nickname), drivers(name)')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as Load[];
+      if (!currentTenant || !user) return [];
+      return await readOperatorReferenceCatalog({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        resource: 'loads',
+        includeInactive: true,
+      }) as unknown as Load[];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
+    retry: false,
   });
 }
 
@@ -61,10 +64,11 @@ export function useLoadsPage(input: {
   filters: Record<string, Json>;
 }) {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['loads', 'page', currentTenant?.id, input.page, input.pageSize, input.filters],
+    queryKey: ['loads', 'page', currentTenant?.id, user?.id, input.page, input.pageSize, input.filters],
     queryFn: async (): Promise<LoadsPage> => {
-      if (!currentTenant) return { rows: [], totalCount: 0, statusCounts: {} };
+      if (!currentTenant || !user) return { rows: [], totalCount: 0, statusCounts: {} };
       const { data, error } = await supabase.rpc('list_loads_page_v1', {
         _tenant_id: currentTenant.id,
         _filters: input.filters,
@@ -86,7 +90,7 @@ export function useLoadsPage(input: {
         statusCounts,
       };
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!user,
     placeholderData: previous => previous,
   });
 }
@@ -100,23 +104,6 @@ export function useCreateLoad() {
       return result.load as unknown as Load;
     },
   });
-}
-
-export async function getNextLoadNumberFromExisting(tenantId: string) {
-  const { data, error } = await supabase
-    .from('loads')
-    .select('load_number')
-    .eq('tenant_id', tenantId)
-    .limit(10000);
-  if (error) throw error;
-
-  const maxNumber = (data || []).reduce((max, load) => {
-    const match = String(load.load_number || '').match(/\d+/g);
-    const number = match ? Number(match[match.length - 1]) : 0;
-    return Number.isFinite(number) ? Math.max(max, number) : max;
-  }, 1000);
-
-  return String(maxNumber + 1);
 }
 
 export function useCreateLoadWithNextNumber() {

@@ -18,9 +18,10 @@ it('reconciles the real error/EXCEPTION rejection and releases production source
 it('records a typed rejection on the original HTTP error only when its identity matches',async()=>{
  const {claim}=await operation();expect(await reconcileResponse(claim.emission.id,{success:false,error:{code:'CTE_EXCEPTION'},document:rejected(String(claim.emission.request_payload.idIntegracao))},502)).toMatchObject({confirmed:true,status:'rejected'});
 });
-it('does not release a generic provider error or unknown state as rejection or processing',async()=>{
- const {claim}=await operation();for(const status of ['error','unexpected-state'])expect(await reconcileResponse(claim.emission.id,{document:{id:'hub-qa',status}})).toMatchObject({confirmed:false});
- expect((await context.db.query('select status,dispatch_state from hub_fiscal_emissions')).rows[0]).toEqual({status:'pending',dispatch_state:'uncertain'});
+it('records the canonical Hub error without releasing it and rejects an unknown state',async()=>{
+ const {claim}=await operation();expect(await reconcileResponse(claim.emission.id,{document:{id:'hub-qa',status:'error'}})).toMatchObject({confirmed:true,status:'error'});
+ expect(await reconcileResponse(claim.emission.id,{document:{id:'hub-qa',status:'unexpected-state'}})).toMatchObject({confirmed:false});
+ expect((await context.db.query('select status,dispatch_state from hub_fiscal_emissions')).rows[0]).toEqual({status:'error',dispatch_state:'uncertain'});
 });
 it('refuses an HTTP error receipt belonging to another integration reference',async()=>{
  const {claim}=await operation();expect(await reconcileResponse(claim.emission.id,{success:false,document:rejected('other')},502)).toMatchObject({confirmed:false});

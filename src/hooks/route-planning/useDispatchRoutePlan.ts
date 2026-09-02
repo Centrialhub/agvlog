@@ -6,6 +6,7 @@ import type { RouteStopDraft } from '@/lib/route-planning/routePlanningTypes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createDispatchOutbox, DISPATCH_OUTBOX_CHANGED, pendingDispatches, type PendingDispatch } from '@/lib/route-planning/dispatchOutbox';
 import { invalidateTripLoadQueries, tripMutationError } from '@/lib/tripMutation';
+import { hasValidStopCoordinates } from '@/lib/route-planning/stopCoordinates';
 
 export interface DispatchRoutePayload {
   attempt_scope: string;
@@ -69,6 +70,8 @@ export function useDispatchRoutePlan() {
     };
     const plannedStart=timestamp(payload.planned_start_at);
     if(!plannedStart)throw new Error('Informe o horário previsto de saída.');
+    const invalidStopIndex=payload.stops.findIndex(stop=>!hasValidStopCoordinates(stop));
+    if(invalidStopIndex>=0)throw new Error(`Parada ${invalidStopIndex+1}: informe latitude e longitude válidas antes do despacho.`);
     const orderOf = (s: RouteStopDraft) =>
       s.manual_order ?? s.optimized_order ?? s.original_order ?? 9999;
     const stops = [...payload.stops]

@@ -83,6 +83,16 @@ describe('mapOperationalEventToDriverEvent', () => {
     expect(mapped.label).toBe('Outra ocorrência');
     expect(mapped.stopName).toBe('Viagem — sem parada específica');
     expect(mapped.observation).toBe('Cliente pediu nova previsão de entrega.');
-    expect(mapped.code).toBe('OTHE');
+    expect(mapped.code).toBe('');
+  });
+
+  it('normalizes a legacy technical label before either driver screen renders it', () => {
+    const mapped = mapOperationalEventToDriverEvent(event({
+      event_type: 'other',
+      report_details: { label: 'OTHE' },
+    }));
+
+    expect(mapped.label).toBe('Outra ocorrência');
+    expect(mapped.code).toBe('');
   });
 });

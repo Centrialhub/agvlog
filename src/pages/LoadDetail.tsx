@@ -37,6 +37,15 @@ import {
 } from '@/lib/driverTrip';
 import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
 import TripOperationalEventsPanel from '@/components/control-tower/TripOperationalEventsPanel';
+import { coordinateFromInput, isValidLatitude, isValidLongitude } from '@/lib/route-planning/stopCoordinates';
+
+interface DispatchStopInput {
+  destination: string;
+  client_id: string;
+  fiscal_document_ids: string[];
+  latitude: string;
+  longitude: string;
+}
 
 function useLoad(id: string | undefined) {
   const { currentTenant } = useTenant();
@@ -160,28 +169,28 @@ export default function LoadDetail() {
     vehicle_id: '',
     notes: '',
   });
-  const [dispatchStops, setDispatchStops] = useState<{ destination: string; client_id: string; fiscal_document_ids:string[] }[]>([]);
+  const [dispatchStops, setDispatchStops] = useState<DispatchStopInput[]>([]);
   const dispatchDocuments=useMemo(()=>Array.from(new Set(items.map(item=>item.fiscal_document_id)
     .filter((documentId):documentId is string=>Boolean(documentId)))),[items]);
 
   // Auto-populate stops from load items when dialog opens
   const populateStopsFromItems = () => {
     if (items.length === 0) {
-      setDispatchStops([{ destination: load?.destination || '', client_id: '',fiscal_document_ids:[] }]);
+      setDispatchStops([{ destination: load?.destination || '', client_id: '',fiscal_document_ids:[], latitude:'', longitude:'' }]);
       return;
     }
     // A carga expõe hoje um único destino consolidado, independentemente da
     // quantidade de itens. O operador pode refinar as paradas no planejamento.
-    const stops: { destination: string; client_id: string; fiscal_document_ids:string[] }[] = [];
+    const stops: DispatchStopInput[] = [];
     const destination = load?.destination || '';
-    if (destination) stops.push({ destination, client_id: '',fiscal_document_ids:dispatchDocuments });
+    if (destination) stops.push({ destination, client_id: '',fiscal_document_ids:dispatchDocuments, latitude:'', longitude:'' });
     if (stops.length === 0) {
-      stops.push({ destination: load?.destination || '', client_id: '',fiscal_document_ids:dispatchDocuments });
+      stops.push({ destination: load?.destination || '', client_id: '',fiscal_document_ids:dispatchDocuments, latitude:'', longitude:'' });
     }
     setDispatchStops(stops);
   };
 
-  const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '',fiscal_document_ids:[] }]);
+  const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '',fiscal_document_ids:[], latitude:'', longitude:'' }]);
   const removeStop = (idx: number) => setDispatchStops(s => s.filter((_, i) => i !== idx));
   const updateStop = (idx: number, field: string, value: string) =>
     setDispatchStops(s => s.map((stop, i) => i === idx ? { ...stop, [field]: value } : stop));
@@ -196,16 +205,25 @@ export default function LoadDetail() {
       if(items.some(item=>!item.fiscal_document_id))throw new Error('Esta carga contém itens manuais. O fluxo de baixa desses itens ainda precisa ser habilitado.');
       if(validStops.some(stop=>!stop.destination.trim() || stop.fiscal_document_ids.length===0))
         throw new Error('Informe o destino e distribua os documentos de cada parada.');
+      const locatedStops=validStops.map(stop=>({
+        ...stop,
+        parsedLatitude:coordinateFromInput(stop.latitude),
+        parsedLongitude:coordinateFromInput(stop.longitude),
+      }));
+      const invalidLocation=locatedStops.findIndex(stop=>!isValidLatitude(stop.parsedLatitude) || !isValidLongitude(stop.parsedLongitude));
+      if(invalidLocation>=0)throw new Error(`Parada ${invalidLocation+1}: informe latitude e longitude válidas antes do despacho.`);
       const assigned=validStops.flatMap(stop=>stop.fiscal_document_ids);
       if(assigned.length!==dispatchDocuments.length || new Set(assigned).size!==dispatchDocuments.length
         || dispatchDocuments.some(document=>!assigned.includes(document)))throw new Error('Distribua cada documento exatamente uma vez.');
-      const stopsPayload = validStops.map((s, idx) => ({
+      const stopsPayload = locatedStops.map((s, idx) => ({
         id:`stop-${idx}`,recipient_name:s.destination,load_ids:[load.id],invoice_numbers:[],
         total_weight_kg:0,total_volume_m3:0,total_pallet_count:0,total_value:0,service_time_minutes:20,
         priority:0,risk_level:'normal' as const,manual_order:idx+1,notes:idx===0?dispatchForm.notes:undefined,
         destination: s.destination,
         client_id: s.client_id || null,
         fiscal_document_ids: s.fiscal_document_ids,
+        latitude:s.parsedLatitude,
+        longitude:s.parsedLongitude,
       }));
       const tripId = await dispatchPlan.dispatchRoute({
           attempt_scope:`load:${load.id}`,
@@ -460,7 +478,7 @@ export default function LoadDetail() {
               <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Despachar Carga {load.load_number}</DialogTitle>
-                  <DialogDescription>Confirme motorista, veículo e distribua cada documento em uma única parada.</DialogDescription>
+                  <DialogDescription>Confirme motorista, veículo, o ponto físico de cada parada e distribua cada documento uma única vez.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                   <div>
@@ -502,22 +520,32 @@ export default function LoadDetail() {
                     </div>
                     <div className="space-y-2">
                       {dispatchStops.map((stop, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold shrink-0">
-                            {idx + 1}
+                        <div key={idx} className="space-y-2 rounded-md border p-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold shrink-0">
+                              {idx + 1}
+                            </div>
+                            <Input
+                              aria-label={`Destino parada ${idx+1}`}
+                              value={stop.destination}
+                              onChange={e => updateStop(idx, 'destination', e.target.value)}
+                              placeholder={`Destino parada ${idx + 1}`}
+                              className="h-8 text-xs"
+                            />
+                            {dispatchStops.length > 1 && (
+                              <Button type="button" variant="ghost" size="sm" aria-label={`Remover parada ${idx+1}`} className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeStop(idx)}>
+                                ×
+                              </Button>
+                            )}
                           </div>
-                          <Input
-                            aria-label={`Destino parada ${idx+1}`}
-                            value={stop.destination}
-                            onChange={e => updateStop(idx, 'destination', e.target.value)}
-                            placeholder={`Destino parada ${idx + 1}`}
-                            className="h-8 text-xs"
-                          />
-                          {dispatchStops.length > 1 && (
-                            <Button type="button" variant="ghost" size="sm" aria-label={`Remover parada ${idx+1}`} className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeStop(idx)}>
-                              ×
-                            </Button>
-                          )}
+                          <div className="grid grid-cols-2 gap-2 pl-7">
+                            <Input type="number" step="any" min={-90} max={90}
+                              aria-label={`Latitude parada ${idx+1}`} value={stop.latitude}
+                              onChange={event=>updateStop(idx,'latitude',event.target.value)} placeholder="Latitude" className="h-8 text-xs" />
+                            <Input type="number" step="any" min={-180} max={180}
+                              aria-label={`Longitude parada ${idx+1}`} value={stop.longitude}
+                              onChange={event=>updateStop(idx,'longitude',event.target.value)} placeholder="Longitude" className="h-8 text-xs" />
+                          </div>
                         </div>
                       ))}
                     </div>

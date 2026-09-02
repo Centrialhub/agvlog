@@ -6,7 +6,7 @@ interface Intent extends RecordData {
 }
 interface DispatchInput {
  admin: SupabaseClient; tenant: string; actor: string; emitter: string; type: string; environment: string;
- body: RecordData; fiscalId?: string; cteId?: string; nfseId?: string;
+ body: RecordData; fiscalId?: string; cteId?: string; nfseId?: string; loadManifestId?: string;
  call: (method: string, path: string, query?: Record<string,string>, body?: unknown) => Promise<{status: number; data: unknown}>;
 }
 const record = (value: unknown): RecordData => value && typeof value === 'object' && !Array.isArray(value) ? value as RecordData : {};
@@ -20,10 +20,15 @@ const uncertain = (id: string) => ({
 /** At most one outbound POST per durable intent. Unknown outcomes never expire into a resend. */
 export async function dispatchFiscalEmission(input: DispatchInput) {
  const {admin,tenant,actor,emitter,type,environment,body,call}=input;
- const claimed=await admin.rpc('claim_hub_fiscal_emission',{
-  _tenant:tenant,_actor:actor,_emitter:emitter,_type:type,_environment:environment,_body:body,
-  _fiscal_id:input.fiscalId||null,_cte_id:input.cteId||null,_nfse_id:input.nfseId||null,
- });
+ const claimed=input.loadManifestId
+  ? await admin.rpc('claim_mdfe_fiscal_emission',{
+    _tenant:tenant,_actor:actor,_emitter:emitter,_environment:environment,_body:body,
+    _load_manifest_id:input.loadManifestId,
+   })
+  : await admin.rpc('claim_hub_fiscal_emission',{
+    _tenant:tenant,_actor:actor,_emitter:emitter,_type:type,_environment:environment,_body:body,
+    _fiscal_id:input.fiscalId||null,_cte_id:input.cteId||null,_nfse_id:input.nfseId||null,
+   });
  if(claimed.error) throw new Error('Não foi possível reservar a emissão: '+claimed.error.message);
  const claim=record(claimed.data), emission=record(claim.emission) as Intent;
  if(typeof emission.id!=='string'||!emission.request_payload)throw new Error('Confirmação da reserva fiscal inválida.');
@@ -66,4 +71,3 @@ export async function dispatchFiscalEmission(input: DispatchInput) {
   pdfUrl:committed.pdf_url,xmlUrl:committed.xml_url,message:committed.message};
  return {status:200,data:{success:true,hub:{document},emission:{id:committed.id},recovered:claim.dispatch!==true}};
 }
-

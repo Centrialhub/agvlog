@@ -16,6 +16,8 @@ const baseStop = (over: Partial<RouteStopDraft> = {}): RouteStopDraft => ({
   total_volume_m3: 1,
   total_pallet_count: 1,
   total_value: 100,
+  latitude: -23.55052,
+  longitude: -46.633308,
   service_time_minutes: 20,
   priority: 0,
   risk_level: 'normal',
@@ -54,6 +56,20 @@ describe('validateRouteConsistency', () => {
     });
     expect(r.valid).toBe(false);
     expect(r.blockingErrors[0]).toMatch(/Recalcule/);
+  });
+
+  it.each([
+    [{ latitude: null, longitude: null }, 'latitude'],
+    [{ latitude: -91, longitude: -46.6 }, 'latitude'],
+    [{ latitude: -23.5, longitude: 181 }, 'longitude'],
+  ])('bloqueia coordenadas ausentes ou fora da faixa: %o', (coordinates, expected) => {
+    const result = validateRouteConsistency({
+      loads: [baseLoad()],
+      stops: [baseStop(coordinates)],
+      vehicle_id: 'V1', driver_id: 'D1', planned_start_at: '2030-01-01T08:00',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.blockingErrors.join(' ')).toContain(expected);
   });
 
   it('bloqueia se parada referencia carga removida', () => {

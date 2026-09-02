@@ -101,9 +101,7 @@ BEGIN
       ) AS request_id;
     $job$
     );
-  END IF;
-
-  PERFORM cron.schedule(
+    PERFORM cron.schedule(
     'agvlog-daily-aggregate',
     '0 2 * * *',
     $job$
@@ -122,6 +120,7 @@ BEGIN
       ) AS request_id;
     $job$
   );
+  END IF;
 
   IF fiscal_effective THEN
     PERFORM cron.schedule(

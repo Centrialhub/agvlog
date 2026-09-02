@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import {
   mapOperationalEventToDriverEvent,
   type DriverEventView,
 } from '@/lib/driver/driverEventView';
+import { useDriverOperationalEventHistory } from '@/hooks/useDriverOperationalEventHistory';
 
 export default function DriverEvents() {
   const navigate = useNavigate();
@@ -34,27 +35,17 @@ export default function DriverEvents() {
   const qc = useQueryClient();
 
   const {
-    data: realEvents = [],
+    data: eventHistory,
     isPending: eventsLoading,
     error: eventsError,
     refetch: refetchEvents,
-  } = useQuery({
-    queryKey: ['driver_events', driver?.id, trip?.id],
-    queryFn: async () => {
-      if (!driver?.id) return [] as DriverEventView[];
-      let q = supabase
-        .from('operational_events')
-        .select('*')
-        .eq('driver_id', driver.id)
-        .order('created_at', { ascending: false })
-        .limit(100);
-      if (trip?.id) q = q.eq('dispatch_trip_id', trip.id);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []).map(mapOperationalEventToDriverEvent);
-    },
-    enabled: !!driver?.id && !tripLoading && !tripError,
-    retry: false,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useDriverOperationalEventHistory({
+    driverId: driver?.id,
+    tripId: trip?.id,
+    enabled: !tripLoading && !tripError,
   });
 
   useEffect(() => {
@@ -64,7 +55,7 @@ export default function DriverEvents() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'operational_events', filter: `driver_id=eq.${driver.id}` },
-        () => qc.invalidateQueries({ queryKey: ['driver_events'] }),
+        () => qc.invalidateQueries({ queryKey: ['driver_operational_event_history'] }),
       )
       .subscribe();
     return () => {
@@ -72,7 +63,7 @@ export default function DriverEvents() {
     };
   }, [driver?.id, qc]);
 
-  const events: DriverEventView[] = realEvents;
+  const events: DriverEventView[] = (eventHistory?.items ?? []).map(mapOperationalEventToDriverEvent);
   const loading = driverLoading || (!!driver?.id && (tripLoading || eventsLoading));
   const readError = driverError || tripError || eventsError;
 
@@ -223,6 +214,17 @@ export default function DriverEvents() {
             );
           })}
         </div>
+      )}
+      {hasNextPage && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          disabled={isFetchingNextPage}
+          onClick={() => void fetchNextPage()}
+        >
+          {isFetchingNextPage ? 'Carregando mais eventos...' : 'Carregar mais eventos'}
+        </Button>
       )}
         </>
       )}

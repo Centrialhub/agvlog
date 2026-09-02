@@ -6,6 +6,7 @@ import {
   completeFiscalWebhook,
   duplicateWebhookResponse,
 } from '../_shared/fiscal-webhook-inbox.ts';
+import { verifyHubFiscalWebhookSignature } from '../_shared/fiscal-webhook-signature.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -15,10 +16,17 @@ const SHARED_SECRET = Deno.env.get('HUB_FISCAL_WEBHOOK_SECRET') || '';
 function normalizeStatus(s: string | undefined): string {
   if (!s) return 'unknown';
   const v = String(s).toLowerCase();
-  if (['authorized', 'concluido', 'autorizado'].includes(v)) return 'authorized';
-  if (['cancelled', 'canceled', 'cancelado'].includes(v)) return 'cancelled';
-  if (['rejected', 'rejeitado', 'erro', 'error'].includes(v)) return 'rejected';
-  if (['processing', 'pending', 'processando'].includes(v)) return 'processing';
+  if (['authorized', 'concluido', 'concluído', 'autorizado', 'issued', 'emitida'].includes(v)) return 'authorized';
+  if (['cancelled', 'canceled', 'cancelado', 'cancelada'].includes(v)) return 'cancelled';
+  if (['rejected', 'rejeitado', 'rejeitada'].includes(v)) return 'rejected';
+  if (['denied', 'denegado', 'denegada'].includes(v)) return 'denied';
+  if (['processing', 'pending', 'processando', 'queued', 'submitted', 'transmitting'].includes(v)) return 'processing';
+  if (['draft', 'rascunho'].includes(v)) return 'draft';
+  if (['cancel_processing', 'cancelling', 'cancelando'].includes(v)) return 'cancel_processing';
+  if (['cancel_rejected', 'cancelamento_rejeitado'].includes(v)) return 'cancel_rejected';
+  if (['inutilized', 'inutilizada', 'inutilizado'].includes(v)) return 'inutilized';
+  if (['interrupted', 'interrompido', 'interrompida'].includes(v)) return 'interrupted';
+  if (['error', 'erro', 'failed'].includes(v)) return 'error';
   return v;
 }
 
@@ -32,15 +40,25 @@ Deno.serve(async (req) => {
   if (!SHARED_SECRET) {
     return new Response(JSON.stringify({ error: 'webhook_not_configured' }), { status: 503, headers: corsHeaders });
   }
-  const provided =
-    req.headers.get('x-webhook-secret') ||
-    req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || '';
-  if (provided !== SHARED_SECRET) {
-    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders });
-  }
+  const rawBody = await req.text();
+  const timestamp = req.headers.get('x-hubfiscal-timestamp') || '';
+  const signature = req.headers.get('x-hubfiscal-signature') || '';
+  const verified = await verifyHubFiscalWebhookSignature({
+    secret: SHARED_SECRET,
+    rawBody,
+    timestamp,
+    signature,
+  });
+  if (!verified.ok) return new Response(JSON.stringify({
+    error: 'invalid_webhook_signature',
+    reason: verified.error,
+  }), {
+    status: 403,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 
   let body: any;
-  try { body = await req.json(); } catch {
+  try { body = JSON.parse(rawBody); } catch {
     return new Response(JSON.stringify({ error: 'invalid_json' }), { status: 400, headers: corsHeaders });
   }
 
@@ -60,10 +78,10 @@ Deno.serve(async (req) => {
       request: req,
       admin,
       source: 'hub-fiscal',
-      eventType: String(body?.eventType || body?.event || doc?.type || 'document.status'),
+      eventType: String(req.headers.get('x-hubfiscal-event') || body?.eventType || body?.event || doc?.type || 'document.status'),
       payload: body,
       explicitDeliveryId: body?.deliveryId || body?.eventId || doc?.eventId,
-      eventTimestamp: body?.eventTimestamp || body?.createdAt || doc?.updatedAt,
+      eventTimestamp: body?.occurredAt || body?.eventTimestamp || timestamp || body?.createdAt || doc?.updatedAt,
     });
   } catch (error) {
     console.error('[webhook-in] inbox claim error', error instanceof Error ? error.message : String(error));
@@ -130,10 +148,32 @@ Deno.serve(async (req) => {
   }
 
   const normalized = normalizeStatus(doc.status || doc.plugnotasStatus);
+  const localStatus = normalized === 'authorized'
+    ? 'authorized'
+    : ['rejected', 'denied', 'inutilized'].includes(normalized)
+      ? 'rejected'
+      : normalized === 'cancelled'
+        ? 'cancelled'
+        : normalized === 'cancel_rejected'
+          ? 'authorized'
+          : 'transmitting';
+  const nfseStatus = normalized === 'authorized' || normalized === 'cancel_rejected'
+    ? 'issued'
+    : ['rejected', 'denied', 'inutilized'].includes(normalized)
+      ? 'rejected'
+      : ['processing', 'draft', 'provider_unknown', 'cancel_processing'].includes(normalized)
+        ? 'submitted'
+        : normalized;
+  const incomingVersion = Number.isSafeInteger(body?.documentVersion) ? Number(body.documentVersion) : null;
+  if (!emission.dispatch_key && incomingVersion !== null && emission.provider_document_version !== null
+    && incomingVersion <= Number(emission.provider_document_version)) {
+    await completeFiscalWebhook(admin, claim, { success: true, tenantId: emission.tenant_id, emissionId: emission.id });
+    return new Response(JSON.stringify({ success: true, matched: true, ignored: true, reason: 'out_of_order' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
   if(emission.dispatch_key) {
     const result=await admin.rpc('complete_hub_fiscal_emission',{
       _tenant:emission.tenant_id,_emission:emission.id,_http_status:200,
-      _response:{document:{...doc,id:hubId||emission.hub_document_id,status:normalized,
+      _response:{...body,document:{...doc,id:hubId||emission.hub_document_id,status:normalized,
         accessKey:doc.accessKey||doc.chave,authorizationProtocol:doc.authorizationProtocol||doc.plugnotasProtocol||doc.protocolo,
         number:doc.number||doc.numero,pdfUrl:doc.pdfUrl||doc.pdf,xmlUrl:doc.xmlUrl||doc.xml}},
     });
@@ -156,6 +196,9 @@ Deno.serve(async (req) => {
     xml_url: doc.xmlUrl || doc.xml || undefined,
     hub_document_id: emission.hub_document_id || hubId || undefined,
     plugnotas_id: emission.plugnotas_id || plugnotasId || undefined,
+    provider_document_version: incomingVersion ?? undefined,
+    provider_occurred_at: body?.occurredAt || undefined,
+    provider_effect_id: body?.effectId || undefined,
     last_callback: {
       event_type: body?.eventType || body?.event || doc?.type || null,
       status: doc.status || null,
@@ -181,7 +224,7 @@ Deno.serve(async (req) => {
   const mirrorErrors: string[] = [];
   if (emission.fiscal_document_id) {
       const { error } = await admin.from('fiscal_documents').update({
-        status: normalized === 'authorized' ? 'confirmed' : (normalized === 'cancelled' ? 'cancelled' : undefined),
+        status: localStatus,
         access_key: doc.accessKey || doc.chave || undefined,
         updated_at: new Date().toISOString(),
       }).eq('id', emission.fiscal_document_id);
@@ -189,14 +232,14 @@ Deno.serve(async (req) => {
   }
   if (emission.cte_document_id) {
       const { error } = await admin.from('cte_documents').update({
-        status: normalized,
+        status: localStatus,
         updated_at: new Date().toISOString(),
       }).eq('id', emission.cte_document_id);
       if (error) mirrorErrors.push(`cte_documents:${error.message}`);
   }
   if (emission.nfse_document_id) {
       const { error } = await admin.from('nfse_documents').update({
-        status: normalized === 'authorized' ? 'issued' : normalized,
+        status: nfseStatus,
         pdf_url: doc.pdfUrl || doc.pdf || undefined,
         xml_url: doc.xmlUrl || doc.xml || undefined,
         nfse_number: doc.number || doc.numero || undefined,
