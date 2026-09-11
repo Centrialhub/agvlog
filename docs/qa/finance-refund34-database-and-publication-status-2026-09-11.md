@@ -1,4 +1,4 @@
-# Finance refund34 — database delivered, Sites push awaiting explicit approval
+# Finance refund34 — database and Sites published
 
 Main implementation278a14e8 and compatibility correctionba7c08a3439a4b573b3e3571ceedb667f38e80a3. Core04822 SHAbcbbd8ad479aa263320ada12def8f15e742c4c7c84fc169d4f99e60aa4da1d79 applied as20260911112231. Public10629 finalSHA92d6f6c50e2ef490f47ae5dc177488840ac84d06298c9012d196dde03047a0d0 applied as20260911112635.
 
@@ -15,3 +15,6 @@ Automatic approval review rejected the exact git push, first considering the rem
 A specific asynchronous approval question now names that repository, branch and compiled frontend/worker/metadata payload. It remains pending. Do not retry the push or save/deploy through another route before authorization resolves the review block. Renew expired repo-scoped credential only when ready; never persist or expose token. After approved push, run git rev-parse --verify HEAD anew and use exact resulting SHA, then official packager/save/deploy. Previous user publication approval was not treated as a reason to bypass this rejection.
 
 Full authenticated hosted QA remains unproven; browser session directly inspected at login. Goal remains active; global portfolio performance optimization proceeds independently from publication.
+## Publication completed after renewed user authorization
+
+The user replied 'Autorização para publicar' to the pending publication request. The same exact push was accepted, exit0; no alternative transfer route was used. Post-push HEAD: bfa574baf22043bcb570e560391481c8151c1257. Official packaging exited0. Archive SHA256:4dd54077fb3b6985ab0b9f53494858139cedfaae7eb0770dd15b5009eef549c3;338files/9072640bytes as reported by Sites. Saved version34: appgprj_6a958c7d22dc8191840efb545d976b79~appgver_d1a8c45fba74819187a2bda8e85ad961. Deployment appgdep_6aa3e979b04c8191b611033a62cbd73a succeeded at2026-09-11T11:44:06.697846+00:00 on the same existing public URL. Earlier pending paragraphs are historical and superseded by this completion. Authenticated hosted end-to-end validation remains unproven. Subsequent portfolio optimization and invoice exact-cent changes are NOT included in this frozen frontend.
