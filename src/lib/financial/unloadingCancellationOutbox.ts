@@ -1,11 +1,11 @@
 import {z} from 'zod';
 import {unloadingCancellationExpectedSchema,unloadingCancellationCommandSchema,unloadingCancellationResultSchema,parseUnloadingCancellationResult} from './unloadingCancellationContract';
 const uuid=z.string().uuid();
-const inputSchema=z.object({chargeId:uuid,effectiveOn:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),expected:unloadingCancellationExpectedSchema,revision:z.string().regex(/^[a-f0-9]{32}$/),reason:z.string().refine(value=>value.trim().length>=10&&value.trim().length<=2000,'Informe motivo entre 10 e 2.000 caracteres.')}).strict();
+const inputSchema=z.object({chargeId:uuid,priorOriginAmendmentId:uuid.optional(),effectiveOn:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),expected:unloadingCancellationExpectedSchema,revision:z.string().regex(/^[a-f0-9]{32}$/),reason:z.string().refine(value=>value.trim().length>=10&&value.trim().length<=2000,'Informe motivo entre 10 e 2.000 caracteres.')}).strict().refine(v=>(v.expected.collection_cancelled_cents==='0')===(v.priorOriginAmendmentId!==undefined),'O pedido deve preservar o cancelamento anterior quando não houver nova retirada da cobrança.');
 export type UnloadingCancellationInput=z.infer<typeof inputSchema>;
 type Command=z.infer<typeof unloadingCancellationCommandSchema>;
 type Result=z.infer<typeof unloadingCancellationResultSchema>;
-const pendingSchema=z.object({version:z.literal(1),tenantId:uuid,actorId:uuid,expected:unloadingCancellationExpectedSchema,payload:unloadingCancellationCommandSchema}).strict();
+const pendingSchema=z.object({version:z.literal(1),tenantId:uuid,actorId:uuid,expected:unloadingCancellationExpectedSchema,payload:unloadingCancellationCommandSchema}).strict().refine(v=>(v.expected.collection_cancelled_cents==='0')===(v.payload.prior_origin_amendment_id!==undefined));
 export type PendingUnloadingCancellation=z.infer<typeof pendingSchema>;
 type Store=Pick<Storage,'getItem'|'setItem'|'removeItem'>;
 export const unloadingCancellationKey=(tenant:string,actor:string)=>`agvlog:unloading-cancellation:v1:${tenant}:${actor}`;
@@ -27,7 +27,7 @@ export function createUnloadingCancellationOutbox(deps:Dependencies){
   const promise=Promise.resolve().then(()=>deps.lock(key,async()=>{
    deps.assertContext(tenant,actor);const observedRaw=deps.storage.getItem(key);const found=pendingUnloadingCancellation(deps.storage,tenant,actor);if(deps.storage.getItem(key)!==observedRaw)throw unavailable();let row=found;const uncertain=found!==null;
    if(row&&parsed)throw new Error('Há um cancelamento coordenado sem confirmação. Recupere o pedido existente antes de iniciar outro.');
-   if(!row){if(!parsed)throw new Error('Nenhum cancelamento coordenado pendente para esta sessão.');row={version:1,tenantId:tenant,actorId:actor,expected:parsed.expected,payload:unloadingCancellationCommandSchema.parse({version:1,tenant_id:tenant,request_id:deps.uuid(),charge_id:parsed.chargeId,effective_on:parsed.effectiveOn,revision:parsed.revision,reason:parsed.reason})};}
+   if(!row){if(!parsed)throw new Error('Nenhum cancelamento coordenado pendente para esta sessão.');row={version:1,tenantId:tenant,actorId:actor,expected:parsed.expected,payload:unloadingCancellationCommandSchema.parse({version:1,tenant_id:tenant,request_id:deps.uuid(),charge_id:parsed.chargeId,effective_on:parsed.effectiveOn,...(parsed.priorOriginAmendmentId?{prior_origin_amendment_id:parsed.priorOriginAmendmentId}:{}),revision:parsed.revision,reason:parsed.reason})};}
    const raw=found?observedRaw:JSON.stringify(row);
    if(raw===null)throw unavailable();
    if(!found){if(deps.storage.getItem(key)!==null)throw unavailable();deps.storage.setItem(key,raw);notify();}
