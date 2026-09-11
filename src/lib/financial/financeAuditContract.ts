@@ -52,3 +52,13 @@ financeAuditActions.expense_cancelled='Gasto cancelado manualmente, com original
 financeAuditActions.manual_expense_cancelled='Despesa avulsa cancelada manualmente, com original preservado';
 financeAuditActions.movement_voided='Movimentação invalidada manualmente, com original preservado';
 financeAuditActions.unloading_projection_repaired='Título de descarga restaurado manualmente conforme a origem';
+
+financeAuditActions.unloading_origin_corrected='Fornecedor ou cobrança de descarga corrigidos manualmente';
+financeAuditActions.unloading_cancelled_coordinated='Descarga e custo cancelados com histórico preservado';
+financeAuditActions.unloading_cost_corrected='Custo de descarga corrigido manualmente';
+financeAuditActions.unloading_cost_regularized='Custo coberto regularizado manualmente';
+financeAuditActions.cost_disposition_return_recorded='Devolução vinculada à responsabilidade financeira';
+financeAuditActions.unloading_open_complement_corrected='Complemento de descarga corrigido manualmente';
+financeAuditActions.payable_approved_with_revision='Conta aprovada após conferência de valor';
+financeAuditActions.cash_forecast_preserved='Previsão de caixa preservada pelo responsável';
+financeAuditActions.unloading_open_complement_extinguished='Complemento cancelado após correção do custo';
