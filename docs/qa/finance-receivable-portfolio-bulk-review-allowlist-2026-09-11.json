@@ -1,0 +1,73 @@
+{
+  "owner": "bank_period_evidence",
+  "files": [
+    {
+      "path": "docs/qa/finance-receivable-10k-benchmark-allowlist-2026-09-11.json",
+      "sha256": "556f9566e24bc34461c75af96912bc3c33fa3bab097d3175b2b1372f2cef497d"
+    },
+    {
+      "path": "docs/qa/finance-receivable-10k-bulk-native-benchmark-2026-09-11.json",
+      "sha256": "69670ec81def351ed7f5dbf59c273303d83da064784e55e18f978df2416594f5"
+    },
+    {
+      "path": "docs/qa/finance-receivable-10k-local-benchmark-2026-09-11.json",
+      "sha256": "9b2e74f81cafdda4d9b81307b0a4b67c825c013f6fc41ab50c1cfebb735fabf4"
+    },
+    {
+      "path": "docs/qa/finance-receivable-10k-native-benchmark-2026-09-11.json",
+      "sha256": "8b82f271e9f854bbbf53309ed2affb5b57a51771246cb0b798b135a101d8cb95"
+    },
+    {
+      "path": "docs/qa/finance-receivable-10k-performance-audit-2026-09-11.md",
+      "sha256": "4fba12faa36653d8c62573c70f702b6c1af4a91cac5e287f215a0b961e4d1d26"
+    },
+    {
+      "path": "docs/qa/finance-receivable-10k-production-indexes-2026-09-11.json",
+      "sha256": "7aa44b140cd691fcda757e15aa4716e88af33fbbfb7c4f9144dfd81ca7b88be4"
+    },
+    {
+      "path": "docs/qa/finance-receivable-portfolio-bulk-differential-2026-09-11.md",
+      "sha256": "0c006931957cedd2cd845157bc0c1fba1931fbc4b1c78bce64037bcda27cc914"
+    },
+    {
+      "path": "docs/qa/finance-receivable-portfolio-bulk-predecessors-2026-09-11.json",
+      "sha256": "a9dc472b9bb7d78ca5af66fad159da786cb7eb9e9cd0dfc3c23976fe9e56c1ec"
+    },
+    {
+      "path": "scripts/benchmark-finance-receivables-10k.mjs",
+      "sha256": "499788b921fcde6addb7281f9821d8cd5c2ad517552cc9ff835321de47c2ee3a"
+    },
+    {
+      "path": "scripts/benchmark-finance-receivables-bulk-10k.mjs",
+      "sha256": "21a4770c631a9d2da91ff2389166ef2a1230e125b9b537443da2fd03e1127ab1"
+    },
+    {
+      "path": "scripts/benchmark-finance-receivables-bulk-native-cases.mjs",
+      "sha256": "9fbcdd7b35d27b45b18caf470331b01de2a8ce3ef8fab16fe25d2b5a554a46c7"
+    },
+    {
+      "path": "scripts/benchmark-finance-receivables-bulk-native.mjs",
+      "sha256": "26f892d6cf13a7193134bd028ed6e02b883ded8a0d5cfed3c717ac0eab21c9e0"
+    },
+    {
+      "path": "scripts/benchmark-finance-receivables-native-cases.mjs",
+      "sha256": "8f00ca5103924ec405be3dd9e68ab7a05d78757012eda44a2814b50b39fb8210"
+    },
+    {
+      "path": "scripts/benchmark-finance-receivables-native.mjs",
+      "sha256": "85b5ceee67d7da503c1914ac4360b94c6920dfd636fccf36e701ffcc4511ab07"
+    },
+    {
+      "path": "src/test/helpers/receivablePortfolioBulkReviewDatabase.ts",
+      "sha256": "c733a7ae713f5bb2d9ba7260a164c4f7e049ac8206ea96571a0531d776f086eb"
+    },
+    {
+      "path": "src/test/receivablePortfolioBulkDifferential.test.ts",
+      "sha256": "3560000b87f577dfd1e2ff97fb625b9c018a7b0c8933940c261687a2d607d301"
+    },
+    {
+      "path": "src/test/receivablePortfolioBulkPredecessors.test.ts",
+      "sha256": "034e082e1ca19e2faccc8f596d0d7bee3663ffbb44719f5200c235e371121f9d"
+    }
+  ]
+}

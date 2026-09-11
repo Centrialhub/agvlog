@@ -1,0 +1,33 @@
+{
+  "status": "local_candidate_tests_passed_native_review_pending",
+  "own_tests": {
+    "passed": 2,
+    "time": "08:45:14",
+    "exit_code": 0,
+    "lint_exit_code": 0
+  },
+  "allowlist": [
+    {
+      "path": "supabase/migrations/20260911113458_finance_receivable_portfolio_bulk_evidence.sql",
+      "sha256": "e948a5d8592dbfc5fb8b559b9adccefec7eb456b5c302e9657a8971f3ec84a3a"
+    },
+    {
+      "path": "src/test/receivablePortfolioBulk.test.ts",
+      "sha256": "fd8ddc39e3b4570020da4bfd7eb39ffdfcd6450af6b6f23b4f36f2ff64e9e2a2"
+    }
+  ],
+  "summary_prosrc_md5": "cd10de42b2e3a1567dc2de034048e7f0",
+  "native_benchmark": {
+    "session": 3295,
+    "exit_code": 0,
+    "postgres_stopped": true,
+    "titles": 10000,
+    "p95_ms": 142.38,
+    "scalar_control_ms": 15530.1053,
+    "baseline_p95_ms": 14890,
+    "installed_migration_sha256": "f6b52860bb86ecf320b0c7780226a0135487ef1a21c2a02042ec176bcf4e3e22",
+    "final_preflight_verified_separately": true,
+    "query_body_unchanged": true,
+    "report": "docs/qa/finance-receivable-10k-bulk-native-benchmark-2026-09-11.json"
+  }
+}

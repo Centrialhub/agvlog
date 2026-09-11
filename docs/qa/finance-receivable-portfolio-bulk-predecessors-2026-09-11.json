@@ -1,0 +1,62 @@
+[
+  {
+    "signature": "finance_private.cash_receivable_ledger_evidence(_tenant uuid, _id uuid)",
+    "normalized_md5": "351d7b05301ec509747944c68ea6c49e",
+    "prosecdef": false,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.customer_credit_position(_tenant uuid, _credit uuid)",
+    "normalized_md5": "0e2098c0c0f79c666f31dbd9093538db",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.receivable_credit_evidence(_tenant uuid, _receivable uuid)",
+    "normalized_md5": "d62bb1656e6be89b7753f44c6e5501dc",
+    "prosecdef": false,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.receivable_fiscal_issue(_tenant uuid, _receivable uuid)",
+    "normalized_md5": "88983b1f6cbb9765237667c87084283b",
+    "prosecdef": false,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.receivable_portfolio_summary(_tenant uuid, _from date, _to date, _client uuid)",
+    "normalized_md5": "57b41ad9b959e236163ecb2e2cc590ac",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres,authenticated=X/postgres}"
+  },
+  {
+    "signature": "public._receivable_financial_snapshot(_tenant uuid, _id uuid)",
+    "normalized_md5": "473e509e0283627f5520dddfb36a083d",
+    "prosecdef": false,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  }
+]
