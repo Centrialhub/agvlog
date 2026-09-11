@@ -1,0 +1,163 @@
+{
+  "functions": [
+    {
+      "signature": "finance_private.audit_events(uuid,jsonb)",
+      "prosrc_md5": "e2ec37aa8997d9a175d003d742f9fb2e",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "signature": "finance_private.cash_forecast_agenda_preview(uuid,date,date,text)",
+      "prosrc_md5": "ee53aa23fb2af973e3a56efee9bd2cbc",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.cash_forecast_collect(uuid,date,date)",
+      "prosrc_md5": "0f9dfc28159c7012d5d241d60fbd42b6",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.cash_forecast_collect_before_agenda(uuid,date,date)",
+      "prosrc_md5": "f05aa53d0b085c6d89f177234a65b24c",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.forecast_agenda_projection_input(jsonb)",
+      "prosrc_md5": "591e66e2777c9ebee7e19e12b8fa18c1",
+      "prosecdef": false,
+      "provolatile": "i",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.preserve_event()",
+      "prosrc_md5": "3b84ce910686158db38ac0dd79705a92",
+      "prosecdef": false,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.project_collected_cash_forecast(jsonb)",
+      "prosrc_md5": "115992c8873fb0b3a901308189cf4860",
+      "prosecdef": false,
+      "provolatile": "i",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.record_cash_forecast_agenda(jsonb)",
+      "prosrc_md5": "79c68ce49f0211287a460a3937a73607",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    }
+  ],
+  "triggers": [
+    {
+      "tgname": "RI_ConstraintTrigger_a_19898",
+      "relation": "finance_private.cash_forecast_agenda_events",
+      "function": "\"RI_FKey_noaction_del\"()",
+      "tgtype": 9,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "RI_ConstraintTrigger_a_19899",
+      "relation": "finance_private.cash_forecast_agenda_events",
+      "function": "\"RI_FKey_noaction_upd\"()",
+      "tgtype": 17,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "RI_ConstraintTrigger_c_19895",
+      "relation": "finance_private.cash_forecast_agenda_events",
+      "function": "\"RI_FKey_check_ins\"()",
+      "tgtype": 5,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "RI_ConstraintTrigger_c_19896",
+      "relation": "finance_private.cash_forecast_agenda_events",
+      "function": "\"RI_FKey_check_upd\"()",
+      "tgtype": 17,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "RI_ConstraintTrigger_c_19900",
+      "relation": "finance_private.cash_forecast_agenda_events",
+      "function": "\"RI_FKey_check_ins\"()",
+      "tgtype": 5,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "RI_ConstraintTrigger_c_19901",
+      "relation": "finance_private.cash_forecast_agenda_events",
+      "function": "\"RI_FKey_check_upd\"()",
+      "tgtype": 17,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "preserve_cash_forecast_agenda",
+      "relation": "finance_private.cash_forecast_agenda_events",
+      "function": "finance_private.preserve_event()",
+      "tgtype": 27,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    }
+  ]
+}

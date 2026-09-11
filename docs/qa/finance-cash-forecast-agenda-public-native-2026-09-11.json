@@ -1,0 +1,38 @@
+{
+  "files": [
+    {
+      "path": "supabase/migrations/20260911100348_finance_cash_forecast_agenda_public_boundary.sql",
+      "sha256": "bfaa2030c704be5bf3f832e2c687e30cc69a6e3ff745e6b530111d58fe1c89ce"
+    },
+    {
+      "path": "src/test/cashForecastAgendaPublicBoundary.test.ts",
+      "sha256": "4e5650614e84d3ba5a89c92e42a529e0958ce14fbeb59cec457cc5737d2bc409"
+    },
+    {
+      "path": "src/test/helpers/cashForecastAgendaNativeFixture.ts",
+      "sha256": "e4778b6014859989617e167d1ec8f5f2a4bbc8c1bbbd22fedc55780e88c31d81"
+    },
+    {
+      "path": "scripts/test-finance-agenda-native.mjs",
+      "sha256": "8fe7f55df031512803af748dae93ba8d0b9a3498d80a3634d91bd956d1b57d51"
+    },
+    {
+      "path": "scripts/test-finance-agenda-native-cases.mjs",
+      "sha256": "4ba98168cc1f6a445debe68dac0d31afc60d18324c47930ef36f7a5abecc60d6"
+    },
+    {
+      "path": "docs/qa/finance-cash-forecast-agenda-core-catalog-2026-09-11.json",
+      "sha256": "1667741accdec9d429304041a9670b5c1915d2e91d25c2aa9e1261fc50e82f65"
+    },
+    {
+      "path": "docs/qa/finance-cash-forecast-agenda-public-native-2026-09-11.md",
+      "sha256": "4d5f09af5dd7f7e4ad730bc0da32557080947e4e31c2ae27a5c390a2ec3db282"
+    }
+  ],
+  "public_tests_passed": 5,
+  "native_tests_passed": 6,
+  "native_session": 60421,
+  "exit_code": 0,
+  "postgres_stopped": true,
+  "remote_mutations": false
+}
