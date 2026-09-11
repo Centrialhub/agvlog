@@ -1,4 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { matchesSearch } from '@/lib/listFilters';
+import { Input } from '@/components/ui/input';
 import { CheckCircle2, Lock, RefreshCw } from 'lucide-react';
 import { useScopedAlerts } from '@/hooks/useAlertStore';
 import {
@@ -21,13 +23,27 @@ import { payrollPaymentIssues, payrollPaymentLabels } from '@/lib/financial/payr
 import { getErrorMessage } from '@/lib/errors';
 import { formatPayrollCurrency } from './formatPayrollCurrency';
 
-export function PeriodEntries({ period, onOpenEntry }: { period: PayrollPeriod; onOpenEntry: (entry: PayrollEntry) => void }) {
+type PeriodEntriesProps = { period: PayrollPeriod; onOpenEntry: (entry: PayrollEntry) => void };
+export function PeriodEntries(props: PeriodEntriesProps) {
+  return <PeriodEntriesContent key={`${props.period.tenant_id}:${props.period.id}`} {...props} />;
+}
+function PeriodEntriesContent({ period, onOpenEntry }: PeriodEntriesProps) {
   const { confirmAction, promptAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const { data: entries = [], isLoading, error } = usePayrollEntries(period.id);
   const approve = useApprovePayrollPeriod();
   const close = useClosePayrollPeriod();
   const gen = useGeneratePayrollPeriod();
+  const [search, setSearch] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const filtered = useMemo(() => entries.filter(entry =>
+    matchesSearch(search, entry.employees?.name, entry.employee_id, entry.employees?.department, entry.employees?.branch)
+    && (paymentFilter === 'all' || entry.payment_summary?.status === paymentFilter)
+  ), [entries, search, paymentFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 50));
+  const currentPage = Math.min(page, pageCount);
+  const visibleEntries = filtered.slice((currentPage - 1) * 50, currentPage * 50);
 
   const totals = useMemo(() => entries.reduce((acc, entry) => ({
     gross: acc.gross + Number(entry.gross_amount || 0),
@@ -96,6 +112,12 @@ export function PeriodEntries({ period, onOpenEntry }: { period: PayrollPeriod; 
         </div>
       </div>
 
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-sm">Buscar na folha<Input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Nome, identificação, departamento ou filial" /></label>
+        <label className="text-sm">Situação do pagamento<select className="block rounded border p-2" value={paymentFilter} onChange={event => { setPaymentFilter(event.target.value); setPage(1); }}><option value="all">Todos</option>{Object.entries(payrollPaymentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <Button variant="outline" onClick={() => { setSearch(''); setPaymentFilter('all'); setPage(1); }}>Limpar busca e filtros</Button>
+      </div>
+      <p className="text-sm text-muted-foreground">Os totais e as ações de aprovação e fechamento abrangem a folha inteira. A busca e os filtros alteram apenas a lista abaixo.</p>
       <Card><CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
@@ -106,10 +128,10 @@ export function PeriodEntries({ period, onOpenEntry }: { period: PayrollPeriod; 
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
-              : entries.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-sm text-muted-foreground">Sem entradas</TableCell></TableRow>
-                : entries.map(entry => (
-                  <TableRow key={entry.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onOpenEntry(entry)}>
-                    <TableCell className="text-sm font-medium">{entry.employees?.name ?? entry.employee_id.slice(0, 8)}</TableCell>
+              : filtered.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-sm text-muted-foreground">{entries.length ? 'Nenhum funcionário corresponde aos filtros' : 'Sem entradas'}</TableCell></TableRow>
+                : visibleEntries.map(entry => (
+                  <TableRow key={entry.id} className="hover:bg-muted/50">
+                    <TableCell className="text-sm font-medium"><button type="button" className="text-left underline underline-offset-2" onClick={() => onOpenEntry(entry)}>{entry.employees?.name ?? entry.employee_id.slice(0, 8)}</button></TableCell>
                     <TableCell><Badge variant="outline" className="text-[10px]">{entry.entry_type === 'driver' ? 'Motorista' : 'Funcionário'}</Badge></TableCell>
                     <TableCell className="text-right text-sm">{formatPayrollCurrency(Number(entry.gross_amount))}</TableCell>
                     <TableCell className="text-right text-sm text-red-600">{formatPayrollCurrency(Number(entry.discount_amount))}</TableCell>
@@ -125,6 +147,11 @@ export function PeriodEntries({ period, onOpenEntry }: { period: PayrollPeriod; 
           </TableBody>
         </Table>
       </CardContent></Card>
+      {!isLoading && <nav aria-label="Páginas dos funcionários da folha" className="flex flex-wrap items-center gap-3">
+        <p role="status">{filtered.length} de {entries.length} funcionários · Página {currentPage} de {pageCount}</p>
+        <Button variant="outline" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Página anterior</Button>
+        <Button variant="outline" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Próxima página</Button>
+      </nav>}
     </div>
   );
 }

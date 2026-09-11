@@ -1,4 +1,4 @@
-import {render,screen,within} from '@testing-library/react';
+import {fireEvent,render,screen,within} from '@testing-library/react';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import type {PayrollPeriod} from '../hooks/usePayroll';
 const state=vi.hoisted(()=>({error:null as Error|null,rows:[] as unknown[]}));
@@ -38,4 +38,31 @@ describe('payroll payment presentation',()=>{
   expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível conferir');
   expect(screen.queryByText('Pessoa QA')).not.toBeInTheDocument();
  });
+});
+
+it('pages all employees, keeps whole-period totals, and searches beyond the visible page',()=>{
+ const template=state.rows[0] as Record<string,unknown>;
+ state.rows=Array.from({length:125},(_,index)=>({...template,id:`entry-${index}`,employee_id:`employee-${index}`,employees:{name:`Pessoa ${String(index).padStart(3,'0')}`}}));
+ const open=vi.fn();render(<PeriodEntries period={period} onOpenEntry={open}/>);
+ expect(screen.getAllByRole('row')).toHaveLength(51);
+ expect(screen.getByText(/125 de 125 funcionários/)).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Próxima página'}));
+ expect(screen.queryByRole('button',{name:'Pessoa 000'})).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Pessoa 050'})).toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText('Buscar na folha'),{target:{value:'Pessoa 124'}});
+ expect(screen.getByText(/1 de 125 funcionários · Página 1 de 1/)).toBeInTheDocument();
+ expect(screen.getByText(/125.000,00/)).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Pessoa 124'}));
+ expect(open).toHaveBeenCalledWith(state.rows[124]);
+ fireEvent.change(screen.getByLabelText('Situação do pagamento'),{target:{value:'paid'}});
+ expect(screen.getByText('Nenhum funcionário corresponde aos filtros')).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Limpar busca e filtros'}));
+ expect(screen.getByRole('button',{name:'Pessoa 000'})).toBeInTheDocument();
+});
+it('resets employee filters when switching payroll period',()=>{
+ const view=render(<PeriodEntries period={period} onOpenEntry={vi.fn()}/>);
+ fireEvent.change(screen.getByLabelText('Buscar na folha'),{target:{value:'nobody'}});
+ view.rerender(<PeriodEntries period={{...period,id:'another-period'}} onOpenEntry={vi.fn()}/>);
+ expect(screen.getByLabelText('Buscar na folha')).toHaveValue('');
+ expect(screen.getByRole('button',{name:'Pessoa QA'})).toBeInTheDocument();
 });
