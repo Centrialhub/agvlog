@@ -24,6 +24,7 @@ import {
   Activity, Wifi, Link2, Unlink, Radio, Pencil,
 } from 'lucide-react';
 import { CompanySettings } from '@/components/settings/CompanySettings';
+import { WorkspaceTenantsSettings } from '@/components/settings/WorkspaceTenantsSettings';
 import { InsuranceSettings } from '@/components/settings/InsuranceSettings';
 import EmittersSettings from '@/components/settings/EmittersSettings';
 import { IntegrationUnavailable } from '@/components/integrations/IntegrationUnavailable';
@@ -66,6 +67,40 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+interface EdgeFunctionErrorLike {
+  message?: unknown;
+  context?: Response | { status?: unknown; json?: () => Promise<unknown>; clone?: () => Response };
+}
+
+async function edgeFunctionErrorMessage(error: unknown, fallback: string): Promise<string> {
+  const candidate = error && typeof error === 'object' ? error as EdgeFunctionErrorLike : {};
+  const context = candidate.context;
+  let payload: Record<string, unknown> | null = null;
+  try {
+    if (context && typeof context.clone === 'function') {
+      payload = parseObject(await context.clone().json().catch((): null => null));
+    } else if (context && typeof context.json === 'function') {
+      payload = parseObject(await context.json().catch((): null => null));
+    }
+  } catch {
+    // Fall back to the status and SDK message when the response body is unavailable.
+  }
+
+  const status = context && typeof context.status === 'number' ? context.status : undefined;
+  const responseCode = payload && typeof payload.code === 'string' ? payload.code : undefined;
+  const responseError = payload && typeof payload.error === 'string' ? payload.error : undefined;
+  if (status === 401) return 'Sua sessão expirou. Entre novamente no AGVLog e repita o salvamento.';
+  if (status === 403 || responseError === 'Forbidden') return 'Seu usuário não tem permissão de administrador nesta empresa.';
+  if (status === 409 || responseError === 'tenant_context_mismatch') return 'A empresa ativa não foi confirmada. Selecione a empresa novamente e repita o salvamento.';
+  if (responseError && responseError !== 'Internal error') {
+    return responseCode ? `${responseError} (${responseCode})` : responseError;
+  }
+  if (responseCode) return `${fallback} (${responseCode})`;
+
+  const sdkMessage = typeof candidate.message === 'string' ? candidate.message : '';
+  return sdkMessage && !/non-2xx/i.test(sdkMessage) ? sdkMessage : fallback;
+}
+
 function parseObject(value: unknown): Record<string, unknown> | null {
   try {
     const parsed = typeof value === 'string' ? JSON.parse(value) : value;
@@ -88,7 +123,8 @@ export default function Settings() {
   const { isEnabled, error, refetch } = useTenantCapabilities();
   const ssxEnabled = isEnabled('ssx');
   const requestedTab = searchParams.get('tab');
-  const initialTab = requestedTab === 'integration' ? 'integration' : 'company';
+  const allowedTabs = ['company', 'emitters', 'integration', 'units', 'telemetry', 'mapping', 'logs', 'maintenance'];
+  const initialTab = requestedTab && allowedTabs.includes(requestedTab) ? requestedTab : 'company';
   const ssxUnavailable = (
     <IntegrationUnavailable
       capability="ssx"
@@ -103,9 +139,9 @@ export default function Settings() {
         <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
         <p className="text-sm text-muted-foreground">Gerencie integrações e parâmetros do sistema</p>
       </div>
-      <Tabs defaultValue={initialTab}>
+      <Tabs key={initialTab} defaultValue={initialTab}>
         <TabsList className="flex-wrap">
-          <TabsTrigger value="company">Empresa</TabsTrigger>
+          <TabsTrigger value="company">Empresas</TabsTrigger>
           <TabsTrigger value="emitters">Emitentes Fiscais</TabsTrigger>
           <TabsTrigger value="integration">Integração SSX</TabsTrigger>
           <TabsTrigger value="units" disabled={!ssxEnabled}>Rastreadores</TabsTrigger>
@@ -115,6 +151,7 @@ export default function Settings() {
           <TabsTrigger value="maintenance">Manutenção</TabsTrigger>
         </TabsList>
         <TabsContent value="company" className="mt-4 space-y-4">
+          <WorkspaceTenantsSettings />
           <CompanySettings />
           <InsuranceSettings />
         </TabsContent>
@@ -519,7 +556,15 @@ function IntegrationDialog({ open, onOpenChange, tenantId, account }: {
     if (!tenantId) return;
     setLoading(true);
     try {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshed.session?.access_token) {
+        throw new Error('Sua sessão expirou. Entre novamente no AGVLog e repita o salvamento.');
+      }
       const { data, error } = await supabase.functions.invoke('agvlog-integration-upsert', {
+        headers: {
+          Authorization: `Bearer ${refreshed.session.access_token}`,
+          'x-agvlog-tenant-id': tenantId,
+        },
         body: {
           id: account?.id,
           tenant_id: tenantId, base_url: SSX_BASE_URL, username, password,
@@ -530,7 +575,7 @@ function IntegrationDialog({ open, onOpenChange, tenantId, account }: {
           work_schedule_integration_code: workScheduleCode,
         },
       });
-      if (error) throw error;
+      if (error) throw new Error(await edgeFunctionErrorMessage(error, 'Falha interna ao salvar a credencial SSX.'));
       if (data?.error) throw new Error(data.error);
       toast.success(account ? 'Credencial atualizada. Faça o teste de login.' : 'Integração criada! Faça o teste de login.');
       queryClient.invalidateQueries({ queryKey: ['integration_accounts'] });

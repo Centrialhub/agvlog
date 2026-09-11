@@ -16497,6 +16497,16 @@ export type Database = {
         Args: { _tenant_name: string }
         Returns: string
       }
+      create_workspace_tenant_v1: {
+        Args: {
+          _company?: Json
+          _initial_emitter?: Json
+          _name: string
+          _tenant_id: string
+          _timezone?: string
+        }
+        Returns: Json
+      }
       cte_defaults_for_group: { Args: { p_load_ids: string[] }; Returns: Json }
       current_driver_id: { Args: { _tenant_id: string }; Returns: string }
       delete_driver_settlement: {
@@ -17322,6 +17332,10 @@ export type Database = {
           uf: string | null
         }[]
       }
+      list_workspace_tenants_v1: {
+        Args: { _tenant_id: string }
+        Returns: Json
+      }
       list_load_control_page_v2: {
         Args: {
           _cursor?: Json
@@ -17895,6 +17909,24 @@ export type Database = {
       }
       set_default_tenant_emitter: {
         Args: { _emitter_id: string; _tenant_id: string }
+        Returns: string
+      }
+      set_workspace_tenant_default_emitter_v1: {
+        Args: {
+          _emitter_id: string
+          _target_tenant_id: string
+          _tenant_id: string
+        }
+        Returns: string
+      }
+      update_workspace_tenant_v1: {
+        Args: {
+          _company: Json
+          _name: string
+          _target_tenant_id: string
+          _tenant_id: string
+          _timezone?: string
+        }
         Returns: string
       }
       settle_zero_driver_settlement: {

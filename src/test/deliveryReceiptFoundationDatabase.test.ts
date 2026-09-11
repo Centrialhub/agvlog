@@ -351,8 +351,9 @@ describe('canonical delivery receipt foundation', () => {
     expect((await db.query<{documents:Array<{kind:string;number:string}>}>(
       'select document_snapshot documents from delivery_receipt_email_items where batch_id=$1',[request],
     )).rows[0].documents.map(item=>item.kind).sort()).toEqual(['cte','nfe']);
+    const databaseDate = (await db.query<{today:string}>("select current_date::text today")).rows[0].today;
     expect((await db.query<{file_name:string}>('select file_name from delivery_receipt_email_items where batch_id=$1',[request])).rows[0].file_name)
-      .toBe(`CANHOTO_FORNECEDOR-QA_${new Date().toISOString().slice(0,10)}_CARGA-${ids.load.slice(0,8)}_ENTREGA-${ids.event.slice(0,8)}.pdf`);
+      .toBe(`CANHOTO_FORNECEDOR-QA_${databaseDate}_CARGA-${ids.load.slice(0,8)}_ENTREGA-${ids.event.slice(0,8)}.pdf`);
     expect((await db.query('select email_status from delivery_receipts where id=$1',[receipt.id])).rows)
       .toEqual([{email_status:'queued'}]);
     const claim=(await db.query<{result:{lease_token:string;items:Array<{documents:Array<{kind:string}>;cover:{supplier_key:string;documents:Array<{kind:string}>}}>}}>(

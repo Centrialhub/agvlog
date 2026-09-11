@@ -40,9 +40,14 @@ describe('SSX credential recovery contract', () => {
     expect(settings).toContain('Atualizar credencial');
     expect(settings).toContain('id: account?.id');
     expect(settings).toContain('Deixe em branco para manter o atual');
+    expect(settings).toContain('await supabase.auth.refreshSession()');
+    expect(settings).toContain("'x-agvlog-tenant-id': tenantId");
+    expect(settings).toContain('edgeFunctionErrorMessage(error');
     expect(settings).not.toContain('password_encrypted');
     expect(settings).not.toContain('token_cache');
     expect(settings).toContain('delete_workspace_ssx_account_v1');
+    expect(upsert).toContain('SSX_CREDENTIAL_PREVIEW_ORIGIN');
+    expect(upsert).toContain('"Access-Control-Allow-Origin": requestOrigin');
   });
 
   it('runs the ingestion pipeline through the workspace SSX registry', () => {

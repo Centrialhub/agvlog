@@ -99,7 +99,8 @@ export function useSaveEmitter() {
   return useMutation({
     mutationFn: async (input: Partial<TenantEmitter> & { id?: string }) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const payload = { ...input, tenant_id: currentTenant.id };
+      const { is_default: _isDefault, ...editableInput } = input;
+      const payload = { ...editableInput, tenant_id: currentTenant.id };
       if (payload.cnpj) payload.cnpj = String(payload.cnpj).replace(/\D/g, '');
       if (input.id) {
         const { id: _id, ...patch } = payload;

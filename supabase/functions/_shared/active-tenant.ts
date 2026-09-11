@@ -21,7 +21,11 @@ function decodeJwtPayload(authorization: string | null): Record<string, unknown>
  * The header transports the UI selection; the signed claim prevents a caller from
  * changing that selection by forging only the header or request body.
  */
-export function requireActiveTenant(req: Request, tenantId: unknown): Response | null {
+export function requireActiveTenant(
+  req: Request,
+  tenantId: unknown,
+  responseHeaders: Record<string, string> = corsHeaders,
+): Response | null {
   const requestedTenant = typeof tenantId === 'string' ? tenantId : '';
   const headerTenant = req.headers.get('x-agvlog-tenant-id')?.trim() || '';
   const claims = decodeJwtPayload(req.headers.get('Authorization'));
@@ -30,7 +34,7 @@ export function requireActiveTenant(req: Request, tenantId: unknown): Response |
   if (!UUID.test(requestedTenant) || headerTenant !== requestedTenant || claimTenant !== requestedTenant) {
     return new Response(JSON.stringify({ error: 'tenant_context_mismatch' }), {
       status: 409,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...responseHeaders, 'Content-Type': 'application/json' },
     });
   }
   return null;

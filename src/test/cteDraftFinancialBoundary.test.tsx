@@ -6,7 +6,7 @@ const state=vi.hoisted(()=>({calls:[] as {table:string;payload:unknown}[]}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'tenant'}})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'actor'}})}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{from:(table:string)=>{
- if(table==='tenant_emitters')return {select:()=>({eq:()=>({eq:()=>({order:()=>({order:()=>({limit:async()=>({data:[],error:null})})})})})})};
+ if(table==='tenant_emitters')return {select:()=>{const chain:any={eq:()=>chain,maybeSingle:async()=>({data:{id:'emitter',razao_social:'Emitente QA',nome_fantasia:null,cnpj:'11111111000111'},error:null})};return chain;}};
  if(table==='cte_batches')return {insert:(payload:unknown)=>{state.calls.push({table,payload});return {select:()=>({single:async()=>({data:{id:'batch'},error:null})})};}};
  if(table==='cte_documents')return {insert:async(payload:unknown)=>{state.calls.push({table,payload});return {error:null};},
   select:()=>({eq:async()=>({data:[{id:'draft-document',client_id:'client',freight_value:200,recipient:'Destino'}],error:null})})};

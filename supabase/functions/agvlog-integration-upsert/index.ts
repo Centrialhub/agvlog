@@ -1,11 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders as defaultCorsHeaders } from "../_shared/cors.ts";
 import { requireActiveTenant } from "../_shared/active-tenant.ts";
 import { normalizeSsxBaseUrl } from "../_shared/ssx-utils.ts";
 
 type JsonObject = Record<string, unknown>;
 
+const SSX_CREDENTIAL_PREVIEW_ORIGIN =
+  "https://agvlog-preview-thomaz-20260831.veituma.chatgpt.site";
+
 Deno.serve(async (req) => {
+  const requestOrigin = req.headers.get("Origin");
+  const corsHeaders = requestOrigin === SSX_CREDENTIAL_PREVIEW_ORIGIN
+    ? { ...defaultCorsHeaders, "Access-Control-Allow-Origin": requestOrigin }
+    : defaultCorsHeaders;
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -113,7 +121,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const tenantContextError = requireActiveTenant(req, tenant_id);
+    const tenantContextError = requireActiveTenant(req, tenant_id, corsHeaders);
     if (tenantContextError) return tenantContextError;
 
     // Verify admin

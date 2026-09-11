@@ -37,6 +37,17 @@ describe('Edge active tenant context', () => {
     expect(requireActiveTenant(crossTenant, tenantB)?.status).toBe(409);
   });
 
+  it('preserves endpoint-specific CORS headers on a tenant mismatch', async () => {
+    const { requireActiveTenant } = await import('../../supabase/functions/_shared/active-tenant.ts');
+    const request = new Request('https://project.supabase.co/functions/v1/test', {
+      headers: { Authorization: `Bearer ${token(tenantA)}`, 'x-agvlog-tenant-id': tenantB },
+    });
+    const response = requireActiveTenant(request, tenantB, {
+      'Access-Control-Allow-Origin': 'https://preview.example',
+    });
+    expect(response?.headers.get('Access-Control-Allow-Origin')).toBe('https://preview.example');
+  });
+
   it('protects financial, fiscal and document gateways before service-role writes', () => {
     const root = process.cwd();
     for (const path of [

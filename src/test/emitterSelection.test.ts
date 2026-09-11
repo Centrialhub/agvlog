@@ -19,7 +19,15 @@ describe('seleção segura de emitente fiscal', () => {
     expect(selectDefaultActiveEmitter(emitters.slice(0, 1))).toBeNull();
   });
 
-  it('substitui uma seleção inativa pelo padrão ativo', () => {
-    expect(selectActiveEmitterById(emitters, 'inactive-default')?.id).toBe('active-default');
+  it('não inventa padrão usando apenas o primeiro emitente ativo', () => {
+    expect(selectDefaultActiveEmitter(emitters.slice(0, 2))).toBeNull();
+  });
+
+  it('rejeita uma seleção explícita inativa em vez de trocar silenciosamente o CNPJ', () => {
+    expect(selectActiveEmitterById(emitters, 'inactive-default')).toBeNull();
+  });
+
+  it('usa o padrão somente quando nenhum emitente foi escolhido explicitamente', () => {
+    expect(selectActiveEmitterById(emitters)?.id).toBe('active-default');
   });
 });

@@ -238,7 +238,7 @@ export function useCreateCteBatch() {
       const totalValue = input.groups.reduce((s, g) => s + g.cargo_value, 0);
       const totalFreight = input.groups.reduce((s, g) => s + g.freight_value, 0);
 
-      // Resolve emitente (override → default ativo) para vincular remetente/CNPJ nos CT-es do lote.
+      // Resolve somente um override válido ou o padrão explicitamente escolhido.
       let emitter: Pick<Tables<'tenant_emitters'>, 'id' | 'razao_social' | 'nome_fantasia' | 'cnpj'> | null = null;
       if (input.emitter_id) {
         const { data, error } = await supabase
@@ -250,22 +250,22 @@ export function useCreateCteBatch() {
           .maybeSingle();
         if (error) throw error;
         emitter = data || null;
+        if (!emitter) throw new Error('O emitente selecionado não pertence à empresa ativa ou está inativo.');
       }
       if (!emitter) {
         const { data, error } = await supabase
           .from('tenant_emitters').select('id, razao_social, nome_fantasia, cnpj')
-          .eq('tenant_id', currentTenant.id).eq('active', true)
-          .order('is_default', { ascending: false })
-          .order('created_at', { ascending: true })
-          .limit(1);
+          .eq('tenant_id', currentTenant.id).eq('active', true).eq('is_default', true)
+          .maybeSingle();
         if (error) throw error;
-        emitter = data?.[0] || null;
+        emitter = data || null;
       }
+      if (!emitter) throw new Error('Defina o emitente fiscal padrão desta empresa antes de gerar CT-e.');
 
       const batchPayload: TablesInsert<'cte_batches'> = {
         tenant_id: currentTenant.id,
         client_id: input.client_id,
-        emitter_id: emitter?.id || null,
+        emitter_id: emitter.id,
         grouping_mode: input.grouping_mode,
         grouping_mode_label: mode.label,
         source_type: input.source_type,

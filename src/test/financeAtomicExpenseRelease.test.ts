@@ -5,12 +5,12 @@ import {it,expect} from 'vitest';
 import {expenseMfaDatabase} from './helpers/expenseMfaDatabase';
 import {installSettlementAdjustmentFixture} from './helpers/settlementAdjustmentDatabase';
 import {operationIds as ids} from './helpers/operationOutcomeDatabase';
-const release=readFileSync('supabase/rollouts/20260910225611_finance_expense_adjustment_production_release.sql','utf8');
+const release=readFileSync('supabase/rollouts/20260910225611_finance_expense_adjustment_production_release.sql','utf8').replace(/\r\n/g,'\n');
 const original=readFileSync('supabase/migrations/20260831164442_remove_authenticator_requirement.sql','utf8');
 const start=original.indexOf('create or replace function public.is_tenant_operator_or_admin(');const helper=original.slice(start,original.indexOf('$function$;',start)+11);
 async function fixture(){const {db}=await expenseMfaDatabase(false);await installSettlementAdjustmentFixture(db);await db.exec(helper);return db;}
 it('installs complete release in one transaction with final password policy and preserved global authorization',async()=>{
- expect(createHash('sha256').update(release).digest('hex')).toBe('213455212dc767bd6858164adf233e1a5baadcd6ee1348abf2b8189d9be020f7');
+ expect(createHash('sha256').update(release).digest('hex')).toBe('ca160ab888064e33b1af908a92db8793277fb24f54dee904f237aeff7ebda56f');
  const db=await fixture();try{
  const before=(await db.query("select prosrc,proacl from pg_proc where oid='public.is_tenant_operator_or_admin(uuid)'::regprocedure")).rows;
  await db.transaction(async tx=>{await tx.exec(release);});
