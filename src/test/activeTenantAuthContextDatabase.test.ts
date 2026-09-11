@@ -8,6 +8,7 @@ const tenantB='10000000-0000-4000-8000-000000000002';
 const strangerTenant='10000000-0000-4000-8000-000000000003';
 const workspace='30000000-0000-4000-8000-000000000001';
 const user='20000000-0000-4000-8000-000000000001';
+const otherUser='20000000-0000-4000-8000-000000000002';
 let db:PGlite;
 
 beforeAll(async()=>{
@@ -52,10 +53,11 @@ beforeAll(async()=>{
     grant select,insert,update,delete on public.scoped_records to authenticated;
     grant all on public.scoped_records to service_role;
     create function public.create_tenant_with_owner(text) returns uuid language sql as $$select gen_random_uuid()$$;
-    insert into auth.users(id) values ('${user}');
+    insert into auth.users(id) values ('${user}'),('${otherUser}');
     insert into public.tenants(id,name) values ('${tenantA}','Empresa A'),('${tenantB}','Empresa B'),('${strangerTenant}','Empresa C');
     insert into public.tenant_memberships(tenant_id,user_id,role) values
-      ('${tenantA}','${user}','owner'),('${tenantB}','${user}','operator');
+      ('${tenantA}','${user}','owner'),('${tenantB}','${user}','operator'),
+      ('${tenantA}','${otherUser}','operator'),('${tenantB}','${otherUser}','operator');
   `);
   await db.exec(readFileSync('supabase/migrations/20260910125751_workspace_tenant_foundation.sql','utf8'));
   await db.query(`insert into public.workspaces(id,name) values ('${workspace}','Grupo AB')`);
@@ -94,11 +96,15 @@ beforeAll(async()=>{
 afterAll(async()=>db?.close());
 
 async function signedIn<T>(action:()=>Promise<T>){
-  await db.exec(`set role authenticated;set request.jwt.claim.sub='${user}';set request.jwt.claims='{}'`);
+  return signedInAs(user,action);
+}
+
+async function signedInAs<T>(actor:string,action:()=>Promise<T>){
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${actor}';set request.jwt.claims='{}'`);
   try{return await action();}finally{await db.exec('reset role;reset request.jwt.claim.sub;reset request.jwt.claims;reset request.headers');}
 }
 
-const hookEvent=()=>JSON.stringify({user_id:user,claims:{sub:user,role:'authenticated',aud:'authenticated'}});
+const hookEvent=(actor=user)=>JSON.stringify({user_id:actor,claims:{sub:actor,role:'authenticated',aud:'authenticated'}});
 
 describe('active tenant Auth context in PostgreSQL',()=>{
   it('refuses a tenant outside the signed-in user access set',async()=>{
@@ -115,6 +121,23 @@ describe('active tenant Auth context in PostgreSQL',()=>{
       `select public.custom_access_token_hook($1::jsonb) result`,[hookEvent()],
     )).rows[0].result.claims;
     expect(claims).toMatchObject({active_tenant_id:tenantB,active_workspace_id:workspace});
+  });
+
+  it('stores each employee selection independently',async()=>{
+    await signedIn(()=>db.query(`select public.set_active_tenant_context_v1('${tenantB}')`));
+    await signedInAs(otherUser,()=>db.query(`select public.set_active_tenant_context_v1('${tenantA}')`));
+
+    expect((await db.query<{user_id:string;tenant_id:string}>(`
+      select user_id,tenant_id from private.user_active_tenant_contexts order by user_id
+    `)).rows).toEqual([
+      {user_id:user,tenant_id:tenantB},
+      {user_id:otherUser,tenant_id:tenantA},
+    ]);
+
+    const otherClaims=(await db.query<{result:{claims:Record<string,string>}}>(
+      `select public.custom_access_token_hook($1::jsonb) result`,[hookEvent(otherUser)],
+    )).rows[0].result.claims;
+    expect(otherClaims.active_tenant_id).toBe(tenantA);
   });
 
   it('uses the signed claim for Realtime and rejects a mismatched REST header',async()=>{

@@ -4,11 +4,15 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const migration = 'supabase/migrations/20260911010415_manage_workspace_tenants_and_emitters.sql';
+const employeeAccessMigration = 'supabase/migrations/20260911020515_sync_workspace_employee_tenant_access.sql';
+const selectorLabelsMigration = 'supabase/migrations/20260911021750_distinguish_duplicate_tenant_selector_labels.sql';
 const workspace = '10000000-0000-4000-8000-000000000001';
 const sourceTenant = '20000000-0000-4000-8000-000000000001';
 const owner = '30000000-0000-4000-8000-000000000001';
 const admin = '30000000-0000-4000-8000-000000000002';
 const operator = '30000000-0000-4000-8000-000000000003';
+const driver = '30000000-0000-4000-8000-000000000004';
+const client = '30000000-0000-4000-8000-000000000005';
 
 let db: PGlite;
 
@@ -35,7 +39,9 @@ beforeAll(async () => {
     );
     create table public.workspace_memberships(
       id uuid primary key default gen_random_uuid(),workspace_id uuid not null,user_id uuid not null,
-      role public.app_role not null,active boolean not null default true,unique(workspace_id,user_id)
+      role public.app_role not null,active boolean not null default true,
+      created_at timestamptz not null default now(),updated_at timestamptz not null default now(),
+      unique(workspace_id,user_id)
     );
     create table public.tenant_memberships(
       id uuid primary key default gen_random_uuid(),tenant_id uuid not null,user_id uuid not null,
@@ -60,16 +66,19 @@ beforeAll(async () => {
     create function private.is_workspace_admin(_workspace_id uuid) returns boolean language sql stable security definer set search_path=''
       as $$select exists(select 1 from public.workspace_memberships where workspace_id=_workspace_id and user_id=auth.uid() and active and role in ('owner','admin'))$$;
 
-    insert into auth.users values ('${owner}'),('${admin}'),('${operator}');
+    insert into auth.users values ('${owner}'),('${admin}'),('${operator}'),('${driver}'),('${client}');
     insert into public.workspaces(id,name) values ('${workspace}','Grupo QA');
     insert into public.tenants(id,workspace_id,name,settings) values
-      ('${sourceTenant}','${workspace}','Empresa A','{"company":{"legal_name":"Empresa A Ltda","tax_id":"11111111000111"}}');
+      ('${sourceTenant}','${workspace}','Empresa A','{"company":{"legal_name":"Empresa A Ltda","trade_name":"B","tax_id":"11111111000111"}}');
     insert into public.workspace_memberships(workspace_id,user_id,role) values
       ('${workspace}','${owner}','owner'),('${workspace}','${admin}','admin'),('${workspace}','${operator}','operator');
     insert into public.tenant_memberships(tenant_id,user_id,role) values
-      ('${sourceTenant}','${owner}','owner'),('${sourceTenant}','${admin}','admin'),('${sourceTenant}','${operator}','operator');
+      ('${sourceTenant}','${owner}','owner'),('${sourceTenant}','${admin}','admin'),
+      ('${sourceTenant}','${operator}','operator'),('${sourceTenant}','${client}','client');
   `);
   await db.exec(readFileSync(migration, 'utf8'));
+  await db.exec(readFileSync(employeeAccessMigration, 'utf8'));
+  await db.exec(readFileSync(selectorLabelsMigration, 'utf8'));
 }, 30_000);
 
 afterAll(async () => db?.close());
@@ -104,8 +113,59 @@ describe('workspace tenant and fiscal emitter management', () => {
     const memberships = (await db.query<{ user_id: string; role: string }>(`
       select user_id,role::text role from public.tenant_memberships where tenant_id='${created.tenant_id}' order by user_id
     `)).rows;
-    expect(memberships).toEqual([{ user_id: owner, role: 'owner' }, { user_id: admin, role: 'admin' }]);
-    expect(memberships.some((membership) => membership.user_id === operator)).toBe(false);
+    expect(memberships).toEqual([
+      { user_id: owner, role: 'owner' },
+      { user_id: admin, role: 'admin' },
+      { user_id: operator, role: 'operator' },
+    ]);
+  });
+
+  it('keeps clients tenant-specific and synchronizes employee changes across the workspace', async () => {
+    const tenantB = (await db.query<{ id: string }>(
+      "select id from public.tenants where name='Empresa B'",
+    )).rows[0].id;
+
+    expect((await db.query<{ tenant_id: string }>(`
+      select tenant_id from public.tenant_memberships
+      where user_id='${client}' and active order by tenant_id
+    `)).rows).toEqual([{ tenant_id: sourceTenant }]);
+
+    await db.query(`
+      insert into public.tenant_memberships(tenant_id,user_id,role)
+      values ('${sourceTenant}','${driver}','driver')
+    `);
+    expect((await db.query<{ tenant_id: string; role: string }>(`
+      select membership.tenant_id,membership.role::text role
+      from public.tenant_memberships membership
+      join public.tenants tenant on tenant.id=membership.tenant_id
+      where membership.user_id='${driver}' and membership.active
+      order by tenant.name
+    `)).rows).toEqual([
+      { tenant_id: sourceTenant, role: 'driver' },
+      { tenant_id: tenantB, role: 'driver' },
+    ]);
+
+    await db.query(`
+      update public.tenant_memberships set role='operator'
+      where tenant_id='${tenantB}' and user_id='${driver}'
+    `);
+    expect((await db.query<{ role: string }>(`
+      select distinct role::text role from public.tenant_memberships where user_id='${driver}'
+    `)).rows).toEqual([{ role: 'operator' }]);
+  });
+
+  it('uses the registered company name in the footer selector', async () => {
+    await db.exec(`set role authenticated;set request.jwt.claim.sub='${operator}'`);
+    try {
+      expect((await db.query<{ tenant_name: string }>(
+        'select tenant_name from public.get_current_memberships_v1() order by tenant_name',
+      )).rows).toEqual([
+        { tenant_name: 'B · Empresa 1' },
+        { tenant_name: 'B · Empresa 2' },
+      ]);
+    } finally {
+      await db.exec('reset role;reset request.jwt.claim.sub');
+    }
   });
 
   it('lists every tenant and its safe emitter choices for group administration', async () => {
