@@ -1,0 +1,24 @@
+{
+  "files": [
+    {
+      "path": "src/lib/financial/clientInvoiceList.ts",
+      "sha256": "dda6b1ab3287874f39150de473e0f9d77049238e7c315f3c93a442999ad97e9f"
+    },
+    {
+      "path": "src/pages/ClientInvoices.tsx",
+      "sha256": "89816d8caeb955b4ea797735440238613fb38a7f8e5b4736dd1ed7026152743c"
+    },
+    {
+      "path": "src/test/clientInvoiceListExactAmounts.test.ts",
+      "sha256": "96603c0099d370c6d144a8e7fb6deb65f55a1c37889eb63e4c9be1c38f556c56"
+    },
+    {
+      "path": "src/test/clientInvoiceListTotals.test.ts",
+      "sha256": "bb15f6ffdc0d5b7dc2a8068a70916ef8d3ec5b5a5b7fecefa7b5419c353f900a"
+    },
+    {
+      "path": "src/test/clientInvoiceLifecycleFrontendDatabase.test.tsx",
+      "sha256": "382a84bc91d0a2259ecc539f38beba35ec57f301dab70724619dc6726638d7de"
+    }
+  ]
+}

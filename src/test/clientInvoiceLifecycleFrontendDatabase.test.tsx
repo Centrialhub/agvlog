@@ -124,8 +124,8 @@ describe('invoice UI integrated with the candidate SQL',{timeout:15000},()=>{
   mock.ctes=[{id:'ce200000-0000-4000-8000-000000000001',cte_number:'QA',freight_value:100,fiscal_document_ids:[]}];const view=render(<Story wizard/>);await wizardStart();fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar CT-e QA'}));mock.ctes=[];view.rerender(<Story wizard/>);fireEvent.click(screen.getByRole('button',{name:'Ver prévia'}));await screen.findByText(/Uma origem selecionada não está mais disponível/);expect(calls()).toHaveLength(0);expect(mock.rpc.mock.calls.some(([name])=>name==='get_client_invoice_creation_context')).toBe(false);
  });
  it('blocks preview on source query errors instead of displaying an empty success',async()=>{mock.sourceError=new Error('Falha controlada');render(<Story wizard/>);await wizardStart();expect(screen.getByText(/Falha na consulta de origens/)).toBeInTheDocument();expect(screen.getByRole('button',{name:'Ver prévia'})).toBeDisabled();expect(calls()).toHaveLength(0);});
- it('displays net received and remaining balances for a partially received invoice',async()=>{
+ it('displays settled and remaining balances for a partially received invoice',async()=>{
   const s=await createInvoiceScenario(db);await bank();await financialCommand(db,await financialPayload(db,s.receivable));render(<QueryClientProvider client={client}><ClientInvoices/></QueryClientProvider>);await screen.findByRole('button',{name:'Ações da fatura'});
-  expect(within(screen.getByText('Em aberto').parentElement!).getByText(/230,00/)).toBeInTheDocument();expect(within(screen.getByText('Recebido líquido').parentElement!).getByText(/10,00/)).toBeInTheDocument();expect(screen.getByRole('button',{name:'Recebimentos e estornos'})).toBeInTheDocument();
+  expect(within(screen.getByText('Em aberto').parentElement!).getByText(/230,00/)).toBeInTheDocument();expect(within(screen.getByText('Total liquidado').parentElement!).getByText(/10,00/)).toBeInTheDocument();expect(screen.getByRole('button',{name:'Recebimentos e estornos'})).toBeInTheDocument();
  });
 });

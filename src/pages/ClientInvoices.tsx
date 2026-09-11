@@ -1,3 +1,5 @@
+import {invoiceListTotals} from '@/lib/financial/clientInvoiceList';
+import {formatFinanceCents} from '@/lib/financial/ledgerContract';
 import {useAuth} from '@/hooks/useAuth';
 import {NewInvoiceWizard} from '@/components/financial/NewInvoiceWizard';
 import {ClientInvoiceLifecycleDialog} from '@/components/financial/ClientInvoiceLifecycleDialog';
@@ -68,15 +70,7 @@ function ClientInvoicesScreen() {
     });
   }, [invoices, search, statusFilter, clientFilter]);
 
-  const totals = useMemo(() => {
-    const now = new Date();
-    return {
-      open: invoices.filter(i => i.status === 'generated' || i.status === 'sent').reduce((s, i) => s + Number(i.open_amount||0), 0),
-      overdue: invoices.filter(i => (i.status === 'generated' || i.status === 'sent') && i.due_date && new Date(i.due_date + 'T23:59:59') < now).reduce((s, i) => s + Number(i.open_amount||0), 0),
-      sent: invoices.filter(i => i.status === 'sent').reduce((s, i) => s + Number(i.open_amount||0), 0),
-      paid: invoices.filter(i => i.status !== 'cancelled').reduce((s, i) => s + Number(i.received_amount||0), 0),
-    };
-  }, [invoices]);
+  const totals = useMemo(() => invoiceListTotals(invoices), [invoices]);
 
   const handleDownloadPdf = async (inv: ClientInvoice) => {
     try {
@@ -154,7 +148,7 @@ function ClientInvoicesScreen() {
           <Card key={k.label}>
             <CardContent className="pt-6">
               <div className="text-xs text-muted-foreground">{k.label}</div>
-              <div className={`text-2xl font-semibold ${k.tone}`}>{balancesUnavailable?'—':brl(k.value)}</div>
+              <div className={`text-2xl font-semibold ${k.tone}`}>{balancesUnavailable||k.value===null?'—':formatFinanceCents(k.value)}</div>
             </CardContent>
           </Card>
         ))}
