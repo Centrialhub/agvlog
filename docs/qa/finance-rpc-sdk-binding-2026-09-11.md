@@ -1,0 +1,9 @@
+# Financial SDK receiver correction — 2026-09-11
+
+Seven published financial clients detached supabase.rpc and invoked it as a standalone function. The installed Supabase SDK uses this.rest.rpc; every affected call failed before transport. Scope: cashForecastAgendaClient, cashForecastViewClient, costDispositionReturnClient, openComplementExtinctionClient, payableApprovalClient, unloadingOpenComplementClient and unloadingCostRegularizationClient. All seven now bind the original client. No financial SQL, permissions or command payload changed.
+
+New financialRpcSdkBinding.test.ts instantiates the actual installed SupabaseClient with an isolated injected fetch returning a diagnostic error. All seven cases failed before the correction with Cannot read properties of undefined (reading rest), then passed after correction, verifying exact RPC path, POST and tenant body. No external network or privileged key is used. This verifies transport binding, not hosted authorization or server business logic.
+
+21 distinct tests across eight files passed (12 at08:07:57 and16 at08:08:55 with7 shared binding cases). Eight-file lint exited0. The analogous driver offline hook is outside this financial patch and was not changed. Existing customerCreditClient already bound in Sites32.
+
+Publication build must exclude current refund candidate edits while preserving the two previously published operational frontend files: src/pages/DeliveryReceipts.tsx and src/lib/deliveryReceipts/deliveryReceiptOperationsDashboard.ts. Use an isolated export of main with only these two existing deltas; never temporarily overwrite shared agent files.

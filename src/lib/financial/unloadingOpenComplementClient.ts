@@ -1,5 +1,5 @@
 import {supabase} from '@/integrations/supabase/client';
 import {unloadingOpenComplementCommandSchema,unloadingOpenComplementPreviewSchema,type UnloadingOpenComplementCommand} from './unloadingOpenComplementContract';
-type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;const rpc=supabase.rpc as unknown as Rpc;
+type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;const rpc=supabase.rpc.bind(supabase) as unknown as Rpc;
 export async function readUnloadingOpenComplement(tenant:string,actor:string,charge:string,amount:string){const {data,error}=await rpc('preview_finance_unloading_open_complement',{_tenant_id:tenant,_charge_id:charge,_amount_cents:amount});if(error)throw error;const v=unloadingOpenComplementPreviewSchema.parse(data);if(v.tenant_id!==tenant||v.actor_id!==actor||v.charge_id!==charge||v.target.cost_cents!==amount)throw new Error('Prévia fora da correção solicitada.');return v;}
 export const sendUnloadingOpenComplement=(command:UnloadingOpenComplementCommand)=>rpc('correct_finance_unloading_open_complement',{_payload:unloadingOpenComplementCommandSchema.parse(command)});

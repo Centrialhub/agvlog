@@ -1,6 +1,6 @@
 import {supabase} from '@/integrations/supabase/client';
 import {cashForecastPreviewSchema,cashForecastSnapshotSchema,cashForecastHistorySchema,cashForecastSourcesSchema,cashForecastCommandSchema,type CashForecastCommand,type CashForecastSources} from './cashForecastViewContract';
-type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;const rpc=supabase.rpc as unknown as Rpc;
+type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;const rpc=supabase.rpc.bind(supabase) as unknown as Rpc;
 export class CashForecastChangedError extends Error{constructor(){super('As fontes mudaram. Atualize a conferência e comece pela primeira página.');}}
 async function read(name:string,args:Record<string,unknown>){const {data,error}=await rpc(name,args);if(error){if(typeof error==='object'&&'code' in error&&error.code==='40001')throw new CashForecastChangedError();throw error;}return data;}
 function scope(v:{tenant_id:string;actor_id:string},tenant:string,actor:string){if(v.tenant_id!==tenant||v.actor_id!==actor)throw new Error('Consulta fora da empresa ou sessão solicitada.');}

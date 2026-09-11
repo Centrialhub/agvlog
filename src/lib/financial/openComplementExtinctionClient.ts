@@ -1,5 +1,5 @@
 import {supabase} from '@/integrations/supabase/client';
 import {openComplementExtinctionPreviewSchema,openComplementExtinctionProposalSchema,openComplementExtinctionCommandSchema,type OpenComplementExtinctionProposal,type OpenComplementExtinctionCommand} from './openComplementExtinctionContract';
-type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;const rpc=supabase.rpc as unknown as Rpc;
+type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;const rpc=supabase.rpc.bind(supabase) as unknown as Rpc;
 export async function readOpenComplementExtinction(tenant:string,actor:string,charge:string,proposal:OpenComplementExtinctionProposal){const requested=openComplementExtinctionProposalSchema.parse(proposal);const {data,error}=await rpc('preview_finance_open_complement_extinction',{_tenant_id:tenant,_charge_id:charge,_proposal:requested});if(error)throw error;const v=openComplementExtinctionPreviewSchema.parse(data);if(v.tenant_id!==tenant||v.actor_id!==actor||v.charge_id!==charge||JSON.stringify(v.proposal)!==JSON.stringify(requested))throw new Error('Prévia fora da proposta solicitada.');return v;}
 export const sendOpenComplementExtinction=(command:OpenComplementExtinctionCommand)=>rpc('extinguish_finance_open_complement',{_payload:openComplementExtinctionCommandSchema.parse(command)});
