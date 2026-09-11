@@ -1,0 +1,44 @@
+{
+  "files": [
+    {
+      "path": "supabase/migrations/20260911094310_finance_open_complement_extinction_public_boundary.sql",
+      "sha256": "aeb874df7a99916efeab18470c1567c6c577b0762212ee2a34ebd11134d16ab1"
+    },
+    {
+      "path": "src/test/openComplementExtinctionPublicBoundary.test.ts",
+      "sha256": "ddc0c6565cb2317ab2c31058a4f045fe8c21e02299c00d32165a7221ab069c7f"
+    },
+    {
+      "path": "src/test/helpers/openComplementExtinctionDatabase.ts",
+      "sha256": "808b4e10c417df17974120e36f929658a9086b46dfcb18001b0c65e708f78c28"
+    },
+    {
+      "path": "src/test/helpers/openComplementExtinctionNativeFixture.ts",
+      "sha256": "a37377341f639c075c06ef82a79105165cbcdea6e6ee08c773040db7a7bec22c"
+    },
+    {
+      "path": "scripts/test-finance-complement-extinction-native.mjs",
+      "sha256": "587c6ebae1ac874affb30fabc7900874a43fc87bdbc57a0b87f74f1340d44cdb"
+    },
+    {
+      "path": "scripts/test-finance-complement-extinction-native-cases.mjs",
+      "sha256": "7a2af9c1f7da60b8158f836c3ad144a5babf6c0afe25d45928c64a249b113840"
+    },
+    {
+      "path": "docs/qa/finance-complement-extinction-core-catalog-2026-09-11.json",
+      "sha256": "b3974907d2e702368f6e283ff37248ab9526c5b88e56aa0f869835c3411727bc"
+    },
+    {
+      "path": "docs/qa/finance-open-complement-extinction-public-2026-09-11.md",
+      "sha256": "d91bcc1cfa90cf2f4b5b6defed51e061085efa181df0aab12092fb42bdb1c5da"
+    }
+  ],
+  "function_pins": 14,
+  "trigger_pins": 17,
+  "pglite_passed": 5,
+  "native_passed": 5,
+  "native_session": 52523,
+  "exit_code": 0,
+  "postgres_stopped": true,
+  "remote_mutations": false
+}

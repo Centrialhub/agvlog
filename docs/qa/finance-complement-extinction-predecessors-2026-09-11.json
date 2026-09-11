@@ -1,0 +1,32 @@
+[
+  {
+    "signature": "finance_private.expense_cost_before_returns(uuid,uuid)",
+    "hash": "e0328bd06900f17657a6bbc985f491fa",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.expense_cost_funding(uuid,uuid)",
+    "hash": "18ce78f3207d8f334f05c930d7434c30",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.guard_effective_unloading_cost()",
+    "hash": "fd0ba9ed44140afda72e537254a2ec8a",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  }
+]

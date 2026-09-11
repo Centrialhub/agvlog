@@ -1,0 +1,62 @@
+[
+  {
+    "path": "src/lib/financial/expenseComplementExtinctionContract.ts",
+    "sha256": "4600535643113cad5d9a53869496f2f26301606b6999b50bc12bf92627f18005"
+  },
+  {
+    "path": "src/lib/financial/openComplementExtinctionContract.ts",
+    "sha256": "992249c80db1d5f0ee136dc61f6809c028847e60d6f83b308a68a13643b0f2a4"
+  },
+  {
+    "path": "src/lib/financial/openComplementExtinctionClient.ts",
+    "sha256": "6550130b619d23d1290b6087d013198fdce949b6975bcfe3ef86799c6ab12ab2"
+  },
+  {
+    "path": "src/lib/financial/openComplementExtinctionOutbox.ts",
+    "sha256": "a90deebdf7557b7288b4d13a0965bfb1d2a028ac7a5d7d30f6a5fb1dcbd9ec56"
+  },
+  {
+    "path": "src/lib/financial/openComplementExtinctionLabels.ts",
+    "sha256": "5e20c4c59ce151679a6dc91cda68cef3250c6e6c191ff5cda5a6bf353756c83d"
+  },
+  {
+    "path": "src/lib/financial/unloadingCostCorrectionContract.ts",
+    "sha256": "a17694d3a410030bd14e2dc859118c205513ca3e6e6db3e42b64b342713a2645"
+  },
+  {
+    "path": "src/components/financial/OpenComplementExtinctionDialog.tsx",
+    "sha256": "011ac077e2589571a2ccd203ddef4831bdc9fbc8d2eb4858aad61b8824fd2362"
+  },
+  {
+    "path": "src/components/financial/OpenComplementExtinctionConfirmation.tsx",
+    "sha256": "2cf80bd03ca1f369ea014c91c7aed4a80f3ad181cf8e05230bc3a5119e690110"
+  },
+  {
+    "path": "src/components/financial/ExpenseComplementExtinctionHistory.tsx",
+    "sha256": "597ff3f04d4733113b6a3dc72dd527a040ed12cd4cfe157c5b19db4a25b63a38"
+  },
+  {
+    "path": "src/test/helpers/openComplementExtinctionFixture.ts",
+    "sha256": "90b1dd11a13381d8d355bd9dda97f53784d476bd69cbf790ede6758b45861ff6"
+  },
+  {
+    "path": "src/test/openComplementExtinctionContract.test.ts",
+    "sha256": "f78acf44d3af6a93122eed9b5900296d738db8db2a4242c227a699ade3d815bc"
+  },
+  {
+    "path": "src/test/openComplementExtinctionOutbox.test.ts",
+    "sha256": "39adb2eff5163a36eaadaddf194eeeac437c65133f30c7a05a92234cfac5d409"
+  },
+  {
+    "path": "src/test/openComplementExtinctionClient.test.ts",
+    "sha256": "6d1aaf13b82b1246174f1237b76e4009aeca561d3b5b99238c8a5e0544ac4164"
+  },
+  {
+    "path": "src/test/openComplementExtinctionPanel.test.tsx",
+    "sha256": "6d0e65948fcbe3c1a812d047d94d0f829ed672e49e7fc75c0e7997acb244aa49"
+  },
+  {
+    "path": "src/test/openComplementExtinctionReturnEntry.test.tsx",
+    "sha256": "18922c4e15300d034a71ea7deff92b44831afbafaa8cc03fdeda4d0fb6cf41b6"
+  }
+]

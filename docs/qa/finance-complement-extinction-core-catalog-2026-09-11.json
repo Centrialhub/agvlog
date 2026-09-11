@@ -1,0 +1,333 @@
+{
+  "functions": [
+    {
+      "signature": "finance_private.check_open_complement_chain()",
+      "prosrc_md5": "179ff0060662c0abfbc745c5d53e2666",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.consume_complement_extinction_ticket()",
+      "prosrc_md5": "b1d57dfd3a968418a4512e7f8355ddc0",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.cost_before_extinction_returns(uuid,uuid)",
+      "prosrc_md5": "e0328bd06900f17657a6bbc985f491fa",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.expense_cost_before_open_complement(uuid,uuid)",
+      "prosrc_md5": "de49565ea3e3325d16c4141e007a5311",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.expense_cost_before_returns(uuid,uuid)",
+      "prosrc_md5": "e7ddcd545d16eed71be863c6a00ae8bc",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.expense_cost_coverage(uuid,uuid)",
+      "prosrc_md5": "a2b095e60f0ce7badda5bfddc9b748fc",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.expense_cost_effective(uuid,uuid)",
+      "prosrc_md5": "ccc7bf6e8ab7219267937dce14da760c",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.extinguish_open_unloading_complement(jsonb)",
+      "prosrc_md5": "5f9a83c9b4e0ae11b1c16393c0673bdf",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.guard_cost_regularization_source()",
+      "prosrc_md5": "dfdfb7d5a899cf4bcf94bf379179fd2b",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.guard_effective_unloading_cost()",
+      "prosrc_md5": "fd0ba9ed44140afda72e537254a2ec8a",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.guard_open_complement_source()",
+      "prosrc_md5": "dd488ce02e562da9c7a9247bc6dddf95",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.guard_payable_revision_approval()",
+      "prosrc_md5": "b221a4388773b4f9de274025249825e7",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.open_complement_before_extinction(uuid,uuid)",
+      "prosrc_md5": "2915ff2023730b766fdc9f9b8347d39d",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.open_complement_extinction_context(uuid,uuid,jsonb)",
+      "prosrc_md5": "e1f9df5621fee337d584b3fc0253104c",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    }
+  ],
+  "triggers": [
+    {
+      "tgname": "a_cost_regularization_guard",
+      "relation": "finance_expense_allocations",
+      "function": "finance_private.guard_cost_regularization_source()",
+      "tgtype": 31,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "a_cost_regularization_guard",
+      "relation": "finance_expense_cancellations",
+      "function": "finance_private.guard_cost_regularization_source()",
+      "tgtype": 7,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "a_cost_regularization_guard",
+      "relation": "finance_movement_voids",
+      "function": "finance_private.guard_cost_regularization_source()",
+      "tgtype": 7,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "a_cost_regularization_guard",
+      "relation": "finance_payable_link_reversals",
+      "function": "finance_private.guard_cost_regularization_source()",
+      "tgtype": 7,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "a_cost_regularization_guard",
+      "relation": "finance_payable_movement_links",
+      "function": "finance_private.guard_cost_regularization_source()",
+      "tgtype": 7,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "cost_return_capacity",
+      "relation": "finance_private.cost_disposition_returns",
+      "function": "finance_private.guard_cost_disposition_return()",
+      "tgtype": 7,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "cost_return_chain",
+      "relation": "finance_private.cost_disposition_returns",
+      "function": "finance_private.check_cost_disposition_return()",
+      "tgtype": 5,
+      "tgenabled": "O",
+      "tgdeferrable": true,
+      "tginitdeferred": true,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "a_cost_regularization_guard",
+      "relation": "finance_private.expense_cost_amendments",
+      "function": "finance_private.guard_cost_regularization_source()",
+      "tgtype": 7,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "a_open_complement_covered_cost",
+      "relation": "finance_private.expense_cost_regularizations",
+      "function": "finance_private.guard_open_complement_source()",
+      "tgtype": 7,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "check_complement_extinction",
+      "relation": "finance_private.open_complement_extinctions",
+      "function": "finance_private.check_open_complement_chain()",
+      "tgtype": 5,
+      "tgenabled": "O",
+      "tgdeferrable": true,
+      "tginitdeferred": true,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "preserve_complement_extinction",
+      "relation": "finance_private.open_complement_extinctions",
+      "function": "finance_private.preserve_event()",
+      "tgtype": 27,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "a_cost_regularization_guard",
+      "relation": "payables",
+      "function": "finance_private.guard_cost_regularization_source()",
+      "tgtype": 27,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "a_open_complement_payable",
+      "relation": "payables",
+      "function": "finance_private.guard_open_complement_source()",
+      "tgtype": 27,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "a_payable_revision_approval",
+      "relation": "payables",
+      "function": "finance_private.guard_payable_revision_approval()",
+      "tgtype": 19,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "finance_effective_unloading_payable",
+      "relation": "payables",
+      "function": "finance_private.guard_effective_unloading_cost()",
+      "tgtype": 23,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "zz_complement_extinction_ticket",
+      "relation": "payables",
+      "function": "finance_private.consume_complement_extinction_ticket()",
+      "tgtype": 19,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    },
+    {
+      "tgname": "a_cost_regularization_guard",
+      "relation": "payables_payments",
+      "function": "finance_private.guard_cost_regularization_source()",
+      "tgtype": 31,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    }
+  ]
+}

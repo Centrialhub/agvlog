@@ -1,0 +1,24 @@
+{
+  "files": [
+    {
+      "path": "supabase/migrations/20260911092319_finance_unloading_open_complement_extinction.sql",
+      "sha256": "3fb732aafd84b75b99baa471bdada3e7c472ebe8c03e209a968cfd511741b263"
+    },
+    {
+      "path": "src/test/unloadingOpenComplementExtinction.test.ts",
+      "sha256": "858670c4696cf8f0335b9a5d8c29418670bd14c9475f4b2555fb8641824b12e9"
+    },
+    {
+      "path": "docs/qa/finance-complement-extinction-predecessors-2026-09-11.json",
+      "sha256": "4868e317248b982e077352f665b2f94f53c9c600269f4d298affe4e2220863d7"
+    },
+    {
+      "path": "docs/qa/finance-open-complement-extinction-2026-09-11.md",
+      "sha256": "4fdfc9a50db769989144a48b3e2b222d1f628b29c484add6f48d792f9b28a97e"
+    }
+  ],
+  "tests_passed": 9,
+  "exit_code": 0,
+  "remote_mutations": false,
+  "active_processes": []
+}

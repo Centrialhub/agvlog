@@ -1,3 +1,4 @@
+import {ExpenseComplementExtinctionHistory} from './ExpenseComplementExtinctionHistory';
 import {ExpenseOpenComplementHistory} from './ExpenseOpenComplementHistory';
 import {ExpenseCostCoverage} from './ExpenseCostCoverage';
 import {useState} from 'react';
@@ -16,6 +17,7 @@ export function ExpenseCostHistory({row}:{row:ExpenseHistoryRow}){
     <p>Valor original preservado: {formatFinanceCents(row.amount_cents)}. Correções do custo não representam novos envios nem alteram automaticamente a cobrança.</p>
     {row.coverage&&<ExpenseCostCoverage coverage={row.coverage} costCents={amount}/>}
     {matches&&origin?.open_complement&&<ExpenseOpenComplementHistory value={origin.open_complement}/>}
+    {matches&&origin?.complement_extinction&&<ExpenseComplementExtinctionHistory value={origin.complement_extinction}/>}
     {matches&&origin?.regularization?.history.map(event=><article key={event.id} className="rounded border border-amber-600 p-3"><strong>Regularização manual de custo coberto</strong><p>De {formatFinanceCents(event.cost_before_cents)} para {formatFinanceCents(event.cost_after_cents)}</p><p>{event.actor_name||'Responsável identificado'} · {event.actor_id} · {event.created_at}</p><p>Motivo: {event.reason} · pedido {event.request_id}</p></article>)}
     {matches&&!!origin?.history.length&&<>
       <h4 className="font-medium">Retificações manuais do custo ({origin.history.length})</h4>

@@ -1,3 +1,4 @@
+import {OpenComplementExtinctionDialog} from './OpenComplementExtinctionDialog';
 import {UnloadingOpenComplementDialog} from './UnloadingOpenComplementDialog';
 import {UnloadingCostRegularizationDialog} from './UnloadingCostRegularizationDialog';
 import {useTenant} from '@/hooks/useTenant';
@@ -16,7 +17,7 @@ import {formatFinanceCents} from '@/lib/financial/ledgerContract';
 import type {ExpenseHistoryRow} from '@/lib/financial/expenseHistoryContract';
 const statusLabel=(status:string|null)=>({pending:'Pendente',paid:'Pago',received:'Recebido',partially_paid:'Parcial',partial:'Parcial',cancelled:'Cancelado',overdue:'Vencido'}[status||'']||'Consultar título');
 export function ExpenseHistoryDetail({row,actor,onClose,currentUnavailable=false}:{row:ExpenseHistoryRow;actor:string;onClose:()=>void;currentUnavailable?:boolean}) {
-  const [receipt,setReceipt]=useState(false),[costCorrection,setCostCorrection]=useState(false),[regularization,setRegularization]=useState(false),[openComplement,setOpenComplement]=useState(false);
+  const [receipt,setReceipt]=useState(false),[costCorrection,setCostCorrection]=useState(false),[regularization,setRegularization]=useState(false),[openComplement,setOpenComplement]=useState(false),[extinction,setExtinction]=useState(false);
   const {currentRole}=useTenant();
   const canReadComplement=!!row.unloading_id&&['owner','admin','operator'].includes(currentRole||'');
   const canCorrectCost=!!row.unloading_id&&['owner','admin'].includes(currentRole||'');
@@ -29,6 +30,7 @@ export function ExpenseHistoryDetail({row,actor,onClose,currentUnavailable=false
     {currentUnavailable?<p role="status">Atualizando o detalhe. Os valores vigentes estão indisponíveis nesta consulta; a conferência aberta conserva seu próprio pedido.</p>:<ExpenseCostHistory row={row}/>}
     {canCorrectCost&&<Button variant="outline" disabled={currentUnavailable} onClick={()=>setCostCorrection(true)}>Conferir correção do custo da descarga</Button>}
     {canCorrectCost&&<Button variant="outline" disabled={currentUnavailable} onClick={()=>setRegularization(true)}>Conferir regularização de custo coberto</Button>}
+    {canReadComplement&&<Button variant="outline" disabled={currentUnavailable} onClick={()=>setExtinction(true)}>Conferir redução até o valor já enviado</Button>}
     {canReadComplement&&<Button variant="outline" disabled={currentUnavailable} onClick={()=>setOpenComplement(true)}>Conferir correção do complemento aberto</Button>}
     {row.receipt_path?<Button variant="outline" onClick={()=>setReceipt(true)}>Ver comprovante</Button>:<p className="rounded border p-3 text-sm">{(row.receipt_artifact_count??0)>0?'Comprovante adicional anexado. ':''}Sem comprovante no registro original: {row.no_receipt_reason||'Justificativa não informada'}</p>}
     <ExpenseArtifactPanel tenant={row.tenant_id} actor={actor} expense={row.id}/>
@@ -49,5 +51,6 @@ export function ExpenseHistoryDetail({row,actor,onClose,currentUnavailable=false
   </DialogContent></Dialog>{canCorrectCost&&costCorrection&&row.unloading_id&&<UnloadingCostCorrectionDialog key={`${row.tenant_id}:${actor}:${row.unloading_id}`} tenant={row.tenant_id} actor={actor} chargeId={row.unloading_id} open onOpenChange={setCostCorrection}/>}
   {canCorrectCost&&regularization&&row.unloading_id&&<UnloadingCostRegularizationDialog key={`${row.tenant_id}:${actor}:${row.unloading_id}`} tenant={row.tenant_id} actor={actor} chargeId={row.unloading_id} open onOpenChange={setRegularization}/>}
   {canReadComplement&&openComplement&&row.unloading_id&&<UnloadingOpenComplementDialog key={`${row.tenant_id}:${actor}:${row.unloading_id}`} tenant={row.tenant_id} actor={actor} chargeId={row.unloading_id} open onOpenChange={setOpenComplement}/>}
+  {canReadComplement&&extinction&&row.unloading_id&&<OpenComplementExtinctionDialog key={`${row.tenant_id}:${actor}:${row.unloading_id}`} tenant={row.tenant_id} actor={actor} chargeId={row.unloading_id} open onOpenChange={setExtinction}/>}
   {receipt&&row.receipt_path&&<ExpenseReceiptDialog tenantId={row.tenant_id} path={row.receipt_path} onClose={()=>setReceipt(false)}/>}</>;
 }
