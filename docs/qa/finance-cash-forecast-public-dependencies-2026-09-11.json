@@ -1,0 +1,122 @@
+[
+  {
+    "signature": "finance_private.cash_forecast_collect(uuid,date,date)",
+    "body_md5": "f05aa53d0b085c6d89f177234a65b24c",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.cash_forecast_snapshot_summary(uuid,uuid)",
+    "body_md5": "f137173987218f4b010b2db993665fa1",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.cash_forecast_source_page(uuid,date,date,uuid,text,integer,text)",
+    "body_md5": "6b9f4cc1f5547c6381808421fbe6c539",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.cash_forecast_summary(jsonb,jsonb,jsonb)",
+    "body_md5": "dd033f6cc7580d367f7624786a97b790",
+    "prosecdef": false,
+    "provolatile": "i",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.forecast_customer_credit_evidence(uuid,uuid)",
+    "body_md5": "0d52a40e865dba8396d54c1eaed99d90",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.forecast_movement_evidence(uuid,uuid)",
+    "body_md5": "5ea1d66232a8b9337f2f7843c0c6ac9a",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.list_cash_forecast_snapshots(uuid,integer,text)",
+    "body_md5": "043decb64c81cca8e77472948ef2d0f4",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.preview_cash_forecast(uuid,date,date,text)",
+    "body_md5": "d3482d879a34b9637e2b09d3a9f9bbe5",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.project_collected_cash_forecast(jsonb)",
+    "body_md5": "995d91c56dd8eb5bafdfeba5bd664896",
+    "prosecdef": false,
+    "provolatile": "i",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.read_cash_forecast_snapshot(uuid,uuid)",
+    "body_md5": "01ce07b9e21b3a2d9c0207b335245823",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.record_cash_forecast_snapshot(jsonb)",
+    "body_md5": "cd0eab6f23ecefa1c61cf976735318fb",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.validate_forecast_json(jsonb,jsonb)",
+    "body_md5": "d7d58dc822008959464fa7fe1ac87415",
+    "prosecdef": false,
+    "provolatile": "i",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  }
+]

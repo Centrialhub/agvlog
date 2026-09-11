@@ -1,0 +1,23 @@
+{
+  "tests": "2 PASS",
+  "files": [
+    {
+      "sha256": "e527123470ea01853e95dc4f7a5f0ebff4fb6b6700138a06b8f8fb42337f26f8",
+      "path": "src/test/cashForecastReadersIndependent.test.ts"
+    },
+    {
+      "sha256": "3978f9c505d2409bcc19095dd0fb9053d9a6c7674c83c97d3809bdfbed2541c6",
+      "path": "docs/qa/finance-cash-forecast-readers-independent-2026-09-11.md"
+    }
+  ],
+  "reviewed_migrations": [
+    {
+      "sha256": "ca9a9a14365ca6d2650a8d272eda3679eceb1eaaf0e9fec4b797c2e32f5eb085",
+      "path": "supabase/migrations/20260911084626_finance_cash_forecast_preserved_snapshots.sql"
+    },
+    {
+      "sha256": "1504d8b85abc9d693cdda4eb0601ccbc9732d421e84aba2ca834af9e89eb2802",
+      "path": "supabase/migrations/20260911085621_finance_cash_forecast_public_readers.sql"
+    }
+  ]
+}

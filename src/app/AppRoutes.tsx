@@ -46,6 +46,7 @@ const FinanceMovements = lazy(() => import("@/pages/FinanceMovements"));
 const FinanceExpenses = lazy(() => import("@/pages/FinanceExpenses"));
 const FinanceStatements = lazy(() => import("@/pages/FinanceStatements"));
 const FinanceAudit = lazy(() => import("@/pages/FinanceAudit"));
+const FinanceCashForecast = lazy(() => import("@/pages/FinanceCashForecast"));
 const FinanceFiscalQueue = lazy(() => import("@/pages/FinanceFiscalQueue"));
 const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
 const DataAudit = lazy(() => import("@/pages/DataAudit"));
@@ -165,6 +166,7 @@ export function AppRoutes() {
       <Route path="/financial/recorded-expenses" element={<ProtectedRoute><FinanceExpenses /></ProtectedRoute>} />
       <Route path="/financial/statements" element={<ProtectedRoute><FinanceStatements /></ProtectedRoute>} />
       <Route path="/financial/audit" element={<ProtectedRoute><FinanceAudit /></ProtectedRoute>} />
+      <Route path="/financial/cash-forecast" element={<ProtectedRoute><FinanceCashForecast /></ProtectedRoute>} />
       <Route path="/financial/fiscal-queue" element={<ProtectedRoute><FinanceFiscalQueue /></ProtectedRoute>} />
       <Route path="/driver-settlements" element={<ProtectedRoute><DriverSettlements /></ProtectedRoute>} />
       <Route path="/cost-centers" element={<ProtectedRoute><CostCenters /></ProtectedRoute>} />

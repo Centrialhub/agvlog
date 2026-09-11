@@ -1,0 +1,44 @@
+{
+  "status": "local_tested_not_deployed",
+  "tests": 8,
+  "files": [
+    {
+      "path": "supabase/migrations/20260911092206_finance_cash_forecast_comparison_public_boundary.sql",
+      "sha256": "b8d89d12d33ec5094df7512e4aef041b06a06de9a23a303da1d475c57c19d514"
+    },
+    {
+      "path": "src/lib/financial/cashForecastComparisonContract.ts",
+      "sha256": "a15a58e6ff3d4c1398b2acab67da06e72e49d1c249d2262cbad8970b7007610f"
+    },
+    {
+      "path": "src/lib/financial/cashForecastComparisonClient.ts",
+      "sha256": "4276276ee6d09167da3d4aa4caf69130f111568741546dd4fc88cc9423bee88c"
+    },
+    {
+      "path": "src/components/financial/CashForecastComparisonPanel.tsx",
+      "sha256": "9398874a33d0b22233a49d047c191a8679a54c54ae69554304ff1d87bfe50f08"
+    },
+    {
+      "path": "src/test/cashForecastComparisonPublic.test.ts",
+      "sha256": "d9dd2e1028828b8c49da3c1ffed8c5eaa8ba85e00dd02cf973c09d8685dc9292"
+    },
+    {
+      "path": "src/test/cashForecastComparisonPanel.test.tsx",
+      "sha256": "74093e574e1bf991371c320df0c58faac74b737926673e5b55a466465ac42b04"
+    },
+    {
+      "path": "src/test/cashForecastComparisonClient.test.ts",
+      "sha256": "ef2190650cb1dbca2cb5c166e47ebdac9df72a0df8ebc8b1286aaf3da59adc57"
+    },
+    {
+      "path": "docs/qa/finance-cash-forecast-comparison-public-dependencies-2026-09-11.json",
+      "sha256": "253e6e192986cd759cba9f128fc4a8322fcba50a2ef862db7e750a15c801c0da"
+    },
+    {
+      "path": "docs/qa/finance-cash-forecast-comparison-public-2026-09-11.md",
+      "sha256": "47044ca0f5c8577985b4396c421b383b4374e0615a32e165d770e047c9e8e107"
+    }
+  ],
+  "include_manifest_itself": "docs/qa/finance-cash-forecast-comparison-public-2026-09-11.json",
+  "final_distinct_comparison_tests": 20
+}

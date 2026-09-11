@@ -16,7 +16,7 @@ export function compareCashForecast(original: Projection, realizedInput: unknown
   const compare = (expanded: boolean) => {
     const scenario = expanded ? original.expanded : original.confirmed;
     if (!realized.monetary_totals_valid || !scenario.complete || scenario.closing_cents === null || original.base.amount_cents === null)
-      return { available: false as const, matches: false, differences: null };
+      return { available: false as const, matches: false, expected: null, actual: null, differences: null };
     const expectedIn = BigInt(original.recorded_totals.in_cents) + BigInt(original.scheduled.confirmed_in_cents)
       + (expanded ? BigInt(original.scheduled.unbilled_in_cents) : 0n);
     const expectedOut = BigInt(original.recorded_totals.out_cents) + BigInt(original.scheduled.confirmed_out_cents);
@@ -29,6 +29,8 @@ export function compareCashForecast(original: Projection, realizedInput: unknown
     const closing = BigInt(realized.totals.closing_cents!) - expectedClosing;
     if (opening + incoming - outgoing !== closing) throw new Error('A decomposição da diferença não conserva o caixa.');
     return { available: true as const, matches: opening === 0n && incoming === 0n && outgoing === 0n && closing === 0n,
+      expected: {opening_cents: original.base.amount_cents, in_cents: expectedIn.toString(), out_cents: expectedOut.toString(), closing_cents: expectedClosing.toString()},
+      actual: {opening_cents: realized.totals.opening_cents!, in_cents: realized.totals.in_cents!, out_cents: realized.totals.out_cents!, closing_cents: realized.totals.closing_cents!},
       differences: { opening_cents: opening.toString(), in_cents: incoming.toString(), out_cents: outgoing.toString(), closing_cents: closing.toString() } };
   };
   return {

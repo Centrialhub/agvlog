@@ -1,0 +1,62 @@
+[
+  {
+    "path": "src/lib/financial/cashForecastViewContract.ts",
+    "sha256": "5692b5094e09489557480c96f871ee55fe6a26ce1621dbfca3e21988a1e78ae6"
+  },
+  {
+    "path": "src/lib/financial/cashForecastViewClient.ts",
+    "sha256": "57304bc1164631047621707ca42273f38759a8a37f15ae0c43697d20dbb79202"
+  },
+  {
+    "path": "src/lib/financial/cashForecastViewOutbox.ts",
+    "sha256": "5c2842682734fcb7117ef564b232a6f0d8d55bbf7b283d9dee7e294f4a832535"
+  },
+  {
+    "path": "src/lib/financial/cashForecastViewLabels.ts",
+    "sha256": "9764fb942a3e7762ca2430d8297e729173981b97c20d00e985948ec15089ff95"
+  },
+  {
+    "path": "src/components/financial/CashForecastPanel.tsx",
+    "sha256": "56f2b4d2ef8a8cc758917154041a2166f7131a99df705f025c9cd27536aab3bd"
+  },
+  {
+    "path": "src/components/financial/CashForecastPreserve.tsx",
+    "sha256": "7e0405660393b7675ab861a2c5e7a6c8b8211564d34c2adf7d243ba63a4602e6"
+  },
+  {
+    "path": "src/components/financial/CashForecastSources.tsx",
+    "sha256": "498bfd7456d1afc0f8b3c2da4bccd54fa48a481b47ad4bc2681e797513d766f6"
+  },
+  {
+    "path": "src/components/financial/CashForecastSummary.tsx",
+    "sha256": "c753f9c7c5da91e8c7502a6f13f7e2a7cc1484fb26d723e5fcf98acaa9507823"
+  },
+  {
+    "path": "src/components/financial/CashForecastHistory.tsx",
+    "sha256": "60602e7bcdb8029730afdb19d302adfc13f74f63804164ab2d84e3618f51b5fb"
+  },
+  {
+    "path": "src/test/cashForecastViewPanel.test.tsx",
+    "sha256": "87b168478d6e28a7ac56ea697d9d796e8e3c58892a1d35698941294cce374362"
+  },
+  {
+    "path": "src/test/cashForecastViewClient.test.ts",
+    "sha256": "6bc4dd3260338178796fb8084eac8ac59630b58abe20f4eef2def9842e87d639"
+  },
+  {
+    "path": "src/test/cashForecastViewContract.test.ts",
+    "sha256": "2ef4edd9f03e7acdd0c6644dda57167231a7221e8a9ccc92b6519f15349fbcbc"
+  },
+  {
+    "path": "src/test/cashForecastViewOutbox.test.ts",
+    "sha256": "690e39d93ab11cec14dc0aebe5cfde2c1d9b082b37eb6079a7b624f384526ea1"
+  },
+  {
+    "path": "src/test/cashForecastViewDatabase.test.ts",
+    "sha256": "bce46c020041ef8695be2ba821e0c5669198e8604341b3980f3fe5fc2879cda0"
+  },
+  {
+    "path": "src/test/helpers/cashForecastViewFixture.ts",
+    "sha256": "9830a19ba28a4779e61a2e98ee253b56842ce70c74789bde279c8e592bf63da1"
+  }
+]

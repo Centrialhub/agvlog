@@ -10,10 +10,13 @@ describe('sidebar navigation', () => {
   it('hides financial links until access is explicitly confirmed and removes them after denial',()=>{
     const view=render(<MemoryRouter><TooltipProvider><SidebarNavigation query="financeiro" capabilityAvailable={()=>true}/></TooltipProvider></MemoryRouter>);
     expect(screen.queryByRole('link',{name:'Contas a pagar'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('link',{name:'Previsão de caixa'})).not.toBeInTheDocument();
     view.rerender(<MemoryRouter><TooltipProvider><SidebarNavigation query="financeiro" capabilityAvailable={()=>true} financeAvailable/></TooltipProvider></MemoryRouter>);
     expect(screen.getByRole('link',{name:'Contas a pagar'})).toBeInTheDocument();
+    expect(screen.getByRole('link',{name:'Previsão de caixa'})).toHaveAttribute('href','/financial/cash-forecast');
     view.rerender(<MemoryRouter><TooltipProvider><SidebarNavigation query="financeiro" capabilityAvailable={()=>true} financeAvailable={false}/></TooltipProvider></MemoryRouter>);
     expect(screen.queryByRole('link',{name:'Contas a pagar'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('link',{name:'Previsão de caixa'})).not.toBeInTheDocument();
   });
   it('does not confuse neighboring routes and identifies detail pages', () => {
     expect(isNavigationActive('/operations-control', '/operations')).toBe(false);
@@ -25,6 +28,7 @@ describe('sidebar navigation', () => {
   it('selects financial subpages and keeps payroll in Financeiro', () => {
     expect(findNavigationPage('/financial/movements')?.item.href).toBe('/financial/movements');
     expect(findNavigationPage('/financial/statements')?.item.href).toBe('/financial/statements');
+    expect(findNavigationPage('/financial/cash-forecast')?.item.href).toBe('/financial/cash-forecast');
     expect(findNavigationPage('/payroll')?.section.id).toBe('finance');
     render(<MemoryRouter initialEntries={['/financial/movements']}><TooltipProvider><SidebarNavigation query="" capabilityAvailable={() => true} financeAvailable /></TooltipProvider></MemoryRouter>);
     expect(screen.getByRole('link', { name: 'Movimentações' })).toHaveAttribute('aria-current', 'page');

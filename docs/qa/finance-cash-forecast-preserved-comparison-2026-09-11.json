@@ -1,0 +1,31 @@
+{
+  "status": "local_tested_private_not_deployed",
+  "tests": {
+    "passed": 5,
+    "exit_code": 0
+  },
+  "files": [
+    {
+      "path": "supabase/migrations/20260911090341_finance_cash_forecast_preserved_comparison.sql",
+      "sha256": "ef0051a87cc252bc1801f4141886561678320595768f2ff4b9effa55cc411a11"
+    },
+    {
+      "path": "src/test/cashForecastComparisonDatabase.test.ts",
+      "sha256": "3189d95091bd9b6988e8cfc3775c8bb3576a39beca36c94bcd7fa5ff96b03846"
+    },
+    {
+      "path": "docs/qa/finance-cash-forecast-preserved-comparison-2026-09-11.md",
+      "sha256": "922f740b0b60dfec824ad86a101a23d56bed5b53fa444010b58f3b8ee51a8015"
+    },
+    {
+      "path": "src/lib/financial/cashForecastComparison.ts",
+      "sha256": "b0ad104fcf1d7c358d4d006fabe7a97f0a161170b7df06185119cd2dfb835c85"
+    },
+    {
+      "path": "src/test/cashForecastComparison.test.ts",
+      "sha256": "657e55ae0ed9bd7c4f83caa77a845a9276fc2d1efdd763f8c4fbfd72a62bb068"
+    }
+  ],
+  "include_manifest_itself": "docs/qa/finance-cash-forecast-preserved-comparison-2026-09-11.json",
+  "final_distinct_comparison_tests": 20
+}

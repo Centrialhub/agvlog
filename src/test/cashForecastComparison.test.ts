@@ -27,7 +27,7 @@ it('rejects cross-company, cross-account and mismatched period comparisons',()=>
 });
 it('does not fabricate a variance when the forecast is incomplete or the realized closing lacks coverage',()=>{
  const {realized,basis}=setup();basis.origins[0].expected_on='2026-07-30';
- expect(compareCashForecast(projectCashForecast(basis),realized).confirmed).toEqual({available:false,matches:false,differences:null});
+ expect(compareCashForecast(projectCashForecast(basis),realized).confirmed).toEqual({available:false,matches:false,expected:null,actual:null,differences:null});
  basis.origins[0].expected_on='2026-08-15';realized.monetary_totals_valid=false;realized.totals={opening_cents:null,in_cents:null,out_cents:null,closing_cents:null};realized.transfer_classification_valid=false;realized.transfer_totals={internal_pair_cents:null,in_excluding_internal_pairs_cents:null,out_excluding_internal_pairs_cents:null};
  expect(compareCashForecast(projectCashForecast(basis),realized).confirmed.available).toBe(false);
 });

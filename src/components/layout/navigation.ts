@@ -67,6 +67,7 @@ export const navigationSections: NavigationSection[] = [
   ] },
   { id: 'finance', label: 'Financeiro', icon: Wallet, items: [
     { label: 'Painel financeiro', href: '/financial', icon: Wallet },
+    { label: 'Previsão de caixa', href: '/financial/cash-forecast', icon: CircleDollarSign, keywords: 'previsto realizado recebimentos pagamentos fluxo saldo' },
     { label: 'Movimentações', href: '/financial/movements', icon: ArrowLeftRight },
     { label: 'Gastos conferidos', href: '/financial/recorded-expenses', icon: ArrowLeftRight },
     { label: 'Extratos importados', href: '/financial/statements', icon: ArrowLeftRight },

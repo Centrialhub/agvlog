@@ -1,0 +1,52 @@
+[
+  {
+    "signature": "finance_private.cash_forecast_comparison(jsonb,jsonb)",
+    "body_md5": "a24bce30f26f157ae1e213c2adc13dd2",
+    "prosecdef": false,
+    "provolatile": "i",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.compare_cash_forecast_snapshot(uuid,uuid)",
+    "body_md5": "29b38b3c43ccf4df6daf95ad34429ad0",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.period_money_package(uuid,date,date,uuid[])",
+    "body_md5": "f389fc63e5bd3e0a130524adc83a08d2",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres,authenticated=X/postgres}"
+  },
+  {
+    "signature": "finance_private.read_cash_forecast_snapshot(uuid,uuid)",
+    "body_md5": "01ce07b9e21b3a2d9c0207b335245823",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.validate_forecast_json(jsonb,jsonb)",
+    "body_md5": "d7d58dc822008959464fa7fe1ac87415",
+    "prosecdef": false,
+    "provolatile": "i",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  }
+]
