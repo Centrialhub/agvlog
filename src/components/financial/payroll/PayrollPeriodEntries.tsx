@@ -30,7 +30,7 @@ export function PeriodEntries(props: PeriodEntriesProps) {
 function PeriodEntriesContent({ period, onOpenEntry }: PeriodEntriesProps) {
   const { confirmAction, promptAction } = useScopedAlerts();
   const toast = useSonnerToast();
-  const { data: entries = [], isLoading, error } = usePayrollEntries(period.id);
+  const { data: entries = [], isLoading, isFetching, error } = usePayrollEntries(period.id);
   const approve = useApprovePayrollPeriod();
   const close = useClosePayrollPeriod();
   const gen = useGeneratePayrollPeriod();
@@ -91,6 +91,7 @@ function PeriodEntriesContent({ period, onOpenEntry }: PeriodEntriesProps) {
   };
 
   if (error) return <p role="alert" className="text-destructive">Não foi possível conferir os pagamentos da folha. {getErrorMessage(error, 'Tente novamente.')}</p>;
+  if (isLoading || isFetching) return <p role="status">Conferindo valores e pagamentos da folha… Aguarde a consulta para aprovar, recalcular ou fechar.</p>;
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">Pagamentos registrados nos títulos. A confirmação pelo extrato bancário é uma conferência separada.</p>

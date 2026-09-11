@@ -22,9 +22,9 @@ export function FinanceOptionPicker({ tenant, actor, kind, trip = null, label, v
       <div className="flex gap-2"><Input ref={searchInput} aria-label={`Buscar ${label}`} value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => {
         if (e.key === 'Enter') {e.preventDefault();setTerm(search);setPage(1);}
       }} /><Button type="button" onClick={() => {setTerm(search);setPage(1);}}>Buscar</Button></div>
-      {query.isPending && <p role="status">Carregando…</p>}
+      {(query.isPending||query.isFetching) && <p role="status">Conferindo opções disponíveis…</p>}
       {query.error && <p role="alert">Não foi possível carregar. <Button type="button" onClick={() => void query.refetch()}>Tentar novamente</Button></p>}
-      {query.data && !query.error && <><div className="max-h-48 overflow-y-auto">{query.data.rows.map(option => <Button type="button" key={option.id}
+      {query.data && !query.error && !query.isFetching && <><div className="max-h-48 overflow-y-auto">{query.data.rows.map(option => <Button type="button" key={option.id}
         variant="ghost" className="h-auto w-full justify-start whitespace-normal text-left" disabled={!!option.delivery?.issue}
         onClick={() => {onChange(option);setOpen(false);trigger.current?.focus();}}>
         <span>{option.label}{option.remaining_cents !== undefined && ` · Disponível ${formatFinanceCents(option.remaining_cents)}`}

@@ -29,7 +29,7 @@ function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:stri
   const [detailsExpanded,setDetailsExpanded]=useState(true),[focusTarget,setFocusTarget]=useState<{id:string;field:string}|null>(null);
   const [error,setError]=useState(''),[storageFailed,setStorageFailed]=useState(false),[review,setReview]=useState(false);
   const [sharedMovement,setSharedMovement]=useState<FinanceOption|null>(null);
-  const draft=saved.draft, locked=busy||uploadBusy||!!saved.request||restored.error;
+  const draft=saved.draft, locked=busy||!!saved.request||restored.error;
   useEffect(()=>{if(restored.error)return;try{sessionStorage.setItem(key,JSON.stringify(saved));setStorageFailed(false);}catch{setStorageFailed(true);}},[key,saved,restored.error]);
   useEffect(()=>{if(!focusTarget)return;const timer=window.setTimeout(()=>{const section=body.current?.querySelector(`[data-expense-id="${focusTarget.id}"]`);const control=body.current?.querySelector<HTMLElement>(focusTarget.id?`[data-expense-id="${focusTarget.id}"] [aria-label^="${focusTarget.field} "]`:`[data-add-expense]`)||Array.from(section?.querySelectorAll(`button`)||[]).find(button=>button.textContent?.trim().startsWith(`${focusTarget.field} `));control?.focus();setFocusTarget(null);},0);return()=>window.clearTimeout(timer);},[focusTarget]);
   const normalize=(next:ExpenseBatchDraft)=>({...next,lines:next.lines.map(line=>{const r=line.preparedReceipt;if(r&&(r.tenantId!==tenant||r.actorId!==actor||r.context!==next.context||r.tripId!==(next.context==='trip'?next.trip?.id??null:null)||r.stopId!==(line.category==='unloading'?line.delivery?.id??null:null)))return {...line,preparedReceipt:null,receiptName:''};return line;})});
@@ -43,6 +43,7 @@ function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:stri
   });}
   const allocated=[...movements.values()].reduce((sum,m)=>sum+m.used,0n);
   function check() {
+    if(locked||uploadBusy)return;
     try{buildExpenseBatch(draft,tenant,saved.request||saved.batchRequest!,actor);setError('');setReview(true);}
     catch(cause){const message=cause instanceof Error?cause.message:'Revise os gastos.';setError(message);setDetailsExpanded(true);const match=/^Gasto (\d+):/.exec(message),line=match?draft.lines[Number(match[1])-1]:undefined;if(line){const field=expenseErrorField(line,message);setFocusTarget({id:line.id,field});}}
   }
@@ -63,6 +64,7 @@ function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:stri
       <DialogHeader><DialogTitle>Conferir gastos em lote</DialogTitle><DialogDescription>Registre cada gasto e vincule os valores aos envios existentes. Este lançamento não realiza pagamentos.</DialogDescription></DialogHeader>
       <div className="space-y-4" ref={body}>
         <fieldset disabled={locked} className="space-y-4">
+          <fieldset disabled={uploadBusy} className="space-y-4" aria-label="Origem e distribuição do lote">
           <div className="grid gap-3 sm:grid-cols-3"><label className="text-sm">Origem dos gastos<select aria-label="Origem dos gastos" className="h-10 w-full rounded border bg-background" value={draft.context}
             onChange={e=>{const context=e.target.value as ExpenseBatchDraft['context'];setSharedMovement(null);change({...draft,context,trip:null,
               lines:draft.lines.map(line=>({...line,payeeType:context==='trip'?'driver':'supplier'}))});}}>
@@ -75,6 +77,8 @@ function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:stri
             <FinanceOptionPicker tenant={tenant} actor={actor} kind="movements" trip={draft.context==='trip'?draft.trip?.id||null:null} label="Envio compartilhado" value={sharedMovement} onChange={setSharedMovement}/>
             <Button type="button" variant="outline" disabled={!sharedMovement} onClick={()=>{try{change(distributeExpenseMovement(draft,sharedMovement!));setError('');}catch(cause){setError(cause instanceof Error?cause.message:'Revise os vínculos.');}}}>Distribuir saldo entre os gastos</Button>
           </div>
+          </fieldset>
+          {uploadBusy&&<p role="status">Preparando comprovante. Você pode preencher outros gastos; a origem do lote e o registro final permanecem bloqueados.</p>}
           <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded border bg-background p-3"><Button type="button" data-add-expense variant="outline" disabled={draft.lines.length>=200} onClick={()=>addLine()}>Adicionar gasto</Button><Button type="button" variant="outline" onClick={()=>setDetailsExpanded(!detailsExpanded)}>{detailsExpanded?'Recolher detalhes dos gastos':'Expandir detalhes dos gastos'}</Button><span className="text-sm">{draft.lines.length}/200 gastos · Total {formatFinanceCents(total.toString())} · Vinculado {formatFinanceCents(allocated.toString())} · Complemento {formatFinanceCents((total>allocated?total-allocated:0n).toString())}</span>{allocated>total&&<span className="text-destructive">Excesso vinculado: {formatFinanceCents((allocated-total).toString())}</span>}</div>
           <p className="text-sm text-muted-foreground">Ctrl+Enter em um gasto adiciona o próximo. Reutilizar dados mantém categoria, descrição, data e favorecido; valor, comprovante, documento, entrega e vínculos devem ser conferidos novamente.</p>
           {draft.lines.map((line,index)=><ExpenseBatchLine key={line.id} tenant={tenant} actor={actor} batchRequest={saved.batchRequest!} context={draft.context} trip={draft.context==='trip'?draft.trip?.id||null:null} line={line} index={index}
@@ -91,7 +95,7 @@ function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:stri
         {review&&<p role="status">Revise os gastos e vínculos acima. Ao registrar, eventuais complementos entram em contas a pagar e cada descarga válida gera uma conta a receber do fornecedor da entrega.</p>}
         <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy||uploadBusy} onClick={onClose}>Fechar e guardar rascunho</Button>
           {review||saved.request?<Button type="button" disabled={busy||uploadBusy||storageFailed||restored.error} onClick={()=>void submit()}>{busy?'Registrando…':saved.request?'Reenviar mesmo lote':'Registrar lote conferido'}</Button>
-            :<Button type="button" disabled={locked||storageFailed} onClick={check}>Revisar lote</Button>}</div>
+            :<Button type="button" disabled={locked||uploadBusy||storageFailed} onClick={check}>Revisar lote</Button>}</div>
       </div>
     </DialogContent>
   </Dialog>;

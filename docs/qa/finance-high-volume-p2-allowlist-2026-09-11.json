@@ -1,0 +1,32 @@
+{
+  "files": [
+    {
+      "path": "src/components/financial/ExpenseBatchDialog.tsx",
+      "sha256": "d7a25d232d023fdb73f7c8b1107f56f395ea6eda19bf9e1dc9090fe0309a03cd"
+    },
+    {
+      "path": "src/components/financial/ExpenseBatchLine.tsx",
+      "sha256": "2e84d87a438b26bfc952043ce1a1c927251a0bf8779847a20f253f73172c8b64"
+    },
+    {
+      "path": "src/components/financial/FinanceOptionPicker.tsx",
+      "sha256": "894cbebccbb1f97c1e41d3daf869dddea7c19adc0cfb45f827aeb6941b256689"
+    },
+    {
+      "path": "src/components/financial/payroll/PayrollPeriodEntries.tsx",
+      "sha256": "f42e6570bf27401ab0edf8c9fc9eee991320f1847668121e9e97b9f949723fc0"
+    },
+    {
+      "path": "src/test/expenseBatchPreparedReceipt.test.tsx",
+      "sha256": "7748afdea5a5cdc3628ab107e3c14a932d44cb688350c223c6c8b37ee5e63d52"
+    },
+    {
+      "path": "src/test/financeOptionPickerKeyboard.test.tsx",
+      "sha256": "018fc94c6bff1029c23b802660666e97b4217e00046791190f610e161ed4539b"
+    },
+    {
+      "path": "src/test/financePayrollScreen.test.tsx",
+      "sha256": "50513c9d1531cd0f7868c9d825eda22d3504af411e8f0a06cdd74d1a1976becd"
+    }
+  ]
+}

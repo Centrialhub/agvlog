@@ -1,9 +1,9 @@
 import {fireEvent,render,screen,within} from '@testing-library/react';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import type {PayrollPeriod} from '../hooks/usePayroll';
-const state=vi.hoisted(()=>({error:null as Error|null,rows:[] as unknown[]}));
+const state=vi.hoisted(()=>({error:null as Error|null,rows:[] as unknown[],loading:false,fetching:false}));
 vi.mock('@/hooks/usePayroll',()=>({
- usePayrollEntries:()=>({data:state.rows,isLoading:false,error:state.error}),
+ usePayrollEntries:()=>({data:state.rows,isLoading:state.loading,isFetching:state.fetching,error:state.error}),
  useApprovePayrollPeriod:()=>({}),useClosePayrollPeriod:()=>({}),useGeneratePayrollPeriod:()=>({}),
  PAYROLL_PERIOD_STATUS_LABELS:{approved:'Aprovada'},PAYROLL_PAYMENT_STATUS_LABELS:{},
 }));
@@ -13,7 +13,7 @@ vi.mock('@/hooks/useEmployees',()=>({useEmployees:()=>({data:[]})}));
 import {PeriodEntries} from '../pages/Payroll';
 const period={id:'period',status:'approved',period_name:'Setembro'} as PayrollPeriod;
 beforeEach(()=>{
- state.error=null;
+ state.error=null;state.loading=false;state.fetching=false;
  state.rows=[{id:'entry',employees:{name:'Pessoa QA'},status:'approved',employee_id:'employee',entry_type:'employee',
  gross_amount:1000,discount_amount:0,already_paid_amount:200,amount_to_pay:800,
  payment_summary:{paid_via_titles:'300.00',remaining_amount:'500.00',status:'partial',issues:[]}}];
@@ -66,3 +66,6 @@ it('resets employee filters when switching payroll period',()=>{
  expect(screen.getByLabelText('Buscar na folha')).toHaveValue('');
  expect(screen.getByRole('button',{name:'Pessoa QA'})).toBeInTheDocument();
 });
+
+it('withholds invented zero totals and closing until the initial payroll query completes',()=>{state.rows=[];state.loading=true;render(<PeriodEntries period={period} onOpenEntry={vi.fn()}/>);expect(screen.getByRole('status')).toHaveTextContent('Conferindo valores');expect(screen.queryByText('Saldo a pagar')).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Fechar'})).not.toBeInTheDocument();expect(screen.queryByText(/0,00/)).not.toBeInTheDocument();});
+it('withholds cached totals and actions during refresh and restores them only after success',()=>{const view=render(<PeriodEntries period={period} onOpenEntry={vi.fn()}/>);expect(screen.getByText('Pessoa QA')).toBeInTheDocument();state.fetching=true;view.rerender(<PeriodEntries period={period} onOpenEntry={vi.fn()}/>);expect(screen.getByRole('status')).toHaveTextContent('Conferindo valores');expect(screen.queryByText('Pessoa QA')).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Fechar'})).not.toBeInTheDocument();state.fetching=false;view.rerender(<PeriodEntries period={period} onOpenEntry={vi.fn()}/>);expect(screen.getByText('Pessoa QA')).toBeInTheDocument();expect(screen.getByRole('button',{name:'Fechar'})).toBeEnabled();});

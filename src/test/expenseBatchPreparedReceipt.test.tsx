@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
@@ -21,3 +22,13 @@ it('keeps registration locked until every concurrent row upload finishes',async(
 });
 
 it('shows confirmed image limits and keeps rejected dimensions out of the prepared batch',async()=>{m.prepare.mockRejectedValueOnce(new Error('Original recebido em quarentena. A imagem excede o limite de dimensões; envie uma versão menor. Nenhum comprovante foi vinculado a este gasto.'));open();expect(screen.getByText(/5.242.880 bytes.*2 megapixels/)).toBeInTheDocument();fireEvent.change(screen.getByLabelText('Comprovante 1'),{target:{files:[new File(['png'],'large.png')]}});await screen.findByRole('alert');expect(screen.getByRole('alert')).toHaveTextContent('limite de dimensões');expect(screen.queryByText(/Cópia validada preparada/)).not.toBeInTheDocument();expect(JSON.parse(sessionStorage.getItem(key)!).draft.lines[0].preparedReceipt).toBeNull();expect(m.record).not.toHaveBeenCalled();});
+
+it('allows typing another row during upload while protecting the uploading row, scope and final send',async()=>{
+ const saved=JSON.parse(sessionStorage.getItem(key)!);saved.draft.lines.push({...saved.draft.lines[0],id:crypto.randomUUID(),category:'food',delivery:null});sessionStorage.setItem(key,JSON.stringify(saved));
+ let finish!:()=>void;m.prepare.mockImplementation((input:Record<string,unknown>,who:string,file:File)=>new Promise(resolve=>{finish=()=>resolve({tenantId:input.tenant_id,actorId:who,batchRequestId:input.batch_request_id,expenseId:input.expense_id,context:input.context,tripId:input.trip_id,stopId:input.stop_id,intentId:crypto.randomUUID(),artifactId:crypto.randomUUID(),sha256:'a'.repeat(64),name:file.name});}));
+ const user=userEvent.setup();open();const initial=JSON.parse(sessionStorage.getItem(key)!);
+ await user.upload(screen.getByLabelText('Comprovante 1'),new File(['png'],'receipt.png',{type:'image/png'}));
+ expect(screen.getByLabelText('Descrição 1')).toBeDisabled();expect(screen.getByRole('button',{name:'Remover gasto 1'})).toBeDisabled();expect(screen.getByLabelText('Origem dos gastos')).toBeDisabled();expect(screen.getByRole('button',{name:'Distribuir saldo entre os gastos'})).toBeDisabled();expect(screen.getByText('Revisar lote')).toBeDisabled();
+ expect(screen.getByLabelText('Descrição 2')).toBeEnabled();await user.clear(screen.getByLabelText('Descrição 2'));await user.type(screen.getByLabelText('Descrição 2'),'Lanche durante a viagem');await user.clear(screen.getByLabelText('Valor 2'));await user.type(screen.getByLabelText('Valor 2'),'25,00');await user.click(screen.getByRole('button',{name:'Adicionar gasto'}));expect(screen.getByLabelText('Categoria 3')).toBeEnabled();
+ await act(async()=>finish());const latest=JSON.parse(sessionStorage.getItem(key)!);expect(latest.batchRequest).toBe(initial.batchRequest);expect(latest.draft.lines[0].id).toBe(initial.draft.lines[0].id);expect(latest.draft.lines[0].preparedReceipt).not.toBeNull();expect(latest.draft.lines[1]).toMatchObject({id:initial.draft.lines[1].id,description:'Lanche durante a viagem',amount:'25,00'});expect(latest.draft.lines).toHaveLength(3);expect(m.record).not.toHaveBeenCalled();
+});

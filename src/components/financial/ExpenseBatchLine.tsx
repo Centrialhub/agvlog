@@ -30,7 +30,7 @@ export function ExpenseBatchLine({ tenant, actor, trip, batchRequest, context, l
     } catch (cause) {if(active.current)setError(cause instanceof Error?cause.message:'Falha no envio do comprovante.');}
     finally {uploadingRef.current=false;if(active.current)setUploading(false);onUploadBusy(false);}
   }
-  return <section className="space-y-3 rounded-lg border p-4" aria-label={`Gasto ${index+1}`} data-expense-id={line.id} onKeyDown={event=>{if(!event.defaultPrevented&&event.ctrlKey&&!event.altKey&&!event.shiftKey&&event.key==='Enter'&&onAddAfter){event.preventDefault();onAddAfter();}}}>
+  return <section className="space-y-3 rounded-lg border p-4" aria-label={`Gasto ${index+1}`} data-expense-id={line.id} onKeyDown={event=>{if(!uploadingRef.current&&!event.defaultPrevented&&event.ctrlKey&&!event.altKey&&!event.shiftKey&&event.key==='Enter'&&onAddAfter){event.preventDefault();onAddAfter();}}}>
     <div className="flex items-center justify-between"><strong>Gasto {index+1}</strong><div className="flex gap-2">{onRepeat&&<Button type="button" variant="outline" disabled={uploading} onClick={onRepeat}>Reutilizar dados do gasto {index+1}</Button>}<Button type="button" variant="ghost" disabled={uploading} onClick={onRemove}>Remover gasto {index+1}</Button></div></div>
     <fieldset disabled={uploading} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-4"><label className="text-sm">Categoria<select aria-label={`Categoria ${index+1}`} className="h-10 w-full rounded border bg-background" value={line.category}
