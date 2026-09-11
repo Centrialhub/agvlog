@@ -9,4 +9,5 @@ TSC86396 passou após corrigir assinatura do mock de teste. Build80562 passou,466
 Checkout Sites atualizado a partir do dist validado, build.mjs passou, commit local criado. O site existente confirmou project_id appgprj_6a958c7d22dc8191840efb545d976b79, acesso public, versão26. O push foi rejeitado pela revisão automática, inclusive após apresentar autorização geral existente e destino confirmado. Nenhum push executado, nenhuma versão27 salva/deployada. Pergunta específica de autorização enviada ao usuário; não contornar o bloqueio. Aguardar resposta antes de novo push. Credencial temporária somente em memória, pode expirar e deve ser renovada depois da autorização.
 
 A interface pública continua versão26. Os novos campos são compatíveis com leitores anteriores, mas a nova operação de devolução ainda não está acessível pela interface publicada. Objetivo global permanece incompleto: complementos/acertos complexos, compensações, previsão persistida e jornada autenticada completa.
-`nCommit local do checkout Sites ainda nao enviado: 758672d96d48c4a203d19e686c63a570fc9d5fe9.
+
+Commit local do checkout Sites ainda nao enviado: 758672d96d48c4a203d19e686c63a570fc9d5fe9.

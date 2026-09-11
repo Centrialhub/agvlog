@@ -66,3 +66,28 @@ it('treats a due date after an old base but before capture as overdue, not futur
  const input=basis();input.cutoff='2026-09-01';input.base.as_of=input.cutoff;input.origins=[row({expected_on:'2026-09-05'})];
  const result=projectCashForecast(input);expect(result.rows[0].timing).toBe('needs_new_date');expect(result.confirmed.closing_cents).toBeNull();
 });
+
+
+it('isolates an unbilled evidence problem from proven confirmed obligations',()=>{
+ const input=basis();input.origins=[row()];const source=id();
+ input.source_issues=[{code:'unbilled_price_unverified',source_ids:[source],scope:'expanded'}];
+ const result=projectCashForecast(input);
+ expect(result.confirmed).toEqual({complete:true,closing_cents:'130000'});
+ expect(result.expanded).toEqual({complete:false,closing_cents:null});
+ expect(result.issues).toEqual([{code:'unbilled_price_unverified',source_ids:[source],scope:'expanded'}]);
+ expect(input.source_issues).toHaveLength(1);
+});
+
+it.each(['confirmed','all',undefined] as const)('keeps confirmed issues and legacy unscoped issues blocking both scenarios: %s',scope=>{
+ const input=basis();input.source_issues=[{code:'title_balance_unverified',source_ids:[id()],...(scope?{scope}:{})}];
+ const result=projectCashForecast(input);
+ expect(result.confirmed).toEqual({complete:false,closing_cents:null});
+ expect(result.expanded).toEqual({complete:false,closing_cents:null});
+});
+
+it('does not let an expanded-only issue hide an unknown opening or unassigned customer credit',()=>{
+ const input=basis();input.source_issues=[{code:'unbilled_price_unverified',source_ids:[id()],scope:'expanded'}];
+ input.unassigned_credit_cents='1000';expect(projectCashForecast(input).confirmed.complete).toBe(false);
+ input.unassigned_credit_cents='0';input.base.amount_cents=null;input.base.confirmation='unverified';
+ expect(projectCashForecast(input).confirmed.closing_cents).toBeNull();
+});

@@ -24,7 +24,7 @@ const origin = z.object({
 });
 
 /** Input must be collected and authorized by the server; this calculator is not evidence validation. */
-export const cashForecastBasisSchema = z.object({
+const forecastBasisObject = z.object({
   version: z.literal(1), tenant_id: z.string().uuid(),
   account_ids: z.array(z.string().uuid()).min(1),
   captured_at: z.string().datetime({ offset: true }), cutoff: day, period_end: day,
@@ -40,8 +40,9 @@ export const cashForecastBasisSchema = z.object({
   }).strict()),
   // Unattributed credit cannot be subtracted from a particular title by guesswork.
   unassigned_credit_cents: cents,
-  source_issues: z.array(z.object({ code: z.string().min(1), source_ids: z.array(z.string().uuid()) }).strict()),
-}).strict().superRefine((basis, ctx) => {
+  source_issues: z.array(z.object({ code: z.string().min(1), source_ids: z.array(z.string().uuid()), scope: z.enum(['confirmed', 'expanded', 'all']).optional() }).strict()),
+}).strict();
+const validateBasis = (basis: z.infer<typeof forecastBasisObject> | z.infer<typeof companyBasisObject>, ctx: z.RefinementCtx) => {
   if (basis.cutoff >= basis.period_end || basis.base.as_of !== basis.cutoff)
     ctx.addIssue({ code: 'custom', message: 'A projeÃ§Ã£o deve comeÃ§ar apÃ³s a data do saldo-base.' });
   if (new Set(basis.account_ids).size !== basis.account_ids.length)
@@ -57,12 +58,40 @@ export const cashForecastBasisSchema = z.object({
     ctx.addIssue({ code: 'custom', message: 'Movimento repetido ou fora do escopo entre a base e a captura.' });
   if ((basis.base.amount_cents === null) !== (basis.base.confirmation === 'unverified'))
     ctx.addIssue({ code: 'custom', message: 'Saldo-base indeterminado exige diagnÃ³stico.' });
+};
+const component = z.object({
+  account_id:z.string().uuid(), account_kind:z.enum(['bank','cash']),
+  source_table:z.string().min(1).nullable(),source_id:z.string().uuid().nullable(),
+  source_revision:z.string().min(1),amount_cents:signed.nullable(),
+  confirmation:z.enum(['bank_confirmed','cash_count','provisional','unverified']),
+}).strict();
+const companyBasisObject=forecastBasisObject.extend({version:z.literal(2),base:z.object({
+  as_of:day,amount_cents:signed.nullable(),confirmation:z.enum(['bank_confirmed','cash_count','mixed_confirmed','provisional','unverified']),
+  components:z.array(component).min(1),
+}).strict()});
+export const cashForecastBasisSchema=forecastBasisObject.superRefine(validateBasis);
+export const cashForecastCompanyBasisSchema=companyBasisObject.superRefine((basis,ctx)=>{
+ validateBasis(basis,ctx);
+ const parts=basis.base.components;
+ const invalid=(message:string)=>ctx.addIssue({code:'custom',message});
+ if(parts.length!==basis.account_ids.length||new Set(parts.map(p=>p.account_id)).size!==parts.length||parts.some(p=>!basis.account_ids.includes(p.account_id)))
+  invalid('A base deve comprovar cada conta selecionada exatamente uma vez.');
+ for(const p of parts){
+  if((p.amount_cents===null)!==(p.confirmation==='unverified'))invalid('Componente sem saldo exige confirmação indeterminada.');
+  if(p.confirmation!=='unverified'&&(!p.source_id||!p.source_table))invalid('Componente determinado exige origem preservada.');
+  if(p.confirmation==='bank_confirmed'&&p.account_kind!=='bank'||p.confirmation==='cash_count'&&p.account_kind!=='cash')invalid('Confirmação incompatível com o tipo de conta.');
+ }
+ const unknown=parts.some(p=>p.amount_cents===null||p.confirmation==='unverified');
+ const confirmation=unknown?'unverified':parts.some(p=>p.confirmation==='provisional')?'provisional':new Set(parts.map(p=>p.confirmation)).size>1?'mixed_confirmed':parts[0].confirmation;
+ if(basis.base.confirmation!==confirmation)invalid('Confirmação consolidada diverge das contas.');
+ if(!unknown&&parts.reduce((sum,p)=>sum+BigInt(p.amount_cents!),0n).toString()!==basis.base.amount_cents)invalid('Saldo consolidado diverge da soma das contas.');
 });
 export type CashForecastBasis = z.infer<typeof cashForecastBasisSchema>;
+export type CashForecastCompanyBasis = z.infer<typeof cashForecastCompanyBasisSchema>;
 
 /** Pure projection: never changes source rows, reserves credit, or records cash. */
-export function projectCashForecast(input: CashForecastBasis) {
-  const basis = cashForecastBasisSchema.parse(input);
+export function projectCashForecast(input: CashForecastBasis | CashForecastCompanyBasis) {
+  const basis = input.version===2?cashForecastCompanyBasisSchema.parse(input):cashForecastBasisSchema.parse(input);
   const capturedDay = captureDay(basis.captured_at);
   let incoming = 0n, outgoing = 0n, unbilled = 0n;
   const recorded = basis.recorded_after_cutoff.reduce((total, row) => {
@@ -87,12 +116,14 @@ export function projectCashForecast(input: CashForecastBasis) {
   });
   const issues = [...basis.source_issues];
   if (BigInt(basis.unassigned_credit_cents) > 0n) issues.push({ code: 'unassigned_customer_credit', source_ids: [] });
-  if (basis.base.amount_cents === null) issues.push({ code: 'base_balance_unverified', source_ids: [basis.base.source_id] });
-  const confirmedComplete = issues.length === 0 && unscheduledConfirmed === 0n;
-  const expandedComplete = confirmedComplete && unscheduledUnbilled === 0n;
+  if (basis.base.amount_cents === null) issues.push({ code: 'base_balance_unverified', source_ids: 'components' in basis.base ? basis.base.components.flatMap(p=>p.source_id?[p.source_id]:[]) : [basis.base.source_id] });
+  // An unbilled-only source problem does not invalidate independently proven titles.
+  // Missing scope stays conservative for previously captured inputs.
+  const confirmedComplete = !issues.some(issue => issue.scope !== 'expanded') && unscheduledConfirmed === 0n;
+  const expandedComplete = confirmedComplete && issues.length === 0 && unscheduledUnbilled === 0n;
   const baseAmount = basis.base.amount_cents === null ? null : BigInt(basis.base.amount_cents);
   return {
-    version: 1 as const, tenant_id: basis.tenant_id, account_ids: [...basis.account_ids],
+    version: basis.version, tenant_id: basis.tenant_id, account_ids: [...basis.account_ids],
     captured_at: basis.captured_at, cutoff: basis.cutoff, period_end: basis.period_end, base: { ...basis.base },
     recorded_after_cutoff: basis.recorded_after_cutoff,
     recorded_totals: { in_cents: recorded.in.toString(), out_cents: recorded.out.toString() },

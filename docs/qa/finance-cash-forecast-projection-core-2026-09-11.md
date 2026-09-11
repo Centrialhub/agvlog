@@ -24,3 +24,12 @@ cashForecastProjection recebe origens j√° verificadas pelo servidor, saldo-base 
 cashForecastComparison recebe a proje√ß√£o original preservada e um pacote monet√°rio validado. Exige mesma empresa, contas e per√≠odo. Compara saldo inicial, entradas brutas, sa√≠das brutas e saldo final separadamente e conserva a equa√ß√£o das diferen√ßas. Saldos finais iguais n√£o significam concord√¢ncia quando saldo inicial e entradas diferem entre si. N√£o determina automaticamente causa ou fraude, n√£o reescreve a previs√£o e n√£o substitui valores desconhecidos por zero.
 
 Cinco testes da compara√ß√£o passaram junto aos12 do c√°lculo; ESLint passou. Abrangem diferen√ßas de fluxo, saldo final igual com componentes divergentes, escopo/empresa/per√≠odo incompat√≠veis, previs√£o/realizado incompletos e total original adulterado. Trata-se de n√∫cleo puro, ainda sem captura persistida ou tela. A atribui√ß√£o por t√≠tulo/movimento (atraso, antecipa√ß√£o, valor alterado, nova movimenta√ß√£o e entrada n√£o identificada) permanece necess√°ria al√©m da compara√ß√£o agregada.
+
+
+## Base por conta e problemas por cen·rio ó atualizaÁ„o2026-09-11
+
+A calculadora aceita agora basisv2 (CashForecastCompanyBasis) com componentes individuais bank/cash e preserva cada source_table/id/revision. Exige todas as contas exatamente uma vez, soma compatÌvel e confirmaÁ„o consolidada derivada: mixed_confirmed para banco+caixa provados; provisional se alguma base provisÛria; unverified e saldo null se alguma desconhecida. N„o fabrica UUID ou zero para conta sem prova. Basisv1 continua aceito para compatibilidade.
+
+source_issues admite scope confirmed/expanded/all. Problema exclusivo do frete a faturar impede o expandido e conserva o confirmado quando suas fontes est„o Ìntegras; problema confirmado impede ambos. Omiss„o de scope conserva o comportamento restritivo anterior. Base desconhecida e crÈdito sem destinaÁ„o continuam impedindo conclus„o.
+
+17 testes de projeÁ„o,5 de componentes e6 de comparaÁ„o passaram (28 distintos; rodada27 seguida de11 apÛs acrescentar comparaÁ„o multicontas). Lint dos arquivos de projeÁ„o/componentes passou; comparaÁ„o teve apenas novo teste. TSC77233 n„o concluiu verde: acusou vari·vel n„o usada no novo teste WIP de complemento de outro agente, informado ao autor. Nenhuma nova interface/RPC/coleta persistida È afirmada por esta mudanÁa. Coletor autorizado separado em implementaÁ„o.

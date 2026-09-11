@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { projectCashForecast, type CashForecastBasis } from '@/lib/financial/cashForecastProjection';
+import { projectCashForecast, type CashForecastBasis, type CashForecastCompanyBasis } from '@/lib/financial/cashForecastProjection';
 import { compareCashForecast } from '@/lib/financial/cashForecastComparison';
 import { moneyPackageFixture } from './helpers/periodMoneyPackageFixture';
 function setup() {
@@ -34,4 +34,14 @@ it('does not fabricate a variance when the forecast is incomplete or the realize
 it('rejects a modified original total instead of recalculating it to appear consistent',()=>{
  const {realized,basis}=setup();const original=projectCashForecast(basis);original.confirmed.closing_cents='1250';
  expect(()=>compareCashForecast(original,realized)).toThrow('valores preservados');
+});
+
+
+it('compares a company projection while preserving the provenance of its account components',()=>{
+ const {realized,basis}=setup();
+ const company:CashForecastCompanyBasis={...basis,version:2,base:{as_of:basis.cutoff,amount_cents:'1100',confirmation:'provisional',components:basis.account_ids.map((account_id,index)=>({account_id,account_kind:'bank',source_table:'finance_account_openings',source_id:crypto.randomUUID(),source_revision:'original-'+index,amount_cents:index===0?'1100':'0',confirmation:'provisional'}))}};
+ const original=projectCashForecast(company);const preserved=JSON.stringify(original.base);
+ const result=compareCashForecast(original,realized);
+ expect(result.base_confirmation).toBe('provisional');expect(result.confirmed.differences?.closing_cents).toBe('-100');
+ expect(JSON.stringify(original.base)).toBe(preserved);
 });
