@@ -1,0 +1,32 @@
+{
+  "status": "private_local_not_promoted",
+  "files": [
+    {
+      "path": "supabase/migrations/20260911094505_finance_cash_forecast_audited_agenda.sql",
+      "sha256": "3ab38431ac00ba1f1affd80caf59eaf8433fa5f6372eeead9a447f70819ea081"
+    },
+    {
+      "path": "src/lib/financial/cashForecastCollectorContract.ts",
+      "sha256": "d65c529c9861537257ddd32bca314c572585e24050bc8c6eec15fd739853710b"
+    },
+    {
+      "path": "src/test/cashForecastAgenda.test.ts",
+      "sha256": "f620c4d7f98817ba0072be5e70d9ea1f9fdbbbc960fa78d9f120447e9a91fe77"
+    },
+    {
+      "path": "docs/qa/finance-cash-forecast-audited-agenda-2026-09-11.md",
+      "sha256": "91546f2a445537cc5456142d8e42f2614ae585bad3535f3f4a13f79c435b72ab"
+    },
+    {
+      "path": "src/test/helpers/cashForecastAgendaDatabase.ts",
+      "sha256": "86533ad90058aab1568b18cee77f20afb199bc7f088758d689f69ceb6167df6c"
+    },
+    {
+      "path": "src/test/cashForecastAgendaCurrentCosts.test.ts",
+      "sha256": "e4d9fe73dd9c18ef95306fcb2b9e9245e2e56715e151058fdf903f4b85471621"
+    }
+  ],
+  "include_manifest_itself": "docs/qa/finance-cash-forecast-audited-agenda-2026-09-11.json",
+  "final_tests": 8,
+  "existing_dependency": "docs/qa/finance-manual-audit-predecessor-2026-09-11.sql"
+}

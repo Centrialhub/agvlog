@@ -1,0 +1,6 @@
+import {forecastIds,forecastPreview} from './cashForecastViewFixture';
+import type {CashForecastAgendaPreview,CashForecastAgendaCommand} from '@/lib/financial/cashForecastAgendaContract';
+export const agendaIds={...forecastIds,source:crypto.randomUUID(),event:crypto.randomUUID()};const i=agendaIds;
+export const agendaPreview:CashForecastAgendaPreview={version:1,tenant_id:i.tenant,actor_id:i.actor,cutoff:forecastPreview.cutoff,period_end:forecastPreview.period_end,revision:forecastPreview.revision,eligible:true,can_execute:true,origin:{economic_key:'receivable:'+i.source,source_table:'receivables',source_id:i.source,source_revision:'b'.repeat(32),direction:'in',scenario:'confirmed',nominal_cents:'15000',fulfilled_cents:'5000',reserved_credit_cents:'0',expected_on:'2026-09-20',expected_date_source:'due_date',valid:true}};
+export const agendaInput={economic_key:agendaPreview.origin.economic_key,action:'set' as const,expected_on:'2026-10-02',reason:'Data combinada com cliente',expected_revision:agendaPreview.revision,cutoff:agendaPreview.cutoff,period_end:agendaPreview.period_end};
+export function agendaSuccess(c:CashForecastAgendaCommand){return{data:{version:1,tenant_id:c.tenant_id,actor_id:i.actor,event_id:i.event,request_id:c.request_id,economic_key:c.economic_key,action:c.action,expected_on:c.expected_on},error:null};}

@@ -1,0 +1,58 @@
+[
+  {
+    "path": "src/lib/financial/cashForecastAgendaContract.ts",
+    "sha256": "723f0f79d4a1100eac597e91f4966aa55261d1555652f3c2d40928c3489733a5"
+  },
+  {
+    "path": "src/lib/financial/cashForecastAgendaClient.ts",
+    "sha256": "59365582dab4df6a9d6ccb9a2c55fdc7a4b8bdfa44b5ec22c2842be185c5c96c"
+  },
+  {
+    "path": "src/lib/financial/cashForecastAgendaOutbox.ts",
+    "sha256": "53b3bf10df39f2a41686b40b470952c4f112d80398fb7f3fc542c9b139af06fe"
+  },
+  {
+    "path": "src/components/financial/CashForecastAgendaDialog.tsx",
+    "sha256": "1e678e8e78b2ee5e05765f1281f2ea09ecd1177c3ca13bce568211f252444a27"
+  },
+  {
+    "path": "src/components/financial/CashForecastAgendaConfirmation.tsx",
+    "sha256": "84fdbad7a0de335a2a92eff1ce6c6b01ddbec2f56a8aee635d0c9c2b9eb3094e"
+  },
+  {
+    "path": "src/components/financial/CashForecastAgendaHistory.tsx",
+    "sha256": "6c976018c8dd0416255d8cc65ce62538d78824d29baddfe688bdfbd235189fc9"
+  },
+  {
+    "path": "src/components/financial/CashForecastPanel.tsx",
+    "sha256": "f45b0add9df9a1b6d18a372d8a8eda15d5622fad108feed1232d8cbd040ef886"
+  },
+  {
+    "path": "src/components/financial/CashForecastSources.tsx",
+    "sha256": "4b9e2d589d5301b1c9a2a55fd3a919349615f3438cba752903ad11780d1ed191"
+  },
+  {
+    "path": "src/lib/financial/cashForecastViewLabels.ts",
+    "sha256": "d3b0180e2ef898ab5b64980ad755de374b5b4ba18f47ec84e18b6685c79ae0b4"
+  },
+  {
+    "path": "src/lib/financial/financeAuditContract.ts",
+    "sha256": "886acd638a01e1aa2a65d116e81994453f25b3aa8f50cf23e00006defa661c34"
+  },
+  {
+    "path": "src/test/cashForecastAgendaPanel.test.tsx",
+    "sha256": "d1a1d4548b690148a34e0b4bd7e00e67e8b37bd87f13846f4b81e112bef4599d"
+  },
+  {
+    "path": "src/test/cashForecastAgendaClient.test.ts",
+    "sha256": "d99993b352278bf0254d3696a03084a5abc7c381cc48c833f61b76f3bbb9220f"
+  },
+  {
+    "path": "src/test/cashForecastAgendaOutbox.test.ts",
+    "sha256": "a4877ac32df10012f5a01ea7223c69f7ebf0f47be299064797fc4c119dce585f"
+  },
+  {
+    "path": "src/test/helpers/cashForecastAgendaFixture.ts",
+    "sha256": "36270f8fc151b0d8f04e9359ca52736cb2db372d72fe87f7e9298a085c64ec39"
+  }
+]

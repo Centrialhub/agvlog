@@ -62,3 +62,6 @@ financeAuditActions.unloading_open_complement_corrected='Complemento de descarga
 financeAuditActions.payable_approved_with_revision='Conta aprovada após conferência de valor';
 financeAuditActions.cash_forecast_preserved='Previsão de caixa preservada pelo responsável';
 financeAuditActions.unloading_open_complement_extinguished='Complemento cancelado após correção do custo';
+
+financeAuditActions.cash_forecast_agenda_set='Data esperada da previsão revisada';
+financeAuditActions.cash_forecast_agenda_cleared='Data manual da previsão retirada';
