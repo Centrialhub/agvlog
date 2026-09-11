@@ -17,3 +17,10 @@ cashForecastProjection recebe origens já verificadas pelo servidor, saldo-base 
 - Captura append-only no servidor, autoria/motivo/versão, recuperação idempotente e leitura por empresa. A cópia imutável em memória testada não substitui persistência histórica.
 - Comparação com pacote monetário de mesmo escopo/período, original preservado, variações identificadas sem inferir automaticamente fraude/causa a partir de mera diferença. Recebimento não identificado deve permanecer visível.
 - Interface e testes reais autenticados; publicar somente conjunto integrado.
+
+
+## Comparação matemática implementada
+
+cashForecastComparison recebe a projeção original preservada e um pacote monetário validado. Exige mesma empresa, contas e período. Compara saldo inicial, entradas brutas, saídas brutas e saldo final separadamente e conserva a equação das diferenças. Saldos finais iguais não significam concordância quando saldo inicial e entradas diferem entre si. Não determina automaticamente causa ou fraude, não reescreve a previsão e não substitui valores desconhecidos por zero.
+
+Cinco testes da comparação passaram junto aos12 do cálculo; ESLint passou. Abrangem diferenças de fluxo, saldo final igual com componentes divergentes, escopo/empresa/período incompatíveis, previsão/realizado incompletos e total original adulterado. Trata-se de núcleo puro, ainda sem captura persistida ou tela. A atribuição por título/movimento (atraso, antecipação, valor alterado, nova movimentação e entrada não identificada) permanece necessária além da comparação agregada.
