@@ -1,3 +1,4 @@
+import {CostDispositionsPanel} from '@/components/financial/CostDispositionsPanel';
 import {PeriodMoneyPackagePanel} from '@/components/financial/PeriodMoneyPackagePanel';
 import {PayablePortfolioPanel} from '@/components/financial/PayablePortfolioPanel';
 import {recordedCostCategoryLabels} from '@/lib/financial/recordedCostCategories';
@@ -36,6 +37,7 @@ export default function Financial(){
  {currentTenant&&user&&<PayablePortfolioPanel tenant={currentTenant.id} actor={user.id} onManage={()=>navigate('/payables')}/>}
  <RecordedCostSummary state={costs} onManage={()=>navigate('/financial/recorded-expenses')}/>
  <FiscalDashboardSummary state={fiscal}/>
+ {currentTenant&&user&&<CostDispositionsPanel tenant={currentTenant.id} actor={user.id}/>}
  {currentTenant&&user&&<PeriodMoneyPackagePanel tenant={currentTenant.id} actor={user.id}/>}
  {currentTenant&&user&&<UnbilledFreightPanel tenant={currentTenant.id} actor={user.id} clients={clients.map(client=>({id:client.id,label:client.company_name}))}/>}
  </div>;

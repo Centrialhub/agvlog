@@ -1,0 +1,119 @@
+[
+  {
+    "signature": "finance_private.canonical_trip_costs(uuid,uuid)",
+    "prosrc_md5": "cf55d4be0f4215a363e1724389e45b9a",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.cost_dispositions(uuid,integer,text)",
+    "prosrc_md5": "7ac7097f7cd269161cdfce861747ffa5",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+  },
+  {
+    "signature": "finance_private.expense_cost_coverage(uuid,uuid)",
+    "prosrc_md5": "e03ebbe00144dbac0874cdb2c6e1a8e9",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.expense_cost_effective(uuid,uuid)",
+    "prosrc_md5": "e0328bd06900f17657a6bbc985f491fa",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.expense_cost_funding(uuid,uuid)",
+    "prosrc_md5": "18ce78f3207d8f334f05c930d7434c30",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.guard_cost_regularization_source()",
+    "prosrc_md5": "dfdfb7d5a899cf4bcf94bf379179fd2b",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.list_expenses(uuid,jsonb)",
+    "prosrc_md5": "1da933d23d3e2fbcf56c31b30337f2c8",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+  },
+  {
+    "signature": "finance_private.payable_effective_cost_evidence(uuid,uuid,jsonb)",
+    "prosrc_md5": "0195ec87e071d7648aa2f8007ff28ac8",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.payable_portfolio(uuid,jsonb,integer,text)",
+    "prosrc_md5": "83054b85c8b68bce312dafc1b742dfb6",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+  },
+  {
+    "signature": "finance_private.regularize_unloading_cost(jsonb)",
+    "prosrc_md5": "6caa6b7a00eca156e99bdcba1a9a66f2",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.require_expense_cost_coverage(uuid,uuid)",
+    "prosrc_md5": "103fc14513a63c667323d022dd635630",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.settlement_expense_context(uuid,uuid,integer)",
+    "prosrc_md5": "2c3fe67a8f2e11da52e33ecf99a148d2",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+  },
+  {
+    "signature": "finance_private.unloading_cost_regularization_context(uuid,uuid,jsonb)",
+    "prosrc_md5": "c3abcbc6593d94094cd4bcd3a51a10ea",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  }
+]

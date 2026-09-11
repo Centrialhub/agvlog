@@ -1,0 +1,213 @@
+{
+  "base_commit": "9fbaad59a92cf9b93bd009cd86d447415b7f7148",
+  "files": [
+    {
+      "path": "docs/qa/finance-covered-cost-core-catalog-2026-09-11.json",
+      "sha256": "32b692cb8d8b3a32744dd771aea605ee57a9f807ecbd8375ead99e1f3e246d1a"
+    },
+    {
+      "path": "docs/qa/finance-covered-cost-public-dependencies-2026-09-11.json",
+      "sha256": "dde938e15f5d3020817503b73760473d56927e7825e827be590266c8bccb395b"
+    },
+    {
+      "path": "docs/qa/finance-covered-cost-readers-2026-09-11.json",
+      "sha256": "546b173726192de3c5e8b68b7b1267abe192ee993583170b0fcd9c103173bb8d"
+    },
+    {
+      "path": "docs/qa/finance-covered-cost-readers-2026-09-11.md",
+      "sha256": "81d05ca2cf5744fe3c700461be8f69719ef2edb521460ab8929cef7be0abeda7"
+    },
+    {
+      "path": "docs/qa/finance-covered-cost-readers-catalog-2026-09-11.json",
+      "sha256": "c25bf47dee7118764ca728f9013e2426997424e3e850a3408a0f63cca11cd8ef"
+    },
+    {
+      "path": "docs/qa/finance-covered-cost-regularization-core-2026-09-11.md",
+      "sha256": "7537d828d042db4f3cdb28248bee6b4b042a710ee3cd4d6d6cd15a9f77476b1a"
+    },
+    {
+      "path": "docs/qa/finance-unloading-covered-cost-regularization-contract-2026-09-11.md",
+      "sha256": "a46ad59b7749fb86086df55e8362f28dee2c4ba35131bf98d61c13e4e5160b06"
+    },
+    {
+      "path": "docs/qa/finance-unloading-covered-cost-ui-2026-09-11.md",
+      "sha256": "7f546b11fb5f070ee90f1f630e835bd15a7877481fa3b44c11f09e4c237fb9e0"
+    },
+    {
+      "path": "docs/qa/finance-unloading-covered-cost-ui-allowlist-2026-09-11.json",
+      "sha256": "63199de30c3e6827cce6086216b43975af8e675b1b41a116da714334300f33c5"
+    },
+    {
+      "path": "src/components/financial/CostDispositionsPanel.tsx",
+      "sha256": "610b23c6a0f17c467941f980c2f23c6c594f0a51678822af0ac92e90bb7f9b79"
+    },
+    {
+      "path": "src/components/financial/ExpenseCostCoverage.tsx",
+      "sha256": "326184618ec737f95743a2b313e4e714144a877ec3f6f818618bef693997431d"
+    },
+    {
+      "path": "src/components/financial/ExpenseCostHistory.tsx",
+      "sha256": "e7cbbff00f3578b551e7ea673696f2874be7123451c1e9d4a87aaf0a938bf44a"
+    },
+    {
+      "path": "src/components/financial/ExpenseFundingSummary.tsx",
+      "sha256": "8ce0bf4915665b676800f1110d21baaf1403c1df3474103002cb1f6865b0303b"
+    },
+    {
+      "path": "src/components/financial/ExpenseHistoryDetail.tsx",
+      "sha256": "a8533fb8af5e041558c3ceee211d93c2c5de1f06e035bfce00cff0dffd1a63c2"
+    },
+    {
+      "path": "src/components/financial/PayablePortfolioPanel.tsx",
+      "sha256": "6cbb7f0ac0e6bb892ffc01e5fe95a4846c50391a4aef4ab28bef4ca4a8d7081f"
+    },
+    {
+      "path": "src/components/financial/SettlementExpenseContext.tsx",
+      "sha256": "6aa5cf5a4d6a14b6016557159c1e6cf9d38fd5fd314848a125fb5b13c46b1cc2"
+    },
+    {
+      "path": "src/components/financial/UnloadingCostDispositionEditor.tsx",
+      "sha256": "a0a184c01dcbd84881933380ec13d67537922af1d447e80520bd9adcd94551f4"
+    },
+    {
+      "path": "src/components/financial/UnloadingCostRegularizationConfirmation.tsx",
+      "sha256": "fa2bd290e8c2e6cad18d3010297d51a5e1a33df477e508fb43bcfe09d5f864ad"
+    },
+    {
+      "path": "src/components/financial/UnloadingCostRegularizationDialog.tsx",
+      "sha256": "8967582773d0f3a3d398b438be8a846655505f1a5e85f25d2dcf88e08456bd8a"
+    },
+    {
+      "path": "src/lib/financial/costDispositionsClient.ts",
+      "sha256": "0f9a5503dd01e8c33b963829d253f05730264fd4a7d52d0bb33a76c30d678bd7"
+    },
+    {
+      "path": "src/lib/financial/costDispositionsContract.ts",
+      "sha256": "b24adae8d80942ec415d63252124d35381de61c001b212dd90b9b32555b325c9"
+    },
+    {
+      "path": "src/lib/financial/expenseCostFundingContract.ts",
+      "sha256": "95241184c151c3e4dc3a10be51a452c822c3010c727dad7607396f50cefe3672"
+    },
+    {
+      "path": "src/lib/financial/expenseCostPresentation.ts",
+      "sha256": "1d8bb9197e886eefbe338958e1439691b30f90cc514f77978c7ea45e9c7e916b"
+    },
+    {
+      "path": "src/lib/financial/expenseHistoryContract.ts",
+      "sha256": "a053118ee031fc37018e81cd8bed54472abc237fcdec59e0c2819f6c4cae4745"
+    },
+    {
+      "path": "src/lib/financial/invalidateAccountReview.ts",
+      "sha256": "7bb41c7193f7b853311f2fba4a11f75b47dab71438a813adb663546e2e4bef76"
+    },
+    {
+      "path": "src/lib/financial/payablePortfolioContract.ts",
+      "sha256": "3b11fdbfdcb4c957c0f681b0544b2e05a6b6b454873e38d12f6c638f4af46ff8"
+    },
+    {
+      "path": "src/lib/financial/settlementExpenseContextContract.ts",
+      "sha256": "0dc4107e4eb30a47c583fc3b37fb97526bdb089f457948a7558ed0e3b40ac453"
+    },
+    {
+      "path": "src/lib/financial/unloadingCostCorrectionContract.ts",
+      "sha256": "a1d5b5fa795911d133469860bbdd2332b0baa55275bbd855a584093043e0cfbd"
+    },
+    {
+      "path": "src/lib/financial/unloadingCostRegularizationClient.ts",
+      "sha256": "c052fc1c82ba9ae898b156fd979f5c4bbbb6788c8753c3f7ea5e132a345a8ff5"
+    },
+    {
+      "path": "src/lib/financial/unloadingCostRegularizationContract.ts",
+      "sha256": "d22cf283469a7bf317fa1e7fc22bdfa786c0b0ac08f9da6da1ee83a3f52ba7dc"
+    },
+    {
+      "path": "src/lib/financial/unloadingCostRegularizationLabels.ts",
+      "sha256": "806c90d7be3703457878418fddbb7f2b513f6ee500fe200587b96ba7775205d5"
+    },
+    {
+      "path": "src/lib/financial/unloadingCostRegularizationOutbox.ts",
+      "sha256": "9b2e1e776610daf33cd66f75d0305d5b338a59dff8a1f5a5a3c2fe449e261ed2"
+    },
+    {
+      "path": "src/pages/FinanceExpenses.tsx",
+      "sha256": "adafc883c79749028f57973ef8176da1b97ecf14d0d30ca3634854736ca9665e"
+    },
+    {
+      "path": "src/pages/Financial.tsx",
+      "sha256": "9925f2ef348ebbed3396748d83ab4fc50e72ed25a2009693354159491926bbe0"
+    },
+    {
+      "path": "src/test/costDispositionsPanel.test.tsx",
+      "sha256": "5b4828eae76935fe31f431abb07ece289291b1609547465ddfb785a235365e07"
+    },
+    {
+      "path": "src/test/coveredCostDispositionReaders.test.ts",
+      "sha256": "bbd4d5a4ebdb9cb1cea37c81678cf1c151bc85ab36fa278c8f38585ff085b385"
+    },
+    {
+      "path": "src/test/coveredCostPublicIndependent.test.ts",
+      "sha256": "cfb288c6e2b9fefc5d0fd14d903c449e3d3f305fb752227e6bcf335f5de3a383"
+    },
+    {
+      "path": "src/test/expenseCostPresentation.test.ts",
+      "sha256": "5decdd3f9206524e00a596f6946b0800de60a795ea1334086aa307a7f4c425c3"
+    },
+    {
+      "path": "src/test/expenseFundingSummary.test.tsx",
+      "sha256": "84ae3d510a6bcd5c8117f4c288a4f6c0279635ffcc29b12b91bdc06376019f34"
+    },
+    {
+      "path": "src/test/financeExpenseHistoryScreen.test.tsx",
+      "sha256": "004e491bf061ce29cff1a68a654a28d484f789a3c208dc5a59aa2fec45931ed1"
+    },
+    {
+      "path": "src/test/helpers/unloadingCostRegularizationFixture.ts",
+      "sha256": "745eaf0abb9b7f999fb0b54d6f23f804af9fc82d5a4cd29f0558e8ac11bcffbc"
+    },
+    {
+      "path": "src/test/settlementExpenseContext.test.tsx",
+      "sha256": "beef0c7e0dcd260ce78d9996e80cc16443fe7ee1c00006f11f92be96ebcadf3b"
+    },
+    {
+      "path": "src/test/unloadingCostDispositionEditor.test.tsx",
+      "sha256": "d6334c1c3123c68bc90e2ebbad8549e6c7bbcea5601a0a09e2605c684fb00943"
+    },
+    {
+      "path": "src/test/unloadingCostRegularizationClient.test.ts",
+      "sha256": "c801ba304cec30c558eb1401060fe895c1b1353bbb77bb77d8044a945e5b47d9"
+    },
+    {
+      "path": "src/test/unloadingCostRegularizationContract.test.ts",
+      "sha256": "6c22ce6f2458154cb44198acb7a054b6ed6129927ad6d7c8ae59215780a963f1"
+    },
+    {
+      "path": "src/test/unloadingCostRegularizationOutbox.test.ts",
+      "sha256": "58308039006c726699aaf5addbe32388b2e9913f091ae14825a2598c0ecf8a01"
+    },
+    {
+      "path": "src/test/unloadingCostRegularizationPanel.test.tsx",
+      "sha256": "3d4840a5dcdc015c0b902dc38cb8248402404135a52f23c35b1260e69c937809"
+    },
+    {
+      "path": "src/test/unloadingCostRegularizationPublicBoundary.test.ts",
+      "sha256": "e31238dad0d89aa9a306f492d6e87e2358270565090ee0ae8b576c5ed9621ac6"
+    },
+    {
+      "path": "src/test/unloadingCoveredCostRegularization.test.ts",
+      "sha256": "a47227d6da76d0fe2c81d996e6be52cc82e2a41ebd5ffb98740ca3a664650c91"
+    },
+    {
+      "path": "supabase/migrations/20260911072557_finance_unloading_covered_cost_regularization.sql",
+      "sha256": "cd41a809dfe98661351f9e9cdfc446169ea08289e723f678a66635ed6b288c9f"
+    },
+    {
+      "path": "supabase/migrations/20260911072723_finance_effective_cost_disposition_readers.sql",
+      "sha256": "bdb264f011b63f4d9f42326fdf17c2096a429bdef163ad35220de2ccaa4520a6"
+    },
+    {
+      "path": "supabase/migrations/20260911074203_finance_unloading_cost_regularization_public_boundary.sql",
+      "sha256": "d7b3f00fb00fe01db1488c274b818d25eb6043deb6a3f079b5126e7a7cfac351"
+    }
+  ]
+}

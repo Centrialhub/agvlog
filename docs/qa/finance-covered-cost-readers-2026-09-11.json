@@ -1,0 +1,27 @@
+{
+  "files": [
+    {
+      "path": "supabase/migrations/20260911072557_finance_unloading_covered_cost_regularization.sql",
+      "sha256": "cd41a809dfe98661351f9e9cdfc446169ea08289e723f678a66635ed6b288c9f"
+    },
+    {
+      "path": "supabase/migrations/20260911072723_finance_effective_cost_disposition_readers.sql",
+      "sha256": "bdb264f011b63f4d9f42326fdf17c2096a429bdef163ad35220de2ccaa4520a6"
+    },
+    {
+      "path": "supabase/migrations/20260911074203_finance_unloading_cost_regularization_public_boundary.sql",
+      "sha256": "d7b3f00fb00fe01db1488c274b818d25eb6043deb6a3f079b5126e7a7cfac351"
+    },
+    {
+      "path": "src/test/coveredCostDispositionReaders.test.ts",
+      "sha256": "bbd4d5a4ebdb9cb1cea37c81678cf1c151bc85ab36fa278c8f38585ff085b385"
+    },
+    {
+      "path": "src/test/coveredCostPublicIndependent.test.ts",
+      "sha256": "cfb288c6e2b9fefc5d0fd14d903c449e3d3f305fb752227e6bcf335f5de3a383"
+    }
+  ],
+  "result": "11 tests passed across coveredCostDispositionReaders, coveredCostPublicIndependent and effectiveCostReaders; 04:50:36, 5.78s; ESLint exit0",
+  "database": "PGlite selected real financial chain; not full Supabase production graph",
+  "remote_mutations": false
+}

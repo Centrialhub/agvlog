@@ -79,7 +79,7 @@ describe('recorded expense history screen',()=>{
     expect(screen.getAllByText('R$ 1.550,00').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button',{name:'Detalhar Almoço da viagem'}));
     expect(await screen.findByText('Maria Financeiro · Registrou o lote')).toBeInTheDocument();
-    expect(screen.getByText(/Envio de R\$ 500,00 · Este gasto utiliza R\$ 50,00/)).toBeInTheDocument();
+    expect(screen.getByText(/Envio de R\$ 500,00 · Vínculo original deste gasto: R\$ 50,00/)).toBeInTheDocument();
     expect(screen.getByText(/Recibo solicitado ao restaurante/)).toBeInTheDocument();
   });
   it('applies filters deliberately instead of using a partial local total',async()=>{
@@ -94,3 +94,5 @@ describe('recorded expense history screen',()=>{
     mocks.role='admin';mocks.access=false;mount();expect(mocks.history).not.toHaveBeenCalled();
   });
 });
+
+it('opens funded cost regularization only for an admin unloading expense',async()=>{mocks.role='admin';const regular=mount();fireEvent.click(await screen.findByRole('button',{name:'Detalhar Almoço da viagem'}));expect(screen.queryByRole('button',{name:'Conferir regularização de custo coberto'})).not.toBeInTheDocument();regular.unmount();mocks.history.mockResolvedValue({...result,rows:[{...row,unloading_id:crypto.randomUUID()}]});mount();fireEvent.click(await screen.findByRole('button',{name:'Detalhar Almoço da viagem'}));fireEvent.click(screen.getByRole('button',{name:'Conferir regularização de custo coberto'}));expect(screen.getByRole('dialog',{name:'Regularizar custo coberto e saldo pendente'})).toBeInTheDocument();expect(screen.queryByRole('button',{name:'Confirmar regularização de custo'})).not.toBeInTheDocument();});

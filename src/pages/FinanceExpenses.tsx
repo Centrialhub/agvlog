@@ -1,3 +1,4 @@
+import {ExpenseFundingSummary} from '@/components/financial/ExpenseFundingSummary';
 import {expenseCurrentCost,expenseCostMoney} from '@/lib/financial/expenseCostPresentation';
 import {LegacyCostInventory} from '@/components/financial/LegacyCostInventory';
 import {useState} from 'react';
@@ -51,7 +52,7 @@ function ExpenseWorkspace({tenant,actor}:{tenant:string;actor:string}){
       <p className="text-xs text-muted-foreground">{page.active_count} ativo(s) e {page.cancelled_count} cancelado(s). Totais dos gastos ativos do filtro; cancelados permanecem no histórico. Complementos gerados incluem títulos que podem já ter sido pagos; consulte o status no detalhe.</p>
       <div className="flex flex-wrap gap-2">{page.categories.map(c=><span key={c.category} className="rounded bg-muted px-3 py-1 text-sm">{expenseCategories[c.category as keyof typeof expenseCategories]||c.category}: {expenseCostMoney(c.amount_cents)}</span>)}</div>
       <section aria-label="Gastos por centro de custo" className="space-y-2"><h2 className="font-semibold">Por centro de custo</h2>
-        <p className="text-xs text-muted-foreground">Cada gasto conferido é contado uma vez. Envios e títulos de complemento não são somados novamente. Estes totais não incluem despesas registradas fora dos lotes.</p>
+        {page.gross_reserved_cents!==undefined&&<ExpenseFundingSummary costCents={page.total_cents} grossReservedCents={page.gross_reserved_cents} driverCustodyCents={page.driver_custody_cents??null} paymentRecoveryCents={page.payment_recovery_cents??null}/>}<p className="text-xs text-muted-foreground">Cada gasto conferido é contado uma vez. Envios e títulos de complemento não são somados novamente. Estes totais não incluem despesas registradas fora dos lotes.</p>
         {filters.cost_center&&<Button variant="outline" onClick={()=>{setFilters({...filters,cost_center:'',page:1});setDraft({...draft,cost_center:''});}}>Todos os centros</Button>}
         <div className="flex flex-wrap gap-2">{(page.cost_centers||[]).map(center=><Button key={center.cost_center_id||'unassigned'} variant="outline" onClick={()=>{
           const cost_center=center.cost_center_id||'unassigned';setFilters({...filters,cost_center,page:1});setDraft({...draft,cost_center});setSelected(null);

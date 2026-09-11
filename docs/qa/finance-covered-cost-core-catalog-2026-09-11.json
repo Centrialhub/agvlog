@@ -1,0 +1,47 @@
+[
+  {
+    "signature": "finance_private.expense_cost_effective(uuid,uuid)",
+    "prosrc_md5": "4d6b0669f91d82e053e25dd0894a2a12",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.expense_cost_funding(uuid,uuid)",
+    "prosrc_md5": "13d85d3b0141af86942afc07a9b163d6",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.guard_cost_regularization_source()",
+    "prosrc_md5": "9e8cb8227558a8a4869709fffd65ea75",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.regularize_unloading_cost(jsonb)",
+    "prosrc_md5": "997451db0388b5996f0a1d41a7d2b4d7",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.unloading_cost_regularization_context(uuid,uuid,jsonb)",
+    "prosrc_md5": "006b351ca0bcabe65d1026f873362e53",
+    "prosecdef": true,
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  }
+]

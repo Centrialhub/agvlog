@@ -1,0 +1,6 @@
+import {beforeEach,it,expect,vi} from 'vitest';
+import {readUnloadingCostRegularization} from '@/lib/financial/unloadingCostRegularizationClient';
+import {regularizationIds as i,regularizationPreview as p,regularizationProposal as proposal} from './helpers/unloadingCostRegularizationFixture';
+const m=vi.hoisted(()=>({rpc:vi.fn()}));vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:m.rpc}}));beforeEach(()=>vi.clearAllMocks());
+it('uses the agreed RPC and rejects a response for another actor',async()=>{m.rpc.mockResolvedValueOnce({data:p,error:null}).mockResolvedValueOnce({data:{...p,actor_id:crypto.randomUUID()},error:null});expect(await readUnloadingCostRegularization(i.tenant,i.actor,i.charge,proposal)).toEqual(p);expect(m.rpc).toHaveBeenCalledWith('preview_finance_unloading_cost_regularization',{_tenant_id:i.tenant,_charge_id:i.charge,_proposal:proposal});await expect(readUnloadingCostRegularization(i.tenant,i.actor,i.charge,proposal)).rejects.toThrow('fora');});
+it('does not accept eligible proof that replaces the operator proposed responsible identity',async()=>{m.rpc.mockResolvedValue({data:p,error:null});await expect(readUnloadingCostRegularization(i.tenant,i.actor,i.charge,{...proposal,dispositions:[{...proposal.dispositions[0],responsible_id:crypto.randomUUID()}]})).rejects.toThrow('Fontes diferentes');});
