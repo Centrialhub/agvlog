@@ -1,0 +1,4 @@
+import {formatFinanceCents} from '@/lib/financial/ledgerContract';
+type Money=string|number|null;
+const money=(v:Money|undefined)=>v==null?'Indeterminado':formatFinanceCents(String(v));
+export function ReceivableSettlementAmounts({nominal,settled,open,cash,credit,compact=false}:{nominal?:Money;settled:Money;open:Money;cash?:Money;credit?:Money;compact?:boolean}){const known=cash!==undefined&&credit!==undefined;return <section aria-label="Composição da liquidação" className={compact?'text-xs space-y-1':'space-y-2'}>{!compact&&nominal!==undefined&&<p>Valor nominal: {money(nominal)}</p>}<p>Total liquidado: {money(settled)} · em aberto: {money(open)}</p>{known?<p>Dinheiro recebido: {money(cash)} · crédito aplicado: {money(credit)}</p>:<p>Composição entre dinheiro e crédito indisponível nesta versão.</p>}</section>;}

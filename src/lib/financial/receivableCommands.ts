@@ -1,3 +1,4 @@
+import {receivableCreditNumberFields,creditCompositionValid} from './receivableCreditAmounts';
 import {movementUseError} from './movementUseErrors';
 import {z} from 'zod';
 const id=z.string().uuid();const revision=z.string().regex(/^[a-f0-9]{32}$/);const cents=z.number().int().nonnegative().max(99999999999999);
@@ -16,7 +17,7 @@ export type FinancialCommand=z.infer<typeof financialCommandSchema>;
 type Input<T>=T extends FinancialCommand?Omit<T,'version'|'tenant_id'|'actor_id'|'request_id'>:never;
 export type FinancialCommandInput=Input<FinancialCommand>;
 const contextSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,receivable_id:id,invoice_id:id.nullable(),report_id:id.nullable(),reference:z.string(),revision,
- status:z.string(),amount_cents:cents.positive(),received_cents:cents,open_cents:cents,requires_reconciliation:z.boolean(),reconciliation_reason:z.string().nullable(),
+ status:z.string(),amount_cents:cents.positive(),received_cents:cents,open_cents:cents,...receivableCreditNumberFields,credit_revision:revision.optional(),credit_application_count:z.number().int().nonnegative().optional(),requires_reconciliation:z.boolean(),reconciliation_reason:z.string().nullable(),
  source_issue:z.literal('finance_unloading_source_mismatch').nullable().optional(),
  source_revision:revision.nullable().optional(),
  can_receive:z.boolean(),can_reverse:z.boolean(),can_reconcile:z.boolean(),fiscal_block_reason:z.enum(['fiscal_origin_suspended','fiscal_origin_cancelled','fiscal_origin_credit_pending','fiscal_origin_review','fiscal_authorization_unavailable']).nullable().optional(),history_complete:z.boolean(),payment_count:z.number().int().nonnegative(),
@@ -28,7 +29,7 @@ export const receivablePaymentSchema=contextSchema.shape.payments.element;
 export type ReceivablePayment=z.infer<typeof receivablePaymentSchema>;
 export function parseFinancialContext(value:unknown,tenant:string,actor:string,receivable:string){
  const parsed=contextSchema.safeParse(value);if(!parsed.success)throw new Error('Contexto financeiro incompatível. Atualize antes de confirmar.');const row=parsed.data;
- if(row.tenant_id!==tenant||row.actor_id!==actor||row.receivable_id!==receivable||(row.source_issue&&(row.can_receive||!row.source_revision))||(!row.requires_reconciliation&&(row.status==='cancelled'?row.received_cents!==0||row.open_cents!==0:row.received_cents+row.open_cents!==row.amount_cents)))
+ if((row.credit_revision===undefined)!==(row.credit_application_count===undefined)||!creditCompositionValid(row,row.received_cents)||(row.settled_cents===null&&row.can_receive)||row.tenant_id!==tenant||row.actor_id!==actor||row.receivable_id!==receivable||(row.source_issue&&(row.can_receive||!row.source_revision))||(!row.requires_reconciliation&&(row.status==='cancelled'?row.received_cents!==0||row.open_cents!==0:row.received_cents+row.open_cents!==row.amount_cents)))
   throw new Error('Contexto financeiro incompatível com a sessão.');return row;
 }
 const resultSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,request_id:id,receivable_id:id,action:financialAction,confirmed:z.literal(true),command_id:id,

@@ -1,0 +1,3 @@
+import {readFileSync} from 'node:fs';
+import {createCustomerCreditApplicationDatabase,seedCustomerCreditApplicationSource} from './customerCreditApplicationDatabase';
+export async function prepareCustomerCreditNative(){const db=await createCustomerCreditApplicationDatabase();await db.exec(readFileSync('supabase/migrations/20260911101312_finance_customer_credit_applications.sql','utf8'));await db.exec(readFileSync('supabase/migrations/20260911103921_finance_customer_credit_public_catalog.sql','utf8'));const source=await seedCustomerCreditApplicationSource(db);await db.exec('commit');return source;}

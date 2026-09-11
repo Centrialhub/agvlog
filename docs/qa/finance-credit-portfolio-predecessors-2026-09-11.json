@@ -1,0 +1,83 @@
+{
+  "project_id": "qcvnsdrbcchaxvawcngk",
+  "functions": [
+    {
+      "nspname": "finance_private",
+      "proname": "receivable_portfolio_summary",
+      "signature": "finance_private.receivable_portfolio_summary(uuid,date,date,uuid)",
+      "normalized_md5": "c8b19aabed3e3d0d0b308ffdd70355af",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.receivable_portfolio_summary(_tenant uuid, _from date, _to date, _client uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare result jsonb;today date:=(statement_timestamp() at time zone 'America/Sao_Paulo')::date;\nbegin\n if not finance_private.can_access(_tenant) then raise exception 'finance_access_denied' using errcode='42501';end if;\n if (_from is not null and not isfinite(_from)) or (_to is not null and not isfinite(_to)) or _from>_to then raise exception 'finance_invalid_filters' using errcode='22023';end if;\n if _client is not null and not exists(select 1 from public.clients where tenant_id=_tenant and id=_client) then raise exception 'finance_client_not_found' using errcode='22023';end if;\n with selected as materialized(\n  select r.* from public.receivables r where r.tenant_id=_tenant and (_client is null or r.client_id=_client)\n   and (r.created_at is null or not isfinite(r.created_at) or\n    ((_from is null or r.created_at>=(_from::timestamp at time zone 'America/Sao_Paulo'))\n     and (_to is null or r.created_at<((_to+1)::timestamp at time zone 'America/Sao_Paulo'))))\n ), active as materialized(\n  select s.*,coalesce(\n   s.status in('pending','invoiced','partial','received') and s.created_at is not null and isfinite(s.created_at)\n\n   and s.amount::text not in('NaN','Infinity','-Infinity') and coalesce(s.received_amount,0)::text not in('NaN','Infinity','-Infinity')\n   and (s.due_date is null or isfinite(s.due_date))\n   and s.amount>=0 and s.amount*100=trunc(s.amount*100) and s.amount*100<=99999999999999\n   and coalesce(s.received_amount,0)>=0 and coalesce(s.received_amount,0)<=s.amount and coalesce(s.received_amount,0)*100=trunc(coalesce(s.received_amount,0)*100)\n   and (s.status<>'received' or s.amount=coalesce(s.received_amount,0)),false) numeric_valid\n  from selected s where s.status is distinct from 'cancelled'\n ), evidence as materialized(\n  select a.*,case when numeric_valid then public._receivable_financial_snapshot(_tenant,a.id) end snapshot from active a\n ), checked as materialized(\n  select e.*,numeric_valid and not coalesce((snapshot->>'requires_reconciliation')::boolean,true) and nullif(snapshot->>'fiscal_block_reason','') is null valid from evidence e\n ), amounts as materialized(\n  select a.*,case when valid then trunc(amount*100) end nominal,\n   case when valid then trunc(coalesce(received_amount,0)*100) end allocated,\n   case when valid then trunc((amount-coalesce(received_amount,0))*100) end remaining\n  from checked a\n ), summary as(\n  select count(*) total,count(*) filter(where not valid) invalid,coalesce(sum(nominal),0) nominal,\n   coalesce(sum(allocated),0) allocated,coalesce(sum(remaining),0) remaining,\n   coalesce(sum(remaining) filter(where due_date<today),0) overdue from amounts\n ), statuses as(\n  select coalesce(status,'unknown') status,count(*) count,sum(nominal) nominal,sum(allocated) allocated,sum(remaining) remaining\n  from amounts group by status\n )\n select jsonb_build_object('version',1,'tenant_id',_tenant,'from',_from,'to',_to,'client_id',_client,'as_of',today,\n  'total_titles',s.total,'canceled_titles',(select count(*) from selected where status='cancelled'),'invalid_titles',s.invalid,'totals_valid',s.invalid=0,\n  'nominal_cents',case when s.invalid=0 then s.nominal::text end,\n  'received_allocated_cents',case when s.invalid=0 then s.allocated::text end,\n  'open_cents',case when s.invalid=0 then s.remaining::text end,\n  'overdue_cents',case when s.invalid=0 then s.overdue::text end,\n  'status_rows',coalesce((select jsonb_agg(jsonb_build_object('status',g.status,'count',g.count,\n   'nominal_cents',case when s.invalid=0 then g.nominal::text end,\n   'received_allocated_cents',case when s.invalid=0 then g.allocated::text end,\n   'open_cents',case when s.invalid=0 then g.remaining::text end) order by g.status) from statuses g),'[]'))\n into result from summary s;\n return result;\nend$function$\n"
+    },
+    {
+      "nspname": "finance_private",
+      "proname": "receivables_page",
+      "signature": "finance_private.receivables_page(uuid,text,text,uuid,date,date,integer)",
+      "normalized_md5": "61e9d3b32f1b7d32cd0f5aed8a1938b3",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.receivables_page(_tenant uuid, _search text, _status text, _client uuid, _from date, _to date, _page integer)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare result jsonb;today date:=(statement_timestamp() at time zone 'America/Sao_Paulo')::date;\nbegin\n if not finance_private.can_access(_tenant) then raise exception 'finance_access_denied' using errcode='42501';end if;\n if _search is null or length(_search)>200 or _page is null or _page not between 1 and 1000000 or _status is null or _status not in('all','pending','invoiced','partial','received','cancelled','overdue')\n  or (_from is not null and not isfinite(_from)) or (_to is not null and not isfinite(_to)) or _from>_to then raise exception 'finance_invalid_filters' using errcode='22023';end if;\n if _client is not null and not exists(select 1 from public.clients where tenant_id=_tenant and id=_client) then raise exception 'finance_client_not_found' using errcode='22023';end if;\n with candidates as materialized(\n  select r.*,case when c.id is not null then jsonb_build_object('company_name',c.company_name) end clients\n  from public.receivables r left join public.clients c on c.tenant_id=r.tenant_id and c.id=r.client_id\n  where r.tenant_id=_tenant and (_client is null or r.client_id=_client)\n   and (_status='all' or r.status=_status or (_status='overdue' and r.status in('pending','invoiced','partial') and isfinite(r.due_date) and r.due_date<today))\n   and (_from is null or r.due_date>=_from) and (_to is null or r.due_date<=_to)\n   and (_search='' or strpos(lower(concat_ws(' ',r.description,r.invoice_number,c.company_name)),lower(_search))>0)\n ), page_rows as(select * from candidates order by created_at desc nulls last,id desc limit 50 offset (_page-1)*50)\n select jsonb_build_object('version',1,'tenant_id',_tenant,'page',_page,'page_size',50,'total',(select count(*) from candidates),\n  'total_unfiltered',(select count(*) from public.receivables where tenant_id=_tenant),\n  'rows',coalesce((select jsonb_agg(to_jsonb(p) order by p.created_at desc nulls last,p.id desc) from page_rows p),'[]')) into result;\n return result;\nend$function$\n"
+    },
+    {
+      "nspname": "finance_private",
+      "proname": "receivables_page_by_origin",
+      "signature": "finance_private.receivables_page_by_origin(uuid,text,text,uuid,date,date,integer,text)",
+      "normalized_md5": "3f79b4f3874c2e2b00b6bea071d211ee",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.receivables_page_by_origin(_tenant uuid, _search text, _status text, _client uuid, _from date, _to date, _page integer, _origin text)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\ndeclare result jsonb;today date:=(statement_timestamp() at time zone 'America/Sao_Paulo')::date;\r\nbegin\r\n if not finance_private.can_access(_tenant) then raise exception 'finance_access_denied' using errcode='42501';end if;\r\n if _origin is null or _origin not in('all','unloading','fiscal','other') or _search is null or length(_search)>200 or _page is null or _page not between 1 and 1000000 or _status is null or _status not in('all','pending','invoiced','partial','received','cancelled','overdue')\r\n  or (_from is not null and not isfinite(_from)) or (_to is not null and not isfinite(_to)) or _from>_to then raise exception 'finance_invalid_filters' using errcode='22023';end if;\r\n if _client is not null and not exists(select 1 from public.clients where tenant_id=_tenant and id=_client) then raise exception 'finance_client_not_found' using errcode='22023';end if;\r\n with classified as materialized(\r\n  select r.*,case\r\n   when exists(select 1 from public.finance_unloading_charges u where u.tenant_id=r.tenant_id and u.receivable_id=r.id) then 'unloading'\r\n   when r.cte_document_id is not null or exists(select 1 from public.finance_fiscal_receivable_origins f where f.tenant_id=r.tenant_id and f.receivable_id=r.id) then 'fiscal'\r\n   else 'other' end as origin_kind\r\n  from public.receivables r where r.tenant_id=_tenant\r\n ), candidates as materialized(\r\n  select r.*,case when c.id is not null then jsonb_build_object('company_name',c.company_name) end clients\r\n  from classified r left join public.clients c on c.tenant_id=r.tenant_id and c.id=r.client_id\r\n  where r.tenant_id=_tenant and (_origin='all' or r.origin_kind=_origin) and (_client is null or r.client_id=_client)\r\n   and (_status='all' or r.status=_status or (_status='overdue' and r.status in('pending','invoiced','partial') and isfinite(r.due_date) and r.due_date<today))\r\n   and (_from is null or r.due_date>=_from) and (_to is null or r.due_date<=_to)\r\n   and (_search='' or strpos(lower(concat_ws(' ',r.description,r.invoice_number,c.company_name)),lower(_search))>0)\r\n ), page_rows as(select * from candidates order by created_at desc nulls last,id desc limit 50 offset (_page-1)*50)\r\n select jsonb_build_object('version',2,'origin_filter',_origin,'tenant_id',_tenant,'page',_page,'page_size',50,'total',(select count(*) from candidates),\r\n  'total_unfiltered',(select count(*) from public.receivables where tenant_id=_tenant),\r\n  'rows',coalesce((select jsonb_agg(to_jsonb(p) order by p.created_at desc nulls last,p.id desc) from page_rows p),'[]')) into result;\r\n return result;\r\nend$function$\n"
+    },
+    {
+      "nspname": "public",
+      "proname": "get_finance_receivable_portfolio_summary",
+      "signature": "get_finance_receivable_portfolio_summary(uuid,date,date,uuid)",
+      "normalized_md5": "57ec337154e72f5fd37b0921453f3202",
+      "prosecdef": false,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION public.get_finance_receivable_portfolio_summary(_tenant_id uuid, _from date DEFAULT NULL::date, _to date DEFAULT NULL::date, _client_id uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO ''\nAS $function$select finance_private.receivable_portfolio_summary(_tenant_id,_from,_to,_client_id)$function$\n"
+    },
+    {
+      "nspname": "public",
+      "proname": "get_finance_receivables_page",
+      "signature": "get_finance_receivables_page(uuid,text,text,uuid,date,date,integer)",
+      "normalized_md5": "70abc27d04ecd22155b4287114666e9d",
+      "prosecdef": false,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION public.get_finance_receivables_page(_tenant_id uuid, _search text DEFAULT ''::text, _status text DEFAULT 'all'::text, _client_id uuid DEFAULT NULL::uuid, _from date DEFAULT NULL::date, _to date DEFAULT NULL::date, _page integer DEFAULT 1)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO ''\nAS $function$select finance_private.receivables_page(_tenant_id,_search,_status,_client_id,_from,_to,_page)$function$\n"
+    },
+    {
+      "nspname": "public",
+      "proname": "get_finance_receivables_page_by_origin",
+      "signature": "get_finance_receivables_page_by_origin(uuid,text,text,uuid,date,date,integer,text)",
+      "normalized_md5": "dee21e6ae2e9d39a4452929de62522e6",
+      "prosecdef": false,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION public.get_finance_receivables_page_by_origin(_tenant_id uuid, _search text DEFAULT ''::text, _status text DEFAULT 'all'::text, _client_id uuid DEFAULT NULL::uuid, _from date DEFAULT NULL::date, _to date DEFAULT NULL::date, _page integer DEFAULT 1, _origin text DEFAULT 'all'::text)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO ''\nAS $function$select finance_private.receivables_page_by_origin(_tenant_id,_search,_status,_client_id,_from,_to,_page,_origin)$function$\n"
+    }
+  ]
+}

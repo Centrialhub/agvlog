@@ -1,0 +1,24 @@
+{
+  "files": [
+    {
+      "path": "supabase/migrations/20260911101312_finance_customer_credit_applications.sql",
+      "sha256": "298e3ae217acf80e32439e097c0f202d0d0be425b14fb8b54b116d3dbd81a2ac"
+    },
+    {
+      "path": "src/test/helpers/customerCreditApplicationDatabase.ts",
+      "sha256": "1d54782a8ad8e3efce589c1e8dde1f23f4e6f0b5e0d10f54762d69545e3a6ec8"
+    },
+    {
+      "path": "src/test/customerCreditApplication.test.ts",
+      "sha256": "d0fb6b5b9ddc87708437011154b929eb21c0af2e20f4290aa929922b9f3ba502"
+    },
+    {
+      "path": "docs/qa/finance-customer-credit-core-catalog-2026-09-11.json",
+      "sha256": "7900a39837dbe791887e03a35db8e647123714302da4994c8c6acd0423627347"
+    },
+    {
+      "path": "docs/qa/finance-customer-credit-core-2026-09-11.md",
+      "sha256": "14a900417a5834832d8593ff8eb4a179e34eaf714e0b21e8be0be2b2f9112e9c"
+    }
+  ]
+}

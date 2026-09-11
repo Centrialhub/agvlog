@@ -10,8 +10,8 @@ export type ReceivableStatus = typeof RECEIVABLE_STATUSES[number];
 export const RECEIVABLE_STATUS_LABELS: Record<ReceivableStatus, string> = {
   pending: 'Pendente',
   invoiced: 'Faturado',
-  partial: 'Parcialmente recebido',
-  received: 'Recebido',
+  partial: 'Parcialmente liquidado',
+  received: 'Liquidado',
   cancelled: 'Cancelado',
 };
 

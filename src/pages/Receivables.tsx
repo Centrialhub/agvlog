@@ -1,3 +1,6 @@
+import {CustomerCreditDialog} from '@/components/financial/CustomerCreditPanel';
+import {ReceivableSettlementAmounts} from '@/components/financial/ReceivableSettlementAmounts';
+import {receivableListSettlement} from '@/lib/financial/receivableCreditAmounts';
 import {UnloadingCancellationDialog} from '@/components/financial/UnloadingCancellationDialog';
 import {UnloadingOriginCorrectionDialog} from '@/components/financial/UnloadingOriginCorrectionDialog';
 import {UnloadingProjectionRepairDialog} from '@/components/financial/UnloadingProjectionRepairDialog';
@@ -39,6 +42,7 @@ export default function Receivables() {
 }
 function ReceivablesScreen() {
   const toast = useSonnerToast();
+  const [creditOpen,setCreditOpen]=useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
   const [repairCharge,setRepairCharge]=useState<string|null>(null);
   const [correctionCharge,setCorrectionCharge]=useState<string|null>(null);
@@ -160,11 +164,12 @@ function ReceivablesScreen() {
           </h1>
           <p className="text-sm text-muted-foreground">Títulos financeiros vinculados a fretes e pedidos</p>
         </div>
-        <div className="flex gap-2">{currentTenant&&user&&<Button variant="outline" onClick={()=>setHistoryOpen(true)}>Histórico de alterações</Button>}<Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+        <div className="flex gap-2">{currentTenant&&user&&<Button variant="outline" onClick={()=>setCreditOpen(true)}>Créditos de clientes</Button>}{currentTenant&&user&&<Button variant="outline" onClick={()=>setHistoryOpen(true)}>Histórico de alterações</Button>}<Button onClick={() => { resetForm(); setDialogOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Novo Título
         </Button></div>
       </div>
 
+      {creditOpen&&currentTenant&&user&&<CustomerCreditDialog key={`${currentTenant.id}:${user.id}`} tenant={currentTenant.id} actor={user.id} onClose={()=>setCreditOpen(false)}/>}
       {historyOpen&&currentTenant&&user&&<ReceivableHistoryDialog key={`${currentTenant.id}:${user.id}`} tenant={currentTenant.id} actor={user.id} onClose={()=>setHistoryOpen(false)}/>}
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-4">
@@ -177,8 +182,10 @@ function ReceivablesScreen() {
           <p className="text-xl font-bold text-blue-600">{portfolioValue(portfolio,'overdue_cents')}</p>
         </CardContent></Card>
         <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Baixas alocadas (inclui parciais)</p>
+          <p className="text-xs text-muted-foreground">Total liquidado (inclui parciais)</p>
           <p className="text-xl font-bold text-green-600">{portfolioValue(portfolio,'received_allocated_cents')}</p>
+          {portfolio.data&&<ReceivableSettlementAmounts compact settled={portfolio.data.settled_cents===undefined?portfolio.data.received_allocated_cents:portfolio.data.settled_cents} open={portfolio.data.open_cents} cash={portfolio.data.cash_received_cents} credit={portfolio.data.credit_applied_cents}/>}
+
         </CardContent></Card>
       </div>
 
@@ -203,7 +210,7 @@ function ReceivablesScreen() {
                 <TableHead>Cliente / fornecedor devedor</TableHead>
                 <TableHead>Nº Fatura</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="text-right">Recebido / Saldo</TableHead>
+                <TableHead className="text-right">Liquidação / Saldo</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-40">Ações</TableHead>
@@ -221,9 +228,8 @@ function ReceivablesScreen() {
                   <TableCell className="text-sm text-muted-foreground">{r.invoice_number || '—'}</TableCell>
                   <TableCell className="text-sm text-right font-medium">{fmt(Number(r.amount || 0))}</TableCell>
                   <TableCell className="text-sm text-right">
-                    <span className="text-green-600">{fmt(Number(r.received_amount || 0))}</span>
-                    {' / '}
-                    <span className="text-warning">{fmt(Math.max(0, Number(r.amount || 0) - Number(r.received_amount || 0)))}</span>
+                    <ReceivableSettlementAmounts compact {...receivableListSettlement(r)}/>
+
                   </TableCell>
                   <TableCell className="text-sm">{r.due_date ? new Date(r.due_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</TableCell>
                   <TableCell><Badge className={statusColor(r.status)}>{r.status === 'partial' ? 'Parcial' : (RECEIVABLE_STATUS_LABELS[r.status as keyof typeof RECEIVABLE_STATUS_LABELS] || r.status)}</Badge></TableCell>

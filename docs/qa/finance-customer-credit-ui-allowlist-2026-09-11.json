@@ -1,0 +1,100 @@
+{
+  "files": [
+    {
+      "path": "src/components/financial/CustomerCreditPanel.tsx",
+      "sha256": "c7db38ff0a06903ecaffc8dc3c22d51e95613f463b209b62716d7c373c3f983d"
+    },
+    {
+      "path": "src/components/financial/CustomerCreditReview.tsx",
+      "sha256": "73d4396708150a24ee801eff4de52ffbc0504e9a6692bda16a32b4d83d8d564f"
+    },
+    {
+      "path": "src/components/financial/CustomerCreditConfirmation.tsx",
+      "sha256": "4d2bc0d85662b70d1571e64af0637fb10cdd73a25639849110921845de4c02a6"
+    },
+    {
+      "path": "src/lib/financial/customerCreditContract.ts",
+      "sha256": "8e2fc051a8e91898245469d989bdeb207dcbd9544f41026f4fe924209c853ac3"
+    },
+    {
+      "path": "src/lib/financial/customerCreditClient.ts",
+      "sha256": "dbdf474e83a20aba888f2aba2bf0b471e8916ed119ee0aeba02f45669d496c2a"
+    },
+    {
+      "path": "src/lib/financial/customerCreditOutbox.ts",
+      "sha256": "3773ec79d6baf019cb1b71cab3daf5a06a7e35458ded3c824aeb2cabc8590051"
+    },
+    {
+      "path": "src/lib/financial/customerCreditCache.ts",
+      "sha256": "80586faf77c6dbc8886b7845f01bd8ee8699332d85c8f2caab6fe7d09649e75f"
+    },
+    {
+      "path": "src/test/customerCreditPanel.test.tsx",
+      "sha256": "a22808faa9a1d3d1dad2f026957e5c3e2e4068f0bf6a2ce27072fa0994ffb6ed"
+    },
+    {
+      "path": "src/test/customerCreditClient.test.ts",
+      "sha256": "e17116646726035be312dff4c8d661e8ddb30d42b9602679d23c277ec05de9d4"
+    },
+    {
+      "path": "src/test/customerCreditContract.test.ts",
+      "sha256": "a988c8fb4f3e7b61097932abd5f53633e7c5a5d23ae7c776de752422e7086eec"
+    },
+    {
+      "path": "src/test/customerCreditOutbox.test.ts",
+      "sha256": "84ec5f2f692398b719030a6f6a0e51d9fbffcccdf57199b3aec8a26d5ce9179b"
+    },
+    {
+      "path": "src/test/helpers/customerCreditFixture.ts",
+      "sha256": "6630e2509ddd94f3da217394ca4f30038d547576f9b0522bc72c62c011ab9a69"
+    },
+    {
+      "path": "src/components/financial/ReceivableSettlementAmounts.tsx",
+      "sha256": "ea1b15ef7ebba2be7c4805ccc179dd08f761c42fd108969aabf9991f36140c24"
+    },
+    {
+      "path": "src/lib/financial/receivableCreditAmounts.ts",
+      "sha256": "166135cbc281100d2bfebaafd51bed1009c3b3efda41a4eb9dbba7c1e228d28c"
+    },
+    {
+      "path": "src/lib/financial/receivableCommands.ts",
+      "sha256": "c08587995b304e5b1ae16bf79112bc4203d023e81d34aac4dc902a1ca495684a"
+    },
+    {
+      "path": "src/components/financial/ReceivableFinancialDialog.tsx",
+      "sha256": "85fe0d57da4c053ad0011d720e79b358ac429a95dd5685cdca5b19dfb27974b7"
+    },
+    {
+      "path": "src/lib/financial/receivablesPageContract.ts",
+      "sha256": "48cb94d174504d49c5cbf6784d572b1cd3d2a9688999f79358f5b33b9ecbf92a"
+    },
+    {
+      "path": "src/lib/financial/receivablePortfolioContract.ts",
+      "sha256": "ca25e55d5a90a7920d245f8747862d173928ac032f710185f27bbdf413e0fd30"
+    },
+    {
+      "path": "src/hooks/useReceivables.tsx",
+      "sha256": "930acf59ef87200ca4bc398ddc79585a3e403514f54c82327a3100f7bddb69db"
+    },
+    {
+      "path": "src/pages/Receivables.tsx",
+      "sha256": "0a57161ecb8444c3384e849cce298637cf1f7bd1faefa30add4ea63f6e0dce83"
+    },
+    {
+      "path": "src/test/receivableSettlementAmounts.test.tsx",
+      "sha256": "dd78625902f05ef401324b3188f936c001f5fae5c5d74c05088af3ec29ab7281"
+    },
+    {
+      "path": "src/test/receivableCreditAmounts.test.ts",
+      "sha256": "1d70173490b450b36574486d4e62c3d5d8bef01feb52bb22c6bc95de28652700"
+    },
+    {
+      "path": "src/test/receivableCreditContext.test.ts",
+      "sha256": "eac0700157bbb4a1288180cb51e5e26f6575b0ab287c2242683595daa47f7043"
+    },
+    {
+      "path": "src/test/receivableCreditContextDatabase.test.ts",
+      "sha256": "26531395b222d5a9e3b00ac4d6510ba19e7e58ed4b213a051a9c22b9f6b0cb03"
+    }
+  ]
+}

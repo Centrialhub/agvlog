@@ -1,0 +1,54 @@
+{
+  "scope": "Local public customer credit application/release, paginated catalog, portfolio composition, and native concurrency",
+  "native": {
+    "session": 72919,
+    "exit_code": 0,
+    "passed": 5,
+    "functional_gaps": 0,
+    "postgres_stopped": true,
+    "version": "17.11"
+  },
+  "pglite": {
+    "candidate_public": 3,
+    "candidate_cash_reversal_and_portfolio": 1,
+    "predecessor_observation_review": 1
+  },
+  "allowlist": [
+    {
+      "path": "supabase/migrations/20260911103921_finance_customer_credit_public_catalog.sql",
+      "sha256": "2defe18ac7c90b410d2a20519e967959a4528e197baae7c465b2b75b669dabbb"
+    },
+    {
+      "path": "supabase/migrations/20260911104429_finance_customer_credit_portfolio_composition.sql",
+      "sha256": "1104ace915f17953c61a907e3a1ccdbc4200d3fcd91af5939a98749006a19442"
+    },
+    {
+      "path": "src/test/customerCreditPublicCatalog.test.ts",
+      "sha256": "49434be3f3bb7189aabf1ac65a7db662588116386edd70dacabca9dd8e66fbc6"
+    },
+    {
+      "path": "src/test/customerCreditCashReversalReview.test.ts",
+      "sha256": "2a60eeba8e2694c915d8a0a0b7bf9e48c3ca199260b6724fb4f245c0102b294f"
+    },
+    {
+      "path": "src/test/customerCreditSourceObservationReview.test.ts",
+      "sha256": "488c24ebdef2e4d057b0aefcf3712645a2c5d3447f30487cf2f6aae78a737fe7"
+    },
+    {
+      "path": "src/test/helpers/customerCreditNativeFixture.ts",
+      "sha256": "edf2ee825cb2079ee8616baa32ff6594d506d65a7383a99afebba99b1ee94133"
+    },
+    {
+      "path": "scripts/test-finance-credit-native.mjs",
+      "sha256": "28a48fd9e1442b7ee6f6a8e357c8b93bf51d8c2bd8cfc44963b70461c378d4ed"
+    },
+    {
+      "path": "scripts/test-finance-credit-native-cases.mjs",
+      "sha256": "46b785088f1550f6578e87a56c08f90f1b2ce2f47ec0416bd71c5f911f23ad13"
+    },
+    {
+      "path": "docs/qa/finance-credit-source-observation-review-2026-09-11.md",
+      "sha256": "ab25903804250efc38c2b2dbd94e470afd1a41fdcf42da8632d8015f3ac4ead3"
+    }
+  ]
+}

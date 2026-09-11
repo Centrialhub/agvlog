@@ -1,0 +1,192 @@
+[
+  {
+    "signature": "finance_private.audit_events(_tenant uuid, _filters jsonb)",
+    "normalized_md5": "6c7960750c3acb7d3ceba891e924fecb",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres,authenticated=X/postgres}"
+  },
+  {
+    "signature": "finance_private.cash_receivable_ledger_evidence(_tenant uuid, _id uuid)",
+    "normalized_md5": "351d7b05301ec509747944c68ea6c49e",
+    "prosecdef": false,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.customer_credit_application_context(_tenant uuid, _credit uuid, _receivable uuid, _amount text, _application uuid)",
+    "normalized_md5": "896f7c6c668df92def2bf361330a8156",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.customer_credit_position(_tenant uuid, _credit uuid)",
+    "normalized_md5": "9c7f511f9f20852086366abba5b2b56b",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.customer_credit_source_evidence(_tenant uuid, _credit uuid)",
+    "normalized_md5": "3184b4aa2eddc8ac7d7f831d6ffac48c",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.forecast_customer_credit_evidence(_tenant uuid, _credit uuid)",
+    "normalized_md5": "0d52a40e865dba8396d54c1eaed99d90",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.guard_customer_credit_application_insert()",
+    "normalized_md5": "22d45c1723d4a474dec714e19b961f9f",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.process_fiscal_observation(_tenant uuid, _observation uuid)",
+    "normalized_md5": "5be67b8fe326ec383618052fd90c75e9",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.receivable_credit_evidence(_tenant uuid, _receivable uuid)",
+    "normalized_md5": "d62bb1656e6be89b7753f44c6e5501dc",
+    "prosecdef": false,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.record_customer_credit_application(_payload jsonb)",
+    "normalized_md5": "6b04a6f7a7c514ec40976f3550988577",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.release_receivable_customer_credits(_tenant uuid, _receivable uuid, _reason text, _observation uuid)",
+    "normalized_md5": "4f0decac7d15076018408b91077231e5",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.sync_credit_application_projection()",
+    "normalized_md5": "e1f657a380c67e6a277fd91d615c27db",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.verify_customer_credit_application()",
+    "normalized_md5": "da2360750d5289651ac40ac3bf9c6032",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "public._guard_receivable_ledger()",
+    "normalized_md5": "ccba9ce7b0afd669374dbc564d22be19",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "public._invoice_lifecycle_snapshot(_tenant uuid, _id uuid)",
+    "normalized_md5": "af796b4802563eb3435dab6dbed8046a",
+    "prosecdef": false,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "public._recalc_receivable_received()",
+    "normalized_md5": "3ace7a905df9b11f0a1e1e3117f76ebb",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "public._receivable_financial_snapshot(_tenant uuid, _id uuid)",
+    "normalized_md5": "473e509e0283627f5520dddfb36a083d",
+    "prosecdef": false,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "public._receivable_ledger_evidence(_tenant uuid, _id uuid)",
+    "normalized_md5": "51dc0bea52d353a7b6407fb6faa50cf0",
+    "prosecdef": false,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "public.apply_client_invoice_command(_payload jsonb)",
+    "normalized_md5": "0c581f489eef3cb23cfa6c068e819d60",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres,authenticated=X/postgres}"
+  }
+]

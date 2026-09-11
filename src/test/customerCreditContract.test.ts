@@ -1,0 +1,5 @@
+import {expect,it} from 'vitest';
+import {customerCreditPreviewSchema,parseCustomerCreditResult} from '@/lib/financial/customerCreditContract';
+import {creditPreview as p,creditCommand,creditResult,creditIds as i} from './helpers/customerCreditFixture';
+it('validates same payer, capacity and coherent monetary proof without throwing on malformed strings',()=>{expect(customerCreditPreviewSchema.safeParse(p).success).toBe(true);for(const value of [{...p,credit:{...p.credit,available_cents:'NaN'}},{...p,target:{...p.target,payer_id:i.actor}},{...p,amount_cents:'60000'},{...p,eligible:false,can_execute:true}]){expect(()=>customerCreditPreviewSchema.safeParse(value)).not.toThrow();expect(customerCreditPreviewSchema.safeParse(value).success).toBe(false);}});
+it('matches release identity and does not interpret a release as a refund',()=>{const command={...creditCommand,action:'release' as const,application_id:i.event};expect(parseCustomerCreditResult({...creditResult,action:'release'},command,i.actor).cash_movement_created).toBe(false);expect(()=>parseCustomerCreditResult({...creditResult,action:'release',application_id:i.payer},command,i.actor)).toThrow();});

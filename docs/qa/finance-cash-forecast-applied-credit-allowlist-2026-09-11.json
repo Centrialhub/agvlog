@@ -1,0 +1,22 @@
+[
+  {
+    "path": "supabase/migrations/20260911102519_finance_cash_forecast_applied_credit_balance.sql",
+    "sha256": "70b248d2f1a2972eaf173292e4f58dd6e819e992f2d4a6658264675b06599aa0"
+  },
+  {
+    "path": "src/test/cashForecastAppliedCredit.test.ts",
+    "sha256": "375a2a008e00a38193359b4e343cf30ef8e1b6a6a1aaf4fedf0aad3ed0fa90ed"
+  },
+  {
+    "path": "src/components/financial/CashForecastSources.tsx",
+    "sha256": "7b229f16f03a47452210907474db0cd7cba080278949d7e71467ea121c94a074"
+  },
+  {
+    "path": "src/components/financial/CashForecastAgendaDialog.tsx",
+    "sha256": "1c57dc4fc2835e3855e9e36afe7b79daef529db0f32ebf5e0c4e1dc5da885490"
+  },
+  {
+    "path": "docs/qa/finance-cash-forecast-applied-credit-2026-09-11.md",
+    "sha256": "0d1d67ff2a35f1d15c7b9bc5e75cad5308759de8d3689132ef224ee3e0140bf3"
+  }
+]
