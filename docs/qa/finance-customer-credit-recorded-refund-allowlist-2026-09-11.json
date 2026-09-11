@@ -1,0 +1,36 @@
+{
+  "files": [
+    {
+      "path": "supabase/migrations/20260911104822_finance_customer_credit_recorded_refunds.sql",
+      "sha256": "bcbbd8ad479aa263320ada12def8f15e742c4c7c84fc169d4f99e60aa4da1d79"
+    },
+    {
+      "path": "src/test/helpers/customerCreditRefundDatabase.ts",
+      "sha256": "7bbfbd7da1bc1fff44f605ed1299631a9ea7d9e47ab4a3c43eb380e5c97e9673"
+    },
+    {
+      "path": "src/test/customerCreditRefund.test.ts",
+      "sha256": "a6ab68aef859688753691fcd885bd1e2ccaa5a8c947c5da9b4a7d2f6d870bda7"
+    },
+    {
+      "path": "docs/qa/finance-customer-credit-refund-core-catalog-2026-09-11.json",
+      "sha256": "0514e9f2f4865cdd4707b00d22d08b50905a11378dc52f014c79d96b59fbfef0"
+    },
+    {
+      "path": "docs/qa/finance-customer-credit-refund-production-predecessors-2026-09-11.json",
+      "sha256": "b9447ebd08cfb81612e881d444fa24d89fae3110452c5cb08339bf27346a923f"
+    },
+    {
+      "path": "docs/qa/finance-customer-credit-refund-production-triggers-2026-09-11.json",
+      "sha256": "769ab9299aaa4c1c37e296c217e85e381f2d8dbdc9bd9a201e40b21d60078bad"
+    },
+    {
+      "path": "docs/qa/finance-customer-credit-recorded-refund-design-2026-09-11.md",
+      "sha256": "8942f5c07e56c3aca7569194fc0d0ab3c1bf9a94b016bbbf21c04051baf2c6b8"
+    },
+    {
+      "path": "docs/qa/finance-customer-credit-recorded-refund-core-2026-09-11.md",
+      "sha256": "e348a76375d761359d0d614ce066dca652aa43583fe9a97cd79f7c949814e710"
+    }
+  ]
+}

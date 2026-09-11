@@ -1,0 +1,72 @@
+{
+  "files": [
+    {
+      "path": "src/lib/financial/customerCreditRefundContract.ts",
+      "sha256": "ce42d326766888a1942d01b9e6b6967604b68aacc18153bb29aa99981d6067c2"
+    },
+    {
+      "path": "src/lib/financial/customerCreditRefundClient.ts",
+      "sha256": "4d06d41d17957b33497054ea10abf44bf99b166a8b4f1f3ca791061964367517"
+    },
+    {
+      "path": "src/lib/financial/customerCreditRefundOutbox.ts",
+      "sha256": "2b4945837fc04456b4d4e7b872dcfc87bd29fa2304fb6fb20fbd286a78ee529e"
+    },
+    {
+      "path": "src/components/financial/CustomerCreditRefundPanel.tsx",
+      "sha256": "574daa246e2582adcbd5b28fc4c79e6e331c105b6f445805a89cdfe2a094dcdc"
+    },
+    {
+      "path": "src/components/financial/CustomerCreditRefundReview.tsx",
+      "sha256": "b40f59084a94cc847d72bac3a2dc0df74fc289f8e25285ddea9607673798168b"
+    },
+    {
+      "path": "src/components/financial/CustomerCreditRefundConfirmation.tsx",
+      "sha256": "a94b5114a3d742f3ad968d77e6502c7cb5e5cc9ebd94ba556cec4ebe1d7994fc"
+    },
+    {
+      "path": "src/test/helpers/customerCreditRefundFixture.ts",
+      "sha256": "b6ff4f1c99fc4042ea26b5438b5251ba56b0b5542501b224045899ae8bfeb984"
+    },
+    {
+      "path": "src/test/customerCreditRefundContract.test.ts",
+      "sha256": "061da135612824e666cb00ef09a5402a430199ff48216429347275c4ae533cf4"
+    },
+    {
+      "path": "src/test/customerCreditRefundClient.test.ts",
+      "sha256": "e1c0482bde6e5452563f6d3a6b29d974f3418d666cde6251c3e69382424a54b4"
+    },
+    {
+      "path": "src/test/customerCreditRefundOutbox.test.ts",
+      "sha256": "c53dbca0f1150e67bb988109a05fb8573dfae247cd9554e48b2718ce38d37712"
+    },
+    {
+      "path": "src/test/customerCreditRefundPanel.test.tsx",
+      "sha256": "21a4ddb6ee163ad79e31f25e09b2387d9850d42b2fe98367eefbecff542a7ad4"
+    },
+    {
+      "path": "src/lib/financial/customerCreditContract.ts",
+      "sha256": "0dec1040c488f2066472c3b1f0efa74991ea47cb57f5271da6db0ef959c072cd"
+    },
+    {
+      "path": "src/components/financial/CustomerCreditPanel.tsx",
+      "sha256": "7a5a6a2245fa7794fe6aa8b2210153bab8f585bf9c61da88bd5bca82500b4b9f"
+    },
+    {
+      "path": "src/lib/financial/customerCreditCache.ts",
+      "sha256": "9e5ed0617abcec818dbd1278712968e3d0478b44931496e40802ec69506d3c34"
+    },
+    {
+      "path": "src/test/customerCreditContract.test.ts",
+      "sha256": "81e0fcc01e7c42cd37818d7ff9c3804cfb342b75719f4d68d5af002501c22fa1"
+    },
+    {
+      "path": "src/lib/financial/financeAuditContract.ts",
+      "sha256": "92b7016e7e4642a11b92ae5ff0071bd61d4d16e74efdb6bdcdca1ac333cb1a5c"
+    },
+    {
+      "path": "src/test/customerCreditAuditLabels.test.ts",
+      "sha256": "1494afb01c64fc526a7de47f09cc7b9513385836135886a22bfe3c9f88fa2f8f"
+    }
+  ]
+}

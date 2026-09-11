@@ -1,0 +1,46 @@
+{
+  "native": {
+    "session": 19470,
+    "exit_code": 0,
+    "passed": 6,
+    "postgres_stopped": true
+  },
+  "pglite": {
+    "passed": 3,
+    "session": 37432,
+    "exit_code": 0
+  },
+  "core_sha256": "bcbbd8ad479aa263320ada12def8f15e742c4c7c84fc169d4f99e60aa4da1d79",
+  "allowlist": [
+    {
+      "path": "supabase/migrations/20260911110629_finance_customer_credit_refund_public_catalog.sql",
+      "sha256": "89ae43b8ab488c1112651c719b3a62487049d51077c67e719abe59406ca37299"
+    },
+    {
+      "path": "src/test/customerCreditRefundPublic.test.ts",
+      "sha256": "4a4b62a80371c1229bbee4d2843e42d71a21f4102f024189d0ca7fb1f86370bc"
+    },
+    {
+      "path": "src/test/helpers/customerCreditRefundNativeFixture.ts",
+      "sha256": "b213849f531e5d5fe53d591c7d45560f0beae8b91c94037cb2190933659a9b60"
+    },
+    {
+      "path": "scripts/test-finance-credit-refund-native.mjs",
+      "sha256": "3973c517648ba155dda6e03bd17fe8e8ee3dfda377346920238b993052d76070"
+    },
+    {
+      "path": "scripts/test-finance-credit-refund-native-cases.mjs",
+      "sha256": "c28ce02a00083d6218e5ca500cb3b2020438973f401b7c883183c3329c8cf372"
+    },
+    {
+      "path": "src/test/customerCreditRefundPeriodClose.test.ts",
+      "sha256": "a7a4e1a52319206540141cb2a68a9cd9986b79639486f39d2811c4da5986d846"
+    }
+  ],
+  "period_close_supplement": {
+    "passed": 1,
+    "runtime": "PGlite",
+    "time": "08:20:22",
+    "lint_exit_code": 0
+  }
+}

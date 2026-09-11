@@ -1,0 +1,222 @@
+[
+  {
+    "relation": "finance_expense_allocations",
+    "tgname": "a_cost_regularization_guard",
+    "tgtype": 31,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER a_cost_regularization_guard BEFORE INSERT OR DELETE OR UPDATE ON public.finance_expense_allocations FOR EACH ROW EXECUTE FUNCTION finance_private.guard_cost_regularization_source()",
+    "function": "finance_private.guard_cost_regularization_source()"
+  },
+  {
+    "relation": "finance_expense_allocations",
+    "tgname": "a_finance_active_movement_reference",
+    "tgtype": 23,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER a_finance_active_movement_reference BEFORE INSERT OR UPDATE ON public.finance_expense_allocations FOR EACH ROW EXECUTE FUNCTION finance_private.guard_active_financial_movement_reference()",
+    "function": "finance_private.guard_active_financial_movement_reference()"
+  },
+  {
+    "relation": "finance_expense_allocations",
+    "tgname": "a_open_complement_allocation",
+    "tgtype": 31,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER a_open_complement_allocation BEFORE INSERT OR DELETE OR UPDATE ON public.finance_expense_allocations FOR EACH ROW EXECUTE FUNCTION finance_private.guard_open_complement_source()",
+    "function": "finance_private.guard_open_complement_source()"
+  },
+  {
+    "relation": "finance_expense_allocations",
+    "tgname": "finance_cancelled_expense_allocation",
+    "tgtype": 7,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER finance_cancelled_expense_allocation BEFORE INSERT ON public.finance_expense_allocations FOR EACH ROW EXECUTE FUNCTION finance_private.guard_cancelled_expense_dependency()",
+    "function": "finance_private.guard_cancelled_expense_dependency()"
+  },
+  {
+    "relation": "finance_expense_allocations",
+    "tgname": "finance_effective_unloading_allocation",
+    "tgtype": 23,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER finance_effective_unloading_allocation BEFORE INSERT OR UPDATE ON public.finance_expense_allocations FOR EACH ROW EXECUTE FUNCTION finance_private.guard_effective_unloading_cost()",
+    "function": "finance_private.guard_effective_unloading_cost()"
+  },
+  {
+    "relation": "finance_expense_allocations",
+    "tgname": "finance_expense_shared_capacity",
+    "tgtype": 7,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER finance_expense_shared_capacity BEFORE INSERT ON public.finance_expense_allocations FOR EACH ROW EXECUTE FUNCTION finance_private.check_movement_use()",
+    "function": "finance_private.check_movement_use()"
+  },
+  {
+    "relation": "finance_expense_allocations",
+    "tgname": "preserve_finance",
+    "tgtype": 27,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER preserve_finance BEFORE DELETE OR UPDATE ON public.finance_expense_allocations FOR EACH ROW EXECUTE FUNCTION finance_private.preserve_event()",
+    "function": "finance_private.preserve_event()"
+  },
+  {
+    "relation": "finance_movement_voids",
+    "tgname": "a_cost_regularization_guard",
+    "tgtype": 7,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER a_cost_regularization_guard BEFORE INSERT ON public.finance_movement_voids FOR EACH ROW EXECUTE FUNCTION finance_private.guard_cost_regularization_source()",
+    "function": "finance_private.guard_cost_regularization_source()"
+  },
+  {
+    "relation": "finance_movement_voids",
+    "tgname": "a_cost_return_guard",
+    "tgtype": 7,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER a_cost_return_guard BEFORE INSERT ON public.finance_movement_voids FOR EACH ROW EXECUTE FUNCTION finance_private.guard_cost_disposition_return()",
+    "function": "finance_private.guard_cost_disposition_return()"
+  },
+  {
+    "relation": "finance_movement_voids",
+    "tgname": "a_open_complement_void",
+    "tgtype": 7,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER a_open_complement_void BEFORE INSERT ON public.finance_movement_voids FOR EACH ROW EXECUTE FUNCTION finance_private.guard_open_complement_source()",
+    "function": "finance_private.guard_open_complement_source()"
+  },
+  {
+    "relation": "finance_movement_voids",
+    "tgname": "finance_manual_movement_void_command",
+    "tgtype": 7,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER finance_manual_movement_void_command BEFORE INSERT ON public.finance_movement_voids FOR EACH ROW EXECUTE FUNCTION finance_private.guard_manual_movement_void()",
+    "function": "finance_private.guard_manual_movement_void()"
+  },
+  {
+    "relation": "finance_movement_voids",
+    "tgname": "preserve_finance_movement_void",
+    "tgtype": 27,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER preserve_finance_movement_void BEFORE DELETE OR UPDATE ON public.finance_movement_voids FOR EACH ROW EXECUTE FUNCTION finance_private.preserve_event()",
+    "function": "finance_private.preserve_event()"
+  },
+  {
+    "relation": "finance_payable_movement_links",
+    "tgname": "a_cost_regularization_guard",
+    "tgtype": 7,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER a_cost_regularization_guard BEFORE INSERT ON public.finance_payable_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.guard_cost_regularization_source()",
+    "function": "finance_private.guard_cost_regularization_source()"
+  },
+  {
+    "relation": "finance_payable_movement_links",
+    "tgname": "a_finance_active_movement_reference",
+    "tgtype": 23,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER a_finance_active_movement_reference BEFORE INSERT OR UPDATE ON public.finance_payable_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.guard_active_financial_movement_reference()",
+    "function": "finance_private.guard_active_financial_movement_reference()"
+  },
+  {
+    "relation": "finance_payable_movement_links",
+    "tgname": "finance_cancelled_manual_dependency",
+    "tgtype": 23,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER finance_cancelled_manual_dependency BEFORE INSERT OR UPDATE ON public.finance_payable_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.guard_cancelled_manual_expense_dependency()",
+    "function": "finance_private.guard_cancelled_manual_expense_dependency()"
+  },
+  {
+    "relation": "finance_payable_movement_links",
+    "tgname": "finance_payable_shared_capacity",
+    "tgtype": 7,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER finance_payable_shared_capacity BEFORE INSERT ON public.finance_payable_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.check_movement_use()",
+    "function": "finance_private.check_movement_use()"
+  },
+  {
+    "relation": "finance_payable_movement_links",
+    "tgname": "preserve_finance_payable_link",
+    "tgtype": 27,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER preserve_finance_payable_link BEFORE DELETE OR UPDATE ON public.finance_payable_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.preserve_event()",
+    "function": "finance_private.preserve_event()"
+  },
+  {
+    "relation": "finance_settlement_movement_links",
+    "tgname": "a_finance_active_movement_reference",
+    "tgtype": 23,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER a_finance_active_movement_reference BEFORE INSERT OR UPDATE ON public.finance_settlement_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.guard_active_financial_movement_reference()",
+    "function": "finance_private.guard_active_financial_movement_reference()"
+  },
+  {
+    "relation": "finance_settlement_movement_links",
+    "tgname": "finance_settlement_capacity",
+    "tgtype": 7,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER finance_settlement_capacity BEFORE INSERT ON public.finance_settlement_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.check_settlement_movement_link()",
+    "function": "finance_private.check_settlement_movement_link()"
+  },
+  {
+    "relation": "finance_settlement_movement_links",
+    "tgname": "finance_settlement_links_immutable",
+    "tgtype": 27,
+    "tgenabled": "O",
+    "tgdeferrable": false,
+    "tginitdeferred": false,
+    "tgnargs": 0,
+    "definition": "CREATE TRIGGER finance_settlement_links_immutable BEFORE DELETE OR UPDATE ON public.finance_settlement_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.preserve_event()",
+    "function": "finance_private.preserve_event()"
+  }
+]

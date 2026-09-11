@@ -65,3 +65,7 @@ financeAuditActions.unloading_open_complement_extinguished='Complemento cancelad
 
 financeAuditActions.cash_forecast_agenda_set='Data esperada da previsão revisada';
 financeAuditActions.cash_forecast_agenda_cleared='Data manual da previsão retirada';
+
+financeAuditActions.customer_credit_applied='Crédito do cliente aplicado ao título (sem novo dinheiro)';
+financeAuditActions.customer_credit_application_released='Aplicação de crédito liberada (sem devolução de dinheiro)';
+financeAuditActions.customer_credit_refunded='Devolução de crédito vinculada a saída já registrada';

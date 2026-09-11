@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "path": "src/components/financial/ClientInvoiceLifecycleDialog.tsx",
+      "sha256": "b8b88babf7987d1d28219a9c92ab946a21429863149acf3f63d5e7c328efce92"
+    },
+    {
+      "path": "src/pages/ClientInvoices.tsx",
+      "sha256": "6b9c6317ac2a7289a7f34e506df7323ecd090db69b5c055587175d2e8412c7f0"
+    },
+    {
+      "path": "src/test/clientInvoiceCreditSettlementLabels.test.tsx",
+      "sha256": "7755bb95a80459f2a3f4db7ce92fdad9f67e2044aed71e258ab9692f8cc7c85a"
+    }
+  ]
+}

@@ -149,7 +149,7 @@ function ClientInvoicesScreen() {
           { label: 'Em aberto', value: totals.open, tone: 'text-blue-600' },
           { label: 'Vencidas', value: totals.overdue, tone: 'text-red-600' },
           { label: 'Enviadas', value: totals.sent, tone: 'text-amber-600' },
-          { label: 'Recebido líquido', value: totals.paid, tone: 'text-green-600' },
+          { label: 'Total liquidado', value: totals.paid, tone: 'text-green-600' },
         ].map(k => (
           <Card key={k.label}>
             <CardContent className="pt-6">

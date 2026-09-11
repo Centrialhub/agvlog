@@ -1,0 +1,22 @@
+{
+  "passed": 1,
+  "lint_exit": 0,
+  "files": [
+    {
+      "path": "src/test/cashForecastRecordedCreditRefund.test.ts",
+      "sha256": "f7901cda235122738403834db14ff4c0db68d3267b6d3c93c79882aaf9b957a6"
+    },
+    {
+      "path": "supabase/migrations/20260911101312_finance_customer_credit_applications.sql",
+      "sha256": "298e3ae217acf80e32439e097c0f202d0d0be425b14fb8b54b116d3dbd81a2ac"
+    },
+    {
+      "path": "supabase/migrations/20260911102519_finance_cash_forecast_applied_credit_balance.sql",
+      "sha256": "70b248d2f1a2972eaf173292e4f58dd6e819e992f2d4a6658264675b06599aa0"
+    },
+    {
+      "path": "supabase/migrations/20260911104822_finance_customer_credit_recorded_refunds.sql",
+      "sha256": "bcbbd8ad479aa263320ada12def8f15e742c4c7c84fc169d4f99e60aa4da1d79"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+import {useState} from 'react';
+import {useQuery,useQueryClient} from '@tanstack/react-query';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
+import {parseMoneyCents} from '@/lib/financial/receivableCommands';
+import {formatFinanceCents} from '@/lib/financial/ledgerContract';
+import {customerCreditRefundError,customerCreditRefundIssue,readCustomerCreditRefundPreview} from '@/lib/financial/customerCreditRefundClient';
+import {refreshCustomerCredit} from '@/lib/financial/customerCreditCache';
+import {CustomerCreditRefundConfirmation} from './CustomerCreditRefundConfirmation';
+const money=(v:string|null)=>v===null?'Indeterminado':formatFinanceCents(v);
+export function CustomerCreditRefundReview({tenant,actor,creditId,movementId}:{tenant:string;actor:string;creditId:string;movementId:string}){
+ const [amount,setAmount]=useState(''),[proposal,setProposal]=useState<string|null>(null),[error,setError]=useState('');const cache=useQueryClient();
+ const query=useQuery({queryKey:['finance-customer-credit-refund-preview',tenant,actor,creditId,movementId,proposal],queryFn:()=>readCustomerCreditRefundPreview(tenant,actor,creditId,movementId,proposal!),enabled:proposal!==null,retry:false});const data=query.isFetching||query.isError?undefined:query.data;
+ const refresh=()=>refreshCustomerCredit(cache,tenant);
+ return <section aria-label="Revisão da devolução" className="space-y-3 rounded border p-3"><h3>Vincular devolução à saída registrada</h3><p className="text-xs">Movimento {movementId} · crédito {creditId}</p><form onSubmit={e=>{e.preventDefault();try{const cents=String(parseMoneyCents(amount));setProposal(cents);setError('');if(cents===proposal)void query.refetch();}catch{setError('Informe valor positivo com até duas casas decimais.');}}}><label>Valor da devolução<Input value={amount} inputMode="decimal" onChange={e=>{setAmount(e.target.value);setProposal(null);}}/></label><Button>Conferir devolução</Button></form>{error&&<p role="alert">{error}</p>}{query.isFetching&&<p role="status">Conferindo saída e crédito…</p>}{query.error&&<p role="alert">{customerCreditRefundError(query.error)}</p>}{data&&<><p>Pagador: {data.payer.name||'Nome não informado'} · documento {data.payer.document||'Não informado'} · ID {data.payer_id}</p><p>Destinatário da saída: {data.outgoing.beneficiary_name||'Nome não informado'} · documento {data.outgoing.beneficiary_document||'Não informado'}</p><p>Identidade documental: {data.identity.verified?'conferida nesta prévia':'não comprovada'}</p><p>Saída de {data.outgoing.occurred_on||'data indeterminada'}: {money(data.outgoing.amount_cents)} · capacidade disponível {money(data.outgoing.available_cents)}</p><p>Crédito disponível antes: {money(data.effects.credit_before_cents)} · depois previsto: {money(data.effects.credit_after_cents)}</p><p>Capacidade da saída antes: {money(data.effects.movement_available_before_cents)} · depois prevista: {money(data.effects.movement_available_after_cents)}</p><p>A vinculação não executa transferência. A conferência bancária permanece separada.</p>{data.blockers.map(b=><p role="alert" key={b}>{customerCreditRefundIssue(b)}</p>)}</>}<CustomerCreditRefundConfirmation tenant={tenant} actor={actor} preview={data} refresh={refresh}/></section>;
+}
