@@ -69,3 +69,7 @@ financeAuditActions.cash_forecast_agenda_cleared='Data manual da previsão retir
 financeAuditActions.customer_credit_applied='Crédito do cliente aplicado ao título (sem novo dinheiro)';
 financeAuditActions.customer_credit_application_released='Aplicação de crédito liberada (sem devolução de dinheiro)';
 financeAuditActions.customer_credit_refunded='Devolução de crédito vinculada a saída já registrada';
+
+financeAuditActions.receivable_discount_applied='Desconto concedido (sem caixa)';
+financeAuditActions.receivable_loss_applied='Perda registrada (sem caixa)';
+financeAuditActions.receivable_balance_adjustment_reversed='Baixa por desconto ou perda revertida (sem caixa)';

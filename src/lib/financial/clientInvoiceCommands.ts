@@ -1,3 +1,4 @@
+import {receivableCreditNumberFields,creditCompositionValid} from './receivableCreditAmounts';
 import {z} from 'zod';
 import type {CreateClientInvoicePayload} from '@/hooks/useClientInvoices';
 import {isRecord} from '@/lib/loads/operationDocumentOutcome';
@@ -17,11 +18,11 @@ export type InvoiceCommand=z.infer<typeof invoiceCommandSchema>;
 type Input<T>=T extends InvoiceCommand?Omit<T,'version'|'tenant_id'|'actor_id'|'request_id'>:never;
 export type InvoiceCommandInput=Input<InvoiceCommand>;
 const contextSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,invoice_id:id,report_id:id.nullable(),receivable_id:id.nullable(),invoice_number:z.string(),status:z.string(),revision,
- amount_cents:cents,received_cents:cents,open_cents:cents,requires_reconciliation:z.boolean(),can_mark_sent:z.boolean(),can_cancel:z.boolean(),can_reactivate:z.boolean(),
+ ...receivableCreditNumberFields,balance_adjustment_event_count:z.number().int().nonnegative().optional(),balance_adjustment_revision:revision.nullable().optional(),amount_cents:cents,received_cents:cents,open_cents:cents,requires_reconciliation:z.boolean(),can_mark_sent:z.boolean(),can_cancel:z.boolean(),can_reactivate:z.boolean(),
  history:z.array(z.object({id,action:invoiceAction,reason:z.string(),created_at:z.string()}).strict())}).strict();
 export type InvoiceActionContext=z.infer<typeof contextSchema>;
 export function parseInvoiceContext(value:unknown,tenant:string,actor:string,invoice:string){const parsed=contextSchema.safeParse(value);
- if(!parsed.success||parsed.data.tenant_id!==tenant||parsed.data.actor_id!==actor||parsed.data.invoice_id!==invoice)throw new Error('Contexto da fatura incompatível com a sessão. Atualize antes de confirmar.');return parsed.data;}
+ if(!parsed.success||!creditCompositionValid(parsed.data,parsed.data.received_cents)||(parsed.data.balance_adjustment_event_count===undefined)!==(parsed.data.balance_adjustment_revision===undefined)||parsed.data.tenant_id!==tenant||parsed.data.actor_id!==actor||parsed.data.invoice_id!==invoice)throw new Error('Contexto da fatura incompatível com a sessão. Atualize antes de confirmar.');return parsed.data;}
 const creationSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,mode:z.enum(['generate','generate_closing']),report_id:id.nullable(),client_id:id.nullable(),amount_cents:cents,charge_count:z.number().int().nonnegative(),can_generate:z.boolean(),revision}).strict();
 export type InvoiceCreationContext=z.infer<typeof creationSchema>;
 export function parseInvoiceCreationContext(value:unknown,tenant:string,actor:string,report:string|null){const parsed=creationSchema.safeParse(value);
@@ -37,6 +38,6 @@ export function invoiceError(cause:unknown){const raw=cause instanceof Error?cau
  if(/not_authorized|permission denied/.test(raw))return 'Sua sessão não tem permissão para esta ação de fatura.';
  if(/context_changed|source_changed|concurrent_change/.test(raw))return 'A fatura ou sua origem mudou ou está em uso. Atualize a prévia; recupere primeiro pedidos sem confirmação.';
  if(/already_billed|already_reserved|already_invoiced|duplicate_source|ux_charges/.test(raw))return 'Esta origem já está cobrada ou reservada. Concilie a fatura ou o fechamento existente antes de continuar.';
- if(/requires_reconciliation|valid_state/.test(raw))return 'O estado financeiro exige conferência. Para cancelar, estorne antes todos os recebimentos líquidos; para reativar, confira os vínculos e a origem.';
+ if(/requires_reconciliation|valid_state/.test(raw))return 'O estado financeiro exige conferência. Confira a composição da liquidação e regularize os vínculos indicados pela prévia antes de cancelar ou reativar.';
  if(/invalid_/.test(raw))return 'Confira os valores, a data, o motivo e os dados da fatura.';
  return raw||'Fatura sem confirmação. Recupere o mesmo pedido antes de repetir.';}

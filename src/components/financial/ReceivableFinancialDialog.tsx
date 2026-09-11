@@ -1,3 +1,4 @@
+import {ReceivableAdjustmentDialog} from './ReceivableAdjustmentDialog';
 import {ReceivableSettlementAmounts} from './ReceivableSettlementAmounts';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {useAuth} from '@/hooks/useAuth';
@@ -21,6 +22,7 @@ export function ReceivableFinancialDialog({receivableId,tenantId,onClose}:{recei
 }
 function FinancialForm({receivableId,tenantId,onClose}:{receivableId:string;tenantId:string;onClose:()=>void}){
  const api=useReceivableFinancial(receivableId);const context=api.query.data;const busy=useRef(false);
+ const [adjustmentOpen,setAdjustmentOpen]=useState(false);
  const [action,setAction]=useState<FinancialAction|''>('');const [reason,setReason]=useState('');const [amount,setAmount]=useState('');const [date,setDate]=useState(today);
  const [bank,setBank]=useState('');const [method,setMethod]=useState<PaymentMethod>('pix');const [notes,setNotes]=useState('');const [payment,setPayment]=useState('');
  const [useExisting,setUseExisting]=useState(false),[movement,setMovement]=useState('');
@@ -52,7 +54,7 @@ function FinancialForm({receivableId,tenantId,onClose}:{receivableId:string;tena
  return <Dialog open onOpenChange={()=>onClose()}><DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto"><DialogHeader>
   <DialogTitle>Recebimentos — {context?.reference||'Título'}</DialogTitle><DialogDescription>Registro contábil de valores já recebidos. Não movimenta sua conta bancária. Estornos preservam os lançamentos originais.</DialogDescription></DialogHeader>
   {api.query.isPending?<p role="status">Consultando título e histórico…</p>:null}{api.query.error?<p role="alert">{api.query.error.message}</p>:null}
-  {context?<div className="space-y-3"><ReceivableSettlementAmounts nominal={context.amount_cents} settled={context.settled_cents===undefined?context.received_cents:context.settled_cents} open={context.open_cents} cash={context.cash_received_cents} credit={context.credit_applied_cents}/>
+  {context?<div className="space-y-3"><Button disabled={blocked} onClick={()=>setAdjustmentOpen(true)}>Conferir desconto ou perda</Button>{adjustmentOpen&&<ReceivableAdjustmentDialog key={`${tenantId}:${context.actor_id}:${receivableId}`} tenant={tenantId} actor={context.actor_id} receivable={receivableId} onClose={()=>setAdjustmentOpen(false)}/>}<ReceivableSettlementAmounts nominal={context.amount_cents} settled={context.settled_cents===undefined?context.received_cents:context.settled_cents} open={context.open_cents} cash={context.cash_received_cents} credit={context.credit_applied_cents} discount={context.discount_cents} loss={context.loss_cents}/>
    {context.source_issue==="finance_unloading_source_mismatch"?<p role="alert" className="rounded border border-amber-600 p-3">A origem da descarga diverge deste título. Novos recebimentos estão indisponíveis. Conferir ou conciliar o saldo não corrige o fornecedor nem o valor da origem. A devolução de um recebimento já realizado permanece disponível quando autorizada.</p>:null}
    {context.requires_reconciliation?<p role="alert">O histórico e as projeções divergem. {context.can_reconcile?'Um administrador pode conciliar os saldos com os lançamentos comprovados.':'Solicite revisão administrativa dos vínculos e comprovantes. Nenhum valor será registrado enquanto houver divergência.'}</p>:null}
    {context.fiscal_block_reason?<p role="alert">{context.fiscal_block_reason==='fiscal_origin_cancelled'?'Documento fiscal cancelado. Esta cobrança não aceita novos recebimentos.':context.fiscal_block_reason==='fiscal_origin_credit_pending'?'Documento cancelado com recebimento a regularizar como crédito. Confira a origem e o histórico.':context.fiscal_block_reason==='fiscal_origin_suspended'?'Recebimentos suspensos enquanto o cancelamento fiscal está em análise.':context.fiscal_block_reason==='fiscal_origin_review'?'A origem fiscal exige revisão antes de novos recebimentos.':'A autorização fiscal vigente não foi confirmada. Atualize o estado fiscal antes de registrar recebimentos.'}</p>:null}

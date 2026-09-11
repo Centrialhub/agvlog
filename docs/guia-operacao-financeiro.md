@@ -95,3 +95,16 @@ No crédito selecionado, abra **Conferir devolução de dinheiro**. Escolha uma 
 A prévia mostra quanto restará do crédito e da saída após o vínculo. É necessário comprovar o mesmo pagador pelo documento; nome parecido não basta. Informe o motivo e confirme apenas o valor efetivamente devolvido. Devoluções parciais permanecem no histórico com autoria.
 
 Saídas de períodos fechados não podem receber um novo vínculo sem reabertura auditada. Um pedido sem resposta deve ser recuperado com a identidade original. O mesmo saldo não pode ser usado simultaneamente para devolver dinheiro e aplicar crédito em outro título.
+## Descontos, perdas e reversões de saldo
+
+Em implementação e validação; este fluxo ainda não está publicado.
+
+Em **Contas a receber**, abra a conferência do título e escolha **Conferir desconto ou perda**. Informe a categoria, o valor e a data econômica. Use **Conferir valores e autorização** para ver a composição atual e a proposta. A confirmação exige permissão da gestão e um motivo explícito.
+
+O nominal permanece preservado. Dinheiro recebido, crédito aplicado, desconto e perda aparecem separados. Por exemplo: um título de R$ 1.000 com R$ 900 recebidos e R$ 100 de desconto tem saldo aberto zero e apenas R$ 900 de entrada de dinheiro. Registrar a perda do saldo também não gera recebimento bancário.
+
+Para desfazer um ajuste, selecione sua reversão no histórico. É possível reverter apenas uma parcela; o saldo reabre pelo valor revertido, e o evento original continua visível. A data da reversão não pode anteceder a do ajuste original. As datas também respeitam a origem econômica comprovada e os períodos fechados.
+
+Uma alteração de saldo pode exigir revisão da data esperada na Previsão de caixa. Um título integralmente encerrado não tem entrada futura a agendar. Se a reversão reabrir saldo, confira a data novamente. As previsões já preservadas mantêm os valores e o histórico da captura original.
+
+Se a resposta da confirmação não chegar, recupere o pedido pendente exibido na tela antes de iniciar outro. A recuperação conserva a identidade e os valores do pedido original. Cancelamento fiscal continua sendo tratado a partir da evidência fiscal recebida; desconto e perda não geram crédito fictício a devolver.

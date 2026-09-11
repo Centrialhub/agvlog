@@ -1,0 +1,21 @@
+import {refreshReceivableAdjustment} from '@/lib/financial/receivableAdjustmentCache';
+import {receivableAdjustmentLabel} from '@/lib/financial/receivableAdjustmentLabels';
+import {useState} from 'react';
+import {useQuery,useQueryClient} from '@tanstack/react-query';
+import {Button} from '@/components/ui/button';
+import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@/components/ui/dialog';
+import {parseMoneyCents} from '@/lib/financial/receivableCommands';
+import {readReceivableAdjustment,receivableAdjustmentError} from '@/lib/financial/receivableAdjustmentClient';
+import type {ReceivableAdjustmentComposition} from '@/lib/financial/receivableAdjustmentContract';
+import {ReceivableAdjustmentAmounts} from './ReceivableAdjustmentAmounts';
+import {ReceivableAdjustmentHistory} from './ReceivableAdjustmentHistory';
+import {ReceivableAdjustmentConfirmation} from './ReceivableAdjustmentConfirmation';
+const view=(v:ReceivableAdjustmentComposition)=>({nominal:v.amount_cents,cash:v.cash_received_cents,credit:v.credit_applied_cents,discount:v.discount_cents,loss:v.loss_cents,settled:v.settled_cents,open:v.open_cents});
+export function ReceivableAdjustmentDialog({tenant,actor,receivable,onClose}:{tenant:string;actor:string;receivable:string;onClose:()=>void}){
+ const cache=useQueryClient(),[kind,setKind]=useState<'discount'|'loss'>('discount'),[amount,setAmount]=useState(''),[date,setDate]=useState(()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())),[adjustment,setAdjustment]=useState<string|null>(null),[proposal,setProposal]=useState<{kind:'discount'|'loss';amount:string;date:string;adjustment:string|null}|null>(null),[error,setError]=useState('');
+ const query=useQuery({queryKey:['finance-receivable-adjustment-preview',tenant,actor,receivable,proposal],queryFn:()=>readReceivableAdjustment(tenant,actor,receivable,proposal!.kind,proposal!.amount,proposal!.date,proposal!.adjustment),enabled:proposal!==null,retry:false});
+ const preview=!query.isFetching&&!query.error?query.data:undefined;
+ const invalidate=()=>setProposal(null);
+ const refresh=()=>refreshReceivableAdjustment(cache,tenant);
+ return <Dialog open onOpenChange={onClose}><DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Desconto ou perda no recebível</DialogTitle><DialogDescription>Baixa residual sem entrada de dinheiro. O valor nominal e os recebimentos permanecem no histórico.</DialogDescription></DialogHeader><p>Título: {receivable}</p>{adjustment&&<p>Reversão do ajuste {adjustment}. A reversão reabre saldo e não devolve dinheiro.</p>}<label>Categoria<select value={kind} disabled={adjustment!==null} onChange={e=>{setKind(e.target.value as 'discount'|'loss');invalidate();}}><option value="discount">Desconto</option><option value="loss">Perda</option></select></label><label>Valor (R$)<input value={amount} onChange={e=>{setAmount(e.target.value);invalidate();}} inputMode="decimal"/></label><label>Data econômica<input type="date" value={date} onChange={e=>{setDate(e.target.value);invalidate();}}/></label><Button onClick={()=>{try{setProposal({kind,amount:String(parseMoneyCents(amount)),date,adjustment});setError('');}catch(e){setError(receivableAdjustmentError(e));}}}>Conferir valores e autorização</Button>{adjustment&&<Button onClick={()=>{setAdjustment(null);setAmount('');invalidate();}}>Voltar para nova baixa</Button>}{error&&<p role="alert">{error}</p>}{query.isFetching&&<p role="status">Consultando prévia…</p>}{query.error&&<p role="alert">{receivableAdjustmentError(query.error)}</p>}{preview&&<><h3>{preview.target.reference}</h3><ReceivableAdjustmentAmounts current={view(preview.effects.before)} proposed={view(preview.effects.after)}/>{preview.blockers.length>0&&<p role="alert">{preview.blockers.map(b=>receivableAdjustmentLabel(b.code)).join(' ')}</p>}</>}<ReceivableAdjustmentConfirmation tenant={tenant} actor={actor} preview={preview} refresh={refresh}/><ReceivableAdjustmentHistory tenant={tenant} actor={actor} receivable={receivable} onReverse={row=>{setAdjustment(row.id);setKind(row.kind);setAmount((BigInt(row.amount)/100n).toString()+','+(BigInt(row.amount)%100n).toString().padStart(2,'0'));invalidate();}}/></DialogContent></Dialog>;
+}

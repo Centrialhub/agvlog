@@ -1,3 +1,4 @@
+import {ReceivableSettlementAmounts} from './ReceivableSettlementAmounts';
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -26,7 +27,8 @@ function InvoiceActionForm({invoiceId,onClose}:{invoiceId:string;onClose:()=>voi
   <DialogDescription>Ações sobre a fatura comercial. Não emitem nem cancelam CT-e/NFS-e, não transferem dinheiro e não enviam mensagens.</DialogDescription></DialogHeader>
   {api.query.isPending?<p role="status">Consultando fatura…</p>:null}{api.query.error?<p role="alert">{api.query.error.message}</p>:null}
   {context?<div className="space-y-3"><p>Estado: {INVOICE_STATUS_LABELS[context.status as InvoiceStatus]||context.status} · Liquidado: {brl(context.received_cents)} · Em aberto: {brl(context.open_cents)}</p>
-   {context.received_cents>0?<p>O total liquidado pode incluir dinheiro recebido e crédito aplicado. {context.can_cancel?'O cancelamento está disponível nesta consulta e preserva o histórico; não executa devolução de dinheiro.':'O cancelamento está indisponível nesta consulta. Confira a composição da liquidação e os vínculos financeiros para identificar a regularização necessária.'}</p>:null}
+   {context.settled_cents!==undefined&&<ReceivableSettlementAmounts settled={context.settled_cents} open={context.open_cents} cash={context.cash_received_cents} credit={context.credit_applied_cents} discount={context.discount_cents} loss={context.loss_cents}/>}
+   {context.received_cents>0?<p>O total liquidado pode incluir dinheiro recebido, crédito aplicado, descontos ou perdas. {context.can_cancel?'O cancelamento está disponível nesta consulta e preserva o histórico; não executa devolução de dinheiro.':'O cancelamento está indisponível nesta consulta. Confira a composição da liquidação e os vínculos financeiros para identificar a regularização necessária.'}</p>:null}
    {context.requires_reconciliation?<p role="alert">Os estados vinculados exigem conferência. Cancelar ou reativar, quando disponível, faz uma conciliação explícita preservando o histórico.</p>:null}
    <fieldset disabled={api.isPending} className="space-y-3"><label className="block">Ação da fatura<select className="h-10 w-full rounded border bg-background px-3" value={action} onChange={e=>setAction(e.target.value as typeof action)}><option value="">Selecione</option>
     {context.can_mark_sent?<option value="mark_sent">Registrar envio</option>:null}{context.can_cancel?<option value="cancel">Cancelar fatura</option>:null}{context.can_reactivate?<option value="reactivate">Reativar fatura</option>:null}</select></label>

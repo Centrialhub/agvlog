@@ -184,7 +184,7 @@ function ReceivablesScreen() {
         <Card><CardContent className="pt-4">
           <p className="text-xs text-muted-foreground">Total liquidado (inclui parciais)</p>
           <p className="text-xl font-bold text-green-600">{portfolioValue(portfolio,'received_allocated_cents')}</p>
-          {portfolio.data&&<ReceivableSettlementAmounts compact settled={portfolio.data.settled_cents===undefined?portfolio.data.received_allocated_cents:portfolio.data.settled_cents} open={portfolio.data.open_cents} cash={portfolio.data.cash_received_cents} credit={portfolio.data.credit_applied_cents}/>}
+          {portfolio.data&&<ReceivableSettlementAmounts compact settled={portfolio.data.settled_cents===undefined?portfolio.data.received_allocated_cents:portfolio.data.settled_cents} open={portfolio.data.open_cents} cash={portfolio.data.cash_received_cents} credit={portfolio.data.credit_applied_cents} discount={portfolio.data.discount_cents} loss={portfolio.data.loss_cents}/>}
 
         </CardContent></Card>
       </div>

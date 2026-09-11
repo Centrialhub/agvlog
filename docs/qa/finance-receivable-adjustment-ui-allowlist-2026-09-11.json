@@ -1,0 +1,153 @@
+{
+  "status": "TS/UI frozen locally; no remote deployment by UI agent",
+  "files": [
+    {
+      "path": "src/components/closingReports/ClosingLifecycleDialog.tsx",
+      "sha256": "544054281df122bff12bb77c4caeb113495763f10c836c81744c414dd06eb9fc"
+    },
+    {
+      "path": "src/components/financial/ClientInvoiceLifecycleDialog.tsx",
+      "sha256": "e0637a6e6b27e31fe8fde96fc97bcdfa4b2e8a4747bb62acda680dcc1326552e"
+    },
+    {
+      "path": "src/components/financial/ReceivableAdjustmentAmounts.tsx",
+      "sha256": "d5b7e688c78ffdd562a556aac1595af7f3f8b00e03100d6f703d947253cc826c"
+    },
+    {
+      "path": "src/components/financial/ReceivableAdjustmentConfirmation.tsx",
+      "sha256": "90cd177572814c6b472f1b0e6c1cd7efc7411a9da25c894fc5bcab0f78b60812"
+    },
+    {
+      "path": "src/components/financial/ReceivableAdjustmentDialog.tsx",
+      "sha256": "9c6da12948649dbb24e3a5b0c454aacec2acdf15b31a6058054c344df91f5823"
+    },
+    {
+      "path": "src/components/financial/ReceivableAdjustmentHistory.tsx",
+      "sha256": "afc13f64ac4bb48e6a76c25789ca0154ec2af6a172eddea31672880825c3e80b"
+    },
+    {
+      "path": "src/components/financial/ReceivableFinancialDialog.tsx",
+      "sha256": "f43185f085443e9746c139c57bb685e17519f7199b56ae7129533d7866c248ad"
+    },
+    {
+      "path": "src/components/financial/ReceivableSettlementAmounts.tsx",
+      "sha256": "b6394e68b282fa5e93eb8225d2308a650dd2fb67996fbd5b607cf365f4f128a7"
+    },
+    {
+      "path": "src/lib/closingReports/closingLifecycle.ts",
+      "sha256": "fd9d86ac3df80b3911ee7c76d404cf2ccacde6beb0e689f396ac97a9b40bfd45"
+    },
+    {
+      "path": "src/lib/financial/clientInvoiceCommands.ts",
+      "sha256": "a1276e8271b9536e5059a438a8b36f86c92dc971a5f0532d6363b65a20effe4c"
+    },
+    {
+      "path": "src/lib/financial/customerCreditContract.ts",
+      "sha256": "c7120cdfd8012e79026aaf6b16d06eb55730970cd23d8602bab4cc4f055fbd68"
+    },
+    {
+      "path": "src/lib/financial/financeAuditContract.ts",
+      "sha256": "6a647e8af968482d8e60d06f89ad5a38e8f02c0cd299da97739da3f039215f56"
+    },
+    {
+      "path": "src/lib/financial/receivableAdjustmentCache.ts",
+      "sha256": "608b1cb4788534ce7fd7d27ce0a169f586b2fb4315e952fc6cbbbcc556dd7ae8"
+    },
+    {
+      "path": "src/lib/financial/receivableAdjustmentClient.ts",
+      "sha256": "d6e320da8a7f92d7043402a960b7cdd41d44cf1fc342adf1bcc5464469df2450"
+    },
+    {
+      "path": "src/lib/financial/receivableAdjustmentCommandContract.ts",
+      "sha256": "52f93d1818b8fe6db5c101758008b833c86decc0e224241938b147de5ba5d75a"
+    },
+    {
+      "path": "src/lib/financial/receivableAdjustmentContract.ts",
+      "sha256": "d154bca97c044da3b48e8d9cf1935c506064f7a5d10302a54da43bcda17949dc"
+    },
+    {
+      "path": "src/lib/financial/receivableAdjustmentLabels.ts",
+      "sha256": "536fca6e124d939eef41ad4435c4416f94febdf682d4efa43756534b611b4630"
+    },
+    {
+      "path": "src/lib/financial/receivableAdjustmentOutbox.ts",
+      "sha256": "aab8dc2f34a4876c569f3affa0afb67079471ad202a7eb5a9318c55aa35d0357"
+    },
+    {
+      "path": "src/lib/financial/receivableCommands.ts",
+      "sha256": "8b6877ba54e2b431015ee4a8c947bb24bdd294317e4ec2fe485a9410550dddf3"
+    },
+    {
+      "path": "src/lib/financial/receivableCreditAmounts.ts",
+      "sha256": "a1ed27c7d4e1c1c19c6502d243e22731062ac4fd4fb6b10b935bb27a03bfa3e6"
+    },
+    {
+      "path": "src/lib/financial/receivablePortfolioContract.ts",
+      "sha256": "ab09e0f375ccef74633ec66d8b7acfb3134e37cc124039bcbf093498d10c800e"
+    },
+    {
+      "path": "src/pages/Receivables.tsx",
+      "sha256": "292b12fd83dd409118e702fef10324749de6f429c6891427430701ed97898bfb"
+    },
+    {
+      "path": "src/test/helpers/receivableAdjustmentFixture.ts",
+      "sha256": "059b91a25097b668bb0671b49804460f3a43f097ca54af6ea88c03fdbefa3fd7"
+    },
+    {
+      "path": "src/test/receivableAdjustmentAmounts.test.tsx",
+      "sha256": "0b72c947f9f0469afd3e6378cbd8f809ec8d6c5d1b87bd9886266b79499460f0"
+    },
+    {
+      "path": "src/test/receivableAdjustmentCache.test.ts",
+      "sha256": "070767af3b1fa975ab2bdb695427d6c2ff6b79a24ccfdb0149d8057cc887b458"
+    },
+    {
+      "path": "src/test/receivableAdjustmentClient.test.ts",
+      "sha256": "8f69758ece172335ded0316215f576ce3633be3e89860082598ec2c36c4f7a4e"
+    },
+    {
+      "path": "src/test/receivableAdjustmentClosing.test.ts",
+      "sha256": "bcc220517fb574b46644a2b01b696e38da3ae177f37a1d8f09d53cce3db1d929"
+    },
+    {
+      "path": "src/test/receivableAdjustmentCommandContract.test.ts",
+      "sha256": "bdbd41daf7b4cc778c920c76e32153a5e125f2cc9ddb7c15bca0fee4f0f458d7"
+    },
+    {
+      "path": "src/test/receivableAdjustmentComposition.test.ts",
+      "sha256": "1a22173411a5df5070c19900d1ec4888b9c817cbc9951879da889a0114370040"
+    },
+    {
+      "path": "src/test/receivableAdjustmentConfirmation.test.tsx",
+      "sha256": "7451fb5e18d4b9d0030aa78904eba67473840dadc3fd7d7dc953f1932bc00696"
+    },
+    {
+      "path": "src/test/receivableAdjustmentContract.test.ts",
+      "sha256": "33cb716b49ba293c021fb0a3c4ccf821263474fc8d8d4c1b8261556b6296957c"
+    },
+    {
+      "path": "src/test/receivableAdjustmentDialog.test.tsx",
+      "sha256": "43d0e14ade0d6d040288e1d5107e89bc94b892aed4f14bd1e6c654191c28555b"
+    },
+    {
+      "path": "src/test/receivableAdjustmentHistory.test.tsx",
+      "sha256": "df228848508bcadef79a297c5ded1d547e48ea5d648a7f345ef728e8212c6a21"
+    },
+    {
+      "path": "src/test/receivableAdjustmentInvoice.test.ts",
+      "sha256": "0f4b4dc2adb4f68f9bb0de51101659e55ed00647def5b2985d18d666e59fc7a6"
+    },
+    {
+      "path": "src/test/receivableAdjustmentOutbox.test.ts",
+      "sha256": "d5b80cd3231d05521b07c5eaeb862172ea37b9f7073b894ab308d7924abf3d9e"
+    },
+    {
+      "path": "src/test/receivableAdjustmentPortfolio.test.ts",
+      "sha256": "81b6b7ca286e2809111891d5019602daa5d51636e075824328736354554bf634"
+    },
+    {
+      "path": "src/test/receivableAdjustmentPublicBoundary.test.ts",
+      "sha256": "504e2c2b870a089b3f793724919ff34f9be0dfda82a3adc31f16bc8700db0891"
+    }
+  ]
+}

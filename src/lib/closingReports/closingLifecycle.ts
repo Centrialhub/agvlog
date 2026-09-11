@@ -1,3 +1,4 @@
+import {receivableCreditNumberFields,creditCompositionValid,legacyReceivableCents} from '@/lib/financial/receivableCreditAmounts';
 import {z} from 'zod';
 const id=z.string().uuid();const revision=z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const closingActionName=z.enum(['close','cancel','reopen','mark_sent']);
@@ -10,11 +11,11 @@ export type ClosingActionPayload=z.infer<typeof closingActionSchema>;
 export type ClosingActionInput=Omit<ClosingActionPayload,'version'|'tenant_id'|'actor_id'|'request_id'>;
 export const closingActionContextSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,report_id:id,closing_number:z.string().min(1),revision,
  status:z.string().min(1),payment_status:z.string(),invoice_status:z.string(),total_amount:z.number().finite().nonnegative(),received_amount:z.number().finite().nonnegative(),open_amount:z.number().finite().nonnegative(),
- has_financial_links:z.boolean(),source_review_required:z.boolean(),allowed_actions:z.array(closingActionName)}).strict();
+ ...receivableCreditNumberFields,balance_adjustment_event_count:z.number().int().nonnegative().optional(),balance_adjustment_revision:z.string().regex(/^[a-f0-9]{32}$/).nullable().optional(),has_financial_links:z.boolean(),source_review_required:z.boolean(),allowed_actions:z.array(closingActionName)}).strict();
 export type ClosingActionContext=z.infer<typeof closingActionContextSchema>;
 export function parseClosingActionContext(value:unknown,tenant:string,actor:string,report:string){
  const data=closingActionContextSchema.safeParse(value);
- if(!data.success||data.data.tenant_id!==tenant||data.data.actor_id!==actor||data.data.report_id!==report)throw new Error('Contexto do fechamento incompatível com a sessão. Atualize antes de confirmar.');
+ if(!data.success||!creditCompositionValid(data.data,legacyReceivableCents(data.data.received_amount))||(data.data.balance_adjustment_event_count===undefined)!==(data.data.balance_adjustment_revision===undefined)||data.data.tenant_id!==tenant||data.data.actor_id!==actor||data.data.report_id!==report)throw new Error('Contexto do fechamento incompatível com a sessão. Atualize antes de confirmar.');
  return data.data;
 }
 const resultSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,request_id:id,report_id:id,action:closingActionName,confirmed:z.literal(true),

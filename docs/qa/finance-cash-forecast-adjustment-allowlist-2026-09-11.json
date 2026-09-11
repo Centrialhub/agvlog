@@ -1,0 +1,78 @@
+{
+  "status": "final_local_validation_passed_production_migrations_applied",
+  "core_sha256": "86428df46295f943412638fc4af2527c9b2fcc7040cdb51ccd705955ac051e49",
+  "files": [
+    {
+      "path": "supabase/migrations/20260911115916_finance_cash_forecast_balance_adjustments.sql",
+      "sha256": "46fbae999b8230e14453294a5aa2ec36d7cb8e8c4d776f75ab973ab495bc946a"
+    },
+    {
+      "path": "src/lib/financial/cashForecastAdjustments.ts",
+      "sha256": "aed7332f1468814e5db642d5176451e27e3674f0d58e2570111f58e1eaccf078"
+    },
+    {
+      "path": "src/lib/financial/cashForecastProjection.ts",
+      "sha256": "bd72b8b680f2ece09b347807868a45c0010b391d7fb63bacfa7331c1c2a58700"
+    },
+    {
+      "path": "src/lib/financial/cashForecastCollectorContract.ts",
+      "sha256": "5832e05af48ffa138467cba5381e20fdb933d265f4e97b55c6b6c2cb1c02ed02"
+    },
+    {
+      "path": "src/lib/financial/cashForecastCollectorProjection.ts",
+      "sha256": "e3e406089793af0c38c0d863282e3658255284761854ce38a957c9f879feb548"
+    },
+    {
+      "path": "src/lib/financial/cashForecastAgendaContract.ts",
+      "sha256": "d76fe8d075d3cc209dc92d2b283c42cffe4a1a63ca1a885135d3dde1d7517232"
+    },
+    {
+      "path": "src/components/financial/CashForecastSources.tsx",
+      "sha256": "0aaa45b940c5e0666e46747b376c5cd25a57bb05d89f46c68ec9ba9f6cc1b905"
+    },
+    {
+      "path": "src/components/financial/CashForecastAgendaDialog.tsx",
+      "sha256": "f36898d8778c484eafb2781e9d0473875c957c531eafb7e016b6e88f35a8316f"
+    },
+    {
+      "path": "src/test/cashForecastAdjustments.test.ts",
+      "sha256": "5d5cfa8fb387753ac43b1abd7e22534202492f68e3b252caaaa8997876024fd6"
+    },
+    {
+      "path": "src/test/cashForecastAdjustmentSqlProjection.test.ts",
+      "sha256": "02b2f4f6cc56e0e3698baeb1051f8a079f49851f8b5ff0f48c3ee08de1110688"
+    },
+    {
+      "path": "src/test/cashForecastBalanceAdjustmentIntegration.test.ts",
+      "sha256": "14623c4bbadb5d5224441ee9f53ac7e9d4b49289c667a7322719aa056bc5001a"
+    },
+    {
+      "path": "docs/qa/finance-cash-forecast-adjustment-predecessors-2026-09-11.json",
+      "sha256": "4e3cd8c2fa296efe8c6e05057d68d1e4a861dd45b8e5796854d0e831eace9de0"
+    },
+    {
+      "path": "supabase/migrations/20260911121356_finance_receivable_adjustment_public_catalog.sql",
+      "sha256": "7e6bf20bcbb11890b3217bc4fcdd1b459d015c8fce2d0476b617aad55750b436"
+    },
+    {
+      "path": "src/test/receivableAdjustmentPublicBoundary.test.ts",
+      "sha256": "504e2c2b870a089b3f793724919ff34f9be0dfda82a3adc31f16bc8700db0891"
+    },
+    {
+      "path": "src/test/cashForecastUnloadingSourceIssueReview.test.ts",
+      "sha256": "ef84a68c5e1c84a3de5e217cce7ae92f83ef3a3bf397850ee9cac1329dfc446d"
+    },
+    {
+      "path": "docs/qa/finance-receivable-adjustment-public-boundary-2026-09-11.md",
+      "sha256": "b76f1b032894518f06c19679da9bee2257fbe63b752b2739c429860b7e651c06"
+    },
+    {
+      "path": "docs/qa/finance-adjustment-boundary-forecast-independent-review-2026-09-11.md",
+      "sha256": "f0cd2c371c8d8b520df7720b5ee5478e8c10d899a24f4a8c43c2f93a04731086"
+    },
+    {
+      "path": "docs/guia-operacao-financeiro.md",
+      "sha256": "a41ce3c885d7ac15282ca7d5a40238ecc371d369a82a1529fec092c9b9e58a85"
+    }
+  ]
+}

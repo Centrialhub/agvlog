@@ -1,0 +1,12 @@
+import {useEffect,useState} from 'react';
+import {useQuery} from '@tanstack/react-query';
+import {Button} from '@/components/ui/button';
+import {formatFinanceCents} from '@/lib/financial/ledgerContract';
+import {readReceivableAdjustmentHistory,ReceivableAdjustmentChangedError,receivableAdjustmentError} from '@/lib/financial/receivableAdjustmentClient';
+export function ReceivableAdjustmentHistory({tenant,actor,receivable,onReverse}:{tenant:string;actor:string;receivable:string;onReverse:(row:{id:string;kind:'discount'|'loss';amount:string})=>void}){
+ const [page,setPage]=useState({offset:0,revision:null as string|null,epoch:0}),[notice,setNotice]=useState('');
+ const query=useQuery({queryKey:['finance-receivable-adjustments',tenant,actor,receivable,page],queryFn:()=>readReceivableAdjustmentHistory(tenant,actor,receivable,{offset:page.offset,limit:30,expected_revision:page.revision}),retry:false});
+ useEffect(()=>{if(query.error instanceof ReceivableAdjustmentChangedError){setPage(p=>({offset:0,revision:null,epoch:p.epoch+1}));setNotice('O histórico mudou. A primeira página foi consultada novamente.');}},[query.error]);
+ const data=!query.isFetching&&!query.error?query.data:undefined;
+ return <section aria-label="Histórico de descontos e perdas"><h3>Histórico de descontos e perdas</h3>{notice&&<p role="status">{notice}</p>}{query.isFetching&&<p role="status">Consultando histórico…</p>}{query.error&&<p role="alert">{receivableAdjustmentError(query.error)}</p>}{data&&<><p>{data.total} eventos, incluindo reversões.</p>{data.rows.map(r=><article key={r.id} className="rounded border p-2"><p>{r.action==='apply'?'Baixa':'Reversão'} de {r.kind==='discount'?'desconto':'perda'}: {formatFinanceCents(r.amount_cents)} · data econômica {r.effective_on}</p><p>{r.actor_name} · {r.actor_id??'Sistema'} · registrado em {r.created_at}</p><p>Motivo: {r.reason}</p>{r.action==='apply'&&r.available_to_reverse_cents!==null&&BigInt(r.available_to_reverse_cents)>0n&&<Button onClick={()=>onReverse({id:r.adjustment_id,kind:r.kind,amount:r.available_to_reverse_cents!})}>Conferir reversão — {formatFinanceCents(r.available_to_reverse_cents)}</Button>}</article>)}<Button disabled={page.offset===0} onClick={()=>setPage(p=>({...p,offset:Math.max(0,p.offset-30),revision:data.revision}))}>Página anterior</Button><Button disabled={data.next_offset===null} onClick={()=>setPage(p=>({...p,offset:data.next_offset!,revision:data.revision}))}>Próxima página</Button></>}</section>;
+}

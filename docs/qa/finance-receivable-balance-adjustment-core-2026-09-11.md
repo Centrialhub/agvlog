@@ -1,0 +1,31 @@
+# Baixa residual de recebível: desconto e perda sem caixa
+
+Candidata privada `20260911115046_finance_receivable_balance_adjustments.sql`, criada via Supabase CLI. Requisitos: plano financeiro129 e471, acrescidos da autorização explícita para desconto/perda gerenciais reversíveis. Não emite documento fiscal, não altera nominal nem cria movimentos. Fronteira pública121356 e previsão15916 pertencem à raiz e são entregas integradas separadas.
+
+## Modelo e contrato
+
+Journal privado `receivable_balance_adjustment_events`, append-only, com apply/reverse, kind discount/loss, identidade do título e do apply original, centavos positivos, competência, ator, motivo, request_id, revisão, prova da origem e confirmação. Reversão admite parcela até o saldo ativo do apply. Apply admite parcela até o saldo aberto. Permissão gerencial existente owner/admin; não introduz aprovação dupla. Identidade do recebível permanece congelada após qualquer ajuste, mesmo revertido.
+
+Equação atual: settled = cash_received + credit_applied + discount + loss; adjustment = discount + loss; open = nominal - settled. `received_amount` e campos legados equivalentes continuam representando total quitado por compatibilidade com a projeção existente; não podem ser apresentados como caixa. Snapshots de recebível/fatura/fechamento expõem os componentes em centavos numéricos; páginas/carteira e target das prévias usam strings de centavos. Metadata: balance_adjustment_event_count e balance_adjustment_revision.
+
+Privados: receivable_balance_adjustment_context(tenant,receivable,kind,amounttext,effective_on,adjustmentnullable), record_receivable_balance_adjustment(payload), receivable_balance_adjustment_history(tenant,receivable,query). Prévia devolve target, effects before/after, blockers com IDs, revisão e can_execute=false. Payload version1/tenant_id/request_id/receivable_id/action/kind/adjustment_id/amount_cents/effective_on/expected_revision/reason. Apply retorna adjustment_id=event_id; reverse conserva adjustment_id original e cria event_id. Resultado contém confirmed=true e cash_movement_created=false. Histórico paginado inclui autoria e saldo disponível para reversão; não expõe snapshots privados.
+
+## Competência e integridade
+
+Data mínima segue a origem comprovada: descarga usa o resolver verificado e last_effective_on da cadeia, com revisão incluída no fingerprint; fonte fiscal usa issued_at do CT-e ou issue_date de NFS-e/documento vinculado; fatura comercial usa issue_date; título manual usa o dia São Paulo de created_at. Data documental ausente é pendência explícita, não data inventada. Competência futura é rejeitada. Reversão nunca antecede o apply original. A fonte temporal é travada com SHARE NOWAIT antes da revisão final; data/fonte ficam preservadas no journal. Um título importado não fica artificialmente limitado pela data técnica de cadastro quando há origem documental anterior.
+
+O ajuste exige competência aberta e ausência de dependências ativas e congeladas do título/fatura/fechamento. Não reabre nem altera o dinheiro de recebimentos antigos. Um fechamento de ontem pode permanecer imutável e coexistir com compensação hoje em período aberto; reversão datada em período fechado é bloqueada. Snapshots históricos de composição permanecem preservados.
+
+Writer usa fiscal lock, finance lock, membership/driver SHARE NOWAIT, nova autorização, replay por ator e hash de payload, graph lock e trava da fonte temporal. Depois compara revisão, elegibilidade e efeitos; auditoria precede journal; recalc e sync existentes atualizam título/fatura/fechamento. Guarda de inserção prova o comando e a competência; constraint diferida verifica a cadeia e a projeção final. Não há GUC de bypass ou grant raw.
+
+Cancelamento comercial/fiscal usa o hook existente de liberação de crédito: primeiro reverte ajustes auditadamente, depois libera créditos aplicados e trata apenas dinheiro real. Assim nominal100, cash60 e desconto40 cancelados fiscalmente geram crédito de60, nunca100. Compensação sistêmica exige observação de cancelamento comprovada e atorNULL com origem fiscal registrada, sem atribuir uma ação automática a pessoa fictícia. Falha de compensação deve ser tratada pelo worker real em retry/review, preservando observação fiscal recebida; não desfaz autorização/cancelamento upstream.
+
+## Integrações
+
+Ledger combinado, snapshot, guard de identidade, recalc/sync, cancelamento, contexto de crédito, páginas, carteira bulk13458, fatura, fechamento e classificação de auditoria são integrados na candidata. A carteira só calcula prova de ajuste para títulos que possuem eventos, preservando o caminho bulk sem journal para demais títulos. Ações manuais: receivable_discount_applied, receivable_loss_applied e receivable_balance_adjustment_reversed. A previsão15916 e wrappers121356 são da raiz; não publicar o core isolado desses consumidores e schemas.
+
+## Provas locais
+
+Dois testes próprios passaram às09:21:43 (sessão47078 saída0, lint0): recebimento real900 em nominal1000, desconto100, replay, diagnóstico de excesso, histórico com parser real, carteira/página com composição correta e bancos byte-equivalentes; descarga real150→120 com amendment05/08, bloqueio de ajuste04/08 e aceite05/08. Catálogo de funções instalado exportado em finance-receivable-balance-adjustment-core-catalog-2026-09-11.json.
+
+O revisor independente informou sete casos aprovados incluindo dinheiro/crédito/estorno, cancelamento fiscal cash-only, competência fechada/reabertura lógica e preservação da observação em falha local injetada. Seis disputas nativas passaram no PostgreSQL local (sessão 22836, saída 0, cluster parado), com SHA 86428df intacto: ajuste versus dinheiro e crédito nas duas ordens, revogação após espera e trava prévia da linha. A suíte independente final passou oito casos às 09:27:30, incluindo fatura/fechamento reais: cash90 + desconto10 produz paid/open0; os dois contextos públicos expõem os oito campos de composição; reversão5 produz open5, cash90, desconto5 e settled95, com dois eventos e banco byte-equivalente. A raiz já executou teste público autenticado e comparação de previsãoSQL/TS. Estes resultados não constituem teste de navegador, emissão fiscal ou implantação remota.

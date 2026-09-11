@@ -1,0 +1,37 @@
+{
+  "status": "private_core_frozen_local_validation_complete",
+  "own_tests": {
+    "passed": 2,
+    "session": 47078,
+    "exit_code": 0,
+    "lint_exit_code": 0
+  },
+  "allowlist": [
+    {
+      "path": "supabase/migrations/20260911115046_finance_receivable_balance_adjustments.sql",
+      "sha256": "86428df46295f943412638fc4af2527c9b2fcc7040cdb51ccd705955ac051e49"
+    },
+    {
+      "path": "src/test/receivableBalanceAdjustmentCore.test.ts",
+      "sha256": "48e2f9dd4eec8b236ae72cfb0ca565b324fd94163bcf98a85f2d79e602874809"
+    },
+    {
+      "path": "docs/qa/finance-receivable-balance-adjustment-core-catalog-2026-09-11.json",
+      "sha256": "0b0f3a49c8bd47a47cbd4962782c3356497378555ad226f1de9e49c12a632dff"
+    }
+  ],
+  "independent_native_tests": {
+    "passed": 6,
+    "session": 22836,
+    "exit_code": 0,
+    "postgres_stopped": true,
+    "migration_sha256": "86428df46295f943412638fc4af2527c9b2fcc7040cdb51ccd705955ac051e49",
+    "reported_by": "bank_period_evidence"
+  },
+  "independent_sql_tests": {
+    "passed": 8,
+    "completed_local": "2026-09-11 09:27:30",
+    "invoice_closing_positive": true,
+    "reported_by": "bank_period_evidence"
+  }
+}

@@ -1,3 +1,4 @@
+import {forecastAdjustmentFields,forecastAdjustmentsValid,forecastAdjustmentAmount} from './cashForecastAdjustments';
 import { z } from 'zod';
 
 const cents = z.string().regex(/^(0|[1-9]\d{0,13})$/);
@@ -12,10 +13,11 @@ const origin = z.object({
   source_table: z.string().min(1).max(100), source_id: z.string().uuid(),
   source_revision: z.string().min(1).max(128),
   direction: z.enum(['in', 'out']), scenario: z.enum(['confirmed', 'unbilled']),
-  nominal_cents: cents, fulfilled_cents: cents, reserved_credit_cents: cents,
+  nominal_cents: cents, fulfilled_cents: cents, reserved_credit_cents: cents, ...forecastAdjustmentFields,
   expected_on: day.nullable(), expected_date_source: z.enum(['due_date', 'reviewed_date', 'unknown']),
 }).strict().superRefine((row, ctx) => {
-  if (BigInt(row.fulfilled_cents) + BigInt(row.reserved_credit_cents) > BigInt(row.nominal_cents))
+  if (!forecastAdjustmentsValid(row)) {ctx.addIssue({code:'custom',message:'Composição de ajustes sem caixa inválida.'});return;}
+  if (BigInt(row.fulfilled_cents) + BigInt(row.reserved_credit_cents) + forecastAdjustmentAmount(row) > BigInt(row.nominal_cents))
     ctx.addIssue({ code: 'custom', message: 'Recebimentos, pagamentos e créditos excedem a origem.' });
   if ((row.expected_on === null) !== (row.expected_date_source === 'unknown'))
     ctx.addIssue({ code: 'custom', message: 'A previsão da data exige sua origem.' });
@@ -100,7 +102,7 @@ export function projectCashForecast(input: CashForecastBasis | CashForecastCompa
   }, { in: 0n, out: 0n });
   let unscheduledConfirmed = 0n, unscheduledUnbilled = 0n;
   const rows = basis.origins.map(row => {
-    const remaining = BigInt(row.nominal_cents) - BigInt(row.fulfilled_cents) - BigInt(row.reserved_credit_cents);
+    const remaining = BigInt(row.nominal_cents) - BigInt(row.fulfilled_cents) - BigInt(row.reserved_credit_cents) - forecastAdjustmentAmount(row);
     const timing = remaining === 0n ? 'already_covered'
       : row.expected_on === null || row.expected_on < capturedDay ? 'needs_new_date'
       : row.expected_on > basis.period_end ? 'after_period' : 'in_period';

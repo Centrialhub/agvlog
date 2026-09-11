@@ -1,3 +1,5 @@
+import {ReceivableSettlementAmounts} from '@/components/financial/ReceivableSettlementAmounts';
+import {legacyReceivableCents} from '@/lib/financial/receivableCreditAmounts';
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -27,6 +29,7 @@ function ClosingActionForm({reportId,onClose}:{reportId:string;onClose:()=>void}
   {api.query.isPending?<p role="status">Consultando estado atual…</p>:null}
   {api.query.error?<p role="alert">{api.query.error.message}</p>:null}
   {context?<div className="space-y-3"><p>Estado atual: {STATUS_LABELS[context.status]||context.status} · revisão {context.revision}</p>
+   {context.settled_cents!==undefined&&<ReceivableSettlementAmounts settled={context.settled_cents} open={legacyReceivableCents(context.open_amount)} cash={context.cash_received_cents} credit={context.credit_applied_cents} discount={context.discount_cents} loss={context.loss_cents}/>}
    {context.has_financial_links?<p>Há fatura ou recebimento vinculado. Cancelamento e reabertura exigem conciliação financeira.</p>:null}
    {context.source_review_required?<p role="alert">Há origem sem validação financeira. O fechamento permanece indisponível até a revisão.</p>:null}
    <fieldset disabled={api.isPending} className="space-y-3"><label>Ação desejada<select className="h-10 w-full rounded border bg-background px-3" value={action} onChange={e=>setAction(e.target.value as ClosingAction|'')}><option value="">Selecione</option>{context.allowed_actions.map(value=><option key={value} value={value}>{closingActionLabels[value]}</option>)}</select></label>

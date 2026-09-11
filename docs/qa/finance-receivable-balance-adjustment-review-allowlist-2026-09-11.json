@@ -1,0 +1,65 @@
+{
+  "scope": "Independent balance adjustment review; product migration owned by native_finance_links",
+  "local_only": true,
+  "tests": {
+    "pglite": 8,
+    "postgres_17_11": 6,
+    "native_session": 22836,
+    "exit_code": 0,
+    "postgres_stopped": true
+  },
+  "files": [
+    {
+      "path": "supabase/migrations/20260911115046_finance_receivable_balance_adjustments.sql",
+      "sha256": "86428df46295f943412638fc4af2527c9b2fcc7040cdb51ccd705955ac051e49"
+    },
+    {
+      "path": "src/test/receivableBalanceAdjustmentReview.test.ts",
+      "sha256": "e2ad7baf7badada4377b7a0088d707f75afb17a6fad1f4b004e10a20de944460"
+    },
+    {
+      "path": "src/test/helpers/receivableBalanceAdjustmentReviewDatabase.ts",
+      "sha256": "9880485b0359f16bdcfde7827c5521616aebdbfa36476ab7b058f834e449e6bc"
+    },
+    {
+      "path": "src/test/helpers/receivableBalanceAdjustmentNativeFixture.ts",
+      "sha256": "7578139389f729995b1e4430fb2b193dbb5be20c859e5bdc22a368057612a54b"
+    },
+    {
+      "path": "scripts/test-balance-adjustment-native.mjs",
+      "sha256": "15c058422be99aafad60ac1091016b0acd35d8b6504943ce15389b20f3d34e2d"
+    },
+    {
+      "path": "scripts/test-balance-adjustment-native-cases.mjs",
+      "sha256": "9935c398e3c53be345429d9a76f3940405977b024e64eeee6057d3c49ba60753"
+    },
+    {
+      "path": "docs/qa/finance-receivable-balance-adjustment-review-matrix-2026-09-11.md",
+      "sha256": "89027bc74e81a57efdc6e27f3f592bfb7e2c533b402ce7b20ad98e1c46e4a326"
+    },
+    {
+      "path": "docs/qa/finance-receivable-balance-adjustment-predecessors-2026-09-11.json",
+      "sha256": "dc915c32b03c5f728b6427856c8c0a2dd306e6021fbf892788a9946eb654d2b8"
+    },
+    {
+      "path": "docs/qa/finance-receivable-balance-adjustment-capture-predecessor-2026-09-11.json",
+      "sha256": "5e41d50c718be3dda8d3a1b162bf5e163627c1991a1ec6eff9cdaa07302b6f88"
+    },
+    {
+      "path": "docs/qa/finance-receivable-balance-adjustment-addon-predecessors-2026-09-11.json",
+      "sha256": "ed0a835170f19d3eb215106978250719f87ffaa75c5db3d775b116118aa6f264"
+    },
+    {
+      "path": "docs/qa/finance-receivable-balance-adjustment-unloading-predecessor-2026-09-11.json",
+      "sha256": "d51c45870527288cf8eff2b1f441218a4f225420e2ca0f462af0bb2afb292467"
+    }
+  ],
+  "excluded": [
+    "scripts/check-balance-adjustment-review-fixture.mjs (temporary local diagnostic)",
+    "Other agents UI/public boundary/forecast files are owned and listed separately"
+  ],
+  "dependencies": [
+    "Existing committed full customer-credit/refund/bulk/closing fixtures imported by review helper",
+    "Captured production metadata are read-only; they are not a production dump"
+  ]
+}
