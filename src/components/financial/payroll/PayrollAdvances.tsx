@@ -21,14 +21,21 @@ import { getErrorMessage } from '@/lib/errors';
 import { formatPayrollCurrency } from './formatPayrollCurrency';
 
 export function AdvancesTable() {
-  const { data: advances = [] } = useEmployeeAdvances();
+  const query = useEmployeeAdvances();
+  const advances = query.isFetching || query.isError ? [] : query.data ?? [];
   const upd = useUpdateAdvanceStatus();
+  const toast = useSonnerToast();
+  const changeStatus = (id: string, status: string) => upd.mutate({ id, status }, {
+    onError: error => toast.error(getErrorMessage(error, 'Não foi possível atualizar o adiantamento. Confira o histórico antes de tentar novamente.')),
+  });
   return (
     <Card><CardContent className="p-0">
       <Table>
         <TableHeader><TableRow><TableHead>Funcionário</TableHead><TableHead>Data</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Motivo</TableHead><TableHead>Status</TableHead><TableHead className="w-40"></TableHead></TableRow></TableHeader>
         <TableBody>
-          {advances.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">Nenhum adiantamento</TableCell></TableRow>
+          {query.isFetching ? <TableRow><TableCell colSpan={6}><p role="status">Consultando adiantamentos…</p></TableCell></TableRow>
+            : query.isError ? <TableRow><TableCell colSpan={6}><p role="alert">Não foi possível consultar os adiantamentos.</p><Button variant="outline" onClick={() => void query.refetch()}>Tentar novamente</Button></TableCell></TableRow>
+            : advances.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center py-8 text-sm text-muted-foreground">Nenhum adiantamento</TableCell></TableRow>
             : advances.map(advance => (
               <TableRow key={advance.id}>
                 <TableCell className="text-sm font-medium">{advance.employees?.name ?? advance.employee_id.slice(0, 8)}</TableCell>
@@ -37,9 +44,9 @@ export function AdvancesTable() {
                 <TableCell className="text-sm text-muted-foreground">{advance.reason ?? '—'}</TableCell>
                 <TableCell><Badge variant="outline" className="text-[10px]">{ADVANCE_STATUS_LABELS[advance.status] ?? advance.status}</Badge></TableCell>
                 <TableCell><div className="flex gap-1">
-                  {advance.status === 'pending' && <Button size="sm" variant="outline" onClick={() => upd.mutate({ id: advance.id, status: 'approved' })}>Aprovar</Button>}
-                  {(advance.status === 'approved' || advance.status === 'pending') && <Button size="sm" onClick={() => upd.mutate({ id: advance.id, status: 'paid' })}>Pagar</Button>}
-                  {advance.status !== 'cancelled' && advance.status !== 'paid' && <Button size="sm" variant="ghost" onClick={() => upd.mutate({ id: advance.id, status: 'cancelled' })}>Cancelar</Button>}
+                  {advance.status === 'pending' && <Button size="sm" variant="outline" disabled={upd.isPending} onClick={() => changeStatus(advance.id, 'approved')}>Aprovar</Button>}
+                  {(advance.status === 'approved' || advance.status === 'pending') && <Button size="sm" disabled={upd.isPending} onClick={() => changeStatus(advance.id, 'paid')}>Pagar</Button>}
+                  {advance.status !== 'cancelled' && advance.status !== 'paid' && <Button size="sm" variant="ghost" disabled={upd.isPending} onClick={() => changeStatus(advance.id, 'cancelled')}>Cancelar</Button>}
                 </div></TableCell>
               </TableRow>
             ))}
