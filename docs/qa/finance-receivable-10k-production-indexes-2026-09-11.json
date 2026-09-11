@@ -1,0 +1,164 @@
+[
+  {
+    "schemaname": "finance_private",
+    "tablename": "customer_credit_application_events",
+    "indexname": "customer_credit_application_events_pkey",
+    "indexdef": "CREATE UNIQUE INDEX customer_credit_application_events_pkey ON finance_private.customer_credit_application_events USING btree (id)"
+  },
+  {
+    "schemaname": "finance_private",
+    "tablename": "customer_credit_application_events",
+    "indexname": "customer_credit_application_events_tenant_id_request_id_key",
+    "indexdef": "CREATE UNIQUE INDEX customer_credit_application_events_tenant_id_request_id_key ON finance_private.customer_credit_application_events USING btree (tenant_id, request_id)"
+  },
+  {
+    "schemaname": "finance_private",
+    "tablename": "customer_credit_application_events",
+    "indexname": "customer_credit_application_source",
+    "indexdef": "CREATE INDEX customer_credit_application_source ON finance_private.customer_credit_application_events USING btree (tenant_id, credit_id, id)"
+  },
+  {
+    "schemaname": "finance_private",
+    "tablename": "customer_credit_application_events",
+    "indexname": "customer_credit_application_target",
+    "indexdef": "CREATE INDEX customer_credit_application_target ON finance_private.customer_credit_application_events USING btree (tenant_id, receivable_id, id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivable_payment_reversals",
+    "indexname": "receivable_payment_reversals_pkey",
+    "indexdef": "CREATE UNIQUE INDEX receivable_payment_reversals_pkey ON public.receivable_payment_reversals USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivable_payment_reversals",
+    "indexname": "receivable_payment_reversals_tenant_id_financial_command_id_key",
+    "indexdef": "CREATE UNIQUE INDEX receivable_payment_reversals_tenant_id_financial_command_id_key ON public.receivable_payment_reversals USING btree (tenant_id, financial_command_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivable_payment_reversals",
+    "indexname": "receivable_payment_reversals_tenant_id_payment_id_key",
+    "indexdef": "CREATE UNIQUE INDEX receivable_payment_reversals_tenant_id_payment_id_key ON public.receivable_payment_reversals USING btree (tenant_id, payment_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivable_payment_reversals",
+    "indexname": "receivable_reversals_target_idx",
+    "indexdef": "CREATE INDEX receivable_reversals_target_idx ON public.receivable_payment_reversals USING btree (tenant_id, receivable_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "idx_receivables_client_id",
+    "indexdef": "CREATE INDEX idx_receivables_client_id ON public.receivables USING btree (client_id) WHERE (client_id IS NOT NULL)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "idx_receivables_client_invoice",
+    "indexdef": "CREATE INDEX idx_receivables_client_invoice ON public.receivables USING btree (client_invoice_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "idx_receivables_client_invoice_id",
+    "indexdef": "CREATE INDEX idx_receivables_client_invoice_id ON public.receivables USING btree (client_invoice_id) WHERE (client_invoice_id IS NOT NULL)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "idx_receivables_closing_report_id",
+    "indexdef": "CREATE INDEX idx_receivables_closing_report_id ON public.receivables USING btree (closing_report_id) WHERE (closing_report_id IS NOT NULL)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "idx_receivables_fiscal_document_id",
+    "indexdef": "CREATE INDEX idx_receivables_fiscal_document_id ON public.receivables USING btree (fiscal_document_id) WHERE (fiscal_document_id IS NOT NULL)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "idx_receivables_load_id",
+    "indexdef": "CREATE INDEX idx_receivables_load_id ON public.receivables USING btree (load_id) WHERE (load_id IS NOT NULL)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "idx_receivables_order_id",
+    "indexdef": "CREATE INDEX idx_receivables_order_id ON public.receivables USING btree (order_id) WHERE (order_id IS NOT NULL)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "idx_receivables_tenant_id",
+    "indexdef": "CREATE INDEX idx_receivables_tenant_id ON public.receivables USING btree (tenant_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "receivables_pkey",
+    "indexdef": "CREATE UNIQUE INDEX receivables_pkey ON public.receivables USING btree (id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "receivables_tenant_cte_document_uidx",
+    "indexdef": "CREATE UNIQUE INDEX receivables_tenant_cte_document_uidx ON public.receivables USING btree (tenant_id, cte_document_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables",
+    "indexname": "receivables_tenant_id_id_uidx",
+    "indexdef": "CREATE UNIQUE INDEX receivables_tenant_id_id_uidx ON public.receivables USING btree (tenant_id, id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables_payments",
+    "indexname": "idx_receivables_payments_receivable",
+    "indexdef": "CREATE INDEX idx_receivables_payments_receivable ON public.receivables_payments USING btree (receivable_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables_payments",
+    "indexname": "idx_receivables_payments_receivables_payments_bank_acc_1e0825ea",
+    "indexdef": "CREATE INDEX idx_receivables_payments_receivables_payments_bank_acc_1e0825ea ON public.receivables_payments USING btree (bank_account_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables_payments",
+    "indexname": "idx_receivables_payments_receivables_payments_bank_tra_8ee9c91c",
+    "indexdef": "CREATE INDEX idx_receivables_payments_receivables_payments_bank_tra_8ee9c91c ON public.receivables_payments USING btree (bank_transaction_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables_payments",
+    "indexname": "idx_receivables_payments_tenant",
+    "indexdef": "CREATE INDEX idx_receivables_payments_tenant ON public.receivables_payments USING btree (tenant_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables_payments",
+    "indexname": "receivable_one_payment_per_command",
+    "indexdef": "CREATE UNIQUE INDEX receivable_one_payment_per_command ON public.receivables_payments USING btree (tenant_id, financial_command_id) WHERE (financial_command_id IS NOT NULL)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables_payments",
+    "indexname": "receivable_payment_target_idx",
+    "indexdef": "CREATE INDEX receivable_payment_target_idx ON public.receivables_payments USING btree (tenant_id, receivable_id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables_payments",
+    "indexname": "receivable_payment_tenant_id_key",
+    "indexdef": "CREATE UNIQUE INDEX receivable_payment_tenant_id_key ON public.receivables_payments USING btree (tenant_id, id)"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "receivables_payments",
+    "indexname": "receivables_payments_pkey",
+    "indexdef": "CREATE UNIQUE INDEX receivables_payments_pkey ON public.receivables_payments USING btree (id)"
+  }
+]

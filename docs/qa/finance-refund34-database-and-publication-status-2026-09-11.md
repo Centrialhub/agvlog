@@ -1,0 +1,17 @@
+# Finance refund34 — database delivered, Sites push awaiting explicit approval
+
+Main implementation278a14e8 and compatibility correctionba7c08a3439a4b573b3e3571ceedb667f38e80a3. Core04822 SHAbcbbd8ad479aa263320ada12def8f15e742c4c7c84fc169d4f99e60aa4da1d79 applied as20260911112231. Public10629 finalSHA92d6f6c50e2ef490f47ae5dc177488840ac84d06298c9012d196dde03047a0d0 applied as20260911112635.
+
+Initial public migration attempt rolled back on its exact predecessor check: it pinned the ancestral forecast helper instead of the published02519 wrapper. Root queried19 function fingerprints; only forecast differed. New public fixture installs13→25→39→44→48→106. Five tests passed in33674, including actual close/reopen and native-fixture preparation using the final boundary; no repeat of six older native disputes is claimed. Final public wrapper pin d2c1776dfadc5267578077be619ca9bd matches generated02519 and production. Core04822 was never changed after its successful production application.
+
+Postchecks: journal0; public refund RPCs authenticated-only; raw context/writer/internal proof denied to authenticated,anon,service_role. No customer financial entry, outgoing movement or fiscal document created by rollout. Four core SQL, three public cases, six native concurrency cases on prior guard boundary, real period close/reopen, forecast integration,13UI tests,8application regressions and2invoice label tests provide the scoped evidence. Root15cases passed9894. Final frontend typecheck45299/build32131 exit0,4719modules20.59s, no source maps or recognized secrets. Frozen build .sites-artifacts/finance-refund-34-build. SQL-only predecessor correction afterwards did not change compiled frontend.
+
+## Publication state
+
+Existing Site appgprj_6a958c7d22dc8191840efb545d976b79 is public, current user owner, current live URL https://agvlog-preview-thomaz-20260831.veituma.chatgpt.site. Local prepared Sites source commit bfa574baf22043bcb570e560391481c8151c1257 has NOT been pushed. No new saved version, deployment or archive was created. Current live release remains33.
+
+Automatic approval review rejected the exact git push, first considering the remote unverified. Read-only verification confirmed origin equals the source repository returned by the Sites connector for this project: https://git.chatgpt-team.site/b0027462-24e7-4352-b36d-739f16beaeef/appgprj_6a958c7d22dc8191840efb545d976b79.git, branchmain. Tree contains compiledclient, worker/build, hosting metadata and package/README; no customerdata or private source tree. The same push was resubmitted with this evidence and rejected again because trusted user content did not specifically authorize repository payload/destination. No workaround or alternate transfer was attempted.
+
+A specific asynchronous approval question now names that repository, branch and compiled frontend/worker/metadata payload. It remains pending. Do not retry the push or save/deploy through another route before authorization resolves the review block. Renew expired repo-scoped credential only when ready; never persist or expose token. After approved push, run git rev-parse --verify HEAD anew and use exact resulting SHA, then official packager/save/deploy. Previous user publication approval was not treated as a reason to bypass this rejection.
+
+Full authenticated hosted QA remains unproven; browser session directly inspected at login. Goal remains active; global portfolio performance optimization proceeds independently from publication.

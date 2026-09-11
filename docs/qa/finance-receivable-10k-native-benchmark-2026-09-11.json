@@ -1,0 +1,617 @@
+{
+  "runtime": "PostgreSQL 17 native; isolated local database-only; no concurrent workload or network",
+  "titles": 10000,
+  "samples": [
+    {
+      "name": "page_first",
+      "milliseconds": [
+        88.66900000000169,
+        94.46119999999792,
+        88.98990000000049,
+        100.09490000000005,
+        94.6923999999999,
+        99.57159999999931,
+        99.99859999999899,
+        94.64199999999983,
+        94.27339999999822,
+        95.15039999999863,
+        99.28880000000208,
+        100.14709999999832,
+        94.48860000000059,
+        100.03529999999955,
+        94.51989999999932,
+        99.91820000000007,
+        98.91589999999997,
+        101.57880000000296,
+        98.79530000000159,
+        95.06130000000121
+      ],
+      "warmup_ms": 139.0155999999988,
+      "result_total": 10000,
+      "rows": 50,
+      "p95_ms": 100.14709999999832,
+      "explain": [
+        {
+          "Plan": {
+            "Node Type": "Result",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 0,
+            "Total Cost": 0.26,
+            "Plan Rows": 1,
+            "Plan Width": 32,
+            "Actual Startup Time": 85.969,
+            "Actual Total Time": 85.97,
+            "Actual Rows": 1,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 4668,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning": {
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.007,
+          "Triggers": [],
+          "Execution Time": 85.976
+        }
+      ]
+    },
+    {
+      "name": "page_deep",
+      "milliseconds": [
+        94.02270000000135,
+        106.13540000000285,
+        94.34530000000086,
+        99.59150000000227,
+        103.67059999999765,
+        113.3721000000005,
+        110.65710000000036,
+        105.61769999999888,
+        111.70650000000023,
+        110.42309999999998,
+        105.65810000000056,
+        111.01810000000114,
+        111.13630000000194,
+        106.21270000000004,
+        114.93789999999717,
+        102.04260000000068,
+        108.73400000000038,
+        112.64010000000053,
+        109.44900000000052,
+        107.25720000000001
+      ],
+      "warmup_ms": 99.77770000000237,
+      "result_total": 10000,
+      "rows": 50,
+      "p95_ms": 113.3721000000005,
+      "explain": [
+        {
+          "Plan": {
+            "Node Type": "Result",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 0,
+            "Total Cost": 0.26,
+            "Plan Rows": 1,
+            "Plan Width": 32,
+            "Actual Startup Time": 87.583,
+            "Actual Total Time": 87.585,
+            "Actual Rows": 1,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 4668,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning": {
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.007,
+          "Triggers": [],
+          "Execution Time": 87.593
+        }
+      ]
+    },
+    {
+      "name": "page_search",
+      "milliseconds": [
+        33.32389999999941,
+        44.4890000000014,
+        33.58490000000165,
+        33.226699999999255,
+        38.76540000000023,
+        33.297999999998865,
+        33.32790000000023,
+        45.282100000000355,
+        32.56390000000101,
+        33.292600000000675,
+        44.376000000000204,
+        33.294999999998254,
+        33.03199999999924,
+        44.812300000001414,
+        33.55069999999978,
+        34.18830000000162,
+        37.82259999999951,
+        33.967499999998836,
+        32.91969999999856,
+        43.318099999996775
+      ],
+      "warmup_ms": 32.06160000000091,
+      "result_total": 11,
+      "rows": 11,
+      "p95_ms": 44.812300000001414,
+      "explain": [
+        {
+          "Plan": {
+            "Node Type": "Result",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 0,
+            "Total Cost": 0.26,
+            "Plan Rows": 1,
+            "Plan Width": 32,
+            "Actual Startup Time": 25.426,
+            "Actual Total Time": 25.427,
+            "Actual Rows": 1,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 1314,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning": {
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.008,
+          "Triggers": [],
+          "Execution Time": 25.432
+        }
+      ]
+    },
+    {
+      "name": "portfolio_all",
+      "milliseconds": [
+        14076.653100000003,
+        14891.314500000008,
+        13969.678100000005,
+        14127.419900000008,
+        14217.671399999992,
+        14044.027500000011,
+        14205.692699999985,
+        14011.199900000007,
+        14111.092600000004,
+        14017.561499999982,
+        14110.415600000008,
+        14055.679600000003,
+        14955.512600000016,
+        14205.741299999994,
+        14139.089199999988,
+        13973.12559999997,
+        14583.252999999968,
+        14094.357399999979,
+        14116.14519999997,
+        14200.633299999987
+      ],
+      "warmup_ms": 13984.170600000005,
+      "result_total": 10000,
+      "portfolio": {
+        "to": null,
+        "from": null,
+        "as_of": "2026-09-11",
+        "version": 1,
+        "client_id": null,
+        "tenant_id": "20000000-0000-4000-8000-000000000001",
+        "open_cents": "100000000",
+        "status_rows": [
+          {
+            "count": 10000,
+            "status": "pending",
+            "open_cents": "100000000",
+            "nominal_cents": "100000000",
+            "settled_cents": "0",
+            "cash_received_cents": "0",
+            "credit_applied_cents": "0",
+            "received_allocated_cents": "0"
+          }
+        ],
+        "total_titles": 10000,
+        "totals_valid": true,
+        "nominal_cents": "100000000",
+        "overdue_cents": "33390000",
+        "settled_cents": "0",
+        "invalid_titles": 0,
+        "canceled_titles": 0,
+        "cash_received_cents": "0",
+        "credit_applied_cents": "0",
+        "received_allocated_cents": "0"
+      },
+      "p95_ms": 14891.314500000008,
+      "explain": [
+        {
+          "Plan": {
+            "Node Type": "Result",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 0,
+            "Total Cost": 0.26,
+            "Plan Rows": 1,
+            "Plan Width": 32,
+            "Actual Startup Time": 14160.726,
+            "Actual Total Time": 14160.727,
+            "Actual Rows": 1,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 860185,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 2139,
+            "Temp Written Blocks": 6370
+          },
+          "Planning": {
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.007,
+          "Triggers": [],
+          "Execution Time": 14160.734
+        }
+      ]
+    },
+    {
+      "name": "portfolio_client",
+      "milliseconds": [
+        733.265400000033,
+        726.858200000017,
+        733.991800000018,
+        733.3852000000188,
+        738.9223999999813,
+        717.7082999999984,
+        698.9021000000066,
+        711.0854999999865,
+        700.2113000000245,
+        727.6591999999946,
+        705.8047999999835,
+        724.6160999999847,
+        708.4391000000178,
+        705.5909000000102,
+        756.1052999999956,
+        716.271299999964,
+        744.6663999999873,
+        749.578600000008,
+        759.617200000037,
+        791.820699999982
+      ],
+      "warmup_ms": 743.9156000000075,
+      "result_total": 500,
+      "portfolio": {
+        "to": null,
+        "from": null,
+        "as_of": "2026-09-11",
+        "version": 1,
+        "client_id": "b274e4fc-47ff-6d0b-d7e8-4b877dbea784",
+        "tenant_id": "20000000-0000-4000-8000-000000000001",
+        "open_cents": "5000000",
+        "status_rows": [
+          {
+            "count": 500,
+            "status": "pending",
+            "open_cents": "5000000",
+            "nominal_cents": "5000000",
+            "settled_cents": "0",
+            "cash_received_cents": "0",
+            "credit_applied_cents": "0",
+            "received_allocated_cents": "0"
+          }
+        ],
+        "total_titles": 500,
+        "totals_valid": true,
+        "nominal_cents": "5000000",
+        "overdue_cents": "1660000",
+        "settled_cents": "0",
+        "invalid_titles": 0,
+        "canceled_titles": 0,
+        "cash_received_cents": "0",
+        "credit_applied_cents": "0",
+        "received_allocated_cents": "0"
+      },
+      "p95_ms": 759.617200000037,
+      "explain": [
+        {
+          "Plan": {
+            "Node Type": "Result",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 0,
+            "Total Cost": 0.26,
+            "Plan Rows": 1,
+            "Plan Width": 32,
+            "Actual Startup Time": 711.631,
+            "Actual Total Time": 711.632,
+            "Actual Rows": 1,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 43186,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning": {
+            "Shared Hit Blocks": 0,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.02,
+          "Triggers": [],
+          "Execution Time": 711.636
+        }
+      ]
+    }
+  ],
+  "files": {
+    "supabase/migrations/20260911101312_finance_customer_credit_applications.sql": "298e3ae217acf80e32439e097c0f202d0d0be425b14fb8b54b116d3dbd81a2ac",
+    "supabase/migrations/20260911104429_finance_customer_credit_portfolio_composition.sql": "1104ace915f17953c61a907e3a1ccdbc4200d3fcd91af5939a98749006a19442"
+  },
+  "indexes": [
+    {
+      "schemaname": "finance_private",
+      "tablename": "customer_credit_application_events",
+      "indexname": "customer_credit_application_events_pkey",
+      "indexdef": "CREATE UNIQUE INDEX customer_credit_application_events_pkey ON finance_private.customer_credit_application_events USING btree (id)"
+    },
+    {
+      "schemaname": "finance_private",
+      "tablename": "customer_credit_application_events",
+      "indexname": "customer_credit_application_events_tenant_id_request_id_key",
+      "indexdef": "CREATE UNIQUE INDEX customer_credit_application_events_tenant_id_request_id_key ON finance_private.customer_credit_application_events USING btree (tenant_id, request_id)"
+    },
+    {
+      "schemaname": "finance_private",
+      "tablename": "customer_credit_application_events",
+      "indexname": "customer_credit_application_source",
+      "indexdef": "CREATE INDEX customer_credit_application_source ON finance_private.customer_credit_application_events USING btree (tenant_id, credit_id, id)"
+    },
+    {
+      "schemaname": "finance_private",
+      "tablename": "customer_credit_application_events",
+      "indexname": "customer_credit_application_target",
+      "indexdef": "CREATE INDEX customer_credit_application_target ON finance_private.customer_credit_application_events USING btree (tenant_id, receivable_id, id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivable_payment_reversals",
+      "indexname": "receivable_payment_reversals_pkey",
+      "indexdef": "CREATE UNIQUE INDEX receivable_payment_reversals_pkey ON public.receivable_payment_reversals USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivable_payment_reversals",
+      "indexname": "receivable_payment_reversals_tenant_id_financial_command_id_key",
+      "indexdef": "CREATE UNIQUE INDEX receivable_payment_reversals_tenant_id_financial_command_id_key ON public.receivable_payment_reversals USING btree (tenant_id, financial_command_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivable_payment_reversals",
+      "indexname": "receivable_payment_reversals_tenant_id_payment_id_key",
+      "indexdef": "CREATE UNIQUE INDEX receivable_payment_reversals_tenant_id_payment_id_key ON public.receivable_payment_reversals USING btree (tenant_id, payment_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivable_payment_reversals",
+      "indexname": "receivable_reversals_target_idx",
+      "indexdef": "CREATE INDEX receivable_reversals_target_idx ON public.receivable_payment_reversals USING btree (tenant_id, receivable_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "idx_receivables_client_id",
+      "indexdef": "CREATE INDEX idx_receivables_client_id ON public.receivables USING btree (client_id) WHERE (client_id IS NOT NULL)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "idx_receivables_client_invoice",
+      "indexdef": "CREATE INDEX idx_receivables_client_invoice ON public.receivables USING btree (client_invoice_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "idx_receivables_client_invoice_id",
+      "indexdef": "CREATE INDEX idx_receivables_client_invoice_id ON public.receivables USING btree (client_invoice_id) WHERE (client_invoice_id IS NOT NULL)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "idx_receivables_closing_report_id",
+      "indexdef": "CREATE INDEX idx_receivables_closing_report_id ON public.receivables USING btree (closing_report_id) WHERE (closing_report_id IS NOT NULL)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "idx_receivables_fiscal_document_id",
+      "indexdef": "CREATE INDEX idx_receivables_fiscal_document_id ON public.receivables USING btree (fiscal_document_id) WHERE (fiscal_document_id IS NOT NULL)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "idx_receivables_load_id",
+      "indexdef": "CREATE INDEX idx_receivables_load_id ON public.receivables USING btree (load_id) WHERE (load_id IS NOT NULL)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "idx_receivables_order_id",
+      "indexdef": "CREATE INDEX idx_receivables_order_id ON public.receivables USING btree (order_id) WHERE (order_id IS NOT NULL)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "idx_receivables_tenant_id",
+      "indexdef": "CREATE INDEX idx_receivables_tenant_id ON public.receivables USING btree (tenant_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "qa_closing_receivables_tenant_key",
+      "indexdef": "CREATE UNIQUE INDEX qa_closing_receivables_tenant_key ON public.receivables USING btree (tenant_id, id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "receivables_pkey",
+      "indexdef": "CREATE UNIQUE INDEX receivables_pkey ON public.receivables USING btree (id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "receivables_tenant_cte_document_uidx",
+      "indexdef": "CREATE UNIQUE INDEX receivables_tenant_cte_document_uidx ON public.receivables USING btree (tenant_id, cte_document_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables",
+      "indexname": "receivables_tenant_id_id_uidx",
+      "indexdef": "CREATE UNIQUE INDEX receivables_tenant_id_id_uidx ON public.receivables USING btree (tenant_id, id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables_payments",
+      "indexname": "idx_receivables_payments_receivable",
+      "indexdef": "CREATE INDEX idx_receivables_payments_receivable ON public.receivables_payments USING btree (receivable_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables_payments",
+      "indexname": "idx_receivables_payments_receivables_payments_bank_acc_1e0825ea",
+      "indexdef": "CREATE INDEX idx_receivables_payments_receivables_payments_bank_acc_1e0825ea ON public.receivables_payments USING btree (bank_account_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables_payments",
+      "indexname": "idx_receivables_payments_receivables_payments_bank_tra_8ee9c91c",
+      "indexdef": "CREATE INDEX idx_receivables_payments_receivables_payments_bank_tra_8ee9c91c ON public.receivables_payments USING btree (bank_transaction_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables_payments",
+      "indexname": "idx_receivables_payments_tenant",
+      "indexdef": "CREATE INDEX idx_receivables_payments_tenant ON public.receivables_payments USING btree (tenant_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables_payments",
+      "indexname": "receivable_one_payment_per_command",
+      "indexdef": "CREATE UNIQUE INDEX receivable_one_payment_per_command ON public.receivables_payments USING btree (tenant_id, financial_command_id) WHERE (financial_command_id IS NOT NULL)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables_payments",
+      "indexname": "receivable_payment_target_idx",
+      "indexdef": "CREATE INDEX receivable_payment_target_idx ON public.receivables_payments USING btree (tenant_id, receivable_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables_payments",
+      "indexname": "receivable_payment_tenant_id_key",
+      "indexdef": "CREATE UNIQUE INDEX receivable_payment_tenant_id_key ON public.receivables_payments USING btree (tenant_id, id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receivables_payments",
+      "indexname": "receivables_payments_pkey",
+      "indexdef": "CREATE UNIQUE INDEX receivables_payments_pkey ON public.receivables_payments USING btree (id)"
+    }
+  ],
+  "catalog": [
+    {
+      "nspname": "public",
+      "proname": "_receivable_financial_snapshot",
+      "hash": "473e509e0283627f5520dddfb36a083d"
+    },
+    {
+      "nspname": "finance_private",
+      "proname": "receivable_portfolio_summary",
+      "hash": "57b41ad9b959e236163ecb2e2cc590ac"
+    },
+    {
+      "nspname": "finance_private",
+      "proname": "receivables_page",
+      "hash": "8585c392e5d51874380f094c913098e3"
+    },
+    {
+      "nspname": "finance_private",
+      "proname": "receivables_page_by_origin",
+      "hash": "35dc6d2153bde484f39ee1440ee8a680"
+    }
+  ]
+}

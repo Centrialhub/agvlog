@@ -1,6 +1,6 @@
 # Guia de uso do financeiro
 
-Referência das telas publicadas em 11/09/2026. Este guia não substitui o aceite completo: a validação autenticada de ponta a ponta continua pendente.
+Referência do financeiro em 11/09/2026. A interface de devolução de créditos está pronta, mas aguarda publicação; o banco já recebeu essa funcionalidade. Este guia não substitui o aceite completo: a validação autenticada de ponta a ponta continua pendente.
 
 ## Acesso e organização
 
