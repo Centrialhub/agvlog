@@ -28,6 +28,8 @@ begin
   if position(original in body)=0 then raise exception 'finance_credit_balance_contract_changed: %',signature;end if;
   execute replace(body,original,replacement);
  end loop;
+ if to_regprocedure('public._receivable_ledger_evidence(uuid,uuid)') is null then
+ if not exists(select 1 from pg_proc where oid=to_regprocedure('public._receivable_financial_snapshot(uuid,uuid)') and md5(replace(prosrc,E'\r\n',E'\n'))='b47c1f216593712ceabee63a333d4794' and not prosecdef and not has_function_privilege('authenticated',oid,'execute') and not has_function_privilege('anon',oid,'execute') and not has_function_privilege('service_role',oid,'execute')) then raise exception 'finance_inline_snapshot_predecessor_changed';end if;
  select pg_get_functiondef('public._receivable_financial_snapshot(uuid,uuid)'::regprocedure) into body;
  original:='coalesce(sum(p.amount) filter(where rv.id is null),0)';
  if position(original in body)=0 then raise exception 'finance_credit_snapshot_contract_changed';end if;
@@ -39,6 +41,27 @@ begin
  if position(original in body)=0 then raise exception 'finance_credit_open_balance_contract_changed';end if;
  body:=replace(body,original,'''open_cents'',case when r.status=''cancelled'' then 0 else (greatest(0,r.amount-v_net)*100)::bigint end');
  execute body;
+ else
+ -- Exact current invoice-lifecycle source: aggregate belongs to shared evidence.
+ if not exists(select 1 from pg_proc where oid=to_regprocedure('public._receivable_ledger_evidence(uuid,uuid)')
+  and md5(replace(prosrc,E'\r\n',E'\n'))='516278d4049bbadeed1f2b94e4f020b9' and not prosecdef
+  and not has_function_privilege('authenticated',oid,'execute') and not has_function_privilege('anon',oid,'execute')
+  and not has_function_privilege('service_role',oid,'execute')) then raise exception 'finance_credit_ledger_contract_changed';end if;
+ if not exists(select 1 from pg_proc where oid=to_regprocedure('public._receivable_financial_snapshot(uuid,uuid)')
+  and md5(replace(prosrc,E'\r\n',E'\n'))='7e78a142d1eabad9c5e503c198f38fa5' and not prosecdef
+  and not has_function_privilege('authenticated',oid,'execute') and not has_function_privilege('anon',oid,'execute')
+  and not has_function_privilege('service_role',oid,'execute')) then raise exception 'finance_credit_snapshot_contract_changed';end if;
+ select pg_get_functiondef('public._receivable_ledger_evidence(uuid,uuid)'::regprocedure) into body;
+ original:='coalesce(sum(p.amount) filter(where rv.id is null),0)';
+ if (length(body)-length(replace(body,original,'')))/length(original)<>1 then raise exception 'finance_credit_shared_sum_contract_changed';end if;
+ execute replace(body,original,'coalesce(sum(p.amount) filter(where rv.id is null and not exists(select 1 from public.finance_customer_credits credit where credit.tenant_id=p.tenant_id and credit.payment_id=p.id)),0)');
+ select pg_get_functiondef('public._receivable_financial_snapshot(uuid,uuid)'::regprocedure) into body;
+ original:='''reversed_at'',rv.created_at,''reversal_reason'',rv.reason';
+ if (length(body)-length(replace(body,original,'')))/length(original)<>1 then raise exception 'finance_credit_history_contract_changed';end if;
+ execute replace(body,original,original||',''credit_id'',(select credit.id from public.finance_customer_credits credit where credit.tenant_id=p.tenant_id and credit.payment_id=p.id)');
+
+ end if;
+
 end;
 $credit_balances$;
 

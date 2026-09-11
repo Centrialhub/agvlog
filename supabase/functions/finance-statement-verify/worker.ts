@@ -1,19 +1,27 @@
+import {readArtifactReport} from './artifact-worker.ts';
 import {compareStatementRows,mapStatementMatrix,readStatementCsv,StatementReadError,type StatementMapping} from '../_shared/finance-statement-reader.ts';
 import {originalHash} from '../secure-upload/statement-original.ts';
 import {checkStatementBalances} from '../_shared/finance-statement-balances.ts';
 import {readOfxStatement} from '../_shared/finance-ofx-reader.ts';
 export interface StatementSourceContext {
-  revision:string;import_data:{id:string;tenant_id:string;source_path:string;file_hash:string;parser_version:string;mapping:StatementMapping;period_start:string;period_end:string};
+  revision:string;import_data:{id:string;tenant_id:string;bank_account_id?:string;source_snapshot?:{artifact?:unknown};source_path:string;file_hash:string;parser_version:string;mapping:StatementMapping;period_start:string;period_end:string};
   rows:Record<string,unknown>[];
 }
 export async function verifyStatementSource(input:{tenant:string;actor:string;importId:string;request:string},deps:{
   inspect:()=>Promise<StatementSourceContext>;
   download:(path:string)=>Promise<Uint8Array>;
+  downloadArtifact?:(path:string)=>Promise<Uint8Array>;
   workbook:(bytes:Uint8Array,sheet:number)=>Promise<{matrix:unknown[][];date1904:boolean;sheetCount:number}>;
   authorize:()=>Promise<boolean>;
   record:(payload:Record<string,unknown>)=>Promise<unknown>;
 }) {
   const context=await deps.inspect(),source=context.import_data;
+  if(source.source_snapshot?.artifact){
+    if(source.tenant_id!==input.tenant||source.id!==input.importId||!deps.downloadArtifact||!Array.isArray(context.rows)||context.rows.length>10000)throw new Error('finance_statement_scope_invalid');
+    const result=await readArtifactReport(context,deps.downloadArtifact);
+    if(!await deps.authorize())throw new Error('finance_access_denied');
+    return deps.record({tenant_id:input.tenant,actor_id:input.actor,request_id:input.request,import_id:input.importId,reader_version:'statement-artifact-v2',source_revision:context.revision,file_hash:source.file_hash,...result});
+  }
   if(source.tenant_id!==input.tenant||source.id!==input.importId||!source.source_path.startsWith(`${input.tenant}/imports/${source.file_hash}.`)
     ||!Array.isArray(context.rows)||context.rows.length>10000)throw new Error('finance_statement_scope_invalid');
   const bytes=await deps.download(source.source_path);

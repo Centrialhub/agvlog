@@ -1,0 +1,15 @@
+# Upload Supabase-only v2 — integração local11/09/2026
+
+Escopo autorizado: PR032 permite antimalware OU quarentena. Nenhum scannedtrue/cleantrue substituído artificialmente. O handlerlegado continua exigindo seu scanner; novoactionfinance_upload_v2 usa40123 reserveauthenticated, prepareservice comautorização expirada em120s, upload originalimutável privado, validação estritaOFX/CSV, JSONderivado comhashpróprio e finalizeauditado. PDF/XLS/XLSX/JPEG/PNG ficamquarentena nesta entrega. Somente o DTOpúblico é retornado: ticket e original_path nunca escapam.
+
+Multipart tem limite real de stream10MiB+64KiB e15s, além do limite porarquivo. Replays armazenamupsertfalse e conferem bytes completos seStoragejápossuiobjeto; finalizeconfere metadados/hash/tamanho antesusar. Falha de rede/persistência não cria confirmação. Originais ficam privados mesmo se a validação for rejeitada. Não é uma implementação de AV.
+
+Frontend: clientesuploadArtifact* separados do retornopathlegado. StatementImportpendingnovo marca quarantine_v2 e guarda artefato no armazenamento durável ANTESintake. Pedidos antigos continuam v1. intake41340 recebeversion2/artifact_id/pathderivado/filehashoriginal. Artefato quarantined é visível e interrompe o fluxo antesintake. Modal oferece preservação separada dePDF/planilhas/imagens sem evento onImported. Recuperação desse envio usa WebLocks, identidade tenant/actor/source/hash e mesmo request_id armazenado. Não soma arquivos emquarentena como gasto/pagamento.
+
+Verificador: branch source_snapshot.artifact baixa SOMENTEJSONupload-validated, conferehashderivado, reinterpreta matrizCSV ou compara OFXnormalizado e mantém identidade/coveragepending. Report original_reopenedfalse, original_sha256 preservado, derivative_sha256 separado. Gravação v2 usa autorizaçãoauthenticated renovável e RPCserviceespecífica; não muda v1. NenhumaURLoriginal é produzida.
+
+Validação local:56testesVitest em10arquivos passaram nas rodadas focadas (structured10,image5,workflow6,artifactcontract3,runtime2,artifactworker4,legacyreader9,importworkflow9,dialog6,quarantineUI2). Mais3 testesNode de stream(bytes/limite/timeout) passaram. Lints focados0. Root informoutypecheck/buildcheck aprovados após duas correções de tipagem no statementImportClient. Nenhum TSC executado por este agente. SQL40123/41340 testado/aplicado pelo agente de banco/root; testes deste agente usam parsers reais e transportes controlados, não Storage remoto.
+
+Manifestos de deploy gerados localmente, publicação exclusiva root: finance-statement-verify-deploy-files-2026-09-11.json, secure-upload-deploy-files-2026-09-11.json e benchmarktemporário separado. Root informou verifier publicado e runtimeWASMprivado enviado. Este relatório não afirma que secure-upload/frontendv2 já foram publicados nem que a sanitizaçãoimagemhosted passou.
+
+Pendência concreta: benchhostedWASM, habilitaçãoDBsanitized apósprova e ponteexpense_item/artifact_id para recibo canônico. Não atribuir pathupload-validated ao contrato antigo de receiptsscanned. A API de anexos está em elaboração comnative_finance_links. Relatório de benchmark/roteiro em infra/upload-validation-bench/README.md.

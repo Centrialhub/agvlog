@@ -1,0 +1,859 @@
+{
+  "version": 1,
+  "purpose": "Candidate commit allowlist only; no stage, commit, deployment or independent production attestation",
+  "head": "eb524526d12af22a55727d64c5736e8b40a28e53",
+  "scope": "Completed uploads, server-side filters, original unloading billing corrections and fiscal evidence preview/collision guard; parent reports production deployment",
+  "files": [
+    {
+      "path": "src/components/financial/ExpenseArtifactPanel.tsx",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "79f0032cf4509672e6f95f7a9a63e07323fccb9743f18551554dbf10a445f062",
+      "bytes": 6184
+    },
+    {
+      "path": "src/components/financial/QuarantineFileUpload.tsx",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "bc5adafac8ebcbf39991d1cbb051e4c7b0851b7ee5577cf4eab6d9c40ff33d8d",
+      "bytes": 1939
+    },
+    {
+      "path": "src/components/financial/ExpenseHistoryDetail.tsx",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "09389551fa0706f4bc1b4130d191bc99f53faf309f8a7440f82ce924c04d58af",
+      "bytes": 4280
+    },
+    {
+      "path": "src/components/financial/StatementImportDialog.tsx",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "b66db07f9b10dac49cb35f5dedf0aa7f0b634bd16d8dcf3b404e2a2c5a7c2db1",
+      "bytes": 14442
+    },
+    {
+      "path": "src/lib/financial/expenseArtifactClient.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "35b667f9dfcd647a7ac0af68749e41e7d525837c8f780c61db0d23fd1d69caa8",
+      "bytes": 3171
+    },
+    {
+      "path": "src/lib/financial/expenseArtifactOutbox.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "28cdfe5891c01939616cb379425f268d0279f9de7bb54d58745b5def05312b1b",
+      "bytes": 2369
+    },
+    {
+      "path": "src/lib/financial/uploadArtifactClient.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "eab4095a5008fece41f8285541c02c9e651d17fe56c238b4559ddfbaa6246fbd",
+      "bytes": 1571
+    },
+    {
+      "path": "src/lib/financial/uploadArtifactContract.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "4a6577889c90d62a03199d2572e3a169a27b164605367e5da9e2f13c509281ba",
+      "bytes": 3742
+    },
+    {
+      "path": "src/lib/financial/uploadArtifactRecovery.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "8e0cfca8f2c51b4b8ef4d70f9500728e29fa2d823401a7826eb0c0af827edde1",
+      "bytes": 1632
+    },
+    {
+      "path": "src/lib/financial/expenseHistoryContract.ts",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "da5b19bebd8b9feffcc710b488364364e44a7adbb90ffc8f668962d64deee4b2",
+      "bytes": 2655
+    },
+    {
+      "path": "src/lib/financial/statementImportClient.ts",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "975e69e5c4088e30c49a2a7738cf0fd946fccb388694a3fb6dcfd3456291af0e",
+      "bytes": 7822
+    },
+    {
+      "path": "src/lib/financial/statementImportContract.ts",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "68e03a9b2dafae98e0981af8b65f5327860d25e429fe906cbb051f4dfff140ad",
+      "bytes": 6551
+    },
+    {
+      "path": "src/lib/financial/statementImportWorkflow.ts",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "c20295885ab4a22b0a33c0761633ad8aa0dec24a5fc81122d4c8d21bc6b294e5",
+      "bytes": 5195
+    },
+    {
+      "path": "src/pages/FinanceExpenses.tsx",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "cbdf8c2d83ca35354244d0ffea161dac88cd51d5fb01a988d870ef9b7c184416",
+      "bytes": 10266
+    },
+    {
+      "path": "src/test/expenseArtifactOutbox.test.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "b9bc4f7a860d05e76b08fa967610f6f1d88fb4b2a665814b7ca84d0bdf25409c",
+      "bytes": 2566
+    },
+    {
+      "path": "src/test/expenseArtifactPanel.test.tsx",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "b13ae255662f1fd79b5fec214046dfe7bb7cfc67a2c9edd5f96cc7ddf727abf0",
+      "bytes": 3025
+    },
+    {
+      "path": "src/test/expenseArtifactPreview.test.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "14b92e148229b0745fb23b6d2d1c1f98cc5b509e4a24caef5e6a437edee52877",
+      "bytes": 1370
+    },
+    {
+      "path": "src/test/expenseReceiptArtifactDatabase.test.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "c58687c479e8e6eaa2d76ebcff1678330f385e908a94326cc35278b76a3427de",
+      "bytes": 14270
+    },
+    {
+      "path": "src/test/financeExpenseHistoryScreen.test.tsx",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "d666df600a79399edd3331199ca829c76fd3321f862757900f6bb04f9988418a",
+      "bytes": 5118
+    },
+    {
+      "path": "src/test/financeStatementArtifactWorker.test.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "aec5d71ab805b9f009a2d229ac1888c0219fe28d3184b9a0139edc104e788b39",
+      "bytes": 3767
+    },
+    {
+      "path": "src/test/quarantineFileUpload.test.tsx",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "f675bf7d4dc4885eb40e8e949b0b4a1175f6ddd20d8ed84c27dd4e4e5243e311",
+      "bytes": 1781
+    },
+    {
+      "path": "src/test/quarantineImageValidation.test.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "e92c5080c068d5e56b04ea4f8b6f2ec275a176648678f6ae48a360890c9d9e6c",
+      "bytes": 2172
+    },
+    {
+      "path": "src/test/quarantineRuntime.test.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "c6b76afb83c41add1cea64d8accb2b6a5aecb1ccb461a7ca351dd87413261522",
+      "bytes": 690
+    },
+    {
+      "path": "src/test/quarantineStructuredValidation.test.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "fc306a6fbff9c7d6ec64f26dc5e9d3ef33266a1b6eee16efe87732525117b2b6",
+      "bytes": 2095
+    },
+    {
+      "path": "src/test/quarantineWorkflow.test.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "acfd324e759d5a92d58f3fcb38d6165d1ba574f0b536eeccce0ca6c08ff3bab4",
+      "bytes": 4735
+    },
+    {
+      "path": "src/test/uploadArtifactContract.test.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "1595fc17c8321b8257bc8e6f045981a4195785ccbb8f1e926154cee1354f668c",
+      "bytes": 1653
+    },
+    {
+      "path": "src/test/uploadQuarantineDatabase.test.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "7f9e59ff60cec864a89210a0d0925e9f5ef584dbf663d354516cb7e63c4c881c",
+      "bytes": 16258
+    },
+    {
+      "path": "src/test/helpers/uploadQuarantineDatabase.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "bd1f9c195ea4188361b72f4faf41f6eec5a573361c74da8b882d03dcf021c96e",
+      "bytes": 2552
+    },
+    {
+      "path": "src/test/statementImportDialog.test.tsx",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "45310e7b348faf37fdee026e8d7394781dab7701ad5714774b35dadcded02b9a",
+      "bytes": 6081
+    },
+    {
+      "path": "src/test/statementImportWorkflow.test.ts",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "56873c2962cd06fc5de8c8a6a5f6a4aa9457c549f76e61d6d02794af6c22c5ad",
+      "bytes": 8050
+    },
+    {
+      "path": "supabase/functions/secure-upload/index.ts",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "7c38cdf5837289ff0a2c8ee6a7b9b0d066277bbff272357cbe84e3e95e3e7c76",
+      "bytes": 20422
+    },
+    {
+      "path": "supabase/functions/secure-upload/artifact-preview.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "59d3ca8478e761bb2621f591a9586ae9d2b0b6601b3d29e7eaeaaf0cdcf87a9e",
+      "bytes": 1426
+    },
+    {
+      "path": "supabase/functions/secure-upload/bounded-request.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "798345994a3ca75c7ed8306551da2aeef358da0315b9304a6c51cafaef6b10bb",
+      "bytes": 870
+    },
+    {
+      "path": "supabase/functions/secure-upload/quarantine-image.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "08f267b8ca965878a8b35899df02b6604e5ce126d9fb7272d4101520385631fc",
+      "bytes": 3608
+    },
+    {
+      "path": "supabase/functions/secure-upload/quarantine-magick.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "8310ebb7efe36e684b70208fa5a221383c161f7150d7fa4aeea3fd6ff3121eb8",
+      "bytes": 1271
+    },
+    {
+      "path": "supabase/functions/secure-upload/quarantine-runtime.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "3bae80317967ed8b7c25279755cd8d0e3c6b6412457463d13e85966f5d7a6bc9",
+      "bytes": 805
+    },
+    {
+      "path": "supabase/functions/secure-upload/quarantine-validation.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "af85aaea9693ee13fb3ac9c1e25cae3eba38b59c70bc382c1849869dd09614a2",
+      "bytes": 1805
+    },
+    {
+      "path": "supabase/functions/secure-upload/quarantine-workflow.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "29f21ec22fd9f9190926bf9327b6fe2aaf059cfb8438ddca5bc72c7c32a6b327",
+      "bytes": 6696
+    },
+    {
+      "path": "supabase/functions/finance-statement-verify/index.ts",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "73779db23f429caf8b97bfcfdedea1879ae9de490f081cda357a91c8d6e2df77",
+      "bytes": 4270
+    },
+    {
+      "path": "supabase/functions/finance-statement-verify/worker.ts",
+      "group": "uploads",
+      "status": "modified",
+      "sha256": "41c1eea9b2c473a11ad65d3b4fc3c5877ed5499f04cb3eba9db37250e3d5b641",
+      "bytes": 5353
+    },
+    {
+      "path": "supabase/functions/finance-statement-verify/artifact-worker.ts",
+      "group": "uploads",
+      "status": "untracked",
+      "sha256": "20cd697127f8b1c05a775a77694130ffcd1cc6be6bedadd74c986787d0e57231",
+      "bytes": 5008
+    },
+    {
+      "path": "src/components/financial/PayablePortfolioPanel.tsx",
+      "group": "filters",
+      "status": "modified",
+      "sha256": "db0e3030ebd759e36abb1ec9eb4a01c64a387e88def52efb96ae936f399942d8",
+      "bytes": 10275
+    },
+    {
+      "path": "src/lib/financial/payablePortfolioClient.ts",
+      "group": "filters",
+      "status": "modified",
+      "sha256": "ef25aa2d07b6f8b2e618223e469663e72469cc1b19023c86a2953f157a3e4d85",
+      "bytes": 1196
+    },
+    {
+      "path": "src/lib/financial/payablePortfolioContract.ts",
+      "group": "filters",
+      "status": "modified",
+      "sha256": "52f93c49ef09533328158897f95eb91e48db339a157558b2f63e50b7c0588a97",
+      "bytes": 4540
+    },
+    {
+      "path": "src/lib/financial/receivablesPageClient.ts",
+      "group": "filters",
+      "status": "modified",
+      "sha256": "30d81d0c5e25ed1ed57b3ab6a6989504e69f92cc36c83fdc52328af3ff7d496b",
+      "bytes": 1121
+    },
+    {
+      "path": "src/lib/financial/receivablesPageContract.ts",
+      "group": "filters",
+      "status": "modified",
+      "sha256": "bff8393a180c317c2151b3252db438ad5216f4b6aec12a22049aacfcafa82a82",
+      "bytes": 1795
+    },
+    {
+      "path": "src/pages/Payables.tsx",
+      "group": "filters",
+      "status": "modified",
+      "sha256": "575b6bdf03768b1b8b88b30619980733079f43426ac7c82cf15528abc14247c2",
+      "bytes": 11554
+    },
+    {
+      "path": "src/pages/Receivables.tsx",
+      "group": "filters",
+      "status": "modified",
+      "sha256": "53b40c9562a2d938cceda31aab55d6af09b7f35110b8f694d45f4efeb9dcb582",
+      "bytes": 20972
+    },
+    {
+      "path": "src/test/payablePortfolio.test.ts",
+      "group": "filters",
+      "status": "modified",
+      "sha256": "353364571951b763a40953e311e0161d26dcb2662da016c6fdc58c8c70921be6",
+      "bytes": 11728
+    },
+    {
+      "path": "src/test/payablePortfolioPanel.test.tsx",
+      "group": "filters",
+      "status": "modified",
+      "sha256": "7801457fd24a694a886cc46335c9f44d8f7ac0e7ce2d82b41ade859a9e3da062",
+      "bytes": 6290
+    },
+    {
+      "path": "src/test/payablesServerManagement.test.tsx",
+      "group": "filters",
+      "status": "untracked",
+      "sha256": "3381f593e01e42f55c27fb8cd8639edb04ad9ff0744bca95b4142128ab9a5462",
+      "bytes": 2888
+    },
+    {
+      "path": "src/test/receivablesOriginPage.test.ts",
+      "group": "filters",
+      "status": "untracked",
+      "sha256": "6d6441cd7bfd81d65689f1d2e90cb283a75d170a0602e16678ddbc74604c8080",
+      "bytes": 5542
+    },
+    {
+      "path": "src/test/receivablesPagedScreen.test.tsx",
+      "group": "filters",
+      "status": "modified",
+      "sha256": "4d79695af27793e1a154d1e86212577221745dc9a17b605de3172fdcb4e7fd4d",
+      "bytes": 4884
+    },
+    {
+      "path": "src/components/financial/ExpenseUnloadingHistory.tsx",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "36484725920e67ca6c282b94aadd67d39aa13ee5615f556a4c85d792ba1dde54",
+      "bytes": 2383
+    },
+    {
+      "path": "src/components/financial/UnloadingOriginCorrectionConfirmation.tsx",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "9a6dc33b10d4318277ca0198b35088871e728fcbace75195d0106eef885aae29",
+      "bytes": 5582
+    },
+    {
+      "path": "src/components/financial/UnloadingOriginCorrectionDialog.tsx",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "4d1692ba63c94718ce5c986081845c1212a5eb3b8fc7052636c0e037bbd589f6",
+      "bytes": 9518
+    },
+    {
+      "path": "src/components/financial/PeriodUnloadingFlowDetails.tsx",
+      "group": "origin_correction",
+      "status": "modified",
+      "sha256": "7ced69ab6f2e46cef76bbfa4a7cdc0c82d93bae8059ef15513d3b212434842da",
+      "bytes": 6436
+    },
+    {
+      "path": "src/components/financial/PeriodUnloadingFlowPanel.tsx",
+      "group": "origin_correction",
+      "status": "modified",
+      "sha256": "3a61970f5eed23b6d05579ffc427a685102ce77fd841f794082472929017a2db",
+      "bytes": 5956
+    },
+    {
+      "path": "src/lib/financial/periodUnloadingFlowLabels.ts",
+      "group": "origin_correction",
+      "status": "modified",
+      "sha256": "0ca61eec9bdebe1c625a41f1278f4d713c96f087bbd5bbed20cf78712edc4c7f",
+      "bytes": 2316
+    },
+    {
+      "path": "src/lib/financial/unloadingOriginCorrectionClient.ts",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "06b7b4a52a7ae68e98ff87dc25f7e23031b5ad9425ddd3f09edcb1cfd9df8e90",
+      "bytes": 2981
+    },
+    {
+      "path": "src/lib/financial/unloadingOriginCorrectionContract.ts",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "9a4e1e6066cf8a4de2d227e5df90d88778b15fed6f34d14153ede17a2c9378fd",
+      "bytes": 5340
+    },
+    {
+      "path": "src/lib/financial/unloadingOriginCorrectionOutbox.ts",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "a519aa4d61209c8a439b8520976c5f4ba3a22db66cb6bce03b17336aed34f618",
+      "bytes": 5841
+    },
+    {
+      "path": "src/test/expenseUnloadingHistory.test.tsx",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "9f441dd718093330f8a1fab95737ba68eaa0fef8cbace369911de5049841b8f9",
+      "bytes": 3525
+    },
+    {
+      "path": "src/test/unloadingOriginAmendments.test.ts",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "765824281271e240d9ac766ccef5491e91b1aab1a1cd17b49ceaa9427f038f33",
+      "bytes": 23648
+    },
+    {
+      "path": "src/test/unloadingOriginCorrectionConfirmation.test.tsx",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "ceb8ca8804f75113a2d5e308803d195f741f1f5833f857d26d6da298be850a12",
+      "bytes": 4726
+    },
+    {
+      "path": "src/test/unloadingOriginCorrectionContract.test.ts",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "e0e258570c2f5ef32da69718248ebb284e29c41d54173148b0b542ac96949ff8",
+      "bytes": 3470
+    },
+    {
+      "path": "src/test/unloadingOriginCorrectionOutbox.test.ts",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "dbd49b3df7e3dc49c68c2edd47301692ae69b2a24870a62753c8b3e5f0f18066",
+      "bytes": 5719
+    },
+    {
+      "path": "src/test/unloadingOriginCorrectionPanel.test.tsx",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "0e9b28769516e3b9a68e946e9568f8c7af8ec8adcdc5c84284e54c3ad838cb1a",
+      "bytes": 5371
+    },
+    {
+      "path": "src/test/helpers/unloadingOriginCorrectionFixture.ts",
+      "group": "origin_correction",
+      "status": "untracked",
+      "sha256": "93d3ba8d1c0b575afa5fa9aece35b12699022797278cf7de0de49dc4ac54685e",
+      "bytes": 1236
+    },
+    {
+      "path": "src/test/receivableUnloadingEdit.test.tsx",
+      "group": "origin_correction",
+      "status": "modified",
+      "sha256": "84c11cd6100b8c075b321faa10f1bdede60bf1ba7fc3dfbc220abfefeacb1d8c",
+      "bytes": 7816
+    },
+    {
+      "path": "supabase/config.toml",
+      "group": "fiscal_preview",
+      "status": "modified",
+      "sha256": "802fc124622ee4446b20bd2c53d86db5c96758b8a8ca096a4bf8e9f4f2898a26",
+      "bytes": 3663
+    },
+    {
+      "path": "supabase/functions/finance-fiscal-evidence-preview/deno.json",
+      "group": "fiscal_preview",
+      "status": "untracked",
+      "sha256": "b898f02ad3bf51312aae088ad01b2ccbd00d288b7dd8d302e2b1eab36c278879",
+      "bytes": 195
+    },
+    {
+      "path": "supabase/functions/finance-fiscal-evidence-preview/deno.lock",
+      "group": "fiscal_preview",
+      "status": "untracked",
+      "sha256": "1c86a24d0490740ac35f4d1dfdec0f3ba4e1f0b1524c798cb030e115ca8f8156",
+      "bytes": 2521
+    },
+    {
+      "path": "supabase/functions/finance-fiscal-evidence-preview/index.ts",
+      "group": "fiscal_preview",
+      "status": "untracked",
+      "sha256": "98517aa8281aee46bd18add45433a9ed9942829cbf1285fa0da1ef79b2d2430e",
+      "bytes": 4408
+    },
+    {
+      "path": "supabase/functions/finance-fiscal-evidence-preview/preview.ts",
+      "group": "fiscal_preview",
+      "status": "untracked",
+      "sha256": "4812454503c503607807505a2be17f4722bf2f10fd92018e2db4975ec7015ca1",
+      "bytes": 6289
+    },
+    {
+      "path": "src/lib/financial/fiscalEvidencePreviewClient.ts",
+      "group": "fiscal_preview",
+      "status": "untracked",
+      "sha256": "f2528bba3cf977d3a2a6cd76ec1d5479cdef68a2c78b6d811b1ae5d9d1e34b31",
+      "bytes": 1259
+    },
+    {
+      "path": "src/lib/financial/fiscalQueueContract.ts",
+      "group": "fiscal_preview",
+      "status": "modified",
+      "sha256": "c25ef4fd22b4e42203dad3dd8e7e9e0a3d873303dd703223cc6765aa86ef09ed",
+      "bytes": 3032
+    },
+    {
+      "path": "src/components/financial/FiscalEvidencePreview.tsx",
+      "group": "fiscal_preview",
+      "status": "untracked",
+      "sha256": "abd7707f6e13ee81f3c8a45f799231ca947d21019d78884e960c86d62c9d2802",
+      "bytes": 2868
+    },
+    {
+      "path": "src/pages/FinanceFiscalQueue.tsx",
+      "group": "fiscal_preview",
+      "status": "modified",
+      "sha256": "75f2470634c879513827b6d7dc98a09af242cdaf3b1ae367c0c00a09eb081c9b",
+      "bytes": 4670
+    },
+    {
+      "path": "src/test/fiscalAuthorizationCollision.test.ts",
+      "group": "fiscal_preview",
+      "status": "untracked",
+      "sha256": "b5907d43bb0b9c1f6365b5983ddc4041d7dc8d76060b5122c450d110d4d3cb33",
+      "bytes": 3271
+    },
+    {
+      "path": "src/test/fiscalEvidencePreviewUi.test.tsx",
+      "group": "fiscal_preview",
+      "status": "untracked",
+      "sha256": "e9929d13274f9c54b82bfd2374abd53bda86d7d9d1d363c481cf5311bc84bd21",
+      "bytes": 2045
+    },
+    {
+      "path": "src/test/fiscalExistingXmlPreview.test.ts",
+      "group": "fiscal_preview",
+      "status": "untracked",
+      "sha256": "2431f8654fbc32a5041db69cfc271696714603bd3f82947d0f8501ece69f719f",
+      "bytes": 5107
+    },
+    {
+      "path": "src/test/financeFiscalQueueScreen.test.tsx",
+      "group": "fiscal_preview",
+      "status": "modified",
+      "sha256": "a0927c96cc448cebb02a7afacc6d3b0de9ed81507b31fa14508f914ceb08e1c0",
+      "bytes": 3396
+    },
+    {
+      "path": "supabase/migrations/20260911040123_finance_upload_quarantine_artifacts_v2.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "e2a15a3422319c24fb5ecd87ffb9caa54f74b3405e733427d58ced41a4ac3a2c",
+      "bytes": 19727
+    },
+    {
+      "path": "supabase/migrations/20260911041340_finance_quarantine_statement_artifact_bridge.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "9224c3bc025b3cfa6340f530c0334cba3dd90158a54283da5e6b84b1e4587d7a",
+      "bytes": 12769
+    },
+    {
+      "path": "supabase/migrations/20260911042754_finance_expense_quarantine_receipt_links.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "99455bdef68f867c3712b0c5a5b4c8a70abc0b920c345ef94ba3a7f7642b7071",
+      "bytes": 9867
+    },
+    {
+      "path": "supabase/migrations/20260911042847_upload_validation_runtime_bucket.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "bfba6737f01bf8dbc6e93ab838aed21fda15424789e36796d411d328ef4c93bd",
+      "bytes": 545
+    },
+    {
+      "path": "supabase/migrations/20260911044437_finance_enable_reviewed_image_derivatives.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "42ebd89e46c5dab9bfa9a07264f15e3ac7857b4b85eceace1a5b5bc65a938c29",
+      "bytes": 2385
+    },
+    {
+      "path": "supabase/migrations/20260911044823_finance_expense_receipt_artifact_status.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "9a387d68419fb46798ffe1864cac78a57b6b8907e41ae3f34fc1e099b3bbf01d",
+      "bytes": 2871
+    },
+    {
+      "path": "supabase/migrations/20260911045009_finance_receivables_origin_filter.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "ea4b129531b4d20c1bb91a5cec21fd673417995d47a2f7ae26610ea930fc4c29",
+      "bytes": 3931
+    },
+    {
+      "path": "supabase/migrations/20260911045402_finance_unloading_origin_amendments.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "cc8b23cf305fe29b82f0701d08fa76623212127c879ea2789200b9bb69c64122",
+      "bytes": 29108
+    },
+    {
+      "path": "supabase/migrations/20260911050116_finance_payable_portfolio_global_filters.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "735d0fdc69c7b9704860f46d7800726918c0046bcdad1d0ef0afe6a7b5abc9ef",
+      "bytes": 7474
+    },
+    {
+      "path": "supabase/migrations/20260911051405_finance_unloading_origin_economic_flow.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "d2f1abd8d7017c8aa4ec6686490d9f2f73e062b95321b9dda05d793a43fc8e1c",
+      "bytes": 25333
+    },
+    {
+      "path": "supabase/migrations/20260911051642_finance_fiscal_authorization_receipt_collision.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "5eec028600679786fee8ea25fa0f29aca7384fd9247403122524b694afb4d14c",
+      "bytes": 2198
+    },
+    {
+      "path": "supabase/migrations/20260911051729_finance_expense_unloading_effective_origin.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "d4cc42e47911e551d5036b1ae559f3b975f7bee5553c66e5401301d54d386020",
+      "bytes": 1303
+    },
+    {
+      "path": "supabase/migrations/20260911052521_finance_unloading_origin_public_boundary.sql",
+      "group": "round_migrations",
+      "status": "untracked",
+      "sha256": "d3794e0ba9754a0da92959438d1ba641e677d5e4fe323d818ececdbbb98fdab0",
+      "bytes": 4044
+    },
+    {
+      "path": "docs/qa/finance-expense-image-ui-integration-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "b2090c460d56e4d34d38047ec825e38ef4b6d5c95e0f4965ba7e6b1e651b7123",
+      "bytes": 3210
+    },
+    {
+      "path": "docs/qa/finance-expense-quarantine-receipt-bridge-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "af3305da1d06198d2f37ede6626e4bab4c2b254f6633741d328e8bc731de3d1b",
+      "bytes": 5792
+    },
+    {
+      "path": "docs/qa/finance-expense-unloading-history-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "d269f4bd71366ed0ac55872889575cc3b14d4b10dbbb74fa0f63096d0b023a21",
+      "bytes": 1130
+    },
+    {
+      "path": "docs/qa/finance-quarantine-statement-artifact-bridge-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "946a39ce332fea0cc33ac69674384f00b7c927d3cab6c57d69d2b0ab5abf07e8",
+      "bytes": 5079
+    },
+    {
+      "path": "docs/qa/finance-unloading-origin-amendments-implementation-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "615c49d33f1fdff00b2690d68a106329639968f7feb01cdd3a7b6fec4813c2dd",
+      "bytes": 9498
+    },
+    {
+      "path": "docs/qa/finance-unloading-origin-correction-ui-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "8af6b0e6ee16847f0b2d634d3dd9d3b7afe573d81651e56987545b933644e055",
+      "bytes": 4613
+    },
+    {
+      "path": "docs/qa/finance-upload-quarantine-db-v2-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "331e263e963e700bda916344cb570642c701fea54a67fc632e14a344f32e8d55",
+      "bytes": 6587
+    },
+    {
+      "path": "docs/qa/fiscal-authorization-recovery-investigation-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "af8d4645b716dde19b11100b5b932b94f799a6e247223231a659241886076156",
+      "bytes": 4043
+    },
+    {
+      "path": "docs/qa/fiscal-existing-xml-preview-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "c3d20a041e0e9ec8c12d5377de0c64ef4f8d60fb8d1bd025ebaa5577ad68edbb",
+      "bytes": 2255
+    },
+    {
+      "path": "docs/qa/payable-global-filters-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "d3d79dec37c2850c512182c6bb74fc9a0c02c6e80affcecd610e486312143cb0",
+      "bytes": 1898
+    },
+    {
+      "path": "docs/qa/payables-server-management-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "bdb3398a4de95b50d090081d5ffd62203c39dc49d905a171c69c7b6a0844399e",
+      "bytes": 1220
+    },
+    {
+      "path": "docs/qa/supabase-only-upload-quarantine-contract-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "0ce4bc4cdf5471fe00009a50e687b29bc750f0e14d3f4884b42e49b4b2def5e9",
+      "bytes": 6075
+    },
+    {
+      "path": "docs/qa/supabase-upload-v2-local-integration-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "ec6db4b7a379febf77618e196f75ef1a634619f3260375985bab080c2ae31a57",
+      "bytes": 3220
+    },
+    {
+      "path": "docs/qa/finance-image-hosted-benchmark-notes-2026-09-11.md",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "b59f1767a81ebaff0a191728dc0af9bc0279fb4fa8c29319fdcc86a35d23abaa",
+      "bytes": 1730
+    },
+    {
+      "path": "docs/qa/finance-image-hosted-benchmark-2026-09-11.json",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "19fbe1b853773a39a1a715b0d0bd521e1dc553cbd94ef09393061dc3b91f5e95",
+      "bytes": 5122
+    },
+    {
+      "path": "docs/qa/finance-fiscal-evidence-preview-manifest-2026-09-11.json",
+      "group": "qa_documents",
+      "status": "untracked",
+      "sha256": "f1214dfd53e021180c0b2e321b24148fc52761db3363fe32d3e1e90d20b30e8d",
+      "bytes": 1800
+    }
+  ],
+  "review_required_prior_or_shared_changes": [
+    {
+      "path": "src/components/layout/navigation.ts",
+      "sha256": "792ee26ba66fafe8c01d45d611b875fbfff0d4ca2e61d61c173694a32456cee2"
+    },
+    {
+      "path": "src/test/helpers/financeForwardBlockDatabase.ts",
+      "sha256": "08c8563cceb4281d551705b90e3a17b530c98d5c25ca7ced3493b008c2ccd563"
+    },
+    {
+      "path": "src/test/helpers/movementCorrectionContextDatabase.ts",
+      "sha256": "d26cc5a7cc7af845887b458b23c411f10d90d08afd4fbac583ac289e218f0f68"
+    },
+    {
+      "path": "src/test/sidebarNavigation.test.tsx",
+      "sha256": "a2a071c9393bb5b55e57386b7d2bc7f74c26b105352b6e09cfe4f2731e529cf5"
+    },
+    {
+      "path": "supabase/migrations/20260910011121_finance_fiscal_cancellation_credits.sql",
+      "sha256": "3655553151f1d61c328c636cc3e16ca7155d11e85b6b0521f171f1edab1719e7"
+    },
+    {
+      "path": "supabase/migrations/20260910025658_finance_receipt_allocation_corrections.sql",
+      "sha256": "fa548e79da43d1e6ec083cd20bcb1765812e5afd8cb7dc84447c19ac0d1b9745"
+    },
+    {
+      "path": "supabase/migrations/20260910133352_finance_payroll_lifecycle_serialization.sql",
+      "sha256": "2dbc81ea2638980cb3f9c5bd0ec5c8668807bb1a818288191a724d549aa52b6b"
+    },
+    {
+      "path": "supabase/migrations/20260910190516_finance_movement_correction_context.sql",
+      "sha256": "fbffac3208c08250d6aabc82b91b3d127f3f3c0e675f2b6dd958a3ffb0d6bcfc"
+    }
+  ],
+  "explicit_wip_exclusions": [
+    "src/components/financial/UnloadingCancellationConfirmation.tsx",
+    "src/components/financial/UnloadingCancellationDialog.tsx",
+    "src/lib/financial/unloadingCancellationClient.ts",
+    "src/lib/financial/unloadingCancellationContract.ts",
+    "src/lib/financial/unloadingCancellationLabels.ts",
+    "src/lib/financial/unloadingCancellationOutbox.ts",
+    "src/test/coordinatedUnloadingCancellation.test.ts",
+    "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts",
+    "src/test/helpers/unloadingCancellationFixture.ts",
+    "src/test/unloadingCancellationContract.test.ts",
+    "src/test/unloadingCancellationOutbox.test.ts",
+    "src/test/unloadingCancellationPanel.test.tsx",
+    "supabase/migrations/20260911053349_finance_coordinated_unloading_cancellation.sql"
+  ],
+  "exclude_prefixes": [
+    ".deploy-driver-main-20260910-2240/",
+    ".sites/",
+    ".tmp/",
+    "node_modules/",
+    "infra/malware-scanner/",
+    "infra/upload-validation-bench/",
+    "supabase/functions/finance-image-runtime-benchmark/"
+  ],
+  "other_changes_not_allowed_by_default": true,
+  "limitations": [
+    "Old QA reports retain their original local-only deployment wording. Parent deployment evidence supersedes status; do not rewrite historical evidence.",
+    "Old modified migrations and shared fixture helpers require a separate reviewed earlier-integration commit. Some included SQL tests transitively depend on these current working-tree changes.",
+    "No blanket git add of src, supabase, docs or all finance-named files. Recheck hashes at staging; concurrent agents share the tree.",
+    "Only config.toml diff currently observed is finance-fiscal-evidence-preview verify_jwt=true.",
+    "Receivables current diff contains origin filter/correction only, no coordinated cancellation entry.",
+    "Generated deploy-files JSON bundles, binaries, temporary Sites assets, secret/cache/config copies and unrelated SSX/driver work excluded."
+  ]
+}

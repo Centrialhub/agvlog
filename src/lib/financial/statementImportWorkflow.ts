@@ -1,9 +1,10 @@
+import {uploadArtifactSchema,uploadArtifactStatus,type UploadArtifact} from './uploadArtifactContract';
 import {FinanceRejectedError} from './ledgerClient';
 import {pendingStatementSchema,statementIntakeResultSchema,statementVerificationResultSchema,type PendingStatement,type StatementVerificationResult} from './statementImportContract';
 interface Dependencies {
   store:{load:(tenant:string,actor:string)=>Promise<PendingStatement|null>;save:(row:PendingStatement)=>Promise<void>;remove:(tenant:string,actor:string)=>Promise<void>};
   lock:<T>(key:string,work:()=>Promise<T>)=>Promise<T>;assertContext:()=>void;
-  originalReady:(row:PendingStatement)=>Promise<boolean>;upload:(row:PendingStatement,file:File)=>Promise<void>;
+  originalReady:(row:PendingStatement)=>Promise<boolean>;upload:(row:PendingStatement,file:File)=>Promise<void|UploadArtifact>;
   intake:(row:PendingStatement)=>Promise<unknown>;verify:(row:PendingStatement)=>Promise<unknown>;
 }
 export function createStatementImportWorkflow(deps:Dependencies){
@@ -21,7 +22,13 @@ export function createStatementImportWorkflow(deps:Dependencies){
       if(row.phase==='upload'){
         const ready=await deps.originalReady(row);deps.assertContext();
         if(!ready){if(!file)throw new Error('Selecione novamente o mesmo arquivo original para concluir o envio.');
-          await deps.upload(row,file);deps.assertContext();}
+          const artifact=await deps.upload(row,file);deps.assertContext();
+          if(row.upload_mode==='quarantine_v2'){
+            const validated=uploadArtifactSchema.parse(artifact);
+            if(validated.tenant_id!==tenant||validated.actor_id!==actor||validated.request_id!==row.command.request_id||validated.source_type!=='bank_account'||validated.source_id!==row.command.bank_account_id||validated.original.sha256!==row.command.file_hash||validated.original.size_bytes!==row.file_size)throw new Error('Artefato fora do pedido preservado.');
+            row={...row,artifact:validated};await deps.store.save(row);deps.assertContext();
+            if(!validated.usable)throw new Error(uploadArtifactStatus(validated));
+          }}
         row={...row,phase:'intake',uncertain:false};await deps.store.save(row);deps.assertContext();
       }
       if(row.phase==='intake'){

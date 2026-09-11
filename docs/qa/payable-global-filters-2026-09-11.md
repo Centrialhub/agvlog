@@ -1,0 +1,9 @@
+# Filtros globais da carteira de contas a pagar
+
+Migration CLI20260911050116_finance_payable_portfolio_global_filters.sql, SHA256735d0fdc69c7b9704860f46d7800726918c0046bcdad1d0ef0afe6a7b5abc9ef. Não aplicada por este agente. SELECT remoto confirmou predecessor prosrcMD5 1ddff1b28f6c39e2e1227a528ef6584d, SECURITYDEFINER/search_path vazio/EXECUTE postgres+authenticated. Guard admite somente predecessor exato ou novo corpo idempotente.
+
+RPC existente mantém assinatura. _filters aceita search(texto até200, substring literal case-insensitive de fornecedor/descrição/documento), status(pending/approved/partial/paid/overdue/cancelled/unknown), source(manual/system/unknown), todos opcionais/nulos, além dos filtros anteriores. overdue significa vencimento ultrapassado em São Paulo e status não paid/cancelled; títulos inválidos seguem visíveis nesse filtro. source system inclui sourceNULL conforme classificação operacional anterior; unknown captura valores diferentes dos dois conhecidos. Envelope ecoa search/status_filter/source_filter; cliente verifica identidade. Hash inclui todos os filtros e todas as fontes filtradas, antes de paginação30.
+
+Não altera payable_portfolio_evidence, classificação monetária, pagamentos, estornos, escritores, triggers ou grants. Totais limitam-se ao conjunto do filtro escolhido, não à empresa inteira sem qualificação. Filtros de categoria e fornecedor agora também visíveis; fornecedor usa seletor paginado existente.
+
+14SQL PGlite PASS, inclusive1005fontes e página34, revisão obsoleta após origem mudar, literal% sem wildcard, NaN/statusdesconhecido, reapply e ACL. OitoUI PASS (6painel+2gestão),4cliente PASS; ESLint0. SemPGnativo/TSC. Esses testes não substituem jornada UI implantada, ainda bloqueada para identidadeQA por rejeição de acesso à chave administrativa. Artefatos novos não alteram credenciais.

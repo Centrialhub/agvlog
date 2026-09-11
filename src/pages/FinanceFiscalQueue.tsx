@@ -1,3 +1,4 @@
+import {FiscalEvidencePreview} from '@/components/financial/FiscalEvidencePreview';
 import {useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {useAuth} from '@/hooks/useAuth';
@@ -35,6 +36,7 @@ function QueueWorkspace({tenant,actor}:{tenant:string;actor:string}){
     {row.issue&&<p className="mt-2">{fiscalQueueIssue(row.issue)}</p>}
     {row.status==='pending'&&row.automatic_failures>0&&<p className="text-sm">Próxima tentativa a partir de {timestamp(row.available_at)}.</p>}
     <p className="text-sm">{row.attempts} tentativa(s) · {row.automatic_failures} falha(s) automática(s)</p>
+    <FiscalEvidencePreview tenant={tenant} actor={actor} observation={row.observation_id}/>
    </article>)}{!data.rows.length&&<p>Nenhum registro neste filtro.</p>}</div>
    <div className="flex items-center justify-between"><Button variant="outline" disabled={page===1||query.isFetching} onClick={()=>setPage(page-1)}>Anterior</Button>
     <span>Página {data.page} de {Math.max(1,Math.ceil(data.total/data.page_size))}</span>

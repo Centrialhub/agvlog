@@ -1,3 +1,5 @@
+import {ExpenseUnloadingHistory} from './ExpenseUnloadingHistory';
+import {ExpenseArtifactPanel} from './ExpenseArtifactPanel';
 import {ExpenseCancellationReview} from './ExpenseCancellationReview';
 import {useState} from 'react';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
@@ -15,7 +17,8 @@ export function ExpenseHistoryDetail({row,actor,onClose}:{row:ExpenseHistoryRow;
       <div><dt>Valor do gasto</dt><dd className="font-medium">{formatFinanceCents(row.amount_cents)}</dd></div>
       <div><dt>Estabelecimento / prestador</dt><dd>{row.supplier_name}</dd></div><div><dt>Data</dt><dd>{row.occurred_on.split('-').reverse().join('/')}</dd></div>
       <div><dt>Centro de custo</dt><dd>{row.cost_center_name||'Não informado'}</dd></div><div><dt>Documento</dt><dd>{row.document_number||'Não informado'}</dd></div></dl>
-    {row.receipt_path?<Button variant="outline" onClick={()=>setReceipt(true)}>Ver comprovante</Button>:<p className="rounded border p-3 text-sm">Sem comprovante: {row.no_receipt_reason||'Justificativa não informada'}</p>}
+    {row.receipt_path?<Button variant="outline" onClick={()=>setReceipt(true)}>Ver comprovante</Button>:<p className="rounded border p-3 text-sm">{(row.receipt_artifact_count??0)>0?'Comprovante adicional anexado. ':''}Sem comprovante no registro original: {row.no_receipt_reason||'Justificativa não informada'}</p>}
+    <ExpenseArtifactPanel tenant={row.tenant_id} actor={actor} expense={row.id}/>
     <div className="space-y-2"><h3 className="font-medium">Envios vinculados</h3>
       {row.allocations.map(a=><div key={a.movement_id} className="rounded border p-3 text-sm"><p>{a.beneficiary_name} · {a.occurred_on.split('-').reverse().join('/')}</p>
         <p>Envio de {formatFinanceCents(a.movement_amount_cents)} · Este gasto utiliza {formatFinanceCents(a.amount_cents)}</p><p>Referência: {a.bank_reference||'Não informada'}</p></div>)}
@@ -24,8 +27,7 @@ export function ExpenseHistoryDetail({row,actor,onClose}:{row:ExpenseHistoryRow;
     </div>
     {row.payable_id&&<div className="rounded border p-3 text-sm"><h3 className="font-medium">Complemento gerado em contas a pagar</h3>
       <p>{formatFinanceCents(row.amount_cents-row.allocated_cents)} · {statusLabel(row.payable_status)}</p></div>}
-    {row.receivable_id&&<div className="rounded border p-3 text-sm"><h3 className="font-medium">Reembolso de descarga a receber</h3>
-      <p>{row.reimbursement_supplier_name||'Fornecedor vinculado à entrega'} · {formatFinanceCents(row.amount_cents)} · {statusLabel(row.receivable_status)}</p></div>}
+    <ExpenseUnloadingHistory row={row}/>
     <div className="space-y-2"><h3 className="font-medium">Histórico</h3>{row.history.map(event=><div key={event.id} className="border-l-2 pl-3 text-sm">
       <p className="font-medium">{event.actor_name} · {event.action==='recorded'?'Registrou o lote':event.action==='expense_cancelled'?'Cancelou o gasto':event.action}</p>
       <p className="text-xs text-muted-foreground">Responsável: {event.actor_id}</p>

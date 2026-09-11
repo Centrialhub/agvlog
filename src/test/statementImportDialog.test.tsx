@@ -41,12 +41,12 @@ describe('statement import preparation and recovery UI',()=>{
     await waitFor(()=>expect(screen.getByRole('button',{name:'Preparar prévia'})).toBeEnabled());
     fireEvent.click(screen.getByRole('button',{name:'Preparar prévia'}));
     await screen.findByText(/1 registros · Entradas R\$ 0,00 · Saídas R\$ 500,00/);expect(mocks.run).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button',{name:'Importar e conferir original'}));
+    fireEvent.click(screen.getByRole('button',{name:'Importar e conferir dados'}));
     await waitFor(()=>expect(mocks.run).toHaveBeenCalledWith(tenant,actor,pending,file));
   });
   it('offers only recovery for an existing verification-stage request',async()=>{
     mocks.load.mockResolvedValue({file_name:'preservado.csv',phase:'verify',uncertain:false,command:{rows:[{}]}});
-    mount();await screen.findByText('Próxima etapa: Conferir original no servidor');
+    mount();await screen.findByText('Próxima etapa: Conferir dados preservados no servidor');
     expect(screen.queryByLabelText('Arquivo original')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button',{name:'Retomar importação'}));
     await waitFor(()=>expect(mocks.run).toHaveBeenCalledWith(tenant,actor,undefined,undefined));

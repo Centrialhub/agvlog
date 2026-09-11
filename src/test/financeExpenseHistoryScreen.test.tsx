@@ -20,6 +20,12 @@ const result={version:1,tenant_id:tenant,page:1,page_size:30,total:31,total_cent
 function mount(){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><FinanceExpenses/></QueryClientProvider>);}
 beforeEach(()=>{vi.clearAllMocks();mocks.role='operator';mocks.access=true;mocks.history.mockResolvedValue(result);});
 describe('recorded expense history screen',()=>{
+  it('identifies a later attachment without claiming the original receipt existed',async()=>{
+    mocks.history.mockResolvedValue({...result,rows:[{...row,receipt_artifact_count:1}]});
+    mount();expect(await screen.findByText('Anexado posteriormente')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button',{name:'Detalhar Almoço da viagem'}));
+    expect(await screen.findByText(/Sem comprovante no registro original/)).toBeInTheDocument();
+  });
   it('filters by the server cost center totals and allows returning to all centers',async()=>{
     mount();fireEvent.click(await screen.findByRole('button',{name:/Sem centro de custo:.*1.550,00/}));
     await waitFor(()=>expect(mocks.history).toHaveBeenLastCalledWith(tenant,expect.objectContaining({cost_center:'unassigned',page:1})));

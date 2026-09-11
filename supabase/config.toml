@@ -178,3 +178,6 @@ verify_jwt = false
 
 [functions.process-delivery-receipt-portals]
 verify_jwt = false
+
+[functions.finance-fiscal-evidence-preview]
+verify_jwt = true

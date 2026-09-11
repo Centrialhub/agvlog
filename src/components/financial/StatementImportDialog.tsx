@@ -1,3 +1,5 @@
+import {QuarantineFileUpload} from './QuarantineFileUpload';
+import {uploadArtifactStatus} from '@/lib/financial/uploadArtifactContract';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {useBankAccounts} from '@/hooks/useFinancialPayments';
 import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
@@ -10,7 +12,7 @@ import {statementImportErrorMessage} from '@/lib/financial/statementImportContra
 import type {StatementMapping} from '../../../supabase/functions/_shared/finance-statement-reader';
 import {formatFinanceCents} from '@/lib/financial/ledgerContract';
 const initialMap:StatementMapping={header_row:0,sheet_index:0,delimiter:';',number_format:'br',date_format:'dmy',date_column:0,description_column:1,amount_column:2};
-const stageLabel={upload:'Preservar original',intake:'Registrar linhas',verify:'Conferir original no servidor',rejected:'Pedido rejeitado'};
+const stageLabel={upload:'Preservar original',intake:'Registrar linhas',verify:'Conferir dados preservados no servidor',rejected:'Pedido rejeitado'};
 export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:{tenant:string;actor:string;onClose:()=>void;onImported:(result:StatementVerificationResult)=>void;initial?:{account:string;start:string;end:string}}){
   const active=useRef(true),version=useRef(0),accounts=useBankAccounts();
   const [workflow]=useState(()=>statementImportWorkflow(()=>{if(!active.current)throw new Error('A sessão de importação mudou. Retome o pedido no contexto original.');}));
@@ -24,6 +26,7 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
   },[loadPending]);
   async function readFile(next:File,nextMap=mapping){
     const current=++version.current;setBusy(true);setError('');setPrepared(null);setLayout(null);setFile(next);
+    if(/\.(pdf|jpe?g|png)$/i.test(next.name)){setBusy(false);return;}
     try{const result=await inspectStatementLayout(next,nextMap.delimiter||';',nextMap.sheet_index||0);
       if(active.current&&current===version.current){setLayout(result);setMapping(nextMap);
         if(result.nativeOfx){const dates=[result.nativeOfx.period.start.date,result.nativeOfx.period.end.date,...result.nativeOfx.rows.map(row=>row.posted_on)].sort();setStart(dates[0]);setEnd(dates[dates.length-1]);}
@@ -51,12 +54,12 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
       onChange={e=>updateMapping({...mapping,[key]:e.target.value===''?undefined:Number(e.target.value)})}>
       {!required&&<option value="">Não disponível</option>}{(layout?.matrix[mapping.header_row]||[]).map((header,index)=><option key={index} value={index}>{index+1}. {String(header??'Sem título')}</option>)}</select></label>;
   return <Dialog open onOpenChange={open=>{if(!open&&!busy)onClose();}}><DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl" onInteractOutside={e=>{if(busy)e.preventDefault();}}>
-    <DialogHeader><DialogTitle>Importar e conferir extrato</DialogTitle><DialogDescription>O original é preservado e conferido no servidor. A validação de conta, cobertura e saldos é uma etapa separada.</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>Importar e conferir extrato</DialogTitle><DialogDescription>O original fica privado em quarentena. OFX e CSV são conferidos por uma cópia de dados validada; conta, cobertura e saldos exigem conferência separada.</DialogDescription></DialogHeader>
     {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
     {!loaded&&<Button disabled={busy} onClick={()=>void loadPending().catch(()=>setError('Recuperação indisponível. Nenhuma importação foi enviada.'))}>Abrir recuperação</Button>}
     {loaded&&pending?<div className="space-y-3"><p className="font-medium">{pending.file_name} · {pending.command.rows.length} registros</p><p>Próxima etapa: {stageLabel[pending.phase]}</p>
       {pending.phase==='upload'&&<label className="text-sm">Mesmo arquivo original, se necessário<Input type="file" accept=".csv,.xls,.xlsx,.ofx" disabled={busy} onChange={e=>setFile(e.target.files?.[0]||null)}/></label>}
-      <p className="text-sm">O pedido e suas identificações foram preservados. Retomar não cria uma segunda importação.</p>
+      {pending.artifact&&<p role="status" className="rounded border p-3 text-sm">{uploadArtifactStatus(pending.artifact)}</p>}<p className="text-sm">O pedido e suas identificações foram preservados. Retomar não cria uma segunda importação.</p>
       <div className="flex gap-2">{pending.phase!=='rejected'&&<Button disabled={busy} onClick={()=>void run()}>Retomar importação</Button>}
         {['upload','rejected'].includes(pending.phase)&&!pending.uncertain&&<Button variant="outline" disabled={busy} onClick={()=>{
           setBusy(true);void workflow.abandon(tenant,actor).then(()=>loadPending()).catch(cause=>setError(cause instanceof Error?cause.message:'Pedido não descartado.')).finally(()=>setBusy(false));
@@ -66,7 +69,8 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
         <option value="">Selecionar</option>{(accounts.data||[]).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
         <label className="text-sm">Início do período<Input aria-label="Início do período" type="date" value={start} onChange={e=>{setStart(e.target.value);setPrepared(null);}}/></label>
         <label className="text-sm">Fim do período<Input aria-label="Fim do período" type="date" value={end} onChange={e=>{setEnd(e.target.value);setPrepared(null);}}/></label></div>
-      <label className="block text-sm">Arquivo original<Input aria-label="Arquivo original" type="file" accept=".csv,.xls,.xlsx,.ofx" onChange={e=>{const selected=e.target.files?.[0];if(selected)void readFile(selected);}}/></label>
+      <label className="block text-sm">Arquivo original<Input aria-label="Arquivo original" type="file" accept=".csv,.xls,.xlsx,.ofx,.pdf,.jpg,.jpeg,.png" onChange={e=>{const selected=e.target.files?.[0];if(selected)void readFile(selected);}}/></label>
+      {file&&<QuarantineFileUpload key={`${tenant}:${actor}:${account}:${version.current}`} tenant={tenant} actor={actor} account={account} file={file}/>}
       {!layout?.nativeOfx&&<label className="text-sm">Separador CSV<select className="block h-10 rounded border bg-background" value={mapping.delimiter} onChange={e=>{const next={...mapping,delimiter:e.target.value as StatementMapping['delimiter']};if(file)void readFile(file,next);else updateMapping(next);}}>
         <option value=";">Ponto e vírgula</option><option value=",">Vírgula</option><option value={'\t'}>Tabulação</option></select></label>}
       {layout?.nativeOfx&&<div className="rounded border p-3 text-sm"><p>Dados lidos diretamente do OFX: banco {layout.nativeOfx.account.bank_id}, agência {layout.nativeOfx.account.branch_id||'não informada'}, conta {layout.nativeOfx.account.account_id}.</p>
@@ -96,7 +100,7 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
     {prepared&&<div className="space-y-3 rounded border p-4"><p>{prepared.pending.command.rows.length} registros · Entradas {formatFinanceCents(prepared.totals.inflow_cents)} · Saídas {formatFinanceCents(prepared.totals.outflow_cents)}</p>
       <div className="max-h-52 overflow-auto text-sm">{prepared.pending.command.rows.slice(0,20).map((row,index)=><p key={index}>{row.posted_on} · {row.description} · {formatFinanceCents(row.amount_cents)}</p>)}</div>
       <p className="text-xs">A prévia mostra até 20 registros. O servidor conferirá todas as linhas e preservará as ambiguidades de identificação.</p>
-      <Button disabled={busy} onClick={()=>void run()}>Importar e conferir original</Button></div>}
+      <Button disabled={busy} onClick={()=>void run()}>Importar e conferir dados</Button></div>}
     </div>}
     {busy&&<p role="status">Processando a etapa atual…</p>}
     <Button variant="ghost" disabled={busy} onClick={onClose}>Fechar</Button>

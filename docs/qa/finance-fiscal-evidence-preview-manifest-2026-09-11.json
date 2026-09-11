@@ -1,0 +1,52 @@
+{
+  "name": "finance-fiscal-evidence-preview",
+  "entrypoint_path": "finance-fiscal-evidence-preview/index.ts",
+  "import_map_path": "finance-fiscal-evidence-preview/deno.json",
+  "verify_jwt": true,
+  "files": [
+    {
+      "name": "finance-fiscal-evidence-preview/index.ts",
+      "sha256": "98517aa8281aee46bd18add45433a9ed9942829cbf1285fa0da1ef79b2d2430e"
+    },
+    {
+      "name": "secure-upload/bounded-request.ts",
+      "sha256": "798345994a3ca75c7ed8306551da2aeef358da0315b9304a6c51cafaef6b10bb"
+    },
+    {
+      "name": "_shared/fiscal-cors.ts",
+      "sha256": "2f574d36d13ab55fe57fe4557119dd2142558c30fe2000ee2f6713b36de3d763"
+    },
+    {
+      "name": "_shared/cors.ts",
+      "sha256": "410a3c54ccd546930bbb479261b47d995fee5b26462c21674d804de36edcbf7c"
+    },
+    {
+      "name": "_shared/active-tenant.ts",
+      "sha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45"
+    },
+    {
+      "name": "_shared/fiscal-poll.ts",
+      "sha256": "177b2b9e4a06639f8064a35801c53234f742f7ee29072b114fb73594d7925e09"
+    },
+    {
+      "name": "_shared/fiscal-credential-crypto.ts",
+      "sha256": "316124440ed449c021d1a2a09a48ef0a6aaddf323a520ba659172ce428795773"
+    },
+    {
+      "name": "_shared/fiscal-environment.ts",
+      "sha256": "5efb7fdcda923682cfacfa9e62f9ac8f45729fe8aeb2f99426a1d56ffd5af048"
+    },
+    {
+      "name": "_shared/fiscal-transport.ts",
+      "sha256": "bc36598259b65d8efa1142c7dc1f4fb5a89b99d36f6b9a84b5dd6260b0b071c7"
+    },
+    {
+      "name": "finance-fiscal-evidence-preview/preview.ts",
+      "sha256": "4812454503c503607807505a2be17f4722bf2f10fd92018e2db4975ec7015ca1"
+    },
+    {
+      "name": "finance-fiscal-evidence-preview/deno.json",
+      "sha256": "b898f02ad3bf51312aae088ad01b2ccbd00d288b7dd8d302e2b1eab36c278879"
+    }
+  ]
+}

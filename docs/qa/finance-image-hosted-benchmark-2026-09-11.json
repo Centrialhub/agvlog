@@ -1,0 +1,201 @@
+{
+  "at": "2026-09-11T04:44:02.910Z",
+  "results": [
+    {
+      "case": "anonymous_denied",
+      "status": 401
+    },
+    {
+      "fixture": "1x1.png",
+      "expected": "reencode_within_budget",
+      "status": 200,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": true,
+        "elapsed_ms": 971.953626,
+        "output_mime": "image/png",
+        "output_size": 95,
+        "output_sha256": "e92f1a91b340d3f61a9f857dcfee4f028e1d10f6032921beb043d34f268edc7c"
+      }
+    },
+    {
+      "fixture": "1x1.jpg",
+      "expected": "reencode_within_budget",
+      "status": 200,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": true,
+        "elapsed_ms": 605.978929,
+        "output_mime": "image/jpeg",
+        "output_size": 284,
+        "output_sha256": "dc21dd215014eaff1d6be6c186488f26403585d68fbe77f713ffbf70d56a665e"
+      }
+    },
+    {
+      "fixture": "640x480.png",
+      "expected": "reencode_within_budget",
+      "status": 200,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": true,
+        "elapsed_ms": 1121.559483,
+        "output_mime": "image/png",
+        "output_size": 3218,
+        "output_sha256": "574737a64e8b304d1530055ade734c3ccaf91f894d7e333a1b9ac34d043930a9"
+      }
+    },
+    {
+      "fixture": "640x480.jpg",
+      "expected": "reencode_within_budget",
+      "status": 200,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": true,
+        "elapsed_ms": 640.587631,
+        "output_mime": "image/jpeg",
+        "output_size": 55893,
+        "output_sha256": "1093cb3fc718e4bf40d236892c659b7e86f24623bdd8848e74d849538074e0e8"
+      }
+    },
+    {
+      "fixture": "1600x1200.png",
+      "expected": "reencode_within_budget",
+      "status": 422,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": false,
+        "error": "image_resource_or_codec_rejection",
+        "elapsed_ms": 2407.534871
+      }
+    },
+    {
+      "fixture": "1600x1200.jpg",
+      "expected": "reencode_within_budget",
+      "status": 200,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": true,
+        "elapsed_ms": 699.085943,
+        "output_mime": "image/jpeg",
+        "output_size": 348711,
+        "output_sha256": "9589cd378c7a9f3ed31a146593c1ad16fe4ea4de532e7ce9d2f7c5915157696a"
+      }
+    },
+    {
+      "fixture": "2000x1000.png",
+      "expected": "allow_or_resource_rejection",
+      "status": 422,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": false,
+        "error": "image_resource_or_codec_rejection",
+        "elapsed_ms": 539.217906
+      }
+    },
+    {
+      "fixture": "2000x1000.jpg",
+      "expected": "allow_or_resource_rejection",
+      "status": 422,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": false,
+        "error": "image_resource_or_codec_rejection",
+        "elapsed_ms": 493.8368459999999
+      }
+    },
+    {
+      "fixture": "2000x1200.png",
+      "expected": "reject_pixels",
+      "status": 422,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": false,
+        "error": "image_pixel_limit",
+        "elapsed_ms": 8.101559000000002
+      }
+    },
+    {
+      "fixture": "2000x1200.jpg",
+      "expected": "reject_pixels",
+      "status": 422,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": false,
+        "error": "image_pixel_limit",
+        "elapsed_ms": 29.06518299999999
+      }
+    },
+    {
+      "fixture": "animation.png",
+      "expected": "reject_animation",
+      "status": 422,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": false,
+        "error": "image_animation_not_supported",
+        "elapsed_ms": 9.174104999999997
+      }
+    },
+    {
+      "fixture": "trailing.png",
+      "expected": "reject_trailing",
+      "status": 422,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": false,
+        "error": "image_trailing_content",
+        "elapsed_ms": 7.0612139999999926
+      }
+    },
+    {
+      "fixture": "corrupt-crc.png",
+      "expected": "reject_codec",
+      "status": 422,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": false,
+        "error": "image_resource_or_codec_rejection",
+        "elapsed_ms": 550.055442
+      }
+    },
+    {
+      "fixture": "invalid.jpg",
+      "expected": "reject_header",
+      "status": 422,
+      "body": {
+        "version": 1,
+        "probe_only": true,
+        "usable": false,
+        "reencoded": false,
+        "error": "image_jpeg_header",
+        "elapsed_ms": 8.456378
+      }
+    }
+  ]
+}

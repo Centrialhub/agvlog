@@ -22,6 +22,16 @@ describe('sidebar navigation', () => {
     const hrefs = navigationSections.flatMap(section => section.items.map(item => item.href));
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
+  it('selects financial subpages and keeps payroll in Financeiro', () => {
+    expect(findNavigationPage('/financial/movements')?.item.href).toBe('/financial/movements');
+    expect(findNavigationPage('/financial/statements')?.item.href).toBe('/financial/statements');
+    expect(findNavigationPage('/payroll')?.section.id).toBe('finance');
+    render(<MemoryRouter initialEntries={['/financial/movements']}><TooltipProvider><SidebarNavigation query="" capabilityAvailable={() => true} financeAvailable /></TooltipProvider></MemoryRouter>);
+    expect(screen.getByRole('link', { name: 'Movimentações' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Painel financeiro' })).not.toHaveAttribute('aria-current');
+    fireEvent.click(screen.getByRole('link', { name: 'Folha de pagamento' }));
+    expect(screen.getByRole('link', { name: 'Folha de pagamento' })).toHaveAttribute('aria-current', 'page');
+  });
   it('finds business terms without accents and reports an empty search', () => {
     expect(searchNavigation('rastreamento').length).toBeGreaterThan(0);
     expect(searchNavigation('zzzz-nonexistent')).toHaveLength(0);

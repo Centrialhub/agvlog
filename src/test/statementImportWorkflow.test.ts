@@ -59,3 +59,17 @@ describe('statement import recoverable stages',()=>{
     expect(await s.deps.store.load()).not.toBeNull();
   });
 });
+
+it('keeps a quarantined artifact in durable recovery and never calls intake',async()=>{
+ const s=setup();s.initial.upload_mode='quarantine_v2';
+ s.deps.upload.mockResolvedValue({version:2,tenant_id:s.tenant,actor_id:s.actor,request_id:s.initial.command.request_id,artifact_id:crypto.randomUUID(),source_type:'bank_account',source_id:s.initial.command.bank_account_id,state:'quarantined',usable:false,derivative:null,issues:['format_requires_sanitization'],original:{sha256:s.initial.command.file_hash,size_bytes:s.initial.file_size,format:'xlsx',received:true}});
+ await expect(s.workflow.run(s.tenant,s.actor,s.initial,s.file)).rejects.toThrow('quarentena');
+ expect(s.deps.intake).not.toHaveBeenCalled();expect(s.deps.verify).not.toHaveBeenCalled();expect((await s.deps.store.load())?.artifact?.state).toBe('quarantined');expect((await s.deps.store.load())?.phase).toBe('upload');
+});
+it('persists a confirmed derived artifact before entering the uncertain intake phase',async()=>{
+ const s=setup();s.initial.upload_mode='quarantine_v2';
+ const a={version:2,tenant_id:s.tenant,actor_id:s.actor,request_id:s.initial.command.request_id,artifact_id:crypto.randomUUID(),source_type:'bank_account',source_id:s.initial.command.bank_account_id,state:'validated_data',usable:true,issues:[],original:{sha256:s.initial.command.file_hash,size_bytes:s.initial.file_size,format:'csv',received:true},derivative:{bucket:'upload-validated',path:`${s.tenant}/${s.initial.command.request_id}/validated.json`,sha256:'b'.repeat(64),size_bytes:20,mime:'application/json',method:'strict-csv-matrix-v1',financial_mapping_required:true}};
+ s.deps.upload.mockResolvedValue(a);s.deps.intake.mockRejectedValueOnce(new Error('reply lost'));
+ await expect(s.workflow.run(s.tenant,s.actor,s.initial,s.file)).rejects.toThrow('reply lost');expect((await s.deps.store.load())?.artifact).toEqual(a);
+ await s.workflow.run(s.tenant,s.actor);expect(s.deps.upload).toHaveBeenCalledTimes(1);expect(s.deps.intake.mock.calls[1][0].artifact).toEqual(a);
+});

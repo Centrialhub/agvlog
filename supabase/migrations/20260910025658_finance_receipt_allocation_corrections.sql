@@ -26,9 +26,21 @@ do $$declare signature text;body text;needle text;exclusion text;begin
   end if;
   execute body;
  end loop;
+ if to_regprocedure('public._receivable_ledger_evidence(uuid,uuid)') is null then
+ if not exists(select 1 from pg_proc where oid=to_regprocedure('public._receivable_financial_snapshot(uuid,uuid)') and md5(replace(prosrc,E'\r\n',E'\n'))='9eea07b84402130cc9e0d7f8e25d2ef3' and not prosecdef and not has_function_privilege('authenticated',oid,'execute') and not has_function_privilege('anon',oid,'execute') and not has_function_privilege('service_role',oid,'execute')) then raise exception 'finance_inline_snapshot_predecessor_changed';end if;
  select pg_get_functiondef('public._receivable_financial_snapshot(uuid,uuid)'::regprocedure) into body;
  needle:='filter(where rv.id is null';if position(needle in body)=0 then raise exception 'finance_correction_snapshot_contract_changed';end if;
  body:=replace(body,needle,needle||exclusion);
+
+ else
+ if not exists(select 1 from pg_proc where oid=to_regprocedure('public._receivable_ledger_evidence(uuid,uuid)') and md5(replace(prosrc,E'\r\n',E'\n'))='dc491a846bca5fd6392bf9386cdf5b0b' and not prosecdef and not has_function_privilege('authenticated',oid,'execute') and not has_function_privilege('anon',oid,'execute') and not has_function_privilege('service_role',oid,'execute')) then raise exception 'finance_correction_delegated__receivable_ledger_evidence_changed';end if;
+ if not exists(select 1 from pg_proc where oid=to_regprocedure('public._receivable_financial_snapshot(uuid,uuid)') and md5(replace(prosrc,E'\r\n',E'\n'))='857a4635e4b7dc465b4c52b165227931' and not prosecdef and not has_function_privilege('authenticated',oid,'execute') and not has_function_privilege('anon',oid,'execute') and not has_function_privilege('service_role',oid,'execute')) then raise exception 'finance_correction_delegated__receivable_financial_snapshot_changed';end if;
+ select pg_get_functiondef('public._receivable_ledger_evidence(uuid,uuid)'::regprocedure) into body;
+ needle:='filter(where rv.id is null';if (length(body)-length(replace(body,needle,'')))/length(needle)<>1 then raise exception 'finance_correction_delegated_sum_changed';end if;
+ execute replace(body,needle,needle||exclusion);
+ select pg_get_functiondef('public._receivable_financial_snapshot(uuid,uuid)'::regprocedure) into body;
+
+ end if;
  needle:='''reversed_at'',rv.created_at,''reversal_reason'',rv.reason';if position(needle in body)=0 then raise exception 'finance_correction_history_contract_changed';end if;
  body:=replace(body,needle,needle||',''allocation_correction'',(select jsonb_build_object(''id'',correction.id,''actor_name'',correction.actor_name,''actor_id'',correction.actor_id,''reason'',correction.reason,''created_at'',correction.created_at) from public.finance_receipt_allocation_corrections correction where correction.tenant_id=p.tenant_id and correction.payment_id=p.id)');
  execute body;

@@ -1,3 +1,4 @@
+import {uploadArtifactSchema} from './uploadArtifactContract';
 import {z} from 'zod';
 const uuid=z.string().uuid(),index=z.number().int().min(0).max(99);
 export const statementMappingSchema=z.object({header_row:z.number().int().min(0).max(19),sheet_index:z.number().int().nonnegative().optional(),
@@ -19,7 +20,7 @@ export const statementVerificationResultSchema=z.object({version:z.literal(1),te
   source_verification:z.enum(['rows_match','rows_mismatch','unreadable']),account_coverage_verification:z.literal('pending'),confirmed:z.literal(true)});
 export const pendingStatementSchema=z.object({version:z.literal(1),tenant:uuid,actor:uuid,file_name:z.string(),file_size:z.number().int().positive().max(10485760),
   created_at:z.string(),phase:z.enum(['upload','intake','verify','rejected']),uncertain:z.boolean(),verification_request:uuid,
-  command:statementImportCommandSchema,receipt:statementIntakeResultSchema.optional()});
+  upload_mode:z.literal('quarantine_v2').optional(),artifact:uploadArtifactSchema.optional(),command:statementImportCommandSchema,receipt:statementIntakeResultSchema.optional()});
 export type PendingStatement=z.infer<typeof pendingStatementSchema>;
 export type StatementVerificationResult=z.infer<typeof statementVerificationResultSchema>;
 export function statementImportErrorMessage(error:unknown):string{

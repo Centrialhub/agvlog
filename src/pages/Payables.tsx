@@ -1,22 +1,20 @@
-import { ListFilterBar } from '@/components/ui/list-filter-bar';
-import { useListFilters } from '@/hooks/useListFilters';
-import { matchesSearch, matchesDateRange } from '@/lib/listFilters';
-import { useState, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { FinanceAccessBoundary } from '@/components/financial/FinanceAccessBoundary';
+import { PayablePortfolioPanel } from '@/components/financial/PayablePortfolioPanel';
 import {
-  usePayables, useCreatePayable, useUpdatePayable,
+  useCreatePayable, useUpdatePayable,
   PAYABLE_STATUSES, PAYABLE_STATUS_LABELS,
-  PAYABLE_CATEGORIES, PAYABLE_CATEGORY_LABELS, type Payable, type PayableStatus,
+  PAYABLE_CATEGORIES, PAYABLE_CATEGORY_LABELS, type Payable,
 } from '@/hooks/usePayables';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Wallet, Download, CheckCircle, XCircle, DollarSign, Receipt } from 'lucide-react';
+import { Plus, Wallet, Receipt } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
 import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
@@ -38,47 +36,22 @@ const emptyForm = {
   notes: '',
 };
 
-function isOverdue(p: Payable) {
-  if (!p.due_date) return false;
-  if (p.status === 'paid' || p.status === 'cancelled') return false;
-  return new Date(p.due_date + 'T23:59:59') < new Date();
-}
-
-export default function Payables() {
+export default function Payables(){const {currentTenant}=useTenant();const {user}=useAuth();return <FinanceAccessBoundary>{currentTenant&&user&&<PayablesWorkspace key={`${currentTenant.id}:${user.id}`}/>}</FinanceAccessBoundary>;}
+function PayablesWorkspace() {
   const toast = useSonnerToast();
-  const { data: payables = [], isLoading } = usePayables();
   const { currentTenant } = useTenant();
+  const {user}=useAuth();
+  const [detailBusy,setDetailBusy]=useState(false),[detailError,setDetailError]=useState('');
+  const request=useRef(0);
+  useEffect(()=>()=>{request.current+=1;},[]);
   const createMut = useCreatePayable();
   const updateMut = useUpdatePayable();
-  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', category: 'all', source: 'all', from: '', to: '' });
-  const { search, status: statusFilter, category: categoryFilter, source: sourceFilter } = filters;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [pendingReceipt, setPendingReceipt] = useState<File | null>(null);
   const [paymentPayable, setPaymentPayable] = useState<Payable | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
-
-  const filtered = useMemo(() => {
-    return payables.filter((p) => {
-      if (!matchesSearch(search, p.supplier_name, p.description, p.document_number)) return false;
-      if (!matchesDateRange(p.due_date, filters.from, filters.to)) return false;
-      if (statusFilter !== 'all') {
-        if (statusFilter === 'overdue' && !isOverdue(p)) return false;
-        else if (statusFilter !== 'overdue' && p.status !== statusFilter) return false;
-      }
-      if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
-      if (sourceFilter !== 'all' && (p.source || 'system') !== sourceFilter) return false;
-      return true;
-    });
-  }, [payables, search, statusFilter, categoryFilter, sourceFilter, filters.from, filters.to]);
-
-  const totals = useMemo(() => ({
-    pending: payables.filter(p => p.status === 'pending').reduce((s, p) => s + Number(p.amount || 0), 0),
-    approved: payables.filter(p => p.status === 'approved').reduce((s, p) => s + Number(p.amount || 0), 0),
-    paid: payables.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.amount || 0), 0),
-    overdue: payables.filter(isOverdue).reduce((s, p) => s + Number(p.amount || 0), 0),
-  }), [payables]);
 
   const resetForm = () => {
     setForm({ ...emptyForm });
@@ -175,51 +148,18 @@ export default function Payables() {
     }
   };
 
-  const quickUpdate = async (p: Payable, status: string) => {
-    try {
-      await updateMut.mutateAsync({ id: p.id, status });
-      toast.success('Conta atualizada');
-    } catch (error) {
-      toast.error(getErrorMessage(error, 'Não foi possível atualizar a conta.'));
-    }
-  };
-
-  const exportCsv = () => {
-    const rows = [
-      ['Fornecedor', 'Categoria', 'Descrição', 'Documento', 'Vencimento', 'Competência', 'Valor', 'Status'],
-      ...filtered.map(p => [
-        p.supplier_name,
-        PAYABLE_CATEGORY_LABELS[p.category] || p.category,
-        p.description || '',
-        p.document_number || '',
-        p.due_date || '',
-        p.competence_date || '',
-        Number(p.amount || 0).toFixed(2).replace('.', ','),
-        isOverdue(p) ? 'Vencida' : PAYABLE_STATUS_LABELS[p.status as PayableStatus] || p.status,
-      ]),
-    ];
-    const csv = rows.map(r => r.map(cell => {
-      const v = String(cell ?? '');
-      return /[";\n,]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
-    }).join(';')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `contas-a-pagar-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-
-  const statusColor = (p: Payable) => {
-    if (isOverdue(p)) return 'bg-destructive/10 text-destructive';
-    if (p.status === 'paid') return 'bg-green-500/10 text-green-600';
-    if (p.status === 'approved') return 'bg-blue-500/10 text-blue-600';
-    if (p.status === 'cancelled') return 'bg-muted text-muted-foreground';
-    return 'bg-warning/10 text-warning';
-  };
+  async function openAccount(id:string,action:'edit'|'payments'){
+    if(!currentTenant)return;
+    const generation=++request.current;setDetailBusy(true);setDetailError('');
+    try{
+      const {data,error}=await supabase.from('payables').select('*').eq('tenant_id',currentTenant.id).eq('id',id).single();
+      if(error)throw error;
+      if(!data||data.id!==id||data.tenant_id!==currentTenant.id)throw new Error('Conta fora da empresa solicitada.');
+      if(generation!==request.current)return;
+      if(action==='edit')openEdit(data);else setPaymentPayable(data);
+    }catch(error){if(generation===request.current)setDetailError(getErrorMessage(error,'Não foi possível abrir esta conta.'));}
+    finally{if(generation===request.current)setDetailBusy(false);}
+  }
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -231,9 +171,6 @@ export default function Payables() {
           <p className="text-sm text-muted-foreground">Fornecedores, despesas administrativas, impostos e adiantamentos</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
-            <Download className="h-4 w-4 mr-2" /> Exportar CSV
-          </Button>
           <Button variant="outline" onClick={() => setManualOpen(true)}>
             <Receipt className="h-4 w-4 mr-2" /> Despesa avulsa
           </Button>
@@ -243,98 +180,9 @@ export default function Payables() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Pendente</p>
-          <p className="text-xl font-bold text-warning">{fmt(totals.pending)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Aprovadas</p>
-          <p className="text-xl font-bold text-blue-600">{fmt(totals.approved)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Vencidas</p>
-          <p className="text-xl font-bold text-destructive">{fmt(totals.overdue)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Pagas</p>
-          <p className="text-xl font-bold text-green-600">{fmt(totals.paid)}</p>
-        </CardContent></Card>
-      </div>
-
-      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={payables.length} loading={isLoading} description="Os indicadores acima mostram todas as contas." fields={[
-        { key: 'search', label: 'Buscar conta', type: 'search', placeholder: 'Fornecedor, descrição ou documento', value: search, onChange: value => setFilter('search', value) },
-        { key: 'status', label: 'Situação', value: statusFilter, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, { value: 'partial', label: 'Pagamento parcial' }, ...PAYABLE_STATUSES.map(value => ({ value, label: PAYABLE_STATUS_LABELS[value] }))] },
-        { key: 'category', label: 'Categoria', value: categoryFilter, onChange: value => setFilter('category', value), options: [{ value: 'all', label: 'Todas as categorias' }, ...PAYABLE_CATEGORIES.map(value => ({ value, label: PAYABLE_CATEGORY_LABELS[value] }))] },
-        { key: 'source', label: 'Origem', value: sourceFilter, onChange: value => setFilter('source', value), options: [{ value: 'all', label: 'Todas as origens' }, { value: 'system', label: 'Operacional' }, { value: 'manual', label: 'Avulsa' }] },
-        { key: 'from', label: 'Vencimento de', type: 'date', value: filters.from, onChange: value => setFilter('from', value), max: filters.to || undefined },
-        { key: 'to', label: 'Vencimento até', type: 'date', value: filters.to, onChange: value => setFilter('to', value), min: filters.from || undefined },
-      ]} />
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fornecedor</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead>Documento</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="text-right">Pago / Saldo</TableHead>
-                <TableHead>Vencimento</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-40">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
-              ) : filtered.map((p) => (
-                <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEdit(p)}>
-                  <TableCell className="text-sm font-medium">{p.supplier_name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{PAYABLE_CATEGORY_LABELS[p.category] || p.category}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{p.document_number || '—'}</TableCell>
-                  <TableCell className="text-sm text-right font-medium">{fmt(Number(p.amount || 0))}</TableCell>
-                  <TableCell className="text-sm text-right">
-                    <span className="text-green-600">{fmt(Number(p.paid_amount || 0))}</span>
-                    {' / '}
-                    <span className="text-warning">{fmt(Math.max(0, Number(p.amount || 0) - Number(p.paid_amount || 0)))}</span>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {p.due_date ? new Date(p.due_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={statusColor(p)}>
-                      {isOverdue(p) ? 'Vencida' : (p.status === 'partial' ? 'Parcial' : (PAYABLE_STATUS_LABELS[p.status as PayableStatus] || p.status))}
-                    </Badge>
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <div className="flex gap-1">
-                      {p.status !== 'paid' && p.status !== 'cancelled' && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-green-600" onClick={() => setPaymentPayable(p)}>
-                          <DollarSign className="h-3.5 w-3.5 mr-1" /> Baixa
-                        </Button>
-                      )}
-                      {p.status === 'paid' && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setPaymentPayable(p)}>
-                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Baixas
-                        </Button>
-                      )}
-                      {p.status !== 'cancelled' && p.status !== 'paid' && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" onClick={() => quickUpdate(p, 'cancelled')}>
-                          <XCircle className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {detailBusy&&<p role="status">Abrindo conta selecionada…</p>}
+      {detailError&&<p role="alert">{detailError}</p>}
+      {currentTenant&&user&&<PayablePortfolioPanel tenant={currentTenant.id} actor={user.id} onOpen={(id,action)=>void openAccount(id,action)}/>}
 
       <Dialog open={dialogOpen} onOpenChange={o => { if (!o) resetForm(); setDialogOpen(o); }}>
         <DialogContent>

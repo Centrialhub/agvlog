@@ -74,6 +74,7 @@ export const navigationSections: NavigationSection[] = [
     { label: 'Recebíveis fiscais', href: '/financial/fiscal-queue', icon: ShieldCheck },
     { label: 'Contas a receber', href: '/receivables', icon: ArrowDownToLine },
     { label: 'Contas a pagar', href: '/payables', icon: ArrowUpFromLine },
+    { label: 'Folha de pagamento', href: '/payroll', icon: CircleDollarSign, keywords: 'salarios funcionarios adiantamentos' },
     { label: 'Faturas por cliente', href: '/client-invoices', icon: Receipt },
     { label: 'Arquivo de cobrança', href: '/billing-edi', icon: FileInput, keywords: 'DOCCOB EDI' },
     { label: 'Fechamentos', href: '/closing-reports', icon: BookOpenCheck },
@@ -86,7 +87,6 @@ export const navigationSections: NavigationSection[] = [
     { label: 'Veículos', href: '/vehicles', icon: Truck },
     { label: 'Motoristas', href: '/drivers', icon: Users },
     { label: 'Funcionários', href: '/employees', icon: BriefcaseBusiness },
-    { label: 'Folha de pagamento', href: '/payroll', icon: CircleDollarSign },
     { label: 'Ocorrências formais', href: '/incidents', icon: ShieldAlert, keywords: 'RH auditoria' },
     { label: 'Checklists', href: '/checklists', icon: ClipboardCheck },
     { label: 'Ordens de manutenção', href: '/maintenance-orders', icon: Wrench },
@@ -130,7 +130,9 @@ const routeAliases: Record<string, string> = {
 export function findNavigationPage(pathname: string) {
   const path = routeAliases[pathname] ?? (pathname.startsWith('/occurrences/') ? '/occurrence-reports' : pathname);
   for (const section of navigationSections) {
-    const item = section.items.find(entry => isNavigationActive(path, entry.href));
+    const item = section.items
+      .filter(entry => isNavigationActive(path, entry.href))
+      .sort((left, right) => right.href.length - left.href.length)[0];
     if (item) return { section, item, isDetail: pathname !== item.href && !(pathname in routeAliases) };
   }
   return undefined;

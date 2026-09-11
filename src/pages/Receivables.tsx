@@ -1,3 +1,4 @@
+import {UnloadingOriginCorrectionDialog} from '@/components/financial/UnloadingOriginCorrectionDialog';
 import {UnloadingProjectionRepairDialog} from '@/components/financial/UnloadingProjectionRepairDialog';
 import {financialError} from '@/lib/financial/receivableCommands';
 import {useReceivableUnloadingOrigin} from '@/hooks/useReceivableUnloadingOrigin';
@@ -39,11 +40,13 @@ function ReceivablesScreen() {
   const toast = useSonnerToast();
   const [historyOpen,setHistoryOpen]=useState(false);
   const [repairCharge,setRepairCharge]=useState<string|null>(null);
+  const [correctionCharge,setCorrectionCharge]=useState<string|null>(null);
+  const {currentRole}=useTenant();
   const {currentTenant}=useTenant();const {user}=useAuth();
   const { data: clients = [] } = useClients();
   const createReceivable = useCreateReceivable();
   const updateReceivable = useUpdateReceivable();
-  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', client: 'all', from: '', to: '' });
+  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', client: 'all', origin:'all', from: '', to: '' });
   const { search, status: statusFilter } = filters;
   const settledSearch=useDebouncedValue(search);
   const searchPending=settledSearch!==search;
@@ -180,7 +183,8 @@ function ReceivablesScreen() {
       <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={list.data?.total||0} totalCount={list.data?.total_unfiltered||0} loading={isLoading} description="Indicadores da carteira completa, sem aplicar os filtros da lista. A lista é filtrada pelo vencimento." fields={[
         { key: 'search', label: 'Buscar título', type: 'search', placeholder: 'Descrição, fatura ou cliente', value: search, onChange: value => setFilter('search', value) },
         { key: 'status', label: 'Situação', value: statusFilter, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, { value: 'overdue', label: 'Vencidos em aberto' }, ...RECEIVABLE_STATUSES.map(value => ({ value, label: RECEIVABLE_STATUS_LABELS[value] }))] },
-        { key: 'client', label: 'Cliente', value: filters.client, onChange: value => setFilter('client', value), options: [{ value: 'all', label: 'Todos os clientes' }, ...clients.map(client => ({ value: client.id, label: client.company_name }))] },
+        { key:'origin',label:'Origem',value:filters.origin,onChange:value=>setFilter('origin',value),options:[{value:'all',label:'Todas as origens'},{value:'unloading',label:'Reembolso de descarga'},{value:'fiscal',label:'Frete fiscal vinculado'},{value:'other',label:'Outros / sem vínculo fiscal'}]},
+        { key: 'client', label: 'Cliente / fornecedor devedor', value: filters.client, onChange: value => setFilter('client', value), options: [{ value: 'all', label: 'Todos os devedores' }, ...clients.map(client => ({ value: client.id, label: client.company_name }))] },
         { key: 'from', label: 'Vencimento de', type: 'date', value: filters.from, onChange: value => setFilter('from', value), max: filters.to || undefined },
         { key: 'to', label: 'Vencimento até', type: 'date', value: filters.to, onChange: value => setFilter('to', value), min: filters.from || undefined },
       ]} />
@@ -194,7 +198,7 @@ function ReceivablesScreen() {
             <TableHeader>
               <TableRow>
                 <TableHead>Descrição</TableHead>
-                <TableHead>Cliente</TableHead>
+                <TableHead>Cliente / fornecedor devedor</TableHead>
                 <TableHead>Nº Fatura</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead className="text-right">Recebido / Saldo</TableHead>
@@ -251,11 +255,11 @@ function ReceivablesScreen() {
               <FiscalXmlUpload perspective="receiver" onExtracted={(d) => applyXmlToForm(d)} />
             </div>:null}
             {originPending&&<p role="alert">{originQuery.error?"Não foi possível verificar a origem. O salvamento permanece bloqueado.":"Verificando a origem do título…"}{originQuery.error&&<Button variant="link" onClick={()=>void originQuery.refetch()}>Verificar origem novamente</Button>}</p>}
-            {unloadingOrigin&&<div className="rounded border p-3"><p>Recebível de descarga · origem {unloadingOrigin.id} · entrega {unloadingOrigin.delivery_stop_id}</p><p>Fornecedor devedor: {typeof unloadingOrigin.source_snapshot.supplier_name==="string"?unloadingOrigin.source_snapshot.supplier_name:"Nome preservado não informado"} · {unloadingOrigin.supplier_id}</p><p>Valor da descarga: {formatFinanceCents(unloadingOrigin.amount_cents)}</p><p>Fornecedor, valor e status são protegidos pela origem. Apenas descrição, vencimento, referência e observações podem ser editados aqui.</p><Button variant="outline" onClick={()=>setRepairCharge(unloadingOrigin.id)}>Conferir reparação do título</Button></div>}
+            {unloadingOrigin&&<div className="rounded border p-3"><p>Recebível de descarga · origem {unloadingOrigin.id} · entrega {unloadingOrigin.delivery_stop_id}</p><p>Fornecedor devedor: {typeof unloadingOrigin.source_snapshot.supplier_name==="string"?unloadingOrigin.source_snapshot.supplier_name:"Nome preservado não informado"} · {unloadingOrigin.supplier_id}</p><p>Valor da descarga: {formatFinanceCents(unloadingOrigin.amount_cents)}</p><p>Fornecedor, valor e status são protegidos pela origem. Apenas descrição, vencimento, referência e observações podem ser editados aqui.</p><Button variant="outline" onClick={()=>setRepairCharge(unloadingOrigin.id)}>Conferir reparação do título</Button>{['owner','admin'].includes(currentRole||'')&&<Button variant="outline" onClick={()=>setCorrectionCharge(unloadingOrigin.id)}>Corrigir cobrança da descarga</Button>}</div>}
             <div><Label>Descrição</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Cliente</Label>
+                <Label>Cliente / fornecedor devedor</Label>
                 <Select disabled={originPending||!!unloadingOrigin} value={form.client_id} onValueChange={v => setForm({ ...form, client_id: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
@@ -280,6 +284,7 @@ function ReceivablesScreen() {
         </DialogContent>
       </Dialog>
       {repairCharge&&currentTenant&&user&&<UnloadingProjectionRepairDialog key={`${currentTenant.id}:${user.id}:${repairCharge}`} tenant={currentTenant.id} actor={user.id} chargeId={repairCharge} onClose={()=>setRepairCharge(null)}/>}
+      {correctionCharge&&currentTenant&&user&&<UnloadingOriginCorrectionDialog key={`${currentTenant.id}:${user.id}:${correctionCharge}`} tenant={currentTenant.id} actor={user.id} chargeId={correctionCharge} open onOpenChange={open=>{if(!open)setCorrectionCharge(null);}}/>}
       <ReceivablePaymentDialog
         receivable={paymentReceivable}
         open={!!paymentReceivable}

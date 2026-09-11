@@ -1,3 +1,4 @@
+import {fiscalQueueIssue} from '@/lib/financial/fiscalQueueContract';
 import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
@@ -24,4 +25,11 @@ describe('fiscal receivables monitoring',()=>{
   mock.role='driver';const view=mount();expect(screen.getByRole('alert')).toHaveTextContent('Acesso financeiro não permitido');expect(mock.read).not.toHaveBeenCalled();
   view.unmount();mock.role='operator';mock.access=false;mount();expect(mock.read).not.toHaveBeenCalled();
  });
+});
+
+it('explains actual compound review reasons without diagnosing every invalid amount as fractional cents',()=>{
+ expect(fiscalQueueIssue('authorization_evidence_missing,invalid_receivable_amount')).toBe('Falta número, chave ou protocolo de autorização válido. O valor a receber está ausente ou inválido; confira o valor fiscal e a precisão em centavos.');
+ expect(fiscalQueueIssue('retention_data_missing,nfse_net_amount_conflict')).toContain('retenções');
+ expect(fiscalQueueIssue('authorization_not_active')).toContain('não possui autorização ativa');
+ expect(fiscalQueueIssue('invalid_receivable_amount')).not.toContain('fração');
 });

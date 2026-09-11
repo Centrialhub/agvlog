@@ -129,7 +129,7 @@ declare missing text[]:='{}';required record;found boolean;facts jsonb:='[]';p r
 ('finance_private.reconciliation_evidence_issue(uuid,uuid)','finance_private.active_movements'),
 ('finance_private.available_movement_cents(uuid,uuid,text)','movement_is_active'),
 ('finance_private.check_movement_use()','movement_used_cents'),
-('finance_private.check_payable_payment_insert()','payables_payments'),
+('finance_private.check_payable_payment_insert()','from finance_private.active_payable_payments where payable_id=p.id and tenant_id=p.tenant_id'),
 ('finance_private.check_settlement_movement_link()','movement_used_cents'),
 ('finance_private.check_receipt_movement_capacity()','receipt_movement_used_cents'),
  ('finance_private.movement_is_active(uuid,uuid)','finance_movement_voids'),
@@ -146,8 +146,8 @@ declare missing text[]:='{}';required record;found boolean;facts jsonb:='[]';p r
  ('finance_private.legacy_integrity_rows(uuid)','source_movement_voided'),
  ('finance_private.legacy_cut_settlement_evidence(uuid,uuid)','settlement_movement_voided')
  ) r(signature,token) loop
- select q.oid,q.prosecdef,q.proconfig,q.proacl,pg_get_functiondef(q.oid) definition into p from pg_catalog.pg_proc q where q.oid=to_regprocedure(required.signature);
- if p.oid is null or position(required.token in p.definition)=0 then missing:=array_append(missing,'definition:'||required.signature);end if;
+ select q.oid,q.prosecdef,q.proconfig,q.proacl,md5(replace(q.prosrc,E'\r\n',E'\n')) source_hash,pg_get_functiondef(q.oid) definition into p from pg_catalog.pg_proc q where q.oid=to_regprocedure(required.signature);
+ if p.oid is null or position(required.token in p.definition)=0 or (required.signature='finance_private.check_payable_payment_insert()' and p.source_hash is distinct from '8dffa1b366291f565e438b07803bab8d') then missing:=array_append(missing,'definition:'||required.signature);end if;
  facts:=facts||jsonb_build_array(jsonb_build_object('signature',required.signature,'definition_hash',md5(p.definition),'security_definer',p.prosecdef,'config',to_jsonb(p.proconfig),'acl',to_jsonb(p.proacl)));
  end loop;
  if not coalesce(finance_private.account_period_guards_ready(),false) then missing:=array_append(missing,'period_guards');end if;

@@ -1,3 +1,6 @@
+import {previewExpenseArtifact} from './artifact-preview.ts';
+import {readBoundedBody} from './bounded-request.ts';
+import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { corsHeaders } from "../_shared/cors.ts";
@@ -6,6 +9,7 @@ import { expenseReceiptUpload } from "./expense-receipt.ts";
 import { secureCleanup } from "./secure-cleanup.ts";
 import {preserveStatementOriginal,statementFileType} from "./statement-original.ts";
 import {isFinancialReceiptFolder} from './financial-upload-policy.ts';
+import {quarantineUpload,quarantineSha256} from './quarantine-workflow.ts';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const JSON_HEADERS = { ...corsHeaders, "Content-Type": "application/json" };
@@ -120,7 +124,7 @@ async function authorizeUpload(
   return true;
 }
 
-Deno.serve(async (request) => {
+Deno.serve(withFiscalCors(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return response(405, { error: "method_not_allowed" });
 
@@ -143,8 +147,18 @@ Deno.serve(async (request) => {
     const adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const fingerprint = await actorFingerprint(serviceKey, user.id);
     if (request.headers.get("content-type")?.includes("application/json")) {
-      const cleanup = await request.json() as { action?: unknown; tenant_id?: unknown; bucket?: unknown; paths?: unknown };
+      const cleanup = await request.json() as { action?: unknown; tenant_id?: unknown; bucket?: unknown; paths?: unknown; artifact_id?:unknown; expense_id?:unknown };
       const tenantId = String(cleanup.tenant_id ?? "");
+      if(cleanup.action==='finance_artifact_preview_v2'){
+        const artifact=String(cleanup.artifact_id??''),expense=String(cleanup.expense_id??'');
+        if(!validUuid(tenantId)||!validUuid(artifact)||!validUuid(expense))return response(400,{error:'upload_invalid_request'});
+        const tenantError=requireActiveTenant(request,tenantId);if(tenantError)return tenantError;
+        const preview=await previewExpenseArtifact(tenantId,expense,artifact,{
+          read:()=>callerClient.rpc('get_finance_upload_artifact',{_tenant_id:tenantId,_artifact_id:artifact}),
+          sign:(target,path)=>callerClient.storage.from(target).createSignedUrl(path,300),
+        });
+        return response(200,preview);
+      }
       const bucket = String(cleanup.bucket ?? "");
       const paths = Array.isArray(cleanup.paths) ? cleanup.paths.filter((path): path is string => typeof path === "string") : [];
       const validPaths = paths.length > 0 && paths.length <= 10 && paths.every((path) =>
@@ -174,7 +188,8 @@ Deno.serve(async (request) => {
       return response(cleanupResult.status,cleanupResult.body);
     }
 
-    const form = await request.formData();
+    const bodyBytes=await readBoundedBody(request,MAX_BYTES+64*1024);
+    const form=await new Response(Uint8Array.from(bodyBytes).buffer,{headers:{'Content-Type':request.headers.get('content-type')||''}}).formData();
     const tenantId = String(form.get("tenant_id") ?? "");
     const bucket = String(form.get("bucket") ?? "");
     const folder = String(form.get("folder") ?? "");
@@ -185,6 +200,35 @@ Deno.serve(async (request) => {
     const evidenceHash = String(form.get("sha256") ?? "").toLowerCase();
     const expenseReceipt = form.get("action") === "expense_receipt";
     const statementOriginal = bucket === "finance-statements";
+    if(form.get('action')==='finance_upload_v2'){
+      if(!validUuid(tenantId)||!(file instanceof File)||file.size<=0||file.size>MAX_BYTES)return response(400,{error:'upload_invalid_request'});
+      const tenantContextError=requireActiveTenant(request,tenantId);
+      if(tenantContextError)return tenantContextError;
+      const access=await callerClient.rpc('get_finance_access',{_tenant_id:tenantId});
+      if(access.error||access.data!==true)return response(403,{error:'finance_access_denied'});
+      if(!await consumeQuota(adminClient,fingerprint,'upload'))return response(429,{error:'upload_rate_limited'});
+      const delimiter=form.get('delimiter');
+      const result=await quarantineUpload({tenant:tenantId,actor:user.id,request:evidenceRequestId,
+        sourceType:String(form.get('source_type')??''),sourceId:String(form.get('source_id')??''),
+        format:String(form.get('format')??'unknown'),mime:file.type||'application/octet-stream',bytes:new Uint8Array(await file.arrayBuffer()),
+        delimiter:delimiter===';'||delimiter===','||delimiter==='\t'?delimiter:undefined,
+      },{caller:(name,args)=>callerClient.rpc(name,args),service:(name,args)=>adminClient.rpc(name,args),
+        image:async bytes=>{
+          const {reencodeQuarantinedImage}=await import('./quarantine-magick.ts');
+          return reencodeQuarantinedImage(bytes,async(target,path)=>{const result=await adminClient.storage.from(target).download(path);if(result.error||!result.data)throw new Error('image_runtime_unavailable');return new Uint8Array(await result.data.arrayBuffer());});
+        },
+        put:async(target,path,content,mime,metadata)=>{
+          const stored=await adminClient.storage.from(target).upload(path,content,{contentType:mime,upsert:false,metadata,cacheControl:'0'});
+          if(!stored.error)return;
+          // Exact replays may already have created the immutable object. Never overwrite.
+          const existing=await adminClient.storage.from(target).download(path);
+          if(existing.error||!existing.data||existing.data.size!==content.length)throw new Error('upload_storage_unavailable');
+          if(await quarantineSha256(new Uint8Array(await existing.data.arrayBuffer()))!==metadata.sha256)throw new Error('upload_storage_conflict');
+          // Finalize validates metadata; matching bytes alone never grant usability.
+        },
+      });
+      return response(200,result);
+    }
     if (!validUuid(tenantId) || !(file instanceof File) || !BUCKET_ROLES[bucket] || !KIND_MIMES[kind]) {
       return response(400, { error: "invalid_upload_request" });
     }
@@ -306,4 +350,4 @@ Deno.serve(async (request) => {
     });
     return response(400, { error: "invalid_upload", correlation_id: correlationId });
   }
-});
+}));

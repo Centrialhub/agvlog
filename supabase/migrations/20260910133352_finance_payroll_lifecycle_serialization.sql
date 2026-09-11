@@ -48,7 +48,7 @@ do $patch$declare spec record;definition text;body text;scope text;begin
    execute definition;
    select pg_get_functiondef(('public.'||spec.signature)::regprocedure),prosrc into definition,body from pg_proc where oid=('public.'||spec.signature)::regprocedure;
   end if;
-  execute replace(definition,body,E'<<finance_payroll_lifecycle_guard>>\nBEGIN\n'||scope||E'\n<<finance_payroll_previous_body>>\n'||body||E'\nEND finance_payroll_lifecycle_guard;');
+  execute replace(definition,body,E'<<finance_payroll_lifecycle_guard>>\nBEGIN\n'||scope||E'\n'||body||E'\nEND finance_payroll_lifecycle_guard;');
  end loop;
 end $patch$;
 

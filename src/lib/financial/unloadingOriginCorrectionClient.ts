@@ -1,0 +1,14 @@
+import {z} from 'zod';
+import {supabase} from '@/integrations/supabase/client';
+import {unloadingOriginProposalSchema,unloadingOriginCorrectionContextSchema,unloadingOriginCorrectionCommandSchema,type UnloadingOriginCorrectionCommand} from './unloadingOriginCorrectionContract';
+export class UnloadingOriginCorrectionUnavailableError extends Error{constructor(){super('A correção de cobrança ainda não está disponível neste ambiente. Nenhuma alteração foi enviada.');}}
+const scope=z.object({tenantId:z.string().uuid(),actorId:z.string().uuid(),chargeId:z.string().uuid(),proposal:unloadingOriginProposalSchema});
+type Response={data:unknown;error:unknown};
+type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<Response>;
+export async function readUnloadingOriginCorrectionContext(request:z.infer<typeof scope>){
+ const input=scope.parse(request);const {data,error}=await(supabase.rpc as unknown as Rpc)('get_finance_unloading_origin_correction_context',{_tenant_id:input.tenantId,_charge_id:input.chargeId,_proposal:input.proposal});if(error){const code=typeof error==='object'&&error!==null&&'code' in error?String(error.code):'';if(['PGRST202','42883'].includes(code))throw new UnloadingOriginCorrectionUnavailableError();throw error;}
+ const result=unloadingOriginCorrectionContextSchema.parse(data);
+ if(result.tenant_id!==input.tenantId||result.actor_id!==input.actorId||result.charge_id!==input.chargeId||JSON.stringify(result.proposal)!==JSON.stringify(input.proposal))throw new Error('Consulta fora da empresa, sessão, descarga ou proposta solicitadas.');return result;
+}
+export async function sendUnloadingOriginCorrection(command:UnloadingOriginCorrectionCommand):Promise<Response>{unloadingOriginCorrectionCommandSchema.parse(command);return await(supabase.rpc as unknown as Rpc)('correct_finance_unloading_origin',{_payload:command});}
+export function unloadingOriginCorrectionErrorLabel(error:unknown){const message=error instanceof Error?error.message:typeof error==='object'&&error!==null&&'message' in error?String(error.message):'';const labels:Record<string,string>={finance_unloading_correction_changed:'A cobrança ou seus vínculos mudaram. Confira novamente antes de iniciar outro pedido.',finance_unloading_correction_blocked:'Esta cobrança tem impedimentos que exigem regularização. Confira os vínculos.',finance_unloading_correction_busy:'Outra operação está utilizando esta cobrança. Preserve um pedido pendente e tente recuperá-lo.',finance_unloading_invalid_correction:'A proposta de correção é inválida. Confira fornecedor, valor e data.',finance_access_denied:'Sua sessão não pode corrigir esta cobrança. A autorização é conferida novamente pelo servidor.',finance_request_conflict:'Este identificador de pedido já está associado a outro conteúdo. Preserve o pedido original.'};return labels[message]||message||'O pedido não foi confirmado. Preserve e recupere o pedido exibido, se houver.';}
