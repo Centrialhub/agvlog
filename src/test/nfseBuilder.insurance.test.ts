@@ -63,6 +63,13 @@ describe('NFS-e — propagação do seguro', () => {
 });
 
 describe('NFS-e — ambiente fiscal obrigatório e consistente', () => {
+  it('subtrai deduções e retenções do valor líquido enviado ao provedor',()=>{
+    const result=buildNFSeEmitPayload({
+      doc:{...baseDoc,valor_deducoes:10,iss_retido:true,valor_pis:1,valor_cofins:2},
+      emitter,environment:'homologation',
+    });
+    expect(result.payload.servico.valor).toMatchObject({servico:100,deducoes:10,issRetido:5,liquido:82});
+  });
   it.each(['sandbox','homologation','production'] as const)('mantém %s no envelope e no payload', environment => {
     const result=buildNFSeEmitPayload({doc:baseDoc,emitter,environment});
     expect(result.environment).toBe(environment);

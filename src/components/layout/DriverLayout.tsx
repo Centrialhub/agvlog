@@ -1,5 +1,4 @@
 import { DriverMoreMenu } from '@/components/driver/DriverMoreMenu';
-import { ExpenseCreationRecoveryPanel } from '@/components/financial/ExpenseCreationRecoveryPanel';
 import { ChatRecoveryPanel } from '@/components/driver/ChatRecoveryPanel';
 import { ReactNode, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -17,6 +16,11 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { DriverPwaInstall } from '@/components/driver/DriverPwaInstall';
+import { DriverExpenseSyncAgent } from '@/components/driver/DriverExpenseSyncAgent';
+import { DriverDeliverySyncBanner } from '@/components/driver/DriverDeliverySyncBanner';
+import { DriverOperationalSyncAgent } from '@/components/driver/DriverOperationalSyncAgent';
+import { DriverAppObservabilityAgent } from '@/components/driver/DriverAppObservabilityAgent';
 
 const driverNav: { label: string; href: string; icon: typeof Home; match?: string[] }[] = [
   { label: 'Início', href: '/driver', icon: Home },
@@ -28,7 +32,7 @@ const driverNav: { label: string; href: string; icon: typeof Home; match?: strin
     label: 'Mais',
     href: '/driver/journey',
     icon: MoreHorizontal,
-    match: ['/driver/journey', '/driver/checklist', '/driver/issues', '/driver/expenses', '/driver/events'],
+    match: ['/driver/journey', '/driver/checklist', '/driver/issues', '/driver/events', '/driver/expenses', '/driver/sync', '/driver/install'],
   },
 ];
 
@@ -37,7 +41,7 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const isOnline = useOnlineStatus();
   useEffect(() => {
-    const titles: Record<string, string> = { '/driver': 'Início', '/driver/loads': 'Minhas cargas', '/driver/stops': 'Paradas', '/driver/deliveries': 'Entregas e coletas', '/driver/journey': 'Jornada', '/driver/expenses': 'Despesas', '/driver/checklist': 'Checklist', '/driver/events': 'Eventos', '/driver/issues': 'Ocorrências', '/driver/chat': 'Chat' };
+    const titles: Record<string, string> = { '/driver': 'Início', '/driver/loads': 'Minhas cargas', '/driver/stops': 'Paradas', '/driver/deliveries': 'Entregas e coletas', '/driver/journey': 'Jornada', '/driver/expenses': 'Despesas', '/driver/checklist': 'Checklist', '/driver/events': 'Eventos', '/driver/issues': 'Ocorrências', '/driver/chat': 'Chat', '/driver/sync': 'Sincronização', '/driver/install':'Instalar aplicativo' };
     document.title = (titles[location.pathname] ?? 'Detalhes da viagem') + ' · Motorista · AGVLog';
   }, [location.pathname]);
 
@@ -71,19 +75,25 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
         </button>
       </header>
 
+      <DriverPwaInstall />
+      <DriverExpenseSyncAgent />
+      <DriverDeliverySyncBanner />
+      <DriverOperationalSyncAgent />
+      <DriverAppObservabilityAgent />
+
       {!isOnline && (
         <div
           role="status"
           className="flex items-center justify-center gap-2 bg-warning/15 px-4 py-2 text-center text-xs text-warning-foreground"
         >
           <WifiOff className="h-4 w-4 shrink-0" />
-          Sem conexão. Mantenha os dados na tela e tente enviar novamente quando a rede voltar.
+          Sem conexão. A rota permanece disponível; envios pendentes serão sincronizados quando a rede voltar.
         </div>
       )}
 
       {/* Content area */}
       <main className="flex-1 overflow-y-auto overscroll-contain" tabIndex={0} aria-label="Conteúdo do motorista">
-        <div className="p-4 pb-6 max-w-lg mx-auto"><ExpenseCreationRecoveryPanel /><ChatRecoveryPanel />{children}</div>
+        <div className="p-4 pb-6 max-w-lg mx-auto"><ChatRecoveryPanel />{children}</div>
       </main>
 
       {/* Bottom navigation - mobile style with iOS home-bar safe area */}

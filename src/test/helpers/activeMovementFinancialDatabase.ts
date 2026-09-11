@@ -1,0 +1,19 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import type {PGlite} from '@electric-sql/pglite';
+import {createLegacyPayableAssociationDatabase} from './legacyPayableAssociationDatabase';
+import {createLegacyReceivableAssociationDatabase} from './legacyReceivableAssociationDatabase';
+const read=(name:string)=>readFileSync(`supabase/migrations/${name}.sql`,'utf8');
+async function ddl(db:PGlite,file:string,table:string){if((await db.query<{v:boolean}>('select to_regclass($1) is not null v',['public.'+table])).rows[0].v)return;let sql=read(file).match(new RegExp(`create table public\\.${table}\\s*\\([\\s\\S]*?\\n\\);`,'i'))?.[0];if(!sql)throw new Error(table);sql=sql.replace(/,\s*foreign key\([^;]+?(?=,\s*foreign key|\s*\n\);)/gi,'').replace(/ references public\.\w+\([^)]*\)/g,'');await db.exec(sql);}
+export async function createActiveMovementFinancialDatabase(domain:'outgoing'|'incoming'){
+ const db=domain==='outgoing'?await createLegacyPayableAssociationDatabase():await createLegacyReceivableAssociationDatabase();
+ // Replace the older fixture's permissive admin stand-in with the actual baseline definition.
+ if(domain==='outgoing'){const actual=read('20260824224152_baseline').match(/CREATE OR REPLACE FUNCTION public\.is_tenant_admin\([\s\S]*?\$function\$;/)?.[0];if(!actual)throw new Error('is_tenant_admin');await db.exec(actual);}
+ for(const [file,table] of [['20260909213959_finance_expense_batches','finance_expense_batches'],['20260909213959_finance_expense_batches','finance_expense_items'],['20260909213959_finance_expense_batches','finance_expense_allocations'],['20260910025658_finance_receipt_allocation_corrections','finance_receipt_allocation_corrections'],['20260910145616_finance_legacy_receipt_associations','finance_legacy_receipt_movement_links'],['20260910145616_finance_legacy_receipt_associations','finance_legacy_receipt_link_reversals']])await ddl(db,file,table);
+ for(const [file,name] of [['20260910132411_finance_settlement_link_reversals','movement_used_cents'],['20260910145616_finance_legacy_receipt_associations','receipt_movement_used_cents']]){const sql=read(file);const start=sql.indexOf(`function finance_private.${name}(`);const definition=sql.slice(sql.lastIndexOf('create',start),sql.indexOf('$$;',start)+3).replace(/^create function/,'create or replace function');await db.exec(definition);}
+ await db.exec(read('20260910182541_finance_movement_correction_foundation'));
+ await db.exec(read('20260910183506_finance_active_movement_financial_guards'));
+ const definitions=(await db.query<{signature:string;definition:string}>("select p.oid::regprocedure::text signature,pg_get_functiondef(p.oid) definition from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='finance_private' and p.proname in('movement_used_cents','receipt_movement_used_cents','check_movement_use','check_settlement_movement_link','check_receipt_movement_capacity','apply_payable_movement','project_receivable_command') order by signature")).rows.map(r=>({...r,sha256:createHash('sha256').update(r.definition).digest('hex')}));
+ const triggers=(await db.query("select c.relname table_name,t.tgname name,t.tgenabled enabled,pg_get_triggerdef(t.oid,true) definition from pg_trigger t join pg_class c on c.oid=t.tgrelid where not t.tgisinternal and c.relname in('finance_expense_allocations','finance_payable_movement_links','finance_settlement_movement_links','finance_receivable_movement_links','finance_legacy_receipt_movement_links','payables_payments','driver_settlement_payments','receivables_payments') order by c.relname,t.tgname collate \"C\"")).rows;
+ writeFileSync('docs/qa/finance-active-movement-'+domain+'-effective-2026-09-10.json',JSON.stringify({domain,definitions,triggers},null,2)+'\n');return db;
+}

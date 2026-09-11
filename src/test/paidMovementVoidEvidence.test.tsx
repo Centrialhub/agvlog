@@ -1,0 +1,11 @@
+import {cleanup,render,screen} from '@testing-library/react';
+import {afterEach,it,expect} from 'vitest';
+import {PaidMovementVoidEvidence} from '@/components/financial/PaidMovementVoidEvidence';
+import {legacyIntegrityIssueLabels} from '@/lib/financial/legacyIntegrityContract';
+import {legacyCutIssueLabels} from '@/lib/financial/legacyCutReviewContract';
+import {payablePortfolioIssueLabels} from '@/lib/financial/payablePortfolioLabels';
+const tenant=crypto.randomUUID(),event={id:crypto.randomUUID(),tenant_id:tenant,movement_id:crypto.randomUUID(),actor_id:crypto.randomUUID(),actor_name:'Maria',reason:'Registro duplicado conferido',created_at:'2026-09-10'};
+afterEach(cleanup);
+it('shows preserved movement, author and reason without treating proof failure as unpaid debt',()=>{render(<PaidMovementVoidEvidence tenant={tenant} events={[event]}/>);expect(screen.getByText(`Movimento: ${event.movement_id}`)).toBeInTheDocument();expect(screen.getByText(new RegExp(event.actor_id))).toBeInTheDocument();expect(screen.getByText('Motivo: Registro duplicado conferido')).toBeInTheDocument();expect(screen.getByText(/Não apagam pagamentos, não reabrem títulos/)).toBeInTheDocument();expect(screen.queryByRole('button')).not.toBeInTheDocument();});
+it('rejects malformed or cross-company evidence instead of assuming valid proof',()=>{const view=render(<PaidMovementVoidEvidence tenant={tenant} events={[{...event,tenant_id:crypto.randomUUID()}]}/>);expect(screen.getByRole('alert')).toBeInTheDocument();expect(screen.queryByText(/Invalidado por/)).not.toBeInTheDocument();view.rerender(<PaidMovementVoidEvidence tenant={tenant} events={[{id:event.id}]}/>);expect(screen.getByRole('alert')).toBeInTheDocument();});
+it('maps all public diagnostics without technical-only labels',()=>{expect(legacyIntegrityIssueLabels.source_movement_voided).toContain('Valores e pagamentos originais');expect(legacyCutIssueLabels.legacy_source_movement_voided).toContain('histórico de pagamentos');expect(payablePortfolioIssueLabels.payment_movement_voided).toContain('não foi reaberto');});

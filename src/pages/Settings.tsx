@@ -1,8 +1,8 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { INTEGRATION_ACCOUNT_SAFE_SELECT } from '@/integrations/supabase/selects';
 import type { Json, Tables } from '@/integrations/supabase/types';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
 import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
@@ -10,6 +10,7 @@ import { useVehicles } from '@/hooks/useVehicles';
 import { useProviderUnits, useProviderUnitMutations, useTrackerLinks, useTrackerLinkMutations } from '@/hooks/useProviderUnits';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,7 @@ import { CompanySettings } from '@/components/settings/CompanySettings';
 import { InsuranceSettings } from '@/components/settings/InsuranceSettings';
 import EmittersSettings from '@/components/settings/EmittersSettings';
 import { IntegrationUnavailable } from '@/components/integrations/IntegrationUnavailable';
+import {useWorkspaceSsxAccounts} from '@/hooks/useWorkspaceSsxAccounts';
 
 type IntegrationAccount = Pick<
   Tables<'integration_accounts'>,
@@ -44,6 +46,12 @@ type IntegrationAccount = Pick<
 >;
 
 interface SsxAccountSettings {
+  administration_enabled?: boolean;
+  hashauth_configured?: boolean;
+  hashcentral_configured?: boolean;
+  organization_unit_integration_code?: string;
+  person_role_integration_code?: string;
+  work_schedule_integration_code?: string;
   sync_units_backoff_until?: string;
   last_units_sync_at?: string;
   credential_reentry_required?: boolean;
@@ -73,9 +81,14 @@ function readSsxSettings(value: Json): SsxAccountSettings {
     : {};
 }
 
+const SSX_BASE_URL = 'https://integration.systemsatx.com.br';
+
 export default function Settings() {
+  const [searchParams] = useSearchParams();
   const { isEnabled, error, refetch } = useTenantCapabilities();
   const ssxEnabled = isEnabled('ssx');
+  const requestedTab = searchParams.get('tab');
+  const initialTab = requestedTab === 'integration' ? 'integration' : 'company';
   const ssxUnavailable = (
     <IntegrationUnavailable
       capability="ssx"
@@ -90,7 +103,7 @@ export default function Settings() {
         <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
         <p className="text-sm text-muted-foreground">Gerencie integrações e parâmetros do sistema</p>
       </div>
-      <Tabs defaultValue="company">
+      <Tabs defaultValue={initialTab}>
         <TabsList className="flex-wrap">
           <TabsTrigger value="company">Empresa</TabsTrigger>
           <TabsTrigger value="emitters">Emitentes Fiscais</TabsTrigger>
@@ -205,21 +218,15 @@ function IntegrationSection({ ssxEnabled }: { ssxEnabled: boolean }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<IntegrationAccount | null>(null);
 
-  const { data: accounts = [], isLoading } = useQuery({
-    queryKey: ['integration_accounts', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('integration_accounts').select(INTEGRATION_ACCOUNT_SAFE_SELECT)
-        .eq('tenant_id', currentTenant.id).order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant,
-  });
+  const {data:accounts=[],isLoading}=useWorkspaceSsxAccounts(!!currentTenant&&ssxEnabled);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('integration_accounts').delete().eq('id', id);
+      if (!currentTenant) throw new Error('Selecione uma empresa');
+      const { error } = await supabase.rpc('delete_workspace_ssx_account_v1', {
+        _tenant_id: currentTenant.id,
+        _integration_account_id: id,
+      });
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['integration_accounts'] }); toast.success('Integração removida'); },
@@ -251,12 +258,32 @@ function IntegrationSection({ ssxEnabled }: { ssxEnabled: boolean }) {
 
   const syncTelemetryMutation = useMutation({
     mutationFn: async (accountId: string) => {
-      const { data, error } = await supabase.functions.invoke('ssx-sync-telemetry', { body: { integration_account_id: accountId } });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data;
+      const catalogResult = await supabase.functions.invoke('ssx-sync-telemetry', {
+        body: { integration_account_id: accountId },
+      });
+      if (catalogResult.error) throw catalogResult.error;
+      if (catalogResult.data?.error) throw new Error(catalogResult.data.error);
+      const governanceResult = await supabase.functions.invoke('ssx-sync-governance', {
+        body: { integration_account_id: accountId },
+      });
+      if (governanceResult.error) throw governanceResult.error;
+      if (governanceResult.data?.error) throw new Error(governanceResult.data.error);
+      return { ...catalogResult.data, governance: governanceResult.data };
     },
-    onSuccess: (data) => { queryClient.invalidateQueries({ queryKey: ['telemetry_catalog'] }); toast.success(`Sincronizado: ${data.upserted} telemetrias`); },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['telemetry_catalog'] });
+      const total = data?.catalogs && typeof data.catalogs === 'object'
+        ? Object.values(data.catalogs as Record<string, unknown>).reduce<number>(
+          (sum, value) => sum + (typeof value === 'number' ? value : 0), 0,
+        )
+        : Number(data?.upserted || 0);
+      const governanceTotal = data?.governance?.snapshots && typeof data.governance.snapshots === 'object'
+        ? Object.values(data.governance.snapshots as Record<string, unknown>).reduce<number>(
+          (sum, value) => sum + (typeof value === 'number' ? value : 0), 0,
+        )
+        : 0;
+      toast.success(`Catálogos SSX sincronizados: ${total + governanceTotal} itens`);
+    },
     onError: (e: unknown) => toast.error(`Falha: ${errorMessage(e)}`),
   });
 
@@ -292,7 +319,7 @@ function IntegrationSection({ ssxEnabled }: { ssxEnabled: boolean }) {
         const nextAt = data.next_sync_available_at ? new Date(data.next_sync_available_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
         toast.info(`Rastreadores já sincronizados recentemente.${nextAt ? ` Próximo sync disponível às ${nextAt}.` : ''} Use "Forçar Sync" para atualizar agora.`);
       } else {
-        const method = data.method === 'administration' ? 'Administration' : 'Fallback';
+        const method = data.method === 'administration' ? 'Administration' : 'Tracking (descoberta parcial)';
         const endpoint = data.tracker_endpoint_used ? ` via ${data.tracker_endpoint_used.split('/').slice(-2).join('/')}` : '';
         toast.success(`Sincronizado (${method}${endpoint}): ${data.upserted} rastreadores, ${data.vehicles_created || 0} veículos, ${data.links_created || 0} vínculos`);
       }
@@ -428,7 +455,7 @@ function IntegrationSection({ ssxEnabled }: { ssxEnabled: boolean }) {
                       );
                     })()}
                    <Button size="sm" variant="outline" onClick={() => syncTelemetryMutation.mutate(acc.id)} disabled={!ssxEnabled || syncTelemetryMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
-                     <Activity className={`mr-2 h-3 w-3 ${syncTelemetryMutation.isPending ? 'animate-spin' : ''}`} />Sync Telemetria
+                     <Activity className={`mr-2 h-3 w-3 ${syncTelemetryMutation.isPending ? 'animate-spin' : ''}`} />Sync Catálogos
                    </Button>
                    <Button size="sm" variant="outline" onClick={() => pollMutation.mutate(acc.id)} disabled={!ssxEnabled || pollMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
                     <Radio className={`mr-2 h-3 w-3 ${pollMutation.isPending ? 'animate-spin' : ''}`} />Rodar Polling
@@ -460,21 +487,32 @@ function IntegrationDialog({ open, onOpenChange, tenantId, account }: {
 }) {
   const toast = useSonnerToast();
   const queryClient = useQueryClient();
-  const [baseUrl, setBaseUrl] = useState('https://integration.systemsatx.com.br');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [hashauth, setHashauth] = useState('');
   const [hashcode, setHashcode] = useState('');
+  const [administrationEnabled, setAdministrationEnabled] = useState(false);
+  const [organizationUnitCode, setOrganizationUnitCode] = useState('');
+  const [personRoleCode, setPersonRoleCode] = useState('');
+  const [workScheduleCode, setWorkScheduleCode] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setBaseUrl(account?.base_url || 'https://integration.systemsatx.com.br');
     setUsername(account?.username || '');
     setPassword('');
     setHashauth('');
     setHashcode('');
+    const settings = account ? readSsxSettings(account.settings) : {};
+    setAdministrationEnabled(settings.administration_enabled === true);
+    setOrganizationUnitCode(settings.organization_unit_integration_code || '');
+    setPersonRoleCode(settings.person_role_integration_code || '');
+    setWorkScheduleCode(settings.work_schedule_integration_code || '');
   }, [account, open]);
+
+  const accountSettings = account ? readSsxSettings(account.settings) : {};
+  const requiresHashAuth = !accountSettings.hashauth_configured;
+  const requiresHashcentral = !username.includes('@') && !accountSettings.hashcentral_configured;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -484,8 +522,12 @@ function IntegrationDialog({ open, onOpenChange, tenantId, account }: {
       const { data, error } = await supabase.functions.invoke('agvlog-integration-upsert', {
         body: {
           id: account?.id,
-          tenant_id: tenantId, base_url: baseUrl, username, password,
+          tenant_id: tenantId, base_url: SSX_BASE_URL, username, password,
           hashauth: hashauth || null, hashcode: hashcode || null,
+          administration_enabled: administrationEnabled,
+          organization_unit_integration_code: organizationUnitCode,
+          person_role_integration_code: personRoleCode,
+          work_schedule_integration_code: workScheduleCode,
         },
       });
       if (error) throw error;
@@ -504,19 +546,58 @@ function IntegrationDialog({ open, onOpenChange, tenantId, account }: {
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>{account ? 'Atualizar credencial SSX' : 'Nova Integração SSX'}</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2"><Label htmlFor="ssx-base-url">URL Base</Label><Input id="ssx-base-url" name="base_url" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} required /></div>
+          <div className="space-y-2"><Label htmlFor="ssx-base-url">URL Base oficial</Label><Input id="ssx-base-url" name="base_url" value={SSX_BASE_URL} readOnly disabled /></div>
           <div className="space-y-2"><Label htmlFor="ssx-username">Usuário</Label><Input id="ssx-username" name="username" autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required /></div>
           <div className="space-y-2"><Label htmlFor="ssx-password">Senha</Label><Input id="ssx-password" name="password" autoComplete="new-password" type="password" value={password} onChange={e => setPassword(e.target.value)} required /></div>
           <div className="space-y-2">
             <Label htmlFor="ssx-hashauth">HashAuth</Label>
-            <Input id="ssx-hashauth" name="hashauth" value={hashauth} onChange={e => setHashauth(e.target.value)} placeholder={account ? 'Deixe em branco para manter o atual' : 'Recomendado para polling'} />
-            {!account && !hashauth && (
+            <Input id="ssx-hashauth" name="hashauth" value={hashauth} onChange={e => setHashauth(e.target.value)} placeholder={account ? 'Deixe em branco para manter o atual' : 'Obrigatório para Tracking'} required={requiresHashAuth} />
+            {requiresHashAuth && !hashauth && (
               <p className="text-xs text-warning">
-                ⚠ Sem HashAuth, o polling de posições (PositionHistory) e violações de regras podem não funcionar. Configure se disponível.
+                O HashAuth gerado na configuração de integração SSX é obrigatório para autenticar o produto Tracking.
               </p>
             )}
           </div>
-          <div className="space-y-2"><Label htmlFor="ssx-hashcode">Hashcode</Label><Input id="ssx-hashcode" name="hashcode" value={hashcode} onChange={e => setHashcode(e.target.value)} placeholder={account ? 'Deixe em branco para manter o atual' : 'Opcional'} /></div>
+          <div className="space-y-2">
+            <Label htmlFor="ssx-hashcentral">Hashcentral</Label>
+            <Input id="ssx-hashcentral" name="hashcentral" value={hashcode} onChange={e => setHashcode(e.target.value)} placeholder={account ? 'Deixe em branco para manter o atual' : 'Obrigatório se o usuário não for e-mail'} required={requiresHashcentral} />
+            <p className="text-xs text-muted-foreground">Necessário quando o usuário SSX não é um endereço de e-mail.</p>
+          </div>
+          <div className="rounded-md border p-3 space-y-2">
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="ssx-administration-enabled"
+                checked={administrationEnabled}
+                onCheckedChange={value => setAdministrationEnabled(value === true)}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="ssx-administration-enabled">Administration contratado e autorizado</Label>
+                <p className="text-xs text-muted-foreground">
+                  Ative somente se a Systemsat confirmou o produto Administration para esta conta. Tracking funciona sem esta opção.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-md border p-3 space-y-3">
+            <div>
+              <p className="text-sm font-medium">Pessoas e motoristas</p>
+              <p className="text-xs text-muted-foreground">
+                Use os códigos de integração cadastrados na SSX. O cargo é obrigatório para atualizar uma pessoa existente.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ssx-organization-unit-code">Unidade organizacional</Label>
+              <Input id="ssx-organization-unit-code" maxLength={40} value={organizationUnitCode} onChange={e => setOrganizationUnitCode(e.target.value)} placeholder="Opcional" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ssx-person-role-code">Cargo da pessoa</Label>
+              <Input id="ssx-person-role-code" maxLength={40} value={personRoleCode} onChange={e => setPersonRoleCode(e.target.value)} placeholder="Código PersonRole da SSX" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ssx-work-schedule-code">Escala de trabalho</Label>
+              <Input id="ssx-work-schedule-code" maxLength={40} value={workScheduleCode} onChange={e => setWorkScheduleCode(e.target.value)} placeholder="Opcional" />
+            </div>
+          </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : account ? 'Atualizar' : 'Salvar'}</Button>
@@ -532,17 +613,7 @@ function UnitsSection() {
   const { confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const { currentTenant } = useTenant();
-  const { data: accounts = [] } = useQuery({
-    queryKey: ['integration_accounts', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('integration_accounts').select('id, username, provider')
-        .eq('tenant_id', currentTenant.id);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant,
-  });
+  const {data:accounts=[]}=useWorkspaceSsxAccounts(!!currentTenant);
   const { data: units = [], isLoading: unitsLoading } = useProviderUnits();
   const { data: links = [], isLoading: linksLoading } = useTrackerLinks();
   const { data: vehicles = [] } = useVehicles();

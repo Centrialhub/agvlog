@@ -1,19 +1,12 @@
 import type { RouteStopDraft, RouteStopSortMode } from './routePlanningTypes';
-import { consolidateLoadsIntoStops, type ConsolidationLoad } from './stopConsolidation';
+import { consolidateLoadsIntoStops, deliveryGroupingKey as keyFor, type ConsolidationLoad } from './stopConsolidation';
 import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from './simpleStopSequencing';
 import { simulateStopTimeline } from './timelineSimulation';
-import { normalizeCity as norm } from '@/lib/utils/normalizeCity';
-
-const keyFor = (s: Pick<RouteStopDraft, 'client_id' | 'recipient_name' | 'city' | 'neighborhood'>) => [
-  s.client_id ? `c:${s.client_id}` : `r:${norm(s.recipient_name)}`,
-  norm(s.city),
-  norm(s.neighborhood),
-].join('|');
 
 /**
  * Recria as paradas a partir das cargas atuais, preservando edições manuais
  * (janelas, tempo de serviço, prioridade, ordem manual e notas) feitas em paradas
- * que continuam existindo (mesmo client/destinatário/cidade/bairro).
+ * que continuam existindo (mesmo destinatário, localização e fornecedor).
  */
 export function regenerateStopsPreservingEdits(
   loads: ConsolidationLoad[],
@@ -36,6 +29,13 @@ export function regenerateStopsPreservingEdits(
       if (typeof prev.manual_order === 'number') s.manual_order = prev.manual_order;
       if (typeof prev.latitude === 'number') s.latitude = prev.latitude;
       if (typeof prev.longitude === 'number') s.longitude = prev.longitude;
+      if (prev.location_source) s.location_source = prev.location_source;
+      if (prev.location_address) s.location_address = prev.location_address;
+      if (prev.location_provider) s.location_provider = prev.location_provider;
+      if (typeof prev.location_accuracy_m === 'number') s.location_accuracy_m = prev.location_accuracy_m;
+      if (typeof prev.location_confidence === 'number') s.location_confidence = prev.location_confidence;
+      if (prev.location_audit) s.location_audit = prev.location_audit;
+      if (typeof prev.geofence_radius_m === 'number') s.geofence_radius_m = prev.geofence_radius_m;
     });
   }
   // Reaplica o sortMode atual quando aplicável.

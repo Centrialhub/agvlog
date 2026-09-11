@@ -10,14 +10,13 @@ export function useDriverHomeVehiclePosition(vehicleId?: string | null) {
     queryKey: ['driver_home_vehicle_pos', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return null;
-      const { data, error } = await supabase
-        .from('positions_last')
-        .select('lat, lng, captured_at')
-        .eq('tenant_id', currentTenant.id)
-        .eq('vehicle_id', vehicleId)
-        .maybeSingle();
+      const { data, error } = await supabase.rpc('get_workspace_vehicle_position_v1', {
+        _tenant_id: currentTenant.id,
+        _vehicle_id: vehicleId,
+      });
       if (error) throw error;
-      return isFreshPositionObservation(data) ? data : null;
+      const observation = data?.[0] ?? null;
+      return isFreshPositionObservation(observation) ? observation : null;
     },
     enabled: !!currentTenant && !!vehicleId,
     staleTime: 15_000,

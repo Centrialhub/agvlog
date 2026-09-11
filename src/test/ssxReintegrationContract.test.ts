@@ -21,6 +21,11 @@ describe('SSX reintegration readiness', () => {
     expect(settings).toContain('SSX desativado — preparação segura disponível');
     expect(settings).toContain('disabled={!ssxEnabled || loginMutation.isPending}');
     expect(settings).toContain('onClick={() => { setEditingAccount(acc); setDialogOpen(true); }}');
+    expect(settings).toContain("requestedTab === 'integration' ? 'integration' : 'company'");
+
+    const health = read('src', 'pages', 'IntegrationHealth.tsx');
+    expect(health).toContain('actionHref="/settings?tab=integration"');
+    expect(health).toContain('actionLabel="Atualizar credencial SSX"');
   });
 
   it('documents staged activation, fresh telemetry proof, observation, and rollback', () => {

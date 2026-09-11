@@ -7,7 +7,7 @@ import DriverJourney from '@/pages/driver/DriverJourney';
 const mocks = vi.hoisted(() => ({
   events: [] as { id: string; event_type: string; event_at: string }[],
   failRead: false, pendingRead: false, preCompleted: true, postCompleted: true, activeTrip: true,
-  rpc: vi.fn(), toast: vi.fn(), navigate: vi.fn(),
+  rpc: vi.fn(), submit: vi.fn(), toast: vi.fn(), navigate: vi.fn(),
 }));
 
 vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: 'tenant' } }) }));
@@ -21,6 +21,9 @@ vi.mock('@/hooks/useChecklistStatus', () => ({ useChecklistStatus: () => ({
   preCheckedCount: 8, preTotalCount: 8, postCheckedCount: 5, postTotalCount: 5, isLoading: false, refetch: vi.fn(),
 }) }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mocks.toast }) }));
+vi.mock('@/hooks/useDriverOperationalOffline', () => ({ useDriverOperationalOffline: () => ({
+  commands: [], submit: mocks.submit,
+}) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => mocks.navigate }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: {
   from: () => {
@@ -57,6 +60,10 @@ beforeEach(() => {
     }
     mocks.events = [...mocks.events, { id: String(mocks.events.length), event_type: args._event_type, event_at: new Date().toISOString() }];
     return { data: 'event-id', error: null };
+  });
+  mocks.submit.mockImplementation(async (command) => {
+    mocks.events = [...mocks.events, { id: String(mocks.events.length), event_type: command.payload.event_type, event_at: new Date().toISOString() }];
+    return { queued: false, state: 'confirmed' };
   });
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   container = document.createElement('div');
@@ -112,7 +119,8 @@ describe('driver journey rendered frontend', () => {
     expect(button('Retomada')).toBeDisabled();
     await act(async () => button('Início de Jornada').click());
     await flushUntil(() => expect(button('Almoço')).toBeEnabled());
-    expect(mocks.rpc).toHaveBeenCalledWith('driver_create_event', expect.objectContaining({ _trip_id: 'trip', _event_type: 'start_shift' }));
+    expect(mocks.submit).toHaveBeenCalledWith(expect.objectContaining({ kind: 'journey', aggregateId: 'trip',
+      payload: expect.objectContaining({ trip_id: 'trip', event_type: 'start_shift' }) }));
     expect(button('Início de Jornada')).toBeDisabled();
     expect(container.textContent).toContain('Em atividade');
   });
@@ -145,24 +153,20 @@ describe('driver journey rendered frontend', () => {
     await renderJourney();
     await flushUntil(() => expect(button('Fim de Jornada')).toBeEnabled());
     await act(async () => button('Fim de Jornada').click());
-    expect(mocks.rpc).toHaveBeenCalledWith('driver_create_event', expect.objectContaining({
-      _trip_id: 'original-trip', _event_type: 'end_shift',
-      _payload: expect.objectContaining({ expected_previous_event_id: 'start', client_event_id: expect.any(String) }),
-    }));
+    expect(mocks.submit).toHaveBeenCalledWith(expect.objectContaining({ kind: 'journey', aggregateId: 'original-trip',
+      payload: expect.objectContaining({ trip_id: 'original-trip', event_type: 'end_shift',
+        event_payload: expect.objectContaining({ expected_previous_event_id: 'start' }) }) }));
   });
 
-  it('retains the request key after a lost response and shows PostgREST errors', async () => {
-    const defaultRpc = mocks.rpc.getMockImplementation()!;
-    mocks.rpc.mockImplementation((name, args) => name === 'driver_create_event'
-      ? Promise.resolve({ data: null, error: { message: 'Conexão interrompida' } }) : defaultRpc(name, args));
+  it('preserves the journey state and shows synchronization errors', async () => {
+    mocks.submit.mockRejectedValue(new Error('Conexão interrompida'));
     await renderJourney();
     await flushUntil(() => expect(button('Início de Jornada')).toBeEnabled());
     await act(async () => button('Início de Jornada').click());
     await flushUntil(() => expect(button('Início de Jornada')).toBeEnabled());
     await act(async () => button('Início de Jornada').click());
-    const calls = mocks.rpc.mock.calls.filter(([name]) => name === 'driver_create_event');
-    expect(calls).toHaveLength(2);
-    expect(calls[0][1]._payload.client_event_id).toBe(calls[1][1]._payload.client_event_id);
+    expect(mocks.submit).toHaveBeenCalledTimes(2);
+    expect(mocks.submit.mock.calls[1]).toEqual(mocks.submit.mock.calls[0]);
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ description: 'Conexão interrompida' }));
   });
 });

@@ -20,8 +20,12 @@ import {
   ssxPost,
   logIntegration,
   logSsxCall,
+  redactedSsxResponsePreview,
   getTenantRole,
+  getWorkspaceRoleForAccount,
+  requireWorkspaceAccountContext,
   type SsxErrorClass,
+  type SsxHttpResult,
 } from "../_shared/ssx-utils.ts";
 
 declare const Deno: {
@@ -96,7 +100,9 @@ Deno.serve(async (req) => {
     }
 
     if (!isCron && callerId) {
-      const memberRole = await getTenantRole(supabase, account.tenant_id, callerId);
+      const tenantContextError=await requireWorkspaceAccountContext(req,supabase,integration_account_id);
+      if(tenantContextError)return tenantContextError;
+      const memberRole=account.workspace_id?await getWorkspaceRoleForAccount(supabase,account.workspace_id,callerId):await getTenantRole(supabase,account.tenant_id,callerId);
       if (!memberRole || !["owner", "admin"].includes(memberRole)) {
         return jsonResp({ error: "Forbidden: admin role required" }, 403);
       }
@@ -193,7 +199,119 @@ Deno.serve(async (req) => {
   }
 });
 
-// ==================== BROADBAND POLL (1 request for all units) ====================
+// ==================== COMPLETE WINDOW FETCH ====================
+
+const SSX_POSITION_RESULT_LIMIT = 500;
+const SSX_MIN_WINDOW_MS = 1_000;
+const SSX_MAX_WINDOW_REQUESTS = 32;
+
+type CompletePositionWindow = {
+  items: any[];
+  response: SsxHttpResult;
+  endpoint: string;
+  requests: number;
+  saturated: boolean;
+};
+
+async function fetchCompletePositionWindow(params: {
+  positionUrls: string[];
+  token: string;
+  apiVersion: string;
+  timeoutMs: number;
+  start: string;
+  end: string;
+}): Promise<CompletePositionWindow> {
+  const { positionUrls, token, apiVersion, timeoutMs } = params;
+  if (positionUrls.length === 0) throw new Error("SSX_POSITION_ENDPOINT_MISSING");
+
+  let requests = 0;
+  let preferredUrl = positionUrls[0];
+  let lastResponse: SsxHttpResult | null = null;
+  let lastEndpoint = preferredUrl;
+
+  const fetchRange = async (start: string, end: string): Promise<CompletePositionWindow> => {
+    if (requests >= SSX_MAX_WINDOW_REQUESTS && lastResponse) {
+      return {
+        items: [], response: lastResponse, endpoint: lastEndpoint,
+        requests, saturated: true,
+      };
+    }
+    let response: SsxHttpResult | null = null;
+    let endpoint = preferredUrl;
+    const orderedUrls = [preferredUrl, ...positionUrls.filter((url) => url !== preferredUrl)];
+
+    for (const url of orderedUrls) {
+      if (requests >= SSX_MAX_WINDOW_REQUESTS) {
+        if (!response) throw new Error("SSX_POSITION_REQUEST_BUDGET_EXHAUSTED");
+        return { items: [], response, endpoint, requests, saturated: true };
+      }
+      const filters = [
+        { PropertyName: "EventDate", Condition: ">=", Value: start },
+        { PropertyName: "EventDate", Condition: "<", Value: end },
+      ];
+      response = await ssxPost(url, token, filters, timeoutMs);
+      endpoint = url;
+      requests++;
+      lastResponse = response;
+      lastEndpoint = endpoint;
+      const items = response.ok ? extractResponseItems(response.parsed) : [];
+
+      logSsxCall({
+        routine: "poll-positions",
+        endpoint: url,
+        method: "POST",
+        apiVersion,
+        attemptType: "bounded_fleet_window",
+        statusCode: response.status,
+        durationMs: response.durationMs,
+        responsePreview: redactedSsxResponsePreview(response.text, response.networkError),
+        result: response.ok ? (items.length ? "success" : "empty") : "error",
+        errorClass: response.ok ? undefined : response.errorClass,
+      });
+
+      if (response.ok) {
+        preferredUrl = url;
+        if (items.length < SSX_POSITION_RESULT_LIMIT) {
+          return { items, response, endpoint, requests, saturated: false };
+        }
+
+        const startMs = Date.parse(start);
+        const endMs = Date.parse(end);
+        if (
+          !Number.isFinite(startMs)
+          || !Number.isFinite(endMs)
+          || endMs - startMs <= SSX_MIN_WINDOW_MS
+          || requests >= SSX_MAX_WINDOW_REQUESTS
+        ) {
+          return { items: [], response, endpoint, requests, saturated: true };
+        }
+
+        const middle = new Date(startMs + Math.floor((endMs - startMs) / 2)).toISOString();
+        const left = await fetchRange(start, middle);
+        if (left.saturated || !left.response.ok) return left;
+        const right = await fetchRange(middle, end);
+        if (right.saturated || !right.response.ok) return right;
+        return {
+          items: [...left.items, ...right.items],
+          response: right.response,
+          endpoint: right.endpoint,
+          requests,
+          saturated: false,
+        };
+      }
+
+      if (response.errorClass !== "route_not_found") {
+        return { items: [], response, endpoint, requests, saturated: false };
+      }
+    }
+
+    return { items: [], response: response!, endpoint, requests, saturated: false };
+  };
+
+  return fetchRange(params.start, params.end);
+}
+
+// ==================== BROADBAND POLL (bounded requests for all units) ====================
 
 async function broadbandPoll(params: {
   units: any[];
@@ -209,26 +327,45 @@ async function broadbandPoll(params: {
     integration_account_id, tenant_id, lookback_minutes } = params;
 
   const pollWindowMin = lookback_minutes || config.pollWindowMinutes || 15;
-  const timeStart = new Date(Date.now() - pollWindowMin * 60_000).toISOString();
+  const windowEnd = new Date();
+  const timeStart = new Date(windowEnd.getTime() - pollWindowMin * 60_000).toISOString();
   const broadbandUrl = positionUrls[0];
-
-  // Single request — only time filter, no unit filter
-  const filters = [
-    { PropertyName: "EventDate", Condition: ">=", Value: timeStart },
-  ];
 
   console.log(`[SSX:poll-positions] BROADBAND mode | ${units.length} units | window=${pollWindowMin}min | url=${broadbandUrl}`);
 
-  const resp = await ssxPost(broadbandUrl, config.token, filters, config.requestTimeoutMs);
-
-  logSsxCall({
-    routine: "poll-positions", endpoint: broadbandUrl, method: "POST",
-    apiVersion: config.apiVersion, attemptType: "broadband_fleet",
-    statusCode: resp.status, durationMs: resp.durationMs,
-    responsePreview: (resp.text || "").substring(0, 150),
-    result: resp.ok ? "success" : "error",
-    errorClass: resp.ok ? undefined : resp.errorClass,
+  const completeWindow = await fetchCompletePositionWindow({
+    positionUrls,
+    token: config.token,
+    apiVersion: config.apiVersion,
+    timeoutMs: config.requestTimeoutMs,
+    start: timeStart,
+    end: windowEnd.toISOString(),
   });
+  const resp = completeWindow.response;
+
+  if (completeWindow.saturated) {
+    const observedAt = new Date().toISOString();
+    const failure = await recordBroadbandFailure(supabase, {
+      units, unitToVehicle, integrationAccountId: integration_account_id,
+      observedAt, error: "SSX position window remained saturated at 500 records",
+      backoffUntil: new Date(Date.now() + 60_000).toISOString(),
+    });
+    if (!failure.ok) {
+      return jsonResp({
+        success: false, batch_aborted: true, abort_reason: "persistence_failure",
+        total_units: units.length, total_inserted: 0,
+      }, 500);
+    }
+    return jsonResp({
+      success: false,
+      batch_aborted: true,
+      abort_reason: "saturated_response",
+      saturation_blocked: true,
+      requests: completeWindow.requests,
+      total_units: units.length,
+      total_inserted: 0,
+    }, 409);
+  }
 
   if (resp.errorClass === "rate_limited") {
     const observedAt = new Date().toISOString();
@@ -271,7 +408,7 @@ async function broadbandPoll(params: {
     }, 502);
   }
 
-  const allItems = extractResponseItems(resp.parsed);
+  const allItems = completeWindow.items;
   console.log(`[SSX:poll-positions] BROADBAND received ${allItems.length} positions from fleet`);
 
   // Build identifier sets for each unit
@@ -291,10 +428,19 @@ async function broadbandPoll(params: {
   let unmatched = 0;
   let ambiguous = 0;
   let outsideBindingWindow = 0;
+  const quarantineCandidates: Array<{ point: Record<string, unknown>; reason: PositionQuarantineReason }> = [];
 
   for (const item of allItems) {
+    const structuralRejection = structuralPositionRejection(item);
+    if (structuralRejection) {
+      quarantineCandidates.push({ point: item, reason: structuralRejection });
+      continue;
+    }
     const normalized = normalizePosition(item);
-    if (!normalized) continue;
+    if (!normalized) {
+      quarantineCandidates.push({ point: item, reason: "invalid_timestamp" });
+      continue;
+    }
 
     const telemetry = { ...item };
     const matches = unitIdentifierSets.filter(({ identifiers }) =>
@@ -302,12 +448,21 @@ async function broadbandPoll(params: {
     );
     if (matches.length !== 1) {
       unmatched++;
-      if (matches.length > 1) ambiguous++;
+      if (matches.length > 1) {
+        ambiguous++;
+        quarantineCandidates.push({ point: item, reason: "ambiguous_unit" });
+      } else {
+        quarantineCandidates.push({
+          point: item,
+          reason: pointHasTrackedUnitIdentity(item) ? "unmatched_unit" : "missing_identity",
+        });
+      }
       continue;
     }
     const { unit, mapping } = matches[0];
     if (!isWithinBindingWindow(normalized.captured_at, mapping)) {
       outsideBindingWindow++;
+      quarantineCandidates.push({ point: item, reason: "outside_binding_window" });
       continue;
     }
     const key = mapping.vehicle_id;
@@ -318,6 +473,23 @@ async function broadbandPoll(params: {
   }
 
   console.log(`[SSX:poll-positions] BROADBAND distributed: ${vehiclePositions.size} vehicles matched, ${unmatched} unmatched points, ${ambiguous} ambiguous`);
+
+  const quarantineRecords = await Promise.all(quarantineCandidates.map(({ point, reason }) =>
+    buildQuarantineRecord(point, reason)
+  ));
+  const quarantineCommit = await recordQuarantineBatch(
+    supabase, tenant_id, integration_account_id, quarantineRecords,
+  );
+  if (!quarantineCommit.ok) {
+    console.error(`[SSX:poll-positions] QUARANTINE_PERSISTENCE_FAILURE | error=${quarantineCommit.error}`);
+    return jsonResp({
+      success: false,
+      batch_aborted: true,
+      abort_reason: "persistence_failure",
+      total_units: units.length,
+      total_inserted: 0,
+    }, 500);
+  }
 
   // Process each vehicle's positions
   let totalInserted = 0;
@@ -410,6 +582,7 @@ async function broadbandPoll(params: {
       unmatched_positions: unmatched,
       ambiguous_positions: ambiguous,
       outside_binding_window: outsideBindingWindow,
+      quarantined_positions: quarantineRecords.length,
       total_inserted: totalInserted,
       total_duplicates: totalDuplicates,
       total_failed: totalFailed,
@@ -426,6 +599,7 @@ async function broadbandPoll(params: {
     unmatched_positions: unmatched,
     ambiguous_positions: ambiguous,
     outside_binding_window: outsideBindingWindow,
+    quarantined_positions: quarantineRecords.length,
     total_inserted: totalInserted,
     total_duplicates: totalDuplicates,
     total_failed: totalFailed,
@@ -782,7 +956,7 @@ async function pollSingleUnit(params: {
       apiVersion: config.apiVersion,
       attemptType: `${type}:${property}:${format}:${timeProp}`,
       statusCode: resp.status, durationMs: resp.durationMs,
-      responsePreview: (resp.text || "").substring(0, 150),
+      responsePreview: redactedSsxResponsePreview(resp.text, resp.networkError),
       result: items.length > 0 ? "success" : (resp.ok ? "empty" : "error"),
       errorClass: resp.ok ? (items.length > 0 ? undefined : "empty_response" as SsxErrorClass) : resp.errorClass,
     });
@@ -1134,10 +1308,67 @@ function isPointFromCurrentUnitBroadband(
 
 // ==================== Position Normalizer ====================
 
+type PositionQuarantineReason =
+  | "invalid_gps"
+  | "invalid_coordinates"
+  | "invalid_timestamp"
+  | "missing_identity"
+  | "unmatched_unit"
+  | "ambiguous_unit"
+  | "outside_binding_window"
+  | "unsupported_unit_type";
+
+function structuralPositionRejection(point: any): PositionQuarantineReason | null {
+  const validGps = point.ValidGPS ?? point.validGPS ?? point.ValidGps ?? point.validGps;
+  if (validGps === false || validGps === 0 || validGps === "0" || String(validGps).toLowerCase() === "false") {
+    return "invalid_gps";
+  }
+
+  const trackedUnitType = point.IdTrackedUnitType ?? point.idTrackedUnitType;
+  if (trackedUnitType != null && Number(trackedUnitType) !== 1) {
+    return "unsupported_unit_type";
+  }
+
+  const lat = point.Latitude ?? point.latitude ?? point.Lat ?? point.lat ?? point.Y ?? point.y;
+  const lng = point.Longitude ?? point.longitude ?? point.Lng ?? point.lng ?? point.X ?? point.x;
+  const parsedLat = typeof lat === "string" ? parseFloat(lat) : lat;
+  const parsedLng = typeof lng === "string" ? parseFloat(lng) : lng;
+  if (
+    !Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)
+    || parsedLat < -90 || parsedLat > 90 || parsedLng < -180 || parsedLng > 180
+    || (parsedLat === 0 && parsedLng === 0)
+  ) return "invalid_coordinates";
+
+  const dateValue =
+    point.EventDate ?? point.eventDate ?? point.UpdateDate ?? point.updateDate
+    ?? point.DateTimeGPS ?? point.dateTimeGPS ?? point.DateTimeServer ?? point.dateTimeServer
+    ?? point.DateTime ?? point.dateTime ?? point.Date ?? point.date ?? point.Timestamp ?? point.timestamp;
+  const timestamp = typeof dateValue === "string" || typeof dateValue === "number"
+    ? Date.parse(String(dateValue))
+    : Number.NaN;
+  if (!Number.isFinite(timestamp) || timestamp < Date.UTC(2000, 0, 1) || timestamp > Date.now() + 5 * 60_000) {
+    return "invalid_timestamp";
+  }
+  return null;
+}
+
+function pointHasTrackedUnitIdentity(point: any): boolean {
+  return [
+    point.TrackedUnit, point.trackedUnit,
+    point.Plate, point.plate,
+    point.VehicleIntegrationCode, point.vehicleIntegrationCode,
+    point.TrackedUnitIntegrationCode, point.trackedUnitIntegrationCode,
+    point.TrackerIntegrationCode, point.trackerIntegrationCode,
+    point.IdTrackedUnit, point.idTrackedUnit,
+    point.IdTracker, point.idTracker,
+  ].some((value) => value != null && String(value).trim() !== "");
+}
+
 function normalizePosition(point: any): {
   lat: number; lng: number; speed: number | null; heading: number | null;
   captured_at: string; telemetry: Record<string, any>;
 } | null {
+  if (structuralPositionRejection(point)) return null;
   const lat = point.Latitude ?? point.latitude ?? point.Lat ?? point.lat ?? point.Y ?? point.y;
   const lng = point.Longitude ?? point.longitude ?? point.Lng ?? point.lng ?? point.X ?? point.x;
   const speed = point.Speed ?? point.speed ?? point.Velocidade ?? null;
@@ -1200,6 +1431,67 @@ type PositionPersistenceRow = {
   telemetry: Record<string, any>;
   provider_payload_hash: string;
 };
+
+type PositionQuarantineRecord = {
+  reason: PositionQuarantineReason;
+  provider_position_id: string | null;
+  tracked_unit_integration_code: string | null;
+  event_date: string | null;
+  payload_hash: string;
+  payload: Record<string, unknown>;
+};
+
+const QUARANTINE_PAYLOAD_FIELDS = [
+  "IdPosition", "IdTrackedUnit", "IdTrackedUnitType",
+  "TrackedUnitIntegrationCode", "TrackerIntegrationCode", "TrackerSlot",
+  "EventDate", "UpdateDate", "Latitude", "Longitude", "ValidGPS", "Plate",
+] as const;
+
+async function buildQuarantineRecord(
+  point: Record<string, unknown>,
+  reason: PositionQuarantineReason,
+): Promise<PositionQuarantineRecord> {
+  const payload: Record<string, unknown> = {};
+  for (const field of QUARANTINE_PAYLOAD_FIELDS) {
+    if (point[field] != null) payload[field] = point[field];
+  }
+  const providerPosition = point.IdPosition ?? point.idPosition;
+  const trackedUnit = point.TrackedUnitIntegrationCode ?? point.trackedUnitIntegrationCode;
+  const eventValue = point.EventDate ?? point.eventDate ?? point.UpdateDate ?? point.updateDate;
+  const eventMs = eventValue == null ? Number.NaN : Date.parse(String(eventValue));
+  return {
+    reason,
+    provider_position_id: providerPosition == null ? null : String(providerPosition),
+    tracked_unit_integration_code: trackedUnit == null ? null : String(trackedUnit),
+    event_date: Number.isFinite(eventMs) ? new Date(eventMs).toISOString() : null,
+    payload_hash: await sha256Hex(canonicalJson({ reason, payload })),
+    payload,
+  };
+}
+
+async function recordQuarantineBatch(
+  supabase: any,
+  tenantId: string,
+  integrationAccountId: string,
+  records: PositionQuarantineRecord[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (records.length === 0) return { ok: true };
+  const { data, error } = await supabase.rpc("record_ssx_position_quarantine_batch_v1", {
+    _tenant_id: tenantId,
+    _integration_account_id: integrationAccountId,
+    _records: records,
+  });
+  if (error) return { ok: false, error: error.message || "ssx_quarantine_commit_failed" };
+  const receipt = Array.isArray(data) ? data[0] : data;
+  if (!receipt || receipt.version !== 1
+    || receipt.tenant_id !== tenantId
+    || receipt.integration_account_id !== integrationAccountId
+    || receipt.attempted !== records.length
+    || receipt.recorded !== records.length) {
+    return { ok: false, error: "ssx_quarantine_receipt_invalid" };
+  }
+  return { ok: true };
+}
 
 async function toPersistenceRow(
   normalized: ReturnType<typeof normalizePosition> & object,

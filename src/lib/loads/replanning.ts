@@ -1,5 +1,10 @@
+import type { Json } from '@/integrations/supabase/types';
+
 export type ReplanningTarget = { mode: 'unassigned' } | { mode: 'existing'; stop_id: string } | {
   mode: 'new'; destination: string; latitude: number; longitude: number; client_id: string | null;
+  location_source: 'address_geocoded' | 'map_selected'; location_address: string | null;
+  location_provider: string | null; location_accuracy_m: number | null; location_confidence: number | null;
+  location_audit: Json; geofence_radius_m: number;
 };
 export interface ReplanningPayload {
   tenant_id: string; source_load_id: string; target_load_id: string; item_ids: string[];
@@ -31,6 +36,9 @@ export function isReplanningPayload(value: unknown): value is ReplanningPayload 
   return target.mode === 'new' && typeof target.destination === 'string' && !!target.destination.trim()
     && typeof target.latitude === 'number' && Number.isFinite(target.latitude) && Math.abs(target.latitude) <= 90
     && typeof target.longitude === 'number' && Number.isFinite(target.longitude) && Math.abs(target.longitude) <= 180
+    && (target.location_source === 'address_geocoded' || target.location_source === 'map_selected')
+    && (target.location_source !== 'address_geocoded' || typeof target.location_address === 'string' && !!target.location_address.trim())
+    && typeof target.geofence_radius_m === 'number' && target.geofence_radius_m >= 50 && target.geofence_radius_m <= 5000
     && (target.client_id === null || typeof target.client_id === 'string' && uuid.test(target.client_id));
 }
 export function parseReplanningContext(value: unknown, source: string, target: string): ReplanningContext {

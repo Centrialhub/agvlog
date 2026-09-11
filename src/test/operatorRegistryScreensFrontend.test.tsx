@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Drivers from '@/pages/Drivers';
@@ -119,5 +119,20 @@ describe('operator driver and vehicle registries', () => {
       _resource: 'vehicles',
       _include_inactive: true,
     }));
+  });
+
+  it.each([
+    ['motoristas', <Drivers />],
+    ['veículos', <Vehicles />],
+  ])('does not present a failed %s request as an empty registry', async (label, page) => {
+    mock.rpc.mockResolvedValue({ data: null, error: new Error('falha de leitura') });
+    renderScreen(page);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(`Não foi possível carregar os ${label}: falha de leitura.`);
+    expect(screen.queryByText(new RegExp(`Nenhum ${label.slice(0, -1)}`))).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    await waitFor(() => expect(mock.rpc).toHaveBeenCalledTimes(3));
   });
 });

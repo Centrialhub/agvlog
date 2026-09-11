@@ -25,6 +25,7 @@ import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { useTenant } from '@/hooks/useTenant';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 import { driverMonitorCommandError } from '@/lib/driverMonitoring/driverMonitorCommands';
+import { DriverAppObservabilityPanel } from '@/components/driver/DriverAppObservabilityPanel';
 
 const dt = (v?: string | null) => (v ? v.slice(0, 10).split('-').reverse().join('/') : '—');
 
@@ -261,6 +262,7 @@ export default function DriverMonitoring() {
           <TabsTrigger value="daily">Registro Diário</TabsTrigger>
           <TabsTrigger value="arrival">Previsão de Chegada</TabsTrigger>
           <TabsTrigger value="reports">Relatórios</TabsTrigger>
+          <TabsTrigger value="app-health">Saúde do app</TabsTrigger>
           <TabsTrigger value="import">Importar Planilha</TabsTrigger>
         </TabsList>
 
@@ -361,6 +363,10 @@ export default function DriverMonitoring() {
             <ReportCard title="Atrasos" onCsv={() => downloadCsv('atrasos.csv', driversInRouteCsv(rows.filter((r) => r.status === 'delayed')))} onPdf={() => downloadPdf(delaysPdf(rows.filter((r) => r.status === 'delayed'), filterSummary, companyInfo), 'atrasos.pdf')} />
             <ReportCard title="Produtividade" onCsv={() => downloadCsv('produtividade.csv', driversInRouteCsv(rows))} onPdf={() => downloadPdf(productivityPdf(rows, filterSummary, companyInfo), 'produtividade.pdf')} />
           </div>
+        </TabsContent>
+
+        <TabsContent value="app-health" className="space-y-3">
+          <DriverAppObservabilityPanel />
         </TabsContent>
 
         <TabsContent value="import" className="space-y-3">

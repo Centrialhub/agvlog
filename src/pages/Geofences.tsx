@@ -9,9 +9,7 @@ import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useListFilters } from '@/hooks/useListFilters';
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { matchesSearch } from '@/lib/listFilters';
@@ -19,16 +17,17 @@ import { Separator } from '@/components/ui/separator';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   Hexagon, Plus, Trash2, MapPin, Shield, Truck, Building2,
-  Info, ArrowDownUp, Eye, EyeOff, HelpCircle, AlertTriangle, RefreshCw
+  Info, ArrowDownUp, Eye, EyeOff, HelpCircle, AlertTriangle, RefreshCw, Pencil, LockKeyhole
 } from 'lucide-react';
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, CircleMarker, Popup } from 'react-leaflet';
+import { GeofenceFormDialog, type EditableFleetGeofence } from '@/components/geofences/GeofenceFormDialog';
 import 'leaflet/dist/leaflet.css';
 
 const CATEGORIES = [
-  { value: 'base', label: 'Base / Garagem', icon: Building2, color: '#22c55e', description: 'Sua base de operações, garagem ou pátio' },
-  { value: 'client', label: 'Cliente', icon: MapPin, color: '#a855f7', description: 'Local de carga/descarga de um cliente' },
-  { value: 'restricted', label: 'Zona Restrita', icon: Shield, color: '#ef4444', description: 'Área onde veículos não devem entrar' },
-  { value: 'general', label: 'Outra', icon: Hexagon, color: '#3b82f6', description: 'Posto, pernoite, ponto de apoio, etc.' },
+  { value: 'base', label: 'Base / Garagem', icon: Building2, color: '#22c55e', defaultRadius: 250, description: 'Sua base de operações, garagem ou pátio' },
+  { value: 'client', label: 'Cliente', icon: MapPin, color: '#a855f7', defaultRadius: 300, description: 'Local de carga/descarga de um cliente' },
+  { value: 'restricted', label: 'Zona Restrita', icon: Shield, color: '#ef4444', defaultRadius: 500, description: 'Área onde veículos não devem entrar' },
+  { value: 'general', label: 'Outra', icon: Hexagon, color: '#3b82f6', defaultRadius: 300, description: 'Posto, pernoite, ponto de apoio, etc.' },
 ] as const;
 
 const getCategoryConfig = (cat: string) => CATEGORIES.find(c => c.value === cat) || CATEGORIES[3];
@@ -42,6 +41,7 @@ export default function Geofences() {
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingGeofence, setEditingGeofence] = useState<EditableFleetGeofence | null>(null);
   const { filters, setFilter, resetFilters, activeCount: filterCount } = useListFilters({ search: '', category: 'all', status: 'all' });
   const [showHelp, setShowHelp] = useState(false);
 
@@ -50,7 +50,7 @@ export default function Geofences() {
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data, error } = await supabase.from('geofences')
-        .select('id, tenant_id, name, category, enabled, created_at')
+        .select('id, tenant_id, name, category, enabled, created_at, shape_kind, scope_kind, dispatch_stop_id, source_kind, source_address, center_lat, center_lng, radius_m, location_provider, location_accuracy_m, location_confidence, location_audit, enter_margin_m, exit_margin_m, transition_confirmations')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -101,10 +101,15 @@ export default function Geofences() {
   const toggleMutation = useMutation({
     mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { error } = await supabase.from('geofences').update({ enabled })
+      const { data, error } = await supabase.from('geofences').update({ enabled })
         .eq('id', id)
-        .eq('tenant_id', currentTenant.id);
+        .eq('tenant_id', currentTenant.id)
+        .eq('scope_kind', 'fleet')
+        .is('dispatch_stop_id', null)
+        .select('id')
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('Somente cercas de frota podem ser alteradas nesta tela.');
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['geofences'] }); },
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao atualizar geofence')),
@@ -113,10 +118,15 @@ export default function Geofences() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { error } = await supabase.from('geofences').delete()
+      const { data, error } = await supabase.from('geofences').delete()
         .eq('id', id)
-        .eq('tenant_id', currentTenant.id);
+        .eq('tenant_id', currentTenant.id)
+        .eq('scope_kind', 'fleet')
+        .is('dispatch_stop_id', null)
+        .select('id')
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('Somente cercas de frota podem ser removidas nesta tela.');
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['geofences'] }); toast.success('Geofence removida'); },
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao remover geofence')),
@@ -229,7 +239,7 @@ export default function Geofences() {
       )}
 
       {/* Map */}
-      {positions.length > 0 && (
+      {(positions.length > 0 || geofences.some((f) => f.center_lat != null && f.center_lng != null)) && (
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -240,11 +250,17 @@ export default function Geofences() {
           <CardContent className="p-0">
             <div className="h-[350px]">
               <MapContainer
-                center={[positions[0].lat, positions[0].lng]}
-                zoom={10}
+                center={positions.length > 0 ? [positions[0].lat, positions[0].lng] : [Number(geofences[0]?.center_lat) || -14.235, Number(geofences[0]?.center_lng) || -51.9253]}
+                zoom={positions.length > 0 ? 10 : 14}
                 className="h-full w-full z-0"
               >
                 <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                {geofences.flatMap((f) => f.enabled && f.center_lat != null && f.center_lng != null && f.radius_m != null ? [
+                  <Circle key={f.id} center={[Number(f.center_lat), Number(f.center_lng)]} radius={Number(f.radius_m)}
+                    pathOptions={{ color: getCategoryConfig(f.category || 'general').color, fillOpacity: 0.12 }}>
+                    <Popup><strong>{f.name}</strong><br />Raio {Math.round(Number(f.radius_m))} m</Popup>
+                  </Circle>,
+                ] : [])}
                 {positions.map((p) => (
                   <CircleMarker key={p.vehicle_id} center={[p.lat, p.lng]} radius={6}
                     pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8 }}>
@@ -300,6 +316,7 @@ export default function Geofences() {
                 const config = getCategoryConfig(g.category || 'general');
                 const Icon = config.icon;
                 const insideCount = currentStates.filter((s) => s.geofence_id === g.id).length;
+                const deliveryReadOnly = g.scope_kind === 'delivery' || Boolean(g.dispatch_stop_id);
 
                 return (
                   <div key={g.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
@@ -310,6 +327,9 @@ export default function Geofences() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium truncate">{g.name}</span>
                         <Badge variant="outline" className="text-[10px] shrink-0">{config.label}</Badge>
+                        <Badge variant="secondary" className="text-[10px] shrink-0">
+                          {g.scope_kind === 'delivery' ? 'Entrega' : 'Frota'}
+                        </Badge>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5">
                         {insideCount > 0 && (
@@ -323,8 +343,17 @@ export default function Geofences() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      {isAdmin && (
+                      {isAdmin && deliveryReadOnly && (
+                        <Badge variant="outline" className="gap-1 text-[10px]" title="Gerada automaticamente pelo destino da parada">
+                          <LockKeyhole className="h-3 w-3" /> Somente leitura
+                        </Badge>
+                      )}
+                      {isAdmin && !deliveryReadOnly && (
                         <>
+                          <Button size="icon" variant="ghost" className="h-7 w-7"
+                            onClick={() => setEditingGeofence(g)} title={`Editar cerca ${g.name}`}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7"
                             onClick={() => toggleMutation.mutate({ id: g.id, enabled: !g.enabled })}
                             title={g.enabled ? 'Pausar monitoramento' : 'Ativar monitoramento'}
@@ -388,11 +417,17 @@ export default function Geofences() {
       <HelpDialog open={showHelp} onOpenChange={setShowHelp} />
 
       {/* Create dialog */}
-      {isAdmin && <NewGeofenceDialog open={dialogOpen} onOpenChange={setDialogOpen} tenantId={currentTenant?.id} />}
+      {isAdmin && currentTenant && (
+        <>
+          <GeofenceFormDialog open={dialogOpen} onOpenChange={setDialogOpen} tenantId={currentTenant.id} />
+          <GeofenceFormDialog open={Boolean(editingGeofence)}
+            onOpenChange={(open) => { if (!open) setEditingGeofence(null); }}
+            tenantId={currentTenant.id} geofence={editingGeofence} />
+        </>
+      )}
     </div>
   );
 }
-
 /* ─── Help Dialog ─── */
 function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   return (
@@ -437,152 +472,11 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: b
             <ol className="space-y-1 text-muted-foreground list-decimal list-inside">
               <li>Clique em <strong className="text-foreground">"Nova Cerca"</strong></li>
               <li>Dê um nome (ex: "Garagem SP") e escolha a categoria</li>
-              <li>Informe as coordenadas do centro e o raio em metros</li>
+              <li>Pesquise o endereço ou marque o ponto diretamente no mapa</li>
               <li>O sistema cria um círculo no mapa e começa a monitorar</li>
             </ol>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ─── Create Dialog ─── */
-function NewGeofenceDialog({ open, onOpenChange, tenantId }: { open: boolean; onOpenChange: (v: boolean) => void; tenantId?: string }) {
-  const toast = useSonnerToast();
-  const qc = useQueryClient();
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('base');
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
-  const [radius, setRadius] = useState('200');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tenantId) return;
-    setLoading(true);
-
-    const cLat = parseFloat(lat);
-    const cLng = parseFloat(lng);
-    const r = parseFloat(radius);
-
-    if (isNaN(cLat) || isNaN(cLng) || cLat < -90 || cLat > 90 || cLng < -180 || cLng > 180) {
-      toast.error('Coordenadas inválidas. Latitude: -90 a 90, Longitude: -180 a 180');
-      setLoading(false);
-      return;
-    }
-
-    const coords: [number, number][] = [];
-    for (let i = 0; i <= 32; i++) {
-      const angle = (i / 32) * 2 * Math.PI;
-      const dLat = (r / 111320) * Math.cos(angle);
-      const dLng = (r / (111320 * Math.cos(cLat * Math.PI / 180))) * Math.sin(angle);
-      coords.push([cLng + dLng, cLat + dLat]);
-    }
-
-    const geojson = JSON.stringify({ type: 'Polygon', coordinates: [coords] });
-
-    const { error } = await supabase.rpc('upsert_geofence', {
-      _id: null as never,
-      _tenant_id: tenantId,
-      _name: name,
-      _category: category,
-      _geojson: geojson,
-      _enabled: true,
-    });
-
-    if (error) toast.error(error.message);
-    else {
-      toast.success(`Cerca "${name}" criada com sucesso!`);
-      qc.invalidateQueries({ queryKey: ['geofences'] });
-      onOpenChange(false);
-      setName(''); setLat(''); setLng(''); setRadius('200'); setCategory('base');
-    }
-    setLoading(false);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Nova Cerca Virtual</DialogTitle>
-          <DialogDescription>
-            Defina um ponto central e um raio. O sistema criará uma área circular de monitoramento.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name */}
-          <div className="space-y-1.5">
-            <Label>Nome da cerca</Label>
-            <Input value={name} onChange={e => setName(e.target.value)} required placeholder="Ex: Garagem SP, Cliente ABC, Posto BR-101" />
-          </div>
-
-          {/* Category with visual selector */}
-          <div className="space-y-1.5">
-            <Label>Tipo</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {CATEGORIES.map(cat => {
-                const Icon = cat.icon;
-                const isSelected = category === cat.value;
-                return (
-                  <button
-                    type="button"
-                    key={cat.value}
-                    onClick={() => setCategory(cat.value)}
-                    className={`flex items-center gap-2 p-2.5 rounded-lg border text-left transition-all ${
-                      isSelected
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                        : 'border-border hover:bg-muted/50'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" style={{ color: cat.color }} />
-                    <div>
-                      <p className="text-xs font-medium">{cat.label}</p>
-                      <p className="text-[10px] text-muted-foreground leading-tight">{cat.description}</p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Coordinates */}
-          <div>
-            <Label className="text-sm font-medium mb-2 block">Localização do centro</Label>
-            <p className="text-xs text-muted-foreground mb-2">
-              Dica: abra o Google Maps, clique com o botão direito no local e copie as coordenadas.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Latitude</Label>
-                <Input type="number" step="any" value={lat} onChange={e => setLat(e.target.value)} required placeholder="-23.5505" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Longitude</Label>
-                <Input type="number" step="any" value={lng} onChange={e => setLng(e.target.value)} required placeholder="-46.6333" />
-              </div>
-            </div>
-          </div>
-
-          {/* Radius */}
-          <div className="space-y-1.5">
-            <Label>Raio (metros)</Label>
-            <Input type="number" value={radius} onChange={e => setRadius(e.target.value)} required min={50} max={50000} />
-            <p className="text-xs text-muted-foreground">
-              {parseInt(radius) < 200 ? '⚠ Raio pequeno — ideal para pontos específicos' :
-               parseInt(radius) > 2000 ? '⚠ Raio grande — cobre uma área ampla' :
-               '✓ Raio adequado para a maioria dos casos'}
-            </p>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={loading}>{loading ? 'Criando...' : 'Criar Cerca'}</Button>
-          </div>
-        </form>
       </DialogContent>
     </Dialog>
   );

@@ -1,0 +1,7 @@
+import {supabase} from '@/integrations/supabase/client';
+import {expenseCancellationPreviewSchema,expenseCancellationCommandSchema,expenseCancellationResultSchema,type ExpenseCancellationCommand} from './expenseCancellationContract';
+type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{message:string;code?:string}|null}>;
+export class ExpenseCancellationRejectedError extends Error {}
+async function rpc(name:string,args:Record<string,unknown>){const {data,error}=await(supabase.rpc as unknown as Rpc)(name,args);if(error){if(['22023','23514','23505','40001','42501','55000'].includes(error.code||''))throw new ExpenseCancellationRejectedError(error.message);throw new Error(error.message);}return data;}
+export async function readExpenseCancellation(tenant:string,expense:string){const result=expenseCancellationPreviewSchema.parse(await rpc('preview_finance_expense_cancellation',{_tenant_id:tenant,_expense_id:expense}));if(result.tenant_id!==tenant||result.expense_id!==expense)throw new Error('Conferência fora do gasto selecionado.');return result;}
+export async function submitExpenseCancellation(command:ExpenseCancellationCommand){expenseCancellationCommandSchema.parse(command);const result=expenseCancellationResultSchema.parse(await rpc('cancel_finance_expense',{_payload:command}));if(result.tenant_id!==command.tenant_id||result.expense_id!==command.expense_id||result.request_id!==command.request_id)throw new Error('Resposta fora do pedido original.');return result;}

@@ -1,0 +1,737 @@
+{
+  "scope": "all local migration textual references, not proof of effective catalog definition",
+  "references": [
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 20,
+      "nearest_function": "finance_private.can_access",
+      "sql": "create table public.finance_movements ("
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 33,
+      "nearest_function": "finance_private.can_access",
+      "sql": "create index finance_movements_account_date on public.finance_movements(tenant_id,bank_account_id,occurred_on,id);"
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 34,
+      "nearest_function": "finance_private.can_access",
+      "sql": "create index finance_movements_driver_date on public.finance_movements(tenant_id,driver_id,occurred_on);"
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 64,
+      "nearest_function": "finance_private.preserve_event",
+      "sql": "create trigger preserve_finance_movement before update or delete on public.finance_movements"
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 67,
+      "nearest_function": "finance_private.preserve_event",
+      "sql": "alter table public.finance_movements enable row level security;"
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 70,
+      "nearest_function": "finance_private.preserve_event",
+      "sql": "revoke all on public.finance_movements,public.finance_events,public.finance_commands from public,anon,authenticated,service_role;"
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 71,
+      "nearest_function": "finance_private.preserve_event",
+      "sql": "grant select on public.finance_movements,public.finance_events to authenticated,service_role;"
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 72,
+      "nearest_function": "finance_private.preserve_event",
+      "sql": "create policy finance_movements_read on public.finance_movements for select to authenticated"
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 123,
+      "nearest_function": "finance_private.record_movement",
+      "sql": "select 1 from public.finance_movements where tenant_id=t and bank_account_id=account"
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 126,
+      "nearest_function": "finance_private.record_movement",
+      "sql": "insert into public.finance_movements(tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,"
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "line": 135,
+      "nearest_function": "finance_private.record_movement",
+      "sql": "from public.finance_movements m where m.id=movement;"
+    },
+    {
+      "file": "20260909213020_finance_movement_queries.sql",
+      "line": 12,
+      "nearest_function": "finance_private.list_movements",
+      "sql": "select m.*,b.name account_name from public.finance_movements m join public.bank_accounts b on b.id=m.bank_account_id and b.tenant_id=m.tenant_id"
+    },
+    {
+      "file": "20260909213959_finance_expense_batches.sql",
+      "line": 24,
+      "nearest_function": null,
+      "sql": "foreign key(tenant_id,movement_id) references public.finance_movements(tenant_id,id),"
+    },
+    {
+      "file": "20260909213959_finance_expense_batches.sql",
+      "line": 43,
+      "nearest_function": "finance_private.record_expense_batch",
+      "sql": "existing public.finance_commands%rowtype; item jsonb; allocation jsonb; movement public.finance_movements%rowtype;"
+    },
+    {
+      "file": "20260909213959_finance_expense_batches.sql",
+      "line": 104,
+      "nearest_function": "finance_private.record_expense_batch",
+      "sql": "select * into movement from public.finance_movements where tenant_id=t and id=(allocation->>'movement_id')::uuid for share;"
+    },
+    {
+      "file": "20260909220020_finance_expense_workspace_queries.sql",
+      "line": 21,
+      "nearest_function": "finance_private.expense_options",
+      "sql": "from public.finance_movements m left join lateral ("
+    },
+    {
+      "file": "20260909220941_finance_receipt_evidence.sql",
+      "line": 27,
+      "nearest_function": "finance_private.preserve_receipt_object",
+      "sql": "or exists(select 1 from public.finance_movements where receipt_path=old.name)) then"
+    },
+    {
+      "file": "20260909220941_finance_receipt_evidence.sql",
+      "line": 37,
+      "nearest_function": "finance_private.preserve_receipt_object",
+      "sql": "create index finance_movement_receipt_path on public.finance_movements(receipt_path) where receipt_path is not null;"
+    },
+    {
+      "file": "20260909220941_finance_receipt_evidence.sql",
+      "line": 39,
+      "nearest_function": "finance_private.preserve_receipt_object",
+      "sql": "alter table public.finance_movements add column receipt_evidence jsonb;"
+    },
+    {
+      "file": "20260909220941_finance_receipt_evidence.sql",
+      "line": 59,
+      "nearest_function": "finance_private.verify_receipt_object",
+      "sql": "create trigger verify_finance_movement_receipt before insert on public.finance_movements for each row execute function finance_private.verify_receipt_object();"
+    },
+    {
+      "file": "20260909221405_finance_expense_history_queries.sql",
+      "line": 38,
+      "nearest_function": "finance_private.list_expenses",
+      "sql": "order by m.occurred_on,m.id) from public.finance_expense_allocations a join public.finance_movements m on m.id=a.movement_id and m.tenant_id=a.tenant_id"
+    },
+    {
+      "file": "20260910002244_finance_payable_movement_links.sql",
+      "line": 3,
+      "nearest_function": null,
+      "sql": "movement_id uuid not null references public.finance_movements(id),"
+    },
+    {
+      "file": "20260910002244_finance_payable_movement_links.sql",
+      "line": 31,
+      "nearest_function": "finance_private.check_movement_use",
+      "sql": "declare m public.finance_movements%rowtype; p public.payables_payments%rowtype;"
+    },
+    {
+      "file": "20260910002244_finance_payable_movement_links.sql",
+      "line": 35,
+      "nearest_function": "finance_private.check_movement_use",
+      "sql": "select * into m from public.finance_movements where tenant_id=new.tenant_id and id=new.movement_id;"
+    },
+    {
+      "file": "20260910002244_finance_payable_movement_links.sql",
+      "line": 91,
+      "nearest_function": "finance_private.apply_payable_movement",
+      "sql": "p public.payables%rowtype;m public.finance_movements%rowtype;old_command public.finance_commands%rowtype;"
+    },
+    {
+      "file": "20260910002244_finance_payable_movement_links.sql",
+      "line": 113,
+      "nearest_function": "finance_private.apply_payable_movement",
+      "sql": "select * into m from public.finance_movements where id=(_payload->>'movement_id')::uuid and tenant_id=t;"
+    },
+    {
+      "file": "20260910002244_finance_payable_movement_links.sql",
+      "line": 161,
+      "nearest_function": "finance_private.payable_movement_options",
+      "sql": "from public.finance_movements m join public.bank_accounts b on b.id=m.bank_account_id and b.tenant_id=_tenant"
+    },
+    {
+      "file": "20260910013543_finance_bank_reconciliation_groups.sql",
+      "line": 37,
+      "nearest_function": "finance_private.reconciliation_context",
+      "sql": "if (select count(*) from public.finance_movements where tenant_id=_tenant and id=any(_movements))<>cardinality(_movements)"
+    },
+    {
+      "file": "20260910013543_finance_bank_reconciliation_groups.sql",
+      "line": 44,
+      "nearest_function": "finance_private.reconciliation_context",
+      "sql": "select bank_account_id from public.finance_movements where tenant_id=_tenant and id=any(_movements)"
+    },
+    {
+      "file": "20260910013543_finance_bank_reconciliation_groups.sql",
+      "line": 46,
+      "nearest_function": "finance_private.reconciliation_context",
+      "sql": "'movements',(select jsonb_agg(to_jsonb(m) order by m.id) from public.finance_movements m where m.tenant_id=_tenant and m.id=any(_movements)),"
+    },
+    {
+      "file": "20260910014238_finance_reconciliation_workspace.sql",
+      "line": 13,
+      "nearest_function": "finance_private.reconciliation_options",
+      "sql": "from public.finance_movements m where _kind='movements' and m.tenant_id=_tenant and m.bank_account_id=account"
+    },
+    {
+      "file": "20260910022059_finance_automatic_reference_reconciliation.sql",
+      "line": 3,
+      "nearest_function": null,
+      "sql": "create index finance_movement_bank_reference on public.finance_movements(tenant_id,bank_account_id,bank_reference) where bank_reference is not null;"
+    },
+    {
+      "file": "20260910022059_finance_automatic_reference_reconciliation.sql",
+      "line": 50,
+      "nearest_function": "finance_private.revisit_automatic_reconciliation",
+      "sql": "create trigger finance_revisit_automatic_reconciliation after insert on public.finance_movements for each row execute function finance_private.revisit_automatic_reconciliation();"
+    },
+    {
+      "file": "20260910022059_finance_automatic_reference_reconciliation.sql",
+      "line": 68,
+      "nearest_function": "finance_private.process_automatic_reconciliation",
+      "sql": "m public.finance_movements%rowtype;snapshot jsonb;actor_name text;group_id uuid;processed integer:=0;matched integer:=0;account uuid;"
+    },
+    {
+      "file": "20260910022059_finance_automatic_reference_reconciliation.sql",
+      "line": 98,
+      "nearest_function": "finance_private.process_automatic_reconciliation",
+      "sql": "select * into m from public.finance_movements where tenant_id=job.tenant_id and bank_account_id=account and bank_reference=e.bank_id order by id limit 1;"
+    },
+    {
+      "file": "20260910022059_finance_automatic_reference_reconciliation.sql",
+      "line": 100,
+      "nearest_function": "finance_private.process_automatic_reconciliation",
+      "sql": "if exists(select 1 from public.finance_movements other where other.tenant_id=job.tenant_id and other.bank_account_id=account and other.bank_reference=e.bank_id and other.id<>m.id)"
+    },
+    {
+      "file": "20260910022059_finance_automatic_reference_reconciliation.sql",
+      "line": 143,
+      "nearest_function": "finance_private.run_automatic_reconciliation_queue",
+      "sql": "if (select count(*) from public.finance_movements m join public.finance_bank_entries e"
+    },
+    {
+      "file": "20260910023911_finance_account_period_review.sql",
+      "line": 13,
+      "nearest_function": "finance_private.account_period_review",
+      "sql": "select * from public.finance_movements where tenant_id=_tenant and bank_account_id=_account and occurred_on between _from and _to"
+    },
+    {
+      "file": "20260910023911_finance_account_period_review.sql",
+      "line": 17,
+      "nearest_function": "finance_private.account_period_review",
+      "sql": "or exists(select 1 from public.finance_movements m where m.tenant_id=_tenant and m.id=any(g.movement_ids) and m.occurred_on not between _from and _to) crosses_period"
+    },
+    {
+      "file": "20260910024438_finance_receivable_movement_projection.sql",
+      "line": 8,
+      "nearest_function": null,
+      "sql": "foreign key(tenant_id,movement_id) references public.finance_movements(tenant_id,id)"
+    },
+    {
+      "file": "20260910024438_finance_receivable_movement_projection.sql",
+      "line": 21,
+      "nearest_function": "finance_private.project_receivable_command",
+      "sql": "selected public.finance_movements%rowtype;allocated numeric;"
+    },
+    {
+      "file": "20260910024438_finance_receivable_movement_projection.sql",
+      "line": 44,
+      "nearest_function": "finance_private.project_receivable_command",
+      "sql": "select * into selected from public.finance_movements where tenant_id=new.tenant_id and id=(new.response->>'movement_id')::uuid;"
+    },
+    {
+      "file": "20260910024438_finance_receivable_movement_projection.sql",
+      "line": 54,
+      "nearest_function": "finance_private.project_receivable_command",
+      "sql": "insert into public.finance_movements(tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,description,beneficiary_name,receipt_path,created_by)"
+    },
+    {
+      "file": "20260910024438_finance_receivable_movement_projection.sql",
+      "line": 75,
+      "nearest_function": "finance_private.receipt_movement_options",
+      "sql": "from public.finance_movements m where m.tenant_id=_tenant and m.bank_account_id=_account and m.occurred_on=_date and m.direction='in' and m.nature in('receipt','customer_advance','other')"
+    },
+    {
+      "file": "20260910025658_finance_receipt_allocation_corrections.sql",
+      "line": 7,
+      "nearest_function": null,
+      "sql": "foreign key(tenant_id,movement_id) references public.finance_movements(tenant_id,id)"
+    },
+    {
+      "file": "20260910032730_finance_movement_receipt_trace.sql",
+      "line": 8,
+      "nearest_function": "finance_private.movement_receipt_trace",
+      "sql": "if not exists(select 1 from public.finance_movements where tenant_id=_tenant and id=_movement) then raise exception 'finance_movement_not_found' using errcode='P0002';end if;"
+    },
+    {
+      "file": "20260910033918_finance_internal_transfer_pairs.sql",
+      "line": 5,
+      "nearest_function": null,
+      "sql": "foreign key(tenant_id,outgoing_id) references public.finance_movements(tenant_id,id),"
+    },
+    {
+      "file": "20260910033918_finance_internal_transfer_pairs.sql",
+      "line": 6,
+      "nearest_function": null,
+      "sql": "foreign key(tenant_id,incoming_id) references public.finance_movements(tenant_id,id)"
+    },
+    {
+      "file": "20260910033918_finance_internal_transfer_pairs.sql",
+      "line": 47,
+      "nearest_function": "finance_private.record_internal_transfer",
+      "sql": "if exists(select 1 from public.finance_movements m where m.tenant_id=t and"
+    },
+    {
+      "file": "20260910033918_finance_internal_transfer_pairs.sql",
+      "line": 51,
+      "nearest_function": "finance_private.record_internal_transfer",
+      "sql": "insert into public.finance_movements(id,tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,description,beneficiary_name,bank_reference,created_by)"
+    },
+    {
+      "file": "20260910034731_finance_transfers_in_transit.sql",
+      "line": 6,
+      "nearest_function": null,
+      "sql": "foreign key(tenant_id,outgoing_id) references public.finance_movements(tenant_id,id)"
+    },
+    {
+      "file": "20260910034731_finance_transfers_in_transit.sql",
+      "line": 18,
+      "nearest_function": "finance_private.record_transfer_stage",
+      "sql": "original public.finance_movements%rowtype;pending public.finance_transfer_departures%rowtype;result jsonb;actor_name text;"
+    },
+    {
+      "file": "20260910034731_finance_transfers_in_transit.sql",
+      "line": 49,
+      "nearest_function": "finance_private.record_transfer_stage",
+      "sql": "select * into original from public.finance_movements where tenant_id=t and id=pending.outgoing_id;"
+    },
+    {
+      "file": "20260910034731_finance_transfers_in_transit.sql",
+      "line": 56,
+      "nearest_function": "finance_private.record_transfer_stage",
+      "sql": "if exists(select 1 from public.finance_movements where tenant_id=t and bank_account_id=case when stage='depart' then source else destination end"
+    },
+    {
+      "file": "20260910034731_finance_transfers_in_transit.sql",
+      "line": 58,
+      "nearest_function": "finance_private.record_transfer_stage",
+      "sql": "insert into public.finance_movements(id,tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,description,beneficiary_name,bank_reference,created_by)"
+    },
+    {
+      "file": "20260910034731_finance_transfers_in_transit.sql",
+      "line": 88,
+      "nearest_function": "finance_private.pending_transfers",
+      "sql": "from public.finance_transfer_departures d join public.finance_movements m on m.tenant_id=d.tenant_id and m.id=d.outgoing_id"
+    },
+    {
+      "file": "20260910035550_finance_transfer_period_position.sql",
+      "line": 13,
+      "nearest_function": "finance_private.transfer_period_position",
+      "sql": "from public.finance_movements m"
+    },
+    {
+      "file": "20260910035550_finance_transfer_period_position.sql",
+      "line": 15,
+      "nearest_function": "finance_private.transfer_period_position",
+      "sql": "left join public.finance_movements credit on credit.tenant_id=p.tenant_id and credit.id=p.incoming_id"
+    },
+    {
+      "file": "20260910035550_finance_transfer_period_position.sql",
+      "line": 23,
+      "nearest_function": "finance_private.transfer_period_position",
+      "sql": "from public.finance_movements m where m.tenant_id=_tenant and m.bank_account_id=_account and m.direction='in' and m.nature='transfer' and m.occurred_on<=_cutoff"
+    },
+    {
+      "file": "20260910120756_finance_manual_expense_recording.sql",
+      "line": 88,
+      "nearest_function": "finance_private.manual_expense_movements",
+      "sql": "from public.finance_movements m join public.bank_accounts b on b.tenant_id=m.tenant_id and b.id=m.bank_account_id"
+    },
+    {
+      "file": "20260910122628_finance_bank_transaction_browser_boundary.sql",
+      "line": 1,
+      "nearest_function": null,
+      "sql": "-- Browser declarations belong in finance_movements. Bank rows are written only"
+    },
+    {
+      "file": "20260910124716_finance_expense_cost_center_totals.sql",
+      "line": 41,
+      "nearest_function": "finance_private.list_expenses",
+      "sql": "order by m.occurred_on,m.id) from public.finance_expense_allocations a join public.finance_movements m on m.id=a.movement_id and m.tenant_id=a.tenant_id"
+    },
+    {
+      "file": "20260910130540_finance_settlement_movement_links.sql",
+      "line": 6,
+      "nearest_function": null,
+      "sql": "movement_id uuid not null references public.finance_movements(id),amount_cents bigint not null check(amount_cents>0 and amount_cents<=99999999999999),"
+    },
+    {
+      "file": "20260910130540_finance_settlement_movement_links.sql",
+      "line": 29,
+      "nearest_function": "finance_private.check_settlement_movement_link",
+      "sql": "declare payment public.driver_settlement_payments%rowtype;driver uuid;m public.finance_movements%rowtype;"
+    },
+    {
+      "file": "20260910130540_finance_settlement_movement_links.sql",
+      "line": 38,
+      "nearest_function": "finance_private.check_settlement_movement_link",
+      "sql": "select * into m from public.finance_movements where tenant_id=new.tenant_id and id=new.movement_id;"
+    },
+    {
+      "file": "20260910130921_finance_settlement_movement_options.sql",
+      "line": 21,
+      "nearest_function": "finance_private.get_settlement_payment_movements",
+      "sql": "from public.finance_movements m join public.bank_accounts a on a.id=m.bank_account_id and a.tenant_id=m.tenant_id"
+    },
+    {
+      "file": "20260910133355_finance_new_settlement_payment_candidates.sql",
+      "line": 22,
+      "nearest_function": "finance_private.new_settlement_payment_candidates",
+      "sql": "from public.finance_movements m join public.bank_accounts a on a.id=m.bank_account_id and a.tenant_id=_tenant"
+    },
+    {
+      "file": "20260910133421_finance_settlement_payment_recording.sql",
+      "line": 6,
+      "nearest_function": "finance_private.record_settlement_payment",
+      "sql": "prior public.finance_commands%rowtype;s public.driver_settlements%rowtype;m public.finance_movements%rowtype;"
+    },
+    {
+      "file": "20260910133421_finance_settlement_payment_recording.sql",
+      "line": 40,
+      "nearest_function": "finance_private.record_settlement_payment",
+      "sql": "select * into m from public.finance_movements where tenant_id=t and id=mid;"
+    },
+    {
+      "file": "20260910140010_finance_account_opening_balances.sql",
+      "line": 111,
+      "nearest_function": "finance_private.account_opening",
+      "sql": "select coalesce(sum(case when direction='in' then amount_cents else -amount_cents end),0) into prior_net from public.finance_movements"
+    },
+    {
+      "file": "20260910140010_finance_account_opening_balances.sql",
+      "line": 114,
+      "nearest_function": "finance_private.account_opening",
+      "sql": "from public.finance_movements where tenant_id=_tenant and bank_account_id=_account and occurred_on between _from and _to;"
+    },
+    {
+      "file": "20260910143833_finance_legacy_payable_associations.sql",
+      "line": 53,
+      "nearest_function": "finance_private.check_movement_use",
+      "sql": "declare m public.finance_movements%rowtype;p public.payables_payments%rowtype;issue text;begin"
+    },
+    {
+      "file": "20260910143833_finance_legacy_payable_associations.sql",
+      "line": 57,
+      "nearest_function": "finance_private.check_movement_use",
+      "sql": "select * into m from public.finance_movements where tenant_id=new.tenant_id and id=new.movement_id;"
+    },
+    {
+      "file": "20260910143833_finance_legacy_payable_associations.sql",
+      "line": 90,
+      "nearest_function": "finance_private.manage_legacy_payable_association",
+      "sql": "movement public.finance_movements%rowtype;l public.finance_payable_movement_links%rowtype;prior public.finance_commands%rowtype;"
+    },
+    {
+      "file": "20260910143833_finance_legacy_payable_associations.sql",
+      "line": 131,
+      "nearest_function": "finance_private.manage_legacy_payable_association",
+      "sql": "select * into movement from public.finance_movements where tenant_id=t and id=(_payload->>'movement_id')::uuid;"
+    },
+    {
+      "file": "20260910143920_finance_legacy_payable_association_options.sql",
+      "line": 20,
+      "nearest_function": "finance_private.legacy_payable_association",
+      "sql": "from public.finance_movements m join public.bank_accounts a on a.tenant_id=m.tenant_id and a.id=m.bank_account_id"
+    },
+    {
+      "file": "20260910145616_finance_legacy_receipt_associations.sql",
+      "line": 4,
+      "nearest_function": null,
+      "sql": "receivable_id uuid not null references public.receivables(id),movement_id uuid not null references public.finance_movements(id),"
+    },
+    {
+      "file": "20260910145616_finance_legacy_receipt_associations.sql",
+      "line": 73,
+      "nearest_function": "finance_private.check_receipt_movement_capacity",
+      "sql": "declare m public.finance_movements%rowtype;p public.receivables_payments%rowtype;issue text;cents numeric;begin"
+    },
+    {
+      "file": "20260910145616_finance_legacy_receipt_associations.sql",
+      "line": 83,
+      "nearest_function": "finance_private.check_receipt_movement_capacity",
+      "sql": "select * into m from public.finance_movements where tenant_id=new.tenant_id and id=new.movement_id;"
+    },
+    {
+      "file": "20260910145616_finance_legacy_receipt_associations.sql",
+      "line": 113,
+      "nearest_function": "finance_private.manage_legacy_receivable_association",
+      "sql": "declare t uuid;request uuid;actor uuid:=auth.uid();actor_name text;p public.receivables_payments%rowtype;m public.finance_movements%rowtype;"
+    },
+    {
+      "file": "20260910145616_finance_legacy_receipt_associations.sql",
+      "line": 149,
+      "nearest_function": "finance_private.manage_legacy_receivable_association",
+      "sql": "select * into m from public.finance_movements where tenant_id=t and id=(_payload->>'movement_id')::uuid;"
+    },
+    {
+      "file": "20260910145659_finance_legacy_receivable_association_options.sql",
+      "line": 20,
+      "nearest_function": "finance_private.legacy_receivable_association",
+      "sql": "from public.finance_movements m join public.bank_accounts a on a.tenant_id=m.tenant_id and a.id=m.bank_account_id"
+    },
+    {
+      "file": "20260910150338_finance_legacy_receipt_movement_trace.sql",
+      "line": 8,
+      "nearest_function": "finance_private.movement_receipt_trace",
+      "sql": "if not exists(select 1 from public.finance_movements where tenant_id=_tenant and id=_movement) then raise exception 'finance_movement_not_found' using errcode='P0002';end if;"
+    },
+    {
+      "file": "20260910151011_finance_legacy_integrity_inventory.sql",
+      "line": 53,
+      "nearest_function": "finance_private.legacy_integrity_rows",
+      "sql": "select m.bank_account_id into account_id from public.finance_settlement_movement_links l join public.finance_movements m on m.tenant_id=l.tenant_id and m.id=l.movement_id where l.tenant_id=_tenant and l.payment_id=source_id and not exists(select 1 from public.finance_settlement_link_reversals z where z.tenant_id=l.tenant_id and z.link_id=l.id) order by l.id limit 1;"
+    },
+    {
+      "file": "20260910162958_finance_account_period_close_snapshot.sql",
+      "line": 50,
+      "nearest_function": "finance_private.account_period_close_snapshot",
+      "sql": "with movements as materialized(select * from public.finance_movements where tenant_id=_tenant and bank_account_id=_account and occurred_on between _from and _to),"
+    },
+    {
+      "file": "20260910162958_finance_account_period_close_snapshot.sql",
+      "line": 65,
+      "nearest_function": "finance_private.account_period_close_snapshot",
+      "sql": "'transfers',coalesce((select jsonb_agg(to_jsonb(t) order by t.id) from public.finance_internal_transfers t where t.tenant_id=_tenant and exists(select 1 from public.finance_movements m where m.tenant_id=_tenant and m.bank_account_id=_account and m.occurred_on<=_to and m.id in(t.outgoing_id,t.incoming_id))),'[]'),"
+    },
+    {
+      "file": "20260910162958_finance_account_period_close_snapshot.sql",
+      "line": 66,
+      "nearest_function": "finance_private.account_period_close_snapshot",
+      "sql": "'transfer_departures',coalesce((select jsonb_agg(to_jsonb(d) order by d.id) from public.finance_transfer_departures d where d.tenant_id=_tenant and exists(select 1 from public.finance_movements m where m.tenant_id=_tenant and m.occurred_on<=_to and m.id=d.outgoing_id and (m.bank_account_id=_account or d.destination_account_id=_account))),'[]')"
+    },
+    {
+      "file": "20260910162958_finance_account_period_close_snapshot.sql",
+      "line": 71,
+      "nearest_function": "finance_private.account_period_close_snapshot",
+      "sql": "('finance_movements','money',facts->'movements'),('finance_reconciliation_groups','bank_evidence',facts->'groups'),('finance_reconciliation_reversals','bank_evidence',facts->'group_reversals'),"
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "line": 6,
+      "nearest_function": "finance_private.assert_closed_source_mutable",
+      "sql": "declare account uuid;start_date date;end_date date;ref record;source_table text;source jsonb;identifier uuid;raw_date text;hit boolean:=false;outgoing public.finance_movements%rowtype;incoming public.finance_movements%rowtype;native jsonb;imp public.finance_statement_imports%rowtype;registered public.bank_accounts%rowtype;closed public.finance_account_period_closures%rowtype;anchor date;"
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "line": 16,
+      "nearest_function": "finance_private.assert_closed_source_mutable",
+      "sql": "select * into outgoing from public.finance_movements where tenant_id=_tenant and id=(_row->>'outgoing_id')::uuid;"
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "line": 17,
+      "nearest_function": "finance_private.assert_closed_source_mutable",
+      "sql": "select * into incoming from public.finance_movements where tenant_id=_tenant and id=(_row->>'incoming_id')::uuid;"
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "line": 23,
+      "nearest_function": "finance_private.assert_closed_source_mutable",
+      "sql": "perform finance_private.assert_closed_source_mutable(_tenant,'finance_movements',to_jsonb(incoming),_depth+1);return;"
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "line": 53,
+      "nearest_function": "finance_private.assert_closed_source_mutable",
+      "sql": "if start_date is not null or _table in('finance_movements','finance_bank_entries','bank_transactions','receivables_payments','payables_payments','driver_settlement_payments','closing_report_payments','load_payments','employee_advances','payroll_entry_items') then"
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "line": 58,
+      "nearest_function": "finance_private.assert_closed_source_mutable",
+      "sql": "source_table:=case ref.key when 'import_id' then case when _table='bank_transactions' then null else 'finance_statement_imports' end when 'first_import_id' then 'finance_statement_imports' when 'row_id' then 'finance_statement_rows' when 'review_id' then 'finance_statement_identity_reviews' when 'group_id' then 'finance_reconciliation_groups' when 'opening_id' then 'finance_account_openings' when 'approval_id' then 'finance_statement_coverage_approvals' when 'bank_transaction_id' then 'bank_transactions' when 'bank_entry_id' then 'finance_bank_entries' when 'movement_id' then 'finance_movements' when 'outgoing_id' then 'finance_movements' when 'incoming_id' then 'finance_movements' when 'receivable_payment_id' then 'receivables_payments' when 'payment_id' then case when _table='receivable_payment_reversals' then 'receivables_payments' end end;"
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "line": 67,
+      "nearest_function": "finance_private.assert_closed_source_mutable",
+      "sql": "for identifier in select value::uuid from jsonb_array_elements_text(_row->'movement_ids') loop select to_jsonb(m) into source from public.finance_movements m where m.tenant_id=_tenant and m.id=identifier;perform finance_private.assert_closed_source_mutable(_tenant,'finance_movements',source,_depth+1);end loop;"
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "line": 92,
+      "nearest_function": "finance_private.guard_closed_financial_source",
+      "sql": "do $$declare t text;begin foreach t in array array['finance_movements','finance_bank_entries','finance_statement_imports','finance_statement_rows','finance_statement_verifications','finance_statement_identity_reviews','finance_statement_review_reversals','finance_reconciliation_groups','finance_reconciliation_reversals','finance_statement_coverage_approvals','finance_statement_coverage_reversals','finance_account_openings','finance_account_opening_reversals','finance_period_evidence_reviews','bank_accounts','bank_transactions','receivables_payments','receivable_payment_reversals','payables_payments','driver_settlement_payments','closing_report_payments','load_payments','employee_advances','payroll_entry_items','finance_internal_transfers','finance_transfer_departures'] loop"
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "line": 96,
+      "nearest_function": "finance_private.account_period_guards_ready",
+      "sql": "select not exists(select 1 from unnest(array['finance_legacy_cut_reviews','finance_movements','finance_bank_entries','finance_statement_imports','finance_statement_rows','finance_statement_verifications','finance_statement_identity_reviews','finance_statement_review_reversals','finance_reconciliation_groups','finance_reconciliation_reversals','finance_statement_coverage_approvals','finance_statement_coverage_reversals','finance_account_openings','finance_account_opening_reversals','finance_period_evidence_reviews','bank_accounts','bank_transactions','receivables_payments','receivable_payment_reversals','payables_payments','driver_settlement_payments','closing_report_payments','load_payments','employee_advances','payroll_entry_items','finance_internal_transfers','finance_transfer_departures']) names(name) where not exists(select 1 from pg_catalog.pg_trigger tr join pg_catalog.pg_class tab on tab.oid=tr.tgrelid join pg_catalog.pg_namespace ns on ns.oid=tab.relnamespace where ns.nspname='public' and tab.relname=names.name and tr.tgname='finance_closed_period_source' and tr.tgenabled in('O','A') and tr.tgfoid='finance_private.guard_closed_financial_source()'::regprocedure))$$;"
+    },
+    {
+      "file": "20260910163116_finance_legacy_cut_reviews.sql",
+      "line": 24,
+      "nearest_function": "finance_private.legacy_cut_manifest",
+      "sql": "foreach table_name in array array['receivables_payments','receivable_payment_reversals','payables_payments','driver_settlement_payments','closing_report_payments','load_payments','employee_advances','payroll_entry_items','bank_transactions','finance_movements','finance_receivable_movement_links','finance_payable_movement_links','finance_payable_link_reversals','finance_settlement_movement_links','finance_settlement_link_reversals','finance_legacy_receipt_movement_links','finance_legacy_receipt_link_reversals','finance_receipt_allocation_corrections'] loop"
+    },
+    {
+      "file": "20260910163116_finance_legacy_cut_reviews.sql",
+      "line": 48,
+      "nearest_function": "finance_private.legacy_cut_manifest",
+      "sql": "select * into r from public.finance_movements where tenant_id=_tenant and id=(m.link->>'movement_id')::uuid;"
+    },
+    {
+      "file": "20260910163116_finance_legacy_cut_reviews.sql",
+      "line": 54,
+      "nearest_function": "finance_private.legacy_cut_manifest",
+      "sql": "select * into r from public.finance_movements where tenant_id=_tenant and id=(m.link->>'movement_id')::uuid;"
+    },
+    {
+      "file": "20260910163116_finance_legacy_cut_reviews.sql",
+      "line": 90,
+      "nearest_function": "finance_private.legacy_cut_manifest",
+      "sql": "if m.used>(select amount_cents from public.finance_movements where tenant_id=_tenant and id=m.id::uuid) then blockers:=blockers||jsonb_build_array(jsonb_build_object('code','legacy_mapping_capacity_exceeded','source_table','finance_movements','source_id',m.id));end if;"
+    },
+    {
+      "file": "20260910164942_finance_closed_period_late_payment_composition.sql",
+      "line": 3,
+      "nearest_function": null,
+      "sql": "-- payload can waive the proof. New finance_movements remain immediately guarded."
+    },
+    {
+      "file": "20260910164942_finance_closed_period_late_payment_composition.sql",
+      "line": 5,
+      "nearest_function": "finance_private.frozen_movement",
+      "sql": "select exists(select 1 from public.finance_account_period_dependencies d join public.finance_account_period_closures c on c.tenant_id=d.tenant_id and c.id=d.closure_id join public.finance_movements m on m.tenant_id=d.tenant_id and m.id=d.source_id"
+    },
+    {
+      "file": "20260910164942_finance_closed_period_late_payment_composition.sql",
+      "line": 6,
+      "nearest_function": "finance_private.frozen_movement",
+      "sql": "where d.tenant_id=_tenant and d.source_kind='finance_movements' and d.source_id=_movement and d.dependency_role='money'"
+    },
+    {
+      "file": "20260910164942_finance_closed_period_late_payment_composition.sql",
+      "line": 10,
+      "nearest_function": "finance_private.late_payment_composition_proved",
+      "sql": "declare source jsonb;link record;m public.finance_movements%rowtype;amount numeric;day date;account uuid;matches integer:=0;identifier uuid;used numeric;"
+    },
+    {
+      "file": "20260910164942_finance_closed_period_late_payment_composition.sql",
+      "line": 31,
+      "nearest_function": "finance_private.late_payment_composition_proved",
+      "sql": "select * into m from public.finance_movements where tenant_id=_tenant and id=link.movement_id;"
+    },
+    {
+      "file": "20260910164942_finance_closed_period_late_payment_composition.sql",
+      "line": 40,
+      "nearest_function": "finance_private.late_payment_composition_proved",
+      "sql": "select * into m from public.finance_movements where tenant_id=_tenant and id=link.movement_id;"
+    },
+    {
+      "file": "20260910164942_finance_closed_period_late_payment_composition.sql",
+      "line": 47,
+      "nearest_function": "finance_private.late_payment_composition_proved",
+      "sql": "select * into m from public.finance_movements where tenant_id=_tenant and id=link.movement_id;"
+    },
+    {
+      "file": "20260910170213_finance_legacy_cut_settlement_mapping.sql",
+      "line": 4,
+      "nearest_function": "finance_private.legacy_cut_settlement_evidence",
+      "sql": "declare p public.driver_settlement_payments%rowtype;s public.driver_settlements%rowtype;l public.finance_settlement_movement_links%rowtype;m public.finance_movements%rowtype;n integer;used numeric;valid boolean:=false;"
+    },
+    {
+      "file": "20260910170213_finance_legacy_cut_settlement_mapping.sql",
+      "line": 12,
+      "nearest_function": "finance_private.legacy_cut_settlement_evidence",
+      "sql": "select * into m from public.finance_movements where tenant_id=_tenant and id=l.movement_id;"
+    },
+    {
+      "file": "20260910172624_finance_paid_projection_chains.sql",
+      "line": 4,
+      "nearest_function": "finance_private.paid_projection_chain",
+      "sql": "leg record;m public.finance_movements%rowtype;settle public.driver_settlement_payments%rowtype;parent jsonb;fp jsonb:='[]';snap jsonb:='{}';issue text;total numeric:=0;n integer;used numeric;"
+    },
+    {
+      "file": "20260910172624_finance_paid_projection_chains.sql",
+      "line": 26,
+      "nearest_function": "finance_private.paid_projection_chain",
+      "sql": "select * into m from public.finance_movements where tenant_id=_tenant and id=(leg.link->>'movement_id')::uuid;"
+    },
+    {
+      "file": "20260910172624_finance_paid_projection_chains.sql",
+      "line": 50,
+      "nearest_function": "finance_private.paid_projection_chain",
+      "sql": "select * into m from public.finance_movements where tenant_id=_tenant and id=(parent->'movement_ids'->>0)::uuid;"
+    },
+    {
+      "file": "20260910172624_finance_paid_projection_chains.sql",
+      "line": 59,
+      "nearest_function": "finance_private.paid_projection_chain",
+      "sql": "snap:=snap||jsonb_build_object('footprints',fp,'movement_evidence',(select coalesce(jsonb_agg(to_jsonb(money_row) order by money_row.id),'[]') from public.finance_movements money_row where money_row.tenant_id=_tenant and exists(select 1 from jsonb_array_elements(fp) f where f->>'movement_id'=money_row.id::text)),"
+    },
+    {
+      "file": "20260910173906_finance_cash_period_closure.sql",
+      "line": 56,
+      "nearest_function": "finance_private.cash_period_close_snapshot",
+      "sql": "select coalesce(sum(amount_cents) filter(where direction='in'),0),coalesce(sum(amount_cents) filter(where direction='out'),0) into inflow,outflow from public.finance_movements where tenant_id=_tenant and bank_account_id=_account and occurred_on between _from and _to;"
+    },
+    {
+      "file": "20260910173906_finance_cash_period_closure.sql",
+      "line": 64,
+      "nearest_function": "finance_private.cash_period_close_snapshot",
+      "sql": "facts:=jsonb_build_object('movements',(select coalesce(jsonb_agg(to_jsonb(m) order by m.id),'[]') from public.finance_movements m where m.tenant_id=_tenant and m.bank_account_id=_account and m.occurred_on between _from and _to),"
+    },
+    {
+      "file": "20260910173906_finance_cash_period_closure.sql",
+      "line": 65,
+      "nearest_function": "finance_private.cash_period_close_snapshot",
+      "sql": "'transfers',(select coalesce(jsonb_agg(to_jsonb(tr) order by tr.id),'[]') from public.finance_internal_transfers tr where tr.tenant_id=_tenant and exists(select 1 from public.finance_movements m where m.tenant_id=_tenant and m.bank_account_id=_account and m.occurred_on between _from and _to and m.id in(tr.outgoing_id,tr.incoming_id))),"
+    },
+    {
+      "file": "20260910173906_finance_cash_period_closure.sql",
+      "line": 66,
+      "nearest_function": "finance_private.cash_period_close_snapshot",
+      "sql": "'transfer_departures',(select coalesce(jsonb_agg(to_jsonb(d) order by d.id),'[]') from public.finance_transfer_departures d where d.tenant_id=_tenant and exists(select 1 from public.finance_movements m where m.tenant_id=_tenant and m.bank_account_id=_account and m.occurred_on between _from and _to and m.id=d.outgoing_id)));"
+    },
+    {
+      "file": "20260910173906_finance_cash_period_closure.sql",
+      "line": 68,
+      "nearest_function": "finance_private.cash_period_close_snapshot",
+      "sql": "('finance_movements','money',facts->'movements'),('finance_internal_transfers','composition_snapshot',facts->'transfers'),('finance_transfer_departures','composition_snapshot',facts->'transfer_departures'),"
+    },
+    {
+      "file": "20260910175733_finance_expense_cancellation_preview.sql",
+      "line": 60,
+      "nearest_function": "finance_private.list_expenses",
+      "sql": "order by m.occurred_on,m.id) from public.finance_expense_allocations a join public.finance_movements m on m.id=a.movement_id and m.tenant_id=a.tenant_id"
+    },
+    {
+      "file": "20260910180040_finance_payable_portfolio.sql",
+      "line": 4,
+      "nearest_function": "finance_private.payable_portfolio_evidence",
+      "sql": "declare p public.payables%rowtype;pp record;m public.finance_movements%rowtype;b public.bank_transactions%rowtype;l public.finance_payable_movement_links%rowtype;"
+    },
+    {
+      "file": "20260910180040_finance_payable_portfolio.sql",
+      "line": 20,
+      "nearest_function": "finance_private.payable_portfolio_evidence",
+      "sql": "select * into m from public.finance_movements where tenant_id=_tenant and id=l.movement_id;"
+    }
+  ]
+}

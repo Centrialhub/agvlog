@@ -45,59 +45,15 @@ import { normalizeCity } from '@/lib/utils/normalizeCity';
 import type { Json } from '@/integrations/supabase/types';
 import { getErrorMessage } from '@/lib/errors';
 import { routeDraftDeleteError } from '@/lib/route-planning/draftDeleteCommand';
+import {
+  sortAvailableLoadsByRecipient,
+  sortItemsByRecipient,
+  sortLoadsByRecipient,
+  type PendingRoutePlanningLoad as PendingLoad,
+  type RoutePlanningLoadItem as LoadItem,
+} from '@/lib/route-planning/routePlanningLoads';
 
 /* ────────────── types ────────────── */
-const recipientCollator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
-
-const getLoadRecipient = (load: PendingLoad) => load.items[0]?.fiscal_documents?.recipient || load.destination || load.load_number || '';
-
-const sortLoadsByRecipient = (loads: PendingLoad[]) => [...loads].sort((a, b) =>
-  recipientCollator.compare(getLoadRecipient(a), getLoadRecipient(b)) ||
-  recipientCollator.compare(a.load_number, b.load_number)
-);
-
-const sortItemsByRecipient = (items: LoadItem[]) => [...items].sort((a, b) =>
-  recipientCollator.compare(a.fiscal_documents?.recipient || '—', b.fiscal_documents?.recipient || '—') ||
-  recipientCollator.compare(a.fiscal_documents?.invoice_number || '—', b.fiscal_documents?.invoice_number || '—')
-);
-
-interface LoadItem {
-  id: string;
-  load_id: string;
-  item_description: string;
-  pallet_count: number;
-  weight_kg: number;
-  volume_m3: number;
-  fiscal_document_id: string | null;
-  fiscal_documents?: {
-    invoice_number: string | null;
-    remitter: string | null;
-    recipient: string | null;
-    recipient_city: string | null;
-    recipient_state: string | null;
-    recipient_neighborhood: string | null;
-    client_id?: string | null;
-    value: number | null;
-    weight_kg: number | null;
-    issue_date: string | null;
-  } | null;
-}
-
-interface PendingLoad {
-  id: string;
-  load_number: string;
-  destination: string | null;
-  total_weight_kg: number | null;
-  total_volume_m3: number | null;
-  total_pallet_count: number | null;
-  status: string;
-  created_at: string;
-  notes: string | null;
-  vehicle_id: string | null;
-  driver_id: string | null;
-  items: LoadItem[];
-}
-
 interface RoutePlan {
   id: string;
   name: string;
@@ -170,16 +126,29 @@ export default function RoutePlanning() {
       const loadIds = loads.map(load => load.id);
       const { data: items, error: itemsErr } = await supabase
         .from('load_items')
-        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, client_id, value, weight_kg, issue_date)')
+        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, client_id, supplier_id, value, weight_kg, issue_date)')
         .in('load_id', loadIds)
         .order('created_at', { ascending: true });
       if (itemsErr) throw itemsErr;
+
+      const clientIds = [...new Set((items || []).map((item) => item.fiscal_documents?.client_id).filter(Boolean))] as string[];
+      const { data: clients, error: clientsError } = clientIds.length ? await supabase.from('clients')
+        .select('id, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, address_zip')
+        .eq('tenant_id', currentTenant.id).in('id', clientIds) : { data: [], error: null };
+      if (clientsError) throw clientsError;
+      const addressByClient = new Map((clients || []).map((client) => [client.id,
+        [client.address_street, client.address_number, client.address_complement, client.address_neighborhood,
+          client.address_city, client.address_state, client.address_zip].filter(Boolean).join(', ')]));
 
       const itemsByLoad: Record<string, LoadItem[]> = {};
       (items || []).forEach((item) => {
         if (!itemsByLoad[item.load_id]) itemsByLoad[item.load_id] = [];
         itemsByLoad[item.load_id].push({
           ...item,
+          fiscal_documents: item.fiscal_documents ? {
+            ...item.fiscal_documents,
+            client_address: item.fiscal_documents.client_id ? addressByClient.get(item.fiscal_documents.client_id) || null : null,
+          } : null,
           pallet_count: item.pallet_count ?? 0,
           weight_kg: item.weight_kg ?? 0,
           volume_m3: item.volume_m3 ?? 0,
@@ -266,11 +235,7 @@ export default function RoutePlanning() {
     const loads = filterDest === 'all'
       ? availableLoads
       : availableLoads.filter(l => normalizeCity(l.destination).includes(filterDest));
-    return [...loads].sort((a, b) => {
-      const recipientA = a.items[0]?.fiscal_documents?.recipient || a.destination || '';
-      const recipientB = b.items[0]?.fiscal_documents?.recipient || b.destination || '';
-      return recipientCollator.compare(recipientA, recipientB) || recipientCollator.compare(a.load_number, b.load_number);
-    });
+    return sortAvailableLoadsByRecipient(loads);
   }, [availableLoads, filterDest]);
 
   const destinations = useMemo(() => {
@@ -1022,6 +987,7 @@ export default function RoutePlanning() {
                         <p className="text-[11px] text-amber-700">{route.notes}</p>
                       )}
                       <StopDraftTable
+                        tenantId={currentTenant?.id || ''}
                         stops={(route.stops || []).slice().sort((a,b) => routeStopOrder(a) - routeStopOrder(b))}
                         onMove={(id, dir) => moveStop(route.id, id, dir)}
                         onUpdate={(id, patch) => updateStop(route.id, id, patch)}

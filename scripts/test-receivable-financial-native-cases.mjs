@@ -72,5 +72,13 @@ export async function runReceivableFinancialNative({query,session,finish,waitFor
    assert.equal((await context()).received_cents,0);assert.equal((await context()).amount_cents,10000);assert.equal(await count('receivables_payments'),'3');
   }],
  ];
- for(const [name,test] of tests){await test();console.log('PASS '+name);}return tests.length;
+ for(const [name,test] of tests){await test();console.log('PASS '+name);}
+ // Clone only the disposable fixture after all sessions have closed. New
+ // financial migrations must not change the baseline used by later suites.
+ const database='finance_recorded_money_qa';
+ await query(`create database ${database} template postgres;`,'template1');
+ const {runRecordedMoneyNative}=await import('./test-finance-recorded-money-native-cases.mjs');
+ const recordedCount=await runRecordedMoneyNative({query:sql=>query(sql,database),
+  contested:(holder,waiter,options={})=>contested(holder,waiter,{...options,database}),literal:q});
+ return tests.length+recordedCount;
 }

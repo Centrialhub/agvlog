@@ -25,13 +25,27 @@ function storageKey(tenantId: string, userId: string): string {
 function isSnapshot(value: unknown, tenantId: string, userId: string): value is DriverRouteSnapshot {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<DriverRouteSnapshot>;
+  const cachedAt = typeof candidate.cachedAt === 'string'
+    ? new Date(candidate.cachedAt).getTime()
+    : Number.NaN;
   return candidate.version === 1
     && candidate.tenantId === tenantId
     && candidate.userId === userId
-    && typeof candidate.cachedAt === 'string'
+    && Number.isFinite(cachedAt)
     && typeof candidate.driver?.id === 'string'
+    && typeof candidate.driver.name === 'string'
     && typeof candidate.trip?.id === 'string'
-    && Array.isArray(candidate.stops);
+    && typeof candidate.trip.status === 'string'
+    && (candidate.trip.actual_start_at === null || typeof candidate.trip.actual_start_at === 'string')
+    && (candidate.trip.loads === null || (
+      typeof candidate.trip.loads === 'object'
+      && typeof candidate.trip.loads.load_number === 'string'
+    ))
+    && Array.isArray(candidate.stops)
+    && candidate.stops.every((stop) => !!stop
+      && typeof stop === 'object'
+      && typeof stop.id === 'string'
+      && typeof stop.status === 'string');
 }
 
 export function readDriverRouteSnapshot(

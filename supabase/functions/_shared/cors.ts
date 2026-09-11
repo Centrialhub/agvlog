@@ -8,6 +8,7 @@ const DEFAULT_ALLOWED_HEADERS = [
   "x-supabase-client-runtime",
   "x-supabase-client-runtime-version",
   "x-retry-count",
+  "x-agvlog-tenant-id",
   "x-agvlog-cron-secret",
   "x-fiscal-token",
   "x-webhook-secret",

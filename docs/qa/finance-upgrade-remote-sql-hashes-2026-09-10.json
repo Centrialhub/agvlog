@@ -1,0 +1,655 @@
+{
+  "read_only": true,
+  "bodies_exported": false,
+  "hash_scope": "UTF8_of_single_stored_statement",
+  "rows": [
+    {
+      "version": "20260824224152",
+      "name": "harden_tenant_scoped_security_definer_rpcs",
+      "statement_count": 1,
+      "single_statement_sha256": "47f60e4097f039e6f7e1abe3bc984679fb28eac817407095099a55ac661b13ba"
+    },
+    {
+      "version": "20260825014449",
+      "name": "production_baseline_hardening",
+      "statement_count": 1,
+      "single_statement_sha256": "c9dd17b8db8c74a7c41190dc989bf7390647a960499799d35a359f0cadbba54d"
+    },
+    {
+      "version": "20260825015349",
+      "name": "production_frontend_fk_indexes",
+      "statement_count": 1,
+      "single_statement_sha256": "f25e932a36bf70435aa3d012b59dc899afba7809422a21d4358529e397c452ff"
+    },
+    {
+      "version": "20260825020506",
+      "name": "production_secure_cron_vault",
+      "statement_count": 1,
+      "single_statement_sha256": "f6b9fa611b95452e72e3cdfd049f1de78b044cbe99977f1e1707d5424670d1e1"
+    },
+    {
+      "version": "20260825020850",
+      "name": "production_cte_status_poll_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "b906f5ae1465980884c87e649f3a9050b28a318bb95bc433e2fab4567c5add01"
+    },
+    {
+      "version": "20260825161010",
+      "name": "restore_frontend_rpc_contract_and_driver_flow",
+      "statement_count": 1,
+      "single_statement_sha256": "7cbbaf1860876a27de83a29f31e6cb5e7dc5ff67455b9a24002b5829b59e6df2"
+    },
+    {
+      "version": "20260825183818",
+      "name": "index_dispatch_foreign_keys",
+      "statement_count": 1,
+      "single_statement_sha256": "d3e9bc06c7fd813f649eab8b18140c2a294427c103fe8a89ab14935db71fa469"
+    },
+    {
+      "version": "20260825205752",
+      "name": "index_high_traffic_foreign_keys",
+      "statement_count": 1,
+      "single_statement_sha256": "de637834a27bafe08e47a4204a8a6872751c4664afa99dad50b9d5e73370f047"
+    },
+    {
+      "version": "20260825210005",
+      "name": "scope_authenticated_rls_policies",
+      "statement_count": 1,
+      "single_statement_sha256": "5741732496ab140c07acebd5322b2baa025b833e631134ce24ae95e9679875c8"
+    },
+    {
+      "version": "20260825212743",
+      "name": "harden_driver_message_rls",
+      "statement_count": 1,
+      "single_statement_sha256": "a546ca3722fd453ca6fec12a4dc58b608e3350b78258388791244c41839569af"
+    },
+    {
+      "version": "20260825213311",
+      "name": "consolidate_driver_message_rls",
+      "statement_count": 1,
+      "single_statement_sha256": "f0c36f55c90fb9e9e26090063c9f5957d2550c48fe57e34157f0d4d3e84afa50"
+    },
+    {
+      "version": "20260825213855",
+      "name": "link_maintenance_orders_to_vehicles",
+      "statement_count": 1,
+      "single_statement_sha256": "43e0eae083a377315af3e8ef16e320a9a106860130488e18ce6914f4882b566f"
+    },
+    {
+      "version": "20260825214418",
+      "name": "restore_receivables_foreign_keys",
+      "statement_count": 1,
+      "single_statement_sha256": "f6e4938bd2a6edde60a0829bc6d2685f6e2006696dadb331982e99a5535bbb9f"
+    },
+    {
+      "version": "20260825220540",
+      "name": "add_fiscal_document_cost_center",
+      "statement_count": 1,
+      "single_statement_sha256": "4407fcd7254ae42a57461ab8ae7e907d493353fb38aeb01de02f84eba397dd38"
+    },
+    {
+      "version": "20260825220834",
+      "name": "harden_finance_hr_maintenance_rls",
+      "statement_count": 1,
+      "single_statement_sha256": "36db6775bf7fbda92f565c1723d589bb8566821b8c3799079708964210a2891c"
+    },
+    {
+      "version": "20260825224339",
+      "name": "harden_tms_operator_rls",
+      "statement_count": 1,
+      "single_statement_sha256": "54c99f7dcfcecbb3fd4b09fabafe913570c1fa0f482b8e638d85aeb649642de2"
+    },
+    {
+      "version": "20260825225036",
+      "name": "grant_operational_route_normalizer",
+      "statement_count": 1,
+      "single_statement_sha256": "aff958a8b75723270239cde1cf5c8ddf533b5edf22b099a931515a70a6b0e6e6"
+    },
+    {
+      "version": "20260825230251",
+      "name": "harden_load_control_rls",
+      "statement_count": 1,
+      "single_statement_sha256": "ea8a26703e23780f747ea715725b8fa054bcd825a6ad8c2e64a69df953038f5c"
+    },
+    {
+      "version": "20260826001449",
+      "name": "relocate_public_extensions",
+      "statement_count": 1,
+      "single_statement_sha256": "4fdf08af650fb8e825a4f17e7745e612706b7bbb88c0bf6a9888476b35a8246b"
+    },
+    {
+      "version": "20260826001520",
+      "name": "index_all_public_foreign_keys",
+      "statement_count": 1,
+      "single_statement_sha256": "735f66f43e459a1ee648de493c3e798f357a8c6488ae38e4e24a7d5392edfd02"
+    },
+    {
+      "version": "20260826002301",
+      "name": "revoke_unsafe_legacy_rpc_signatures",
+      "statement_count": 1,
+      "single_statement_sha256": "1bdfd7f7cf8404f36b51a8aa157a875ccf74bdfb9efec7cf8835afe6000a228e"
+    },
+    {
+      "version": "20260826002408",
+      "name": "restore_rls_helper_execute",
+      "statement_count": 1,
+      "single_statement_sha256": "92dd4880fa3d82d664eb58b8414c1d790e8e3f8375664ac8e318085d5b18de0a"
+    },
+    {
+      "version": "20260826142151",
+      "name": "fiscal_poll_dead_letters",
+      "statement_count": 1,
+      "single_statement_sha256": "3e262e3a482ac2b947c1df34998001209f7bc6a42851e5ab78701e1d8b24a418"
+    },
+    {
+      "version": "20260826213612",
+      "name": "restrict_integration_metadata_to_operational_roles",
+      "statement_count": 1,
+      "single_statement_sha256": "7f177f64375f11661e07036ef7ac93c5198a29d7ec4c465311916b4fcee3ba2a"
+    },
+    {
+      "version": "20260826213623",
+      "name": "canonical_load_mutations",
+      "statement_count": 1,
+      "single_statement_sha256": "e80da4bb52c8ab71b5aeebca2746aea8adfd7e5877234fbeefab1cb5b57169cb"
+    },
+    {
+      "version": "20260826213631",
+      "name": "storage_upload_limits",
+      "statement_count": 1,
+      "single_statement_sha256": "1bc92ed0fbbadb1f9985ee32a969160b8613e91079b1a7d406f70f4b7807d94e"
+    },
+    {
+      "version": "20260826213640",
+      "name": "fiscal_dead_letter_terminalize",
+      "statement_count": 1,
+      "single_statement_sha256": "f1b0f950a42201df4ab335b97936583153a3f390d0c89cadbba7cd81ce697f8a"
+    },
+    {
+      "version": "20260826213649",
+      "name": "fiscal_webhook_inbox_claims",
+      "statement_count": 1,
+      "single_statement_sha256": "fbb80a7c5e171c8a0540f5e26eb2e9e01f304622389e159201d64f71f9283b27"
+    },
+    {
+      "version": "20260826213657",
+      "name": "harden_future_default_privileges",
+      "statement_count": 1,
+      "single_statement_sha256": "df637b4caa6445a7c5d7aac1550010f0a04992bce48fcbe5bbc05e862bb73d92"
+    },
+    {
+      "version": "20260826213733",
+      "name": "harden_portal_rpc_execution",
+      "statement_count": 1,
+      "single_statement_sha256": "22c391698154d414a7744f4801856d3be3992021f1543a0f17749bbd8315c74d"
+    },
+    {
+      "version": "20260826214104",
+      "name": "require_privileged_mfa",
+      "statement_count": 1,
+      "single_statement_sha256": "24e1e613ea9ed4debaba3274f54cbab2a1c8f5d6f5ada3667aa9aa49c000e1fd"
+    },
+    {
+      "version": "20260826215934",
+      "name": "remove_permissive_policy_overlaps",
+      "statement_count": 1,
+      "single_statement_sha256": "1ab836629f891b060915116f59228c6b44157cf59ac28c80e573fc27ac8d8c89"
+    },
+    {
+      "version": "20260828105626",
+      "name": "hide_driver_rls_helpers_from_data_api",
+      "statement_count": 1,
+      "single_statement_sha256": "351503a1478433ee74ee177c60cf67ca1a123e4118fa9cf0301eaef50645b1ba"
+    },
+    {
+      "version": "20260828110409",
+      "name": "hide_policy_only_driver_helpers_from_data_api",
+      "statement_count": 1,
+      "single_statement_sha256": "c47fe8fc15aeef897257f3f4f9c1ca7ca26cd09f8f547854136099c25a15280d"
+    },
+    {
+      "version": "20260828113034",
+      "name": "harden_tenant_mutation_rpcs_and_cte_monitor",
+      "statement_count": 1,
+      "single_statement_sha256": "ded459616dd6bf0aede3d715dea796781bfe78aded2197ce844a440885a37c6b"
+    },
+    {
+      "version": "20260828121520",
+      "name": "link_cte_receivables",
+      "statement_count": 1,
+      "single_statement_sha256": "361b80264eebdfe1d6f0e912e0d9631e193d4ad1542615600a6e7e69841cc105"
+    },
+    {
+      "version": "20260828123509",
+      "name": "harden_client_invoice_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "24978146fa8a33ee6c08c22746a07999fb1f473b2bf48c73daa65ca253ba5d7d"
+    },
+    {
+      "version": "20260828124136",
+      "name": "index_client_invoice_detail_tenant_graph",
+      "statement_count": 1,
+      "single_statement_sha256": "8319b74a5d8cff30912d4bdf7e08829cb2b2b1890db8b59a2fbacd996c44470b"
+    },
+    {
+      "version": "20260828124653",
+      "name": "harden_client_portal_access_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "d30f4c3cd6c8e60fc651c4a96ef77ab5cec5b578fcde5ead17f24cb8cea74df8"
+    },
+    {
+      "version": "20260828125152",
+      "name": "harden_driver_vehicle_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "f1a09e0fda74d402f2ae79328c8867aa11cf85dd6e0a71dfa233f65f01674723"
+    },
+    {
+      "version": "20260828130909",
+      "name": "harden_closing_report_financial_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "21d5fda078c12d523fe1c54df1c579438ced60a7b13ac8059f37bc4a97be5aae"
+    },
+    {
+      "version": "20260828131619",
+      "name": "index_driver_vehicle_tenant_assignments",
+      "statement_count": 1,
+      "single_statement_sha256": "60442a39436967bca5b0bb76ef794bf43fdfa6a3e13a0f76caa9e92a1b2d5944"
+    },
+    {
+      "version": "20260828132140",
+      "name": "harden_rural_profile_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "8befdc10f2cd9dbec427e474622caaae601a3d5bf96fbc5635f9f5bcd72050a2"
+    },
+    {
+      "version": "20260828132852",
+      "name": "harden_billing_edi_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "9bc8cb6b7036750c3aee90ac95db06b059551c91f1d888d30783a4c5c958b1fe"
+    },
+    {
+      "version": "20260828133419",
+      "name": "harden_hub_credential_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "943c042098353370394387c5f05119fbf0e3d4e90653254a0a2444482c924e85"
+    },
+    {
+      "version": "20260828133728",
+      "name": "harden_client_region_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "24389ef68b62764277a3d320bf052245fd9835d2dbffee4dcd60785716457b66"
+    },
+    {
+      "version": "20260828134845",
+      "name": "harden_pallet_return_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "52606b5700ee723d36c553538777e2125ea6de89885fa3d402553dbafacb58a1"
+    },
+    {
+      "version": "20260828140050",
+      "name": "harden_freight_table_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "e5027d70fe59009a35a8bf597687d8d4060e6389f993be8190a82ef62f7d9307"
+    },
+    {
+      "version": "20260828141003",
+      "name": "harden_order_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "242b732a43abf7382df3a130189462371b28c87015c7c56f0b11f0ea29ae38d7"
+    },
+    {
+      "version": "20260828143144",
+      "name": "harden_incident_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "606c173d8b9a17f22e7fd8a93e6c5f5de4ba9f0c86ebe22a549dbe404279269f"
+    },
+    {
+      "version": "20260828143346",
+      "name": "complete_incident_tenant_ownership",
+      "statement_count": 1,
+      "single_statement_sha256": "28805e8ea89a0d8422889d87822b1c80e47d75d0c782dce728db241c77e3d323"
+    },
+    {
+      "version": "20260828144026",
+      "name": "harden_cte_sefaz_event_tenant_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "6f5c53c444ab3475d1f7d14b422ede2764e68bacba6ae5007e8a56e1f2077668"
+    },
+    {
+      "version": "20260828144613",
+      "name": "harden_driver_monitoring_tenant_graph",
+      "statement_count": 1,
+      "single_statement_sha256": "8c3b435d37e08d5503154017ed34af36a1654225e2b344e3f7e4d54866a82b94"
+    },
+    {
+      "version": "20260828151937",
+      "name": "remove_duplicate_driver_monitoring_indexes",
+      "statement_count": 1,
+      "single_statement_sha256": "dd6e2a60c30757fb499bebfa9ae647fd495f94a0bc565a8ed79e3ea45f820491"
+    },
+    {
+      "version": "20260828172412",
+      "name": "remove_privileged_mfa",
+      "statement_count": 1,
+      "single_statement_sha256": "6d750c55269c3756a83ed72bc6445086528750c2e4b6f8ed0f985154e2042158"
+    },
+    {
+      "version": "20260828181403",
+      "name": "set_default_emitter_atomic",
+      "statement_count": 1,
+      "single_statement_sha256": "fae15cb6b66fef6ce1da866655994979c9ea4a2e4c882a34bb481d7267c07482"
+    },
+    {
+      "version": "20260828185518",
+      "name": "enforce_invite_only_auth_users",
+      "statement_count": 1,
+      "single_statement_sha256": "73fcee1c8e8c1d383b97d408dedd00392f935fc6a177d2b7aad23768b56a8af2"
+    },
+    {
+      "version": "20260828185827",
+      "name": "harden_auth_invite_authorizations",
+      "statement_count": 1,
+      "single_statement_sha256": "e8f30973d2a1604da23b93ea1f3f8df181df6508c47dc90f63968eda81b2667d"
+    },
+    {
+      "version": "20260829133957",
+      "name": "complete_hub_fiscal_environment_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "339109d0d937574edaef1cacf6737bf225f7987137d01a6ce9368ac4fa5c9c3b"
+    },
+    {
+      "version": "20260829142707",
+      "name": "restore_production_integration_capabilities",
+      "statement_count": 1,
+      "single_statement_sha256": "fbd65b73b6339d445f576f60fa9a21375d33fe142b2dd60cf359e15947e147ce"
+    },
+    {
+      "version": "20260829142719",
+      "name": "restore_production_frontend_pagination_contracts",
+      "statement_count": 1,
+      "single_statement_sha256": "d21e9fc76ecd5a6ecdd922bb267714fec73d1526849e68fe536a0fe59d710e1c"
+    },
+    {
+      "version": "20260829142956",
+      "name": "index_tenant_feature_policy_updated_by",
+      "statement_count": 1,
+      "single_statement_sha256": "26dfe0cc131ff09c5d79025239222b545fd1bda79a3cfa03a03773d5dfd9d855"
+    },
+    {
+      "version": "20260829143948",
+      "name": "add_production_application_error_telemetry",
+      "statement_count": 1,
+      "single_statement_sha256": "a502cf57473850692710acd23ac0d823f2e318aa839862cb29f17731dd49366f"
+    },
+    {
+      "version": "20260829143955",
+      "name": "add_production_application_web_vitals",
+      "statement_count": 1,
+      "single_statement_sha256": "6bf103b3b4461674324f08138c1cafe6b7a02c1d65b820b532abdca93edf2a2b"
+    },
+    {
+      "version": "20260829144001",
+      "name": "add_production_secure_upload_rate_limits",
+      "statement_count": 1,
+      "single_statement_sha256": "430846bb51487c53418f157d8c82362b7afb8b756a91f206b5de201f1559459a"
+    },
+    {
+      "version": "20260829144103",
+      "name": "enforce_secure_upload_gateway_policies",
+      "statement_count": 1,
+      "single_statement_sha256": "435d04e95edee6c421491bf21c7fbf0ff74a72a07c3834e0f0e5d1594af2e367"
+    },
+    {
+      "version": "20260829150921",
+      "name": "repair_dispatch_trip_v3_idempotency_contract",
+      "statement_count": 1,
+      "single_statement_sha256": "b5c387ca020124b60fdf668feea1430e14e0ac77395a1f7bc45c96102247685e"
+    },
+    {
+      "version": "20260829151605",
+      "name": "allow_in_transit_driver_delivery_flow",
+      "statement_count": 1,
+      "single_statement_sha256": "470b87bcfe6ed4afebaaa4d42ec9cabb8be7914f39abd3fe4eeaedda37a3f8fb"
+    },
+    {
+      "version": "20260829160528",
+      "name": "restore_client_portal_fiscal_document_read",
+      "statement_count": 1,
+      "single_statement_sha256": "8cc134ef5716110961b426cadda6e476f0a1b837d07c9755bb6975571cf44180"
+    },
+    {
+      "version": "20260829161509",
+      "name": "grant_portal_fiscal_scope_helper",
+      "statement_count": 1,
+      "single_statement_sha256": "712f2e7eda2ea184b5d44944b303db35e9f0dbcec46eac57cfa0c1fd639d288f"
+    },
+    {
+      "version": "20260830013356",
+      "name": "harden_driver_occurrence_scope",
+      "statement_count": 1,
+      "single_statement_sha256": "a1a08d240029382d9590e4355ee0a685ac4f63d4298ac886f38e72f9aedae5ee"
+    },
+    {
+      "version": "20260830013726",
+      "name": "restrict_tenant_creation_to_platform",
+      "statement_count": 1,
+      "single_statement_sha256": "6ad8fcf2bad9aaf51752c638d62568584fe8d9ea7daa6aa95d6dd111adca7a28"
+    },
+    {
+      "version": "20260830024309",
+      "name": "enforce_driver_journey_state_machine",
+      "statement_count": 1,
+      "single_statement_sha256": "add7729113ad6a92995c4f91ff4c97d3ea67173d9c69dbbc2ba399f42d485d30"
+    },
+    {
+      "version": "20260830033306",
+      "name": "restrict_legacy_driver_event_api",
+      "statement_count": 1,
+      "single_statement_sha256": "ec7eaef06abd9572f1f91ca89f771f3efb183e68f4c5554f10e29cc389c98de3"
+    },
+    {
+      "version": "20260830042313",
+      "name": "harden_driver_stop_departure",
+      "statement_count": 1,
+      "single_statement_sha256": "f49820fca991060fbd62346b763705c1658c9fcecc0554bbbdbbb98d9de36a44"
+    },
+    {
+      "version": "20260830050226",
+      "name": "enforce_delivery_outcome_atomicity",
+      "statement_count": 1,
+      "single_statement_sha256": "18e79cbe7f49a7b918d821c7b4007c337f346fdebe20d26cd35a237d10fb2e3b"
+    },
+    {
+      "version": "20260830061800",
+      "name": "restrict_idempotency_key_read_scope",
+      "statement_count": 1,
+      "single_statement_sha256": "1a83403c41be8885298a75df818b7a0ad4270dd5b6dd85920c989e95faf3f0f5"
+    },
+    {
+      "version": "20260830115234",
+      "name": "harden_portal_shipment_detail_privacy",
+      "statement_count": 1,
+      "single_statement_sha256": "b937a9bf54aac2439f7eac8d3b738cbfed78e231b2cb17b362f441295d427a7f"
+    },
+    {
+      "version": "20260831124505",
+      "name": "fiscal_emission_readiness",
+      "statement_count": 1,
+      "single_statement_sha256": "a7531e0705e2f167dd493d83a54b08d15a33e576aebce65a4475089b665e1553"
+    },
+    {
+      "version": "20260831153911",
+      "name": "reconcile_unsent_fiscal_dispatch",
+      "statement_count": 1,
+      "single_statement_sha256": "14367e740575029bb4843c1cad4e25a659283d48d9b594bb21338d4868c15b80"
+    },
+    {
+      "version": "20260831160035",
+      "name": "reconcile_provider_rejections",
+      "statement_count": 1,
+      "single_statement_sha256": "b37504220581d5fd218dda5a4b6cf179e43740c3d6b722cd693be6c1a33f4cd1"
+    },
+    {
+      "version": "20260831160938",
+      "name": "reconcile_authorized_cte_catalog",
+      "statement_count": 1,
+      "single_statement_sha256": "0b7d6c0b709c4bd01c3f162b58f714a749c9f8117e6ca1ed8903e243dce9c040"
+    },
+    {
+      "version": "20260831161743",
+      "name": "preserve_terminal_fiscal_receipts",
+      "statement_count": 1,
+      "single_statement_sha256": "6015bd6b531d949dcef898acbd3921d4812fe079a624df5a5579f87acaf64ed5"
+    },
+    {
+      "version": "20260831170755",
+      "name": "serialize_cte_dispatch_and_reconcile_rejections",
+      "statement_count": 1,
+      "single_statement_sha256": "e0e671dcff3f78a8d7ca9386acf301f79d3f6fca4a97d51ccca55a436238e2d5"
+    },
+    {
+      "version": "20260831184715",
+      "name": "fix_cte_defaults_product_summary",
+      "statement_count": 1,
+      "single_statement_sha256": "5d4cdad5c0f1e709b9a4868d1e3c4440381f87fa7b0247a9d56ed9619f0b8161"
+    },
+    {
+      "version": "20260831214749",
+      "name": "add_official_tax_registry",
+      "statement_count": 1,
+      "single_statement_sha256": "76f9195c20ab1d3dfd73d3befc69befc17adcb7e73634652e2644b20d08ef530"
+    },
+    {
+      "version": "20260831215043",
+      "name": "protect_fiscal_certificate_secrets",
+      "statement_count": 1,
+      "single_statement_sha256": "27c4143db3f5efd25ebb2939fe576252b61850cf5407a381964b09b5ae8460ba"
+    },
+    {
+      "version": "20260831230903",
+      "name": "enforce_trip_load_transit_invariant",
+      "statement_count": 1,
+      "single_statement_sha256": "c2e0788e7625a0dcdd43bb71bf013d5535a52b3c77e4f6220b4fbc8a4fe77d2a"
+    },
+    {
+      "version": "20260831230957",
+      "name": "reconcile_load_1003_no_start_evidence",
+      "statement_count": 1,
+      "single_statement_sha256": "7da51424a990b80c99939f0b5c351c0d48841fc1a19a2426867836a4c335465c"
+    },
+    {
+      "version": "20260831232156",
+      "name": "remove_trip_load_from_unscoped_driver_occurrences",
+      "statement_count": 1,
+      "single_statement_sha256": "940a94f234e425e32d4ff04e95decae097d9d4d3e77ec5b9c0973d7ca20987c7"
+    },
+    {
+      "version": "20260831232458",
+      "name": "add_gps_driver_arrival_rpc",
+      "statement_count": 1,
+      "single_statement_sha256": "c1a47d9ea670afa0e07495859398a94dd36f21760cb134854deb0d4f2930b02e"
+    },
+    {
+      "version": "20260901001442",
+      "name": "revoke_reintroduced_legacy_composition_acl",
+      "statement_count": 1,
+      "single_statement_sha256": "b90e955b403776ecf511e84743e6e3fd5b053a9c24e75b78024f33a6e57b3342"
+    },
+    {
+      "version": "20260901001826",
+      "name": "revoke_reintroduced_legacy_security_definers",
+      "statement_count": 1,
+      "single_statement_sha256": "8dfb629dc43421131a1cbc4ce9cad21e9b8728b3c973efd46902cd8593719bcf"
+    },
+    {
+      "version": "20260901002245",
+      "name": "cutover_legacy_driver_delivery_writers",
+      "statement_count": 1,
+      "single_statement_sha256": "c375dc435c4569c0117c6208a142533492aa7c2862ca1d790cb40a72e792863e"
+    },
+    {
+      "version": "20260901162058",
+      "name": "adopt_hub_fiscal_status_callbacks",
+      "statement_count": 1,
+      "single_statement_sha256": "dec75f45ec923a27260577f897d8871df605638ce8c22b8a26c224678ffb246a"
+    },
+    {
+      "version": "20260901213635",
+      "name": "revoke_replaced_dispatch_planner_acl",
+      "statement_count": 1,
+      "single_statement_sha256": "f7717d3e1b82d6733bf0c6be8f674ea74d92c71c957893b9ecdab64cd95069ab"
+    },
+    {
+      "version": "20260901213736",
+      "name": "protect_linked_storage_evidence",
+      "statement_count": 1,
+      "single_statement_sha256": "ec88401a746022c46da65ef14c7feda1949ed115c643119f4810fa4df63fe383"
+    },
+    {
+      "version": "20260902015801",
+      "name": "retire_legacy_driver_delivery_browser_acl",
+      "statement_count": 1,
+      "single_statement_sha256": "100b47964aae285d27bf75fe7c00d03dd42555141a0ae2ad71b18f9f02b3447b"
+    },
+    {
+      "version": "20260902015925",
+      "name": "add_cursor_operator_event_reader",
+      "statement_count": 1,
+      "single_statement_sha256": "8b82441b655be0f22d5aabab91299190684fd6faf3f120dd06ca7c883fa87030"
+    },
+    {
+      "version": "20260902015933",
+      "name": "add_operator_cursor_readers",
+      "statement_count": 1,
+      "single_statement_sha256": "886c87d049a8577c5bfe98e1f71ac37234a304542660902885078615cecee7d3"
+    },
+    {
+      "version": "20260902015940",
+      "name": "add_driver_load_history_cursor",
+      "statement_count": 1,
+      "single_statement_sha256": "8cd353eae08db3fe0c9ef4a263b19c3c460bc61c85632554171eecf04ac70093"
+    },
+    {
+      "version": "20260902015947",
+      "name": "add_driver_event_history_cursor",
+      "statement_count": 1,
+      "single_statement_sha256": "6d16f159a9354331b212ee515939a0ce2cb27598f0d20d4288c5e088c859f83c"
+    },
+    {
+      "version": "20260902020725",
+      "name": "make_load_aggregate_commands_atomic",
+      "statement_count": 1,
+      "single_statement_sha256": "fb01363de15bcaa18c99f3ec06cccdea2796c4b076a3d737c0186b5bafa13e38"
+    },
+    {
+      "version": "20260902020756",
+      "name": "enforce_atomic_load_number_allocation",
+      "statement_count": 1,
+      "single_statement_sha256": "79934491f616c1caf5440b791553f29c06d3902c98e12f90f453fd1f3cdf0dde"
+    },
+    {
+      "version": "20260902020825",
+      "name": "add_driver_fiscal_file_reader",
+      "statement_count": 1,
+      "single_statement_sha256": "837658861c26fae782eba671acfc54934299fc7acb21d35d2d13402cb5d3e0d5"
+    },
+    {
+      "version": "20260902021534",
+      "name": "reconcile_disabled_ssx_cron",
+      "statement_count": 1,
+      "single_statement_sha256": "12c5b76c6fd3e1dce98bb2d754d11fe251106cd550f394645e655e792804e9e1"
+    },
+    {
+      "version": "20260902021653",
+      "name": "index_atomic_load_foreign_keys",
+      "statement_count": 1,
+      "single_statement_sha256": "150f4db27321ec0952dff282e725f1dfe63e0edf04f3121d178eb7911c9b1eaa"
+    },
+    {
+      "version": "20260909221751",
+      "name": "prepare_durable_nfse_issue_batches",
+      "statement_count": 1,
+      "single_statement_sha256": "9e900fd3d5b14a6693e0f446415a01aab9b45992fc2b29a5ca34c2bd2d3d60cb"
+    }
+  ]
+}

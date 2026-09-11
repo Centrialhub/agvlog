@@ -3,6 +3,14 @@ import { isCronRequest } from "../_shared/cron-auth.ts";
 import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
+const POSITION_PROCESSING_PAGE_SIZE = 5000;
+
+type PositionProcessingPageRow = {
+  position_payload: Record<string, unknown>;
+  position_captured_at: string;
+  position_point_key: string;
+};
+
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (error && typeof error === "object" && "message" in error) {
@@ -223,6 +231,60 @@ Deno.serve(async (req) => {
 
 // ============ VEHICLE PROCESSOR (idempotent) ============
 
+async function loadPositionProcessingWindow(
+  supabase: any,
+  tenantId: string,
+  vehicleId: string,
+  windowFrom: string,
+  windowTo: string,
+): Promise<{ positions: any[]; geofencePages: any[][] }> {
+  const positions: any[] = [];
+  const geofencePages: any[][] = [];
+  let afterCapturedAt: string | null = null;
+  let afterPointKey: string | null = null;
+
+  while (true) {
+    const { data, error } = await supabase.rpc("read_vehicle_position_processing_page_v1", {
+      _tenant_id: tenantId,
+      _vehicle_id: vehicleId,
+      _window_from: windowFrom,
+      _window_to: windowTo,
+      _after_captured_at: afterCapturedAt,
+      _after_point_key: afterPointKey,
+      _page_size: POSITION_PROCESSING_PAGE_SIZE,
+    });
+    if (error) throw error;
+
+    const page = (data || []) as PositionProcessingPageRow[];
+    if (page.length === 0) break;
+    if (page.length > POSITION_PROCESSING_PAGE_SIZE) {
+      throw new Error("position_processing_page_limit_exceeded");
+    }
+
+    const last = page[page.length - 1];
+    if (!last?.position_captured_at || !last?.position_point_key) {
+      throw new Error("invalid_position_processing_cursor");
+    }
+    if (
+      afterCapturedAt !== null
+      && (
+        last.position_captured_at < afterCapturedAt
+        || (last.position_captured_at === afterCapturedAt && last.position_point_key <= (afterPointKey || ""))
+      )
+    ) {
+      throw new Error("position_processing_cursor_did_not_advance");
+    }
+
+    const pagePositions = page.map((row) => row.position_payload);
+    geofencePages.push(pagePositions);
+    positions.push(...pagePositions);
+    afterCapturedAt = last.position_captured_at;
+    afterPointKey = last.position_point_key;
+  }
+
+  return { positions, geofencePages };
+}
+
 async function processVehicle(
   supabase: any,
   tenantId: string,
@@ -248,19 +310,12 @@ async function processVehicle(
   const windowTo = new Date().toISOString();
   const windowFrom = new Date(Date.now() - 24 * 3600 * 1000 - 30 * 60 * 1000).toISOString();
 
-  // Fetch positions
-  const { data: positions, error: posErr } = await supabase
-    .from("positions_raw")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .eq("vehicle_id", vehicleId)
-    .gte("captured_at", windowFrom)
-    .lte("captured_at", windowTo)
-    .order("captured_at", { ascending: true })
-    .limit(5000);
-
-  if (posErr) throw posErr;
-  if (!positions || positions.length === 0) {
+  // Traverse every raw position in the same (captured_at, point_key) order used
+  // by the database engine. Each RPC and geofence batch remains capped at 5,000.
+  const { positions, geofencePages } = await loadPositionProcessingWindow(
+    supabase, tenantId, vehicleId, windowFrom, windowTo,
+  );
+  if (positions.length === 0) {
     return { positions_analyzed: 0 };
   }
 
@@ -292,6 +347,7 @@ async function processVehicle(
     .delete()
     .eq("tenant_id", tenantId).eq("vehicle_id", vehicleId)
     .eq("source", "engine")
+    .not("event_type", "in", '("geofence_enter","geofence_exit")')
     .gte("event_at", windowFrom).lte("event_at", windowTo);
 
   // 1) Classify movement
@@ -552,15 +608,10 @@ async function processVehicle(
     }
   }
 
-  // 11) Geofence checks
-  if (positions.length > 0) {
-    const lastPoint = positions[positions.length - 1];
-    try {
-      const geoResult = await checkGeofences(supabase, tenantId, vehicleId, lastPoint, alertRules || []);
-      result.geofence_events_created += geoResult;
-    } catch (e) {
-      console.log("Geofence check error:", e);
-    }
+  // 11) Process geofences only after the engine-event cleanup above. Keeping
+  // the original pages guarantees every RPC batch stays within its 5,000 cap.
+  for (const pagePositions of geofencePages) {
+    result.geofence_events_created += await checkGeofences(supabase, tenantId, vehicleId, pagePositions);
   }
 
   // 12) Route matching
@@ -1036,74 +1087,22 @@ function haversine(lat1: number, lon1: number, lat2: number, lon2: number): numb
 
 async function checkGeofences(
   supabase: any, tenantId: string, vehicleId: string,
-  lastPoint: any, alertRules: any[]
+  positions: any[]
 ): Promise<number> {
-  const { data: geofences } = await supabase
-    .from("geofences").select("id, name, geometry")
-    .eq("tenant_id", tenantId).eq("enabled", true);
-
-  if (!geofences || geofences.length === 0) return 0;
-
-  let eventsCreated = 0;
-
-  for (const geo of geofences) {
-    const { data: insideResult } = await supabase.rpc("is_point_in_geofence", {
-      _geofence_id: geo.id, _lng: lastPoint.lng, _lat: lastPoint.lat,
-    }).single();
-
-    if (insideResult === null || insideResult === undefined) continue;
-    const isInside = !!insideResult;
-
-    const { data: state } = await supabase
-      .from("geofence_states").select("*")
-      .eq("tenant_id", tenantId).eq("vehicle_id", vehicleId).eq("geofence_id", geo.id)
-      .maybeSingle();
-
-    const wasInside = state?.is_inside || false;
-
-    if (isInside !== wasInside) {
-      const direction = isInside ? "enter" : "exit";
-      const eventType = isInside ? "geofence_enter" : "geofence_exit";
-
-      await supabase.from("geofence_events").insert({
-        tenant_id: tenantId, vehicle_id: vehicleId,
-        geofence_id: geo.id, direction,
-        event_at: lastPoint.captured_at,
-        payload: { geofence_name: geo.name, lat: lastPoint.lat, lng: lastPoint.lng },
-      });
-
-      await supabase.from("events").insert({
-        tenant_id: tenantId, vehicle_id: vehicleId,
-        event_type: eventType, severity: "info", source: "engine",
-        event_at: lastPoint.captured_at,
-        payload: { geofence_id: geo.id, geofence_name: geo.name, direction },
-      });
-
-      eventsCreated += 2;
-
-      for (const rule of alertRules) {
-        if (rule.rule_type === "geofence" && rule.enabled) {
-          const rp = rule.params as any || {};
-          if (rp.geofence_id === geo.id && (!rp.direction || rp.direction === direction)) {
-            await supabase.from("alert_instances").insert({
-              tenant_id: tenantId, vehicle_id: vehicleId,
-              rule_id: rule.id, status: "open", source: "engine",
-              opened_at: lastPoint.captured_at,
-            });
-          }
-        }
-      }
-    }
-
-    await supabase.from("geofence_states").upsert({
-      tenant_id: tenantId, vehicle_id: vehicleId, geofence_id: geo.id,
-      is_inside: isInside,
-      last_changed_at: isInside !== wasInside ? new Date().toISOString() : (state?.last_changed_at || new Date().toISOString()),
-      last_checked_at: new Date().toISOString(),
-    }, { onConflict: "tenant_id,vehicle_id,geofence_id" });
-  }
-
-  return eventsCreated;
+  const points = positions.map((point) => ({
+    captured_at: point.captured_at,
+    lat: point.lat,
+    lng: point.lng,
+    accuracy_m: typeof point.accuracy_m === "number" ? point.accuracy_m : null,
+    provider_payload_hash: typeof point.provider_payload_hash === "string" ? point.provider_payload_hash : null,
+  }));
+  const { data, error } = await supabase.rpc("process_geofence_position_batch_v2", {
+    _tenant_id: tenantId,
+    _vehicle_id: vehicleId,
+    _points: points,
+  });
+  if (error) throw error;
+  return Number(data?.transition_count) || 0;
 }
 
 async function autoDetectPois(supabase: any, tenantId: string) {

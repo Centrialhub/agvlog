@@ -5,7 +5,7 @@ import {useAuth} from '@/hooks/useAuth';
 import {supabase} from '@/integrations/supabase/client';
 import {expenseReviewError,parseExpenseReviewContext,parseExpenseReviewList,type ExpenseReviewInput,type ExpenseReviewResult} from '@/lib/financial/expenseReviewCommands';
 import {EXPENSE_REVIEW_CHANGED,createExpenseReviewOutbox,pendingExpenseReview} from '@/lib/financial/expenseReviewOutbox';
-const invalidations=['expense-review-context','expense_approval','driver_expenses','ops_expenses_count','driver_settlements','driver_settlement','financial_obligations','financial_matches_suggested'];
+const invalidations=['finance-legacy-cost-context','finance-legacy-cost-inventory','expense-review-context','expense_approval','driver_expenses','ops_expenses_count','driver_settlements','driver_settlement','financial_obligations','financial_matches_suggested'];
 export function useExpenseReviewList(filter:'pending'|'reviewed',offset:number){
  const {currentTenant}=useTenant();const {user}=useAuth();const tenant=currentTenant?.id,actor=user?.id;const client=useQueryClient();
  useEffect(()=>{if(!tenant||!actor)return;const channel=supabase.channel('expense-reviews:'+tenant+':'+actor).on('postgres_changes',{event:'*',schema:'public',table:'driver_expenses',filter:'tenant_id=eq.'+tenant},()=>{

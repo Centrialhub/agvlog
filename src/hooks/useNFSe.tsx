@@ -7,7 +7,7 @@ import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { TenantEmitter } from './useEmitters';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
-import { hubFiscal, type HubResponse } from '@/lib/fiscal/hubFiscalClient';
+import { hubFiscal, type HubResponse, type NFSeBatchMode, type NFSeBatchResponse } from '@/lib/fiscal/hubFiscalClient';
 import { buildNFSeEmitPayload, type BuildNFSeInput } from '@/lib/fiscal/nfseBuilder';
 import { requireHubEnvironment, selectScopedHubCredential, type HubEnvironment } from '../../supabase/functions/_shared/fiscal-environment';
 
@@ -236,6 +236,10 @@ export function useCreateNFSe() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nfse'] });
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({queryKey:['finance-receivable-portfolio']});
+      qc.invalidateQueries({queryKey:['finance-fiscal-dashboard-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-origins']});
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
     },
   });
@@ -270,6 +274,10 @@ export function useUpdateNFSe() {
         qc.invalidateQueries({ queryKey: ['nfse'] });
       }
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({queryKey:['finance-receivable-portfolio']});
+      qc.invalidateQueries({queryKey:['finance-fiscal-dashboard-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-origins']});
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
     },
   });
@@ -379,6 +387,10 @@ export function useIssueNFSe(selectedEnvironment: HubEnvironment) {
     onSuccess: (data: NFSeIssueResult) => {
       qc.invalidateQueries({ queryKey: ['nfse'] });
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({queryKey:['finance-receivable-portfolio']});
+      qc.invalidateQueries({queryKey:['finance-fiscal-dashboard-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-origins']});
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       if (data?.status === 'issued') toast.success('NFS-e autorizada com sucesso!');
       else if (data?.status === 'submitted' || (data?.provider === 'hub_fiscal' && data?.status === 'processing')) {
@@ -394,7 +406,78 @@ export function useIssueNFSe(selectedEnvironment: HubEnvironment) {
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao emitir NFS-e')),
     onSettled: () => {
       // A rejection/timeout may have committed a reservation or its release.
-      for (const key of ['nfse','billing_documents','fiscal_documents']) qc.invalidateQueries({queryKey:[key]});
+      for (const key of ['nfse','finance-receivable-portfolio','finance-fiscal-dashboard-summary','finance-unbilled-freight-summary','finance-unbilled-freight-origins','billing_documents','fiscal_documents']) qc.invalidateQueries({queryKey:[key]});
+    },
+  });
+}
+
+export interface IssueNFSeBatchInput {
+  mode: NFSeBatchMode;
+  requestId: string;
+  nfseDocumentIds: string[];
+}
+
+/**
+ * Issues already-created NFS-e drafts as one durable command. Draft creation is
+ * deliberately separate; callers must retain requestId + document ids on retry.
+ */
+export function useIssueNFSeBatch(selectedEnvironment: HubEnvironment) {
+  const qc = useQueryClient();
+  return useMutation<NFSeBatchResponse, Error, IssueNFSeBatchInput>({
+    mutationFn: async ({ mode, requestId, nfseDocumentIds }) => {
+      const uniqueIds = [...new Set(nfseDocumentIds)];
+      if (!requestId.trim() || uniqueIds.length === 0 || uniqueIds.length !== nfseDocumentIds.length) {
+        throw new Error('Comando de emissão NFS-e em lote inválido.');
+      }
+      const environment = requireHubEnvironment(selectedEnvironment);
+      const { data: rows, error: documentsError } = await supabase
+        .from('nfse_documents').select('*').in('id', uniqueIds);
+      if (documentsError) throw documentsError;
+      if (!rows || rows.length !== uniqueIds.length) throw new Error('Uma NFS-e do lote não foi encontrada.');
+      const documents = new Map(rows.map(row => [row.id, normalizeNFSeDocument(row)]));
+      const emitterIds = new Set(rows.map(row => row.emitter_id).filter((id): id is string => Boolean(id)));
+      if (emitterIds.size !== 1) throw new Error('Todas as NFS-e do lote devem usar o mesmo emitente.');
+      const emitterId = [...emitterIds][0];
+      const { data: emitterRow, error: emitterError } = await supabase
+        .from('tenant_emitters').select('*').eq('id', emitterId).maybeSingle();
+      if (emitterError) throw emitterError;
+      if (!emitterRow) throw new Error('Emitente fiscal do lote não encontrado.');
+      const emitter = normalizeEmitter(emitterRow);
+      const { data: credentials, error: credentialsError } = await supabase
+        .from('hub_fiscal_credentials')
+        .select('id, doc_scope, environment')
+        .eq('emitter_id', emitterId).eq('tenant_id', rows[0].tenant_id).eq('enabled', true)
+        .in('doc_scope', ['nfse', 'all']);
+      if (credentialsError) throw credentialsError;
+      if (!selectScopedHubCredential(credentials || [], 'nfse', environment)) {
+        throw new Error(`Emitente sem credencial NFS-e em ${environment}.`);
+      }
+      const entries = uniqueIds.map(nfseDocumentId => {
+        const built = buildNFSeEmitPayload({
+          doc: documents.get(nfseDocumentId)! as unknown as BuildNFSeInput['doc'],
+          emitter,
+          environment,
+        });
+        return {
+          nfseDocumentId,
+          body: {
+            emitterCnpj: built.emitterCnpj,
+            environment: built.environment,
+            externalId: `agvlog-nfse-${nfseDocumentId}`,
+            payload: built.payload,
+          },
+        };
+      });
+      return hubFiscal.emitNFSeBatch({ mode, requestId, emitterId, environment, entries });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['nfse'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({queryKey:['finance-receivable-portfolio']});
+      qc.invalidateQueries({queryKey:['finance-fiscal-dashboard-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-origins']});
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
     },
   });
 }
@@ -420,7 +503,7 @@ export function useCancelNFSe() {
     if(released.error)throw new Error('Rascunho cancelado; falha ao liberar as origens. Atualize e concilie.');
     return {status:'cancelled'};
   },onSuccess:(data)=>{
-    for(const key of ['nfse','billing_documents','fiscal_documents','eligible_nfse'])qc.invalidateQueries({queryKey:[key]});
+    for(const key of ['nfse','finance-receivable-portfolio','finance-fiscal-dashboard-summary','finance-unbilled-freight-summary','finance-unbilled-freight-origins','billing_documents','fiscal_documents','eligible_nfse'])qc.invalidateQueries({queryKey:[key]});
     if(data.status==='cancelled')toast.success('Cancelamento confirmado');else toast.info('Cancelamento solicitado; aguardando confirmação do provedor.');
   },onError:(error:unknown)=>toast.error(errorMessage(error,'Falha ao cancelar NFS-e'))});
 }
@@ -436,7 +519,7 @@ export function useDeleteNFSe() {
     const {error}=await supabase.from('nfse_documents').delete().eq('tenant_id',currentTenant.id).eq('id',id);
     if(error)throw error;
     return {id};
-  },onSuccess:()=>{for(const key of ['nfse','billing_documents','fiscal_documents'])qc.invalidateQueries({queryKey:[key]});toast.success('NFS-e excluída');},
+  },onSuccess:()=>{for(const key of ['nfse','finance-receivable-portfolio','finance-fiscal-dashboard-summary','finance-unbilled-freight-summary','finance-unbilled-freight-origins','billing_documents','fiscal_documents'])qc.invalidateQueries({queryKey:[key]});toast.success('NFS-e excluída');},
   onError:(error:unknown)=>toast.error(errorMessage(error,'Falha ao excluir NFS-e'))});
 }
 
@@ -460,7 +543,7 @@ export function useResendNFSe() {
     const result=await hubFiscal.emit({type:'nfse',emitterId:emission.emitter_id,nfseDocumentId:id,body});
     if(['rejected','cancelled'].includes(String(result.hub?.document?.status)))throw new Error(result.hub?.document?.message||'Documento recusado ou cancelado. Confira o retorno na prévia.');
     return result;
-  },onSuccess:()=>{for(const key of ['nfse','billing_documents','fiscal_documents','eligible_nfse'])qc.invalidateQueries({queryKey:[key]});toast.success('Operação fiscal consultada');},
+  },onSuccess:()=>{for(const key of ['nfse','finance-receivable-portfolio','finance-fiscal-dashboard-summary','finance-unbilled-freight-summary','finance-unbilled-freight-origins','billing_documents','fiscal_documents','eligible_nfse'])qc.invalidateQueries({queryKey:[key]});toast.success('Operação fiscal consultada');},
   onError:(error:unknown)=>toast.error(errorMessage(error,'Falha ao recuperar NFS-e'))});
 }
 

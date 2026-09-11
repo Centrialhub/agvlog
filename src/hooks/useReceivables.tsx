@@ -55,23 +55,25 @@ export function useCreateReceivable() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['receivables'] }),
+    onSuccess: () => Promise.all(['receivables','finance-receivable-portfolio','finance-receivable-history'].map(key=>qc.invalidateQueries({queryKey:[key]}))),
   });
 }
 
 export function useUpdateReceivable() {
+  const {currentTenant}=useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: UpdateReceivableInput) => {
+      if(!currentTenant?.id||!user?.id)throw new Error('Sessão financeira indisponível.');
       const { data, error } = await supabase.from('receivables').update({
         ...values,
         updated_by: user?.id,
         updated_at: new Date().toISOString(),
-      }).eq('id', id).select().single();
+      }).eq('id', id).eq('tenant_id',currentTenant.id).select().single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['receivables'] }),
+    onSuccess: () => Promise.all(['receivables','finance-receivable-portfolio','finance-receivable-history'].map(key=>qc.invalidateQueries({queryKey:[key]}))),
   });
 }

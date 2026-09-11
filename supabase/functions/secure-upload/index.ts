@@ -1,8 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import { corsHeaders } from "../_shared/cors.ts";
+import { requireActiveTenant } from "../_shared/active-tenant.ts";
 import { expenseReceiptUpload } from "./expense-receipt.ts";
 import { secureCleanup } from "./secure-cleanup.ts";
+import {preserveStatementOriginal,statementFileType} from "./statement-original.ts";
+import {isFinancialReceiptFolder} from './financial-upload-policy.ts';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const JSON_HEADERS = { ...corsHeaders, "Content-Type": "application/json" };
@@ -11,11 +14,13 @@ const BUCKET_ROLES: Record<string, readonly string[]> = {
   receipts: ["owner", "admin", "operator", "driver"],
   "occurrence-return-proofs": ["owner", "admin", "operator"],
   "pallet-return-proofs": ["owner", "admin", "operator"],
+  "finance-statements": ["owner", "admin", "operator"],
 };
 const KIND_MIMES: Record<string, readonly string[]> = {
   image: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"],
   proof: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"],
   financial: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf", "application/xml"],
+  statement: ["text/csv","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","application/x-ofx"],
 };
 
 function response(status: number, payload: Record<string, unknown>) {
@@ -148,11 +153,18 @@ Deno.serve(async (request) => {
       if (cleanup.action !== "cleanup" || !validUuid(tenantId) || !BUCKET_ROLES[bucket] || !validPaths) {
         return response(400, { error: "invalid_cleanup_request" });
       }
+      const tenantContextError = requireActiveTenant(request, tenantId);
+      if (tenantContextError) return tenantContextError;
       if (paths.some(path => path.includes("\\") || path.includes("%") || path.split("/").some(segment => !segment || segment === "."))) {
         return response(400, { error: "invalid_cleanup_path" });
       }
-      if (bucket === "receipts" && paths.some(path => path.split("/")[1] === "expense-receipts")) {
+      if (bucket === "receipts" && paths.some(path => ["expense-receipts", "finance-batches"].includes(path.split("/")[1]))) {
         return response(403, { error: "expense_receipt_retention_required" });
+      }
+      if(bucket==="finance-statements")return response(403,{error:"finance_statement_file_immutable"});
+      if(paths.some(path=>isFinancialReceiptFolder(bucket,path.split('/').slice(1).join('/')))){
+        const access=await callerClient.rpc('get_finance_access',{_tenant_id:tenantId});
+        if(access.error||access.data!==true)return response(403,{error:'finance_access_denied'});
       }
       const cleanupResult = await secureCleanup({tenant:tenantId,actor:user.id,bucket,paths,correlationId},{
         authorize: args => callerClient.rpc("authorize_secure_upload_cleanup_v1",args),
@@ -168,13 +180,28 @@ Deno.serve(async (request) => {
     const folder = String(form.get("folder") ?? "");
     const kind = String(form.get("kind") ?? "");
     const file = form.get("file");
+    const evidenceRequestId = String(form.get("request_id") ?? "");
+    const evidenceSlot = String(form.get("file_slot") ?? "");
+    const evidenceHash = String(form.get("sha256") ?? "").toLowerCase();
     const expenseReceipt = form.get("action") === "expense_receipt";
+    const statementOriginal = bucket === "finance-statements";
     if (!validUuid(tenantId) || !(file instanceof File) || !BUCKET_ROLES[bucket] || !KIND_MIMES[kind]) {
       return response(400, { error: "invalid_upload_request" });
     }
+    const tenantContextError = requireActiveTenant(request, tenantId);
+    if (tenantContextError) return tenantContextError;
     if (file.size <= 0 || file.size > MAX_BYTES) return response(413, { error: "invalid_file_size" });
 
     const segments = folder.split("/").filter(Boolean);
+    const hasEvidenceIdentity = Boolean(evidenceSlot);
+    const hasDeliveryEvidenceFields = hasEvidenceIdentity || (segments[0] === "deliveries" && Boolean(evidenceRequestId || evidenceHash));
+    if (hasDeliveryEvidenceFields && (!validUuid(evidenceRequestId)
+      || !/^(receipt:(original|processed|thumbnail)|photo:[0-4]|signature)$/.test(evidenceSlot)
+      || !/^[a-f0-9]{64}$/.test(evidenceHash)
+      || segments[0] !== "deliveries")) {
+      return response(400, { error: "invalid_delivery_evidence_identity" });
+    }
+    if((statementOriginal&&(folder!=="imports"||kind!=="statement"))||(!statementOriginal&&kind==="statement"))return response(400,{error:"finance_statement_scope_invalid"});
     if (segments.length < 1 || segments.length > 6 || segments.some((part) => !/^[a-zA-Z0-9_-]{1,80}$/.test(part))) {
       return response(400, { error: "invalid_upload_folder" });
     }
@@ -186,12 +213,26 @@ Deno.serve(async (request) => {
     if (!await authorizeUpload(adminClient, user.id, tenantId, bucket)) {
       return response(403, { error: "tenant_or_role_denied" });
     }
+    const financeReceipt = bucket === "receipts" && segments[0] === "finance-batches";
+    const financialScope=isFinancialReceiptFolder(bucket,folder);
+    if(kind==='financial'&&!financialScope)return response(400,{error:'finance_invalid_receipt_folder'});
+    const financialAccess=async()=>{const access=await callerClient.rpc('get_finance_access',{_tenant_id:tenantId});return !access.error&&access.data===true;};
+    if(financialScope&&!await financialAccess())return response(403,{error:'finance_access_denied'});
+    if(statementOriginal){
+      const access=await callerClient.rpc("get_finance_access",{_tenant_id:tenantId});
+      if(access.error||access.data!==true)return response(403,{error:"finance_access_denied"});
+    }
+    if (financeReceipt) {
+      if (folder !== "finance-batches" || kind !== "proof") return response(400, { error: "finance_invalid_receipt_folder" });
+      const access = await callerClient.rpc("get_finance_access", { _tenant_id: tenantId });
+      if (access.error || access.data !== true) return response(403, { error: "finance_access_denied" });
+    }
     if (!await consumeQuota(adminClient, fingerprint, "upload")) {
       return response(429, { error: "upload_rate_limited", correlation_id: correlationId });
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const mime = detectMime(bytes);
+    const mime = statementOriginal ? statementFileType(file.name,bytes)?.mime : detectMime(bytes);
     if (!mime || !KIND_MIMES[kind].includes(mime)) return response(415, { error: "file_signature_mismatch" });
     if (expenseReceipt) {
       const result = await expenseReceiptUpload({
@@ -212,13 +253,47 @@ Deno.serve(async (request) => {
     if (!scan.available) return response(503, { error: "malware_scanner_unavailable" });
     if (!scan.clean) return response(422, { error: "malware_detected" });
 
-    const path = `${tenantId}/${segments.join("/")}/${crypto.randomUUID()}-${safeName(file.name)}`;
+    if (financialScope || statementOriginal) {
+      const access = await callerClient.rpc("get_finance_access", { _tenant_id: tenantId });
+      if (access.error || access.data !== true) return response(403, { error: "finance_access_denied" });
+    }
+
+    if(statementOriginal){
+      try{
+        const original=await preserveStatementOriginal(tenantId,file.name,bytes,{
+          upload:(path,content,contentType)=>adminClient.storage.from("finance-statements").upload(path,content,{contentType,upsert:false,cacheControl:"0"}),
+          download:async path=>{const stored=await adminClient.storage.from("finance-statements").download(path);return stored.error||!stored.data?null:new Uint8Array(await stored.data.arrayBuffer());},
+        });
+        return response(201,{...original,correlation_id:correlationId});
+      }catch{return response(503,{error:"finance_statement_storage_unconfirmed",correlation_id:correlationId});}
+    }
+
+    if (hasEvidenceIdentity) {
+      const actualHash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+        .map(value => value.toString(16).padStart(2, "0")).join("");
+      if (actualHash !== evidenceHash) return response(409, { error: "delivery_evidence_hash_mismatch", correlation_id: correlationId });
+    }
+    const evidenceName = hasEvidenceIdentity
+      ? `${evidenceRequestId}-${evidenceSlot.replace(":", "-")}-${evidenceHash}`
+      : `${crypto.randomUUID()}-${safeName(file.name)}`;
+    const path = `${tenantId}/${segments.join("/")}/${evidenceName}`;
     const { error: uploadError } = await adminClient.storage.from(bucket).upload(path, bytes, {
       contentType: mime,
       upsert: false,
       cacheControl: "3600",
     });
     if (uploadError) {
+      if (hasEvidenceIdentity) {
+        const stored = await adminClient.storage.from(bucket).download(path);
+        if (!stored.error && stored.data) {
+          const storedHash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await stored.data.arrayBuffer())))
+            .map(value => value.toString(16).padStart(2, "0")).join("");
+          if (storedHash === evidenceHash) {
+            return response(200, { path, content_type: mime, size: file.size, replayed: true, correlation_id: correlationId });
+          }
+          return response(409, { error: "delivery_evidence_existing_object_mismatch", correlation_id: correlationId });
+        }
+      }
       console.error("[secure-upload] storage failure", { correlation_id: correlationId, code: uploadError.name });
       return response(503, { error: "storage_unavailable", correlation_id: correlationId });
     }

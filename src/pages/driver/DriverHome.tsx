@@ -9,25 +9,31 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
+import { Truck, MapPin, Package, ArrowRight, ClipboardCheck, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useEffect, useState } from 'react';
-import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
+import { type DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
+import { DriverHomeDeliveryMap, DriverHomeQuickActions } from '@/components/driver/DriverHomePanels';
 import { TRIP_ACTIVE_STATUSES, tripStatusLabel, LOAD_ACTIVE_STATUSES } from '@/lib/status';
 import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
 import { useDriverTripActions } from '@/hooks/useDriverTripActions';
-import { DRIVER_TRIP_SELECT, driverTripNeedsReconciliation, isDriverTripStarted, normalizeDriverTrip, resolveCanonicalTripLink } from '@/lib/driverTrip';
+import { DRIVER_TRIP_SELECT, driverTripNeedsReconciliation, isDriverTripStarted, normalizeDriverTrip, resolveCanonicalTripLink, type DriverTrip } from '@/lib/driverTrip';
 import { NextDestinationCard } from '@/components/driver/NextDestinationCard';
 import { getNextDriverStop, getPendingDriverStops, readDriverRouteSnapshot, saveDriverRouteSnapshot } from '@/lib/driver/offlineRouteSnapshot';
+import { driverOperationalSnapshotStore, type DriverOperationalSnapshot } from '@/lib/driver/driverOperationalOffline';
+import {useDriverPhysicalJourney} from '@/hooks/useDriverPhysicalJourney';
 
 
 
 
 export default function DriverHome() {
-  const { data: driver, isLoading: driverLoading } = useCurrentDriver();
+  const { data: tenantDriver, isLoading: driverLoading } = useCurrentDriver();
+  const {data:physicalJourney,isLoading:physicalJourneyLoading}=useDriverPhysicalJourney();
+  const driver=tenantDriver??physicalJourney?.driver??null;
+  const multiTenantJourney=Boolean(physicalJourney?.has_active_journey&&new Set(physicalJourney.trips.map(trip=>trip.tenant_id)).size>1);
   const { user } = useAuth();
   const { currentTenant } = useTenant();
   const isOnline = useOnlineStatus();
@@ -50,9 +56,10 @@ export default function DriverHome() {
     error: tripsError,
     refetch: refetchTrips,
   } = useQuery({
-    queryKey: ['driver_my_trips', driver?.id, autoTrip?.id],
+    queryKey: ['driver_my_trips', driver?.id, autoTrip?.id, physicalJourney?.journey?.id, multiTenantJourney],
     queryFn: async () => {
       if (!driver) return [];
+      if (multiTenantJourney) return physicalJourney!.trips as unknown as DriverTrip[];
       
       // If we already have an autoTrip from the hook, use it as the primary
       if (autoTrip) {
@@ -74,7 +81,7 @@ export default function DriverHome() {
         (trip.loads?.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(trip.loads.status))
       ).slice(0, 5);
     },
-    enabled: !!driver,
+    enabled: !!driver && !physicalJourneyLoading,
   });
 
   const {
@@ -84,9 +91,10 @@ export default function DriverHome() {
     error: loadsError,
     refetch: refetchLoads,
   } = useQuery({
-    queryKey: ['driver_my_loads', driver?.id],
+    queryKey: ['driver_my_loads', driver?.id, physicalJourney?.journey?.id, multiTenantJourney],
     queryFn: async () => {
       if (!driver) return [];
+      if (multiTenantJourney) return [];
       const { data, error } = await supabase
         .from('loads')
         .select(`
@@ -111,18 +119,19 @@ export default function DriverHome() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!driver,
+    enabled: !!driver && !physicalJourneyLoading,
   });
 
   // Paradas + posição do veículo para o mapa quando houver viagem real.
   const primaryTrip = activeTrips[0];
   const homeStopsQuery = useQuery({
-    queryKey: ['driver_home_stops', primaryTrip?.id],
+    queryKey: ['driver_home_stops', primaryTrip?.id, physicalJourney?.journey?.id, multiTenantJourney],
     queryFn: async () => {
       if (!primaryTrip?.id) return [];
+      if(multiTenantJourney)return physicalJourney!.stops.filter(stop=>stop.dispatch_trip_id===primaryTrip.id);
       const { data, error } = await supabase
         .from('dispatch_stops')
-        .select('id, stop_order, destination, status, latitude, longitude, notes, clients(company_name)')
+        .select('id, stop_order, destination, status, latitude, longitude, notes, client_id, actual_arrival_at, actual_departure_at, clients(company_name)')
         .eq('dispatch_trip_id', primaryTrip.id)
         .order('stop_order', { ascending: true });
       if (error) throw error;
@@ -182,7 +191,7 @@ export default function DriverHome() {
     !resolveCanonicalTripLink(load.dispatch_trip_loads, TRIP_ACTIVE_STATUSES) && !tripLoadIds.has(load.id)
   );
 
-  const loading = driverLoading || autoTripLoading || tripsLoading || loadsLoading;
+  const loading = driverLoading || physicalJourneyLoading || autoTripLoading || tripsLoading || loadsLoading;
   const dataError = autoTripError ?? tripsError ?? loadsError;
   const hasDataError = autoTripFailed || tripsFailed || loadsFailed;
   const dataErrorMessage = dataError instanceof Error
@@ -216,18 +225,17 @@ export default function DriverHome() {
       ? { lat: Number(vehiclePos.lat), lng: Number(vehiclePos.lng), plate: primaryTrip?.vehicles?.plate || '' }
       : null;
   const showRealMap = realMapStops.length > 0;
-  const [cachedSnapshot, setCachedSnapshot] = useState(() => (
-    readDriverRouteSnapshot(currentTenant?.id, user?.id)
-  ));
+  const routeTenantId=primaryTrip?.tenant_id??currentTenant?.id;
+  const [cachedSnapshot, setCachedSnapshot] = useState(() => readDriverRouteSnapshot(routeTenantId, user?.id));
 
   useEffect(() => {
-    setCachedSnapshot(readDriverRouteSnapshot(currentTenant?.id, user?.id));
-  }, [currentTenant?.id, user?.id]);
+    setCachedSnapshot(readDriverRouteSnapshot(routeTenantId, user?.id));
+  }, [routeTenantId, user?.id]);
 
   useEffect(() => {
-    if (!currentTenant?.id || !user?.id || !driver || !primaryTrip || homeStopsQuery.isError || homeStopsQuery.isPending) return;
+    if (!routeTenantId || !user?.id || !driver || !primaryTrip || homeStopsQuery.isError || homeStopsQuery.isPending) return;
     const savedSnapshot = saveDriverRouteSnapshot({
-      tenantId: currentTenant.id,
+      tenantId: routeTenantId,
       userId: user.id,
       driver: { id: driver.id, name: driver.name },
       trip: {
@@ -241,18 +249,55 @@ export default function DriverHome() {
         stop_order: stop.stop_order,
         destination: stop.destination,
         status: stop.status,
-        latitude: stop.latitude,
-        longitude: stop.longitude,
+        latitude: stop.latitude == null ? null : Number(stop.latitude),
+        longitude: stop.longitude == null ? null : Number(stop.longitude),
         notes: stop.notes,
         clients: stop.clients ? { company_name: stop.clients.company_name } : null,
       })),
     });
     if (savedSnapshot) setCachedSnapshot(savedSnapshot);
-  }, [currentTenant?.id, driver, homeStopsQuery.isError, homeStopsQuery.isPending, primaryTrip, realStops, user?.id]);
+  }, [routeTenantId, driver, homeStopsQuery.isError, homeStopsQuery.isPending, primaryTrip, realStops, user?.id]);
+
+  useEffect(() => {
+    if (!routeTenantId || !user?.id || !driver || !primaryTrip || homeStopsQuery.isError || homeStopsQuery.isPending) return;
+    void (async () => {
+      const existing = await driverOperationalSnapshotStore.read(routeTenantId, user.id, primaryTrip.id);
+      const liveLoad = myLoads.find(load => load.id === primaryTrip.loads?.id);
+      const next: DriverOperationalSnapshot = {
+        version: 1, tenantId: routeTenantId, actorId: user.id, tripId: primaryTrip.id, cachedAt: new Date().toISOString(),
+        trip: { id: primaryTrip.id, status: primaryTrip.status, actualStartAt: primaryTrip.actual_start_at ?? null,
+          actualEndAt: primaryTrip.actual_end_at ?? null, driver: { id: driver.id, name: driver.name },
+          vehicle: primaryTrip.vehicle_id ? { id: primaryTrip.vehicle_id, plate: primaryTrip.vehicles?.plate ?? '', nickname: primaryTrip.vehicles?.nickname ?? null } : null },
+        loads: primaryTrip.loads ? [{ id: primaryTrip.loads.id, loadNumber: primaryTrip.loads.load_number,
+          status: primaryTrip.loads.status, origin: primaryTrip.loads.origin, destination: primaryTrip.loads.destination,
+          volumeCount: existing?.loads.find(load => load.id === primaryTrip.loads?.id)?.volumeCount ?? null,
+          palletCount: liveLoad?.total_pallet_count == null ? existing?.loads.find(load => load.id === primaryTrip.loads?.id)?.palletCount ?? null : Number(liveLoad.total_pallet_count),
+          weightKg: liveLoad?.total_weight_kg == null ? existing?.loads.find(load => load.id === primaryTrip.loads?.id)?.weightKg ?? null : Number(liveLoad.total_weight_kg) }] : existing?.loads ?? [],
+        stops: realStops.map(stop => ({ id: stop.id, order: stop.stop_order ?? null, status: stop.status,
+          destination: stop.destination ?? null, latitude: stop.latitude == null ? null : Number(stop.latitude),
+          longitude: stop.longitude == null ? null : Number(stop.longitude), notes: stop.notes ?? null,
+          client: stop.clients ? { id: typeof stop.client_id === 'string' ? stop.client_id : null, name: stop.clients.company_name } : null,
+          actualArrivalAt: typeof stop.actual_arrival_at === 'string' ? stop.actual_arrival_at : null,
+          actualDepartureAt: typeof stop.actual_departure_at === 'string' ? stop.actual_departure_at : null })),
+        documents: existing?.documents ?? [],
+        deliveryItemsByStop: existing?.deliveryItemsByStop,
+        instructions: [...new Set(realStops.map(stop => stop.notes?.trim()).filter((note): note is string => !!note))],
+        checklist: existing?.checklist ?? { pre: { id: null, boundaryId: null, checkedItems: [] }, post: { id: null, boundaryId: null, checkedItems: [] } },
+        journey: existing?.journey ?? { events: [], lastStartId: null, lastEndId: null },
+        occurrences: existing?.occurrences ?? [],
+        cargo: existing?.cargo ?? null,
+      };
+      await driverOperationalSnapshotStore.put(next);
+    })().catch(() => { /* The live home screen does not depend on offline cache availability. */ });
+  }, [driver, homeStopsQuery.isError, homeStopsQuery.isPending, myLoads, primaryTrip, realStops, routeTenantId, user?.id]);
 
   const cachedRouteMatches = !!cachedSnapshot && (!primaryTrip || cachedSnapshot.trip.id === primaryTrip.id);
   const useCachedRoute = cachedRouteMatches && (!primaryTrip || homeStopsQuery.isError || !isOnline);
-  const destinationStops = useCachedRoute ? cachedSnapshot?.stops ?? [] : realStops;
+  const destinationStops = useCachedRoute ? cachedSnapshot?.stops ?? [] : realStops.map(stop => ({
+    ...stop,
+    latitude: stop.latitude == null ? null : Number(stop.latitude),
+    longitude: stop.longitude == null ? null : Number(stop.longitude),
+  }));
   const nextStop = getNextDriverStop(destinationStops);
   const pendingStops = getPendingDriverStops(destinationStops);
 
@@ -262,6 +307,15 @@ export default function DriverHome() {
         <h1 className="text-lg font-bold">Olá, {driver?.name || cachedSnapshot?.driver.name || 'Motorista'}</h1>
         <p className="text-sm text-muted-foreground">Seu roteiro de hoje</p>
       </div>
+
+      {multiTenantJourney?(
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-3">
+            <p className="text-sm font-medium">Jornada compartilhada entre empresas</p>
+            <p className="text-xs text-muted-foreground">As {physicalJourney?.trips.length ?? 0} viagens aparecem em uma rota física; documentos e confirmações continuam vinculados à empresa correta.</p>
+          </CardContent>
+        </Card>
+      ):null}
 
       {nextStop && (
         <NextDestinationCard
@@ -425,7 +479,7 @@ export default function DriverHome() {
                   size="sm"
                   className="w-full"
                   disabled={isStartingTrip || driverTripNeedsReconciliation(trip.status, trip.actual_start_at, trip.loads?.status)}
-                  onClick={() => accessTrip(trip.id, trip.status, trip.actual_start_at, trip.loads?.status)}
+                  onClick={() => accessTrip(trip.id, trip.status, trip.actual_start_at, trip.loads?.status, trip.tenant_id)}
                 >
                   {driverTripNeedsReconciliation(trip.status, trip.actual_start_at, trip.loads?.status)
                     ? 'Revisão operacional necessária'
@@ -449,33 +503,7 @@ export default function DriverHome() {
 
 
       {/* Delivery map com dados reais — só quando há paradas geolocalizadas na viagem. */}
-      {showRealMap && (
-        <Card>
-          <CardContent className="p-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Map className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">Mapa das entregas</span>
-              </div>
-              <Badge variant="outline" className="text-[10px]">
-                {realMapStops.filter((s) => s.status === 'done').length}/{realMapStops.length} entregues
-              </Badge>
-            </div>
-            <DriverDeliveryMap stops={realMapStops} vehicle={realVehicle} height={240} />
-            <div className="flex items-center justify-around text-[10px] text-muted-foreground pt-1">
-              <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-success" /> Entregue
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-primary" /> Atual
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground" /> Pendente
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {showRealMap ? <DriverHomeDeliveryMap stops={realMapStops} vehicle={realVehicle} /> : null}
 
       {/* Checklist status banner */}
       {autoTrip && !checklist.isLoading && (!checklist.preCompleted || !checklist.postCompleted) && (
@@ -507,38 +535,7 @@ export default function DriverHome() {
       )}
 
       {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="cursor-pointer hover:bg-accent/50 transition-colors" role="button" tabIndex={0} onClick={() => navigate('/driver/journey')} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate('/driver/journey'); } }}>
-          <CardContent className="p-3 flex flex-col items-center gap-1.5">
-            <Clock className="h-5 w-5 text-muted-foreground" />
-            <span className="text-xs font-medium">Jornada</span>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:bg-accent/50 transition-colors" role="button" tabIndex={0} onClick={() => navigate('/driver/expenses')} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate('/driver/expenses'); } }}>
-          <CardContent className="p-3 flex flex-col items-center gap-1.5">
-            <Receipt className="h-5 w-5 text-muted-foreground" />
-            <span className="text-xs font-medium">Despesas</span>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:bg-accent/50 transition-colors" role="button" tabIndex={0} onClick={() => navigate('/driver/checklist')} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate('/driver/checklist'); } }}>
-          <CardContent className="p-3 flex flex-col items-center gap-1.5">
-            <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
-            <span className="text-xs font-medium">Checklist</span>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:bg-accent/50 transition-colors" role="button" tabIndex={0} onClick={() => navigate('/driver/events')} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate('/driver/events'); } }}>
-          <CardContent className="p-3 flex flex-col items-center gap-1.5">
-            <FileText className="h-5 w-5 text-muted-foreground" />
-            <span className="text-xs font-medium">Eventos</span>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:bg-accent/50 transition-colors col-span-2" role="button" tabIndex={0} onClick={() => navigate('/driver/issues')} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate('/driver/issues'); } }}>
-          <CardContent className="p-3 flex flex-col items-center gap-1.5">
-            <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-            <span className="text-xs font-medium">Ocorrências</span>
-          </CardContent>
-        </Card>
-      </div>
+      <DriverHomeQuickActions onNavigate={navigate} />
     </div>
   );
 }

@@ -20,6 +20,7 @@ const FleetMap = lazy(() => import("@/pages/FleetMap"));
 const VehicleDetails = lazy(() => import("@/pages/VehicleDetails"));
 const Alerts = lazy(() => import("@/pages/Alerts"));
 const Geofences = lazy(() => import("@/pages/Geofences"));
+const AddressResolution = lazy(() => import("@/pages/AddressResolution"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const RoutesPage = lazy(() => import("@/pages/Routes"));
 const IntegrationHealth = lazy(() => import("@/pages/IntegrationHealth"));
@@ -32,6 +33,8 @@ const LoadDetail = lazy(() => import("@/pages/LoadDetail"));
 const Traceability = lazy(() => import("@/pages/Traceability"));
 const LoadExtractionAudit = lazy(() => import("@/pages/LoadExtractionAudit"));
 const PodHistory = lazy(() => import("@/pages/PodHistory"));
+const DeliveryReceipts = lazy(() => import("@/pages/DeliveryReceipts"));
+const TripCargoCustody = lazy(() => import("@/pages/TripCargoCustody"));
 const OperationsDashboard = lazy(() => import("@/pages/OperationsDashboard"));
 const OperationalEvents = lazy(() => import("@/pages/OperationalEvents"));
 const Ingestion = lazy(() => import("@/pages/Ingestion"));
@@ -39,6 +42,11 @@ const IngestionReports = lazy(() => import("@/pages/IngestionReports"));
 const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const ExpenseApproval = lazy(() => import("@/pages/ExpenseApproval"));
+const FinanceMovements = lazy(() => import("@/pages/FinanceMovements"));
+const FinanceExpenses = lazy(() => import("@/pages/FinanceExpenses"));
+const FinanceStatements = lazy(() => import("@/pages/FinanceStatements"));
+const FinanceAudit = lazy(() => import("@/pages/FinanceAudit"));
+const FinanceFiscalQueue = lazy(() => import("@/pages/FinanceFiscalQueue"));
 const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
 const DataAudit = lazy(() => import("@/pages/DataAudit"));
 const FreightHub = lazy(() => import("@/pages/FreightHub"));
@@ -99,12 +107,15 @@ const DriverStops = lazy(() => import("@/pages/driver/DriverStops"));
 const DriverDeliveries = lazy(() => import("@/pages/driver/DriverDeliveries"));
 const DriverIssues = lazy(() => import("@/pages/driver/DriverIssues"));
 const DriverJourney = lazy(() => import("@/pages/driver/DriverJourney"));
-const DriverExpenses = lazy(() => import("@/pages/driver/DriverExpenses"));
 const DriverChecklist = lazy(() => import("@/pages/driver/DriverChecklist"));
 const DriverEvents = lazy(() => import("@/pages/driver/DriverEvents"));
 const DriverEventDetail = lazy(() => import("@/pages/driver/DriverEventDetail"));
 const DriverChat = lazy(() => import("@/pages/driver/DriverChat"));
 const DriverLoads = lazy(() => import("@/pages/driver/DriverLoads"));
+const DriverSyncPending = lazy(() => import("@/pages/driver/DriverSyncPending"));
+const DriverOperationalExpenses = lazy(() => import("@/pages/driver/DriverOperationalExpenses"));
+const DriverCargoCustody = lazy(() => import("@/pages/driver/DriverCargoCustody"));
+const DriverPwaGuide = lazy(() => import("@/pages/driver/DriverPwaGuide"));
 
 export function AppRoutes() {
   return (
@@ -120,6 +131,7 @@ export function AppRoutes() {
       <Route path="/vehicles/:vehicleId" element={<ProtectedRoute><VehicleDetails /></ProtectedRoute>} />
       <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
       <Route path="/geofences" element={<ProtectedRoute><Geofences /></ProtectedRoute>} />
+      <Route path="/address-resolution" element={<ProtectedRoute><AddressResolution /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
       <Route path="/corridors" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
       <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
@@ -131,6 +143,8 @@ export function AppRoutes() {
       <Route path="/traceability" element={<ProtectedRoute><Traceability /></ProtectedRoute>} />
       <Route path="/load-extraction-audit" element={<ProtectedRoute><LoadExtractionAudit /></ProtectedRoute>} />
       <Route path="/traceability/:docId/pod" element={<ProtectedRoute><PodHistory /></ProtectedRoute>} />
+      <Route path="/delivery-receipts" element={<ProtectedRoute><DeliveryReceipts /></ProtectedRoute>} />
+      <Route path="/trip-cargo-custody" element={<ProtectedRoute><TripCargoCustody /></ProtectedRoute>} />
       <Route path="/operations" element={<ProtectedRoute><OperationsDashboard /></ProtectedRoute>} />
       <Route path="/operations-control" element={<ProtectedRoute><OperationsControl /></ProtectedRoute>} />
       <Route path="/events" element={<ProtectedRoute><OperationalEvents /></ProtectedRoute>} />
@@ -147,6 +161,11 @@ export function AppRoutes() {
       <Route path="/route-planning" element={<ProtectedRoute><RoutePlanning /></ProtectedRoute>} />
       <Route path="/receivables" element={<ProtectedRoute><Receivables /></ProtectedRoute>} />
       <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
+      <Route path="/financial/movements" element={<ProtectedRoute><FinanceMovements /></ProtectedRoute>} />
+      <Route path="/financial/recorded-expenses" element={<ProtectedRoute><FinanceExpenses /></ProtectedRoute>} />
+      <Route path="/financial/statements" element={<ProtectedRoute><FinanceStatements /></ProtectedRoute>} />
+      <Route path="/financial/audit" element={<ProtectedRoute><FinanceAudit /></ProtectedRoute>} />
+      <Route path="/financial/fiscal-queue" element={<ProtectedRoute><FinanceFiscalQueue /></ProtectedRoute>} />
       <Route path="/driver-settlements" element={<ProtectedRoute><DriverSettlements /></ProtectedRoute>} />
       <Route path="/cost-centers" element={<ProtectedRoute><CostCenters /></ProtectedRoute>} />
       <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
@@ -190,11 +209,14 @@ export function AppRoutes() {
       <Route path="/driver/deliveries" element={<DriverRoute><DriverDeliveries /></DriverRoute>} />
       <Route path="/driver/issues" element={<DriverRoute><DriverIssues /></DriverRoute>} />
       <Route path="/driver/journey" element={<DriverRoute><DriverJourney /></DriverRoute>} />
-      <Route path="/driver/expenses" element={<DriverRoute><DriverExpenses /></DriverRoute>} />
+      <Route path="/driver/expenses" element={<DriverRoute><DriverOperationalExpenses /></DriverRoute>} />
       <Route path="/driver/checklist" element={<DriverRoute><DriverChecklist /></DriverRoute>} />
       <Route path="/driver/events" element={<DriverRoute><DriverEvents /></DriverRoute>} />
       <Route path="/driver/events/:id" element={<DriverRoute><DriverEventDetail /></DriverRoute>} />
       <Route path="/driver/chat" element={<DriverRoute><DriverChat /></DriverRoute>} />
+      <Route path="/driver/sync" element={<DriverRoute><DriverSyncPending /></DriverRoute>} />
+      <Route path="/driver/cargo" element={<DriverRoute><DriverCargoCustody /></DriverRoute>} />
+      <Route path="/driver/install" element={<DriverRoute><DriverPwaGuide /></DriverRoute>} />
 
       <Route path="/routes" element={<Navigate to="/corridors" replace />} />
 

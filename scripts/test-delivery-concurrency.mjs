@@ -84,7 +84,6 @@ function session(name, database = 'postgres') {
   state.send(`set application_name=${literal(name)}; set statement_timeout='8s'; set lock_timeout='6s';`);
   return state;
 }
-
 async function finish(state, sql, success = true) {
   if (!state.exited && !state.child.stdin.destroyed && !state.child.stdin.writableEnded) state.child.stdin.end(`${sql}\n\\q\n`);
   const timeout = setTimeout(() => state.child.kill(), 12_000);
@@ -118,12 +117,13 @@ async function waitForMarker(state, marker) {
   }
 }
 
-async function contested(holderSql, waiterSql, { driver = true, waiterSucceeds = true, holderAfterBlocked = '', database = 'postgres' } = {}) {
+async function contested(holderSql, waiterSql, { driver = true, waiterSucceeds = true, holderAfterBlocked = '', waitForBlocking = true, database = 'postgres' } = {}) {
   const holder = session('delivery-qa-holder',database);
   holder.send(`begin; ${driver ? asDriver : identity} ${holderSql}; select '__HOLDER_READY__';`);
   await waitForMarker(holder, '__HOLDER_READY__');
   const waiter = session('delivery-qa-waiter',database);
   waiter.send(`begin; ${driver ? asDriver : identity} ${waiterSql}; commit;`);
+  if (!waitForBlocking) {const result=await finish(waiter,'',waiterSucceeds);await finish(holder,`${holderAfterBlocked}; commit;`);return result;}
   const deadline = Date.now() + 4500;
   let overlap = false;
   while (!overlap && Date.now() < deadline) {
@@ -226,7 +226,9 @@ try {
   started = existsSync(join(cluster, 'postmaster.pid'));
   assert.equal(launched.status, 0, launched.stderr || launched.error?.message);
   console.log(`Native PostgreSQL: ${await query('show server_version;')} (loopback, disposable fixture)`);
-  if(process.env.PG_QA_SUITE==='control-tower') {
+  if(['finance-transfers','finance-settlements','finance-payroll-lifecycle','finance-settlement-payment','finance-trip-cost-builder','finance-account-openings','finance-cash-openings','finance-coverage-approvals','finance-verification-reauth','finance-legacy-payable','finance-legacy-receipt','finance-legacy-integrity','finance-receivable-portfolio','finance-recorded-cost-summary','finance-fiscal-dashboard','finance-unbilled-freight','finance-full-sequence','finance-legacy-expense-cost','finance-maintenance-labor','finance-maintenance-direct-part','finance-account-period-close','finance-legacy-cut-settlement','finance-stock-acquisition','finance-stock-consumption','finance-paid-projections','finance-paid-real-close','finance-cash-period','finance-payable-portfolio','finance-expense-cancellation','finance-manual-expense-cancellation','finance-active-movements','finance-reconciliation-voids','finance-movement-correction-context','finance-manual-movement-void','finance-public-movement-void','finance-period-money-package','finance-receivable-temporal','finance-receivable-captured-history','finance-receivable-payments-page','finance-period-unloading','finance-unloading-source-guard','finance-unloading-source-context','finance-unloading-projection-repair','finance-public-unloading-repair','redelivery-release'].includes(process.env.PG_QA_SUITE)) {
+    // This suite prepares its own isolated database and roles below.
+  } else if(process.env.PG_QA_SUITE==='control-tower') {
     await query('create role anon;create role authenticated;create role service_role;');
   } else {
   await query(deliverySchema + legacyDeliverySchema + '\nbegin;\n' +
@@ -285,10 +287,111 @@ try {
   console.log(fiscalCount+' fiscal native tests passed.');
   console.log(`${selectedCases.length+tripLoadCount+planningCount+compositionCount+replanningCount+documentChangeCount+itemPreparationCount+operationOutcomeCount+proofVersionCount+correctionCount+portalPrivacyCount+attemptFoundationCount+redeliveryCount+metadataCount+closingSourcesCount+closingDraftsCount+closingLifecycleCount+receivableFinancialCount+clientInvoiceCount+expenseReviewCount+expenseCreationCount+driverChatCount+eventChatCount+expenseMfaCount+settlementAdjustmentCount} native PostgreSQL tests passed (concurrency, invariants, privacy and recovery). No production connection or fiscal request.`);
   }
+  if(!['finance-transfers','finance-settlements','finance-payroll-lifecycle','finance-settlement-payment','finance-trip-cost-builder','finance-account-openings','finance-cash-openings','finance-coverage-approvals','finance-verification-reauth','finance-legacy-payable','finance-legacy-receipt','finance-legacy-integrity','finance-receivable-portfolio','finance-recorded-cost-summary','finance-fiscal-dashboard','finance-unbilled-freight','finance-full-sequence','finance-legacy-expense-cost','finance-maintenance-labor','finance-maintenance-direct-part','finance-account-period-close','finance-legacy-cut-settlement','finance-stock-acquisition','finance-stock-consumption','finance-paid-projections','finance-paid-real-close','finance-cash-period','finance-payable-portfolio','finance-expense-cancellation','finance-manual-expense-cancellation','finance-active-movements','finance-reconciliation-voids','finance-movement-correction-context','finance-manual-movement-void','finance-public-movement-void','finance-period-money-package','finance-receivable-temporal','finance-receivable-captured-history','finance-receivable-payments-page','finance-period-unloading','finance-unloading-source-guard','finance-unloading-source-context','finance-unloading-projection-repair','finance-public-unloading-repair','redelivery-release'].includes(process.env.PG_QA_SUITE)) {
   const towerCount=await runControlTowerNative({query,contested,literal,session,finish,waitForMarker});
   console.log(`${towerCount} additional Control Tower native tests passed.`);
   const ssxCount=await runSsxPositionNative({query,contested,literal});
   console.log(`${ssxCount} additional SSX position native tests passed.`);
+  }
+  if(!['control-tower','finance-settlements','finance-payroll-lifecycle','finance-settlement-payment','finance-trip-cost-builder','finance-account-openings','finance-cash-openings','finance-coverage-approvals','finance-verification-reauth','finance-legacy-payable','finance-legacy-receipt','finance-legacy-integrity','finance-receivable-portfolio','finance-recorded-cost-summary','finance-fiscal-dashboard','finance-unbilled-freight','finance-full-sequence','finance-legacy-expense-cost','finance-maintenance-labor','finance-maintenance-direct-part','finance-account-period-close','finance-legacy-cut-settlement','finance-stock-acquisition','finance-stock-consumption','finance-paid-projections','finance-paid-real-close','finance-cash-period','finance-payable-portfolio','finance-expense-cancellation','finance-manual-expense-cancellation','finance-active-movements','finance-reconciliation-voids','finance-movement-correction-context','finance-manual-movement-void','finance-public-movement-void','finance-period-money-package','finance-receivable-temporal','finance-receivable-captured-history','finance-receivable-payments-page','finance-period-unloading','finance-unloading-source-guard','finance-unloading-source-context','finance-unloading-projection-repair','finance-public-unloading-repair','redelivery-release'].includes(process.env.PG_QA_SUITE)) {
+    const {runInternalTransfersNative}=await import('./test-finance-transfers-native-cases.mjs');
+    const count=await runInternalTransfersNative({query,contested,literal,createRoles:process.env.PG_QA_SUITE==='finance-transfers'});
+    console.log(`${count} additional internal transfer native tests passed.`);
+  }
+  if(process.env.PG_QA_SUITE==='finance-settlements') {
+    const {runSettlementLinksNative}=await import('./test-finance-settlements-native-cases.mjs');
+    const count=await runSettlementLinksNative({query,contested,literal,createRoles:true});
+    console.log(`${count} settlement link native tests passed.`);
+  }
+  if(process.env.PG_QA_SUITE==='finance-payroll-lifecycle') {
+    const {runPayrollLifecycleNative}=await import('./test-finance-payroll-lifecycle-native-cases.mjs');
+    const count=await runPayrollLifecycleNative({query,contested,literal,createRoles:true});
+    console.log(`${count} payroll lifecycle native tests passed.`);
+  }
+  if(process.env.PG_QA_SUITE==='finance-settlement-payment') {
+    const {runSettlementPaymentNative}=await import('./test-finance-settlement-payment-native-cases.mjs');
+    const count=await runSettlementPaymentNative({query,contested,literal,createRoles:true});
+    console.log(`${count} canonical settlement payment native tests passed.`);
+  }
+  if(process.env.PG_QA_SUITE==='finance-trip-cost-builder') {
+    const {runTripCostBuilderNative}=await import('./test-finance-trip-cost-builder-native-cases.mjs');
+    const count=await runTripCostBuilderNative({query,contested,session,finish,waitForMarker,literal,createRoles:true});
+    console.log(`${count} trip cost builder native tests passed.`);
+  }
+  if(process.env.PG_QA_SUITE==='finance-verification-reauth') {
+    const {runVerificationReauthorizationNative}=await import('./test-finance-verification-reauth-native-cases.mjs');
+    const count=await runVerificationReauthorizationNative({query,contested,literal,createRoles:true});
+    console.log(`Verification reauthorization native tests passed: ${count}`);
+  }
+  if(process.env.PG_QA_SUITE==='finance-coverage-approvals') {
+    const {runCoverageApprovalsNative}=await import('./test-finance-coverage-approvals-native-cases.mjs');
+    const count=await runCoverageApprovalsNative({query,contested,literal,createRoles:true});
+    console.log(`Coverage approvals native tests passed: ${count}`);
+  }
+  if(process.env.PG_QA_SUITE==='finance-cash-openings') {
+    const {runCashOpeningsNative}=await import('./test-finance-cash-openings-native-cases.mjs');
+    const count=await runCashOpeningsNative({query,contested,literal,createRoles:true});
+    console.log(`Cash opening native tests passed: ${count}`);
+  }
+  if(process.env.PG_QA_SUITE==='finance-account-openings') {
+    const {runAccountOpeningsNative}=await import('./test-finance-account-openings-native-cases.mjs');
+    const count=await runAccountOpeningsNative({query,contested,literal,createRoles:true});
+    console.log(count+' account opening native tests passed.');
+  }
+  if(process.env.PG_QA_SUITE==='finance-legacy-payable') {
+    const {runLegacyPayableNative}=await import('./test-finance-legacy-payable-native-cases.mjs');
+    const count=await runLegacyPayableNative({query,contested,literal,createRoles:true});
+    console.log(count+' legacy payable association native tests passed.');
+  }
+  if(process.env.PG_QA_SUITE==='finance-legacy-receipt') {
+    const {runLegacyReceiptNative}=await import('./test-finance-legacy-receipt-native-cases.mjs');
+    const count=await runLegacyReceiptNative({query,contested,literal,createRoles:true});
+    console.log(count+' legacy receipt association native tests passed.');
+  }
+  if(process.env.PG_QA_SUITE==='finance-legacy-integrity') {
+    const {runLegacyIntegrityNative}=await import('./test-finance-legacy-integrity-native-cases.mjs');
+    const count=await runLegacyIntegrityNative({query,literal,createRoles:true});
+    console.log(count+' legacy integrity native tests passed.');
+  }
+if(process.env.PG_QA_SUITE==='finance-receivable-portfolio') {
+const {runReceivablePortfolioNative}=await import('./test-finance-receivable-portfolio-native-cases.mjs');
+console.log(await runReceivablePortfolioNative({query,literal,createRoles:true})+' receivable portfolio native tests passed.');
+}
+if(process.env.PG_QA_SUITE==='finance-recorded-cost-summary') {
+const {runRecordedCostSummaryNative}=await import('./test-finance-recorded-cost-summary-native-cases.mjs');
+console.log(await runRecordedCostSummaryNative({query,literal,createRoles:true})+' recorded cost summary native tests passed.');
+}
+if(process.env.PG_QA_SUITE==='finance-fiscal-dashboard') {const {runFiscalDashboardNative}=await import('./test-finance-fiscal-dashboard-native-cases.mjs');console.log(await runFiscalDashboardNative({query,literal,createRoles:true})+' fiscal dashboard native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-unbilled-freight') {const {runUnbilledFreightNative}=await import('./test-finance-unbilled-freight-native-cases.mjs');console.log(await runUnbilledFreightNative({query,literal,createRoles:true})+' unbilled freight native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-full-sequence') {const {runFullMigrationSequenceNative}=await import('./test-full-migration-sequence-native.mjs');console.log(await runFullMigrationSequenceNative({query,literal})+' complete migrations applied.');}
+if(process.env.PG_QA_SUITE==='finance-legacy-expense-cost') {const {runLegacyExpenseCostNative}=await import('./test-finance-legacy-expense-cost-native-cases.mjs');console.log(await runLegacyExpenseCostNative({query,contested,literal,createRoles:true})+' legacy expense cost native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-maintenance-labor') {const {runMaintenanceLaborNative}=await import('./test-finance-maintenance-labor-native-cases.mjs');console.log(await runMaintenanceLaborNative({query,contested,literal,createRoles:true})+' maintenance labor native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-maintenance-direct-part') {const {runMaintenanceDirectPartNative}=await import('./test-finance-maintenance-direct-part-native-cases.mjs');console.log(await runMaintenanceDirectPartNative({query,contested,literal,createRoles:true})+' maintenance direct part native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-account-period-close') {const {runAccountPeriodCloseNative}=await import('./test-finance-account-period-close-native-cases.mjs');console.log(await runAccountPeriodCloseNative({query,contested,literal,createRoles:true})+' account period close native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-legacy-cut-settlement') {const {runLegacyCutSettlementNative}=await import('./test-finance-legacy-cut-settlement-native-cases.mjs');console.log(await runLegacyCutSettlementNative({query,contested,literal,createRoles:true})+' legacy cut settlement native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-stock-acquisition') {const {runStockAcquisitionNative}=await import('./test-finance-stock-acquisition-native-cases.mjs');console.log(await runStockAcquisitionNative({query,contested,literal,createRoles:true})+' stock acquisition native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-stock-consumption') {const {runStockConsumptionNative}=await import('./test-finance-stock-consumption-native-cases.mjs');console.log(await runStockConsumptionNative({query,contested,literal,createRoles:true})+' stock consumption native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-paid-projections') {const {runPaidProjectionsNative}=await import('./test-finance-paid-projections-native-cases.mjs');console.log(await runPaidProjectionsNative({query,contested,literal,createRoles:true})+' paid projection native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-paid-real-close') {const {runPaidRealCloseNative}=await import('./test-finance-paid-real-close-native-cases.mjs');console.log(await runPaidRealCloseNative({query,contested,literal,createRoles:true})+' paid real close native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-cash-period') {const {runCashPeriodNative}=await import('./test-finance-cash-period-native-cases.mjs');console.log(await runCashPeriodNative({query,contested,literal,createRoles:true})+' cash period native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-payable-portfolio') {const {runPayablePortfolioNative}=await import('./test-finance-payable-portfolio-native-cases.mjs');console.log(await runPayablePortfolioNative({query,contested,literal,createRoles:true})+' payable portfolio native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-expense-cancellation') {const {runExpenseCancellationNative}=await import('./test-finance-expense-cancellation-native-cases.mjs');console.log(await runExpenseCancellationNative({query,contested,literal,createRoles:true})+' expense cancellation native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-manual-expense-cancellation') {const {runManualExpenseCancellationNative}=await import('./test-finance-manual-expense-cancellation-native-cases.mjs');console.log(await runManualExpenseCancellationNative({query,contested,literal,createRoles:true})+' manual expense cancellation native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-active-movements') {const {runActiveMovementNative}=await import('./test-finance-active-movements-native-cases.mjs');console.log(await runActiveMovementNative({query,contested,literal,createRoles:true})+' active movement native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-reconciliation-voids') {const {runReconciliationVoidsNative}=await import('./test-finance-reconciliation-voids-native-cases.mjs');console.log(await runReconciliationVoidsNative({query,contested,literal,createRoles:true})+' reconciliation voids native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-movement-correction-context') {const {runMovementCorrectionContextNative}=await import('./test-finance-movement-correction-context-native-cases.mjs');console.log(await runMovementCorrectionContextNative({query,contested,literal,createRoles:true})+' movement correction context native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-manual-movement-void') {const {runManualMovementVoidNative}=await import('./test-finance-manual-movement-void-native-cases.mjs');console.log(await runManualMovementVoidNative({query,contested,literal,createRoles:true})+' manual movement void native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-public-movement-void') {const {runPublicMovementVoidNative}=await import('./test-finance-public-movement-void-native-cases.mjs');console.log(await runPublicMovementVoidNative({query,contested,literal,createRoles:true})+' public movement void native tests passed.');}
+if(process.env.PG_QA_SUITE==='finance-period-money-package') {const {runPeriodMoneyPackageNative}=await import('./test-finance-period-money-package-native-cases.mjs');console.log(await runPeriodMoneyPackageNative({query,contested,literal,createRoles:true})+' period money package native tests passed.');}
+  if (process.env.PG_QA_SUITE === 'finance-receivable-temporal') { const {runReceivableTemporalNative}=await import('./test-finance-receivable-temporal-native-cases.mjs'); const total=await runReceivableTemporalNative({query,contested,literal,createRoles:true}); console.log(`${total} receivable temporal native tests passed.`); }
+  if (process.env.PG_QA_SUITE === 'finance-receivable-captured-history') { const {runReceivableCapturedHistoryNative}=await import('./test-finance-receivable-captured-history-native-cases.mjs'); const total=await runReceivableCapturedHistoryNative({query,contested,literal,createRoles:true}); console.log(`${total} receivable captured history native tests passed.`); }
+  if (process.env.PG_QA_SUITE === 'finance-receivable-payments-page') { const {runReceivablePaymentsPageNative}=await import('./test-finance-receivable-payments-page-native-cases.mjs'); const total=await runReceivablePaymentsPageNative({query,contested,literal,createRoles:true}); console.log(`${total} receivable payments page native tests passed.`); }
+  if (process.env.PG_QA_SUITE === 'finance-period-unloading') { const {runPeriodUnloadingNative}=await import('./test-finance-period-unloading-native-cases.mjs'); const total=await runPeriodUnloadingNative({query,contested,literal,createRoles:true}); console.log(`${total} period unloading native tests passed.`); }
+  if (process.env.PG_QA_SUITE === 'finance-unloading-source-guard') { const {runUnloadingSourceGuardNative}=await import('./test-finance-unloading-source-guard-native-cases.mjs'); const total=await runUnloadingSourceGuardNative({query,contested,literal,createRoles:true}); console.log(`${total} unloading source guard native tests passed.`); }
+  if (process.env.PG_QA_SUITE === 'finance-unloading-source-context') { const {runUnloadingSourceContextNative}=await import('./test-finance-unloading-source-context-native-cases.mjs'); const total=await runUnloadingSourceContextNative({query,contested,literal,createRoles:true}); console.log(`${total} unloading source context native tests passed.`); }
+  if (process.env.PG_QA_SUITE === 'finance-unloading-projection-repair') { const {runUnloadingProjectionRepairNative}=await import('./test-finance-unloading-projection-repair-native-cases.mjs'); const total=await runUnloadingProjectionRepairNative({query,contested,literal,createRoles:true}); console.log(`${total} unloading projection repair native tests passed.`); }
+  if (process.env.PG_QA_SUITE === 'finance-public-unloading-repair') { const {runPublicUnloadingRepairNative}=await import('./test-finance-public-unloading-repair-native-cases.mjs'); const total=await runPublicUnloadingRepairNative({query,contested,literal,createRoles:true}); console.log(`${total} public unloading repair native tests passed.`); }
+  if(process.env.PG_QA_SUITE==='redelivery-release'){const {runRedeliveryReleaseNative}=await import('./test-redelivery-release-native-cases.mjs');const count=await runRedeliveryReleaseNative({query,session,finish,waitForMarker,contested,literal});console.log(`${count} redelivery release native tests passed.`);}
 } catch (error) {
   // Keep the original assertion visible even if cleanup has a second failure.
   console.error('Native PostgreSQL suite failed before cleanup:', error);

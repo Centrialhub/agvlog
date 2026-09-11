@@ -72,12 +72,12 @@ describe('driver load screen reconciliation', () => {
     expect(mocks.rpc.mock.calls.some(([name]) => name === 'driver_start_trip')).toBe(false);
     expect(screen.getByTestId('fiscal-catalog-' + ids.load)).toBeInTheDocument();
   });
-  it('offers a normal start when load and trip are both waiting for departure', async () => {
+  it('routes a waiting load through cargo acceptance before departure', async () => {
     mocks.loadStatus = 'ready';
     show();
     fireEvent.click(await screen.findByRole('button', { name: 'Iniciar Viagem' }));
-    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('driver_start_trip', { _trip_id: ids.trip }));
-    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/driver/stops?trip=' + ids.trip));
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/driver/cargo?trip=' + ids.trip));
+    expect(mocks.rpc.mock.calls.some(([name]) => name === 'driver_start_trip')).toBe(false);
   });
   it('opens an actually started trip without another departure RPC', async () => {
     mocks.tripStatus = 'in_transit'; mocks.started = '2026-08-29T12:00:00Z';

@@ -6,6 +6,7 @@ import { confirmAction, promptAction, useAlertStore } from '@/hooks/useAlertStor
 function collectSources(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
+    if (entry.isDirectory() && entry.name === 'test') return [];
     if (entry.isDirectory()) return collectSources(path);
     return /\.(ts|tsx)$/.test(entry.name) ? [readFileSync(path, 'utf8')] : [];
   });

@@ -1,0 +1,4 @@
+import {supabase} from '@/integrations/supabase/client';
+import {fiscalDashboardSchema,type FiscalDashboardFilters} from './fiscalDashboardContract';
+type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>;
+export async function readFiscalDashboard(tenant:string,filters:FiscalDashboardFilters){const {data,error}=await (supabase.rpc as unknown as Rpc)('get_finance_fiscal_dashboard_summary',{_tenant_id:tenant,_from:filters.from,_to:filters.to,_client_id:filters.client,_doc_type:filters.docType});if(error)throw error;const result=fiscalDashboardSchema.parse(data);if(result.tenant_id!==tenant||result.from!==filters.from||result.to!==filters.to||result.client_id!==filters.client||result.doc_type!==filters.docType)throw new Error('Resumo fiscal fora do filtro solicitado.');return result;}

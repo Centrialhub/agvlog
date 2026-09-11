@@ -276,40 +276,6 @@ export function useUpdateSettlementKmReview() {
 
 
 
-export function useRegisterSettlementPayment() {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (p: {
-      id: string; amount: number;
-      method?: string | null; account?: string | null; reference?: string | null;
-      receipt_url?: string | null; notes?: string | null;
-      allow_overpayment?: boolean; overpayment_reason?: string | null;
-      bank_account_id?: string | null;
-      cost_center?: string | null;
-    }) => {
-      const { data, error } = await supabase.rpc('register_driver_settlement_payment_v2', {
-        _settlement_id: p.id, _amount: p.amount,
-        _payment_method: p.method ?? 'pix', _payment_account: p.account ?? undefined,
-        _payment_reference: p.reference ?? undefined, _receipt_url: p.receipt_url ?? undefined,
-        _notes: p.notes ?? undefined,
-        _allow_overpayment: p.allow_overpayment ?? false,
-        _overpayment_reason: p.overpayment_reason ?? undefined,
-        _bank_account_id: p.bank_account_id ?? undefined,
-        _cost_center: p.cost_center ?? 'Operacional',
-      });
-      if (error) throw error;
-      return data as string;
-    },
-    onSuccess: () => {
-      toast({ title: 'Pagamento registrado' });
-      qc.invalidateQueries({ queryKey: ['driver_settlements'] });
-      qc.invalidateQueries({ queryKey: ['driver_settlement'] });
-    },
-    onError: error => toast({ title: 'Falha ao registrar pagamento', description: getErrorMessage(error), variant: 'destructive' }),
-  });
-}
-
 export function useSettleZeroDriverSettlement() {
   const { toast } = useToast();
   const qc = useQueryClient();

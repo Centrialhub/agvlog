@@ -3,6 +3,7 @@ import { decryptFiscalCredential } from '../_shared/fiscal-credential-crypto.ts'
 import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 import { dispatchFiscalEmission } from '../_shared/fiscal-dispatch.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { requireActiveTenant } from '../_shared/active-tenant.ts';
 import { createClient } from '@supabase/supabase-js';
 import { requireIntegrationCapability } from '../_shared/capabilities.ts';
 import { FiscalCredentialError, requireHubEnvironment, selectScopedHubCredential, type HubEnvironment } from '../_shared/fiscal-environment.ts';
@@ -18,7 +19,7 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ENC_KEY = Deno.env.get('AGVLOG_ENCRYPTION_KEY') || '';
 
 type Action =
-  | 'emit' | 'get' | 'sync' | 'cancel' | 'cce'
+  | 'emit' | 'emit-nfse-batch' | 'get' | 'sync' | 'cancel' | 'cce'
   | 'email' | 'file' | 'query' | 'preview' | 'ping'
   | 'desacordo' | 'cent' | 'discard' | 'import'
   | 'deliver' | 'links' | 'cancel-nfse' | 'close-mdfe';
@@ -47,6 +48,12 @@ interface ProxyRequest {
   loadManifestId?: string;
   emitterId?: string;   // routes to per-emitter Hub credential
   environment?: HubEnvironment;
+  requestId?: string;
+  batchMode?: 'individual' | 'unified';
+  entries?: Array<{
+    nfseDocumentId: string;
+    body: Record<string, unknown>;
+  }>;
 }
 
 function json(status: number, payload: unknown) {
@@ -223,6 +230,16 @@ Deno.serve(withFiscalCors(async (req) => {
       if (error) throw error;
       addTenantHint(`${table}.${column}`, data as Array<{ tenant_id: string | null }> | null);
     };
+    const addBatchResourceHint = async () => {
+      if (action !== 'emit-nfse-batch' || !Array.isArray(payload.entries) || payload.entries.length > 100) return;
+      const ids = [...new Set(payload.entries.map((entry) => (
+        entry && typeof entry === 'object' ? String(entry.nfseDocumentId || '').trim() : ''
+      )).filter(Boolean))];
+      if (ids.length === 0) return;
+      const { data, error } = await admin.from('nfse_documents').select('tenant_id').in('id', ids).limit(101);
+      if (error) throw error;
+      addTenantHint('nfse_documents.id[]', data as Array<{ tenant_id: string | null }> | null);
+    };
 
     if (payload.tenantId) {
       addTenantHint('payload.tenantId', [{ tenant_id: payload.tenantId }]);
@@ -234,6 +251,7 @@ Deno.serve(withFiscalCors(async (req) => {
       addResourceHint('cte_documents', 'id', payload.cteDocumentId),
       addResourceHint('nfse_documents', 'id', payload.nfseDocumentId),
       addResourceHint('load_manifests', 'id', payload.loadManifestId),
+      addBatchResourceHint(),
     ]);
 
     if (payload.id) {
@@ -283,6 +301,8 @@ Deno.serve(withFiscalCors(async (req) => {
       });
     }
     const tenantId = [...eligibleTenantIds][0];
+    const tenantContextError = requireActiveTenant(req, tenantId);
+    if (tenantContextError) return tenantContextError;
     const resolvedMembership = (memberships || []).find(
       (membership) => String(membership.tenant_id) === tenantId,
     );
@@ -346,7 +366,7 @@ Deno.serve(withFiscalCors(async (req) => {
       if (emitterError) throw emitterError;
       // Inactive emitters cannot issue/import or access unlinked documents, but
       // their already-linked documents must remain available for reconciliation.
-      if (!emitter || (!emitter.active && (!emission || action === 'emit' || action === 'import'))) {
+      if (!emitter || (!emitter.active && (!emission || action === 'emit' || action === 'emit-nfse-batch' || action === 'import'))) {
         throw new FiscalCredentialError('HUB_CREDENTIAL_EMITTER_INACTIVE', 'Emitente fiscal inexistente ou inativo para esta operação.');
       }
       if ((action === 'emit' || action === 'import') && onlyDigits(payload.body?.emitterCnpj) !== onlyDigits(emitter.cnpj)) {
@@ -424,6 +444,132 @@ Deno.serve(withFiscalCors(async (req) => {
     }
 
     switch (action) {
+      case 'emit-nfse-batch': {
+        const entries = Array.isArray(payload.entries) ? payload.entries : [];
+        const mode = payload.batchMode;
+        const requestId = String(payload.requestId || '').trim();
+        if (!requestId || requestId.length > 128) {
+          return json(400, { success: false, error: { code: 'INVALID_BATCH_REQUEST_ID', message: 'Informe um identificador idempotente para o lote.' } });
+        }
+        if (mode !== 'individual' && mode !== 'unified') {
+          return json(400, { success: false, error: { code: 'INVALID_NFSE_BATCH_MODE' } });
+        }
+        if (entries.length === 0 || entries.length > 100) {
+          return json(400, { success: false, error: { code: 'INVALID_NFSE_BATCH_SIZE', message: 'O lote deve conter entre 1 e 100 NFS-e.' } });
+        }
+        if (mode === 'unified' && entries.length !== 1) {
+          return json(400, { success: false, error: { code: 'UNIFIED_NFSE_REQUIRES_ONE_DOCUMENT' } });
+        }
+        const ids = entries.map((entry) => (
+          entry && typeof entry === 'object' ? String(entry.nfseDocumentId || '').trim() : ''
+        ));
+        if (
+          ids.some((id) => !id) || new Set(ids).size !== ids.length ||
+          entries.some((entry) => !entry.body || typeof entry.body !== 'object' || Array.isArray(entry.body))
+        ) {
+          return json(400, { success: false, error: { code: 'INVALID_NFSE_BATCH_DOCUMENTS' } });
+        }
+
+        // Validate the complete local set before resolving credentials or making
+        // the first provider request. Partial transport is still possible after
+        // this point and is represented explicitly by the 207 response.
+        const { data: documents, error: documentsError } = await admin
+          .from('nfse_documents')
+          .select('id, emitter_id, fiscal_document_ids, cancelled, is_preview')
+          .eq('tenant_id', tenantId)
+          .in('id', ids);
+        if (documentsError) throw documentsError;
+        const byId = new Map((documents || []).map((document) => [String(document.id), document]));
+        if (byId.size !== ids.length) {
+          return json(400, { success: false, error: { code: 'NFSE_BATCH_DOCUMENT_NOT_FOUND' } });
+        }
+        for (const entry of entries) {
+          const document = byId.get(entry.nfseDocumentId)!;
+          const sourceIds = Array.isArray(document.fiscal_document_ids)
+            ? [...new Set(document.fiscal_document_ids.map(String))]
+            : [];
+          if (document.cancelled || document.is_preview || document.emitter_id !== payload.emitterId) {
+            return json(400, { success: false, error: { code: 'NFSE_BATCH_DOCUMENT_INVALID', nfseDocumentId: entry.nfseDocumentId } });
+          }
+          if ((mode === 'individual' && sourceIds.length !== 1) || (mode === 'unified' && sourceIds.length === 0)) {
+            return json(400, { success: false, error: { code: 'NFSE_BATCH_SOURCE_CARDINALITY_INVALID', nfseDocumentId: entry.nfseDocumentId } });
+          }
+        }
+
+        const resolved = await resolveToken('nfse', payload.emitterId);
+        requireFiscalTransport(HUB_BASE, resolved.token);
+        const emitterCnpj = onlyDigits(entries[0]?.body?.emitterCnpj);
+        const { data: emitter, error: emitterError } = await admin.from('tenant_emitters')
+          .select('cnpj').eq('id', payload.emitterId).eq('tenant_id', tenantId).maybeSingle();
+        if (emitterError) throw emitterError;
+        if (!emitter || !emitterCnpj || onlyDigits(emitter.cnpj) !== emitterCnpj) {
+          return json(400, { success: false, error: { code: 'HUB_CREDENTIAL_EMITTER_MISMATCH' } });
+        }
+        for (const entry of entries) {
+          if (
+            requireHubEnvironment(entry.body.environment) !== resolved.environment ||
+            onlyDigits(entry.body.emitterCnpj) !== emitterCnpj
+          ) {
+            return json(400, { success: false, error: { code: 'NFSE_BATCH_ROUTE_MISMATCH', nfseDocumentId: entry.nfseDocumentId } });
+          }
+        }
+
+        // Configuration and routing errors must fail before the durable source
+        // reservation. Otherwise a request that never reached the provider
+        // could strand every selected fiscal source behind a stale reservation.
+        const snapshot = {
+          mode,
+          environment: payload.environment,
+          emitterId: payload.emitterId,
+          entries: entries.map((entry) => ({ nfseDocumentId: entry.nfseDocumentId, body: entry.body })),
+        };
+        const { data: preparedBatch, error: preparationError } = await admin.rpc('prepare_nfse_issue_batch_v1', {
+          _tenant: tenantId,
+          _actor: userId,
+          _request_id: requestId,
+          _mode: mode,
+          _environment: payload.environment,
+          _emitter: payload.emitterId,
+          _snapshot: snapshot,
+        });
+        if (preparationError) throw preparationError;
+
+        const results: Array<Record<string, unknown>> = [];
+        for (const entry of entries) {
+          try {
+            const idIntegracao = `agvlog-nfse-${entry.nfseDocumentId}`;
+            const body = { ...entry.body, externalId: idIntegracao, idIntegracao };
+            const result = await dispatchFiscalEmission({
+              admin, tenant: tenantId, actor: userId, emitter: resolved.emitter_id,
+              type: 'nfse', environment: resolved.environment, body,
+              nfseId: entry.nfseDocumentId,
+              call: (method, path, query, request) => callHub(method, path, query, request, resolved.token),
+            });
+            const resultData = jsonRecord(result.data);
+            const committedStatus = String(jsonRecord(jsonRecord(resultData.hub).document).status || '').toLowerCase();
+            const itemSuccess = result.status < 400 && !['rejected','rejeitado','error','denied','cancelled'].includes(committedStatus);
+            results.push({ ...resultData, nfseDocumentId: entry.nfseDocumentId, success: itemSuccess, status: result.status });
+          } catch (error) {
+            results.push({
+              nfseDocumentId: entry.nfseDocumentId,
+              success: false,
+              status: 500,
+              error: { code: (error as { code?: string })?.code || 'NFSE_BATCH_ITEM_FAILED', message: error instanceof Error ? error.message : 'Falha na emissão.' },
+            });
+          }
+        }
+        const successful = results.filter((result) => result.success === true).length;
+        const responseStatus = successful === results.length ? 200 : 207;
+        return json(responseStatus, {
+          success: successful === results.length,
+          partial: successful > 0 && successful < results.length,
+          recovered: preparedBatch?.recovered === true,
+          mode,
+          requestId,
+          results,
+        });
+      }
+
       case 'emit': {
         const type = payload.type;
         if (!type) return json(400, { success: false, error: { code: 'MISSING_TYPE' } });

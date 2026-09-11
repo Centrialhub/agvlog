@@ -58,6 +58,39 @@ export interface EmitParams {
   emitterId?: string;
 }
 
+export type NFSeBatchMode = 'individual' | 'unified';
+
+export interface NFSeBatchEntry {
+  nfseDocumentId: string;
+  body: EmitParams['body'];
+}
+
+export interface EmitNFSeBatchParams {
+  mode: NFSeBatchMode;
+  /** Stable client command id; retries must reuse the same value. */
+  requestId: string;
+  emitterId: string;
+  environment: HubEnvironment;
+  entries: NFSeBatchEntry[];
+}
+
+export interface NFSeBatchItemResult {
+  nfseDocumentId: string;
+  success: boolean;
+  status: number;
+  hub?: HubResponse['hub'];
+  emission?: HubResponse['emission'];
+  error?: { code?: string; message?: string };
+}
+
+export interface NFSeBatchResponse {
+  success: boolean;
+  partial: boolean;
+  mode: NFSeBatchMode;
+  requestId: string;
+  results: NFSeBatchItemResult[];
+}
+
 export function readHubFiscalError(value: unknown): string | null {
   if (typeof value === 'string') return value.trim() || null;
   if (Array.isArray(value)) {
@@ -81,7 +114,7 @@ export function readHubFiscalError(value: unknown): string | null {
   return null;
 }
 
-async function invoke(payload: Record<string, unknown>) {
+async function invoke(payload: Record<string, unknown>, acceptPartial = false) {
   const { data, error } = await supabase.functions.invoke('hub-fiscal-proxy', { body: payload });
   if (error) {
     let detail = error.message || 'Hub Fiscal proxy error';
@@ -94,7 +127,7 @@ async function invoke(payload: Record<string, unknown>) {
     }
     throw new Error(detail);
   }
-  if ((data as HubResponse | null)?.success === false) {
+  if ((data as HubResponse | null)?.success === false && !(acceptPartial && Array.isArray((data as NFSeBatchResponse | null)?.results))) {
     throw new Error(readHubFiscalError(data) || 'Operação recusada pelo Hub Fiscal');
   }
   return data as HubResponse;
@@ -136,6 +169,20 @@ export const hubFiscal = {
       fiscalDocumentId,
       body: { justificativa },
     });
+  },
+
+  emitNFSeBatch(params: EmitNFSeBatchParams) {
+    return invoke({
+      action: 'emit-nfse-batch',
+      batchMode: params.mode,
+      requestId: params.requestId,
+      emitterId: params.emitterId,
+      environment: requireHubEnvironment(params.environment),
+      entries: params.entries.map((entry) => ({
+        nfseDocumentId: entry.nfseDocumentId,
+        body: { ...entry.body, environment: requireHubEnvironment(entry.body.environment, params.environment) },
+      })),
+    }, true) as Promise<NFSeBatchResponse>;
   },
 
   closeMdfe(hubDocumentId: string, loadManifestId: string, emissionId: string, emitterId?: string | null) {

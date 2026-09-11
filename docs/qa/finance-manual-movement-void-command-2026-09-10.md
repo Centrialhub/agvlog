@@ -1,0 +1,13 @@
+# Invalidação privada de movimento manual
+
+Migration 20260910191905_finance_manual_movement_void_command.sql, SHA256 6f57f662c965f24ccc010973232ea16b9ed44d0eed8480f0a47a72524237039b.
+
+Implementa finance_private.void_manual_movement(jsonb), sem grant aos papéis da aplicação e sem RPC pública. A prévia pública permanece can_execute=false. O primeiro escopo é invalidar um registro manual livre comprovado pelo contexto190516; duplicidade com alvo, substituição e correções com dependências exigem operações próprias ainda pendentes.
+
+O comando reautoriza após trava financeira e antes de replay; trava movimento/conta com NOWAIT, exige revisão atual e elegibilidade e grava invalidação, auditoria e resultado idempotente atomicamente. O original permanece intacto. O efeito recai sobre o saldo representado, sem realizar transação bancária. Autor, nome, motivo e data são preservados; movement_voided entra no filtro de intervenções manuais da auditoria.
+
+INSERT de invalidação exige ticket privado consumido na mesma transação e nova verificação do contexto completo, origem e revisão. Referências polimórficas em títulos, obrigações, folha e acertos, além das duas pernas de transferências e saídas em trânsito, verificam movimentos ativos em OLD/NEW. Guards anteriores continuam protegendo alocações, pagamentos, vínculos e conciliação. Baseline detecta alteração posterior de corpos, ACLs e triggers; não comprova, por si, qualidade da instalação inicial. Promover EXECUTE ao writer altera ACL e exige migration revisada do baseline.
+
+Nove testes PGlite passaram em src/test/manualMovementVoidCommand.test.ts, com factory190516 real: entrada/saída, original preservado, replay/conflito, pagamento real que invalida a revisão, falta de ticket, referência polimórfica residual, transferência nas duas pernas e saída em trânsito, deriva da guarda, falha de persistência da auditoria com rollback completo, acesso privado e motorista misto após execução. O primeiro caso também valida o leitor real de auditoria pelo schema da interface, inclusive filtro manual, autor e motivo. ESLint dos dois arquivos TypeScript alterados passou.
+
+Revisão independente não identificou defeito adicional no escopo privado após correções OLD/NEW e transferências. O suplemento nativo concluiu oito casos aprovados, execução55176 saída0 e PostgreSQL parado; log/hash conferidos pelo coordenador. Cobre void versus alocação/título/transferência/partida nas duas ordens, NOWAIT e revogação em espera antes de replay. Ver finance-manual-movement-void-native-2026-09-10.md para limites. Nenhuma afirmação de homologação integral do schema ou implantação remota.

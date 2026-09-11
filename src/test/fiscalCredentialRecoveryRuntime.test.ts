@@ -25,8 +25,8 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({
       upsert: (value: Record<string, unknown>) => { state.credential = { id: 'credential', ...value }; state.writes++; return builder; },
       then: (resolve: (value: unknown) => unknown) => {
         let rows: Record<string, unknown>[] = table === 'tenant_emitters'
-          ? [{ id:'emitter',tenant_id:'tenant',active:true,cnpj:'12345678000199' }]
-          : table === 'tenant_memberships' ? [{ user_id:'user',tenant_id:'tenant',active:true,role:state.role }]
+          ? [{ id:'emitter',tenant_id:tenantId,active:true,cnpj:'12345678000199' }]
+          : table === 'tenant_memberships' ? [{ user_id:'user',tenant_id:tenantId,active:true,role:state.role }]
           : state.credential ? [state.credential] : [];
         rows = rows.filter(row => filters.every(([key,value]) => row[key] === value));
         if (columns !== '*') rows = rows.map(row => Object.fromEntries(columns.split(',').map(key => [key.trim(), row[key.trim()]])));
@@ -39,11 +39,13 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({
 const preview = 'https://agvlog-preview-thomaz-20260831.veituma.chatgpt.site';
 const key = 'a1'.repeat(32);
 const token = 'test-only-reentered-hub-token';
+const tenantId = '10000000-0000-4000-8000-000000000001';
+const userToken = `test.${Buffer.from(JSON.stringify({active_tenant_id:tenantId})).toString('base64url')}.signature`;
 const fetcher = vi.fn();
 let save: (req: Request) => Promise<Response>;
 let proxy: (req: Request) => Promise<Response>;
 const req = (body: Record<string, unknown>, auth = true, origin = preview) => new Request('https://edge.test', {
-  method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', ...(auth ? {Authorization:'Bearer test-user'} : {}) }, body: JSON.stringify(body),
+  method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', ...(auth ? {Authorization:`Bearer ${userToken}`,'x-agvlog-tenant-id':tenantId} : {}) }, body: JSON.stringify(body),
 });
 beforeAll(async () => {
   const env: Record<string,string> = { SUPABASE_URL:'https://db.test', SUPABASE_SERVICE_ROLE_KEY:'service-test', SUPABASE_ANON_KEY:'anon-test', AGVLOG_ENCRYPTION_KEY:key };
@@ -58,7 +60,7 @@ afterAll(() => {vi.unstubAllGlobals();vi.restoreAllMocks();});
 
 describe('credential recovery through save, proxy ping and polling (no external requests)', () => {
   it('replaces an unreadable credential only with an explicitly reentered token and reads it across all consumers', async () => {
-    state.credential={id:'credential',tenant_id:'tenant',emitter_id:'emitter',doc_scope:'all',environment:'production',enabled:true,secret_ciphertext:await encryptFiscalCredential('old-test-token','b2'.repeat(32)),secret_name:null};
+    state.credential={id:'credential',tenant_id:tenantId,emitter_id:'emitter',doc_scope:'all',environment:'production',enabled:true,secret_ciphertext:await encryptFiscalCredential('old-test-token','b2'.repeat(32)),secret_name:null};
     const ping={action:'ping',type:'cte',emitterId:'emitter',environment:'production'};
     const broken=await proxy(req(ping));
     expect(broken.status).toBe(400);
@@ -78,7 +80,7 @@ describe('credential recovery through save, proxy ping and polling (no external 
     const {createClient}=await import('@supabase/supabase-js');
     const admin=createClient('https://db.test','test-key');
     for(const scope of ['cte','nfse'] as const) {
-      expect(await resolveHubFiscalToken(admin,{tenantId:'tenant',emitterId:'emitter',environment:'production',scope,encryptionKey:key,getSecret:()=>undefined})).toBe(token);
+      expect(await resolveHubFiscalToken(admin,{tenantId,emitterId:'emitter',environment:'production',scope,encryptionKey:key,getSecret:()=>undefined})).toBe(token);
     }
     expect(fetcher).not.toHaveBeenCalled();
   });

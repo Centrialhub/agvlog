@@ -3,9 +3,8 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapAutoFit } from '@/components/maps/MapAutoFit';
 import { createTruckMarkerIcon, DEFAULT_BRAZIL_MAP_CENTER } from '@/lib/maps/leaflet';
-import { useFleetPositions } from '@/hooks/usePositions';
-import { useVehicles } from '@/hooks/useVehicles';
-import { useFleetState, VehicleState, MovementState, stateLabel, stateColor, stateBadgeClasses, stateDotClass, formatStoppedDuration } from '@/hooks/useVehiclesState';
+import { type MovementState, stateLabel, stateColor, stateBadgeClasses, stateDotClass, formatStoppedDuration } from '@/hooks/useVehiclesState';
+import { useWorkspaceFleetSnapshot } from '@/hooks/useWorkspaceFleet';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
 import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { Input } from '@/components/ui/input';
@@ -18,6 +17,7 @@ import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { resolvePositionTelemetry } from '@/lib/positionTelemetry';
+import {useWorkspaceSsxAccounts} from '@/hooks/useWorkspaceSsxAccounts';
 
 interface PipelineHealth {
   last_run_at?: string;
@@ -96,35 +96,16 @@ export default function FleetMap() {
   const { currentTenant } = useTenant();
   const { isEnabled } = useTenantCapabilities();
   const ssxEnabled = isEnabled('ssx');
-  const {
-    data: positions = [],
-    isLoading: posLoading,
-    error: positionsError,
-    refetch: refetchPositions,
-  } = useFleetPositions();
-  const { data: vehicles = [] } = useVehicles();
-  const {
-    data: vehicleStates = [],
-    isLoading: statesLoading,
-    error: statesError,
-    refetch: refetchStates,
-  } = useFleetState();
+  const { data: fleet = [], isLoading, error: fleetError, refetch } = useWorkspaceFleetSnapshot();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'unknown'>('all');
   const navigate = useNavigate();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
-  const telemetryUnavailable = Boolean(positionsError || statesError);
+  const telemetryUnavailable = Boolean(fleetError);
 
-  const { data: accounts = [] } = useQuery({
-    queryKey: ['integration_accounts_brief', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data } = await supabase.from('integration_accounts').select('id, status').eq('tenant_id', currentTenant.id);
-      return data || [];
-    },
-    enabled: !!currentTenant && isAdmin && ssxEnabled,
-  });
+  const {data:ssxAccounts=[]}=useWorkspaceSsxAccounts(!!currentTenant&&isAdmin&&ssxEnabled);
+  const accounts=ssxAccounts.filter(account=>account.migration_state==='ready');
 
   const pollMutation = useMutation({
     mutationFn: async () => {
@@ -146,47 +127,32 @@ export default function FleetMap() {
       queryClient.invalidateQueries({ queryKey: ['positions_last'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles_state'] });
+      queryClient.invalidateQueries({ queryKey: ['workspace_fleet_snapshot'] });
       queryClient.invalidateQueries({ queryKey: ['tenant_health'] });
-      void refetchPositions();
+      void refetch();
     },
   });
 
-  // Build state map from vehicles_state table
-  const stateMap = useMemo(() => {
-    const map: Record<string, VehicleState> = {};
-    if (telemetryUnavailable) return map;
-    for (const s of vehicleStates) map[s.vehicle_id] = s;
-    return map;
-  }, [telemetryUnavailable, vehicleStates]);
-  const positionMap = useMemo(
-    () => new Map(
-      telemetryUnavailable
-        ? []
-        : positions.map((position) => [position.vehicle_id, position] as const),
-    ),
-    [positions, telemetryUnavailable],
-  );
-
-  // Enrich vehicles: combine vehicle info + state + position
+  // The RPC already deduplicates physical vehicles and picks the freshest
+  // telemetry from every company projection in the workspace.
   const enriched = useMemo(() => {
-    return vehicles.map(v => {
-      const state = stateMap[v.id];
-      const pos = positionMap.get(v.id);
-      const telemetry = resolvePositionTelemetry(pos, state);
+    if (telemetryUnavailable) return [];
+    return fleet.map(vehicle => {
+      const telemetry = resolvePositionTelemetry(vehicle, vehicle);
       return {
-        vehicle: v,
+        vehicle,
         state: telemetry.movementState,
         speed: telemetry.speed,
         stoppedDuration: telemetry.movementState === 'stopped' || telemetry.movementState === 'idle'
-          ? state?.stopped_duration_seconds ?? 0
+          ? vehicle.stopped_duration_seconds
           : 0,
         lastPositionAt: telemetry.capturedAt,
-        lat: pos?.lat ?? null,
-        lng: pos?.lng ?? null,
-        heading: pos?.heading ?? null,
+        lat: vehicle.lat,
+        lng: vehicle.lng,
+        heading: vehicle.heading,
       };
     });
-  }, [vehicles, stateMap, positionMap]);
+  }, [fleet, telemetryUnavailable]);
 
   const filtered = useMemo(() => {
     return enriched.filter(e => {
@@ -209,8 +175,8 @@ export default function FleetMap() {
     const online = enriched.filter(e => e.state === 'moving' || e.state === 'stopped' || e.state === 'idle').length;
     const offline = enriched.filter(e => e.state === 'offline').length;
     const unknown = enriched.filter(e => e.state === 'unknown').length;
-    return { total: vehicles.length, online, offline, unknown };
-  }, [vehicles, enriched]);
+    return { total: fleet.length, online, offline, unknown };
+  }, [fleet.length, enriched]);
 
   return (
     <div className="animate-fade-in flex h-[calc(100vh-3rem)] -m-6">
@@ -253,8 +219,7 @@ export default function FleetMap() {
           </div>
 
           <Button variant="outline" size="sm" className="w-full" onClick={() => {
-            void refetchPositions();
-            void refetchStates();
+            void refetch();
           }}>
             <RefreshCw className="h-4 w-4 mr-2" /> Recarregar
           </Button>
@@ -270,7 +235,7 @@ export default function FleetMap() {
 
         {/* Vehicle list */}
         <div className="flex-1 overflow-y-auto">
-          {positionsError || statesError ? (
+          {fleetError ? (
             <div className="m-3 rounded-md border border-destructive/40 bg-destructive/5 p-3" role="alert">
               <div className="flex items-start gap-2 text-sm text-destructive">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -282,26 +247,25 @@ export default function FleetMap() {
                 size="sm"
                 className="mt-3 w-full"
                 onClick={() => {
-                  void refetchPositions();
-                  void refetchStates();
+                  void refetch();
                 }}
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Tentar novamente
               </Button>
             </div>
-          ) : posLoading || statesLoading ? (
+          ) : isLoading ? (
             <div className="p-4 text-sm text-muted-foreground">Carregando...</div>
           ) : filtered.length === 0 ? (
             <div className="p-4 text-sm text-muted-foreground">
               Nenhum veículo encontrado.
-              {vehicles.length === 0 && ' Cadastre veículos e vincule rastreadores.'}
+              {fleet.length === 0 && ' Cadastre veículos e vincule rastreadores.'}
             </div>
           ) : (
             filtered.map(e => (
               <button
                 key={e.vehicle.id}
-                onClick={() => navigate(`/vehicles/${e.vehicle.id}`)}
+                onClick={() => e.vehicle.source_vehicle_id && navigate(`/vehicles/${e.vehicle.source_vehicle_id}`)}
                 className={`w-full text-left px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors ${e.state === 'offline' || e.state === 'unknown' ? 'opacity-70' : ''}`}
               >
                 <div className="flex items-center justify-between">
@@ -375,7 +339,7 @@ export default function FleetMap() {
                     )}
                   </div>
                   <button
-                    onClick={() => navigate(`/vehicles/${e.vehicle.id}`)}
+                    onClick={() => e.vehicle.source_vehicle_id && navigate(`/vehicles/${e.vehicle.source_vehicle_id}`)}
                     className="mt-2 text-xs text-blue-600 hover:underline flex items-center gap-1"
                   >
                     <Eye className="h-3 w-3" /> Ver detalhes

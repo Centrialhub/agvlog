@@ -18,6 +18,7 @@ import { createClient } from "@supabase/supabase-js";
 import { isCronRequest } from "../_shared/cron-auth.ts";
 import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { requireActiveTenant } from "../_shared/active-tenant.ts";
 
 type PipelineMode = "poll" | "full" | "manual" | "sync_units_only" | "aggregate_only";
 type JsonObject = Record<string, unknown>;
@@ -25,6 +26,9 @@ type JsonObject = Record<string, unknown>;
 interface PipelineStats {
   pipeline_mode: PipelineMode;
   login: unknown;
+  reference_catalogs: number;
+  governance_snapshots: number;
+  rule_violations: number;
   synced_units: number;
   polled_units: number;
   total_inserted: number;
@@ -116,6 +120,8 @@ Deno.serve(async (req) => {
 
     // Verify admin (skip for cron)
     if (!isCron && callerId) {
+      const tenantContextError = requireActiveTenant(req, tenant_id);
+      if (tenantContextError) return tenantContextError;
       const { data: membership } = await supabase
         .from("tenant_memberships").select("role")
         .eq("tenant_id", tenant_id).eq("user_id", callerId).eq("active", true)
@@ -131,6 +137,9 @@ Deno.serve(async (req) => {
     const stats: PipelineStats = {
       pipeline_mode: mode,
       login: null,
+      reference_catalogs: 0,
+      governance_snapshots: 0,
+      rule_violations: 0,
       synced_units: 0,
       polled_units: 0,
       total_inserted: 0,
@@ -147,17 +156,38 @@ Deno.serve(async (req) => {
       steps_executed: [] as string[],
     };
 
-    // Get accounts to process
-    let accountsQuery = supabase
-      .from("integration_accounts")
-      .select("id, status, token_expires_at, settings, last_error")
-      .eq("tenant_id", tenant_id);
-
-    if (integration_account_id) {
-      accountsQuery = accountsQuery.eq("id", integration_account_id);
+    // Resolve the single SSX registration owned by the workspace. Its legacy
+    // tenant_id is only the original anchor and must not hide it from siblings.
+    const { data: tenant, error: tenantError } = await supabase
+      .from("tenants")
+      .select("workspace_id")
+      .eq("id", tenant_id)
+      .single();
+    if (tenantError || !tenant?.workspace_id) {
+      return jsonResp({ error: "Tenant workspace not found" }, 404);
     }
 
-    const { data: accounts } = await accountsQuery;
+    const { data: registry, error: registryError } = await supabase
+      .from("workspace_ssx_accounts")
+      .select("integration_account_id, migration_state")
+      .eq("workspace_id", tenant.workspace_id)
+      .maybeSingle();
+    if (registryError) throw registryError;
+    if (!registry) {
+      return jsonResp({ success: true, message: "No workspace SSX account", stats });
+    }
+    if (registry.migration_state !== "ready") {
+      return jsonResp({ error: "Workspace SSX account needs resolution", stats }, 409);
+    }
+    if (integration_account_id && integration_account_id !== registry.integration_account_id) {
+      return jsonResp({ error: "Integration account does not belong to this workspace" }, 404);
+    }
+
+    const { data: accounts, error: accountsError } = await supabase
+      .from("integration_accounts")
+      .select("id, status, token_expires_at, settings, last_error")
+      .eq("id", registry.integration_account_id);
+    if (accountsError) throw accountsError;
     if (!accounts || accounts.length === 0) {
       return jsonResp({ success: true, message: "No integration accounts", stats });
     }
@@ -187,8 +217,35 @@ Deno.serve(async (req) => {
             stats.steps_executed.push("token_refresh");
             const loginResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-login", {
               integration_account_id: account.id,
-            });
+            },55_000,tenant_id);
             stats.login = loginResp;
+          }
+        }
+
+        // ===== STEP A2: Reference catalogs (full/manual only) =====
+        if (mode === "full" || mode === "manual") {
+          stats.steps_executed.push("reference_catalogs");
+          try {
+            const catalogResp = objectValue(await callEdgeFunction(
+              supabaseUrl,
+              anonKey,
+              authHeader,
+              isCron,
+              cronSecret,
+              "ssx-sync-telemetry",
+              { integration_account_id: account.id },
+              55_000,
+              tenant_id,
+            ));
+            const catalogs = objectValue(catalogResp.catalogs);
+            stats.reference_catalogs = catalogs
+              ? Object.values(catalogs).reduce(
+                (sum, value) => sum + (typeof value === "number" ? value : 0),
+                0,
+              )
+              : 0;
+          } catch (e: unknown) {
+            stats.errors.push(`ReferenceCatalogs: ${errorMessage(e)}`);
           }
         }
 
@@ -200,10 +257,35 @@ Deno.serve(async (req) => {
             const syncResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-sync-units", {
               integration_account_id: account.id,
               force: mode === "manual",
-            });
+            },55_000,tenant_id);
             stats.synced_units += numberValue(syncResp, "upserted");
           } catch (e: unknown) {
             stats.errors.push(`SyncUnits ${account.id}: ${errorMessage(e)}`);
+          }
+        }
+
+        // ===== STEP B2: Governance depends on the refreshed unit catalog =====
+        if (mode === "full" || mode === "manual") {
+          stats.steps_executed.push("governance_snapshots");
+          try {
+            const governanceResp = objectValue(await callEdgeFunction(
+              supabaseUrl,
+              anonKey,
+              authHeader,
+              isCron,
+              cronSecret,
+              "ssx-sync-governance",
+              { integration_account_id: account.id },
+              55_000,
+              tenant_id,
+            ));
+            const snapshots = objectValue(governanceResp.snapshots);
+            stats.governance_snapshots = Object.values(snapshots).reduce(
+              (sum, value) => sum + (typeof value === "number" ? value : 0),
+              0,
+            );
+          } catch (e: unknown) {
+            stats.errors.push(`GovernanceSnapshots: ${errorMessage(e)}`);
           }
         }
 
@@ -227,7 +309,7 @@ Deno.serve(async (req) => {
         if (lookback_minutes) pollBody.lookback_minutes = lookback_minutes;
 
         try {
-          const pollResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-poll-positions", pollBody);
+          const pollResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-poll-positions", pollBody,55_000,tenant_id);
           const pollResult = objectValue(pollResp);
           stats.polled_units += numberValue(pollResult, "total_units");
           stats.total_inserted += numberValue(pollResult, "total_inserted");
@@ -243,6 +325,28 @@ Deno.serve(async (req) => {
         } catch (e: unknown) {
           const message = errorMessage(e);
           stats.errors.push(`Poll: ${message}`);
+        }
+
+        // ===== STEP C1: Rule violations use committed SSX position IDs =====
+        const pollPersistenceFailed = stats.errors.some(e => e.includes("persistence_failure"));
+        if (!pollPersistenceFailed) {
+          stats.steps_executed.push("rule_violations");
+          try {
+            const violationResp = objectValue(await callEdgeFunction(
+              supabaseUrl,
+              anonKey,
+              authHeader,
+              isCron,
+              cronSecret,
+              "ssx-sync-rule-violations",
+              { integration_account_id: account.id },
+              55_000,
+              tenant_id,
+            ));
+            stats.rule_violations += numberValue(violationResp, "upserted");
+          } catch (e: unknown) {
+            stats.errors.push(`RuleViolations: ${errorMessage(e)}`);
+          }
         }
 
         // ===== STEP C2: Compute vehicle state (always after polling) =====
@@ -371,6 +475,12 @@ Deno.serve(async (req) => {
       if (stats.total_inserted > 0) {
         pipelineHealth.last_successful_poll_at = new Date().toISOString();
       }
+      if (stats.errors.length === 0) {
+        const successfulAt = new Date().toISOString();
+        pipelineHealth.first_successful_run_at = pipelineHealth.first_successful_run_at || successfulAt;
+        pipelineHealth.last_successful_run_at = successfulAt;
+        pipelineHealth.successful_run_count = Number(pipelineHealth.successful_run_count || 0) + 1;
+      }
       if (stats.errors.some(e => e.includes("persistence_failure"))) {
         pipelineHealth.last_persistence_failure_at = new Date().toISOString();
       }
@@ -415,6 +525,7 @@ async function callEdgeFunction(
   functionName: string,
   body: unknown,
   timeoutMs = 55_000,
+  activeTenantId: string | null = null,
 ): Promise<unknown> {
   const url = `${supabaseUrl}/functions/v1/${functionName}`;
   const headers: Record<string, string> = {
@@ -427,6 +538,7 @@ async function callEdgeFunction(
     headers["Authorization"] = `Bearer ${anonKey}`;
   } else {
     headers["Authorization"] = authHeader;
+    if(activeTenantId)headers["x-agvlog-tenant-id"]=activeTenantId;
   }
 
   const controller = new AbortController();

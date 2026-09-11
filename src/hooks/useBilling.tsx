@@ -200,6 +200,8 @@ export function useDeleteIssuedCte() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['issued_ctes'] });
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-origins']});
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['cte_monitor'] });
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
@@ -330,42 +332,19 @@ export function useCreateCteBatch() {
         if (e2) throw e2;
       }
 
-      // Sincronização com Financeiro: cria contas a receber por CT-e (se a tabela existir).
-      try {
-        const { data: createdDocs, error: createdDocsError } = await supabase
-          .from('cte_documents')
-          .select('id, client_id, freight_value, net_value, recipient')
-          .eq('batch_id', batch.id);
-        if (createdDocsError) throw createdDocsError;
-
-        if (createdDocs && createdDocs.length > 0 && input.client_id) {
-          const receivables = createdDocs.map((document): TablesInsert<'receivables'> => ({
-            tenant_id: currentTenant.id,
-            client_id: document.client_id,
-            cte_document_id: document.id,
-            description: `CT-e ${document.id.slice(0, 8)} • ${document.recipient || '-'}`,
-            amount: document.freight_value,
-            status: 'pending',
-            created_by: user?.id,
-          }));
-          // Tenta inserir; se a tabela não existir ou colunas divergirem, ignora silenciosamente.
-          const { error: receivablesError } = await supabase.from('receivables').upsert(receivables, {
-            onConflict: 'tenant_id,cte_document_id',
-            ignoreDuplicates: true,
-          });
-          if (receivablesError) throw receivablesError;
-        }
-      } catch (error: unknown) {
-        console.warn('Falha na sincronização opcional do lote com contas a receber', error);
-      }
+      // A draft is only an expectation. Receivables originate from confirmed
+      // production fiscal observations, handled durably on the server.
 
       return batch;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
       qc.invalidateQueries({ queryKey: ['receivables'] });
+      qc.invalidateQueries({queryKey:['finance-receivable-portfolio']});
       // Documentos já emitidos devem sumir da listagem de Faturamento
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-origins']});
       qc.invalidateQueries({ queryKey: ['cte_documents'] });
     },
   });
@@ -415,6 +394,8 @@ export function useCancelCteBatch() {
       qc.invalidateQueries({ queryKey: ['cte_documents'] });
       // Cancelamento devolve os documentos ao pool disponível
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-origins']});
       qc.invalidateQueries({ queryKey: ['pending_invoices_summary'] });
     },
   });

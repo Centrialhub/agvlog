@@ -1,11 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
+import { requireActiveTenant } from "../_shared/active-tenant.ts";
+import { normalizeSsxBaseUrl } from "../_shared/ssx-utils.ts";
 
 type JsonObject = Record<string, unknown>;
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -48,13 +46,75 @@ Deno.serve(async (req) => {
     const callerId = claimsData.claims.sub as string;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    const { tenant_id, base_url, username, password, hashauth, hashcode, id } = await req.json();
+    const {
+      tenant_id, base_url, username, password, hashauth, hashcode, id,
+      administration_enabled, organization_unit_integration_code,
+      person_role_integration_code, work_schedule_integration_code,
+    } = await req.json();
     if (!tenant_id || !username || !password) {
       return new Response(
         JSON.stringify({ error: "tenant_id, username, password required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    if (typeof username !== "string" || username.length < 5 || username.length > 150) {
+      return new Response(JSON.stringify({ error: "SSX username must contain 5 to 150 characters" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (typeof password !== "string" || password.length < 6 || password.length > 20) {
+      return new Response(JSON.stringify({ error: "SSX password must contain 6 to 20 characters" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (administration_enabled !== undefined && typeof administration_enabled !== "boolean") {
+      return new Response(JSON.stringify({ error: "administration_enabled must be boolean" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (hashauth !== undefined && hashauth !== null && typeof hashauth !== "string") {
+      return new Response(JSON.stringify({ error: "SSX HashAuth must be a string" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (hashcode !== undefined && hashcode !== null && typeof hashcode !== "string") {
+      return new Response(JSON.stringify({ error: "SSX Hashcentral must be a string" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const personSettingInputs: Array<[string, unknown]> = [
+      ["organization_unit_integration_code", organization_unit_integration_code],
+      ["person_role_integration_code", person_role_integration_code],
+      ["work_schedule_integration_code", work_schedule_integration_code],
+    ];
+    for (const [name, value] of personSettingInputs) {
+      if (value !== undefined && value !== null &&
+        (typeof value !== "string" || value.trim().length > 40)) {
+        return new Response(JSON.stringify({ error: `${name} must contain at most 40 characters` }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+    let normalizedBaseUrl: string;
+    try {
+      normalizedBaseUrl = normalizeSsxBaseUrl(base_url);
+    } catch {
+      return new Response(JSON.stringify({
+        error: "SSX base URL is not allowed",
+        code: "SSX_BASE_URL_NOT_ALLOWED",
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const tenantContextError = requireActiveTenant(req, tenant_id);
+    if (tenantContextError) return tenantContextError;
 
     // Verify admin
     const { data: membership } = await supabase
@@ -79,18 +139,59 @@ Deno.serve(async (req) => {
     let currentHashauth: string | null = null;
     let currentHashcode: string | null = null;
     if (id) {
-      const { data: current, error: currentError } = await supabase
-        .from("integration_accounts")
-        .select("settings, hashauth, hashcode")
-        .eq("id", id)
-        .eq("tenant_id", tenant_id)
-        .maybeSingle();
-      if (currentError) throw currentError;
+      const [{ data: current, error: currentError }, { data: accountMatches, error: matchError }] = await Promise.all([
+        supabase.from("integration_accounts").select("settings, hashauth, hashcode").eq("id", id).maybeSingle(),
+        supabase.rpc("integration_account_matches_tenant_workspace_v1", {
+          _tenant_id: tenant_id,
+          _integration_account_id: id,
+        }),
+      ]);
+      if (currentError || matchError) throw currentError || matchError;
+      if (!current || accountMatches !== true) {
+        return new Response(JSON.stringify({ error: "Workspace SSX account not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       settings = (current?.settings && typeof current.settings === "object")
         ? { ...(current.settings as JsonObject) }
         : {};
       currentHashauth = current?.hashauth || null;
       currentHashcode = current?.hashcode || null;
+    }
+
+    const submittedHashauth = typeof hashauth === "string" ? hashauth.trim() : "";
+    const submittedHashcentral = typeof hashcode === "string" ? hashcode.trim() : "";
+    const effectiveHashauth = submittedHashauth || currentHashauth;
+    const effectiveHashcentral = submittedHashcentral || currentHashcode;
+    if (!effectiveHashauth) {
+      return new Response(JSON.stringify({
+        error: "SSX HashAuth is required for the Tracking integration",
+        code: "SSX_HASHAUTH_REQUIRED",
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!username.includes("@") && !effectiveHashcentral) {
+      return new Response(JSON.stringify({
+        error: "SSX Hashcentral is required when username is not an email",
+        code: "SSX_HASHCENTRAL_REQUIRED",
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const currentAdministrationEnabled = settings.administration_enabled === true;
+    settings.administration_enabled = administration_enabled === undefined
+      ? currentAdministrationEnabled
+      : administration_enabled;
+    for (const [name, value] of personSettingInputs) {
+      if (value === undefined) continue;
+      const normalized = typeof value === "string" ? value.trim() : "";
+      if (normalized) settings[name] = normalized;
+      else delete settings[name];
     }
 
     // A credential replacement starts a clean authentication lifecycle. Keeping
@@ -109,50 +210,29 @@ Deno.serve(async (req) => {
       delete settings[key];
     }
 
-    const record = {
-      tenant_id,
-      base_url: base_url || "https://integration.systemsatx.com.br",
-      username,
-      password_encrypted: encryptedPassword,
-      hashauth: hashauth || currentHashauth,
-      hashcode: hashcode || currentHashcode,
-      status: "pending",
-      token_cache: null,
-      token_expires_at: null,
-      last_error: null,
-      last_login_at: null,
-      settings,
-    };
-
-    let result;
-    if (id) {
-      const { data, error } = await supabase
-        .from("integration_accounts")
-        .update(record)
-        .eq("id", id)
-        .eq("tenant_id", tenant_id)
-        .select("id")
-        .single();
-      if (error) throw error;
-      result = data;
-    } else {
-      const { data, error } = await supabase
-        .from("integration_accounts")
-        .insert(record)
-        .select("id")
-        .single();
-      if (error) throw error;
-      result = data;
-    }
+    const { data: resultId, error: upsertError } = await supabase.rpc(
+      "upsert_workspace_ssx_account_v1",
+      {
+        _tenant_id: tenant_id,
+        _integration_account_id: id || null,
+        _base_url: normalizedBaseUrl,
+        _username: username,
+        _password_encrypted: encryptedPassword,
+        _hashauth: effectiveHashauth,
+        _hashcode: effectiveHashcentral,
+        _settings: settings,
+      },
+    );
+    if (upsertError) throw upsertError;
 
     return new Response(
-      JSON.stringify({ success: true, id: result.id }),
+      JSON.stringify({ success: true, id: resultId }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {
     console.error("agvlog-integration-upsert error:", err);
     return new Response(
-      JSON.stringify({ error: "Internal error", details: errorMessage(err) }),
+      JSON.stringify({ error: "Internal error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

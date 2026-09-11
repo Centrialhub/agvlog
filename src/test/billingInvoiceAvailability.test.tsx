@@ -27,7 +27,10 @@ vi.mock('@/hooks/useUserUiPreference', () => ({useUserUiPreference: () => ({pref
 vi.mock('@/hooks/useSonnerToast', () => ({useSonnerToast: () => ({success: vi.fn(), error: vi.fn(), info: vi.fn()})}));
 vi.mock('@/hooks/useRecalculateInboundFreight', () => ({useRecalculateInboundFreight: () => ({})}));
 vi.mock('@/hooks/useInsuranceProfile', () => ({useInsuranceProfile: () => ({}), useUpdateInsuranceProfile: () => ({})}));
-vi.mock('@/hooks/useNFSe', () => ({useCreateNFSe: () => ({}), useIssueNFSe: () => ({})}));
+vi.mock('@/hooks/useNFSe', () => ({
+  useCreateNFSe: () => ({isPending: false}),
+  useIssueNFSeBatch: () => ({isPending: false}),
+}));
 vi.mock('@/components/billing/CteEmissionPreviewDialog', () => ({CteEmissionPreviewDialog: () => null}));
 vi.mock('@/components/billing/CancelCteDialog', () => ({CancelCteDialog: () => null}));
 vi.mock('@/hooks/useFreightCalculator', () => ({calculateFreight: vi.fn(), logFreightCalculation: vi.fn()}));
@@ -232,6 +235,37 @@ it('renders precisely the 11 local NFS-e sources and restores them after clearin
   await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(12));
   const restoredCells = new Set(Array.from(document.querySelectorAll('td')).map(cell => cell.textContent?.trim()));
   for (const row of local) expect(restoredCells.has(String(row.invoice_number))).toBe(true);
+});
+
+it('requires an explicit individual or unified choice for multiple NFS-e sources', async () => {
+  state.rows.fiscal_documents = [
+    invoice('NF-101', {recipient_city: 'Montes Claros'}),
+    invoice('NF-102', {recipient_city: 'Montes Claros'}),
+  ];
+  render(<MemoryRouter><Wrapper><NFSeFromInvoicesDialog open onOpenChange={vi.fn()} /></Wrapper></MemoryRouter>);
+  await waitFor(() => expect(screen.getByRole('cell', {name: 'NF-101'})).toBeInTheDocument());
+
+  fireEvent.click(screen.getAllByRole('checkbox')[0]);
+
+  const advance = screen.getByRole('button', {name: /Avançar/});
+  expect(screen.getByRole('radiogroup', {name: 'Modo de emissão das NFS-e'})).toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent('Selecione emissão individual ou unificada para continuar.');
+  expect(advance).toBeDisabled();
+
+  fireEvent.click(screen.getByRole('radio', {name: /Individual/}));
+  expect(screen.getByRole('radio', {name: /Individual/})).toBeChecked();
+  expect(advance).toBeEnabled();
+});
+
+it('uses individual mode semantically for a single NFS-e source without asking for a redundant choice', async () => {
+  state.rows.fiscal_documents = [invoice('NF-201', {recipient_city: 'Montes Claros'})];
+  render(<MemoryRouter><Wrapper><NFSeFromInvoicesDialog open onOpenChange={vi.fn()} /></Wrapper></MemoryRouter>);
+  await waitFor(() => expect(screen.getByRole('cell', {name: 'NF-201'})).toBeInTheDocument());
+
+  fireEvent.click(screen.getAllByRole('checkbox')[1]);
+
+  expect(screen.queryByRole('radiogroup', {name: 'Modo de emissão das NFS-e'})).not.toBeInTheDocument();
+  expect(screen.getByRole('button', {name: /Avançar/})).toBeEnabled();
 });
 
 it.each(['cte','nfse'] as const)('removes an authorized %s source from every list, including explicit searches',async type=>{

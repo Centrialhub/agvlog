@@ -4,6 +4,7 @@ import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/r
 import type {PGlite} from '@electric-sql/pglite';
 import {afterAll,afterEach,beforeAll,beforeEach,describe,expect,it,vi} from 'vitest';
 import {DriverSettlementDrawer} from '@/components/financial/DriverSettlementDrawer';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {createCorrectionDatabase,seedCorrectableOutcome,correctOperation,correctionPayload} from './helpers/operationCorrectionDatabase';
 
 vi.hoisted(async()=>{const {Blob,File}=await import('node:buffer');vi.stubGlobal('Blob',Blob);vi.stubGlobal('File',File);});
@@ -13,7 +14,7 @@ vi.mock('@/hooks/useDriverSettlements',async(importOriginal)=>{
  const mutation=(fn:typeof mock.payment)=>({mutate:fn,mutateAsync:fn,isPending:false});
  return {...actual,useDriverSettlement:()=>({data:mock.data,isLoading:false}),
   useRegenerateDriverSettlement:()=>mutation(mock.regen),useUpdateDriverSettlementStatus:()=>mutation(mock.status),
-  useRegisterSettlementPayment:()=>mutation(mock.payment),useSettleZeroDriverSettlement:()=>mutation(mock.zero),
+  useSettleZeroDriverSettlement:()=>mutation(mock.zero),
   useUpdateSettlementKmReview:()=>mutation(mock.other),useAddSettlementAdjustment:()=>mutation(mock.other),
   useRemoveSettlementAdjustment:()=>mutation(mock.other),useDetachLoadFromSettlement:()=>mutation(mock.other),
   useAddSettlementManualExpense:()=>mutation(mock.other),useDeleteDriverSettlement:()=>mutation(mock.other)};
@@ -23,13 +24,19 @@ vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'10000000-0000-4000-8000-
 vi.mock('@/hooks/useCostCenters',()=>({useCostCenters:()=>({data:[]})}));
 vi.mock('@/hooks/useBankReconciliation',()=>({useBankAccounts:()=>({data:[]})}));
 vi.mock('@/components/financial/AttachLoadsDialog',()=>({default:()=>null}));
+vi.mock('@/components/financial/SettlementPaymentDialog',async()=>{
+ const {SettlementPaymentWorkspace}=await import('@/components/financial/SettlementPaymentWorkspace');
+ return {SettlementPaymentDialog:(props:{settlement:string;initialAmount:number;allowNew:boolean;onClose:()=>void})=><QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><SettlementPaymentWorkspace {...props} tenant="10000000-0000-4000-8000-000000000001" actor="10000000-0000-4000-8000-000000000011"/></QueryClientProvider>};
+});
+vi.mock('@/lib/financial/settlementPaymentClient',()=>({recordSettlementPayment:mock.payment,SettlementPaymentRejectedError:class extends Error{},settlementPaymentError:(e:Error)=>e.message,
+ readSettlementPaymentCandidates:async(_tenant:string,_settlement:string,amount:number)=>({balance_cents:amount,total:1,rows:[{id:'10000000-0000-4000-8000-000000000044',description:'Saída conferida',occurred_on:'2026-01-01',amount_cents:amount,remaining_cents:amount,beneficiary_name:'Motorista QA',account_name:'Conta QA'}]})}));
 afterAll(()=>vi.unstubAllGlobals());
 describe.each(['previous','attempt-foundation','redelivery'] as const)('schema: %s',stage=>{
 let db:PGlite;let stop:string;let id:string;
 beforeAll(async()=>{({db,stop}=await (stage==='redelivery'?createRedeliveryDatabase():stage==='attempt-foundation'?createDeliveryAttemptDatabase():createCorrectionDatabase()));},30000);
 afterAll(async()=>{await db?.close();});
 beforeEach(async()=>{
- vi.clearAllMocks();mock.signed.mockResolvedValue({data:{signedUrl:'https://example.invalid/receipt.png'},error:null});await db.exec('begin');await seedCorrectableOutcome(db,stop,true);
+ vi.clearAllMocks();sessionStorage.clear();mock.signed.mockResolvedValue({data:{signedUrl:'https://example.invalid/receipt.png'},error:null});await db.exec('begin');await seedCorrectableOutcome(db,stop,true);
  id=(await db.query<{id:string}>("update driver_settlements set status='approved' returning id")).rows[0].id;
 });
 afterEach(async()=>{cleanup();await db.exec('rollback');});
@@ -53,9 +60,10 @@ describe('rendered financial drawer with SQL-produced correction state',()=>{
  });
  it('disables an already-open payment confirmation if a correction arrives after the dialog opens',async()=>{
   await db.exec('update driver_settlements set driver_payable_amount=250');await refresh();const view=render(drawer());
-  fireEvent.click(screen.getByRole('button',{name:'Registrar pagamento'}));const dialog=await screen.findByRole('dialog',{name:'Registrar pagamento'});
+  fireEvent.click(screen.getByRole('button',{name:'Registrar pagamento'}));const dialog=await screen.findByRole('dialog',{name:'Registrar pagamento do acerto'});
   expect(within(dialog).getByLabelText(/Valor pago/)).toBeVisible();
-  const confirm=within(dialog).getByRole('button',{name:'Registrar'});await waitFor(()=>expect(confirm).toBeEnabled());
+  fireEvent.click(await within(dialog).findByRole('radio'));fireEvent.change(within(dialog).getByLabelText('Motivo do registro'),{target:{value:'Pagamento conferido anteriormente'}});fireEvent.click(within(dialog).getByRole('button',{name:'Revisar pagamento'}));
+  const confirm=within(dialog).getByRole('button',{name:'Confirmar registro do pagamento'});await waitFor(()=>expect(confirm).toBeEnabled());
   await correct();view.rerender(drawer());expect(confirm).toBeDisabled();fireEvent.click(confirm);expect(mock.payment).not.toHaveBeenCalled();
  });
  it('disables an already-open zero-settlement confirmation when a correction arrives',async()=>{

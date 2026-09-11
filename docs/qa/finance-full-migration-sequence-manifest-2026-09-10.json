@@ -1,0 +1,1598 @@
+{
+  "version": 1,
+  "created_at": "2026-09-10T15:54:30.910Z",
+  "scope": "all_repository_migrations",
+  "database": "finance_full_sequence_qa",
+  "remote_access": false,
+  "sql_rewritten": false,
+  "complete": false,
+  "applied_count": 0,
+  "total_count": 259,
+  "sequence_sha256": "6cbf6a2ef1b880dfaaf9b682f99ba864f50f159e62a9a00f87490d1548649221",
+  "preflight": {
+    "server_version": "17.11",
+    "required_extensions": [
+      "pgcrypto",
+      "uuid-ossp",
+      "pg_stat_statements",
+      "postgis",
+      "pg_net",
+      "pg_cron",
+      "supabase_vault",
+      "pg_trgm",
+      "unaccent"
+    ],
+    "missing_extensions": [
+      "postgis",
+      "pg_net",
+      "pg_cron",
+      "supabase_vault"
+    ],
+    "platform": {
+      "auth_uid": false,
+      "anon_role": false,
+      "auth_users": false,
+      "service_role": false,
+      "storage_buckets": false,
+      "storage_objects": false,
+      "authenticated_role": false
+    },
+    "public_relations": 0
+  },
+  "migrations": [
+    {
+      "file": "20260824224152_baseline.sql",
+      "sha256": "9a8fb331632f4bd29c89c64072e3f81587a9d428d80de12248b77c6193113305",
+      "bytes": 1058709,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825161010_restore_frontend_rpc_contract_and_driver_flow.sql",
+      "sha256": "d411c678c9325773ac8eac6155aa7fc62d9db20cfaf76791feede32126ec6240",
+      "bytes": 13245,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825183818_index_dispatch_foreign_keys.sql",
+      "sha256": "659d9d13691bb70d7ed59380b6657fbf6b0bd6a29f6c6b97f8015c53093be0b5",
+      "bytes": 710,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825205752_index_high_traffic_foreign_keys.sql",
+      "sha256": "ec4da67cc4bfe23e23a74ddb09e3a63344acd1cca87395e44b713c81b8088e04",
+      "bytes": 1152,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825210005_scope_authenticated_rls_policies.sql",
+      "sha256": "c951406fb81b2412105c553f910a5b44f65fd2d8954d853e4cbd74b14b7a888f",
+      "bytes": 2148,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825212743_harden_driver_message_rls.sql",
+      "sha256": "ab021321b81c8dce523d2f2ae56eb6445a338f5db7ca7e1e050d3699ec74bfb5",
+      "bytes": 3057,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825213311_consolidate_driver_message_rls.sql",
+      "sha256": "edf7c133e1bda40da6cb8474cc34a186878a2cbbea6b560b83095cacf0de3fa6",
+      "bytes": 3011,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825213855_link_maintenance_orders_to_vehicles.sql",
+      "sha256": "8659ba08b6d497eddc0b669c3b44a3549175a795e88ee055e6555ba66874c018",
+      "bytes": 417,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825214418_restore_receivables_foreign_keys.sql",
+      "sha256": "5af6e59424e36b6436a19b438d0cd055b9bb1c51ddeab71f34386c39f3ed1a6a",
+      "bytes": 1755,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825220540_add_fiscal_document_cost_center.sql",
+      "sha256": "545c5276420fb75a337dbc541b73c73001bf23793f07e526c79efb415cf54ef3",
+      "bytes": 236,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825220834_harden_finance_hr_maintenance_rls.sql",
+      "sha256": "c56ce62967e90d772f68f72ab03acb6f36da1ac7958241747c3fa9b0d7d36105",
+      "bytes": 4308,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825224339_harden_tms_operator_rls.sql",
+      "sha256": "7c6be8b25ab3e6f43069c9661b0aed648907018a9037d724da03f07ce587c049",
+      "bytes": 3985,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825225036_grant_operational_route_normalizer.sql",
+      "sha256": "ee1661197ccd3c1f23c010ce1e104661609a4ac2abce7b55ccf8b2acc9d2b5f5",
+      "bytes": 221,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260825230251_harden_load_control_rls.sql",
+      "sha256": "fea308785a186360cd45ea4d519b7a203baf783d9378f391fffc961a6da25335",
+      "bytes": 1899,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826002000_relocate_extensions.sql",
+      "sha256": "d92bb59a8b5cb5dcead33c8a0971f59348adbb7010707f89f194fb44fe93f624",
+      "bytes": 957,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826002200_index_all_foreign_keys.sql",
+      "sha256": "3b3c9ac996c20e4867dcc6646eaf4668e174843050b4d844172b1970a3490e7b",
+      "bytes": 1398,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826002800_revoke_unsafe_legacy_rpc_signatures.sql",
+      "sha256": "ca0306eb482ce4683ad06055943303b22e669a3524255ac632661af684999db9",
+      "bytes": 1147,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826002900_restore_rls_helper_execute.sql",
+      "sha256": "2d7e14a0ad8156190abbc3d007ec4882d2efff87ec93097e42b8b03732ba77d6",
+      "bytes": 648,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826140344_consolidate_public_rls_policies.sql",
+      "sha256": "cb3530cfcdf8aaa5737824509b8ac478ab978c6e8e2871daa0b59a70c3a26e6e",
+      "bytes": 8835,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826143000_fiscal_poll_dead_letters.sql",
+      "sha256": "79d12b5006b2129447c0f8f6a7515dbe4d713bc2e01fb30d86c14945ad8913ac",
+      "bytes": 2070,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826153408_restrict_integration_metadata_to_operational_roles.sql",
+      "sha256": "1684f8bb1b3e9889e47444cd9a07bb86a715d07aa7d96efb737c239348fa90ba",
+      "bytes": 2126,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826160000_canonical_load_mutations.sql",
+      "sha256": "655c15f9905ad9e91f59a69c91e8722c555b8294d908471ab0dec58c0b93f689",
+      "bytes": 11369,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826161000_storage_upload_limits.sql",
+      "sha256": "f628476ce980febfc79dc170ad72fc7f8f6156980ee3b8c45db34a11907e470b",
+      "bytes": 681,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826162000_fiscal_dead_letter_terminalize.sql",
+      "sha256": "384ab505f8fd85950550fc21c11c97bc0fbac15a9eda9fbd5fcf7c2b71f419f8",
+      "bytes": 3534,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826163000_fiscal_webhook_inbox_claims.sql",
+      "sha256": "c9e663e01936f5b0b7f62444c3f154ee90679ec745f1d644e8231bf543753f5c",
+      "bytes": 6559,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826164000_harden_future_default_privileges.sql",
+      "sha256": "3d9cd705f19a08a05889bda6d1ae30b49ec60fe2d0740e592fe4652fdb51a504",
+      "bytes": 1314,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826165000_require_privileged_mfa.sql",
+      "sha256": "e9394e318aec0b3d6d71bb2677c6f6172979b7af815adf7f18b23d26891d178c",
+      "bytes": 11679,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826170000_harden_portal_rpc_execution.sql",
+      "sha256": "b1fc6690646c7d1247e28b227e45ae7f90d5222ce7a2042a8d9fb36a7fefd0fc",
+      "bytes": 5813,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260826171000_remove_permissive_policy_overlaps.sql",
+      "sha256": "5f1a5e9d94e75706b33c5b16c6d8fa268ce07b73bae3e9d805ddced8d96726c5",
+      "bytes": 3245,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828105626_hide_driver_rls_helpers_from_data_api.sql",
+      "sha256": "528c7d3e9f5548a4ee73ed5926800b2a57ca37dc41b15216c0a09bbdf03f5941",
+      "bytes": 3811,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828110409_hide_policy_only_driver_helpers_from_data_api.sql",
+      "sha256": "22f9cbe8e5d6ed1080d909c6727b074cba344cc0cfbc5f2b50b7b85df1714aef",
+      "bytes": 1276,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828113034_harden_tenant_mutation_rpcs_and_cte_monitor.sql",
+      "sha256": "baa4a5c1f0099c60617af854795bce557bf4d3f800ea86c77dd64475d3a4b3cd",
+      "bytes": 13739,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828121520_link_cte_receivables.sql",
+      "sha256": "5022c99bb68d2f9ce6d90381c793a3ff7abead60b0cc551980035e991bbca0b2",
+      "bytes": 759,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828123509_harden_client_invoice_tenant_contract.sql",
+      "sha256": "4b269ba10049fe44a1cc8c6524b6eb6a7718038101fc9b5a7925767f4494876d",
+      "bytes": 13047,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828124136_index_client_invoice_detail_tenant_graph.sql",
+      "sha256": "bf7297e8d6956e68a1af88a3dcd6466c74e7e8219f2047920d26a665399b1332",
+      "bytes": 258,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828124653_harden_client_portal_access_tenant_contract.sql",
+      "sha256": "2068d028afa26b7bba5de015645ed46f29d3d165f064c159a75fbafe2bf5e2b7",
+      "bytes": 514,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828125152_harden_driver_vehicle_tenant_contract.sql",
+      "sha256": "b3f6cd3831f5e93ced63ae78e1c5e68d6ee008ef6d31f1cfe67c32778e408b1b",
+      "bytes": 3485,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828130909_harden_closing_report_financial_contract.sql",
+      "sha256": "b0b31fd14e19edb8d7cc451e8bd17b3d6bdf3b2a4bc4dd503fc4b47871c0fbdb",
+      "bytes": 13691,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828131619_index_driver_vehicle_tenant_assignments.sql",
+      "sha256": "075c677d5460df8c64b5aaae35c82caf276cb395a7c063c26c55bd3abd8e4866",
+      "bytes": 306,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828132140_harden_rural_profile_tenant_contract.sql",
+      "sha256": "620d792c65c0eb6271446505c00f440b518b5b0adb983c34e99e5bd520ef6c11",
+      "bytes": 889,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828132852_harden_billing_edi_tenant_contract.sql",
+      "sha256": "8ab772a0d2f2af0875030dbd28664db513fdd35f8564d89a6c19a6bb12440819",
+      "bytes": 2761,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828133419_harden_hub_credential_tenant_contract.sql",
+      "sha256": "cfd6e2eb27815df68ee6a25ae10dc4b30d4120f6c3558986f144d2d2eefb3e97",
+      "bytes": 715,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828133728_harden_client_region_tenant_contract.sql",
+      "sha256": "3730938a2841397a2d8568199d22c8c6978edbd8f504110d929e599164fcf3a9",
+      "bytes": 528,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828134845_harden_pallet_return_tenant_contract.sql",
+      "sha256": "c38d0c2fc3a3aa067a40b01ecb022c3b06bc14891a2e01c9213a4ef30ec45ad4",
+      "bytes": 4852,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828140050_harden_freight_table_tenant_contract.sql",
+      "sha256": "795e38ccff0f0dc68d81e6838bb9c739119deef50415aed4c49cc13b270c37bb",
+      "bytes": 871,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828141003_harden_order_tenant_contract.sql",
+      "sha256": "3ba3c31a8d109ec895b503dd662dfcc403e0ecb920b677e0a8be31546b878c25",
+      "bytes": 759,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828143144_harden_incident_tenant_contract.sql",
+      "sha256": "327f51f3869c3cb003d30b0891caa38c29c96a7980e5a606efa144c8958c53a2",
+      "bytes": 8032,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828143346_complete_incident_tenant_ownership.sql",
+      "sha256": "2d9f72a643b53fef1755236f796b91cfc33ef97bae5346795fa679ab33ab3ca8",
+      "bytes": 781,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828144026_harden_cte_sefaz_event_tenant_contract.sql",
+      "sha256": "6782275377ebc44b802f70bd090fa2b7f606a70ada6f68aff12617c3c04f4d4c",
+      "bytes": 1015,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828144613_harden_driver_monitoring_tenant_graph.sql",
+      "sha256": "9133fe37af1022fa6afd2a133a10b9c6a8e68b393a2942c279f8527e3e0a0b20",
+      "bytes": 7869,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828151937_remove_duplicate_driver_monitoring_indexes.sql",
+      "sha256": "73d9692829a300715af7c4a75969565d4ded9d10bbea81e128b2ede651481c2b",
+      "bytes": 485,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828160000_remove_privileged_mfa.sql",
+      "sha256": "b61e63e7b8b3ebf7fd7affc3ef6fa2b9541c1d0ef322a1de77294093920f32fe",
+      "bytes": 2994,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828181017_set_default_emitter_atomic.sql",
+      "sha256": "fa35f0b3cb82b58359f2c8b2de931a34dda9ec65e89f432837ff4b9b75dc54e9",
+      "bytes": 1750,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828185133_enforce_invite_only_auth_users.sql",
+      "sha256": "52df0c836064caaef754e0a3cbe86f76217ba4831f6e3d44f407e0432a43570d",
+      "bytes": 4982,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828185757_harden_auth_invite_authorizations.sql",
+      "sha256": "40d50775d4834153bc235659353ba7480cbf0bbeda4272886bfeaaf8eeb160a6",
+      "bytes": 396,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260828210458_enforce_privileged_mfa_release.sql",
+      "sha256": "fa2a8126779f5b152fedadfbbc5ade8c665ee4310ee0139e1fca526a21d9577b",
+      "bytes": 4483,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829093000_complete_hub_fiscal_environment_contract.sql",
+      "sha256": "10b4d6b9ace6974d38d6b6f9be7ca160e5a69e561b722b1a748a0dfb6050f71f",
+      "bytes": 1215,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829133957_complete_hub_fiscal_environment_contract.sql",
+      "sha256": "2cc7b8ce88f8f739b0460d756270d3ce8faade038438c323cb838bfad637ceb7",
+      "bytes": 894,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829142707_restore_production_integration_capabilities.sql",
+      "sha256": "91c744b319000a6a755cbcde7914ba145dbf21e73b451e05660e8d088c928bc3",
+      "bytes": 7033,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829142719_restore_production_frontend_pagination_contracts.sql",
+      "sha256": "fdc20cf1e16c18fa24661033b4f5207eb2e23782136896a31879add2b22baf1b",
+      "bytes": 11360,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829142956_index_tenant_feature_policy_updated_by.sql",
+      "sha256": "60a42ec0d1ec77655bcbb8a8e32118cb503693fc6df3fba848a89d2296d89f27",
+      "bytes": 146,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829143948_add_production_application_error_telemetry.sql",
+      "sha256": "7492e7820f91b8ee97eb9b3afd73ef3051c8910a11fd022437f523ca666804ed",
+      "bytes": 2951,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829143955_add_production_application_web_vitals.sql",
+      "sha256": "c298d6403db7dee53b8a2523ecd24d5e28d5b6a3dea767db63cba83b7ef666a4",
+      "bytes": 2054,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829144001_add_production_secure_upload_rate_limits.sql",
+      "sha256": "0c936274eb7d645343f798996229fb94c5981217193555c274bc53e60b9c25c8",
+      "bytes": 3628,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829144103_enforce_secure_upload_gateway_policies.sql",
+      "sha256": "3d3a1ce0bb2beba1e9a28e6eefb7ac1d4157a9c7b93d43335bb665d9c520ce87",
+      "bytes": 626,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829150921_repair_dispatch_trip_v3_idempotency_contract.sql",
+      "sha256": "00e2e85c0d8ca3c4014376d0bf628e0024c9222a2d4967e273febf743dda76c3",
+      "bytes": 6342,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829151605_allow_in_transit_driver_delivery_flow.sql",
+      "sha256": "ba95b04f8441fd3b40d426d46eee854f5d688ed6ebdce25fb7b1abe4c9993170",
+      "bytes": 1423,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829160528_restore_client_portal_fiscal_document_read.sql",
+      "sha256": "736627dd0997f7bcf4a95f7d18396254f78c5a4dbb41fd817a84f4804b559ecd",
+      "bytes": 487,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260829161715_grant_portal_fiscal_scope_helper.sql",
+      "sha256": "ff54694bf54db0d7ffc31d856db3b77261091757ad06e4709c2ec8ab90f1090f",
+      "bytes": 305,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830003721_require_driver_arrival_geolocation.sql",
+      "sha256": "adafe7a71244317337419a1870292b57aa0619fae6688bce8c6be9a53ce6e79a",
+      "bytes": 6127,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830005603_close_authenticated_security_definer_surface.sql",
+      "sha256": "e629386ffc5c883707735c8682f33f6f96e456888af71c7ac509e85c78bc9aa7",
+      "bytes": 4178,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830013356_harden_driver_occurrence_scope.sql",
+      "sha256": "d4103a43e1b8419af9cf5c8d19d9b347e4ae8caad6626c1f9935a1ea6892199b",
+      "bytes": 5500,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830013726_restrict_tenant_creation_to_platform.sql",
+      "sha256": "dbd8c21323940283169058f6fce538408eff44ddee956e59bb59a0f5653e0f37",
+      "bytes": 722,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830024309_enforce_driver_journey_state_machine.sql",
+      "sha256": "3042d98b13761d43c0ec8abc4d7977a3c5b3834fedb938aa4920ccc54a69ae99",
+      "bytes": 18280,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830033306_restrict_legacy_driver_event_api.sql",
+      "sha256": "0930b0a7f6e3462477e9b4f1a409f2c70391d184e8cb6f0936ba453c4c25d044",
+      "bytes": 759,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830042313_harden_driver_stop_departure.sql",
+      "sha256": "e21f8e1059036cbaf49c56e030be70f1917083728a534a3c5d92ea23cdccacf7",
+      "bytes": 4871,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830050226_enforce_delivery_outcome_atomicity.sql",
+      "sha256": "e8a24b00a7d0bef6c395e6628cf220be2e54b6ef366c5456c348361295fbf8f2",
+      "bytes": 34559,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830061800_restrict_idempotency_key_read_scope.sql",
+      "sha256": "62c8ff48491db1ad295c2d88cc50a70737e9fd53ad0cad40bfb368a44f7e01b5",
+      "bytes": 1535,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830062933_harden_dispatch_planned_route.sql",
+      "sha256": "1376526e6a60e2ff9a16f59637a938a357cb6a22cf968c589c54b24794dd64af",
+      "bytes": 15744,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830072744_harden_load_composition_integrity.sql",
+      "sha256": "8ef63c8d51e109fbabd384ffbcccddda55da39befacb517a81a3cf0574e7cde6",
+      "bytes": 15413,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830080608_add_explicit_load_replanning.sql",
+      "sha256": "fe9a7a3fd7530c8286849acdd4abd220cabd7d3cc0c42dedae874e35d727ce4c",
+      "bytes": 30348,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830085557_harden_document_composition_changes.sql",
+      "sha256": "b24bc0586f00c926abd3bf6fd35580d5d3931ca26b91c07d93cbfe84463e4ca5",
+      "bytes": 23718,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830094049_harden_load_item_preparation_writer.sql",
+      "sha256": "53392f642304006af1b7c99d468cca16ad87686c647f9a0cc8e33b8432d8a783",
+      "bytes": 15121,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830102652_add_operational_document_outcomes.sql",
+      "sha256": "2dee850e906f79854703116e076f8bfc8aba7a60f1ea910138165be0d381fd14",
+      "bytes": 40736,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830115234_harden_portal_shipment_detail_privacy.sql",
+      "sha256": "68a50853deedba7e4f9dab52544ee869a5e710db729911a4b13ab71288e9dffa",
+      "bytes": 17669,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830120554_version_delivery_proof_evidence.sql",
+      "sha256": "7e7542955b620306316f0e8222153b48e0cee8b77ee4c6ba4df499e965de41a7",
+      "bytes": 104381,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830124944_add_operational_document_corrections.sql",
+      "sha256": "bb3182617bd76b22ca92fa2db0407eb7ee83cb8d7aa87a79b9cd3bf36c94b745",
+      "bytes": 54446,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830135338_introduce_delivery_attempt_allocations.sql",
+      "sha256": "eefd96194024a7cd4678b7c69c869f32946559113d848f4ada58d5185b7a5854",
+      "bytes": 23299,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830142048_enable_audited_delivery_reallocation.sql",
+      "sha256": "b39c73e86ed3881957b804e5ee5d39e774eeae9f5a425c4ff21402c4922f5987",
+      "bytes": 238102,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830151949_audit_delivery_document_metadata.sql",
+      "sha256": "1f3717d1e61e577e18ce7273a171fd545d21e0e70b59d9356edabc69f4388b64",
+      "bytes": 45781,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830161722_make_closing_reports_attempt_aware.sql",
+      "sha256": "2dc6ff614419b48d11804dbdc67987b5c0cfc2554cf3e42b06fdc1e8dfef735e",
+      "bytes": 12859,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830165149_make_closing_drafts_atomic.sql",
+      "sha256": "cf37591be626ea87e15c41fc34e668234c1d8080b6a3057dc605311c2a61781b",
+      "bytes": 44701,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830174819_audit_closing_lifecycle_and_charge_claims.sql",
+      "sha256": "151471e20fd75f0ef3335b521602506139cdd5d2632b5c9ef587525f9e3399a3",
+      "bytes": 24833,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830183929_audit_receivable_payments_and_reversals.sql",
+      "sha256": "9e98c2312ec41de519557e1161ff595ec6b719709d2b07090963e65509d0d07f",
+      "bytes": 40917,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830192908_audit_client_invoice_lifecycle.sql",
+      "sha256": "03cd774ed14b4f4eda00d93ef3479f362dd673b9a4d332e1783410d7127b4510",
+      "bytes": 68860,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830203548_audit_driver_expense_reviews.sql",
+      "sha256": "0024490322b5048eb7465909383b21f1a149e5bd91ab4fd1e1335662150ab06c",
+      "bytes": 20666,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830211707_make_driver_expense_creation_recoverable.sql",
+      "sha256": "e4653ae0a090e4e954dd1b25b6cd3d727aed7ddf757bdfd9652ceda164f93adf",
+      "bytes": 50783,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830221527_make_driver_chat_recoverable.sql",
+      "sha256": "5e3f149f06dde92ba8bbdcbacff5a60a9864097ccf853dab4f56331bc894a91e",
+      "bytes": 15765,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830224344_make_event_chat_recoverable.sql",
+      "sha256": "9fa8aa6da81198b4dab889199a6e3bc8c220dfe898d3ad9184f418af4bf197cf",
+      "bytes": 20359,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830231003_enforce_expense_creation_mfa.sql",
+      "sha256": "e0af4f2f66662c19667b36617db691adb5f6065fd54305c4b385378a11705f74",
+      "bytes": 26584,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260830233637_audit_driver_settlement_adjustments.sql",
+      "sha256": "d1c2bd81d9fc7e6deb1c0942887d172406abc0bb63fef8875a51e20a4aa1031e",
+      "bytes": 23371,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831021458_reconcile_control_tower_read_contracts.sql",
+      "sha256": "4004fee026dc604981d4e6f365b26d02ed9ea404a3cb8492df9a0858bb8f70b0",
+      "bytes": 7572,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831024934_make_control_tower_evaluation_atomic.sql",
+      "sha256": "e44f7145ed7ad1e40334c49da474f691373930f00ef4f15b93714617cee17f1e",
+      "bytes": 22128,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831112949_make_trip_route_calculation_recoverable.sql",
+      "sha256": "5b5bc963fba993733ace1080147adaaa87781f0c4f6c8faace1aace0c1122f63",
+      "bytes": 31864,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831114316_separate_planned_and_remaining_route_distance.sql",
+      "sha256": "2d98cc3c643c8b9224761d65449554ffe8e22fb2db9008adb58c05d1f2d52dcf",
+      "bytes": 24661,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831124505_fiscal_emission_readiness.sql",
+      "sha256": "a7531e0705e2f167dd493d83a54b08d15a33e576aebce65a4475089b665e1553",
+      "bytes": 25548,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831144530_attach_fiscal_invoice_gate.sql",
+      "sha256": "83d8c3af17bdecede24977240b0d4a2c793e4a613c68b06835d490e4e233862f",
+      "bytes": 1900,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831153911_reconcile_unsent_fiscal_dispatch.sql",
+      "sha256": "5f8daa66ca22c6539bfe2e3d2f63c75ff7af2a339fccf9d992cb1cdcbc80a65b",
+      "bytes": 8009,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831160035_reconcile_provider_rejections.sql",
+      "sha256": "80a6b95a7a8ebeb5fa1cd66d2a941ba7208a6caec10f42f99e623f0787d02d76",
+      "bytes": 6525,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831160938_reconcile_authorized_cte_catalog.sql",
+      "sha256": "052f1ad1fdd4d8e619e4dfba828648c40670d3b927c15c55b334e4b0277283ee",
+      "bytes": 10470,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831161743_preserve_terminal_fiscal_receipts.sql",
+      "sha256": "c39d2208a35c533bb0b38baad34bcb4a9fec372fffa59db38f584b05e6445e7f",
+      "bytes": 12734,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831164442_remove_authenticator_requirement.sql",
+      "sha256": "afebc0abe625ece64d8938129ca57543b0d08f66a757da6dad1253c9e210b63b",
+      "bytes": 18347,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831170755_serialize_cte_dispatch_and_reconcile_rejections.sql",
+      "sha256": "52a6e3d6ebfedc73f7fae1693ab39d26ea47fb1056ff52705f4a959adba2c288",
+      "bytes": 16947,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831184715_fix_cte_defaults_product_summary.sql",
+      "sha256": "4468068c8fa3844ec06f3470d229e295fd179d03b2c3eb72941f51fd7c9482d3",
+      "bytes": 4077,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831211632_make_ssx_position_ingestion_monotonic.sql",
+      "sha256": "8b358e899441f5fcc6d8be19737c76f5d939d49b4445291e1ac89f16c7746977",
+      "bytes": 30877,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831213305_add_official_tax_registry.sql",
+      "sha256": "cd88b3b41591216251f3f4ab129c7715c018d1ad563d7395d75006fa6a93d0dd",
+      "bytes": 12289,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831215026_protect_fiscal_certificate_secrets.sql",
+      "sha256": "27c4143db3f5efd25ebb2939fe576252b61850cf5407a381964b09b5ae8460ba",
+      "bytes": 150,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831215357_make_ssx_queue_claims_recoverable.sql",
+      "sha256": "b7744542c3525f55013a82d684be3cf49034b415f07641471a62c6426ae3eb07",
+      "bytes": 5026,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831230903_enforce_trip_load_transit_invariant.sql",
+      "sha256": "3833acfb5bba49422b4301bad0ab41934b4112e1430e64215a1b7d42a42845a5",
+      "bytes": 25902,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831230957_reconcile_load_1003_no_start_evidence.sql",
+      "sha256": "697819fc7824f0b7c9d2a06d69e94307afecc43318473db0a2ad063b6ed985a2",
+      "bytes": 4325,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831232156_remove_trip_load_from_unscoped_driver_occurrences.sql",
+      "sha256": "6d63ca7409260c401cb19b0cea66631b983a3a72a5d02cb9bb0c5ea4bfec367c",
+      "bytes": 10234,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260831232458_add_gps_driver_arrival_rpc.sql",
+      "sha256": "5a096b0df1b1eaeda49ced5fe8dc67197e30be2444e2b9d51b037edb8ea19d0a",
+      "bytes": 6625,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901001442_revoke_reintroduced_legacy_composition_acl.sql",
+      "sha256": "a371f2e59deb761608fdbef724be9f3a589f255cbb8202ef6b5764e20d655e50",
+      "bytes": 1983,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901001826_revoke_reintroduced_legacy_security_definers.sql",
+      "sha256": "b01cf9de4275f846edca42beb7aab62b5d8a8a818676778c38ab67ae561195a9",
+      "bytes": 2586,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901002245_cutover_legacy_driver_delivery_writers.sql",
+      "sha256": "873b420610716eb44441346e9ecde77d25feac2a219a9b2161db03bef8583105",
+      "bytes": 6259,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901003429_close_remaining_legacy_security_definer_acl.sql",
+      "sha256": "8deb137c75ba4c4089b2224d1f6a33e0b654ae50d5bcfc55a2a585e759cb2bb9",
+      "bytes": 5423,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901010000_add_operator_pod_and_occurrence_commands.sql",
+      "sha256": "0976944dc775ad62b121efa8bb6040920d37a931a94e9395859d40c1eca87a32",
+      "bytes": 46440,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901135909_driver_load_fiscal_catalog.sql",
+      "sha256": "d6fbb976ce419613c3411b8d659f4d1335906aeb97eb629405ce03fe38813ac4",
+      "bytes": 7764,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901141149_make_load_payment_recoverable.sql",
+      "sha256": "555426ab41f13838648a680dd6a4eb57567d8f004c4ceb787cb37a3d3dd0c2f5",
+      "bytes": 17585,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901143218_make_load_import_atomic.sql",
+      "sha256": "9ddb168f6a4191c56915197b672d877ca1b9db5f7ad620d74b98b7c7dab8d1eb",
+      "bytes": 28632,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901145247_make_driver_monitor_commands_recoverable.sql",
+      "sha256": "b8a623535b1e0c909b118ec9968b0838e44500b27a4971dde4e60eb0b203db03",
+      "bytes": 26013,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901162058_adopt_hub_fiscal_status_callbacks.sql",
+      "sha256": "865e9ce13a7e366176eb2dc6848bfd83eeaabc9e86333b7354e627b06561de64",
+      "bytes": 11184,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901181949_production_mdfe_load_lifecycle.sql",
+      "sha256": "de77a951a0c7ecc19007de1514e05524bd5730c8191896d01ba369e4a5dd22b5",
+      "bytes": 18978,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901183111_harden_position_read_contracts.sql",
+      "sha256": "74740801f65e67515071a10fcdd3d52fc1d9ba4724ad55069de6958d256356c9",
+      "bytes": 6353,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901190000_make_route_draft_delete_recoverable.sql",
+      "sha256": "1417ae22f15381003d1c2108e1da5c80213f24e290bbdf39143882fbef915c93",
+      "bytes": 7996,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901190100_add_cursor_operator_event_reader.sql",
+      "sha256": "59e3eb14e53ca5c9b7cd04d0e0b5b878eec164fc212910fcaff029d580a254a3",
+      "bytes": 9589,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901201500_make_load_aggregate_commands_atomic.sql",
+      "sha256": "11288823172337cc31422cd076603b0aff920802678b40d65d3a57e9a0d307bb",
+      "bytes": 31047,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901203000_add_keyset_load_control_reader.sql",
+      "sha256": "c9f975f1dbcadfb476eca45eb6fd19e867763c9c9de4729db43bb9d74bf28c11",
+      "bytes": 9756,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901210627_protect_linked_storage_evidence.sql",
+      "sha256": "999e9ac0cf7984dc74c9731a503d05f47558afe31b0c868013c5f2d30875a17a",
+      "bytes": 10068,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901211644_add_operator_cursor_readers.sql",
+      "sha256": "cd8d726c66f05ff01e2351d235d8450ff02175203cb6669441e20a5e68e0f799",
+      "bytes": 23735,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260901212053_revoke_replaced_dispatch_planner_acl.sql",
+      "sha256": "24c17d455fff5f1b37bdf4ae0f8916fd3d2b35f336402f1fd9ac4bc0c5b8ce43",
+      "bytes": 3047,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260902004250_add_driver_fiscal_file_reader.sql",
+      "sha256": "9f889b02f8daf64925895833c4ab349a63c0d26f023dbda53b6b1e7b541054e9",
+      "bytes": 19018,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260902010528_add_driver_load_history_cursor.sql",
+      "sha256": "f5fdf22cf3a76f7932a98b59dbfb0658b9f481b1ea642448f17992a761dd6b28",
+      "bytes": 9895,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260902010806_retire_legacy_driver_delivery_browser_acl.sql",
+      "sha256": "79bd485a39ad987c6feafe6abbb0a2da3de9529f00031d52daa711f61ed50ffe",
+      "bytes": 6384,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260902011603_add_driver_event_history_cursor.sql",
+      "sha256": "c04668cd509e02fd5f3367ef4ae479ee58aeb50889f423d2ff6fcefb328473bf",
+      "bytes": 7521,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260902013811_enforce_atomic_load_number_allocation.sql",
+      "sha256": "222baa5349fbdcd589045aab4a14750c8fa13bdbefa4b3c3480ded2d3b4ce7aa",
+      "bytes": 4897,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260902021339_retire_unbounded_reimport_cleanup_browser_acl.sql",
+      "sha256": "f759b7d676da329700bb2b2d71c06b6a65c0be3d77ccac32d3f944395e4d1fcf",
+      "bytes": 5981,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260902021429_harden_planned_stop_coordinates.sql",
+      "sha256": "383386b43b1de4654448f66855e8c0407beb07eca2bbb9384e230ef577a0a50f",
+      "bytes": 3427,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260902022000_reconcile_disabled_ssx_cron.sql",
+      "sha256": "7a7dce52076bf05ba002e185abb6fc1e1f19c6478f90dd608e8572fb93e926b7",
+      "bytes": 1473,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260902022100_index_atomic_load_foreign_keys.sql",
+      "sha256": "7d9f1e95cbbe4fb496549ae730617e5438e519c6a679123f87aa661c27ab4f52",
+      "bytes": 546,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260908195720_prepare_durable_nfse_issue_batches.sql",
+      "sha256": "01dc177509c9a49b21efabd22fe3f0c2bc1a6812b421682d21d7f7bc2c1cb2b3",
+      "bytes": 7969,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "sha256": "f14984f4b1c7c2c64ffc4fb0b257933cbc449b3759182e2932df8558d3db48f4",
+      "bytes": 10170,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909212514_finance_delivery_unloading.sql",
+      "sha256": "31d527454b746dc9aed8b8c0755f7e9e6132f098ad5251ac937bb7fcbc01bae7",
+      "bytes": 10653,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909213020_finance_movement_queries.sql",
+      "sha256": "9e2ee8a95b50d4cdc4b78430ef54f1a26142b9f8ea5767c9bb609a61e69f0b16",
+      "bytes": 3232,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909213959_finance_expense_batches.sql",
+      "sha256": "3d24b8f562d043eccf99189255e19a1c9d4ce9827341a0348136562963ea0dc3",
+      "bytes": 13393,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909215046_finance_delivery_supplier_guard.sql",
+      "sha256": "0f30ac3d6e4c5c98ac1fab74e3136546cf2868dd8908c61c520d1a19cd9e83e1",
+      "bytes": 3504,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909220020_finance_expense_workspace_queries.sql",
+      "sha256": "2c3b7904bb41a6ebf110225559ef794b4e17c4f79bbad68ce74d0049ad92eda2",
+      "bytes": 3806,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909220941_finance_receipt_evidence.sql",
+      "sha256": "410293d35f3653c894643aa9f635128f13eb3a010f1ecc722aa0fbace7ac5188",
+      "bytes": 4731,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909221405_finance_expense_history_queries.sql",
+      "sha256": "c162e2b0cb35386737703f996872797854c4f66030a638f8a599688656f5ef17",
+      "bytes": 5169,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909222851_finance_statement_intake.sql",
+      "sha256": "e7d153769b285614254438340edee8b1a609f778dac3ce7fe65a53f6b6f7a4e4",
+      "bytes": 13880,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909223737_finance_statement_source_verification.sql",
+      "sha256": "59e80fcbe94a20e27021854d24178b3baba03ed93203a101daa551b56eb1458e",
+      "bytes": 8954,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909230507_finance_statement_queries.sql",
+      "sha256": "670d252f1dfa660cc9e05cf895ccd1561c8e3a6bf275958ec36b4f210f904cae",
+      "bytes": 6660,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909231643_finance_statement_identity_review.sql",
+      "sha256": "26f356955235506fa28f1cbc0b71a1fbe66ff45837e9b55fc2ec31c98b3cc3b4",
+      "bytes": 20478,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909233625_finance_audit_queries.sql",
+      "sha256": "4c5ffab49815e5f41e35ce68ed3321aa67bc0ac681bf491bb252c122c5303666",
+      "bytes": 3525,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909234654_finance_legacy_driver_boundary.sql",
+      "sha256": "0e31b33f678c063c8600d6db2528c81fa5f18ef6fed1cd7ea456e1ded5ea8b36",
+      "bytes": 2254,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909235237_finance_legacy_rpc_boundary.sql",
+      "sha256": "58091908245304fc7d899158a0c59019627241d3adef726474d0c014845dc667",
+      "bytes": 5727,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260909235705_finance_legacy_receipt_boundary.sql",
+      "sha256": "bc2ee41f0cc2814b1c0f13d0752f05f9da36747e24a8746ef13be14053fb82c6",
+      "bytes": 1452,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910000731_finance_payroll_payment_projection.sql",
+      "sha256": "88b308914ba6bcc1d718920f82b391cf60afce7f76a2b7715d3b7c3d641097d3",
+      "bytes": 7956,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910002244_finance_payable_movement_links.sql",
+      "sha256": "950528541ed07a28b12a83ff47212fe6534b02c6a5ac5f5a048d35e9d3006a43",
+      "bytes": 14547,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910003529_finance_payable_link_reversal.sql",
+      "sha256": "6a74f52835c7afe46644109a9c415da5f907180b16b82b36321b9c3186740701",
+      "bytes": 11004,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910004550_finance_fiscal_observation_queue.sql",
+      "sha256": "ca22534cc5e4cbdae362d97a62a35a4fb81ea0300687d9038b4cafc91e080cdf",
+      "bytes": 5740,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910005509_finance_fiscal_receivable_basis.sql",
+      "sha256": "ba09c06c28da321ec456f9738032c9ed68530805ea40358a4ae9f05f132e01c1",
+      "bytes": 6953,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910010034_finance_fiscal_receivable_projection.sql",
+      "sha256": "f34824f21040018028e20d4de22fc37d4b9fedecec3286496f96b7d78c6309b8",
+      "bytes": 13326,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910011121_finance_fiscal_cancellation_credits.sql",
+      "sha256": "f804d5aa34c45ff1cb63bdd0827d157e76ce75a22b54ad45a85172db95c1a02c",
+      "bytes": 9224,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910012152_finance_receivable_fiscal_context.sql",
+      "sha256": "330057896a657744cff7000aa1cbb317ffb6f7a7fda44b4234b41f714aa5ab6c",
+      "bytes": 3269,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910012756_finance_fiscal_queue_worker.sql",
+      "sha256": "3d209e4971a591725a5c5e859ebca9f18457e4f3659f656ab1cef8f3a8f31549",
+      "bytes": 7281,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910013543_finance_bank_reconciliation_groups.sql",
+      "sha256": "af173cc4a5e73d9af39d5d0fcdeb413c7402bb5a1d060746b2c6705af5fe53f3",
+      "bytes": 15918,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910014238_finance_reconciliation_workspace.sql",
+      "sha256": "dbc2b8731347a928d8686d04299d70904e4846f262a51faf85cb0dc76a9f0d83",
+      "bytes": 4148,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910015331_finance_reconciliation_history.sql",
+      "sha256": "f4261dc666cb54f67fdfa51c8d34d5119771a5ded2a4a80d9b43af7de16beea5",
+      "bytes": 5925,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910020543_finance_ofx_statement_intake.sql",
+      "sha256": "9ca8114cbf73cae45a31b81de7b4ba5d47f14e77f2520581d32b2ae04fe7be66",
+      "bytes": 1671,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910021404_finance_native_statement_account.sql",
+      "sha256": "b7b6c9c7aee709a371652bd0aa0e837faf4a41fa446178b59bca2b1a9ea18d13",
+      "bytes": 4939,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910022059_finance_automatic_reference_reconciliation.sql",
+      "sha256": "3c3f6e1762fe872589ca0732bf97ba76f1535a65bec4454aa0f109ce6333926c",
+      "bytes": 14513,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910023208_finance_automatic_reconciliation_status.sql",
+      "sha256": "cf95f50843e0df1d5064e315ad769542aa9dbfaee3ff13cd34ef3f27343baf5f",
+      "bytes": 2326,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910023911_finance_account_period_review.sql",
+      "sha256": "aa651cfd209d54ede798ed74c29773660d05687c4ca004be2d255288cb98bd9e",
+      "bytes": 5771,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910024438_finance_receivable_movement_projection.sql",
+      "sha256": "09c86d71abb1f3716d6a62f0746d25bda5537d7ae10a6bb710e0190c9bdbf197",
+      "bytes": 11817,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910025658_finance_receipt_allocation_corrections.sql",
+      "sha256": "1d6084d521c55c9b784bc25e38d7335dfdef9f57a128bae31700b2aa1e45259f",
+      "bytes": 10274,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910030634_finance_explicit_receipt_refunds.sql",
+      "sha256": "a8cc28abb1eda1b68d297d8319526557200f8ab46b6fc5a1adb619683b4bf0f1",
+      "bytes": 1432,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910032730_finance_movement_receipt_trace.sql",
+      "sha256": "3edcf907a3d165bc4db4b39f8c83fda02c289332f6f467667a8e83ff721e26cb",
+      "bytes": 3114,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910033918_finance_internal_transfer_pairs.sql",
+      "sha256": "564288fe9c1c7cc1863019fc2c5ce090ca97a7bd4d765c2959c3b208daa3e0e4",
+      "bytes": 7618,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910034731_finance_transfers_in_transit.sql",
+      "sha256": "4bb2e1e54b7f7a96f89a1e930af0465a54756ea42e411616a18165c8ed5b1308",
+      "bytes": 10485,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910035550_finance_transfer_period_position.sql",
+      "sha256": "18d8b30e392638af036c6873ffd77dc41a07a1b01198c247c0b7ee95d819ef56",
+      "bytes": 4161,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910120756_finance_manual_expense_recording.sql",
+      "sha256": "a4688897bb9f84ef4ef91ba6f036fb369601b980c632832426db062cce7002dc",
+      "bytes": 9983,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910121937_finance_retire_legacy_payable_writers.sql",
+      "sha256": "11eebb920bd34e6cc81468cdda1b7232db8a7d361de620135e6dad5335ae8f86",
+      "bytes": 2944,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910122628_finance_bank_transaction_browser_boundary.sql",
+      "sha256": "dde957ddb2204641dd39523f0bab3e71c3442ba08605c69b434dbb0f6bed8163",
+      "bytes": 679,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910123613_finance_retire_legacy_statement_import.sql",
+      "sha256": "9d7d057e6f85a7de6db90b492041236f7f63a04833ccc5338a0753955906efa7",
+      "bytes": 1313,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910124258_finance_retire_legacy_reconciliation.sql",
+      "sha256": "422d50770dd0c2d919bc96921d047ede60d5e1e7f29b4ebfa898009845f93a2e",
+      "bytes": 2469,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910124716_finance_expense_cost_center_totals.sql",
+      "sha256": "04cb0d0d10595997c33e9b9c8b6d64f572fc9d2d235fbe79801e64c580a83ece",
+      "bytes": 5114,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910125034_finance_manual_expense_cost_center.sql",
+      "sha256": "469be864296ae2be1c5ad57c049efc570df0a3e09869de657415ebc626086034",
+      "bytes": 5686,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910125357_finance_recorded_costs.sql",
+      "sha256": "4ff64ddafb49126e05b1e7ddc5925fe76dd63df00a1f380e0e6bd9e8db10099c",
+      "bytes": 5063,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910125751_workspace_tenant_foundation.sql",
+      "sha256": "d37d856052c462b9c8163301c68e2cbbc92ef6f59dbc4a1abe4f7deb0871a6f5",
+      "bytes": 8640,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910130032_finance_payroll_recorded_costs.sql",
+      "sha256": "e0d51628df54abeedfa0d78cd7b48632b7daf19ff43ae28dffe9875e77ceebae",
+      "bytes": 5982,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910130540_finance_settlement_movement_links.sql",
+      "sha256": "a05183495df24000b81fd2976a6723df0c4700dbdf2d82b5dca679e47e1f1205",
+      "bytes": 8637,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910130921_finance_settlement_movement_options.sql",
+      "sha256": "3f1a107e4f02187638bf145d03842f860b8e13c16d11ba5515a615e989953821",
+      "bytes": 3703,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910130956_finance_statement_period_evidence.sql",
+      "sha256": "862a3329a13e7b22a29a5c10861f2d12b18d71221c2367c2692fa105eec82cd7",
+      "bytes": 11255,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910131125_active_tenant_auth_context.sql",
+      "sha256": "1fb06ad6090aa35d765acf257b162fd17503559be6fef48452d9536b28ff962e",
+      "bytes": 5996,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910131149_finance_settlement_link_audit.sql",
+      "sha256": "5101428db9da57754866db67ed54bc9c649116adce21280045fb51e33fa2289f",
+      "bytes": 383,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910131419_driver_delivery_receipt_foundation.sql",
+      "sha256": "40a294871fff018b3e903407fb27d4b4e79d3f2201d5afd33b041a877aab3dfc",
+      "bytes": 32580,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910132033_enforce_active_tenant_rls.sql",
+      "sha256": "e33e19664933b31712dceac9c34d8c4dbc2d95abc70d356dbc4c2eb53b2e9e1f",
+      "bytes": 1394,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910132149_require_driver_arrival_gps_cutover.sql",
+      "sha256": "261b7eddf6ac7505121924aabac156b25d56d863fa59f1818d8bb87ad0d8268c",
+      "bytes": 3070,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910132406_finance_payroll_reimbursement_source_dedup.sql",
+      "sha256": "d335fc5dcd74d283255283824ac7b39c3ed9f7160a87576d586352b125e157f4",
+      "bytes": 12894,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910132411_finance_settlement_link_reversals.sql",
+      "sha256": "34cd9f338917b7c461acd7b81e104019312e7834c3c770a4c388f4cdc6dcdf52",
+      "bytes": 9191,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910132428_shared_master_data_foundation.sql",
+      "sha256": "731a745bdf258157e879dcacf6adb2231df5dab2179d3047a0a0e17d09c6b728",
+      "bytes": 16511,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910133110_workspace_ssx_access_contract.sql",
+      "sha256": "00de7aa00f3fb283de8a44a05554a75f02e674f19ab2757795da9ce3cf6a9038",
+      "bytes": 2444,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910133352_finance_payroll_lifecycle_serialization.sql",
+      "sha256": "d596834f30bdfddcd8b2410c9ba3c1a7318129cebd1c3fc1185c40d1f7506311",
+      "bytes": 8979,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910133355_finance_new_settlement_payment_candidates.sql",
+      "sha256": "2228320c5bb307153155b0b33303f23c40da047efa2485551ae784d38576ef18",
+      "bytes": 3730,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910133421_finance_settlement_payment_recording.sql",
+      "sha256": "33d7164beccdc66e575fc9e75801acb7fcdf0f4d90cb0563a8abfd9a7abbaee8",
+      "bytes": 11707,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910133700_finance_retire_legacy_settlement_payment_writers.sql",
+      "sha256": "8cefdf5c92a4bfbd979a2685de8c46edbad0b31d5751453297d676aeb7545595",
+      "bytes": 3087,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910134010_enforce_tenant_storage_context.sql",
+      "sha256": "e6897baf6f2bbb6e5026cc110a38a921d97d14a7d00d7a637f9544a8c9b2693a",
+      "bytes": 1374,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910134223_physical_driver_journeys.sql",
+      "sha256": "02a69b5136041b6ce0d567073d1689910be417243a412cbf95bb139a1e8ed526",
+      "bytes": 13040,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910134820_enforce_one_running_trip_per_driver.sql",
+      "sha256": "7ded3dd461f7e8c44c37933a4438f05350af0ec8d24f41e21ad3f99b0740215d",
+      "bytes": 1073,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910134943_finance_settlement_expense_context.sql",
+      "sha256": "7a26f770888e32c41bca109b571725d10c27b3f1c951a253416c4bcf1c30b92c",
+      "bytes": 5044,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910134948_finance_canonical_trip_cost_settlement.sql",
+      "sha256": "05ab3155f07c0e92cf23cca56cc6f671562b4ac300ba973406652ec5c87d5c0e",
+      "bytes": 7465,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910135125_finance_retire_bulk_obligation_projection.sql",
+      "sha256": "fb9149d2b130d2811fc1ed9b8c596d3587218223c847cecc4ec5746afcdd5e54",
+      "bytes": 3093,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910135800_workspace_ssx_account_management.sql",
+      "sha256": "18a4f01d31d3be12d1b40b59b4dc30e5e99f6763a9a44001e56b5777a5558942",
+      "bytes": 4853,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910140010_finance_account_opening_balances.sql",
+      "sha256": "799f25034f6f3964b32e7da896ebffa589d8bb0fc623b03ae1cd1f13e5964c9c",
+      "bytes": 13828,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910140823_require_matching_active_tenant_claim.sql",
+      "sha256": "a2144982510df757b8b5fb2538193d2d39d40bfbbb9d5a5e5bfdc12b79e759af",
+      "bytes": 1677,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910141240_finance_cash_opening_counts.sql",
+      "sha256": "53cd98728a42edb363418b4aba292bf6d1ed9ed754739e3056f1eef644444b0a",
+      "bytes": 10517,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910141506_workspace_fleet_snapshot.sql",
+      "sha256": "e8dfaa8a141afb58eb67548347478594a78bbe89cc0b996d77e2b05b51d14ca5",
+      "bytes": 5746,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910141902_add_delivery_receipt_pdf_access.sql",
+      "sha256": "6a829621cb2f53d5ddab9b612bac7465fa856a15dbf75fbda711a13dcb27dee8",
+      "bytes": 8461,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910142143_finance_statement_coverage_approvals.sql",
+      "sha256": "cc8bea0528ceef3155cb1447a4cfeff9adf4cc09441aaa38e56beb896e0e1166",
+      "bytes": 17982,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910142232_synchronize_shared_master_projections.sql",
+      "sha256": "0a846fe29fcd854cd0f0ae85b26b7eab2d62d9a08ebbd686d122024f69bd4e2e",
+      "bytes": 14336,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910142606_driver_trip_cargo_custody_cycle.sql",
+      "sha256": "8705d623e376c95f45dd152ddbb9322257e7868e612a5a6154f28eca196e01bb",
+      "bytes": 46263,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910142613_driver_geocoding_geofence_tracking.sql",
+      "sha256": "f8ff5fdf714f9b84552b2353ac28f632a7574dcd284020ac0c0c749c5a1ee5d6",
+      "bytes": 25372,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910142740_finance_legacy_adoption_inventory.sql",
+      "sha256": "872ca49f8f8e033d43d279bed1452064f106782a5efdd642c3cb39cd1504c35c",
+      "bytes": 11667,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910142818_merge_existing_tenant_workspaces.sql",
+      "sha256": "9aeb03c97087ada3c7726eb863cd2bf148723759161163274d5825b5218b5e93",
+      "bytes": 6850,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910142923_finance_statement_verification_reauthorization.sql",
+      "sha256": "9ce386f8a93b46865569099495f6a47935b207f51f6fdee8c932bc1f8763273f",
+      "bytes": 1222,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910143355_driver_physical_journey_payload.sql",
+      "sha256": "c92dccb7d6d72fecabdf10227a193afc6f66bcfb3eac26502cbb6248abc4b4a2",
+      "bytes": 4112,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910143433_add_delivery_receipt_email_batches.sql",
+      "sha256": "43c9bbfbea76742d6309f43caeb1c7d86f6323fe6f360a25ded7306059426ff0",
+      "bytes": 20959,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910143833_finance_legacy_payable_associations.sql",
+      "sha256": "2948e859d766cbff838a170ab288b543bf0d133412e9ba526d1f7fdb3125e529",
+      "bytes": 19494,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910143920_finance_legacy_payable_association_options.sql",
+      "sha256": "9589b6cbb91b7c42b18f08c503f656f0ff0fa7cf43920b4eed5b1556cc4284bd",
+      "bytes": 4756,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910144948_finalize_active_tenant_rls_coverage.sql",
+      "sha256": "b016bcefbaaccc7fc0aa0d05c2013da4acb66f03bb98c11b20b7beebecf70ba8",
+      "bytes": 1444,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910145616_finance_legacy_receipt_associations.sql",
+      "sha256": "c0f2ba253350a39f0c8ec117df2f4883ad655fff1e0c65eeddac486fe6fa8848",
+      "bytes": 23252,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910145659_finance_legacy_receivable_association_options.sql",
+      "sha256": "c66ecf09556ad0a2cb30a57f9eaf4dfb3526b27708162af9257d9e44ca2a22f1",
+      "bytes": 4949,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910145706_harden_ssx_credentials_and_browser_contract.sql",
+      "sha256": "075e109472c37f1a54f4d24b5c6b7be48bb3ea7953ac89bc109344d17fd74f46",
+      "bytes": 7410,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910150338_finance_legacy_receipt_movement_trace.sql",
+      "sha256": "f5cc9ce1b8f221d55dd2fa7cfe0d06bbf6a3532cc109a286ab097f86be26c4cd",
+      "bytes": 3856,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910150914_add_ssx_position_quarantine.sql",
+      "sha256": "b6292889e44f435ad1e65018880064a29a4d725f39af78bf4126b7b459fd60d4",
+      "bytes": 4789,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910151011_finance_legacy_integrity_inventory.sql",
+      "sha256": "606d077ab2ff859740ca5eebbd5526ccdd918b979768157c899db0adddeac083",
+      "bytes": 14887,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910151617_finance_receivable_portfolio_summary.sql",
+      "sha256": "b0fd3bb3785762edbe496d28f48db926bc8c81815ab4448088ca4b768bbd6c50",
+      "bytes": 4853,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910151622_reassert_active_tenant_rls_release_gate.sql",
+      "sha256": "5b189973b4ca3162966a4755a08337694bb9c3f7d73e841c298bbd83bf584d82",
+      "bytes": 1139,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910152456_add_workspace_vehicle_position_reader.sql",
+      "sha256": "f5d6324ee456b9bbaadba3d143877ef4cd0bb4feba5a696aa4a741e3a9f73325",
+      "bytes": 2013,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910152557_finance_recorded_cost_summary.sql",
+      "sha256": "1cc424b40ea451f602949ce6e68d4a23e76943252119badb86592725f66bf611",
+      "bytes": 8001,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910152711_finance_fiscal_dashboard_summary.sql",
+      "sha256": "c005e52bf436e1187c046480e1adf16f15e86054f3c584628ba53e93d6aed0eb",
+      "bytes": 6142,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910153507_gate_ssx_administration_capability.sql",
+      "sha256": "f79b7b0670f9b0cf04ece65b8ec153a87213b74a685252ed535aca7ef94a6c44",
+      "bytes": 3496,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910153731_finance_unbilled_freight_summary.sql",
+      "sha256": "fcc7dfe4f8d73ad0f4681a81b8b016887cf1f0339a8a72d7bfa2229b35135dc0",
+      "bytes": 15129,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910154046_finance_receivables_paged_list.sql",
+      "sha256": "826d1663c923afb300a9fa08c88cb4dd0861b5a093e3ef49ac5c69f86b88d6c1",
+      "bytes": 3085,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910154758_driver_operational_offline_commands.sql",
+      "sha256": "88788c5343e0f1929c09991c8d9646d881e3beb1d7f6aa99c91618941af4be54",
+      "bytes": 7525,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910154811_complete_delivery_receipt_operations.sql",
+      "sha256": "8d1a8763d65e97ea4d5289d55bdbfca1aee2de00b7c8280b0787c9db498cdc55",
+      "bytes": 24377,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910154838_address_resolution_tracking_operations.sql",
+      "sha256": "92b734f1c562a7bb948c76e8db5a1d3304ccc10cdb32bd6bba2073bed3caea93",
+      "bytes": 32076,
+      "status": "not_attempted"
+    },
+    {
+      "file": "20260910154919_add_ssx_workspace_dispatcher.sql",
+      "sha256": "89492dc5264b26034827348d9a4e33c51153e8383c4f57a5a97e15a7e7768494",
+      "bytes": 8658,
+      "status": "not_attempted"
+    }
+  ]
+}

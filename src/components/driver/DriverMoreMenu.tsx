@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ClipboardCheck, Clock, FileClock, MessageSquareWarning, MoreHorizontal, Receipt } from 'lucide-react';
+import { CircleDollarSign, ClipboardCheck, Clock, Download, FileClock, MessageSquareWarning, MoreHorizontal, PackageCheck, RefreshCw } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 const links = [
   { href: '/driver/journey', label: 'Jornada', description: 'Pausas e histórico de trabalho', icon: Clock },
-  { href: '/driver/expenses', label: 'Despesas', description: 'Comprovantes e aprovação', icon: Receipt },
   { href: '/driver/checklist', label: 'Checklist', description: 'Conferências de pré e pós-viagem', icon: ClipboardCheck },
+  { href: '/driver/cargo', label: 'Carga e custódia', description: 'Aceite, conferência, lacres e retorno', icon: PackageCheck },
   { href: '/driver/events', label: 'Eventos', description: 'Histórico dos eventos lançados', icon: FileClock },
   { href: '/driver/issues', label: 'Ocorrências', description: 'Problemas e comunicação com a operação', icon: MessageSquareWarning },
+  { href: '/driver/expenses', label: 'Gastos', description: 'Comprovantes e despesas das suas viagens', icon: CircleDollarSign },
+  { href: '/driver/sync', label: 'Sincronização', description: 'Envios salvos neste aparelho', icon: RefreshCw },
+  { href: '/driver/install', label: 'Instalar aplicativo', description: 'Tutorial e diagnóstico do uso offline', icon: Download },
 ];
 
 export function DriverMoreMenu() {

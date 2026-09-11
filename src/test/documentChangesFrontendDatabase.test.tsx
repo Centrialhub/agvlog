@@ -66,16 +66,16 @@ beforeEach(async()=>{
  mock.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>({abortSignal:async()=>{
   try{let rows:unknown[];
    if(name==='get_load_document_change_context')rows=(await compositionRpc(db,'select get_load_document_change_context($1,$2,$3) result',[args._tenant_id,args._load_id,args._document_ids])).rows;
-   else if(name==='change_load_documents')rows=(await compositionRpc(db,'select change_load_documents($1::jsonb) result',[JSON.stringify(args._payload)])).rows;
+   else if(name==='change_load_documents_v2')rows=(await compositionRpc(db,'select change_load_documents($1::jsonb) result',[JSON.stringify(args._payload)])).rows;
    else throw Error('Unexpected RPC '+name);
-   if(name==='change_load_documents'&&mock.loseReply){mock.loseReply=false;return {data:{},error:null};}
+   if(name==='change_load_documents_v2'&&mock.loseReply){mock.loseReply=false;return {data:{},error:null};}
    return {data:(rows[0] as {result:unknown}).result,error:null};
   }catch(error){return {data:null,error};}
  }}));
 });
 afterEach(()=>{cleanup();client.clear();});
 const show=(panel=true)=>render(<QueryClientProvider client={client}><DocumentChangeRecoveryPanel/>{panel?<LoadItemsPanel loadId={i.load}/>:null}</QueryClientProvider>);
-const writes=()=>mock.rpc.mock.calls.filter(([name])=>name==='change_load_documents');
+const writes=()=>mock.rpc.mock.calls.filter(([name])=>name==='change_load_documents_v2');
 async function attachDialog(){
  fireEvent.click(screen.getByRole('button',{name:'Adicionar Item'}));
  fireEvent.click(await screen.findByRole('button',{name:/NF 333/}));fireEvent.click(screen.getByRole('button',{name:'Puxar NF(s)'}));

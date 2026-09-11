@@ -1,0 +1,22 @@
+[
+  {
+    "file": "20260830203548_audit_driver_expense_reviews.sql",
+    "sha256": "0024490322b5048eb7465909383b21f1a149e5bd91ab4fd1e1335662150ab06c"
+  },
+  {
+    "file": "20260830211707_make_driver_expense_creation_recoverable.sql",
+    "sha256": "e4653ae0a090e4e954dd1b25b6cd3d727aed7ddf757bdfd9652ceda164f93adf"
+  },
+  {
+    "file": "20260830231003_enforce_expense_creation_mfa.sql",
+    "sha256": "e0af4f2f66662c19667b36617db691adb5f6065fd54305c4b385378a11705f74"
+  },
+  {
+    "file": "20260830233637_audit_driver_settlement_adjustments.sql",
+    "sha256": "d1c2bd81d9fc7e6deb1c0942887d172406abc0bb63fef8875a51e20a4aa1031e"
+  },
+  {
+    "file": "20260831144530_attach_fiscal_invoice_gate.sql",
+    "sha256": "83d8c3af17bdecede24977240b0d4a2c793e4a613c68b06835d490e4e233862f"
+  }
+]

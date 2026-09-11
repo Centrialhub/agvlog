@@ -1,15 +1,15 @@
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-
-type RpcPosition = Record<string, unknown> & { provider_payload_hash?: string };
-type RpcArgs = Record<string, unknown> & {
-  _positions?: RpcPosition[];
-};
+import {
+  accountId, linkId, otherLinkId, otherUnitId, otherVehicleId, tables, tenant, unitId, vehicleId,
+  type RpcArgs,
+} from './helpers/ssxPositionPollRuntimeFixture';
 
 const state = vi.hoisted(() => ({
   handler: null as null | ((request: Request) => Promise<Response>),
   provider: { ok: true, status: 200, errorClass: undefined as string | undefined },
   items: [] as Record<string, unknown>[],
+  itemBatches: [] as Record<string, unknown>[][],
   rpcCalls: [] as Array<{ name: string; args: RpcArgs }>,
   writes: [] as string[],
   invalidReceipt: false,
@@ -17,29 +17,6 @@ const state = vi.hoisted(() => ({
   clientCalls: 0,
 }));
 
-const tenant = '31000000-0000-4000-8000-000000000001';
-const accountId = '32000000-0000-4000-8000-000000000001';
-const unitId = '33000000-0000-4000-8000-000000000001';
-const linkId = '34000000-0000-4000-8000-000000000001';
-const vehicleId = '35000000-0000-4000-8000-000000000001';
-const otherUnitId = '33000000-0000-4000-8000-000000000002';
-const otherLinkId = '34000000-0000-4000-8000-000000000002';
-const otherVehicleId = '35000000-0000-4000-8000-000000000002';
-
-const tables: Record<string, Record<string, unknown>[]> = {
-  integration_accounts: [{
-    id: accountId, tenant_id: tenant, provider: 'SSX', status: 'ok',
-    token_expires_at: '2099-01-01T00:00:00.000Z',
-  }],
-  provider_units: [{
-    id: unitId, tenant_id: tenant, integration_account_id: accountId,
-    external_code: 'UNIT-QA', active: true, metadata: { id_tracked_unit: '123' },
-  }],
-  vehicle_tracker_links: [{
-    id: linkId, tenant_id: tenant, provider_unit_id: unitId,
-    vehicle_id: vehicleId, active: true, start_at: '2020-01-01T00:00:00.000Z', end_at: null,
-  }],
-};
 
 vi.mock('../../supabase/functions/_shared/cron-auth.ts', () => ({
   isCronRequest: vi.fn().mockResolvedValue(true),
@@ -54,13 +31,18 @@ vi.mock('../../supabase/functions/_shared/ssx-utils.ts', () => ({
     token: 'token', baseUrl: 'https://ssx.invalid', apiVersion: 'v3',
     requestTimeoutMs: 1000, pollWindowMinutes: 15, settings: {},
   }),
-  extractResponseItems: () => state.items,
+  extractResponseItems: (parsed: unknown) => Array.isArray(parsed) ? parsed : [],
   ssxPost: vi.fn(async () => ({
-    ...state.provider, parsed: {}, text: '', durationMs: 1,
+    ...state.provider,
+    parsed: state.itemBatches.length > 0 ? state.itemBatches.shift() : state.items,
+    text: '', durationMs: 1,
   })),
   logIntegration: vi.fn().mockResolvedValue(undefined),
   logSsxCall: vi.fn(),
+  redactedSsxResponsePreview: vi.fn(() => ''),
   getTenantRole: vi.fn(),
+  getWorkspaceRoleForAccount: vi.fn(),
+  requireWorkspaceAccountContext: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -91,6 +73,19 @@ vi.mock('@supabase/supabase-js', () => ({
           },
           error: null,
         };
+        if (name === 'record_ssx_position_quarantine_batch_v1') {
+          const records = Array.isArray(args._records) ? args._records : [];
+          return {
+            data: {
+              version: 1,
+              tenant_id: args._tenant_id,
+              integration_account_id: args._integration_account_id,
+              attempted: records.length,
+              recorded: records.length,
+            },
+            error: null,
+          };
+        }
         if (state.invalidReceipt) return { data: { version: 99 }, error: null };
         if (state.partialReceipt) return {
           data: {
@@ -166,6 +161,7 @@ afterAll(() => { vi.unstubAllGlobals(); });
 beforeEach(() => {
   state.provider = { ok: true, status: 200, errorClass: undefined };
   state.items = [];
+  state.itemBatches = [];
   state.rpcCalls = [];
   state.writes = [];
   state.invalidReceipt = false;
@@ -271,8 +267,10 @@ describe('SSX poll handler atomic persistence contract', () => {
       ambiguous_positions: identifier === undefined ? 0 : 1,
       vehicles_without_observation: 2,
     });
-    expect(state.rpcCalls).toHaveLength(2);
-    expect(state.rpcCalls.every((call) => call.args._positions?.length === 0)).toBe(true);
+    const positionCommits = state.rpcCalls.filter((call) => call.name === 'commit_ssx_position_batch_v1');
+    expect(positionCommits).toHaveLength(2);
+    expect(positionCommits.every((call) => call.args._positions?.length === 0)).toBe(true);
+    expect(state.rpcCalls[0].name).toBe('record_ssx_position_quarantine_batch_v1');
   });
 
   it('rejects a unique broadband near-match instead of using substring identity', async () => {
@@ -288,8 +286,10 @@ describe('SSX poll handler atomic persistence contract', () => {
       unmatched_positions: 1,
       vehicles_without_observation: 1,
     });
-    expect(state.rpcCalls).toHaveLength(1);
-    expect(state.rpcCalls[0].args._positions).toEqual([]);
+    expect(state.rpcCalls.map((call) => call.name)).toEqual([
+      'record_ssx_position_quarantine_batch_v1', 'commit_ssx_position_batch_v1',
+    ]);
+    expect(state.rpcCalls[1].args._positions).toEqual([]);
   });
 
   it('fails closed on an invalid database receipt', async () => {
@@ -385,8 +385,10 @@ describe('SSX poll handler atomic persistence contract', () => {
       outside_binding_window: 1,
       vehicles_without_observation: 1,
     });
-    expect(state.rpcCalls).toHaveLength(1);
-    expect(state.rpcCalls[0].args._positions).toEqual([]);
+    expect(state.rpcCalls.map((call) => call.name)).toEqual([
+      'record_ssx_position_quarantine_batch_v1', 'commit_ssx_position_batch_v1',
+    ]);
+    expect(state.rpcCalls[1].args._positions).toEqual([]);
   });
 
   it('drops a far-future provider point without aborting valid positions in the batch', async () => {
@@ -405,7 +407,74 @@ describe('SSX poll handler atomic persistence contract', () => {
     const response = await request({ integration_account_id: accountId });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ total_inserted: 1 });
-    expect(state.rpcCalls).toHaveLength(1);
-    expect(state.rpcCalls[0].args._positions).toHaveLength(1);
+    expect(state.rpcCalls.map((call) => call.name)).toEqual([
+      'record_ssx_position_quarantine_batch_v1', 'commit_ssx_position_batch_v1',
+    ]);
+    expect(state.rpcCalls[1].args._positions).toHaveLength(1);
+  });
+
+  it('quarantines ValidGPS=false and never promotes it to the current position', async () => {
+    state.items = [{
+      IdPosition: '9001', IdTrackedUnit: '123', IdTrackedUnitType: 1,
+      Latitude: -23.55, Longitude: -46.63,
+      EventDate: new Date(Date.now() - 60_000).toISOString(),
+      ValidGPS: false,
+    }];
+    const response = await request({ integration_account_id: accountId });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      total_inserted: 0, quarantined_positions: 1,
+      vehicles_without_observation: 1,
+    });
+    expect(state.rpcCalls.map((call) => call.name)).toEqual([
+      'record_ssx_position_quarantine_batch_v1', 'commit_ssx_position_batch_v1',
+    ]);
+    expect(state.rpcCalls[0].args._records).toMatchObject([{
+      reason: 'invalid_gps',
+      provider_position_id: '9001',
+      payload: { IdPosition: '9001', ValidGPS: false },
+    }]);
+    expect(state.rpcCalls[1].args._positions).toEqual([]);
+  });
+
+  it('blocks a saturated 500-item response instead of acknowledging it as complete', async () => {
+    const capturedAt = new Date(Date.now() - 60_000).toISOString();
+    state.items = Array.from({ length: 500 }, (_, index) => ({
+      IdPosition: String(index + 1), IdTrackedUnit: '123', IdTrackedUnitType: 1,
+      Latitude: -23.55, Longitude: -46.63, EventDate: capturedAt, ValidGPS: true,
+    }));
+    const response = await request({ integration_account_id: accountId });
+    expect(response.status).toBe(409);
+    const result = await response.json();
+    expect(result).toMatchObject({
+      success: false,
+      batch_aborted: true,
+      abort_reason: 'saturated_response',
+      saturation_blocked: true,
+      total_inserted: 0,
+    });
+    expect(result.requests).toBeGreaterThan(1);
+    expect(result.requests).toBeLessThanOrEqual(32);
+    expect(state.rpcCalls.map((call) => call.name)).toEqual(['record_ssx_poll_error_v1']);
+  });
+
+  it('subdivides a saturated window and commits only after both halves prove complete', async () => {
+    const capturedAt = new Date(Date.now() - 60_000).toISOString();
+    const positions = Array.from({ length: 500 }, (_, index) => ({
+      IdPosition: String(index + 1), IdTrackedUnit: '123', IdTrackedUnitType: 1,
+      Latitude: -23.55, Longitude: -46.63, EventDate: capturedAt, ValidGPS: true,
+    }));
+    state.itemBatches = [positions, positions.slice(0, 200), positions.slice(200)];
+    const response = await request({ integration_account_id: accountId });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      total_positions_received: 500,
+      total_inserted: 500,
+      touched_vehicles: 1,
+    });
+    const commits = state.rpcCalls.filter((call) => call.name === 'commit_ssx_position_batch_v1');
+    expect(commits).toHaveLength(1);
+    expect(commits[0].args._positions).toHaveLength(500);
   });
 });

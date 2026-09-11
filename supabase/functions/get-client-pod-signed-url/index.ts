@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '../_shared/cors.ts';
+import { requireActiveTenant } from '../_shared/active-tenant.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -26,6 +27,8 @@ Deno.serve(async (req) => {
     if (!tenant_id || !pod_id) {
       return new Response(JSON.stringify({ error: 'tenant_id and pod_id required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+    const tenantContextError = requireActiveTenant(req, tenant_id);
+    if (tenantContextError) return tenantContextError;
 
     const userClient = authClient;
 

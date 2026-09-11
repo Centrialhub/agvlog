@@ -43,8 +43,9 @@ BEGIN
   );
 
   SELECT
-    coalesce(bool_or(policy.enabled) filter (where policy.feature_key = 'ssx_enabled'), false)
-      and not coalesce(bool_or(policy.enabled) filter (where policy.feature_key = 'ssx_kill_switch'), false),
+    count(*) filter (where policy.feature_key in ('ssx_enabled', 'ssx_kill_switch')) = 2
+      and coalesce(bool_or(policy.enabled) filter (where policy.feature_key = 'ssx_enabled'), false)
+      and not coalesce(bool_or(policy.enabled) filter (where policy.feature_key = 'ssx_kill_switch'), true),
     coalesce(bool_or(policy.enabled) filter (where policy.feature_key = 'fiscal_enabled'), false)
       and not coalesce(bool_or(policy.enabled) filter (where policy.feature_key = 'fiscal_kill_switch'), false)
   INTO ssx_effective, fiscal_effective

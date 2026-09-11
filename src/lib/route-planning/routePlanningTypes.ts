@@ -1,3 +1,5 @@
+import type { Json } from '@/integrations/supabase/types';
+
 export type RouteStopRiskLevel = 'normal' | 'warning' | 'critical';
 export type RouteStopSortMode = 'original' | 'manual' | 'smart' | 'auto';
 export type RoutePlanStatus = 'ready' | 'review' | 'blocked';
@@ -5,6 +7,7 @@ export type RoutePlanStatus = 'ready' | 'review' | 'blocked';
 export interface RouteStopDraft {
   id: string;
   client_id?: string | null;
+  supplier_id?: string | null;
   recipient_name: string;
   destination: string;
   city?: string | null;
@@ -22,6 +25,14 @@ export interface RouteStopDraft {
 
   latitude?: number | null;
   longitude?: number | null;
+  location_source?: 'address_geocoded' | 'map_selected' | 'imported' | 'legacy_coordinates';
+  location_address?: string | null;
+  location_provider?: string | null;
+  location_accuracy_m?: number | null;
+  location_confidence?: number | null;
+  location_audit?: Json;
+  geofence_radius_m?: number;
+  location_exception_reason?: string | null;
 
   original_order?: number | null;
   optimized_order?: number | null;

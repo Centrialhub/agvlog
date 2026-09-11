@@ -4,6 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import {resetNotificationScope} from '@/lib/notificationScope';
 import { clearDriverRouteSnapshots } from '@/lib/driver/offlineRouteSnapshot';
+import { clearDriverOfflineSnapshots } from '@/lib/driver/driverOfflineOutbox';
+import { clearDriverExpenseOfflineCaches } from '@/lib/driver/driverExpenseOfflineStore';
+import { clearTenantMembershipCache } from '@/lib/tenantMemberships';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -38,7 +41,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.clear();
       resetNotificationScope();
       if (initialized.current) {
+        const previousActorId=current.current?.user.id;
+        clearTenantMembershipCache(previousActorId);
         try { localStorage.removeItem('agvlog_tenant_id'); } catch { /* optional preference */ }
+        // Cached operational data is sensitive and can be discarded. Durable
+        // outbox commands intentionally remain scoped to their original user.
+        void clearDriverOfflineSnapshots(undefined,previousActorId).catch(()=>undefined);
+        void clearDriverExpenseOfflineCaches(previousActorId).catch(()=>undefined);
         clearDriverRouteSnapshots();
       }
     }

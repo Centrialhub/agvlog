@@ -1,4 +1,5 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {invalidateAccountReview} from '@/lib/financial/invalidateAccountReview';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {useTenant} from '@/hooks/useTenant';
 import {useAuth} from '@/hooks/useAuth';
@@ -26,8 +27,8 @@ export function useReceivableFinancial(receivable?:string){
   if(!tenant||!actor)throw new Error('Entre com uma sessão válida e selecione a empresa.');if(busy.current)throw new Error('Aguarde a operação financeira em andamento.');
   assertContext();busy.current=true;setPending(true);
   try{const result=await work();assertContext();return result;}catch(cause){throw new Error(financialError(cause));}
-  finally{try{await Promise.all(['receivable-financial-context','receivables','receivables_payments','client_invoices','client_invoice_detail','client-invoice-context','closing-reports','closing-report','closing-action-context','bank_transactions','bank_accounts','financial_obligations','financial_matches_suggested'].map(key=>client.invalidateQueries({queryKey:[key]})))}
-   finally{busy.current=false;if(alive.current)setPending(false);}}
+  finally{try{await Promise.all(['receivable-financial-context','receivables','finance-receivable-portfolio','finance-receivable-payments','receivables_payments','client_invoices','client_invoice_detail','client-invoice-context','closing-reports','closing-report','closing-action-context','bank_transactions','bank_accounts','financial_obligations','financial_matches_suggested','finance-movements','finance-receipt-movement-options','finance-movement-receipts','finance-reconciliation-options','finance-automatic-reconciliation','finance-audit'].map(key=>client.invalidateQueries({queryKey:[key]})))}
+   finally{void invalidateAccountReview(client,tenant);busy.current=false;if(alive.current)setPending(false);}}
  };
  return {query,isPending,pending:recovery.pending,recoveryError:recovery.error,submit:(input:FinancialCommandInput)=>run(()=>outbox.submit(tenant!,actor!,input)),recover:()=>run(()=>outbox.recover(tenant!,actor!))};
 }

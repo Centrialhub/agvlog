@@ -16,7 +16,18 @@ vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:i.user}})}));
 vi.mock('@/hooks/useCurrentDriver',()=>({useCurrentDriver:()=>({data:{id:i.driver},refetch:vi.fn()}),useActiveTrip:()=>({data:mock.trip,refetch:vi.fn()})}));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:mock.toast})}));
 vi.mock('react-router-dom',()=>({useNavigate:()=>vi.fn(),useSearchParams:()=>[new URLSearchParams(),vi.fn()]}));
-vi.mock('@/lib/secureUpload',()=>({uploadSecureFile:()=>{throw new Error('No external upload in returned-cargo test');},removeSecureFiles:()=>{throw new Error('No external deletion in returned-cargo test');}}));
+vi.mock('@/lib/secureUpload',()=>({
+ uploadSecureFile:async({tenantId,folder,evidence}:{tenantId:string;folder:string;evidence:{requestId:string;slot:string;sha256:string}})=>{
+  const path=`${tenantId}/${folder}/${evidence.requestId}-${evidence.slot.replace(':','-')}-${evidence.sha256}`;
+  await db.query("insert into storage.objects(bucket_id,name) values('receipts',$1)",[path]);
+  return path;
+ },
+ removeSecureFiles:()=>{throw new Error('No external deletion in returned-cargo test');},
+}));
+vi.mock('@/lib/driver/driverDeliveryOfflineStore',async(importOriginal)=>{
+ const actual=await importOriginal<typeof import('@/lib/driver/driverDeliveryOfflineStore')>();
+ return {...actual,driverDeliveryOfflineStore:actual.createMemoryDriverDeliveryOfflineStore()};
+});
 vi.mock('@/components/ui/sheet',()=>({
  Sheet:({open,children}:{open:boolean;children:ReactNode})=>open?<section>{children}</section>:null,
  SheetContent:({children}:{children:ReactNode})=><div>{children}</div>,
@@ -31,7 +42,8 @@ async function selectTrip(id:string){mock.trip={...(await db.query<Record<string
 beforeAll(async()=>{({db,trip,stop}=await createRedeliveryDatabase());},30000);
 afterAll(async()=>{await db?.close();vi.unstubAllGlobals();});
 beforeEach(async()=>{
- vi.clearAllMocks();mock.tamper=false;await db.exec('begin');await selectTrip(trip);
+ vi.clearAllMocks();vi.stubGlobal('URL',Object.assign(URL,{createObjectURL:vi.fn(()=> 'blob:test'),revokeObjectURL:vi.fn()}));
+ mock.tamper=false;await db.exec('begin');await selectTrip(trip);
  await db.query("update load_items set item_description=case when id=$1 then 'Item histórico QA' else 'Item pendente QA' end",[i.item]);
  client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
  mock.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>{
@@ -41,6 +53,9 @@ beforeEach(async()=>{
     if(name==='get_driver_delivery_items'){
      data=(await operationRpc(db,'select get_driver_delivery_items($1) result',[args._stop_id])).rows[0].result;
      if(mock.tamper)data={...(data as object),trip_id:i.otherTenant};
+    }else if(name==='get_driver_delivery_fiscal_snapshot_v1'){
+     data={version:1,tenant_id:i.tenant,actor_id:i.user,trip_id:String(mock.trip.id),stop_id:String(args._stop_id),
+      captured_at:new Date().toISOString(),revision:'00000000000000000000000000000000',documents:[]};
     }else if(name==='driver_record_delivery_outcome'){
      data=(await operationRpc(db,'select driver_record_delivery_outcome($1,$2,$3::jsonb,$4,$5) result',
       [args._stop_id,args._outcome,JSON.stringify(args._details),args._client_event_id,args._expected_status])).rows[0].result;
@@ -67,6 +82,7 @@ async function openReturn(){
 async function submitReturn(){
  fireEvent.click(screen.getByRole('button',{name:'Marcar tudo'}));
  fireEvent.change(screen.getByLabelText('Motivo da devolução'),{target:{value:'Retorno físico conferido QA'}});
+ fireEvent.change(screen.getByLabelText('Capturar foto da entrega'),{target:{files:[new File([new Uint8Array(16)],'devolucao.jpg',{type:'image/jpeg'})]}});
  fireEvent.click(screen.getByRole('button',{name:'Lançar evento'}));await screen.findByRole('button',{name:'Ver evento enviado à operação'});
 }
 describe('driver screen with real attempt readers and delivery RPCs (local fixture, not hosted E2E)',()=>{

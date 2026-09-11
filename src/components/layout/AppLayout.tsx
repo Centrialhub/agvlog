@@ -10,6 +10,7 @@ import { LogOut, ChevronLeft, ChevronRight, Menu, Search, X } from 'lucide-react
 import { Input } from '@/components/ui/input';
 import { SidebarNavigation } from './SidebarNavigation';
 import { IntegraLabsCredit } from '@/components/branding/IntegraLabsCredit';
+import { CompanyBrand } from '@/components/branding/CompanyBrand';
 import { PageBreadcrumbs } from './PageBreadcrumbs';
 import { findNavigationPage } from './navigation';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -26,10 +27,13 @@ import { ExpenseReviewRecoveryPanel } from '@/components/financial/ExpenseReview
 import { ExpenseCreationRecoveryPanel } from '@/components/financial/ExpenseCreationRecoveryPanel';
 import { SettlementAdjustmentRecoveryPanel } from '@/components/financial/SettlementAdjustmentRecoveryPanel';
 import { ChatRecoveryPanel } from '@/components/driver/ChatRecoveryPanel';
+import {useFinanceAccess} from '@/hooks/useFinanceLedger';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { signOut } = useAuth();
-  const { currentTenant, memberships, setCurrentTenantId } = useTenant();
+  const { currentTenant, memberships, setCurrentTenantId, switchingTenant } = useTenant();
+  const financeAccess=useFinanceAccess();
+  const financeAvailable=financeAccess.data===true&&financeAccess.isFetchedAfterMount&&!financeAccess.error;
   const { isEnabled, isLoading: capabilitiesLoading, error: capabilitiesError } = useTenantCapabilities();
   const { data: companyProfile } = useCompanyProfile();
   const location = useLocation();
@@ -67,13 +71,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="flex w-[min(22rem,92vw)] flex-col gap-0 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground">
           <SheetHeader className="border-b border-sidebar-border px-4 py-3 text-left">
-            <SheetTitle className="flex items-center gap-2 text-sm text-sidebar-primary-foreground">
-              {logoUrl ? (
-                <img src={logoUrl} alt="" className="h-7 w-7 rounded-md object-contain bg-sidebar-primary/10" />
-              ) : (
-                <img src="/icons/agvlog-192.png" alt="" className="h-7 w-7 rounded-md object-contain" />
-              )}
-              <span className="truncate">{brandName}</span>
+            <SheetTitle className="pr-6 text-sm text-sidebar-primary-foreground">
+              <CompanyBrand name={brandName} logoUrl={logoUrl} />
             </SheetTitle>
             <SheetDescription className="sr-only">Navegue por área ou busque uma página.</SheetDescription>
             {memberships.length > 1 ? (
@@ -83,6 +82,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   aria-label="Empresa ativa"
                   className="h-9 w-full rounded-md border border-sidebar-border bg-sidebar px-2 text-sm text-sidebar-foreground"
                   value={currentTenant?.id ?? ""}
+                  disabled={switchingTenant}
                   onChange={(event) => {
                     setCurrentTenantId(event.target.value);
                     setMobileOpen(false);
@@ -97,9 +97,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </label>
             ) : null}
           </SheetHeader>
-          <div className="px-3 pt-3"><Input aria-label="Buscar páginas" placeholder="Buscar página, nota, carga..." value={pageQuery} onChange={event => setPageQuery(event.target.value)} className="border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground" /></div>
-          <SidebarNavigation query={pageQuery} capabilityAvailable={capabilityAvailable} onNavigate={() => setMobileOpen(false)} />
-          <IntegraLabsCredit tone="sidebar" className="mx-3 border-t border-sidebar-border/60 py-2 opacity-70" />
+          <div className="relative mx-3 mt-3">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-sidebar-foreground/60" />
+            <Input aria-label="Buscar páginas" placeholder="Buscar páginas..." value={pageQuery} onChange={event => setPageQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setPageQuery(''); }} className="h-11 border-sidebar-border bg-sidebar-accent/40 pl-9 pr-11 text-base text-sidebar-foreground placeholder:text-sidebar-foreground/60" />
+            {pageQuery && <button type="button" aria-label="Limpar busca de páginas" onClick={() => setPageQuery('')} className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"><X aria-hidden="true" className="h-4 w-4" /></button>}
+          </div>
+              <SidebarNavigation query={pageQuery} capabilityAvailable={capabilityAvailable} financeAvailable={financeAvailable} onNavigate={() => setMobileOpen(false)} />
+          <IntegraLabsCredit tone="sidebar" className="mx-3 border-t border-sidebar-border/60 py-2" />
           <Button variant="ghost" onClick={() => { setMobileOpen(false); void signOut(); }} className="m-2 shrink-0 justify-start"><LogOut className="mr-2 h-4 w-4" />Sair</Button>
         </SheetContent>
       </Sheet>
@@ -109,34 +113,23 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         collapsed ? "w-16" : "w-72"
       )}>
         {/* Logo */}
-        <div className="flex h-16 shrink-0 items-center gap-2 px-3 border-b border-sidebar-border">
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt={brandName}
-              className="h-7 w-7 shrink-0 rounded-md object-contain bg-sidebar-primary/10"
-            />
-          ) : (
-            <img src="/icons/agvlog-192.png" alt={collapsed ? brandName : ''} className="h-7 w-7 shrink-0 rounded-md object-contain" />
-          )}
-          {!collapsed && (
-            <span className="font-bold text-sm text-sidebar-primary-foreground tracking-tight truncate">{brandName}</span>
-          )}
+        <div className="flex h-16 shrink-0 items-center px-3 border-b border-sidebar-border">
+          <CompanyBrand name={brandName} logoUrl={logoUrl} collapsed={collapsed} />
         </div>
 
         <div className="px-2 pt-3">
           {collapsed ? <Button variant="ghost" size="icon" aria-label="Buscar páginas" onClick={() => { setCollapsed(false); requestAnimationFrame(() => searchRef.current?.focus()); }}><Search className="h-4 w-4" /></Button>
             : <div className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-3 h-4 w-4 text-sidebar-foreground/60" />
               <Input ref={searchRef} aria-label="Buscar páginas" placeholder="Buscar páginas..." value={pageQuery} onChange={event => setPageQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setPageQuery(''); }} className="h-10 border-sidebar-border bg-sidebar-accent/40 pl-9 pr-12 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
-              {pageQuery ? <button type="button" aria-label="Limpar busca de páginas" onClick={() => { setPageQuery(''); searchRef.current?.focus(); }} className="absolute right-1 top-1 rounded p-2"><X className="h-4 w-4" /></button> : <kbd className="pointer-events-none absolute right-2 top-3 text-[10px] text-sidebar-foreground/50">Ctrl K</kbd>}
+              {pageQuery ? <button type="button" aria-label="Limpar busca de páginas" onClick={() => { setPageQuery(''); searchRef.current?.focus(); }} className="absolute right-1 top-1 rounded p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"><X className="h-4 w-4" /></button> : <kbd className="pointer-events-none absolute right-2 top-3 text-[10px] text-sidebar-foreground/50">Ctrl K</kbd>}
             </div>}
         </div>
-        <SidebarNavigation collapsed={collapsed} query={pageQuery} capabilityAvailable={capabilityAvailable} />
+        <SidebarNavigation collapsed={collapsed} query={pageQuery} capabilityAvailable={capabilityAvailable} financeAvailable={financeAvailable} />
 
         {/* Footer */}
         <div className="border-t border-sidebar-border p-1.5 space-y-0.5">
           {!collapsed ? (
-            <IntegraLabsCredit tone="sidebar" className="px-1 pb-2 pt-1 opacity-70" />
+            <IntegraLabsCredit tone="sidebar" className="px-1 pb-2 pt-1" />
           ) : null}
           {!collapsed && memberships.length > 1 ? (
             <label className="block space-y-1 px-1 pb-1 text-[10px] text-sidebar-foreground/60">
@@ -145,6 +138,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 aria-label="Empresa ativa"
                 className="h-8 w-full rounded-md border border-sidebar-border bg-sidebar px-2 text-xs text-sidebar-foreground"
                 value={currentTenant?.id ?? ""}
+                disabled={switchingTenant}
                 onChange={(event) => setCurrentTenantId(event.target.value)}
               >
                 {memberships.map((membership) => (
@@ -189,7 +183,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </Button>
           <PageBreadcrumbs />
         </header>
-        <div className="p-4 md:p-6"><DocumentChangeRecoveryPanel /><ItemPreparationRecoveryPanel /><OperationOutcomeRecoveryPanel /><RedeliveryRecoveryPanel /><DocumentMetadataRecoveryPanel /><ClosingDraftRecoveryPanel /><ClosingLifecycleRecoveryPanel /><ReceivableFinancialRecoveryPanel /><ClientInvoiceRecoveryPanel /><ExpenseReviewRecoveryPanel /><ExpenseCreationRecoveryPanel /><SettlementAdjustmentRecoveryPanel /><ChatRecoveryPanel />{children}</div>
+        <div className="p-4 md:p-6"><DocumentChangeRecoveryPanel /><ItemPreparationRecoveryPanel /><OperationOutcomeRecoveryPanel /><RedeliveryRecoveryPanel /><DocumentMetadataRecoveryPanel />{financeAvailable&&<><ClosingDraftRecoveryPanel /><ClosingLifecycleRecoveryPanel /><ReceivableFinancialRecoveryPanel /><ClientInvoiceRecoveryPanel /><ExpenseReviewRecoveryPanel /><ExpenseCreationRecoveryPanel /><SettlementAdjustmentRecoveryPanel /></>}<ChatRecoveryPanel />{children}</div>
       </main>
     </div>
   );

@@ -1,3 +1,4 @@
+import {LegacyCostAssociation} from '@/components/financial/LegacyCostAssociation';
 import {useState} from 'react';
 import {useTenant} from '@/hooks/useTenant';
 import {useAuth} from '@/hooks/useAuth';
@@ -10,9 +11,9 @@ import {expenseReviewError,type ReviewExpense} from '@/lib/financial/expenseRevi
 export default function ExpenseApproval(){
  const {currentTenant}=useTenant();const {user}=useAuth();
  if(!currentTenant||!user)return <p>Entre e selecione a empresa para consultar despesas.</p>;
- return <ScopedExpenseApproval key={currentTenant.id+':'+user.id} tenantId={currentTenant.id}/>;
+ return <ScopedExpenseApproval key={currentTenant.id+':'+user.id} tenantId={currentTenant.id} actor={user.id}/>;
 }
-function ScopedExpenseApproval({tenantId}:{tenantId:string}){
+function ScopedExpenseApproval({tenantId,actor}:{tenantId:string;actor:string}){
  const [filter,setFilter]=useState<'pending'|'reviewed'>('pending'),[offset,setOffset]=useState(0);
  const [selected,setSelected]=useState<string|null>(null),[receipt,setReceipt]=useState<ReviewExpense|null>(null),[notice,setNotice]=useState('');
  const query=useExpenseReviewList(filter,offset);const page=query.data;
@@ -29,7 +30,7 @@ function ScopedExpenseApproval({tenantId}:{tenantId:string}){
   {page&&!query.error?<>
    {!page.can_review?<p className="text-sm">Consulta disponível. A aprovação e a rejeição exigem administrador da empresa.</p>:null}
    <p className="text-sm">{page.total} despesas {filter==='pending'?'pendentes':'revisadas'} · página {Math.floor(offset/50)+1}</p>
-   {page.rows.length===0?<p>{offset>0?'Nenhuma despesa nesta página. Volte à anterior.':'Nenhuma despesa encontrada neste filtro.'}</p>:page.rows.map(expense=><ExpenseReviewCard key={expense.id} expense={expense} canReview={page.can_review} onReview={()=>{setSelected(expense.id);setNotice('');}} onReceipt={()=>setReceipt(expense)}/>)}
+   {page.rows.length===0?<p>{offset>0?'Nenhuma despesa nesta página. Volte à anterior.':'Nenhuma despesa encontrada neste filtro.'}</p>:page.rows.map(expense=><div key={expense.id} className="space-y-2"><ExpenseReviewCard expense={expense} canReview={page.can_review} onReview={()=>{setSelected(expense.id);setNotice('');}} onReceipt={()=>setReceipt(expense)}/><LegacyCostAssociation tenant={tenantId} actor={actor} expense={expense.id}/></div>)}
    <div className="flex justify-between"><Button variant="outline" disabled={offset===0||query.isFetching} onClick={()=>setOffset(value=>Math.max(0,value-50))}>Página anterior</Button>
     <Button variant="outline" disabled={offset+50>=page.total||query.isFetching} onClick={()=>setOffset(value=>value+50)}>Próxima página</Button></div>
   </>:null}

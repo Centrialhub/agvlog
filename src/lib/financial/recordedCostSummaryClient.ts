@@ -1,0 +1,4 @@
+import {supabase} from '@/integrations/supabase/client';
+import {recordedCostSummarySchema,type RecordedCostFilters} from './recordedCostSummaryContract';
+type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>;
+export async function readRecordedCostSummary(tenant:string,filters:RecordedCostFilters){const {data,error}=await (supabase.rpc as unknown as Rpc)('get_finance_recorded_cost_summary',{_tenant_id:tenant,_from:filters.from,_to:filters.to,_category:filters.category,_cost_center:filters.costCenter});if(error)throw error;const result=recordedCostSummarySchema.parse(data);if(result.tenant_id!==tenant||result.from!==filters.from||result.to!==filters.to||result.category!==filters.category||result.cost_center!==filters.costCenter)throw new Error('Custos fora do filtro solicitado.');return result;}

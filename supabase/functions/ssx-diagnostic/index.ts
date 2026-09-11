@@ -4,10 +4,10 @@
  * IMPORTANT: Uses the SAME discovery helpers as ssx-sync-units to ensure
  * identical endpoint strategy in diagnostic and production.
  * 
- * Tests performed (in production priority order):
+ * Tests performed:
  * 1. Token validity
- * 2. Administration/Vehicle/v2/List + Vehicle/List (PRIMARY catalog source)
- * 3. Administration/Tracker/List (enrichment only)
+ * 2. Administration/Vehicle (only when explicitly enabled)
+ * 3. Administration/Tracker (only when explicitly enabled)
  * 4. Tracking/PositionHistory/List
  * 5. Tracking/Telemetry/List
  * 6. HashAuth configuration check
@@ -19,7 +19,7 @@ import { createClient } from "@supabase/supabase-js";
 import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import {
   corsHeaders,
-  buildSsxUrlCandidates,
+  buildTrackingUrl,
   buildAdminUrlCandidates,
   buildPositionHistoryUrlCandidates,
   readAccountConfig,
@@ -29,6 +29,8 @@ import {
   logIntegration,
   summarizeAttemptMatrix,
   getTenantRole,
+  getWorkspaceRoleForAccount,
+  requireWorkspaceAccountContext,
   type SsxErrorClass,
   type AttemptLog,
 } from "../_shared/ssx-utils.ts";
@@ -82,8 +84,10 @@ Deno.serve(async (req) => {
     if (accErr || !account) {
       return jsonResp({ error: "Integration account not found" }, 404);
     }
+    const tenantContextError=await requireWorkspaceAccountContext(req,supabase,integration_account_id);
+    if(tenantContextError)return tenantContextError;
 
-    const role = await getTenantRole(supabase, account.tenant_id, userData.user.id);
+    const role=account.workspace_id?await getWorkspaceRoleForAccount(supabase,account.workspace_id,userData.user.id):await getTenantRole(supabase,account.tenant_id,userData.user.id);
     if (!role || !["owner", "admin"].includes(role)) {
       return jsonResp({ error: "Forbidden" }, 403);
     }
@@ -92,6 +96,7 @@ Deno.serve(async (req) => {
     if (capabilityResponse) return capabilityResponse;
 
     const config = readAccountConfig(account);
+    const administrationEnabled = config.settings.administration_enabled === true;
     const tests: DiagnosticTest[] = [];
 
     // TEST 1: Token validity
@@ -120,11 +125,15 @@ Deno.serve(async (req) => {
     }
 
     // --- Prepare tokens ---
-    const adminTokenResult = await getAdminToken(config, supabase, integration_account_id);
+    const adminTokenResult: { token: string | null; error: string | null } = administrationEnabled
+      ? await getAdminToken(config, supabase, integration_account_id)
+      : { token: null, error: "SSX_ADMINISTRATION_DISABLED" };
     const tokens: { label: string; token: string }[] = [];
-    if (adminTokenResult.token) tokens.push({ label: "admin_token", token: adminTokenResult.token });
-    if (config.token && config.token !== adminTokenResult.token) tokens.push({ label: "regular_token", token: config.token });
-    if (tokens.length === 0 && config.token) tokens.push({ label: "regular_token", token: config.token });
+    if (administrationEnabled) {
+      if (adminTokenResult.token) tokens.push({ label: "admin_token", token: adminTokenResult.token });
+      if (config.token && config.token !== adminTokenResult.token) tokens.push({ label: "regular_token", token: config.token });
+      if (tokens.length === 0 && config.token) tokens.push({ label: "regular_token", token: config.token });
+    }
 
     // TEST 2: Administration/Vehicle list (v2 and v1 variants) — PRIMARY
     const vehicleV2Urls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/v2/List");
@@ -160,7 +169,7 @@ Deno.serve(async (req) => {
       vehicleErrorClass = result.errorClass;
     }
 
-    if (!vehicleSuccess && !vehicleErrorClass) {
+    if (administrationEnabled && !vehicleSuccess && !vehicleErrorClass) {
       vehicleErrorClass = vehicleAllAttempts.length > 0
         ? vehicleAllAttempts[vehicleAllAttempts.length - 1].errorClass
         : "unknown";
@@ -168,16 +177,18 @@ Deno.serve(async (req) => {
 
     tests.push({
       name: "admin_vehicle_list",
-      status: vehicleSuccess ? "pass" : (vehicleErrorClass === "empty_response" ? "warn" : "fail"),
+      status: !administrationEnabled ? "warn" : (vehicleSuccess ? "pass" : (vehicleErrorClass === "empty_response" ? "warn" : "fail")),
       endpoint: vehicleWinningEndpoint,
-      endpoint_candidates: allVehicleUrls,
-      body_candidates_tried: ADMIN_BODY_CANDIDATES.map(b => b.label),
-      token_mode: vehicleWinningToken || tokens.map(t => t.label).join(","),
+      endpoint_candidates: administrationEnabled ? allVehicleUrls : [],
+      body_candidates_tried: administrationEnabled ? ADMIN_BODY_CANDIDATES.map(b => b.label) : [],
+      token_mode: administrationEnabled ? (vehicleWinningToken || tokens.map(t => t.label).join(",")) : "disabled",
       status_code: vehicleAllAttempts.length > 0 ? vehicleAllAttempts[vehicleAllAttempts.length - 1].statusCode : 0,
       error_class: vehicleSuccess ? null : vehicleErrorClass,
       items_found: vehicleItems.length,
       duration_ms: Date.now() - vehicleStart,
-      details: vehicleSuccess
+      details: !administrationEnabled
+        ? "Administration não habilitado para esta conta; nenhuma chamada foi realizada."
+        : vehicleSuccess
         ? `Found ${vehicleItems.length} vehicles via ${vehicleWinningToken}:${vehicleWinningFormat} at ${vehicleWinningEndpoint}`
         : `Failed: ${vehicleErrorClass}`,
       attempt_matrix: summarizeAttemptMatrix(vehicleAllAttempts),
@@ -215,7 +226,7 @@ Deno.serve(async (req) => {
       trackerErrorClass = result.errorClass;
     }
 
-    if (!trackerSuccess && !trackerErrorClass) {
+    if (administrationEnabled && !trackerSuccess && !trackerErrorClass) {
       trackerErrorClass = trackerAllAttempts.length > 0
         ? trackerAllAttempts[trackerAllAttempts.length - 1].errorClass
         : "unknown";
@@ -223,16 +234,18 @@ Deno.serve(async (req) => {
 
     tests.push({
       name: "admin_tracker_list",
-      status: trackerSuccess ? "pass" : (trackerErrorClass === "empty_response" ? "warn" : "fail"),
+      status: !administrationEnabled ? "warn" : (trackerSuccess ? "pass" : (trackerErrorClass === "empty_response" ? "warn" : "fail")),
       endpoint: trackerWinningEndpoint,
-      endpoint_candidates: trackerUrls,
-      body_candidates_tried: ADMIN_BODY_CANDIDATES.map(b => b.label),
-      token_mode: trackerWinningToken || tokens.map(t => t.label).join(","),
+      endpoint_candidates: administrationEnabled ? trackerUrls : [],
+      body_candidates_tried: administrationEnabled ? ADMIN_BODY_CANDIDATES.map(b => b.label) : [],
+      token_mode: administrationEnabled ? (trackerWinningToken || tokens.map(t => t.label).join(",")) : "disabled",
       status_code: trackerAllAttempts.length > 0 ? trackerAllAttempts[trackerAllAttempts.length - 1].statusCode : 0,
       error_class: trackerSuccess ? null : trackerErrorClass,
       items_found: trackerItems.length,
       duration_ms: Date.now() - trackerStart,
-      details: trackerSuccess
+      details: !administrationEnabled
+        ? "Administration não habilitado para esta conta; nenhuma chamada foi realizada."
+        : trackerSuccess
         ? `Found ${trackerItems.length} trackers via ${trackerWinningToken}:${trackerWinningFormat} at ${trackerWinningEndpoint} (enrichment only)`
         : `Failed: ${trackerErrorClass} (enrichment not critical)`,
       attempt_matrix: summarizeAttemptMatrix(trackerAllAttempts),
@@ -278,12 +291,12 @@ Deno.serve(async (req) => {
     });
 
     // TEST 5: Tracking/Telemetry/List
-    const telUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/Telemetry/List");
+    const telUrls = [buildTrackingUrl(config.baseUrl, "/Tracking/Telemetry/List")];
     const telStart = Date.now();
     const telResult = await tryEndpointWithFallback({
       urlCandidates: telUrls,
       token: config.token,
-      bodyCandidates: [{ label: "null_body", body: null }, { label: "empty_array", body: [] }],
+      bodyCandidates: [{ label: "no_body", body: null }],
       timeoutMs: 15_000,
       abortOnAuthError: true,
     });
@@ -293,7 +306,7 @@ Deno.serve(async (req) => {
       status: telResult.success ? (telResult.items.length > 0 ? "pass" : "warn") : "fail",
       endpoint: telResult.endpoint,
       endpoint_candidates: telUrls,
-      body_candidates_tried: ["null_body", "empty_array"],
+      body_candidates_tried: ["no_body"],
       token_mode: "regular_token",
       status_code: telResult.attempts.length > 0 ? telResult.attempts[telResult.attempts.length - 1].statusCode : 0,
       error_class: telResult.success ? null : telResult.errorClass,
@@ -343,7 +356,9 @@ Deno.serve(async (req) => {
 
     // Build actionable summary
     const summaryParts: string[] = [`${passed} passed, ${warned} warnings, ${failed} failed out of ${tests.length} tests`];
-    if (vehicleSuccess) {
+    if (!administrationEnabled) {
+      summaryParts.push("Administration desativado por configuração; Tracking permanece independente");
+    } else if (vehicleSuccess) {
       summaryParts.push(`✓ Catálogo admin funcional (${vehicleItems.length} veículos)`);
     } else {
       summaryParts.push("✗ Catálogo admin indisponível — sync usará fallback");
@@ -366,6 +381,7 @@ Deno.serve(async (req) => {
       summary: summaryParts.join(" | "),
       api_version: config.apiVersion,
       base_url: config.baseUrl,
+      administration_enabled: administrationEnabled,
       admin_token_available: !!adminTokenResult.token,
       admin_token_error: adminTokenResult.error,
       hashauth_configured: hasHashAuth,

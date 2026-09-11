@@ -1,0 +1,42 @@
+[
+  {
+    "file": "20260910125034_finance_manual_expense_cost_center.sql",
+    "sha256": "469be864296ae2be1c5ad57c049efc570df0a3e09869de657415ebc626086034",
+    "matches_manifest": true
+  },
+  {
+    "file": "20260910125357_finance_recorded_costs.sql",
+    "sha256": "4ff64ddafb49126e05b1e7ddc5925fe76dd63df00a1f380e0e6bd9e8db10099c",
+    "matches_manifest": true
+  },
+  {
+    "file": "20260910130032_finance_payroll_recorded_costs.sql",
+    "sha256": "e0d51628df54abeedfa0d78cd7b48632b7daf19ff43ae28dffe9875e77ceebae",
+    "matches_manifest": true
+  },
+  {
+    "file": "20260910130540_finance_settlement_movement_links.sql",
+    "sha256": "a05183495df24000b81fd2976a6723df0c4700dbdf2d82b5dca679e47e1f1205",
+    "matches_manifest": true
+  },
+  {
+    "file": "20260910130921_finance_settlement_movement_options.sql",
+    "sha256": "3f1a107e4f02187638bf145d03842f860b8e13c16d11ba5515a615e989953821",
+    "matches_manifest": true
+  },
+  {
+    "file": "20260910130956_finance_statement_period_evidence.sql",
+    "sha256": "862a3329a13e7b22a29a5c10861f2d12b18d71221c2367c2692fa105eec82cd7",
+    "matches_manifest": true
+  },
+  {
+    "file": "20260910131149_finance_settlement_link_audit.sql",
+    "sha256": "5101428db9da57754866db67ed54bc9c649116adce21280045fb51e33fa2289f",
+    "matches_manifest": true
+  },
+  {
+    "file": "20260910132406_finance_payroll_reimbursement_source_dedup.sql",
+    "sha256": "d335fc5dcd74d283255283824ac7b39c3ed9f7160a87576d586352b125e157f4",
+    "matches_manifest": true
+  }
+]

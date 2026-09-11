@@ -4,6 +4,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { encryptFiscalCredential } from '../_shared/fiscal-credential-crypto.ts';
 import { digits } from '../_shared/tax-registry.ts';
 import { parseFiscalPkcs12 } from '../_shared/fiscal-certificate.ts';
+import { activeTenantFromVerifiedRequest } from '../_shared/active-tenant.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -29,6 +30,7 @@ async function authContext(req: Request, emitterId: string) {
   const { data: emitter, error: emitterError } = await admin.from('tenant_emitters')
     .select('id,tenant_id,cnpj').eq('id', emitterId).maybeSingle();
   if (emitterError || !emitter) throw new HttpError(404, 'Emitente não encontrado');
+  if (activeTenantFromVerifiedRequest(req) !== emitter.tenant_id) throw new HttpError(409, 'tenant_context_mismatch');
   const { data: membership } = await admin.from('tenant_memberships').select('role,active')
     .eq('tenant_id', emitter.tenant_id).eq('user_id', data.user.id).maybeSingle();
   if (!membership?.active) throw new HttpError(403, 'FORBIDDEN');

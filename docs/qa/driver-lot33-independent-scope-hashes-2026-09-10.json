@@ -1,0 +1,889 @@
+[
+  {
+    "version": "20260910141902",
+    "file": "20260910141902_add_delivery_receipt_pdf_access.sql",
+    "sha256": "6a829621cb2f53d5ddab9b612bac7465fa856a15dbf75fbda711a13dcb27dee8",
+    "bytes": 8461,
+    "evidence": [
+      {
+        "line": 27,
+        "text": "grant select on table public.delivery_receipt_exports to authenticated;"
+      },
+      {
+        "line": 28,
+        "text": "grant all on table public.delivery_receipt_exports to service_role;"
+      },
+      {
+        "line": 75,
+        "text": "grant execute on function public.prepare_delivery_receipt_pdf_v1(uuid,uuid,uuid,text)"
+      },
+      {
+        "line": 123,
+        "text": "grant execute on function public.attach_delivery_receipt_pdf_v1(uuid,uuid,uuid,text,timestamptz)"
+      },
+      {
+        "line": 157,
+        "text": "grant execute on function public.complete_delivery_receipt_pdf_download_v1(uuid,uuid,uuid)"
+      }
+    ]
+  },
+  {
+    "version": "20260910142606",
+    "file": "20260910142606_driver_trip_cargo_custody_cycle.sql",
+    "sha256": "8705d623e376c95f45dd152ddbb9322257e7868e612a5a6154f28eca196e01bb",
+    "bytes": 46263,
+    "evidence": [
+      {
+        "line": 168,
+        "text": "grant select on table public.trip_cargo_controls,public.trip_cargo_load_checks,"
+      },
+      {
+        "line": 171,
+        "text": "grant all on table public.trip_cargo_controls,public.trip_cargo_load_checks,"
+      },
+      {
+        "line": 188,
+        "text": "grant execute on function private.can_access_trip_cargo(uuid) to authenticated,service_role;"
+      },
+      {
+        "line": 319,
+        "text": "grant execute on function private.trip_cargo_snapshot(uuid,uuid) to authenticated;"
+      },
+      {
+        "line": 326,
+        "text": "grant execute on function public.get_trip_cargo_control_v1(uuid,uuid) to authenticated;"
+      },
+      {
+        "line": 350,
+        "text": "grant execute on function private.list_trip_cargo_controls(uuid,text) to authenticated;"
+      },
+      {
+        "line": 356,
+        "text": "grant execute on function public.list_trip_cargo_controls_v1(uuid,text) to authenticated;"
+      },
+      {
+        "line": 499,
+        "text": "grant execute on function private.driver_update_trip_cargo(uuid,uuid,uuid,text,jsonb) to authenticated;"
+      },
+      {
+        "line": 506,
+        "text": "grant execute on function public.driver_update_trip_cargo_v1(uuid,uuid,uuid,text,jsonb) to authenticated;"
+      },
+      {
+        "line": 531,
+        "text": "grant execute on function private.review_trip_cargo_divergence(uuid,uuid,text,text) to authenticated;"
+      },
+      {
+        "line": 538,
+        "text": "grant execute on function public.review_trip_cargo_divergence_v1(uuid,uuid,text,text) to authenticated;"
+      },
+      {
+        "line": 571,
+        "text": "grant execute on function private.close_trip_cargo(uuid,uuid,text) to authenticated;"
+      },
+      {
+        "line": 578,
+        "text": "grant execute on function public.close_trip_cargo_v1(uuid,uuid,text) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910142613",
+    "file": "20260910142613_driver_geocoding_geofence_tracking.sql",
+    "sha256": "f8ff5fdf714f9b84552b2353ac28f632a7574dcd284020ac0c0c749c5a1ee5d6",
+    "bytes": 25372,
+    "evidence": [
+      {
+        "line": 178,
+        "text": "grant execute on function public.upsert_geofence_v2(jsonb) to authenticated,service_role;"
+      },
+      {
+        "line": 216,
+        "text": "grant execute on function public.dispatch_planned_route_v2(jsonb) to authenticated,service_role;"
+      },
+      {
+        "line": 251,
+        "text": "grant execute on function public.replan_load_items_v2(jsonb) to authenticated,service_role;"
+      },
+      {
+        "line": 286,
+        "text": "grant execute on function public.change_load_documents_v2(jsonb) to authenticated,service_role;"
+      },
+      {
+        "line": 397,
+        "text": "grant execute on function public.process_geofence_position_batch_v1(uuid,uuid,jsonb) to service_role;"
+      }
+    ]
+  },
+  {
+    "version": "20260910143355",
+    "file": "20260910143355_driver_physical_journey_payload.sql",
+    "sha256": "c92dccb7d6d72fecabdf10227a193afc6f66bcfb3eac26502cbb6248abc4b4a2",
+    "bytes": 4112,
+    "evidence": [
+      {
+        "line": 88,
+        "text": "grant execute on function public.get_current_driver_journey_v1()"
+      }
+    ]
+  },
+  {
+    "version": "20260910143433",
+    "file": "20260910143433_add_delivery_receipt_email_batches.sql",
+    "sha256": "ab3757645f15726cd529c4081cd5ba7e406797d655c5287124362cdd870fbb72",
+    "bytes": 21447,
+    "evidence": [
+      {
+        "line": 61,
+        "text": "grant select on table public.delivery_receipt_email_batches,public.delivery_receipt_email_items to authenticated;"
+      },
+      {
+        "line": 62,
+        "text": "grant all on table public.delivery_receipt_email_batches,public.delivery_receipt_email_items,"
+      },
+      {
+        "line": 160,
+        "text": "grant execute on function public.queue_delivery_receipt_email_v1(uuid,uuid,text,uuid[],text[],text,text) to authenticated;"
+      },
+      {
+        "line": 208,
+        "text": "grant execute on function public.claim_delivery_receipt_email_v1(uuid,uuid) to authenticated;"
+      },
+      {
+        "line": 243,
+        "text": "grant execute on function public.complete_delivery_receipt_email_v1(uuid,uuid,uuid,text) to authenticated;"
+      },
+      {
+        "line": 273,
+        "text": "grant execute on function public.fail_delivery_receipt_email_v1(uuid,uuid,uuid,text,timestamptz) to authenticated;"
+      },
+      {
+        "line": 325,
+        "text": "grant execute on function public.apply_delivery_receipt_email_webhook_v1(text,text,text,timestamptz) to service_role;"
+      }
+    ]
+  },
+  {
+    "version": "20260910154758",
+    "file": "20260910154758_driver_operational_offline_commands.sql",
+    "sha256": "282bb488e8160afffd4bced5d82cc53401dc5dadb8c574e07fbd8dd77ac43aad",
+    "bytes": 9084,
+    "evidence": [
+      {
+        "line": 23,
+        "text": "grant select, insert, update, delete on table public.driver_operational_command_receipts"
+      },
+      {
+        "line": 24,
+        "text": "to service_role;"
+      },
+      {
+        "line": 215,
+        "text": "grant execute on function public.driver_apply_offline_command_v1(uuid,uuid,text,jsonb)"
+      }
+    ]
+  },
+  {
+    "version": "20260910154811",
+    "file": "20260910154811_complete_delivery_receipt_operations.sql",
+    "sha256": "19da792a657ff70481276ac3f9e5ea1f2286bb7af5d66151c3abe0a966653397",
+    "bytes": 24790,
+    "evidence": [
+      {
+        "line": 33,
+        "text": "grant select on table public.delivery_receipt_email_templates to authenticated;"
+      },
+      {
+        "line": 34,
+        "text": "grant all on table public.delivery_receipt_email_templates,public.delivery_receipt_replacements to service_role;"
+      },
+      {
+        "line": 84,
+        "text": "grant execute on function public.save_delivery_receipt_email_template_v1(uuid,uuid,text,text[],text,text,boolean,timestamptz) to authenticated;"
+      },
+      {
+        "line": 144,
+        "text": "grant execute on function public.replace_delivery_receipt_v1(uuid,uuid,uuid,text,text,timestamptz) to authenticated;"
+      },
+      {
+        "line": 179,
+        "text": "grant execute on function public.get_delivery_receipt_operations_v1(uuid) to authenticated;"
+      },
+      {
+        "line": 271,
+        "text": "grant execute on function public.list_delivery_receipts_v1(uuid,jsonb,integer,integer) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910154838",
+    "file": "20260910154838_address_resolution_tracking_operations.sql",
+    "sha256": "5809cf148d512884aecb92ccb598f4f222a33614187a847cc94d7da019561087",
+    "bytes": 37214,
+    "evidence": [
+      {
+        "line": 171,
+        "text": "insert into public.geofence_radius_policies(tenant_id,scope_kind,category,radius_m,enter_margin_m,exit_margin_m,transition_confirmations)"
+      },
+      {
+        "line": 182,
+        "text": "insert into public.tenant_tracking_schedules(tenant_id)"
+      },
+      {
+        "line": 252,
+        "text": "update public.clients c set address_street=c.address_street,"
+      },
+      {
+        "line": 302,
+        "text": "grant execute on function public.consume_geocoding_quota_v1(uuid,text) to service_role;"
+      },
+      {
+        "line": 334,
+        "text": "grant execute on function public.resolve_address_queue_item_v1(jsonb) to authenticated;"
+      },
+      {
+        "line": 356,
+        "text": "grant execute on function public.get_address_resolution_queue_v1(uuid,text,integer) to authenticated;"
+      },
+      {
+        "line": 378,
+        "text": "grant execute on function public.upsert_geofence_v3(jsonb) to authenticated;"
+      },
+      {
+        "line": 426,
+        "text": "grant execute on function public.dispatch_planned_route_v3(jsonb) to authenticated;"
+      },
+      {
+        "line": 449,
+        "text": "grant execute on function public.claim_due_tracking_schedules_v1(integer) to service_role;"
+      },
+      {
+        "line": 463,
+        "text": "grant execute on function public.record_tracking_schedule_result_v1(uuid,text,text) to service_role;"
+      },
+      {
+        "line": 481,
+        "text": "grant execute on function public.update_tracking_schedule_v1(jsonb) to authenticated;"
+      },
+      {
+        "line": 515,
+        "text": "grant execute on function public.get_tracking_observability_v1(uuid) to authenticated;"
+      },
+      {
+        "line": 526,
+        "text": "grant select,insert,update on table public.address_resolution_queue to authenticated;"
+      },
+      {
+        "line": 527,
+        "text": "grant select,insert,update on table public.address_resolution_queue to service_role;"
+      },
+      {
+        "line": 528,
+        "text": "grant select,insert,update,delete on table public.address_geocoding_cache,public.geocoding_rate_limits,public.geocoding_provider_rate_limits to service_role;"
+      },
+      {
+        "line": 529,
+        "text": "grant select on table public.geofence_radius_policies,public.tenant_tracking_schedules to authenticated;"
+      },
+      {
+        "line": 530,
+        "text": "grant update on table public.geofence_radius_policies to authenticated;"
+      },
+      {
+        "line": 531,
+        "text": "grant insert,update on table public.tenant_tracking_schedules to authenticated;"
+      },
+      {
+        "line": 532,
+        "text": "grant select,insert,update on table public.geofence_radius_policies,public.tenant_tracking_schedules to service_role;"
+      }
+    ]
+  },
+  {
+    "version": "20260910160603",
+    "file": "20260910160603_preserve_delivery_receipt_scan_integrity.sql",
+    "sha256": "cf0c1269453cf4b9f3acb011ef6461ae9392ced9a6ba90afc4b29a48092835d5",
+    "bytes": 3670,
+    "evidence": [
+      {
+        "line": 61,
+        "text": "grant execute on function public._sync_delivery_receipt_from_proof_trigger() to service_role;"
+      }
+    ]
+  },
+  {
+    "version": "20260910170631",
+    "file": "20260910170631_add_delivery_receipt_supplier_pdf_profiles.sql",
+    "sha256": "3a3b30f3bf04fbd61037142d803427c9be126225e7b2f36d54b9f15e82af8141",
+    "bytes": 18158,
+    "evidence": [
+      {
+        "line": 6,
+        "text": "update public.delivery_receipt_email_templates set supplier_key='name:'||left(regexp_replace(lower(btrim(supplier_name)),'[^a-z0-9]+','-','g'),160)"
+      },
+      {
+        "line": 15,
+        "text": "update public.delivery_receipt_email_batches set supplier_key='name:'||left(regexp_replace(lower(btrim(supplier_name)),'[^a-z0-9]+','-','g'),160)"
+      },
+      {
+        "line": 85,
+        "text": "grant execute on function public.save_delivery_receipt_email_template_v2(uuid,uuid,text,text,text[],text,text,jsonb,boolean,timestamptz) to authenticated;"
+      },
+      {
+        "line": 136,
+        "text": "grant execute on function public.queue_delivery_receipt_email_v2(uuid,uuid,text,text,uuid[],text[],text,text,jsonb) to authenticated;"
+      },
+      {
+        "line": 170,
+        "text": "grant execute on function public.claim_delivery_receipt_email_v1(uuid,uuid) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910170901",
+    "file": "20260910170901_harden_delivery_geofence_scope.sql",
+    "sha256": "ebbc2f563af375d22407d80af496756fefb40e710a1c9a78bc70f1480f4e4550",
+    "bytes": 17969,
+    "evidence": [
+      {
+        "line": 114,
+        "text": "update public.dispatch_stops s"
+      },
+      {
+        "line": 169,
+        "text": "grant execute on function public.dispatch_planned_route_v3(jsonb) to authenticated;"
+      },
+      {
+        "line": 291,
+        "text": "grant execute on function public.process_geofence_position_batch_v2(uuid,uuid,jsonb) to service_role;"
+      }
+    ]
+  },
+  {
+    "version": "20260910174335",
+    "file": "20260910174335_add_delivery_receipt_ocr_queue.sql",
+    "sha256": "9b5005e80d5b289cf60ffe062d22c5c832671cba4b951176ddeba737da0e502b",
+    "bytes": 12433,
+    "evidence": [
+      {
+        "line": 43,
+        "text": "insert into public.delivery_receipt_ocr_jobs(tenant_id,receipt_id,processed_hash,source_path)"
+      },
+      {
+        "line": 46,
+        "text": "update public.delivery_receipts set ocr_status='queued',ocr_processed_hash=processed_hash,ocr_updated_at=clock_timestamp()"
+      },
+      {
+        "line": 65,
+        "text": "grant execute on function public.claim_delivery_receipt_ocr_v1() to service_role;"
+      },
+      {
+        "line": 96,
+        "text": "grant execute on function public.complete_delivery_receipt_ocr_v1(uuid,uuid,text,text,numeric,text,text) to service_role;"
+      },
+      {
+        "line": 107,
+        "text": "grant execute on function public.get_delivery_receipt_ocr_health_v1(uuid) to authenticated;"
+      },
+      {
+        "line": 122,
+        "text": "grant execute on function public.search_delivery_receipt_ocr_v1(uuid,text,integer) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910181353",
+    "file": "20260910181353_add_delivery_receipt_quality_policies.sql",
+    "sha256": "7a76a2ad17e2183e36a560faac25a41a68c961499e94874398a9176f51f2dc1e",
+    "bytes": 20700,
+    "evidence": [
+      {
+        "line": 78,
+        "text": "grant select, insert, update, delete on table public.delivery_receipt_quality_policies"
+      },
+      {
+        "line": 79,
+        "text": "to service_role;"
+      },
+      {
+        "line": 154,
+        "text": "grant execute on function public.list_delivery_receipt_quality_policies_v1(uuid)"
+      },
+      {
+        "line": 240,
+        "text": "grant execute on function public.save_delivery_receipt_quality_policy_v1(uuid,uuid,jsonb,uuid)"
+      },
+      {
+        "line": 285,
+        "text": "grant execute on function public.retire_delivery_receipt_quality_policy_v1(uuid,uuid,uuid)"
+      },
+      {
+        "line": 351,
+        "text": "grant execute on function public.resolve_delivery_receipt_quality_policy_v1(uuid)"
+      },
+      {
+        "line": 487,
+        "text": "grant execute on function public._sync_delivery_receipt_from_proof_trigger()"
+      },
+      {
+        "line": 488,
+        "text": "to service_role;"
+      }
+    ]
+  },
+  {
+    "version": "20260910181420",
+    "file": "20260910181420_add_delivery_receipt_supplier_channels.sql",
+    "sha256": "0c505840573e7ea16bb9eaa99b32940fac118da557a82db4a9f51a22b8c9fd20",
+    "bytes": 47889,
+    "evidence": [
+      {
+        "line": 181,
+        "text": "grant execute on function public.plan_delivery_receipt_email_batches_v1(uuid,text,text,uuid[],jsonb) to authenticated;"
+      },
+      {
+        "line": 198,
+        "text": "insert into public.delivery_receipt_channel_adapters("
+      },
+      {
+        "line": 371,
+        "text": "grant select on table public.delivery_receipt_supplier_channels,public.delivery_receipt_channel_jobs,"
+      },
+      {
+        "line": 373,
+        "text": "grant all on table public.delivery_receipt_channel_adapters,public.delivery_receipt_supplier_channels,"
+      },
+      {
+        "line": 375,
+        "text": "grant usage,select on sequence public.delivery_receipt_channel_job_events_id_seq to service_role;"
+      },
+      {
+        "line": 455,
+        "text": "grant execute on function public.save_delivery_receipt_supplier_channel_v1(uuid,uuid,text,text,text,jsonb,jsonb,boolean,timestamptz)"
+      },
+      {
+        "line": 601,
+        "text": "grant execute on function public.verify_delivery_receipt_supplier_channel_v1(uuid,uuid,text,text,jsonb)"
+      },
+      {
+        "line": 602,
+        "text": "to service_role;"
+      },
+      {
+        "line": 647,
+        "text": "grant execute on function public.claim_delivery_receipt_channel_jobs_v1(integer,uuid) to service_role;"
+      },
+      {
+        "line": 682,
+        "text": "grant execute on function public.complete_delivery_receipt_channel_job_v1(uuid,uuid,uuid,text,jsonb) to service_role;"
+      },
+      {
+        "line": 713,
+        "text": "grant execute on function public.fail_delivery_receipt_channel_job_v1(uuid,uuid,uuid,text,text,timestamptz) to service_role;"
+      },
+      {
+        "line": 744,
+        "text": "grant execute on function public.retry_delivery_receipt_channel_job_v1(uuid,uuid) to authenticated;"
+      },
+      {
+        "line": 779,
+        "text": "grant execute on function public.get_delivery_receipt_supplier_channels_v1(uuid) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910182124",
+    "file": "20260910182124_enforce_driver_delivery_gps_and_refusal_evidence.sql",
+    "sha256": "0233425408c4bf081806efed785773bed34d2a8a5609a670714af1efa854494b",
+    "bytes": 5342,
+    "evidence": []
+  },
+  {
+    "version": "20260910182454",
+    "file": "20260910182454_auto_arrive_driver_stop_from_delivery_geofence.sql",
+    "sha256": "758da361f9c27eff3a4dc2c82b88931c39df246b8a28d92620d8f7f18eebb8af",
+    "bytes": 4027,
+    "evidence": []
+  },
+  {
+    "version": "20260910182855",
+    "file": "20260910182855_complete_delivery_receipt_physical_return_workflow.sql",
+    "sha256": "74d97bd445ec60213c97e9d1fa357b42f65a7f1e5ae01d9610bcac6a32687cd4",
+    "bytes": 8921,
+    "evidence": [
+      {
+        "line": 33,
+        "text": "grant select on table public.delivery_receipt_physical_events to authenticated;"
+      },
+      {
+        "line": 34,
+        "text": "grant all on table public.delivery_receipt_physical_events to service_role;"
+      },
+      {
+        "line": 183,
+        "text": "grant execute on function public.record_delivery_receipt_physical_status_v1(uuid,uuid,uuid,text,text,timestamptz)"
+      }
+    ]
+  },
+  {
+    "version": "20260910183025",
+    "file": "20260910183025_extend_delivery_receipt_operational_filters.sql",
+    "sha256": "a92e26aca0815813d53433ae22dda106b9717eb637d7450c60e8da4bf8f80fab",
+    "bytes": 11861,
+    "evidence": [
+      {
+        "line": 172,
+        "text": "grant execute on function public.list_delivery_receipts_v1(uuid,jsonb,integer,integer) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910190649",
+    "file": "20260910190649_enforce_driver_delivery_receipt_evidence.sql",
+    "sha256": "534a7b4f8dafaca41db2592ce6ab05306933ae45f476d638fdd86991db86b285",
+    "bytes": 5337,
+    "evidence": []
+  },
+  {
+    "version": "20260910190950",
+    "file": "20260910190950_harden_geofence_tracking_completion.sql",
+    "sha256": "cce1181308a0aabd7d0f0664cf3d5beb7d726e2d31acb95dbfbd681760bb66e5",
+    "bytes": 21100,
+    "evidence": [
+      {
+        "line": 18,
+        "text": "update public.dispatch_stops set geofence_radius_is_override=true"
+      },
+      {
+        "line": 135,
+        "text": "grant execute on function public.dispatch_planned_route_v3(jsonb) to authenticated;"
+      },
+      {
+        "line": 137,
+        "text": "update public.dispatch_stops s set geofence_radius_is_override=s.geofence_radius_is_override"
+      },
+      {
+        "line": 144,
+        "text": "update public.geofence_states set last_point_key='~legacy~' where last_point_at is not null and last_point_key is null;"
+      },
+      {
+        "line": 240,
+        "text": "grant execute on function public.process_geofence_position_batch_v2(uuid,uuid,jsonb) to service_role;"
+      },
+      {
+        "line": 247,
+        "text": "and to_regclass('cron.job') is not null and to_regprocedure('cron.unschedule(bigint)') is not null then"
+      },
+      {
+        "line": 248,
+        "text": "perform cron.unschedule(job.jobid) from cron.job job"
+      }
+    ]
+  },
+  {
+    "version": "20260910191008",
+    "file": "20260910191008_harden_trip_cargo_custody_integrity.sql",
+    "sha256": "7aab72f5dc4b2b052f1a7edbf669f6edfd17842bce8619d5e2950b0a52bdd18f",
+    "bytes": 5520,
+    "evidence": [
+      {
+        "line": 86,
+        "text": "grant execute on function public.driver_update_trip_cargo_v1(uuid,uuid,uuid,text,jsonb) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910191452",
+    "file": "20260910191452_support_nfse_only_delivery_receipts.sql",
+    "sha256": "ec3877f199ef351a38750c7ec8f346fdbab6099bab243df56c814823a86cf97d",
+    "bytes": 6802,
+    "evidence": [
+      {
+        "line": 12,
+        "text": "grant select on table public.dispatch_stop_nfse_documents to authenticated;"
+      },
+      {
+        "line": 13,
+        "text": "grant all on table public.dispatch_stop_nfse_documents to service_role;"
+      },
+      {
+        "line": 87,
+        "text": "grant execute on function public.link_nfse_to_delivery_stop_v1(uuid,uuid,uuid) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910192455",
+    "file": "20260910192455_complete_address_geocoding_automation.sql",
+    "sha256": "23e71c600e55ed48fa027280e8b7969022936bcd02287c1a82862c6b32c11027",
+    "bytes": 39728,
+    "evidence": [
+      {
+        "line": 69,
+        "text": "grant select on table public.address_resolution_audit_events to authenticated,service_role;"
+      },
+      {
+        "line": 70,
+        "text": "grant insert on table public.address_resolution_audit_events to service_role;"
+      },
+      {
+        "line": 155,
+        "text": "grant execute on function public.claim_address_resolution_queue_v2(integer,integer) to service_role;"
+      },
+      {
+        "line": 171,
+        "text": "grant execute on function public.get_claimed_address_resolution_item_v1(uuid,uuid) to service_role;"
+      },
+      {
+        "line": 213,
+        "text": "grant execute on function public.ack_address_resolution_queue_item_v2(jsonb) to service_role;"
+      },
+      {
+        "line": 248,
+        "text": "grant execute on function public.get_routing_client_locations_v1(uuid,uuid[]) to authenticated;"
+      },
+      {
+        "line": 338,
+        "text": "update public.dispatch_stops set location_verification_status=case"
+      },
+      {
+        "line": 516,
+        "text": "grant execute on function public.resolve_address_queue_item_v1(jsonb) to authenticated;"
+      },
+      {
+        "line": 569,
+        "text": "grant execute on function public.dispatch_planned_route_v3(jsonb) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910192744",
+    "file": "20260910192744_canonicalize_delivery_receipt_email_filename.sql",
+    "sha256": "d9c36ff0dc98a8cf9b8c0432035e4a4627e0be3021661267df0d97ce33d36fe1",
+    "bytes": 2277,
+    "evidence": []
+  },
+  {
+    "version": "20260910193642",
+    "file": "20260910193642_driver_app_observability.sql",
+    "sha256": "4e7f10815586e75ce061dfe409ad4adefc1f5be211d7af3b9374ca6df2f47db6",
+    "bytes": 14910,
+    "evidence": [
+      {
+        "line": 40,
+        "text": "grant select,insert,update,delete on table public.driver_app_observability_snapshots to service_role;"
+      },
+      {
+        "line": 146,
+        "text": "grant execute on function public.publish_driver_app_observability_v1(jsonb) to authenticated;"
+      },
+      {
+        "line": 162,
+        "text": "grant execute on function public.disable_driver_app_observability_v1(uuid,uuid) to authenticated;"
+      },
+      {
+        "line": 196,
+        "text": "grant execute on function public.get_driver_app_observability_v1(uuid) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910194438",
+    "file": "20260910194438_complete_trip_cargo_seal_lifecycle.sql",
+    "sha256": "b71870378963b708f7db16abd8933902c8ad9fbee42ea9d98e927dd7cbb11ece",
+    "bytes": 15235,
+    "evidence": [
+      {
+        "line": 14,
+        "text": "update public.trip_cargo_seals"
+      },
+      {
+        "line": 196,
+        "text": "grant execute on function public.driver_update_trip_cargo_v1(uuid,uuid,uuid,text,jsonb) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910194846",
+    "file": "20260910194846_harden_fleet_geofence_editing.sql",
+    "sha256": "7c3217bee9e3ffe189ec0873c90add81aad3e3b69354a09ad3164dadc5efcb89",
+    "bytes": 4755,
+    "evidence": [
+      {
+        "line": 93,
+        "text": "grant execute on function public.upsert_geofence_v3(jsonb) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910195852",
+    "file": "20260910195852_preserve_geofence_fast_pass.sql",
+    "sha256": "0534ae1ce3ed0af26773e6fa30bfde24922f6ab80f0a43167d3b1737a90cbab1",
+    "bytes": 18412,
+    "evidence": [
+      {
+        "line": 83,
+        "text": "grant execute on function public.read_vehicle_position_processing_page_v1("
+      },
+      {
+        "line": 455,
+        "text": "grant execute on function public.process_geofence_position_batch_v2(uuid,uuid,jsonb) to service_role;"
+      }
+    ]
+  },
+  {
+    "version": "20260910204500",
+    "file": "20260910204500_delivery_receipt_email_history.sql",
+    "sha256": "314c5315166b5ac0b7502fd3211da1537a7471464a8a8a0b24c50b84c6ad474c",
+    "bytes": 4550,
+    "evidence": [
+      {
+        "line": 100,
+        "text": "grant execute on function public.list_delivery_receipt_email_batches_v1(uuid,text,text,integer,integer) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910204602",
+    "file": "20260910204602_ensure_nfse_only_delivery_receipt.sql",
+    "sha256": "a8a3d930cec366015962de7e0fe5bd2abc7839757fcb0d13b761611d9c1e5f5c",
+    "bytes": 7237,
+    "evidence": []
+  },
+  {
+    "version": "20260910211000",
+    "file": "20260910211000_canonical_destination_geocoding_idempotency.sql",
+    "sha256": "d767b8347432294fda349e199361cb085a7a5b88f5d820713fafea62e52f33cc",
+    "bytes": 44249,
+    "evidence": [
+      {
+        "line": 50,
+        "text": "grant select on table public.canonical_addresses to authenticated,service_role;"
+      },
+      {
+        "line": 51,
+        "text": "grant insert,update on table public.canonical_addresses to service_role;"
+      },
+      {
+        "line": 180,
+        "text": "update public.clients c set canonical_address_id=private.ensure_canonical_address_v1(c.tenant_id,private.normalized_client_address(c))"
+      },
+      {
+        "line": 182,
+        "text": "update public.dispatch_stops s set canonical_address_id=private.ensure_canonical_address_v1("
+      },
+      {
+        "line": 234,
+        "text": "update public.address_resolution_queue q set canonical_address_id=private.ensure_canonical_address_v1(q.tenant_id,q.address_snapshot)"
+      },
+      {
+        "line": 268,
+        "text": "insert into public.address_resolution_queue(tenant_id,entity_type,entity_id,canonical_address_id,address_snapshot,"
+      },
+      {
+        "line": 310,
+        "text": "update public.geofences g set client_id=s.client_id,canonical_address_id=s.canonical_address_id"
+      },
+      {
+        "line": 312,
+        "text": "update public.geofences g set canonical_address_id=private.ensure_canonical_address_v1(g.tenant_id,g.source_address)"
+      },
+      {
+        "line": 315,
+        "text": "update public.geofences g set client_id=("
+      },
+      {
+        "line": 337,
+        "text": "grant select on table public.operator_command_ledger to authenticated,service_role;"
+      },
+      {
+        "line": 338,
+        "text": "grant insert on table public.operator_command_ledger to service_role;"
+      },
+      {
+        "line": 460,
+        "text": "grant execute on function private.resolve_address_queue_item_v2(jsonb) to authenticated;"
+      },
+      {
+        "line": 465,
+        "text": "grant execute on function public.resolve_address_queue_item_v2(jsonb) to authenticated;"
+      },
+      {
+        "line": 501,
+        "text": "grant execute on function private.upsert_geofence_v4(jsonb) to authenticated;"
+      },
+      {
+        "line": 506,
+        "text": "grant execute on function public.upsert_geofence_v4(jsonb) to authenticated;"
+      },
+      {
+        "line": 540,
+        "text": "grant execute on function private.review_trip_cargo_divergence_v2(uuid,uuid,uuid,text,text) to authenticated;"
+      },
+      {
+        "line": 549,
+        "text": "grant execute on function public.review_trip_cargo_divergence_v2(uuid,uuid,uuid,text,text) to authenticated;"
+      },
+      {
+        "line": 580,
+        "text": "grant execute on function public.get_address_resolution_queue_v1(uuid,text,integer) to authenticated;"
+      },
+      {
+        "line": 611,
+        "text": "grant execute on function public.claim_address_resolution_queue_v2(integer,integer) to service_role;"
+      }
+    ]
+  },
+  {
+    "version": "20260910211200",
+    "file": "20260910211200_driver_delivery_fiscal_snapshot_gate.sql",
+    "sha256": "c66ac6bc9eb42963bf7bf38ef723b5d4b4bb818146156f95d013f861ad436ddd",
+    "bytes": 14959,
+    "evidence": [
+      {
+        "line": 31,
+        "text": "grant all on table public.driver_delivery_fiscal_conflicts to service_role;"
+      },
+      {
+        "line": 99,
+        "text": "grant execute on function public.get_driver_delivery_fiscal_snapshot_v1(uuid,uuid,uuid) to authenticated;"
+      },
+      {
+        "line": 240,
+        "text": "grant execute on function public.driver_record_delivery_outcome(uuid,text,jsonb,uuid,text) to authenticated;"
+      }
+    ]
+  },
+  {
+    "version": "20260910213021",
+    "file": "20260910213021_reconcile_legacy_cargo_gate_and_service_delivery_adapters.sql",
+    "sha256": "a7f723b4169fb7f5f85b3e21011bb789b6053904ccedc1e67ae745f99d1bda36",
+    "bytes": 13385,
+    "evidence": [
+      {
+        "line": 55,
+        "text": "or exists(select 1 from public.driver_settlement_payments payment"
+      },
+      {
+        "line": 57,
+        "text": "or exists(select 1 from public.payables payable"
+      },
+      {
+        "line": 114,
+        "text": "grant execute on function public.resolve_driver_delivery_fiscal_conflict_v1(uuid,uuid,uuid,text,text)"
+      },
+      {
+        "line": 135,
+        "text": "grant execute on function public.get_driver_delivery_fiscal_conflict_v1(uuid,uuid) to authenticated;"
+      },
+      {
+        "line": 158,
+        "text": "grant execute on function public.get_operations_delivery_fiscal_conflict_v1(uuid,uuid) to authenticated;"
+      },
+      {
+        "line": 179,
+        "text": "grant execute on function public.driver_finalize_delivery(uuid,text,text,text[],text,text,text),"
+      }
+    ]
+  }
+]

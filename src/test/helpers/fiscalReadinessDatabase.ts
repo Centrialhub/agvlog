@@ -3,6 +3,7 @@ import {createInvoiceLifecycleDatabase} from './clientInvoiceLifecycleDatabase.t
 import {operationIds as i,operationRpc} from './operationOutcomeDatabase.ts';
 export const fiscalMigration='20260831124505_fiscal_emission_readiness.sql';
 export const fiscalInvoiceGateMigration='20260831144530_attach_fiscal_invoice_gate.sql';
+export const nfseBatchMigration='20260908195720_prepare_durable_nfse_issue_batches.sql';
 export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof createInvoiceLifecycleDatabase>>['db'], options:{invoiceGate?:boolean}={}){
  const baseline=readFileSync('supabase/migrations/20260824224152_baseline.sql','utf8').replace(/\r\n/g,'\n');
  for(const table of ['tenant_emitters','hub_fiscal_emissions','cte_batches','cte_documents','nfse_documents','fiscal_documents']){
@@ -15,7 +16,13 @@ export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof
  for(const table of ['cte_batches','cte_documents']){
   const block=baseline.match(new RegExp('ALTER TABLE ONLY public\\.'+table+'\\n    ADD CONSTRAINT[\\s\\S]*?;'))?.[0];
   if(!block)throw new Error('Missing fiscal catalog constraints '+table);
-  const checks=block.split('\n').filter(line=>line.includes(' CHECK ')).map(line=>line.trim().replace(/[,;]$/,''));
+  const checks=block.split('\n').filter(line=>line.includes(' CHECK ')).map(line=>{
+   const check=line.trim().replace(/[,;]$/,'');
+   // Earlier native billing cases already use the current 'authorized' state.
+   // This transient legacy constraint is replaced below by the real catalog
+   // migration, whose expanded CHECK validates every existing row normally.
+   return table==='cte_documents'&&check.startsWith('ADD CONSTRAINT cte_documents_status_check ')?check+' NOT VALID':check;
+  });
   await db.exec('alter table public.'+table+' '+checks.join(',')+';');
  }
  const deadLetters=readFileSync('supabase/migrations/20260826143000_fiscal_poll_dead_letters.sql','utf8');
@@ -28,6 +35,10 @@ export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof
  await db.exec(readFileSync('supabase/migrations/20260831161743_preserve_terminal_fiscal_receipts.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260831170755_serialize_cte_dispatch_and_reconcile_rejections.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260901162058_adopt_hub_fiscal_status_callbacks.sql','utf8'));
+ // Production already grants authenticated callers USAGE on the shared private
+ // schema for driver RLS helpers. The NFS-e batch migration must preserve it.
+ await db.exec("create schema if not exists private;grant usage on schema private to authenticated;create schema if not exists extensions;create function extensions.digest(bytea,text) returns bytea language sql immutable as $$select decode(md5($1),'hex')$$");
+ await db.exec(readFileSync('supabase/migrations/'+nfseBatchMigration,'utf8'));
  if(options.invoiceGate!==false) await db.exec(readFileSync('supabase/migrations/'+fiscalInvoiceGateMigration,'utf8'));
  const emitter='fa100000-0000-4000-8000-000000000001';
  await db.query("insert into tenant_emitters(id,tenant_id,cnpj,razao_social,active) values($1,$2,'11222333000181','Emitente QA',true)",[emitter,i.tenant]);

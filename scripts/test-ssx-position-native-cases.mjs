@@ -35,7 +35,9 @@ export async function runSsxPositionNative({query,contested,literal:q}) {
   )`;
   const reset=()=>run(`truncate positions_raw,positions_last,ingestion_cursors,vehicle_processing_queue;
     delete from vehicle_tracker_links where id<>${q(i.link)};
-    update vehicle_tracker_links set active=true,end_at=null,vehicle_id=${q(i.vehicle)},provider_unit_id=${q(i.unit)} where id=${q(i.link)};
+    -- Keep the binding in the same synthetic timeline as the positions below.
+    -- The shared fixture uses now()-1 day, which expires these fixed-date cases.
+    update vehicle_tracker_links set active=true,start_at='2026-08-30T00:00:00Z',end_at=null,vehicle_id=${q(i.vehicle)},provider_unit_id=${q(i.unit)} where id=${q(i.link)};
     delete from tenant_feature_policy;
     insert into tenant_feature_policy(tenant_id,feature_key,enabled) values
       (${q(i.tenant)},'ssx_enabled',true),(${q(i.tenant)},'ssx_kill_switch',false);`);

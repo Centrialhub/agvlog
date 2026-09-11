@@ -1,7 +1,20 @@
 import { isRecord } from '@/lib/loads/operationDocumentOutcome';
 import { DOCUMENT_STATUSES } from '@/lib/status/documentStatus';
 
-export function readDriverDeliveryItems(value: unknown, context: { tenant: string; actor: string; trip: string; stop: string }) {
+export type DriverDeliveryItem = {
+  id: string;
+  fiscalDocumentId: string;
+  attemptId: string | null;
+  isHistorical: boolean;
+  sku: string;
+  name: string;
+  qty: number;
+  unit: string;
+  price: number;
+  documentStatus: string;
+};
+
+export function readDriverDeliveryItems(value: unknown, context: { tenant: string; actor: string; trip: string; stop: string }): DriverDeliveryItem[] {
   if (!isRecord(value) || value.tenant_id !== context.tenant || value.actor_id !== context.actor
     || value.trip_id !== context.trip || value.stop_id !== context.stop || !Array.isArray(value.items)) {
     throw new Error('Não foi possível conferir os itens desta parada e viagem.');
@@ -18,7 +31,9 @@ export function readDriverDeliveryItems(value: unknown, context: { tenant: strin
       throw new Error('Itens ou resultados da tentativa estão inconsistentes. Atualize antes de registrar a entrega.');
     }
     ids.add(item.id);
-    return { id: item.id, sku: item.fiscal_document_id.slice(0, 8), name: item.item_description || 'Item',
-      qty: item.quantity, unit: 'UN', price: 0, documentStatus: item.document_status };
+    return { id: item.id, fiscalDocumentId: item.fiscal_document_id, attemptId: item.attempt_id,
+      isHistorical: item.is_historical, sku: item.fiscal_document_id.slice(0, 8),
+      name: item.item_description || 'Item', qty: item.quantity, unit: 'UN', price: 0,
+      documentStatus: item.document_status };
   });
 }

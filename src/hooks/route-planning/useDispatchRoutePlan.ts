@@ -45,11 +45,12 @@ export function useDispatchRoutePlan() {
     changed:()=>window.dispatchEvent(new Event(DISPATCH_OUTBOX_CHANGED)),
     send:async payload=>{
       const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),30_000);
-      try{return await supabase.rpc('dispatch_planned_route',{_payload:JSON.parse(JSON.stringify(payload))}).abortSignal(controller.signal);}
+      try{return await supabase.rpc('dispatch_planned_route_v3' as never,{_payload:JSON.parse(JSON.stringify(payload))} as never).abortSignal(controller.signal);}
       finally{clearTimeout(timer);}
     },
   }),[tenantId,actorId]);
   const pending=useMemo(()=>{
+    void revision;
     try{return {items:tenantId && actorId?pendingDispatches(window.localStorage,tenantId,actorId):[],error:null};}
     catch(error){return {items:[] as PendingDispatch[],error:error instanceof Error?error.message:'Falha na recuperação local.'};}
   },[tenantId,actorId,revision]);
@@ -70,8 +71,11 @@ export function useDispatchRoutePlan() {
     };
     const plannedStart=timestamp(payload.planned_start_at);
     if(!plannedStart)throw new Error('Informe o horário previsto de saída.');
-    const invalidStopIndex=payload.stops.findIndex(stop=>!hasValidStopCoordinates(stop));
-    if(invalidStopIndex>=0)throw new Error(`Parada ${invalidStopIndex+1}: informe latitude e longitude válidas antes do despacho.`);
+    const invalidStopIndex=payload.stops.findIndex(stop=>{
+      const verified=hasValidStopCoordinates(stop)&&['address_geocoded','map_selected'].includes(stop.location_source||'');
+      return !verified&&(stop.location_exception_reason?.trim().length||0)<20;
+    });
+    if(invalidStopIndex>=0)throw new Error(`Parada ${invalidStopIndex+1}: confirme o local por endereço/mapa ou registre uma exceção operacional detalhada.`);
     const orderOf = (s: RouteStopDraft) =>
       s.manual_order ?? s.optimized_order ?? s.original_order ?? 9999;
     const stops = [...payload.stops]
@@ -81,6 +85,14 @@ export function useDispatchRoutePlan() {
           destination: s.destination,
           latitude: s.latitude ?? null,
           longitude: s.longitude ?? null,
+          location_source: s.location_source || 'legacy_coordinates',
+          location_address: s.location_address || s.destination,
+          location_provider: s.location_provider || null,
+          location_accuracy_m: s.location_accuracy_m ?? null,
+          location_confidence: s.location_confidence ?? null,
+          location_audit: s.location_audit || {},
+          geofence_radius_m: s.geofence_radius_m || 500,
+          location_exception_reason: s.location_exception_reason?.trim() || null,
           planned_arrival_at: timestamp(s.planned_arrival_at),
           estimated_departure_at: timestamp(s.estimated_departure_at),
           service_time_minutes: s.service_time_minutes,

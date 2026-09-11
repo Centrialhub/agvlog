@@ -1,13 +1,14 @@
 /**
  * ssx-sync-units — Discovers vehicles/tracked units from the SSX API.
  *
- * STRATEGY (VEHICLE-FIRST):
- * 1. PRIMARY: /Administration/Vehicle/v2/List → Vehicle/List fallback
- * 2. ENRICHMENT: /Administration/Tracker/List (adds device metadata only)
- * 3. FALLBACK: PositionHistory (if all admin endpoints fail)
- * 4. provider_units represent POLLABLE entities (vehicles/tracked units, NOT trackers)
- * 5. external_code = VehicleIntegrationCode > TrackedUnitIntegrationCode
- * 6. Tracker info stored in metadata only
+ * STRATEGY:
+ * 1. Tracking-only accounts discover recent vehicle units opportunistically from
+ *    the canonical v3 PositionHistory route. This is never called a full catalog.
+ * 2. Administration/Vehicle and Tracker are used only when the account has the
+ *    explicit, non-sensitive administration_enabled opt-in.
+ * 3. Discovery never deactivates units absent from the current response.
+ * 4. provider_units represent pollable vehicles (IdTrackedUnitType=1), not people
+ *    or tracker devices.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -16,7 +17,7 @@ import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import {
   corsHeaders,
   buildAdminUrlCandidates,
-  buildSsxUrlCandidates,
+  buildSsxUrl,
   readAccountConfig,
   normalizeTrackerItem,
   pickVehicleIntegrationCode,
@@ -29,6 +30,8 @@ import {
   logSsxCall,
   summarizeAttemptMatrix,
   getTenantRole,
+  getWorkspaceRoleForAccount,
+  requireWorkspaceAccountContext,
   type SsxErrorClass,
   type EndpointAttemptResult,
   type NormalizedUnit,
@@ -82,7 +85,9 @@ Deno.serve(async (req) => {
     }
 
     if (!isCron && callerId) {
-      const role = await getTenantRole(supabase, account.tenant_id, callerId);
+      const tenantContextError=await requireWorkspaceAccountContext(req,supabase,integration_account_id);
+      if(tenantContextError)return tenantContextError;
+      const role=account.workspace_id?await getWorkspaceRoleForAccount(supabase,account.workspace_id,callerId):await getTenantRole(supabase,account.tenant_id,callerId);
       if (!role || !["owner", "admin"].includes(role)) {
         return jsonResponse({ error: "Forbidden: admin role required" }, 403);
       }
@@ -129,103 +134,98 @@ Deno.serve(async (req) => {
     const startTime = Date.now();
 
     // ================================================================
-    // PHASE 1: Vehicle/v2/List → Vehicle/List (PRIMARY catalog source)
+    // PHASE 1: Explicit Administration catalog or Tracking discovery
     // ================================================================
 
+    const administrationEnabled = settings.administration_enabled === true;
     const skipAdminUntil = settings.skip_admin_until;
-    const adminSkipped = !force && skipAdminUntil && new Date(skipAdminUntil).getTime() > Date.now();
-    let usedMethod = "administration";
-
-    let vehicleResult: EndpointAttemptResult;
-
-    if (adminSkipped) {
-      console.log(`[SSX:sync-units] Admin skipped until ${skipAdminUntil}`);
-      vehicleResult = {
-        success: false, items: [], endpoint: "", statusCode: 0,
-        errorClass: "unknown", errorMessage: "Admin temporarily skipped",
-        successfulFormat: null, attempts: [],
-      };
-    } else {
-      // PRIMARY: Try Vehicle/v2/List, then Vehicle/List
-      vehicleResult = await tryAdminVehicleDiscovery(config, supabase, integration_account_id);
-      if (vehicleResult.errorClass === "rate_limited") {
-        return await handle429(supabase, account, settings, integration_account_id, vehicleResult, Date.now() - startTime);
-      }
-    }
-
-    // --- Tracker enrichment (only if vehicles succeeded) ---
+    const adminSkipped = Boolean(
+      administrationEnabled && !force && skipAdminUntil
+      && new Date(skipAdminUntil).getTime() > Date.now()
+    );
+    let administrationAttempted = false;
+    let usedMethod: "administration" | "tracking_discovery" = "tracking_discovery";
+    let vehicleResult: EndpointAttemptResult | null = null;
     let trackerResult: EndpointAttemptResult | null = null;
-    if (vehicleResult.success && vehicleResult.items.length > 0) {
-      trackerResult = await tryAdminTrackerDiscovery(config, supabase, integration_account_id);
-      if (!trackerResult.success) {
-        console.log(`[SSX:sync-units] Tracker enrichment failed (${trackerResult.errorClass}), continuing with vehicles only`);
-      }
-    }
 
-    // ================================================================
-    // PHASE 1b: If Vehicle admin failed, try fallback
-    // ================================================================
-    if (!vehicleResult.success || vehicleResult.items.length === 0) {
-      if (!adminSkipped && vehicleResult.errorClass !== "rate_limited") {
+    if (administrationEnabled && !adminSkipped) {
+      administrationAttempted = true;
+      const adminVehicleResult = await tryAdminVehicleDiscovery(config, supabase, integration_account_id);
+      if (adminVehicleResult.errorClass === "rate_limited") {
+        return await handle429(supabase, account, settings, integration_account_id, adminVehicleResult, Date.now() - startTime);
+      }
+
+      if (adminVehicleResult.success && adminVehicleResult.items.length > 0) {
+        usedMethod = "administration";
+        vehicleResult = adminVehicleResult;
+        trackerResult = await tryAdminTrackerDiscovery(config, supabase, integration_account_id);
+        if (!trackerResult.success) {
+          console.log(`[SSX:sync-units] Tracker enrichment failed (${trackerResult.errorClass}); continuing with the vehicle catalog`);
+        }
+      } else {
         const skipUntil = new Date(Date.now() + ADMIN_SKIP_MS).toISOString();
-        const lastAdminError = `${vehicleResult.errorClass}: ${vehicleResult.errorMessage || "unknown"}`;
         settings.skip_admin_until = skipUntil;
-        settings.last_admin_error = lastAdminError;
-        settings.last_admin_attempt_matrix = summarizeAttemptMatrix(vehicleResult.attempts);
+        settings.last_admin_error = `${adminVehicleResult.errorClass}: ${adminVehicleResult.errorMessage || "unknown"}`;
+        settings.last_admin_attempt_matrix = summarizeAttemptMatrix(adminVehicleResult.attempts);
         await supabase.from("integration_accounts").update({
           settings: { ...settings },
           updated_at: new Date().toISOString(),
         }).eq("id", integration_account_id);
       }
+    } else if (adminSkipped) {
+      console.log(`[SSX:sync-units] Explicit Administration capability is cooling down until ${skipAdminUntil}`);
+    }
 
-      console.log("[SSX:sync-units] Falling back to tracking-based discovery...");
-      usedMethod = "legacy_fallback";
+    if (!vehicleResult) {
+      const trackingResult = await fetchUnitsTrackingDiscovery(config);
 
-      const legacyResult = await fetchUnitsTrackingFallback(config);
-
-      for (const attempt of legacyResult.attempts) {
+      for (const attempt of trackingResult.attempts) {
         logSsxCall({
           routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
-          apiVersion: config.apiVersion, attemptType: `legacy:${attempt.format}`,
+          apiVersion: "v3", attemptType: `tracking_discovery:${attempt.format}`,
           statusCode: attempt.statusCode, durationMs: attempt.durationMs,
           responsePreview: attempt.responsePreview,
-          result: attempt.itemCount > 0 ? "success" : "error",
+          result: attempt.itemCount > 0 ? "success" : (attempt.statusCode >= 200 && attempt.statusCode < 300 ? "empty" : "error"),
           errorClass: attempt.errorClass,
-          fallbackReason: "Administration API unavailable",
+          fallbackReason: administrationAttempted ? "Explicit Administration catalog unavailable" : undefined,
         });
       }
 
-      if (legacyResult.errorClass === "rate_limited") {
-        return await handle429(supabase, account, settings, integration_account_id, legacyResult, Date.now() - startTime);
+      if (trackingResult.errorClass === "rate_limited") {
+        return await handle429(supabase, account, settings, integration_account_id, trackingResult, Date.now() - startTime);
       }
 
-      if (!legacyResult.success) {
+      const emptyButReachable = trackingResult.errorClass === "empty_response"
+        && trackingResult.statusCode >= 200 && trackingResult.statusCode < 300;
+      if (!trackingResult.success && !emptyButReachable) {
         await logIntegration(supabase, {
           tenant_id: account.tenant_id, integration_account_id,
-          action: "ssx_sync_units", endpoint: legacyResult.endpoint,
-          status_code: legacyResult.statusCode, success: false,
-          error_message: `All discovery methods failed. Vehicle: ${vehicleResult.errorClass}. Legacy: ${legacyResult.errorClass}`,
+          action: "ssx_sync_units", endpoint: trackingResult.endpoint,
+          status_code: trackingResult.statusCode, success: false,
+          error_message: `Tracking discovery failed: ${trackingResult.errorClass}`,
           duration_ms: Date.now() - startTime,
           metadata: {
-            method: "all_failed",
-            vehicle_error_class: vehicleResult.errorClass,
-            legacy_error_class: legacyResult.errorClass,
+            method: "tracking_discovery_failed",
+            administration_enabled: administrationEnabled,
+            administration_attempted: administrationAttempted,
+            tracking_error_class: trackingResult.errorClass,
           },
         });
         await supabase.from("integration_accounts").update({
           status: "sync_inconclusive",
-          last_error: `Sync failed: vehicle=${vehicleResult.errorClass}, legacy=${legacyResult.errorClass}`,
+          last_error: `Tracking discovery failed: ${trackingResult.errorClass}`,
           updated_at: new Date().toISOString(),
         }).eq("id", integration_account_id);
 
         return jsonResponse({
-          error: "SSX unit sync failed",
-          vehicle_error: vehicleResult.errorClass,
-          legacy_error: legacyResult.errorClass,
+          error: "SSX Tracking unit discovery failed",
+          error_class: trackingResult.errorClass,
         }, 502);
       }
 
-      vehicleResult = legacyResult;
+      vehicleResult = emptyButReachable
+        ? { ...trackingResult, success: true, items: [] }
+        : trackingResult;
     }
 
     const duration = Date.now() - startTime;
@@ -233,11 +233,23 @@ Deno.serve(async (req) => {
     // ================================================================
     // PHASE 2: Normalize, deduplicate, and extract rich metadata
     // ================================================================
-    const sourceMode = usedMethod === "administration" ? "admin_catalog" : "tracking_fallback";
+    const sourceMode = usedMethod === "administration" ? "admin_catalog" : "tracking_discovery";
     const normalized: (NormalizedUnit & { raw_item: any })[] = [];
     const seenCodes = new Set<string>();
+    let skippedNonVehicle = 0;
+    let skippedMissingStableCode = 0;
 
     for (const raw of vehicleResult.items) {
+      if (sourceMode === "tracking_discovery") {
+        if (!isVehicleTrackedUnit(raw)) {
+          skippedNonVehicle++;
+          continue;
+        }
+        if (!pickTrackedUnitIntegrationCode(raw)) {
+          skippedMissingStableCode++;
+          continue;
+        }
+      }
       const unit = normalizeTrackerItem(raw, vehicleResult.endpoint, sourceMode as any);
       if (!unit || seenCodes.has(unit.external_code)) continue;
       seenCodes.add(unit.external_code);
@@ -265,7 +277,35 @@ Deno.serve(async (req) => {
     // ================================================================
     let upsertedCount = 0, skippedCount = 0, vehiclesCreated = 0, linksCreated = 0;
     let mappingConflicts = 0;
-    const conflictDetails: { unit_code: string; reason: string; linked_vehicle_plate?: string; ssx_plate?: string }[] = [];
+    const conflictDetails: {
+      unit_code: string;
+      reason: string;
+      linked_vehicle_plate?: string;
+      ssx_plate?: string;
+      conflict_id?: string;
+    }[] = [];
+
+    const persistMappingConflict = async (payload: {
+      provider_unit_id: string;
+      external_code: string;
+      observed_plate: string;
+      normalized_plate: string;
+      conflict_type: "ambiguous_plate_match" | "mapping_conflict";
+      candidate_vehicle_ids: string[];
+      linked_vehicle_id?: string;
+    }): Promise<string> => {
+      const { data, error } = await supabase.rpc("report_ssx_mapping_conflict_v1", {
+        _payload: {
+          tenant_id: account.tenant_id,
+          integration_account_id,
+          ...payload,
+        },
+      });
+      if (error || !data) {
+        throw new Error(`ssx_mapping_conflict_queue_failed: ${error?.message || "missing conflict id"}`);
+      }
+      return String(data);
+    };
 
     for (const unit of normalized) {
       const raw = unit.raw_item;
@@ -319,10 +359,19 @@ Deno.serve(async (req) => {
 
         if (matchingVehicles.length > 1) {
           mappingConflicts++;
+          const conflictId = await persistMappingConflict({
+            provider_unit_id: upsertedUnit.id,
+            external_code: unit.external_code,
+            observed_plate: plate,
+            normalized_plate: normalizedPlate,
+            conflict_type: "ambiguous_plate_match",
+            candidate_vehicle_ids: matchingVehicles.map((vehicle: any) => vehicle.id),
+          });
           conflictDetails.push({
             unit_code: unit.external_code,
             reason: "ambiguous_plate_match",
             ssx_plate: plate,
+            conflict_id: conflictId,
           });
           console.warn(`[SSX:sync-units] MAPPING_CONFLICT: provider_unit ${unit.external_code} plate "${plate}" matches ${matchingVehicles.length} vehicles — skipping auto-link`);
           continue;
@@ -358,11 +407,21 @@ Deno.serve(async (req) => {
             mappingConflicts++;
             const { data: linkedVehicle } = await supabase
               .from("vehicles").select("plate").eq("id", existingLink.vehicle_id).single();
+            const conflictId = await persistMappingConflict({
+              provider_unit_id: upsertedUnit.id,
+              external_code: unit.external_code,
+              observed_plate: plate,
+              normalized_plate: normalizedPlate,
+              conflict_type: "mapping_conflict",
+              candidate_vehicle_ids: [vehicleId],
+              linked_vehicle_id: existingLink.vehicle_id,
+            });
             conflictDetails.push({
               unit_code: unit.external_code,
               reason: "mapping_conflict",
               linked_vehicle_plate: linkedVehicle?.plate || existingLink.vehicle_id,
               ssx_plate: plate,
+              conflict_id: conflictId,
             });
             console.warn(`[SSX:sync-units] MAPPING_CONFLICT: provider_unit ${unit.external_code} linked to vehicle ${linkedVehicle?.plate || existingLink.vehicle_id} but SSX plate is "${plate}" (vehicle ${vehicleId}) — NOT overwriting`);
           }
@@ -376,6 +435,33 @@ Deno.serve(async (req) => {
             });
           if (linkErr) {
             console.error(`[SSX:sync-units] Link failed ${unit.external_code}→${plate}: ${linkErr.message}`);
+            if (linkErr.code === "23505") {
+              const { data: blockingLink } = await supabase
+                .from("vehicle_tracker_links")
+                .select("vehicle_id")
+                .eq("tenant_id", account.tenant_id)
+                .eq("vehicle_id", vehicleId)
+                .eq("active", true)
+                .limit(1)
+                .maybeSingle();
+              const conflictId = await persistMappingConflict({
+                provider_unit_id: upsertedUnit.id,
+                external_code: unit.external_code,
+                observed_plate: plate,
+                normalized_plate: normalizedPlate,
+                conflict_type: "mapping_conflict",
+                candidate_vehicle_ids: [vehicleId],
+                linked_vehicle_id: blockingLink?.vehicle_id || vehicleId,
+              });
+              mappingConflicts++;
+              conflictDetails.push({
+                unit_code: unit.external_code,
+                reason: "mapping_conflict",
+                linked_vehicle_plate: plate,
+                ssx_plate: plate,
+                conflict_id: conflictId,
+              });
+            }
           } else {
             linksCreated++;
             console.log(`[SSX:sync-units] Linked provider_unit ${unit.external_code} → vehicle ${plate} (${vehicleId})`);
@@ -434,6 +520,12 @@ Deno.serve(async (req) => {
         vehicles_created: vehiclesCreated,
         links_created: linksCreated,
         mapping_conflicts: mappingConflicts,
+        skipped_non_vehicle: skippedNonVehicle,
+        skipped_missing_stable_code: skippedMissingStableCode,
+        administration_enabled: administrationEnabled,
+        administration_attempted: administrationAttempted,
+        catalog_complete: usedMethod === "administration",
+        discovery_saturated: usedMethod === "tracking_discovery" && vehicleResult.items.length >= 500,
         conflict_details: conflictDetails.length > 0 ? conflictDetails : undefined,
       },
     });
@@ -451,12 +543,18 @@ Deno.serve(async (req) => {
       vehicles_created: vehiclesCreated,
       links_created: linksCreated,
       mapping_conflicts: mappingConflicts,
+      skipped_non_vehicle: skippedNonVehicle,
+      skipped_missing_stable_code: skippedMissingStableCode,
+      administration_enabled: administrationEnabled,
+      administration_attempted: administrationAttempted,
+      catalog_complete: usedMethod === "administration",
+      discovery_saturated: usedMethod === "tracking_discovery" && vehicleResult.items.length >= 500,
       conflict_details: conflictDetails.length > 0 ? conflictDetails : undefined,
     });
 
   } catch (err: any) {
     console.error("[SSX:sync-units] Unhandled error:", err);
-    return jsonResponse({ error: "Internal error", details: err.message }, 500);
+    return jsonResponse({ error: "Internal error" }, 500);
   }
 });
 
@@ -666,50 +764,47 @@ async function tryAdminTrackerDiscovery(
   };
 }
 
-// ==================== Tracking-Based Fallback ====================
+// ==================== Tracking-Based Opportunistic Discovery ====================
 
-async function fetchUnitsTrackingFallback(config: ReturnType<typeof readAccountConfig>): Promise<EndpointAttemptResult> {
-  const allAttempts: AttemptLog[] = [];
-
-  // Skip TrackedUnit/List — not reliable across providers
-  // Go directly to PositionHistory as fallback
-  const posHistUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
-  const since = new Date(Date.now() - 60 * 60_000).toISOString();
+async function fetchUnitsTrackingDiscovery(config: ReturnType<typeof readAccountConfig>): Promise<EndpointAttemptResult> {
+  // Tracking publishes no complete vehicle catalog. Use one exact, documented
+  // v3 request only to discover recent vehicle units; absence never deactivates
+  // an existing provider_unit and the caller reports catalog_complete=false.
+  const posHistUrls = [buildSsxUrl(config.baseUrl, "v3", "/Tracking/PositionHistory/List")];
+  const configuredLookback = Number(config.settings.unit_discovery_lookback_minutes ?? 60);
+  const lookbackMinutes = Number.isFinite(configuredLookback)
+    ? Math.min(1_440, Math.max(5, Math.trunc(configuredLookback)))
+    : 60;
+  const since = new Date(Date.now() - lookbackMinutes * 60_000).toISOString();
   const timeFilterProp = config.settings.time_filter_property || "EventDate";
-  const filters = [{ PropertyName: timeFilterProp, Condition: ">=", Value: since }];
-  const filtersAlt = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
-
-  const posBodyCandidates: { label: string; body: any }[] = [
-    { label: "position_array_filters", body: filters },
-    { label: "position_wrapped_filters", body: { Filters: filters } },
-    { label: "position_array_alt_time", body: filtersAlt },
-    { label: "position_wrapped_alt_time", body: { Filters: filtersAlt } },
-  ];
+  const filters = [{
+    PropertyName: timeFilterProp,
+    Condition: "GreaterThanOrEqualTo",
+    Value: since,
+  }];
 
   const posResult = await tryEndpointWithFallback({
     urlCandidates: posHistUrls,
     token: config.token,
-    bodyCandidates: posBodyCandidates,
+    bodyCandidates: [{ label: "v3_query_condition_array", body: filters }],
     timeoutMs: config.requestTimeoutMs,
     abortOnAuthError: true,
   });
-  allAttempts.push(...posResult.attempts);
+  return posResult;
+}
 
-  if (posResult.errorClass === "rate_limited") return { ...posResult, attempts: allAttempts };
-  if (posResult.success && posResult.items.length > 0) {
-    return { ...posResult, endpoint: `${posResult.endpoint} (fallback 60m)`, attempts: allAttempts };
-  }
+function isVehicleTrackedUnit(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  const record = raw as Record<string, unknown>;
+  const value = record.IdTrackedUnitType ?? record.idTrackedUnitType;
+  return Number(value) === 1;
+}
 
-  const finalError = deriveDominantError(allAttempts);
-  return {
-    success: false, items: [],
-    endpoint: posHistUrls[0] || "",
-    statusCode: allAttempts.length > 0 ? allAttempts[allAttempts.length - 1].statusCode : 0,
-    errorClass: finalError.errorClass,
-    errorMessage: "No units found in tracking fallback",
-    successfulFormat: null,
-    attempts: allAttempts,
-  };
+function pickTrackedUnitIntegrationCode(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const value = record.TrackedUnitIntegrationCode ?? record.trackedUnitIntegrationCode;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 // ==================== Error Classification ====================

@@ -1,0 +1,10 @@
+import {z} from 'zod';
+const uuid=z.string().uuid(),cents=z.number().int().positive().max(99999999999999);
+export const settlementMovementCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,payment_id:uuid,movement_id:uuid,reason:z.string().trim().min(10).max(2000)}).strict();
+export type SettlementMovementCommand=z.infer<typeof settlementMovementCommandSchema>;
+export const settlementMovementResultSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,payment_id:uuid,settlement_id:uuid,movement_id:uuid,link_id:uuid,amount_cents:cents,cash_created:z.literal(false),confirmed:z.literal(true)});
+export const settlementLinkSchema=z.object({id:uuid,movement_id:uuid,amount_cents:cents,created_by:uuid,created_at:z.string(),actor_name:z.string(),reason:z.string().nullable()});
+export const settlementReversalCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,link_id:uuid,reason:z.string().trim().min(10).max(2000)}).strict();
+export type SettlementReversalCommand=z.infer<typeof settlementReversalCommandSchema>;
+export const settlementReversalResultSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,reversal_id:uuid,link_id:uuid,confirmed:z.literal(true),cash_changed:z.literal(false)});
+export const settlementMovementOptionsSchema=z.object({version:z.literal(1),tenant_id:uuid,payment_id:uuid,settlement_id:uuid,amount_cents:cents,page:z.number().int().positive(),page_size:z.literal(20),total:z.number().int().nonnegative(),link:settlementLinkSchema.nullable(),history:z.array(settlementLinkSchema.extend({reversal:z.object({id:uuid,actor_id:uuid,actor_name:z.string(),reason:z.string(),created_at:z.string()}).nullable()})),rows:z.array(z.object({id:uuid,description:z.string(),occurred_on:z.string(),amount_cents:cents,remaining_cents:cents,beneficiary_name:z.string(),account_name:z.string()})).max(20)});

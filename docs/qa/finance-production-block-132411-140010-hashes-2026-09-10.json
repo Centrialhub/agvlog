@@ -1,0 +1,65 @@
+[
+  {
+    "file": "20260910132411_finance_settlement_link_reversals.sql",
+    "sha256": "34cd9f338917b7c461acd7b81e104019312e7834c3c770a4c388f4cdc6dcdf52",
+    "review": "entire_sql_read",
+    "decision": "staged_install_after_adaptive_preflight",
+    "cron_created": false
+  },
+  {
+    "file": "20260910133352_finance_payroll_lifecycle_serialization.sql",
+    "sha256": "d596834f30bdfddcd8b2410c9ba3c1a7318129cebd1c3fc1185c40d1f7506311",
+    "review": "entire_sql_read",
+    "decision": "staged_install_after_adaptive_preflight",
+    "cron_created": false
+  },
+  {
+    "file": "20260910133355_finance_new_settlement_payment_candidates.sql",
+    "sha256": "2228320c5bb307153155b0b33303f23c40da047efa2485551ae784d38576ef18",
+    "review": "entire_sql_read",
+    "decision": "staged_install_after_adaptive_preflight",
+    "cron_created": false
+  },
+  {
+    "file": "20260910133421_finance_settlement_payment_recording.sql",
+    "sha256": "33d7164beccdc66e575fc9e75801acb7fcdf0f4d90cb0563a8abfd9a7abbaee8",
+    "review": "entire_sql_read",
+    "decision": "staged_install_after_adaptive_preflight",
+    "cron_created": false
+  },
+  {
+    "file": "20260910133700_finance_retire_legacy_settlement_payment_writers.sql",
+    "sha256": "8cefdf5c92a4bfbd979a2685de8c46edbad0b31d5751453297d676aeb7545595",
+    "review": "entire_sql_read",
+    "decision": "staged_install_after_adaptive_preflight",
+    "cron_created": false
+  },
+  {
+    "file": "20260910134943_finance_settlement_expense_context.sql",
+    "sha256": "7a26f770888e32c41bca109b571725d10c27b3f1c951a253416c4bcf1c30b92c",
+    "review": "entire_sql_read",
+    "decision": "staged_install_after_adaptive_preflight",
+    "cron_created": false
+  },
+  {
+    "file": "20260910134948_finance_canonical_trip_cost_settlement.sql",
+    "sha256": "79daec2296c36e35b123a618810cb51612b0c9700c4911f8c15bc6573ee84f6d",
+    "review": "entire_sql_read",
+    "decision": "staged_install_after_adaptive_preflight",
+    "cron_created": false
+  },
+  {
+    "file": "20260910135125_finance_retire_bulk_obligation_projection.sql",
+    "sha256": "fb9149d2b130d2811fc1ed9b8c596d3587218223c847cecc4ec5746afcdd5e54",
+    "review": "entire_sql_read",
+    "decision": "staged_install_after_adaptive_preflight",
+    "cron_created": false
+  },
+  {
+    "file": "20260910140010_finance_account_opening_balances.sql",
+    "sha256": "799f25034f6f3964b32e7da896ebffa589d8bb0fc623b03ae1cd1f13e5964c9c",
+    "review": "entire_sql_read",
+    "decision": "staged_install_after_adaptive_preflight",
+    "cron_created": false
+  }
+]

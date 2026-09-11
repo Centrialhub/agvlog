@@ -15,7 +15,7 @@ import { format } from 'date-fns';
 import {
   useDriverSettlement, useRegenerateDriverSettlement, useUpdateDriverSettlementStatus,
   useUpdateSettlementKmReview,
-  useRegisterSettlementPayment, useSettleZeroDriverSettlement,
+  useSettleZeroDriverSettlement,
   SETTLEMENT_STATUS_LABEL, isLocked, DriverSettlementStatus,
   useDetachLoadFromSettlement,
   useDeleteDriverSettlement,
@@ -23,9 +23,12 @@ import {
 import { ExpenseCreationForm } from './ExpenseCreationForm';
 import { SettlementAdjustments } from './SettlementAdjustments';
 import { SettlementAdjustmentRecoveryPanel } from './SettlementAdjustmentRecoveryPanel';
+import { SettlementMovementLink } from './SettlementMovementLink';
+import { SettlementPaymentDialog } from './SettlementPaymentDialog';
+import { SettlementExpenseContext } from './SettlementExpenseContext';
 import { ExpenseReceiptDialog } from './ExpenseReceiptDialog';
-import { useCostCenters } from '@/hooks/useCostCenters';
-import { useBankAccounts } from '@/hooks/useBankReconciliation';
+
+
 import AttachLoadsDialog from './AttachLoadsDialog';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
@@ -64,12 +67,12 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const regen = useRegenerateDriverSettlement();
   const updateStatus = useUpdateDriverSettlementStatus();
   const updateKm = useUpdateSettlementKmReview();
-  const registerPay = useRegisterSettlementPayment();
+
   const settleZero = useSettleZeroDriverSettlement();
   const detachLoad = useDetachLoadFromSettlement();
   const [attachOpen, setAttachOpen] = useState(false);
   const deleteSettlement = useDeleteDriverSettlement();
-  const { data: costCenters } = useCostCenters();
+
 
   const s = isError ? undefined : data?.settlement;
   const items = data?.items ?? [];
@@ -98,7 +101,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
 
   const loadItems = items.filter(i => i.item_type === 'load');
   const docItems = items.filter(i => i.item_type === 'fiscal_document');
-  const expItems = items.filter(i => i.item_type === 'expense');
+  const expItems = items.filter(i => i.item_type === 'expense' && i.source_table !== 'finance_expense_items');
   const adjItems = items.filter(i => i.item_type === 'adjustment');
   const hasPendingExpenses = (s?.pending_expenses_total ?? 0) > 0;
   const noFreight = (s?.total_freight_value ?? 0) === 0;
@@ -118,25 +121,9 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
 
   // Payment dialog
   const [payOpen, setPayOpen] = useState(false);
+  const [paymentRecoveryOnly, setPaymentRecoveryOnly] = useState(false);
   const remaining = Math.max(0, Number(s?.driver_payable_amount ?? 0) - Number(s?.total_paid_amount ?? 0));
-  const [payAmount, setPayAmount] = useState('');
-  const [payMethod, setPayMethod] = useState('pix');
-  const [payAccount, setPayAccount] = useState<string>('caixa');
-  const [payAccountOther, setPayAccountOther] = useState('');
-  const [payReference, setPayReference] = useState('');
-  const [payReceipt, setPayReceipt] = useState('');
-  const [payNotes, setPayNotes] = useState('');
-  const [payBankAccountId, setPayBankAccountId] = useState<string>('none');
-  const [payCostCenter, setPayCostCenter] = useState<string>('Operacional');
-  const { data: bankAccounts } = useBankAccounts();
-  useEffect(() => { if (payOpen) setPayAmount(remaining > 0 ? String(remaining.toFixed(2)) : ''); }, [payOpen, remaining]);
-  const [payAllowOver, setPayAllowOver] = useState(false);
-  const [payOverReason, setPayOverReason] = useState('');
-  const payNumeric = Number(payAmount || 0);
-  const isOverpayment = payNumeric > 0 && payNumeric > remaining;
-  const isOtherAccount = payAccount === 'other';
-  const otherAccountFilled = payAccountOther.trim().length > 0;
-  const accountInvalid = isOtherAccount && !otherAccountFilled;
+
 
   // Approve with exception dialog
   const [approveOpen, setApproveOpen] = useState(false);
@@ -291,7 +278,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               <TabsList>
                 <TabsTrigger value="loads">Romaneios ({loadItems.length})</TabsTrigger>
                 <TabsTrigger value="docs">Notas ({docItems.length})</TabsTrigger>
-                <TabsTrigger value="expenses">Despesas ({expItems.length})</TabsTrigger>
+                <TabsTrigger value="expenses">Despesas</TabsTrigger>
                 <TabsTrigger value="km">KM</TabsTrigger>
                 <TabsTrigger value="adjustments">Ajustes ({adjItems.length})</TabsTrigger>
                 <TabsTrigger value="payments">Pagamentos ({payments.length})</TabsTrigger>
@@ -366,6 +353,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
 
               <TabsContent value="expenses">
                 <div className="space-y-3">
+                  <SettlementExpenseContext settlement={s.id}/>
+                  <h3 className="font-semibold">Outras despesas do acerto</h3>
                   <div className="flex justify-end">
                     <Dialog open={expOpen} onOpenChange={setExpOpen}>
                       <DialogTrigger asChild>
@@ -495,6 +484,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               </TabsContent>
 
               <TabsContent value="payments" className="space-y-3">
+                <Button variant="outline" disabled={needsRecalc} onClick={() => setPayOpen(true)}>Registrar ou retomar pagamento</Button>
+                <Button variant="outline" onClick={() => { setPaymentRecoveryOnly(true); setPayOpen(true); }}>Retomar pagamento anterior</Button>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div><div className="text-muted-foreground text-xs">A pagar</div><div className="font-semibold">{fmtMoney(s.driver_payable_amount)}</div></div>
                   <div><div className="text-muted-foreground text-xs">Pago</div><div className="font-semibold">{fmtMoney(s.total_paid_amount)}</div></div>
@@ -511,7 +502,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                           <TableCell className="text-xs">{p.payment_account ?? '—'}</TableCell>
                           <TableCell>{p.payment_reference ?? '—'}</TableCell>
                           <TableCell className="text-right">{fmtMoney(Number(p.amount))}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{p.notes ?? '—'}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{p.notes ?? '—'}<SettlementMovementLink payment={p.id} settlement={s.id}/></TableCell>
                           <TableCell>{p.receipt_url ? <a className="text-primary text-xs" href={p.receipt_url} target="_blank" rel="noreferrer">abrir</a> : '—'}</TableCell>
                         </TableRow>
                       ))}
@@ -577,128 +568,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             </Dialog>
 
             {/* Register payment */}
-            <Dialog open={payOpen} onOpenChange={setPayOpen}>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Registrar pagamento</DialogTitle>
-                  <DialogDescription>Registre somente um pagamento já conferido. Acertos desatualizados devem ser revisados antes desta ação.</DialogDescription></DialogHeader>
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="settlement-payment-amount">Valor pago * (saldo {fmtMoney(remaining)})</Label>
-                    <Input id="settlement-payment-amount" type="number" step="0.01" min="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>Método *</Label>
-                    <Select value={payMethod} onValueChange={setPayMethod}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pix">PIX</SelectItem>
-                        <SelectItem value="ted">TED</SelectItem>
-                        <SelectItem value="cash">Dinheiro</SelectItem>
-                        <SelectItem value="other">Outro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Conta/origem do pagamento</Label>
-                    <Select value={payAccount} onValueChange={setPayAccount}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="caixa">Caixa</SelectItem>
-                        <SelectItem value="banco">Banco</SelectItem>
-                        <SelectItem value="pix">Pix</SelectItem>
-                        <SelectItem value="conta_operacional">Conta operacional</SelectItem>
-                        <SelectItem value="cartao_empresa">Cartão empresa</SelectItem>
-                        <SelectItem value="other">Outro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {isOtherAccount && (
-                      <div className="mt-2 space-y-1">
-                        <Label className="text-xs">Descreva a conta/origem *</Label>
-                        <Input
-                          value={payAccountOther}
-                          onChange={(e) => setPayAccountOther(e.target.value)}
-                          placeholder="Ex.: Banco Sicoob Eventos, Caixa físico filial 2"
-                        />
-                        {!otherAccountFilled && (
-                          <p className="text-xs text-destructive">Informe a conta/origem do pagamento.</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <Label>Vincular a conta bancária (Conciliação)</Label>
-                    <Select value={payBankAccountId} onValueChange={setPayBankAccountId}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Não vincular agora</SelectItem>
-                        {bankAccounts?.map(ba => (
-                          <SelectItem key={ba.id} value={ba.id}>{ba.name} ({ba.bank_name})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Centro de Custo</Label>
-                    <Select value={payCostCenter} onValueChange={setPayCostCenter}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {costCenters?.map(cc => (
-                          <SelectItem key={cc} value={cc}>{cc}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Referência / comprovante</Label>
-                    <Input value={payReference} onChange={(e) => setPayReference(e.target.value)} placeholder="ID da transação" />
-                  </div>
-                  <div>
-                    <Label>URL do comprovante</Label>
-                    <Input value={payReceipt} onChange={(e) => setPayReceipt(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>Observações</Label>
-                    <Textarea value={payNotes} onChange={(e) => setPayNotes(e.target.value)} />
-                  </div>
-                  {isOverpayment && (
-                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm space-y-2">
-                      <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" /> Valor maior que o saldo restante ({fmtMoney(remaining)}).</div>
-                      <label className="flex items-center gap-2 text-xs">
-                        <input type="checkbox" checked={payAllowOver} onChange={(e) => setPayAllowOver(e.target.checked)} />
-                        Permitir sobrepagamento (requer admin/owner e justificativa)
-                      </label>
-                      {payAllowOver && (
-                        <Textarea value={payOverReason} onChange={(e) => setPayOverReason(e.target.value)} placeholder="Justificativa do sobrepagamento" />
-                      )}
-                    </div>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setPayOpen(false)}>Cancelar</Button>
-                  <Button disabled={needsRecalc || !payAmount || !payMethod || accountInvalid || registerPay.isPending || (isOverpayment && (!payAllowOver || !payOverReason.trim()))}
-                    onClick={async () => {
-                      const accountLabelMap: Record<string, string> = {
-                        caixa: 'Caixa', banco: 'Banco', pix: 'Pix',
-                        conta_operacional: 'Conta operacional', cartao_empresa: 'Cartão empresa',
-                      };
-                      const accountValue = isOtherAccount
-                        ? payAccountOther.trim()
-                        : (accountLabelMap[payAccount] ?? payAccount);
-                      await registerPay.mutateAsync({
-                        id: s.id, amount: Number(payAmount), method: payMethod,
-                        account: accountValue,
-                        reference: payReference || null, receipt_url: payReceipt || null, notes: payNotes || null,
-                        allow_overpayment: isOverpayment ? payAllowOver : false,
-                        overpayment_reason: isOverpayment ? payOverReason : null,
-                        bank_account_id: payBankAccountId === 'none' ? null : payBankAccountId,
-                        cost_center: payCostCenter,
-                      });
-                      setPayOpen(false); setPayReference(''); setPayReceipt(''); setPayNotes(''); setPayAllowOver(false); setPayOverReason(''); setPayAccountOther('');
-                      setPayBankAccountId('none');
-                    }}>Registrar</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            {payOpen && <SettlementPaymentDialog settlement={s.id} initialAmount={remaining} allowNew={!needsRecalc && !paymentRecoveryOnly} onClose={() => { setPayOpen(false); setPaymentRecoveryOnly(false); }}/>}
 
             {/* Settle without payment (zero balance) */}
             <Dialog open={zeroOpen} onOpenChange={setZeroOpen}>

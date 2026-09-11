@@ -1,0 +1,18 @@
+# Prévia de correção de movimento — UI somente leitura — 10/09/2026
+
+Contrato de effects confirmado com autor90516; schema movementCorrectionPreviewSchema exportado em movementCorrectionPreviewContract.ts, cliente readMovementCorrectionPreview em movementCorrectionPreviewClient.ts. Única chamada pública: preview_finance_movement_correction com tenant/movement IDs. Sem função de escrita, botão confirmar ou integração temporária em rota de produção.
+
+MovementCorrectionReview / MovementCorrectionReviewWorkspace exibe origem, autor/ID/evento/motivo originais, favorecido, valor, direção, dia e conta; impedimentos e IDs, dependências com períodos/fechamentos quando preservados, prontidão das proteções e efeitos prospectivos. Dados em atualização/falha são ocultados; nenhum zero é presumido quando effectsnull. FinanceAccessBoundary e query por tenant/actor/movement preservam escopo; wrapper manterá can_execute:false enquanto escrita não existe.
+
+Schema exige amountpositivo inteiroseguro<=99999999999999 ou decimalstringpositivoaté14dígitos; rejeita null/NaN/decimal. Originverified exige originalrequest e uma origem/evento únicos. Efeitos precisam corresponder à direção e ao valor original: remover entrada produz deltaentrada negativo, remover saída produz deltasaída negativo; saldo é entrada−saída. Também valida tenant/movement/conta/dia. Uma equação coerente mas com valor errado é rejeitada. BigInt só executa após validar strings e valor original.
+
+Validação:4testes passaram (2schema,1cliente,1UI), incluindo efeitoscoerentesmaserrados, valorinválido, origem sem pedido e ausência de ação de escrita. Lint6arquivos aprovado. Sem TSC nesta fase. SQL90516/rootwrapper ainda em preparação na hora desta validação; rótulos dos blockers usam fallback legível com referência técnica em detalhe até enum final do core. Nenhum RPC privado foi exposto ou chamado.
+
+Arquivos novos: movementCorrectionPreviewContract.ts, movementCorrectionPreviewClient.ts, MovementCorrectionReview.tsx, movementCorrectionPreviewContract.test.ts, movementCorrectionPreviewClient.test.ts, movementCorrectionReview.test.tsx. Nenhum arquivo de produção integra o componente ainda.
+
+Integração posterior autorizada: FinanceMovements agora abre MovementCorrectionDialog por registro, com seleção por tenant/ator/movementId e botão Fechar conferência. Apenas consulta; nenhum confirmar/escrita. Rótulos reais90516 e proteções pendentes traduzidos.9testes5arquivos passaram, incluindo4RPCreais e interação abrir registro correto/fechar/sem escrita; lint aprovado.
+TSC83391 encontrou2TS2322 no JSX de dependências, corrigidos por condiçõesbooleanas, e1falhaexterna preservada driverPwaUpgrade.test.ts:50 (replaceAll sem libES2021). Log inicial preservado; verificação posterior coordenada separadamente.
+
+Revisão final: labels90516 também cobrem payable_obligation_history, financial_obligation_history, receivable_command_history, other_event_reference e finance_closed_source_resolution_required. Teste explícito confirma que durante refetch e após erro a consulta oculta elegibilidade e efeitos do cache. Callbacks/queries/diálogo mantêm tenant+ator+movementId.6testes próprios passaram na última rodada; lint9arquivos aprovado. TSCfinal66468 em acompanhamento, sem alterar driverPwaUpgrade externo.
+
+TSCfinal66468 terminou exit2 com8diagnósticos exclusivamente em src/lib/driver/driverDeliverySubmission.ts (linhas8,15,18,47,62: declarações sem uso;240: removeSecureFiles ausente;325/341: rejectedSqlStates ausente). Nenhum diagnóstico financeiro nesta rodada; erros próprios corrigidos. driverPwaUpgrade não apareceu no logfinal. Arquivos externos preservados; TSC global não aprovado. Nenhum TSC ativo.

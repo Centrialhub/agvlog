@@ -23,6 +23,7 @@ import { Plus, Pencil, Trash2, RefreshCw, Truck } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
+import {useWorkspaceSsxAccounts} from '@/hooks/useWorkspaceSsxAccounts';
 
 type DriverRow = Tables<'drivers'>;
 type DriverVehicle = Pick<Tables<'vehicles'>, 'id' | 'plate' | 'nickname'>;
@@ -94,7 +95,7 @@ export default function Drivers() {
   const [editing, setEditing] = useState<DriverWithVehicle | null>(null);
   const [vehicleSearch, setVehicleSearch] = useState<Record<string, string>>({});
 
-  const { data: drivers = [], isLoading } = useQuery({
+  const { data: drivers = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['drivers', 'registry', currentTenant?.id, user?.id],
     queryFn: async (): Promise<DriverWithVehicle[]> => {
       if (!currentTenant || !user) return [];
@@ -191,18 +192,8 @@ export default function Drivers() {
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao atualizar vínculo')),
   });
 
-  const { data: accounts = [] } = useQuery({
-    queryKey: ['integration_accounts_for_drivers', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('integration_accounts')
-        .select('id, username, provider, status')
-        .eq('tenant_id', currentTenant.id).eq('status', 'ok');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant && isAdmin,
-  });
+  const {data:ssxAccounts=[]}=useWorkspaceSsxAccounts(!!currentTenant&&isAdmin&&ssxEnabled);
+  const accounts=ssxAccounts.filter(account=>account.status==='ok'&&account.migration_state==='ready');
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -288,6 +279,17 @@ export default function Drivers() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-8 text-center">
+                    <div role="alert" className="flex flex-col items-center gap-3 text-destructive">
+                      <span>Não foi possível carregar os motoristas: {errorMessage(error, 'erro inesperado')}.</span>
+                      <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
+                        <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : filteredDrivers.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{activeCount ? 'Nenhum motorista corresponde aos filtros' : 'Nenhum motorista cadastrado'}</TableCell></TableRow>
               ) : (

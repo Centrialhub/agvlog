@@ -1,0 +1,54 @@
+{
+  "read_only": true,
+  "scope": "next12_after_233625_through_012756",
+  "files": [
+    {
+      "file": "20260909234654_finance_legacy_driver_boundary.sql",
+      "sha256": "0e31b33f678c063c8600d6db2528c81fa5f18ef6fed1cd7ea456e1ded5ea8b36"
+    },
+    {
+      "file": "20260909235237_finance_legacy_rpc_boundary.sql",
+      "sha256": "58091908245304fc7d899158a0c59019627241d3adef726474d0c014845dc667"
+    },
+    {
+      "file": "20260909235705_finance_legacy_receipt_boundary.sql",
+      "sha256": "bc2ee41f0cc2814b1c0f13d0752f05f9da36747e24a8746ef13be14053fb82c6"
+    },
+    {
+      "file": "20260910000731_finance_payroll_payment_projection.sql",
+      "sha256": "88b308914ba6bcc1d718920f82b391cf60afce7f76a2b7715d3b7c3d641097d3"
+    },
+    {
+      "file": "20260910002244_finance_payable_movement_links.sql",
+      "sha256": "950528541ed07a28b12a83ff47212fe6534b02c6a5ac5f5a048d35e9d3006a43"
+    },
+    {
+      "file": "20260910003529_finance_payable_link_reversal.sql",
+      "sha256": "6a74f52835c7afe46644109a9c415da5f907180b16b82b36321b9c3186740701"
+    },
+    {
+      "file": "20260910004550_finance_fiscal_observation_queue.sql",
+      "sha256": "ca22534cc5e4cbdae362d97a62a35a4fb81ea0300687d9038b4cafc91e080cdf"
+    },
+    {
+      "file": "20260910005509_finance_fiscal_receivable_basis.sql",
+      "sha256": "ba09c06c28da321ec456f9738032c9ed68530805ea40358a4ae9f05f132e01c1"
+    },
+    {
+      "file": "20260910010034_finance_fiscal_receivable_projection.sql",
+      "sha256": "f34824f21040018028e20d4de22fc37d4b9fedecec3286496f96b7d78c6309b8"
+    },
+    {
+      "file": "20260910011121_finance_fiscal_cancellation_credits.sql",
+      "sha256": "f804d5aa34c45ff1cb63bdd0827d157e76ce75a22b54ad45a85172db95c1a02c"
+    },
+    {
+      "file": "20260910012152_finance_receivable_fiscal_context.sql",
+      "sha256": "330057896a657744cff7000aa1cbb317ffb6f7a7fda44b4234b41f714aa5ab6c"
+    },
+    {
+      "file": "20260910012756_finance_fiscal_queue_worker.sql",
+      "sha256": "3d209e4971a591725a5c5e859ebca9f18457e4f3659f656ab1cef8f3a8f31549"
+    }
+  ]
+}

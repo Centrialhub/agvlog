@@ -7,6 +7,7 @@ import {AuthProvider,useAuth} from '@/hooks/useAuth';
 import {TenantProvider,useTenant} from '@/hooks/useTenant';
 import {GlobalAlert} from '@/components/GlobalAlert';
 import {confirmAction,promptAction,useAlertStore} from '@/hooks/useAlertStore';
+import {readTenantMembershipCache,saveTenantMembershipCache} from '@/lib/tenantMemberships';
 
 const mock=vi.hoisted(()=>({listeners:new Set<(event:AuthChangeEvent,session:Session|null)=>void>(),getSession:vi.fn(),getUser:vi.fn(),signOut:vi.fn(),rpc:vi.fn(),toast:vi.fn()}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{auth:{getSession:mock.getSession,getUser:mock.getUser,signOut:mock.signOut,onAuthStateChange:(cb:(event:AuthChangeEvent,session:Session|null)=>void)=>{mock.listeners.add(cb);return {data:{subscription:{unsubscribe:()=>mock.listeners.delete(cb)}}};}},rpc:mock.rpc}}));
@@ -36,6 +37,20 @@ describe('real session and tenant providers',()=>{
  it('ignores a tenant response from the previous actor even if the transport ignores abort',async()=>{const pending=deferred<{data:ReturnType<typeof membership>[];error:null}>();mock.rpc.mockImplementationOnce(()=>Object.assign(pending.promise,{abortSignal:()=>pending.promise}));render(<Story tenant/>);await emit('actor-a');await emit('actor-b');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));await act(async()=>pending.resolve({data:[membership('old-actor-tenant','owner')],error:null}));expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a');expect(screen.getByLabelText('role')).toHaveTextContent('operator');});
  it('preserves a draft on ordinary refresh but removes it on tenant replacement',async()=>{render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));fireEvent.change(screen.getByLabelText('draft QA'),{target:{value:'private draft'}});await emit('actor-a','TOKEN_REFRESHED','renewed');await waitFor(()=>expect(mock.rpc.mock.calls.length).toBeGreaterThan(1));expect(screen.getByLabelText('draft QA')).toHaveValue('private draft');fireEvent.click(screen.getByText('Trocar tenant QA'));expect(screen.getByLabelText('draft QA')).toHaveValue('');});
  it('hides memberships on failed revalidation and recovers with an explicit retry',async()=>{render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));mock.rpc.mockImplementationOnce(()=>{const value=Promise.resolve({data:null,error:new Error('denied QA')});return Object.assign(value,{abortSignal:()=>value});});await emit('actor-a','TOKEN_REFRESHED','renewed');await screen.findByRole('alert');expect(screen.queryByLabelText('tenant')).not.toBeInTheDocument();fireEvent.click(screen.getByText('Tentar novamente'));await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));});
+ it('reopens a previously validated tenant offline without contacting the membership RPC',async()=>{
+   render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));
+   cleanup();client.clear();client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:120000}}});
+   vi.spyOn(Navigator.prototype,'onLine','get').mockReturnValue(false);mock.rpc.mockClear();mock.getSession.mockResolvedValue({data:{session:current},error:null});
+   render(<Story tenant/>);await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));
+   expect(screen.getByLabelText('role')).toHaveTextContent('operator');expect(mock.rpc).not.toHaveBeenCalled();
+ });
+ it('scopes and expires the offline membership cache by actor',()=>{
+   const cached=[{tenant_id:'tenant-a',role:'driver' as const,tenants:{id:'tenant-a',name:'Tenant A',plan_key:'qa',timezone:'America/Sao_Paulo'}}];
+   saveTenantMembershipCache('actor-a',cached,new Date('2026-09-01T00:00:00.000Z'));
+   expect(readTenantMembershipCache('actor-b',new Date('2026-09-02T00:00:00.000Z'))).toBeNull();
+   expect(readTenantMembershipCache('actor-a',new Date('2026-09-02T00:00:00.000Z'))).toEqual(cached);
+   expect(readTenantMembershipCache('actor-a',new Date('2026-09-09T00:00:00.000Z'))).toBeNull();
+ });
  it('does not let a delayed successful logout response clear the next account',async()=>{render(<Story/>);await emit('actor-a');const pending=deferred<{error:null}>();mock.signOut.mockReturnValue(pending.promise);fireEvent.click(screen.getByText('Sair QA'));await emit('actor-b');await act(async()=>pending.resolve({error:null}));expect(screen.getByLabelText('actor')).toHaveTextContent('actor-b');});
  it('survives storage denial without exposing an unverified tenant',async()=>{vi.spyOn(Storage.prototype,'getItem').mockImplementation(()=>{throw new Error('storage denied');});vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('quota');});vi.spyOn(Storage.prototype,'removeItem').mockImplementation(()=>{throw new Error('storage denied');});render(<Story tenant/>);await emit('actor-a');await waitFor(()=>expect(screen.getByLabelText('tenant')).toHaveTextContent('tenant-a'));await emit(null);expect(screen.getByLabelText('tenant')).toHaveTextContent('none');});
  it('recovers from bootstrap timeout after an authoritative auth event',async()=>{vi.useFakeTimers();mock.getSession.mockReturnValue(new Promise(()=>{}));render(<Story/>);await act(async()=>{await vi.advanceTimersByTimeAsync(8001);});expect(screen.getByLabelText('availability')).toHaveTextContent('true');await emit('actor-a');expect(screen.getByLabelText('availability')).toHaveTextContent('false');expect(screen.getByLabelText('actor')).toHaveTextContent('actor-a');});

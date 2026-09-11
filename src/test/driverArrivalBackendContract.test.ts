@@ -20,6 +20,12 @@ const cutover = readFileSync(join(
   'qa',
   'DRIVER-ARRIVAL-GPS-CUTOVER-2026-08-31.sql',
 ), 'utf8');
+const release = readFileSync(join(
+  process.cwd(),
+  'supabase',
+  'migrations',
+  '20260910132149_require_driver_arrival_gps_cutover.sql',
+), 'utf8');
 
 describe('driver arrival backend contract', () => {
   it('keeps the rejected destructive migration inert and adds GPS as an overload', () => {
@@ -33,7 +39,7 @@ describe('driver arrival backend contract', () => {
     expect(migration).toContain('_accuracy_m double precision');
   });
 
-  it('stages the legacy removal outside the automatic migration chain', () => {
+  it('preserves the reviewed staged cutover artifact', () => {
     expect(cutover).toContain('deliberately outside supabase/migrations');
     expect(cutover).toContain('74a957d4c16ef52847b8c7c6859f5e20');
     expect(cutover).toContain('drop function public.driver_mark_arrival(uuid)');
@@ -44,6 +50,20 @@ describe('driver arrival backend contract', () => {
       cutover.indexOf('Arrival cutover postcondition failed'),
     );
     expect(cutover).toContain("notify pgrst, 'reload schema'");
+  });
+
+  it('promotes the reviewed cutover into the migration chain after the GPS client release', () => {
+    expect(release).toContain('GPS-only frontend has been the published contract');
+    expect(release).toContain('71506404e6bafbaeb3dc17a3e2530a1c');
+    expect(release).toContain('74a957d4c16ef52847b8c7c6859f5e20');
+    expect(release).toContain('drop function public.driver_mark_arrival(uuid)');
+    expect(release.indexOf('GPS RPC hash changed')).toBeLessThan(
+      release.indexOf('drop function public.driver_mark_arrival(uuid)'),
+    );
+    expect(release.indexOf('drop function public.driver_mark_arrival(uuid)')).toBeLessThan(
+      release.indexOf('Arrival cutover postcondition failed'),
+    );
+    expect(release).toContain("notify pgrst, 'reload schema'");
   });
 
   it('checks trip state, GPS accuracy, and stop proximity', () => {

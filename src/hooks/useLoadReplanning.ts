@@ -29,7 +29,7 @@ export function useLoadReplanning() {
     },
     send: async payload => {
       const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 30_000);
-      try { return await supabase.rpc('replan_load_items', { _payload: JSON.parse(JSON.stringify(payload)) }).abortSignal(controller.signal); }
+      try { return await supabase.rpc('replan_load_items_v2' as never, { _payload: JSON.parse(JSON.stringify(payload)) } as never).abortSignal(controller.signal); }
       finally { clearTimeout(timer); }
     },
   }), [assertContext]);

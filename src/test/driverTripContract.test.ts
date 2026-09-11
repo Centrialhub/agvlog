@@ -4,6 +4,7 @@ import {
   isDriverTripStarted,
   normalizeDriverTrip,
   resolveCanonicalTripLink,
+  selectDriverCurrentTrip,
   type DriverTripQueryRow,
 } from '@/lib/driverTrip';
 
@@ -85,6 +86,14 @@ describe('driver trip canonical load relation', () => {
     expect(isDriverTripStarted('in_transit', null)).toBe(false);
     expect(isDriverTripStarted('in_transit')).toBe(false);
     expect(isDriverTripStarted('planned', null)).toBe(false);
+  });
+
+  it('prioritizes a running trip and refuses an ambiguous running context',()=>{
+    const planned={...baseTrip,id:'planned',status:'planned',dispatch_trip_loads:[]};
+    const running={...baseTrip,id:'running',status:'in_transit',dispatch_trip_loads:[]};
+    expect(selectDriverCurrentTrip([planned,running])?.id).toBe('running');
+    expect(()=>selectDriverCurrentTrip([running,{...running,id:'other',status:'in_progress'}]))
+      .toThrow('mais de uma viagem em andamento');
   });
 
   it('flags an in-transit load whose trip was not started', () => {

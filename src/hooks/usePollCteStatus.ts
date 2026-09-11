@@ -22,6 +22,10 @@ export function usePollCteStatus() {
     onSuccess: () => {
       // Invalida monitor, busca e documentos fiscais para refletir a mudança de status
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      qc.invalidateQueries({queryKey:['finance-receivable-portfolio']});
+      qc.invalidateQueries({queryKey:['finance-fiscal-dashboard-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-summary']});
+      qc.invalidateQueries({queryKey:['finance-unbilled-freight-origins']});
       qc.invalidateQueries({ queryKey: ['cte_search'] });
       qc.invalidateQueries({ queryKey: ['cte_monitor'] });
     }

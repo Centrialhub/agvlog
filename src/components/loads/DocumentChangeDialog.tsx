@@ -13,6 +13,8 @@ import {Button} from '@/components/ui/button';
 import {Label} from '@/components/ui/label';
 import {Input} from '@/components/ui/input';
 import {Textarea} from '@/components/ui/textarea';
+import {LocationPicker} from '@/components/maps/LocationPicker';
+import type {ResolvedLocation} from '@/lib/geocoding';
 export interface DocumentChangeSelection {action:'attach'|'detach';documentIds:string[]}
 interface Props {
  api:ReturnType<typeof useLoadDocumentChanges>;loadId:string;selection:DocumentChangeSelection|null;
@@ -21,9 +23,9 @@ interface Props {
 export function DocumentChangeDialog({api,loadId,selection,onClose,onConfirmed,onFailure}:Props){
  const {currentTenant}=useTenant();const {user}=useAuth();
  const [choice,setChoice]=useState('');const [reason,setReason]=useState('');const [destination,setDestination]=useState('');
- const [latitude,setLatitude]=useState('');const [longitude,setLongitude]=useState('');const [error,setError]=useState<string|null>(null);
+ const [location,setLocation]=useState<ResolvedLocation|null>(null);const [error,setError]=useState<string|null>(null);
  const selectionKey=selection?selection.action+':'+selection.documentIds.join(','):'';
- useEffect(()=>{setChoice('');setReason('');setDestination('');setLatitude('');setLongitude('');setError(null);},[selectionKey,loadId,currentTenant?.id,user?.id]);
+ useEffect(()=>{setChoice('');setReason('');setDestination('');setLocation(null);setError(null);},[selectionKey,loadId,currentTenant?.id,user?.id]);
  const query=useQuery({queryKey:['load_document_change_context',currentTenant?.id,user?.id,loadId,selectionKey],
   enabled:!!selection&&!!currentTenant?.id&&!!user?.id,retry:false,staleTime:0,
   queryFn:async({signal})=>{
@@ -43,9 +45,10 @@ export function DocumentChangeDialog({api,loadId,selection,onClose,onConfirmed,o
    if(selection.action==='attach'){
     if(!choice)throw new Error('Escolha explicitamente o destino dos documentos.');
     if(choice==='new'){
-     if(!destination.trim()||!latitude.trim()||!longitude.trim()||!Number.isFinite(Number(latitude))||!Number.isFinite(Number(longitude))
-      ||Math.abs(Number(latitude))>90||Math.abs(Number(longitude))>180)throw new Error('Informe destino, latitude e longitude válidos.');
-     target={mode:'new',destination:destination.trim(),latitude:Number(latitude),longitude:Number(longitude),client_id:null};
+     if(!destination.trim()||!location)throw new Error('Informe o endereço e confirme o ponto no mapa.');
+     target={mode:'new',destination:destination.trim(),latitude:location.latitude,longitude:location.longitude,client_id:null,
+      location_source:location.source,location_address:location.address||destination.trim(),location_provider:location.provider,
+      location_accuracy_m:location.accuracy_m,location_confidence:location.confidence,location_audit:location.audit,geofence_radius_m:500};
     }else target=choice==='unassigned'?{mode:'unassigned'}:{mode:'existing',stop_id:choice};
    }
    sent=true;const result=await api.submit({load_id:loadId,document_ids:selection.documentIds,action:selection.action,
@@ -71,8 +74,8 @@ export function DocumentChangeDialog({api,loadId,selection,onClose,onConfirmed,o
     </Select></div>:<p className="text-sm">Paradas esvaziadas ficarão canceladas no histórico. A nota ficará sem carga, sem apagar seus registros fiscais.</p>}
    {choice==='new'&&selection?.action==='attach'?<>
     <div><Label htmlFor="document-change-address">Destino da nova parada</Label><Input id="document-change-address" value={destination} onChange={e=>setDestination(e.target.value)} disabled={api.isPending}/></div>
-    <div className="grid grid-cols-2 gap-2"><div><Label htmlFor="document-change-lat">Latitude</Label><Input id="document-change-lat" type="number" step="any" min="-90" max="90" value={latitude} onChange={e=>setLatitude(e.target.value)} disabled={api.isPending}/></div>
-     <div><Label htmlFor="document-change-lng">Longitude</Label><Input id="document-change-lng" type="number" step="any" min="-180" max="180" value={longitude} onChange={e=>setLongitude(e.target.value)} disabled={api.isPending}/></div></div>
+    {currentTenant?<LocationPicker tenantId={currentTenant.id} address={destination} value={location}
+     onAddressChange={setDestination} onChange={setLocation} disabled={api.isPending}/>:null}
    </>:null}
    <div><Label htmlFor="document-change-reason">Motivo da alteração</Label><Textarea id="document-change-reason" value={reason} onChange={e=>setReason(e.target.value)} maxLength={2000} disabled={api.isPending}/></div>
    {error?<p role="alert">{error}</p>:null}

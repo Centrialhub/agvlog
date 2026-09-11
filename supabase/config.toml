@@ -18,6 +18,10 @@ token_refresh = 60
 sign_in_sign_ups = 10
 token_verifications = 10
 
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
+
 [auth.email]
 # Keep the email/password provider active for invited users. Global self-signup
 # remains disabled by [auth].enable_signup above.
@@ -47,7 +51,13 @@ sql_paths = ["./seed.sql"]
 verify_jwt = false
 
 [functions.ssx-sync-telemetry]
-verify_jwt = true
+verify_jwt = false
+
+[functions.ssx-sync-governance]
+verify_jwt = false
+
+[functions.ssx-sync-rule-violations]
+verify_jwt = false
 
 [functions.ssx-poll-positions]
 verify_jwt = false
@@ -65,6 +75,12 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.agvlog-pipeline-run]
+verify_jwt = false
+
+[functions.agvlog-schedule-tenants]
+verify_jwt = false
+
+[functions.agvlog-ssx-dispatcher]
 verify_jwt = false
 
 [functions.ssx-insert-person]
@@ -139,5 +155,26 @@ verify_jwt = true
 [functions.secure-upload]
 verify_jwt = true
 
+[functions.finance-statement-verify]
+verify_jwt = true
+
 [functions.search-users-by-email]
 verify_jwt = true
+
+[functions.geocode-address]
+verify_jwt = false
+
+[functions.process-address-resolution-queue]
+verify_jwt = false
+
+[functions.send-delivery-receipts]
+verify_jwt = true
+
+[functions.delivery-receipt-email-webhook]
+verify_jwt = false
+
+[functions.process-delivery-receipt-ocr]
+verify_jwt = false
+
+[functions.process-delivery-receipt-portals]
+verify_jwt = false

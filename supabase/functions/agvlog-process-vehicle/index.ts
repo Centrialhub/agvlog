@@ -523,20 +523,23 @@ async function insertEvent(
 async function checkGeofences(
   supabase: any,
   tenantId: string,
-  _vehicleId: string,
-  _positions: any[]
+  vehicleId: string,
+  positions: any[]
 ): Promise<{ data: number }> {
-  // Get enabled geofences for tenant
-  const { data: geofences } = await supabase
-    .from("geofences")
-    .select("id, name")
-    .eq("tenant_id", tenantId)
-    .eq("enabled", true);
-
-  if (!geofences || geofences.length === 0) return { data: 0 };
-
-  // Geofence evaluation is delegated to the PostGIS-backed queue processor.
-  return { data: 0 };
+  const points = positions.map((point) => ({
+    captured_at: point.captured_at,
+    lat: point.lat,
+    lng: point.lng,
+    accuracy_m: typeof point.accuracy_m === "number" ? point.accuracy_m : null,
+    provider_payload_hash: typeof point.provider_payload_hash === "string" ? point.provider_payload_hash : null,
+  }));
+  const { data, error } = await supabase.rpc("process_geofence_position_batch_v2", {
+    _tenant_id: tenantId,
+    _vehicle_id: vehicleId,
+    _points: points,
+  });
+  if (error) throw error;
+  return { data: Number(data?.transition_count) || 0 };
 }
 
 async function detectCapabilities(

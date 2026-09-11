@@ -1,8 +1,13 @@
+import {UnloadingProjectionRepairDialog} from '@/components/financial/UnloadingProjectionRepairDialog';
+import {financialError} from '@/lib/financial/receivableCommands';
+import {useReceivableUnloadingOrigin} from '@/hooks/useReceivableUnloadingOrigin';
+import {formatFinanceCents} from '@/lib/financial/ledgerContract';
+import {ReceivableHistoryDialog} from '@/components/financial/ReceivableHistoryDialog';
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { useListFilters } from '@/hooks/useListFilters';
-import { matchesSearch, matchesDateRange } from '@/lib/listFilters';
-import { useState, useMemo } from 'react';
-import { useReceivables, useCreateReceivable, useUpdateReceivable, RECEIVABLE_STATUS_LABELS, RECEIVABLE_STATUSES } from '@/hooks/useReceivables';
+import {useDebouncedValue} from '@/hooks/useDebouncedValue';
+import { useState } from 'react';
+import { useCreateReceivable, useUpdateReceivable, RECEIVABLE_STATUS_LABELS, RECEIVABLE_STATUSES } from '@/hooks/useReceivables';
 import { useClients } from '@/hooks/useClients';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +25,9 @@ import ReceivablePaymentDialog from '@/components/financial/ReceivablePaymentDia
 import type { Receivable } from '@/hooks/useReceivables';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 import { getErrorMessage } from '@/lib/errors';
-import {receivableTotals} from '@/lib/financial/receivableTotals';
+import {useQuery} from '@tanstack/react-query';
+import {readReceivablesPage} from '@/lib/financial/receivablesPageClient';
+import {useReceivablePortfolio,portfolioValue} from '@/hooks/useReceivablePortfolio';
 import {useTenant} from '@/hooks/useTenant';
 import {useAuth} from '@/hooks/useAuth';
 
@@ -30,31 +37,35 @@ export default function Receivables() {
 }
 function ReceivablesScreen() {
   const toast = useSonnerToast();
-  const { data: receivables = [], isLoading } = useReceivables();
+  const [historyOpen,setHistoryOpen]=useState(false);
+  const [repairCharge,setRepairCharge]=useState<string|null>(null);
+  const {currentTenant}=useTenant();const {user}=useAuth();
   const { data: clients = [] } = useClients();
   const createReceivable = useCreateReceivable();
   const updateReceivable = useUpdateReceivable();
   const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', client: 'all', from: '', to: '' });
   const { search, status: statusFilter } = filters;
+  const settledSearch=useDebouncedValue(search);
+  const searchPending=settledSearch!==search;
+  const filterKey=JSON.stringify(filters);
+  const [pagination,setPagination]=useState({key:'',page:1});
+  const page=pagination.key===filterKey?pagination.page:1;
+  const list=useQuery({queryKey:['receivables',currentTenant?.id,user?.id,'page',filters,page],queryFn:()=>readReceivablesPage(currentTenant!.id,filters,page),enabled:!!currentTenant&&!!user&&!searchPending,retry:false});
+  const isLoading=searchPending||list.isPending||list.isFetching;
+  const receivables=isLoading||list.isError?[]:list.data?.rows||[];
+  const filtered=receivables;
+  const portfolio=useReceivablePortfolio(currentTenant?.id,user?.id,{from:null,to:null,client:null});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     description: '', client_id: '', amount: '', due_date: '', invoice_number: '', notes: '', status: 'pending',
   });
   const [paymentReceivable, setPaymentReceivable] = useState<Receivable | null>(null);
+  const originQuery=useReceivableUnloadingOrigin(currentTenant?.id,user?.id,dialogOpen?editingId:null);
+  const originPending=!!editingId&&(originQuery.isPending||originQuery.isFetching||!!originQuery.error);
+  const unloadingOrigin=originQuery.isFetching||originQuery.isError?null:originQuery.data;
   const editedReceivable=receivables.find(row=>row.id===editingId);
-  const manualStatusAllowed=(!editingId||!!editedReceivable)&&!editedReceivable?.client_invoice_id&&!Number(editedReceivable?.received_amount||0)&&['pending','cancelled'].includes(form.status);
-
-  const filtered = useMemo(() => receivables.filter(receivable =>
-    matchesSearch(search, receivable.description, receivable.invoice_number, receivable.clients?.company_name) &&
-    (statusFilter === 'all' || (statusFilter === 'overdue'
-      ? Boolean(receivable.due_date) && new Date(receivable.due_date + 'T23:59:59') < new Date() && !['received', 'cancelled'].includes(receivable.status)
-      : receivable.status === statusFilter)) &&
-    (filters.client === 'all' || receivable.client_id === filters.client) &&
-    matchesDateRange(receivable.due_date, filters.from, filters.to)
-  ), [receivables, search, statusFilter, filters.client, filters.from, filters.to]);
-
-  const totals = useMemo(() => receivableTotals(receivables), [receivables]);
+  const manualStatusAllowed=!originPending&&!unloadingOrigin&&(!editingId||!!editedReceivable)&&!editedReceivable?.client_invoice_id&&!Number(editedReceivable?.received_amount||0)&&['pending','cancelled'].includes(form.status);
 
   const resetForm = () => {
     setForm({ description: '', client_id: '', amount: '', due_date: '', invoice_number: '', notes: '', status: 'pending' });
@@ -101,6 +112,7 @@ function ReceivablesScreen() {
   };
 
   const handleSave = async () => {
+    if(editingId&&originPending){toast.error('Confira a origem do título antes de salvar.');return;}
     try {
       const values = {
         description: form.description || null,
@@ -112,7 +124,7 @@ function ReceivablesScreen() {
         status: form.status,
       };
       if (editingId) {
-        await updateReceivable.mutateAsync({ id: editingId, ...values });
+        await updateReceivable.mutateAsync(unloadingOrigin?{id:editingId,description:values.description,due_date:values.due_date,invoice_number:values.invoice_number,notes:values.notes}:{ id: editingId, ...values });
         toast.success('Título atualizado');
       } else {
         await createReceivable.mutateAsync(values);
@@ -120,7 +132,8 @@ function ReceivablesScreen() {
       }
       resetForm();
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Não foi possível salvar o título.'));
+      const message=typeof error==='object'&&error!==null&&'message' in error?String(error.message):'';
+      toast.error(message.startsWith('finance_unloading_')?financialError(error):getErrorMessage(error, 'Não foi possível salvar o título.'));
     }
   };
 
@@ -142,28 +155,29 @@ function ReceivablesScreen() {
           </h1>
           <p className="text-sm text-muted-foreground">Títulos financeiros vinculados a fretes e pedidos</p>
         </div>
-        <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+        <div className="flex gap-2">{currentTenant&&user&&<Button variant="outline" onClick={()=>setHistoryOpen(true)}>Histórico de alterações</Button>}<Button onClick={() => { resetForm(); setDialogOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Novo Título
-        </Button>
+        </Button></div>
       </div>
 
+      {historyOpen&&currentTenant&&user&&<ReceivableHistoryDialog key={`${currentTenant.id}:${user.id}`} tenant={currentTenant.id} actor={user.id} onClose={()=>setHistoryOpen(false)}/>}
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-4">
         <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Em aberto sem fatura</p>
-          <p className="text-xl font-bold text-warning">{fmt(totals.pending)}</p>
+          <p className="text-xs text-muted-foreground">Saldo em aberto — títulos ativos</p>
+          <p className="text-xl font-bold text-warning">{portfolioValue(portfolio,'open_cents')}</p>
         </CardContent></Card>
         <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Faturado em aberto</p>
-          <p className="text-xl font-bold text-blue-600">{fmt(totals.invoiced)}</p>
+          <p className="text-xs text-muted-foreground">Vencido — títulos ativos</p>
+          <p className="text-xl font-bold text-blue-600">{portfolioValue(portfolio,'overdue_cents')}</p>
         </CardContent></Card>
         <Card><CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">Recebido líquido (inclui parciais)</p>
-          <p className="text-xl font-bold text-green-600">{fmt(totals.received)}</p>
+          <p className="text-xs text-muted-foreground">Baixas alocadas (inclui parciais)</p>
+          <p className="text-xl font-bold text-green-600">{portfolioValue(portfolio,'received_allocated_cents')}</p>
         </CardContent></Card>
       </div>
 
-      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={receivables.length} loading={isLoading} description="Os indicadores acima mostram todos os títulos." fields={[
+      <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={list.data?.total||0} totalCount={list.data?.total_unfiltered||0} loading={isLoading} description="Indicadores da carteira completa, sem aplicar os filtros da lista. A lista é filtrada pelo vencimento." fields={[
         { key: 'search', label: 'Buscar título', type: 'search', placeholder: 'Descrição, fatura ou cliente', value: search, onChange: value => setFilter('search', value) },
         { key: 'status', label: 'Situação', value: statusFilter, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, { value: 'overdue', label: 'Vencidos em aberto' }, ...RECEIVABLE_STATUSES.map(value => ({ value, label: RECEIVABLE_STATUS_LABELS[value] }))] },
         { key: 'client', label: 'Cliente', value: filters.client, onChange: value => setFilter('client', value), options: [{ value: 'all', label: 'Todos os clientes' }, ...clients.map(client => ({ value: client.id, label: client.company_name }))] },
@@ -171,6 +185,8 @@ function ReceivablesScreen() {
         { key: 'to', label: 'Vencimento até', type: 'date', value: filters.to, onChange: value => setFilter('to', value), min: filters.from || undefined },
       ]} />
 
+      {list.isError&&<p role="alert">Não foi possível consultar os títulos. A falha não significa ausência de contas a receber. <Button variant="link" onClick={()=>void list.refetch()}>Tentar novamente</Button></p>}
+      <div className="flex items-center gap-3"><Button variant="outline" disabled={isLoading||page===1} onClick={()=>setPagination({key:filterKey,page:page-1})}>Títulos anteriores</Button><span>Página {page} · até 50 títulos</span><Button variant="outline" disabled={isLoading||list.isError||page*50>=(list.data?.total||0)} onClick={()=>setPagination({key:filterKey,page:page+1})}>Próximos títulos</Button></div>
       {/* Table */}
       <Card>
         <CardContent className="p-0">
@@ -190,7 +206,7 @@ function ReceivablesScreen() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
+              ) : list.isError ? (<TableRow><TableCell colSpan={8} className="text-center py-8">Consulta indisponível</TableCell></TableRow>) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum título encontrado</TableCell></TableRow>
               ) : filtered.map(r => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEdit(r)}>
@@ -231,14 +247,16 @@ function ReceivablesScreen() {
         <DialogContent>
           <DialogHeader><DialogTitle>{editingId ? 'Editar Título' : 'Novo Título'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="rounded-md border bg-muted/30 p-3">
+            {!editingId||(!originPending&&!unloadingOrigin)?<div className="rounded-md border bg-muted/30 p-3">
               <FiscalXmlUpload perspective="receiver" onExtracted={(d) => applyXmlToForm(d)} />
-            </div>
+            </div>:null}
+            {originPending&&<p role="alert">{originQuery.error?"Não foi possível verificar a origem. O salvamento permanece bloqueado.":"Verificando a origem do título…"}{originQuery.error&&<Button variant="link" onClick={()=>void originQuery.refetch()}>Verificar origem novamente</Button>}</p>}
+            {unloadingOrigin&&<div className="rounded border p-3"><p>Recebível de descarga · origem {unloadingOrigin.id} · entrega {unloadingOrigin.delivery_stop_id}</p><p>Fornecedor devedor: {typeof unloadingOrigin.source_snapshot.supplier_name==="string"?unloadingOrigin.source_snapshot.supplier_name:"Nome preservado não informado"} · {unloadingOrigin.supplier_id}</p><p>Valor da descarga: {formatFinanceCents(unloadingOrigin.amount_cents)}</p><p>Fornecedor, valor e status são protegidos pela origem. Apenas descrição, vencimento, referência e observações podem ser editados aqui.</p><Button variant="outline" onClick={()=>setRepairCharge(unloadingOrigin.id)}>Conferir reparação do título</Button></div>}
             <div><Label>Descrição</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Cliente</Label>
-                <Select value={form.client_id} onValueChange={v => setForm({ ...form, client_id: v })}>
+                <Select disabled={originPending||!!unloadingOrigin} value={form.client_id} onValueChange={v => setForm({ ...form, client_id: v })}>
                   <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
                 </Select>
@@ -246,7 +264,7 @@ function ReceivablesScreen() {
               <div><Label>Nº Fatura</Label><Input value={form.invoice_number} onChange={e => setForm({ ...form, invoice_number: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Valor (R$)</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></div>
+              <div><Label>Valor (R$)</Label><Input disabled={originPending||!!unloadingOrigin} type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></div>
               <div><Label>Vencimento</Label><Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} /></div>
             </div>
             <div>
@@ -256,11 +274,12 @@ function ReceivablesScreen() {
             <div><Label>Observações</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={resetForm}>Cancelar</Button>
-              <Button onClick={handleSave}>Salvar</Button>
+              <Button disabled={originPending||updateReceivable.isPending||createReceivable.isPending} onClick={handleSave}>Salvar</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+      {repairCharge&&currentTenant&&user&&<UnloadingProjectionRepairDialog key={`${currentTenant.id}:${user.id}:${repairCharge}`} tenant={currentTenant.id} actor={user.id} chargeId={repairCharge} onClose={()=>setRepairCharge(null)}/>}
       <ReceivablePaymentDialog
         receivable={paymentReceivable}
         open={!!paymentReceivable}

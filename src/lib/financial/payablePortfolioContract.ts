@@ -1,0 +1,21 @@
+import {z} from 'zod';
+const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),revision=z.string().regex(/^[a-f0-9]{32}$/),count=z.number().int().nonnegative(),cents=z.string().regex(/^\d+$/).nullable();
+export const payablePortfolioFiltersSchema=z.object({date_basis:z.enum(['created_at','due_date']),from:date.nullable(),to:date.nullable(),category:z.string().trim().max(100).nullable(),supplier_id:uuid.nullable()}).strict().refine(v=>!v.from||!v.to||v.from<=v.to);
+export type PayablePortfolioFilters=z.infer<typeof payablePortfolioFiltersSchema>;
+const row=z.object({source_table:z.literal('payables'),source_id:uuid,status:z.string(),supplier_id:uuid.nullable(),supplier_name:z.string().nullable(),category:z.string().nullable(),description:z.string().nullable(),due_on:date.nullable(),created_on:date.nullable(),date_in_range:z.boolean(),origin:z.object({source_table:z.string().nullable(),source_id:uuid.nullable()}),declared_amount:z.string().nullable(),declared_paid:z.string().nullable(),payment_ids:z.array(uuid),valid:z.boolean(),issues:z.array(z.string()),nominal_cents:cents,paid_cents:cents,open_cents:cents,source_revision:revision}).superRefine((v,ctx)=>{
+ const values=[v.nominal_cents,v.paid_cents,v.open_cents];
+ if(v.valid!==!v.issues.length||values.some(x=>v.valid?x===null:x!==null)||new Set(v.payment_ids).size!==v.payment_ids.length)ctx.addIssue({code:'custom',message:'Prova do título inconsistente.'});
+ if(v.valid&&v.nominal_cents!==null&&v.paid_cents!==null&&v.open_cents!==null&&(BigInt(v.nominal_cents)!==BigInt(v.paid_cents)+BigInt(v.open_cents)||(v.status==='cancelled'&&values.some(x=>BigInt(x!)!==0n))))ctx.addIssue({code:'custom',message:'Saldo do título inconsistente.'});
+});
+export const payablePortfolioSchema=z.object({version:z.literal(1),tenant_id:uuid,basis:z.literal('current_operational'),date_basis:z.enum(['created_at','due_date']),from:date.nullable(),to:date.nullable(),category:z.string().nullable(),supplier_id:uuid.nullable(),as_of:date,revision,page:z.number().int().positive(),page_size:z.literal(30),total_titles:count,cancelled_titles:count,invalid_titles:count,undated_titles:count,totals_valid:z.boolean(),nominal_cents:cents,paid_cents:cents,open_cents:cents,overdue_cents:cents,status_counts:z.array(z.object({status:z.string(),count})),issue_counts:z.array(z.object({issue:z.string(),count})),rows:z.array(row)}).superRefine((v,ctx)=>{
+ const invalid=(message:string)=>ctx.addIssue({code:'custom',message});
+ if(v.totals_valid!==(v.invalid_titles===0)||[v.cancelled_titles,v.invalid_titles,v.undated_titles].some(x=>x>v.total_titles)||v.status_counts.reduce((sum,x)=>sum+x.count,0)!==v.total_titles||new Set(v.status_counts.map(x=>x.status)).size!==v.status_counts.length)invalid('Contagens da carteira inconsistentes.');
+ if(v.rows.length!==Math.min(30,Math.max(0,v.total_titles-(v.page-1)*30))||new Set(v.rows.map(x=>x.source_id)).size!==v.rows.length)invalid('Página incompleta ou duplicada.');
+ if((v.status_counts.find(x=>x.status==='cancelled')?.count??0)!==v.cancelled_titles||v.rows.filter(x=>!x.valid).length>v.invalid_titles||v.rows.filter(x=>!x.date_in_range).length>v.undated_titles)invalid('Página e totais divergem.');
+ const values=[v.nominal_cents,v.paid_cents,v.open_cents,v.overdue_cents];
+ if(values.some(x=>v.totals_valid?x===null:x!==null))invalid('Total sem cobertura coerente.');
+ if(v.totals_valid&&values.every(x=>x!==null)&&(BigInt(v.nominal_cents!)!==BigInt(v.paid_cents!)+BigInt(v.open_cents!)||BigInt(v.overdue_cents!)>BigInt(v.open_cents!)))invalid('Saldos da carteira inconsistentes.');
+ if(v.totals_valid)for(const key of ['nominal_cents','paid_cents','open_cents'] as const)if(v[key]!==null&&v.rows.every(x=>x[key]!==null)&&v.rows.reduce((sum,x)=>sum+BigInt(x[key]!),0n)>BigInt(v[key]!))invalid('Valores da página excedem a carteira.');
+ for(const item of v.rows){const day=v.date_basis==='due_date'?item.due_on:item.created_on;if(item.date_in_range!==(day!==null)||(day&&((v.from&&day<v.from)||(v.to&&day>v.to))))invalid('Título fora do corte solicitado.');}
+});
+export type PayablePortfolio=z.infer<typeof payablePortfolioSchema>;

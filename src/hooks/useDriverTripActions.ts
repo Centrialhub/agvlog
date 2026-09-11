@@ -1,46 +1,23 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { driverTripNeedsReconciliation, isDriverTripStarted } from '@/lib/driverTrip';
-import { invalidateTripLoadQueries, isConfirmedTripStart, tripMutationError } from '@/lib/tripMutation';
+import { useTenant } from '@/hooks/useTenant';
 
 export function useDriverTripActions() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { currentTenant, activateTenantId } = useTenant();
   const startingRef=useRef(false);
-
-  const startTrip = useMutation({
-    retry:false,
-    mutationFn: async (tripId: string) => {
-      const { data,error } = await supabase.rpc('driver_start_trip', { _trip_id: tripId });
-      if (error) throw error;
-      if(!isConfirmedTripStart(data,tripId))throw new Error('Não foi possível confirmar o início. Atualize os dados antes de tentar novamente.');
-      return tripId;
-    },
-    onSuccess: async (tripId) => {
-      await invalidateTripLoadQueries(queryClient);
-      navigate(`/driver/stops?trip=${tripId}`);
-    },
-    onError: async (error: unknown) => {
-      await invalidateTripLoadQueries(queryClient);
-      toast({
-        title: 'Não foi possível iniciar a viagem',
-        description:tripMutationError(error).message,
-        variant: 'destructive',
-      });
-    },
-    onSettled:()=>{startingRef.current=false;},
-  });
+  const [isOpeningTrip,setIsOpeningTrip]=useState(false);
 
   const accessTrip = (
     tripId: string,
     currentStatus?: string | null,
     actualStartAt?: string | null,
     loadStatus?: string | null,
+    tenantId?: string,
   ) => {
     if(startingRef.current)return;
     if (driverTripNeedsReconciliation(currentStatus, actualStartAt, loadStatus)) {
@@ -49,13 +26,26 @@ export function useDriverTripActions() {
         variant: 'destructive' });
       return;
     }
-    if (isDriverTripStarted(currentStatus, actualStartAt)) {
-      navigate(`/driver/stops?trip=${tripId}`);
-      return;
-    }
     startingRef.current=true;
-    startTrip.mutate(tripId);
+    setIsOpeningTrip(true);
+    void (async()=>{
+      try {
+        if(tenantId&&tenantId!==currentTenant?.id){
+          const activated=await activateTenantId(tenantId);
+          if(!activated){
+            toast({title:'Não foi possível abrir a viagem',description:'A empresa responsável pela viagem não pôde ser ativada.',variant:'destructive'});
+            return;
+          }
+        }
+        navigate(isDriverTripStarted(currentStatus, actualStartAt)
+          ? `/driver/stops?trip=${tripId}`
+          : `/driver/cargo?trip=${encodeURIComponent(tripId)}`);
+      } finally {
+        startingRef.current=false;
+        setIsOpeningTrip(false);
+      }
+    })();
   };
 
-  return { accessTrip, isStartingTrip: startTrip.isPending };
+  return { accessTrip, isStartingTrip: isOpeningTrip };
 }

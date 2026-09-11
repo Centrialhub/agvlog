@@ -12,19 +12,27 @@ export function IntegraLabsCredit({
   return (
     <div
       className={cn(
-        'flex items-center justify-center gap-1.5 text-center text-[10px] leading-none tracking-[0.08em]',
+        'flex shrink-0 items-center justify-center gap-2 text-center text-[10px] leading-none',
         tone === 'sidebar'
-          ? 'text-sidebar-foreground/45'
-          : 'text-muted-foreground/55',
+          ? 'text-sidebar-foreground/70'
+          : 'text-muted-foreground',
         className,
       )}
     >
       <span className="font-medium whitespace-nowrap">Desenvolvido por</span>
-      <img
-        src="/assets/integra-labs-logo.png"
-        alt="Integra Labs"
-        className="h-4 w-auto object-contain opacity-70"
-      />
+      {/* Frame the horizontal artwork within the original square, transparent canvas. */}
+      <span className="relative block h-6 w-[100px] shrink-0 overflow-hidden">
+        <img
+          src="/assets/integra-labs-horizontal.png"
+          alt="Integra Labs"
+          width={2000}
+          height={2000}
+          className={cn(
+            'absolute left-0 top-1/2 h-[100px] w-[100px] max-w-none -translate-y-1/2 object-contain',
+            tone === 'default' && 'brightness-50 grayscale',
+          )}
+        />
+      </span>
     </div>
   );
 }

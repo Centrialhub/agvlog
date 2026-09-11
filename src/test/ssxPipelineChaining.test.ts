@@ -5,6 +5,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 type Handler = (request: Request) => Promise<Response>;
 type Row = Record<string, unknown>;
 
+const TENANT_ID = '11111111-1111-4111-8111-111111111111';
+const WORKSPACE_ID = '22222222-2222-4222-8222-222222222222';
+const ACTOR_JWT = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhY3RvciIsImFjdGl2ZV90ZW5hbnRfaWQiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEifQ.test';
+
 const state = vi.hoisted(() => ({
   handler: null as Handler | null,
   cron: false,
@@ -46,17 +50,20 @@ vi.mock('@supabase/supabase-js', () => ({
 
 function tableRows(table: string): Row[] {
   if (table === 'tenant_memberships') {
-    return [{ tenant_id: 'tenant', user_id: 'actor', active: true, role: state.role }];
+    return [{ tenant_id: TENANT_ID, user_id: 'actor', active: true, role: state.role }];
   }
   if (table === 'integration_accounts') {
     return [{
-      id: 'account', tenant_id: 'tenant', status: 'active',
+      id: 'account', tenant_id: TENANT_ID, workspace_id: WORKSPACE_ID, status: 'active',
       token_expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
       settings: {}, last_error: null,
     }];
   }
-  if (table === 'positions_last') return [{ tenant_id: 'tenant', vehicle_id: 'vehicle' }];
-  if (table === 'tenants') return [{ id: 'tenant', settings: {} }];
+  if (table === 'workspace_ssx_accounts') {
+    return [{ workspace_id: WORKSPACE_ID, integration_account_id: 'account', migration_state: 'ready' }];
+  }
+  if (table === 'positions_last') return [{ tenant_id: TENANT_ID, vehicle_id: 'vehicle' }];
+  if (table === 'tenants') return [{ id: TENANT_ID, workspace_id: WORKSPACE_ID, settings: {} }];
   return [];
 }
 
@@ -69,6 +76,7 @@ function query(table: string) {
     eq: (key: string, value: unknown) => { filters.push([key, value]); return builder; },
     limit: (_limit: number) => builder,
     single: () => { single = true; return builder; },
+    maybeSingle: () => { single = true; return builder; },
     update: (value: Row) => {
       update = value;
       if (table === 'tenants') state.healthWrites.push(value);
@@ -87,9 +95,22 @@ function query(table: string) {
 }
 
 function nestedResponse(name: string): { status: number; body: Row } {
+  if (name === 'ssx-sync-telemetry') {
+    return { status: 200, body: { success: true, catalogs: { telemetry: 2 } } };
+  }
+  if (name === 'ssx-sync-units') return { status: 200, body: { success: true, upserted: 1 } };
+  if (name === 'ssx-sync-governance') {
+    return { status: 200, body: { success: true, snapshots: { logged_rule: 2 } } };
+  }
   if (name === 'ssx-poll-positions') return { status: 200, body: state.pollResponse };
+  if (name === 'ssx-sync-rule-violations') {
+    return { status: 200, body: { success: true, upserted: 1, cursor_advanced: true } };
+  }
   if (name === 'agvlog-compute-state') {
     return { status: 200, body: { success: true, processed: 1, events_emitted: 0 } };
+  }
+  if (name === 'agvlog-aggregate-daily') {
+    return { status: 200, body: { success: true, aggregated: 1 } };
   }
   if (name === 'agvlog-run-queue') return { status: 200, body: { success: true, processed: 1 } };
   if (name === 'update-trip-live-status') {
@@ -98,17 +119,22 @@ function nestedResponse(name: string): { status: number; body: Row } {
   throw new Error(`Unexpected nested Edge Function: ${name}`);
 }
 
-function request(options: { method?: string; cron?: boolean } = {}) {
+function request(options: { method?: string; cron?: boolean; mode?: 'poll' | 'full' } = {}) {
   if (!state.handler) throw new Error('Pipeline handler was not loaded');
   state.cron = options.cron ?? false;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (state.cron) headers['x-agvlog-cron-secret'] = 'vault-backed-test-secret';
-  else headers.Authorization = 'Bearer actor-jwt';
+  else {
+    headers.Authorization = `Bearer ${ACTOR_JWT}`;
+    headers['x-agvlog-tenant-id'] = TENANT_ID;
+  }
   const method = options.method ?? 'POST';
   return state.handler(new Request('https://edge.example.test', {
     method,
     headers,
-    ...(method === 'POST' ? { body: JSON.stringify({ tenant_id: 'tenant', pipeline_mode: 'poll' }) } : {}),
+    ...(method === 'POST' ? {
+      body: JSON.stringify({ tenant_id: TENANT_ID, pipeline_mode: options.mode || 'poll' }),
+    } : {}),
   }));
 }
 
@@ -164,16 +190,18 @@ describe('SSX pipeline post-ingestion chaining', () => {
       total_inserted: 1,
       touched_vehicles: 1,
       trip_live_status_updated: 1,
+      rule_violations: 1,
       trip_live_status_deferred_reason: null,
-      steps_executed: ['position_polling', 'compute_state', 'queue_processing', 'trip_live_status'],
+      steps_executed: ['position_polling', 'rule_violations', 'compute_state', 'queue_processing', 'trip_live_status'],
     });
     expect(state.nestedCalls.map(call => call.name)).toEqual([
-      'ssx-poll-positions', 'agvlog-compute-state', 'agvlog-run-queue', 'update-trip-live-status',
+      'ssx-poll-positions', 'ssx-sync-rule-violations', 'agvlog-compute-state',
+      'agvlog-run-queue', 'update-trip-live-status',
     ]);
     const liveStatus = state.nestedCalls.at(-1)!;
-    expect(liveStatus.headers.get('Authorization')).toBe('Bearer actor-jwt');
+    expect(liveStatus.headers.get('Authorization')).toBe(`Bearer ${ACTOR_JWT}`);
     expect(liveStatus.headers.has('x-agvlog-cron-secret')).toBe(false);
-    expect(liveStatus.body).toEqual({ tenant_id: 'tenant' });
+    expect(liveStatus.body).toEqual({ tenant_id: TENANT_ID });
     expect(state.healthWrites.at(-1)).toMatchObject({ settings: { pipeline_health: {
       last_run_touched_vehicles: 1,
       last_run_trip_live_status_updated: 1,
@@ -200,6 +228,24 @@ describe('SSX pipeline post-ingestion chaining', () => {
     } } });
   });
 
+  it('refreshes units before governance during a full synchronization', async () => {
+    const response = await request({ mode: 'full' });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      reference_catalogs: 2,
+      synced_units: 1,
+      governance_snapshots: 2,
+      rule_violations: 1,
+    });
+    expect(state.nestedCalls.map(call => call.name)).toEqual([
+      'ssx-sync-telemetry', 'ssx-sync-units', 'ssx-sync-governance',
+      'ssx-poll-positions', 'ssx-sync-rule-violations', 'agvlog-compute-state',
+      'agvlog-run-queue', 'update-trip-live-status', 'agvlog-aggregate-daily',
+      'agvlog-compute-state',
+    ]);
+  });
+
   it('does not refresh trip state after a persistence failure', async () => {
     state.pollResponse = {
       success: false, batch_aborted: true, abort_reason: 'persistence_failure',
@@ -223,7 +269,7 @@ describe('SSX pipeline post-ingestion chaining', () => {
       trip_live_status_updated: 0,
       errors: [expect.stringContaining('TripLiveStatus: update-trip-live-status: Forbidden')],
     });
-    expect(state.nestedCalls.at(-1)?.headers.get('Authorization')).toBe('Bearer actor-jwt');
+    expect(state.nestedCalls.at(-1)?.headers.get('Authorization')).toBe(`Bearer ${ACTOR_JWT}`);
   });
 
   it('fails closed before nested work when SSX capability is disabled', async () => {

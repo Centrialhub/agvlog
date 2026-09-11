@@ -2,6 +2,7 @@ import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 import { encryptFiscalCredential } from '../_shared/fiscal-credential-crypto.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
+import { requireActiveTenant } from '../_shared/active-tenant.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -57,6 +58,8 @@ Deno.serve(withFiscalCors(async (req) => {
       .eq('id', emitter_id)
       .maybeSingle();
     if (emErr || !em) return json(404, { error: 'Emitente não encontrado' });
+    const tenantContextError = requireActiveTenant(req, em.tenant_id);
+    if (tenantContextError) return tenantContextError;
 
     const { data: mem } = await admin
       .from('tenant_memberships')

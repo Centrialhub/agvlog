@@ -354,6 +354,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl }:
         issRetido: doc.iss_retido ? valorIss : 0,
         liquido: money(
           totalServicos -
+            num(doc.valor_deducoes) -
             (doc.iss_retido ? valorIss : 0) -
             num(doc.valor_pis) - num(doc.valor_cofins) - num(doc.valor_inss) -
             num(doc.valor_ir) - num(doc.valor_csll) - num(doc.outras_retencoes),

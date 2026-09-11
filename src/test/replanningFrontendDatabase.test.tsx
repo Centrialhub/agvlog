@@ -38,6 +38,9 @@ vi.mock('@/components/ui/select',async()=>{
   return {Select,SelectTrigger,SelectContent,SelectItem,SelectValue,SelectGroup:SelectContent,
     SelectLabel:SelectContent,SelectSeparator:()=>null,SelectScrollUpButton:()=>null,SelectScrollDownButton:()=>null};
 });
+vi.mock('@/components/maps/LocationPicker',()=>({LocationPicker:({onChange}:{onChange:(value:unknown)=>void})=><button
+  onClick={()=>onChange({latitude:-23.55,longitude:-46.66,source:'address_geocoded',address:'Portaria 3, Montes Claros - MG',
+    provider:'qa',accuracy_m:50,confidence:0.9,audit:{}})}>Selecionar endereço no mapa</button>}));
 vi.hoisted(async()=>{const {Blob,File}=await import('node:buffer');vi.stubGlobal('Blob',Blob);vi.stubGlobal('File',File);});
 const mock=vi.hoisted(()=>({rpc:vi.fn(),success:vi.fn(),error:vi.fn(),write:vi.fn(),loseReply:false}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:i.tenant}})}));
@@ -64,9 +67,9 @@ beforeEach(async()=>{
     try {
       let rows:unknown[];
       if(name==='get_load_replanning_context') rows=(await compositionRpc(db,'select get_load_replanning_context($1,$2,$3) result',[args._tenant_id,args._source_load_id,args._target_load_id])).rows;
-      else if(name==='replan_load_items') rows=(await compositionRpc(db,'select replan_load_items($1::jsonb) result',[JSON.stringify(args._payload)])).rows;
+      else if(name==='replan_load_items_v2') rows=(await compositionRpc(db,'select replan_load_items($1::jsonb) result',[JSON.stringify(args._payload)])).rows;
       else throw new Error('Unexpected mutation: '+name);
-      if(name==='replan_load_items' && mock.loseReply){mock.loseReply=false;return {data:{},error:null};}
+      if(name==='replan_load_items_v2' && mock.loseReply){mock.loseReply=false;return {data:{},error:null};}
       return {data:(rows[0] as {result:unknown}).result,error:null};
     }catch(error){return {data:null,error};}
   }}));
@@ -97,7 +100,7 @@ async function choose(dialog:HTMLElement,name:RegExp){
   expect(option).toBeDefined();selectOption(select,option!.value);
   fireEvent.change(within(dialog).getByLabelText('Motivo do replanejamento'),{target:{value:'Transferência planejada QA'}});
 }
-const submitted=()=>mock.rpc.mock.calls.filter(([name])=>name==='replan_load_items');
+const submitted=()=>mock.rpc.mock.calls.filter(([name])=>name==='replan_load_items_v2');
 function StandalonePlanner({source,target}:{source:string;target:string}){
   const api=useLoadReplanning();return <LoadReplanningPanel api={api} sourceId={source} targetId={target}
     itemIds={[source===i.load?i.item:i.item2]} onConfirmed={mock.success}/>;
@@ -109,13 +112,12 @@ describe('real operational screen -> explicit replanning SQL (local fixture, not
     let dialog=await screen.findByRole('dialog');await within(dialog).findByLabelText('Destino dos itens');
     await choose(dialog,/Nova parada com localização/);
     fireEvent.change(within(dialog).getByLabelText('Endereço/destino da nova parada'),{target:{value:'Destino antigo'}});
-    fireEvent.change(within(dialog).getByLabelText('Latitude'),{target:{value:'-23.55'}});
-    fireEvent.change(within(dialog).getByLabelText('Longitude'),{target:{value:'-46.66'}});
+    fireEvent.click(within(dialog).getByRole('button',{name:'Selecionar endereço no mapa'}));
     view.rerender(page(i.load2,i.load));await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button',{name:'Replanejar itens e paradas'}));dialog=await screen.findByRole('dialog');
     await within(dialog).findByLabelText('Destino dos itens');await choose(dialog,/Nova parada com localização/);
     expect(within(dialog).getByLabelText('Endereço/destino da nova parada')).toHaveValue('');
-    expect(within(dialog).getByLabelText('Latitude')).toHaveValue(null);expect(within(dialog).getByLabelText('Longitude')).toHaveValue(null);
+    expect(within(dialog).getByRole('button',{name:'Selecionar endereço no mapa'})).toBeInTheDocument();
     expect(submitted()).toHaveLength(0);
   });
   it('requires an explicit destination and confirms the actual cross-trip transfer',async()=>{
@@ -142,9 +144,8 @@ describe('real operational screen -> explicit replanning SQL (local fixture, not
     show();const dialog=await open();await choose(dialog,/Nova parada com localização/);
     fireEvent.change(within(dialog).getByLabelText('Endereço/destino da nova parada'),{target:{value:'Portaria 3'}});
     fireEvent.click(within(dialog).getByRole('button',{name:'Confirmar replanejamento'}));
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('latitude e longitude');expect(submitted()).toHaveLength(0);
-    fireEvent.change(within(dialog).getByLabelText('Latitude'),{target:{value:'-23.55'}});
-    fireEvent.change(within(dialog).getByLabelText('Longitude'),{target:{value:'-46.66'}});
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('confirme o ponto no mapa');expect(submitted()).toHaveLength(0);
+    fireEvent.click(within(dialog).getByRole('button',{name:'Selecionar endereço no mapa'}));
     fireEvent.click(within(dialog).getByRole('button',{name:'Confirmar replanejamento'}));
     await waitFor(()=>expect(mock.success).toHaveBeenCalledTimes(1));
     expect((await db.query("select destination,latitude::text,longitude::text from dispatch_stops where destination='Portaria 3'")).rows[0])

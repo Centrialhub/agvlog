@@ -1,0 +1,18 @@
+[
+  {
+    "path": "supabase/rollouts/20260910224741_finance_fiscal_worker_staged.sql",
+    "sha256": "dc3de4b8b08820fb4b58542f6e64b7bda768ee670ee04908f8147fcc8f5cce02"
+  },
+  {
+    "path": "supabase/rollouts/20260910225047_finance_bank_worker_staged.sql",
+    "sha256": "0c5e376566bce63bd7addcd81fa27b2c293852ad6c0dfe5de856645dde95832c"
+  },
+  {
+    "path": "supabase/migrations/20260910012756_finance_fiscal_queue_worker.sql",
+    "sha256": "3d209e4971a591725a5c5e859ebca9f18457e4f3659f656ab1cef8f3a8f31549"
+  },
+  {
+    "path": "supabase/migrations/20260910022059_finance_automatic_reference_reconciliation.sql",
+    "sha256": "3c3f6e1762fe872589ca0732bf97ba76f1535a65bec4454aa0f109ce6333926c"
+  }
+]

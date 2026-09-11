@@ -12,14 +12,17 @@ vi.mock('@supabase/supabase-js',()=>({createClient:()=>({
       maybeSingle:()=>{single=true;return q;},single:()=>{single=true;return q;},
       update:()=>{state.writes++;throw Error('Unexpected write');},insert:()=>{state.writes++;throw Error('Unexpected write');},
       then:(resolve:(v:unknown)=>unknown)=>{
-        const rows:Record<string,unknown>[]=table==='fiscal_documents'?[{id:'document',tenant_id:'tenant'}]:table==='tenant_emitters'?[{id:'emitter',tenant_id:'tenant',active:true,cnpj:'12345678000199'}]:table==='tenant_memberships'?[{tenant_id:'tenant',user_id:'user',active:true,role:state.role}]:table==='hub_fiscal_emissions'?[{id:'operation',tenant_id:'tenant',fiscal_document_id:'document',emitter_id:'emitter',environment:'production',dispatch_state:'uncertain',hub_document_id:null}]:[{tenant_id:'tenant',emitter_id:'emitter',doc_scope:'all',environment:'production',enabled:true,secret_name:'PROD_TOKEN',secret_ciphertext:null}];
+        const rows:Record<string,unknown>[]=table==='fiscal_documents'?[{id:'document',tenant_id:tenantId}]:table==='tenant_emitters'?[{id:'emitter',tenant_id:tenantId,active:true,cnpj:'12345678000199'}]:table==='tenant_memberships'?[{tenant_id:tenantId,user_id:'user',active:true,role:state.role}]:table==='hub_fiscal_emissions'?[{id:'operation',tenant_id:tenantId,fiscal_document_id:'document',emitter_id:'emitter',environment:'production',dispatch_state:'uncertain',hub_document_id:null}]:[{tenant_id:tenantId,emitter_id:'emitter',doc_scope:'all',environment:'production',enabled:true,secret_name:'PROD_TOKEN',secret_ciphertext:null}];
         const found=rows.filter(row=>filters.every(([k,v])=>row[k]===v));return Promise.resolve({data:single?found[0]||null:found,error:null}).then(resolve);
       }};return q;
   },
 })}));
 let poll:(req:Request)=>Promise<Response>;let proxy:(req:Request)=>Promise<Response>;
 const fetcher=vi.fn();
-const request=(body:Record<string,unknown>,headers:Record<string,string>={Authorization:'Bearer test-user'})=>new Request('https://edge.test',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
+const tenantId='10000000-0000-4000-8000-000000000001';
+const userToken=`test.${Buffer.from(JSON.stringify({active_tenant_id:tenantId})).toString('base64url')}.signature`;
+const userHeaders={Authorization:`Bearer ${userToken}`,'x-agvlog-tenant-id':tenantId};
+const request=(body:Record<string,unknown>,headers:Record<string,string>=userHeaders)=>new Request('https://edge.test',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
 beforeAll(async()=>{
   const env:Record<string,string>={SUPABASE_URL:'https://db.test',SUPABASE_ANON_KEY:'anon',SUPABASE_SERVICE_ROLE_KEY:'service',PROD_TOKEN:'test-only-token',HUB_FISCAL_BASE_URL:'http://invalid.test'};
   vi.stubGlobal('Deno',{env:{get:(key:string)=>env[key]},serve:(h:typeof state.handler)=>{state.handler=h;}});
@@ -42,7 +45,7 @@ describe('fiscal transport preflight',()=>{
   });
 });
 describe('read-only diagnostics with existing authorization',()=>{
-  it.each<Record<string,string>>([{Authorization:'Bearer test-user'},{'x-agvlog-cron-secret':'verified-cron-secret-for-test-only'}])('allows an existing authorized user or verified cron without writes',async headers=>{
+  it.each<Record<string,string>>([userHeaders,{'x-agvlog-cron-secret':'verified-cron-secret-for-test-only'}])('allows an existing authorized user or verified cron without writes',async headers=>{
     const response=await poll(request({action:'diagnose',document_id:'document'},headers));
     expect(response.status).toBe(200);const body=await response.json();expect(body).toMatchObject({emissionId:'operation',dispatchState:'uncertain',hasProviderReference:false,transport:{baseConfigured:true,baseValid:false,credentialReadable:true,credentialHeaderValid:true}});
     expect(JSON.stringify(body)).not.toContain('test-only-token');expect(state.claims).toBe(0);expect(state.writes).toBe(0);expect(fetcher).not.toHaveBeenCalled();

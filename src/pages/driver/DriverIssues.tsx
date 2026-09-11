@@ -22,6 +22,10 @@ import { EVENT_TYPE_LABELS, OperationalEventType } from '@/hooks/useOperationalE
 import { buildDriverOccurrenceRpcArgs } from '@/lib/driver/driverOccurrence';
 import { useDriverOperationalEventHistory } from '@/hooks/useDriverOperationalEventHistory';
 import type { DriverOperationalEventItem } from '@/lib/driver/driverOperationalEventHistory';
+import { useDriverOperationalOffline } from '@/hooks/useDriverOperationalOffline';
+import { driverOperationalSnapshotStore, type DriverOperationalSnapshot } from '@/lib/driver/driverOperationalOffline';
+import type { DriverOfflineEnvelope } from '@/lib/driver/driverOfflineOutbox';
+import type { Json } from '@/integrations/supabase/types';
 
 // Tipos com modelo padronizado (texto pronto para o fornecedor) + tipos genéricos para casos do dia-a-dia.
 const TEMPLATE_TYPES = Object.keys(OCCURRENCE_TEMPLATES) as OperationalEventType[];
@@ -37,14 +41,58 @@ const SEVERITY_OPTIONS = [
   { value: 'high', label: 'Alta' },
 ];
 
+function pendingOccurrence(
+  command: DriverOfflineEnvelope<Json>,
+  context: { tenantId: string; driverId: string; tripId: string },
+): DriverOperationalEventItem | null {
+  if (command.kind !== 'occurrence' || command.aggregateId !== context.tripId
+    || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return null;
+  const payload = command.payload as Record<string, Json | undefined>;
+  const eventType = typeof payload.event_type === 'string' ? payload.event_type : null;
+  const severity = typeof payload.severity === 'string' ? payload.severity : null;
+  if (!eventType || !severity) return null;
+  return {
+    id: command.id,
+    tenant_id: context.tenantId,
+    driver_id: context.driverId,
+    dispatch_trip_id: context.tripId,
+    dispatch_stop_id: typeof payload.stop_id === 'string' ? payload.stop_id : null,
+    event_type: eventType,
+    severity,
+    description: typeof payload.description === 'string' ? payload.description : null,
+    report_details: null,
+    payload: command.payload,
+    created_at: command.createdAt,
+  };
+}
+
 
 export default function DriverIssues() {
   const { currentTenant } = useTenant();
   const {user}=useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const offlineCommands = useDriverOperationalOffline();
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
+  const [operationalSnapshot, setOperationalSnapshot] = useState<DriverOperationalSnapshot | null>(null);
+  useEffect(() => {
+    let active = true;
+    setOperationalSnapshot(null);
+    if (!currentTenant?.id || !user?.id) return () => { active = false; };
+    const read = driverOperationalSnapshotStore.readLatest(currentTenant.id, user.id);
+    void read.then(snapshot => { if (active) setOperationalSnapshot(snapshot); })
+      .catch(() => { if (active) setOperationalSnapshot(null); });
+    return () => { active = false; };
+  }, [currentTenant?.id, user?.id]);
+  const snapshotMatches = !!operationalSnapshot && (!trip?.id || operationalSnapshot.tripId === trip.id);
+  const effectiveTripId = trip?.id || (snapshotMatches ? operationalSnapshot.tripId : null);
+  const effectiveDriver = driver ?? (snapshotMatches && operationalSnapshot ? {
+    id: operationalSnapshot.trip.driver.id,
+    name: operationalSnapshot.trip.driver.name,
+    tenant_id: operationalSnapshot.tenantId,
+    active: true,
+  } : null);
   const [open, setOpen] = useState(false);
   const fieldPrefix = useId();
   const [form, setForm] = useState<{ event_type: string; severity: string; description: string; details: Record<string, unknown> }>({
@@ -60,34 +108,45 @@ export default function DriverIssues() {
     hasNextPage,
     isFetchingNextPage,
   } = useDriverOperationalEventHistory({
-    driverId: driver?.id,
+    driverId: effectiveDriver?.id,
+    tripId: effectiveTripId,
     enabled: !!currentTenant && !!user,
   });
   const events = eventHistory?.items ?? [];
 
-  const { data: stops = [] } = useQuery({
-    queryKey: ['driver_trip_stops_for_issues', trip?.id],
+  const stopsQuery = useQuery({
+    queryKey: ['driver_trip_stops_for_issues', currentTenant?.id, user?.id, effectiveTripId],
     queryFn: async () => {
-      if (!trip?.id) return [];
+      if (!effectiveTripId || !currentTenant?.id) return [];
       const { data, error } = await supabase
         .from('dispatch_stops')
         .select('*, clients(company_name)')
-        .eq('dispatch_trip_id', trip.id)
+        .eq('tenant_id', currentTenant.id)
+        .eq('dispatch_trip_id', effectiveTripId)
         .order('stop_order', { ascending: true });
       if (error) throw error;
       return data || [];
     },
-    enabled: !!trip?.id,
+    enabled: !!effectiveTripId && !!currentTenant?.id && !!user?.id,
   });
+  const cachedStops = snapshotMatches && operationalSnapshot?.tripId === effectiveTripId
+    ? operationalSnapshot.stops.map(stop => ({
+      id: stop.id,
+      stop_order: stop.order,
+      destination: stop.destination,
+      client_id: stop.client?.id ?? null,
+      clients: stop.client ? { company_name: stop.client.name } : null,
+    })) : [];
+  const stops = stopsQuery.data ?? cachedStops;
 
   // Realtime: refletir mudanças (severidade, status, novas ocorrências) sem reabrir a tela.
   useEffect(() => {
-    if (!driver?.id) return undefined;
+    if (!effectiveDriver?.id || !offlineCommands.online) return undefined;
     const channel = supabase
-      .channel(`driver_issues_${driver.id}`)
+      .channel(`driver_issues_${effectiveDriver.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'operational_events', filter: `driver_id=eq.${driver.id}` },
+        { event: '*', schema: 'public', table: 'operational_events', filter: `driver_id=eq.${effectiveDriver.id}` },
         () => {
           qc.invalidateQueries({ queryKey: ['driver_operational_event_history'] });
         },
@@ -96,42 +155,33 @@ export default function DriverIssues() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [driver?.id, qc]);
+  }, [effectiveDriver?.id, offlineCommands.online, qc]);
 
   const createIssue = useMutation({
     mutationFn: async () => {
       const report = formatOccurrenceReport(form.event_type, form.details);
       const description = report || form.description || null;
-      if (!currentTenant || !driver || !trip) throw new Error('Sem viagem ativa.');
+      if (!currentTenant || !effectiveTripId) throw new Error('Sem viagem ativa.');
       
-      try {
-        const { error, data } = await supabase.rpc(
-          'driver_create_operational_occurrence',
-          buildDriverOccurrenceRpcArgs({
-            tripId: trip.id,
-            eventType: form.event_type,
-            description: description || '',
-            severity: form.severity,
-            stopId: typeof form.details.stop_id === 'string' ? form.details.stop_id : null,
-            clientId: typeof form.details.client_id === 'string' ? form.details.client_id : null,
-          }),
-        );
-        
-        if (error) {
-          console.error('[DriverIssues] RPC error:', error);
-          throw error;
-        }
-        return data;
-      } catch (error: unknown) {
-        console.error('[DriverIssues] Mutation error:', error);
-        throw error;
-      }
+      const args = buildDriverOccurrenceRpcArgs({
+        tripId: effectiveTripId,
+        eventType: form.event_type,
+        description: description || '',
+        severity: form.severity,
+        stopId: typeof form.details.stop_id === 'string' ? form.details.stop_id : null,
+        clientId: typeof form.details.client_id === 'string' ? form.details.client_id : null,
+      });
+      return offlineCommands.submit({ kind: 'occurrence', aggregateId: effectiveTripId, payload: {
+        trip_id: effectiveTripId, event_type: args._event_type, description: args._description, severity: args._severity,
+        stop_id: args._stop_id ?? null, client_id: args._client_id ?? null,
+      } });
     },
-    onSuccess: () => {
-      toast({ title: 'Ocorrência registrada' });
+    onSuccess: result => {
+      toast({ title: result.queued ? 'Ocorrência salva no aparelho' : 'Ocorrência registrada',
+        description: result.queued ? 'Será enviada automaticamente quando houver conexão.' : undefined });
       setOpen(false);
       setForm({ event_type: 'missing_goods', severity: 'medium', description: '', details: {} });
-      qc.invalidateQueries({ queryKey: ['driver_operational_event_history'] });
+      if (!result.queued) qc.invalidateQueries({ queryKey: ['driver_operational_event_history'] });
     },
     onError: (error: unknown) => toast({
       title: 'Erro',
@@ -140,7 +190,34 @@ export default function DriverIssues() {
     }),
   });
 
-  const effectiveEvents = driver && !eventsError ? events : [];
+  useEffect(() => {
+    if (!currentTenant?.id || !user?.id || !effectiveTripId || !eventHistory || eventsError) return;
+    const currentEvents = events.filter(event => event.tenant_id === currentTenant.id
+      && event.driver_id === effectiveDriver?.id && event.dispatch_trip_id === effectiveTripId).slice(0, 50);
+    void (async () => {
+      const existing = await driverOperationalSnapshotStore.read(currentTenant.id, user.id, effectiveTripId);
+      if (!existing) return;
+      const previousKey = (existing.occurrences ?? []).map(event => `${event.id}:${event.created_at}`).join('|');
+      const currentKey = currentEvents.map(event => `${event.id}:${event.created_at}`).join('|');
+      if (previousKey === currentKey) return;
+      const next = { ...existing, cachedAt: new Date().toISOString(), occurrences: currentEvents };
+      await driverOperationalSnapshotStore.put(next);
+      setOperationalSnapshot(next);
+    })().catch(() => { /* Live occurrence history remains usable when the device cache is unavailable. */ });
+  }, [currentTenant?.id, effectiveDriver?.id, effectiveTripId, eventHistory, events, eventsError, user?.id]);
+
+  const cachedEvents = snapshotMatches && operationalSnapshot?.tripId === effectiveTripId
+    ? operationalSnapshot.occurrences ?? [] : [];
+  const baseEvents = eventsError ? cachedEvents : events;
+  const queuedEvents = currentTenant?.id && effectiveDriver?.id && effectiveTripId
+    ? offlineCommands.commands.map(command => pendingOccurrence(command, {
+      tenantId: currentTenant.id,
+      driverId: effectiveDriver.id,
+      tripId: effectiveTripId,
+    })).filter((event): event is DriverOperationalEventItem => !!event)
+    : [];
+  const queuedIds = new Set(queuedEvents.map(event => event.id));
+  const effectiveEvents = [...queuedEvents, ...baseEvents.filter(event => !queuedIds.has(event.id))];
   const [chatEvent, setChatEvent] = useState<DriverOperationalEventItem | null>(null);
 
   const severityColors: Record<string, string> = {
@@ -175,7 +252,7 @@ export default function DriverIssues() {
           <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Nova Ocorrência</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              {trip && (
+              {effectiveTripId && (
                 <div>
                   <Label htmlFor={`${fieldPrefix}-stop`} className="text-xs">Parada / Cliente (opcional)</Label>
                   <Select 
@@ -290,8 +367,19 @@ export default function DriverIssues() {
         </Dialog>
       </div>
 
+      {offlineCommands.commands.some(command => command.kind === 'occurrence' && command.aggregateId === effectiveTripId) && (
+        <Card className="border-amber-300"><CardContent className="p-3 text-xs" role="status">
+          Há ocorrências salvas neste aparelho aguardando sincronização com a operação.
+        </CardContent></Card>
+      )}
 
-      {eventsError ? <div role="alert">Não foi possível consultar as ocorrências. <Button onClick={()=>void refetchEvents()}>Tentar novamente</Button></div> : eventsPending && driver ? <p role="status">Carregando ocorrências...</p> : effectiveEvents.length === 0 ? (
+      {eventsError && cachedEvents.length > 0 && (
+        <div role="status" className="text-xs text-muted-foreground">
+          Histórico salvo no aparelho. As ocorrências pendentes aparecem junto aos últimos registros.
+        </div>
+      )}
+
+      {eventsError && cachedEvents.length === 0 && queuedEvents.length === 0 ? <div role="alert">Não foi possível consultar as ocorrências. <Button onClick={()=>void refetchEvents()}>Tentar novamente</Button></div> : eventsPending && effectiveDriver && cachedEvents.length === 0 && queuedEvents.length === 0 ? <p role="status">Carregando ocorrências...</p> : effectiveEvents.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
             <AlertTriangle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -302,15 +390,16 @@ export default function DriverIssues() {
         <div className="space-y-2">
           {effectiveEvents.map((evt) => {
             const typeLabel = EVENT_TYPE_LABELS[evt.event_type as OperationalEventType] || ISSUE_TYPES.find(t => t.value === evt.event_type)?.label || evt.event_type;
+            const queued = queuedIds.has(evt.id);
             return (
               <Card
                 key={evt.id}
-                className="cursor-pointer hover:bg-muted/30 transition-colors"
-                role="button"
-                tabIndex={0}
-                onClick={() => setChatEvent(evt)}
+                className={queued ? 'border-amber-300' : 'cursor-pointer hover:bg-muted/30 transition-colors'}
+                role={queued ? undefined : 'button'}
+                tabIndex={queued ? undefined : 0}
+                onClick={() => { if (!queued) setChatEvent(evt); }}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
+                  if (!queued && (event.key === 'Enter' || event.key === ' ')) {
                     event.preventDefault();
                     setChatEvent(evt);
                   }
@@ -319,7 +408,10 @@ export default function DriverIssues() {
                 <CardContent className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">{typeLabel}</p>
-                    <Badge className={`text-[10px] ${severityColors[evt.severity] || ''}`} variant="secondary">{evt.severity}</Badge>
+                    <div className="flex items-center gap-1">
+                      {queued && <Badge variant="outline" className="text-[10px]">Pendente</Badge>}
+                      <Badge className={`text-[10px] ${severityColors[evt.severity] || ''}`} variant="secondary">{evt.severity}</Badge>
+                    </div>
                   </div>
                   {evt.description && <p className="text-xs text-muted-foreground">{evt.description}</p>}
                   <div className="flex items-center justify-between text-[10px] text-muted-foreground">
@@ -327,9 +419,9 @@ export default function DriverIssues() {
                       <Clock className="h-2.5 w-2.5" />
                       {new Date(evt.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </span>
-                    <span className="flex items-center gap-1 text-primary">
+                    {!queued && <span className="flex items-center gap-1 text-primary">
                       <MessageSquare className="h-2.5 w-2.5" /> Chat
-                    </span>
+                    </span>}
                   </div>
                 </CardContent>
               </Card>

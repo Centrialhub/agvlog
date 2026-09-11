@@ -1,7 +1,39 @@
 import { isCronRequest } from "./cron-auth.ts";
 import { corsHeaders } from "./cors.ts";
+import { activeTenantFromVerifiedRequest } from "./active-tenant.ts";
 
 export { corsHeaders };
+
+export const SSX_DEFAULT_BASE_URL = "https://integration.systemsatx.com.br";
+
+function parseAllowedSsxOrigin(value: string): string | null {
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+      return null;
+    }
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+export function allowedSsxOrigins(): Set<string> {
+  const configured = (Deno.env.get("SSX_ALLOWED_ORIGINS") || "")
+    .split(",")
+    .map(parseAllowedSsxOrigin)
+    .filter((origin): origin is string => Boolean(origin));
+  return new Set([SSX_DEFAULT_BASE_URL, ...configured]);
+}
+
+export function normalizeSsxBaseUrl(value: unknown): string {
+  const candidate = typeof value === "string" && value.trim() ? value.trim() : SSX_DEFAULT_BASE_URL;
+  const origin = parseAllowedSsxOrigin(candidate);
+  if (!origin || !allowedSsxOrigins().has(origin)) {
+    throw new Error("SSX_BASE_URL_NOT_ALLOWED");
+  }
+  return origin;
+}
 
 declare const Deno: {
   env: { get(name: string): string | undefined };
@@ -14,14 +46,11 @@ declare const Deno: {
  * HTTP helpers, and logging for all SSX edge functions.
  * 
  * DESIGN DECISIONS:
- * - Administration API is the PRIMARY source for tracker/vehicle catalogs.
- * - PositionHistory is a FALLBACK only, never the authoritative source.
- * - Administration API may or may not use version prefix — we try BOTH.
- * - Tracking API uses version prefix (e.g., /v3/Tracking/...).
- * - HashAuth in Login scopes the token to Tracking integration only.
- *   Administration endpoints require a token obtained WITHOUT HashAuth.
- *   HOWEVER: some accounts work with the regular token on Admin endpoints.
- *   We try admin token first, then regular token as fallback.
+ * - Tracking is self-contained and uses exact documented routes.
+ * - PositionHistory may discover recent units, but is not a complete catalog.
+ * - Administration is a separate, explicit account capability and is never
+ *   called unless settings.administration_enabled is exactly true.
+ * - A secondary token without HashAuth may be obtained only behind that gate.
  * - Secrets (token, password, hash) are NEVER logged in plaintext.
  */
 
@@ -33,10 +62,17 @@ declare const Deno: {
  *   => "https://integration.systemsatx.com.br/v3/Tracking/PositionHistory/List"
  */
 export function buildSsxUrl(baseUrl: string, apiVersion: string, path: string): string {
-  const base = baseUrl.replace(/\/$/, "");
+  const base = normalizeSsxBaseUrl(baseUrl);
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   const ver = (apiVersion || "v3").replace(/^\//, "").replace(/\/$/, "");
   return `${base}/${ver}${cleanPath}`;
+}
+
+/** Builds an exact unversioned Tracking URL as published by the SSX OpenAPI. */
+export function buildTrackingUrl(baseUrl: string, path: string): string {
+  const base = normalizeSsxBaseUrl(baseUrl);
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${cleanPath}`;
 }
 
 /**
@@ -44,7 +80,7 @@ export function buildSsxUrl(baseUrl: string, apiVersion: string, path: string): 
  * Used for fallback on 404.
  */
 export function buildSsxUrlCandidates(baseUrl: string, apiVersion: string, path: string): string[] {
-  const base = baseUrl.replace(/\/$/, "");
+  const base = normalizeSsxBaseUrl(baseUrl);
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   const ver = (apiVersion || "v3").replace(/^\//, "").replace(/\/$/, "");
   const urls: string[] = [`${base}/${ver}${cleanPath}`];
@@ -54,20 +90,14 @@ export function buildSsxUrlCandidates(baseUrl: string, apiVersion: string, path:
 }
 
 /**
- * Returns ordered endpoint candidates specifically for PositionHistory/List.
- * Order: unversioned FIRST (production-proven), then current apiVersion, then v2.
- * Rationale: production data shows unversioned works; versioned often returns 204 empty.
+ * Returns only the canonical PositionHistory v3 endpoint. Older contracts omit
+ * identity fields required by AGVLog and cannot be selected implicitly.
  */
 export function buildPositionHistoryUrlCandidates(baseUrl: string, apiVersion: string): string[] {
-  const base = baseUrl.replace(/\/$/, "");
-  const path = "/Tracking/PositionHistory/List";
-  const ver = (apiVersion || "v3").replace(/^\//, "").replace(/\/$/, "");
-  const candidates: string[] = [];
-  const add = (url: string) => { if (!candidates.includes(url)) candidates.push(url); };
-  add(`${base}${path}`);          // unversioned — proven to work
-  add(`${base}/${ver}${path}`);   // current version (e.g. v3)
-  add(`${base}/v2${path}`);       // v2 fallback
-  return candidates;
+  const base = normalizeSsxBaseUrl(baseUrl);
+  const configuredVersion = (apiVersion || "v3").replace(/^\//, "").replace(/\/$/, "");
+  if (configuredVersion !== "v3") throw new Error("SSX_POSITION_V3_REQUIRED");
+  return [`${base}/v3/Tracking/PositionHistory/List`];
 }
 
 /**
@@ -84,26 +114,16 @@ export function summarizePollingAttempts(attempts: { url: string; property: stri
  * Per SSX swagger, Administration endpoints are at /Administration/... directly.
  */
 export function buildAdminUrl(baseUrl: string, path: string): string {
-  const base = baseUrl.replace(/\/$/, "");
+  const base = normalizeSsxBaseUrl(baseUrl);
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   return `${base}${cleanPath}`;
 }
 
 /**
- * Returns ordered endpoint candidates for Administration:
- * 1. Unversioned: /Administration/Tracker/List
- * 2. Versioned:   /v3/Administration/Tracker/List
- * No duplicates.
+ * Returns the exact unversioned Administration route published by its OpenAPI.
  */
-export function buildAdminUrlCandidates(baseUrl: string, apiVersion: string, path: string): string[] {
-  const base = baseUrl.replace(/\/$/, "");
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  const ver = (apiVersion || "v3").replace(/^\//, "").replace(/\/$/, "");
-  const unversioned = `${base}${cleanPath}`;
-  const versioned = `${base}/${ver}${cleanPath}`;
-  const urls = [unversioned];
-  if (versioned !== unversioned) urls.push(versioned);
-  return urls;
+export function buildAdminUrlCandidates(baseUrl: string, _apiVersion: string, path: string): string[] {
+  return [buildAdminUrl(baseUrl, path)];
 }
 
 // ======================== Account Config Reader ========================
@@ -112,7 +132,6 @@ export interface SsxAccountConfig {
   baseUrl: string;
   apiVersion: string;
   token: string;
-  adminToken: string | null;
   pollWindowMinutes: number;
   requestTimeoutMs: number;
   settings: Record<string, any>;
@@ -125,10 +144,9 @@ export interface SsxAccountConfig {
 export function readAccountConfig(account: any): SsxAccountConfig {
   const settings = (account.settings || {}) as Record<string, any>;
   return {
-    baseUrl: (account.base_url || "").replace(/\/$/, ""),
+    baseUrl: normalizeSsxBaseUrl(account.base_url),
     apiVersion: settings.api_version || "v3",
     token: account.token_cache || "",
-    adminToken: settings.admin_token_cache || null,
     pollWindowMinutes: settings.poll_window_minutes || 15,
     requestTimeoutMs: settings.request_timeout_ms || 30_000,
     settings,
@@ -142,26 +160,51 @@ export function readAccountConfig(account: any): SsxAccountConfig {
 // ======================== Admin Token Login ========================
 
 /**
- * Obtains a token WITHOUT HashAuth for Administration API access.
- * If no HashAuth is configured, the regular token works for both.
+ * Obtains a token for the separately enabled Administration integration.
+ * This helper fails closed even if a caller invokes it accidentally.
  */
 export async function getAdminToken(
   config: SsxAccountConfig,
   supabase: any,
   integrationAccountId: string,
 ): Promise<{ token: string | null; error: string | null }> {
+  if (config.settings.administration_enabled !== true) {
+    return { token: null, error: "SSX_ADMINISTRATION_DISABLED" };
+  }
+
   // If no HashAuth is configured, the regular token already has admin scope
   if (!config.hashauth) {
     console.log("[SSX:admin-token] No HashAuth configured, using regular token for admin");
     return { token: config.token, error: null };
   }
 
-  // Check cached admin token
-  if (config.adminToken && config.settings.admin_token_expires_at) {
-    const expiresAt = new Date(config.settings.admin_token_expires_at).getTime();
-    if (expiresAt - Date.now() > 60_000) {
-      console.log("[SSX:admin-token] Using cached admin token");
-      return { token: config.adminToken, error: null };
+  const encryptionKey = Deno.env.get("AGVLOG_ENCRYPTION_KEY");
+  if (!encryptionKey) {
+    return { token: null, error: "AGVLOG_ENCRYPTION_KEY is required" };
+  }
+
+  // The secondary bearer token lives behind service-only RPCs and is encrypted
+  // with the same application key as the SSX password. It must never enter the
+  // browser-readable settings JSON.
+  const { data: cached, error: cacheReadError } = await supabase.rpc(
+    "get_ssx_admin_token_cache_v1",
+    { _integration_account_id: integrationAccountId },
+  );
+  if (!cacheReadError && cached && typeof cached === "object") {
+    const expiresAt = new Date(String(cached.expires_at || "")).getTime();
+    const ciphertext = typeof cached.token_ciphertext === "string" ? cached.token_ciphertext : "";
+    if (ciphertext && expiresAt - Date.now() > 60_000) {
+      try {
+        const token = await decryptAesGcm(ciphertext, encryptionKey);
+        if (token.length >= 10) {
+          console.log("[SSX:admin-token] Using encrypted service-only cache");
+          return { token, error: null };
+        }
+      } catch {
+        await supabase.rpc("clear_ssx_admin_token_cache_v1", {
+          _integration_account_id: integrationAccountId,
+        });
+      }
     }
   }
 
@@ -171,15 +214,11 @@ export async function getAdminToken(
 
   let password = config.passwordEncrypted;
   if (password.startsWith("enc:v1:")) {
-    const encryptionKey = Deno.env.get("AGVLOG_ENCRYPTION_KEY");
-    if (!encryptionKey) {
-      return { token: null, error: "AGVLOG_ENCRYPTION_KEY is required" };
-    }
     try {
       password = await decryptAesGcm(password, encryptionKey);
-    } catch (e: any) {
-      console.error("[SSX:admin-token] Decryption failed:", e.message);
-      return { token: null, error: `Decryption failed: ${e.message}` };
+    } catch {
+      console.error("[SSX:admin-token] Password decryption failed");
+      return { token: null, error: "SSX_ADMIN_PASSWORD_DECRYPTION_FAILED" };
     }
   }
 
@@ -204,15 +243,16 @@ export async function getAdminToken(
       return { token: null, error: `Login without HashAuth failed: HTTP ${resp.status}` };
     }
 
-    let token: string;
+    let token = "";
     let expiresInSeconds: number | null = null;
     try {
-      const parsed = JSON.parse(text);
-      token = parsed.AccessToken || parsed.access_token || parsed.Token || parsed.token || text;
-      expiresInSeconds = parsed.ExpiresIn || parsed.expires_in || null;
-      if (typeof token === "object") token = JSON.stringify(token);
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      token = typeof parsed.AccessToken === "string" ? parsed.AccessToken.trim() : "";
+      expiresInSeconds = typeof parsed.ExpiresIn === "number" && Number.isInteger(parsed.ExpiresIn)
+        ? parsed.ExpiresIn
+        : null;
     } catch {
-      token = text.trim().replace(/^"/, "").replace(/"$/, "");
+      token = "";
     }
 
     if (!token || token.length < 10) {
@@ -243,22 +283,23 @@ export async function getAdminToken(
 
     const expiresAt = new Date(Date.now() + ttlMs).toISOString();
 
-    const { data: currentAccount } = await supabase
-      .from("integration_accounts").select("settings").eq("id", integrationAccountId).single();
-    const currentSettings = currentAccount?.settings || {};
-    await supabase.from("integration_accounts").update({
-      settings: {
-        ...currentSettings,
-        admin_token_cache: token,
-        admin_token_expires_at: expiresAt,
+    const tokenCiphertext = await encryptAesGcm(token, encryptionKey);
+    const { error: cacheWriteError } = await supabase.rpc(
+      "set_ssx_admin_token_cache_v1",
+      {
+        _integration_account_id: integrationAccountId,
+        _token_ciphertext: tokenCiphertext,
+        _expires_at: expiresAt,
       },
-      updated_at: new Date().toISOString(),
-    }).eq("id", integrationAccountId);
+    );
+    if (cacheWriteError) {
+      console.warn("[SSX:admin-token] Failed to persist encrypted cache");
+    }
 
     console.log(`[SSX:admin-token] Admin token obtained, expires at ${expiresAt}`);
     return { token, error: null };
-  } catch (e: any) {
-    return { token: null, error: `Admin login failed: ${e.message}` };
+  } catch {
+    return { token: null, error: "SSX_ADMIN_LOGIN_NETWORK_FAILED" };
   }
 }
 
@@ -357,7 +398,7 @@ export interface NormalizedUnit {
   speed: number | null;
   ignition: boolean | null;
   source_endpoint: string;
-  source_mode: "admin_catalog" | "tracking_fallback";
+  source_mode: "admin_catalog" | "tracking_discovery";
 }
 
 /**
@@ -369,7 +410,7 @@ export interface NormalizedUnit {
  * 3. TrackerIntegrationCode / IntegrationCode (only if no vehicle/unit code)
  * 4. Code / TrackedUnit / SerialNumber / IMEI (last resort)
  */
-export function normalizeTrackerItem(raw: any, sourceEndpoint: string, sourceMode: "admin_catalog" | "tracking_fallback"): NormalizedUnit | null {
+export function normalizeTrackerItem(raw: any, sourceEndpoint: string, sourceMode: "admin_catalog" | "tracking_discovery"): NormalizedUnit | null {
   const vehicleCode = pickFirst(raw, ["VehicleIntegrationCode", "vehicleIntegrationCode"]);
   const trackedUnitCode = pickFirst(raw, ["TrackedUnitIntegrationCode", "trackedUnitIntegrationCode"]);
   const trackerCode = pickFirst(raw, ["TrackerIntegrationCode", "trackerIntegrationCode", "IntegrationCode", "integrationCode"]);
@@ -523,12 +564,8 @@ export async function ssxPost(
  * Swagger shows Admin List endpoints accept QueryCondition[] (array).
  * We try [] first (swagger-aligned), then defensive fallbacks.
  */
-export const ADMIN_BODY_CANDIDATES: { label: string; body: any }[] = [
+export const ADMIN_BODY_CANDIDATES: { label: string; body: unknown }[] = [
   { label: "empty_array", body: [] },
-  { label: "null_body", body: null },
-  { label: "empty_object", body: {} },
-  { label: "wrapped_empty_filters", body: { Filters: [] } },
-  { label: "paginated", body: { Page: 1, PageSize: 500 } },
 ];
 
 /**
@@ -771,6 +808,12 @@ export function logSsxCall(params: {
   console.log(`[SSX:${params.routine}] ${params.method} ${params.endpoint} | v=${params.apiVersion} | type=${params.attemptType} | status=${params.statusCode} | ${params.durationMs}ms | result=${params.result}${params.errorClass ? ` (${params.errorClass})` : ""}${params.fallbackReason ? ` | fallback: ${params.fallbackReason}` : ""}`);
 }
 
+export function redactedSsxResponsePreview(text: string | null | undefined, networkError?: string | null): string {
+  if (networkError) return "[network error redacted]";
+  if (!text) return "";
+  return `[response body redacted; ${new TextEncoder().encode(text).byteLength} bytes]`;
+}
+
 // ======================== Auth Helpers ========================
 
 export async function getTenantRole(supabase: any, tenantId: string, userId: string): Promise<string | null> {
@@ -784,6 +827,41 @@ export async function getTenantRole(supabase: any, tenantId: string, userId: str
     .single();
   if (error || !data) return null;
   return data.role;
+}
+
+export async function getWorkspaceRoleForAccount(supabase:any,workspaceId:string,userId:string):Promise<string|null>{
+  const {data:tenants,error:tenantError}=await supabase.from('tenants').select('id').eq('workspace_id',workspaceId);
+  if(tenantError||!tenants?.length)return null;
+  const tenantIds=tenants.map((tenant:{id:string})=>tenant.id);
+  const {data,error}=await supabase.from('tenant_memberships').select('role').eq('user_id',userId).eq('active',true).in('tenant_id',tenantIds);
+  if(error||!data?.length)return null;
+  const priority=['owner','admin','operator','driver','client'];
+  return data.map((membership:{role:string})=>membership.role).sort((left:string,right:string)=>priority.indexOf(left)-priority.indexOf(right))[0]??null;
+}
+
+export async function requireWorkspaceAccountContext(
+  req: Request,
+  supabase: any,
+  integrationAccountId: string,
+): Promise<Response | null> {
+  const tenantId = activeTenantFromVerifiedRequest(req);
+  if (!tenantId) {
+    return new Response(JSON.stringify({ error: 'tenant_context_mismatch' }), {
+      status: 409,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const { data, error } = await supabase.rpc('integration_account_matches_tenant_workspace_v1', {
+    _tenant_id: tenantId,
+    _integration_account_id: integrationAccountId,
+  });
+  if (error || data !== true) {
+    return new Response(JSON.stringify({ error: 'workspace_ssx_account_mismatch' }), {
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  return null;
 }
 
 export async function authenticateCaller(req: Request, supabaseUrl: string, supabaseAnonKey: string, supabaseServiceKey: string): Promise<{
@@ -825,6 +903,15 @@ export async function authenticateCaller(req: Request, supabaseUrl: string, supa
 
 // ======================== Encryption Helper ========================
 
+export async function encryptAesGcm(plaintext: string, keyHex: string): Promise<string> {
+  const keyBytes = hexToBytes(keyHex.padEnd(64, "0").slice(0, 64));
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(plaintext);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+  return `enc:v1:${bytesToHex(iv)}:${bytesToHex(new Uint8Array(ciphertext))}`;
+}
+
 export async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
   const parts = encrypted.split(":");
   if (parts.length !== 4) throw new Error("Invalid encrypted format");
@@ -846,6 +933,10 @@ function hexToBytes(hex: string) {
     bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   }
   return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 // ======================== Internal Helpers ========================
@@ -890,7 +981,7 @@ function buildAttemptLog(endpoint: string, format: string, result: SsxHttpResult
     errorClass: result.ok ? (itemCount > 0 ? "unknown" as SsxErrorClass : "empty_response") : result.errorClass,
     durationMs: result.durationMs,
     itemCount,
-    responsePreview: (result.text || result.networkError || "").substring(0, 150),
+    responsePreview: redactedSsxResponsePreview(result.text, result.networkError),
   };
 }
 

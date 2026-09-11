@@ -26,6 +26,7 @@ describe('fiscal browser access without bypassing authentication', () => {
       expect(response.status).toBe(method === 'OPTIONS' ? 200 : 401);
       expect(response.headers.get('Access-Control-Allow-Origin')).toBe(origin);
       expect(response.headers.get('Access-Control-Allow-Headers')).toContain('authorization');
+      expect(response.headers.get('Access-Control-Allow-Headers')).toContain('x-agvlog-tenant-id');
       expect(response.headers.get('Vary')).toBe('Accept-Encoding, Origin');
       expect(response.headers.get('X-Trace')).toBe('retained');
       expect(await response.text()).toBe(method === 'OPTIONS' ? 'ok' : 'unauthorized');

@@ -1,0 +1,13 @@
+# Associação de pagamento antigo — interface
+
+`LegacyPayableAssociation` recebe empresa, responsável e ID do pagamento. O botão abre diálogo com controle de acesso financeiro, consulta paginada de candidatas e histórico permanente. O coordenador integra esse componente ao inventário de adoção. A integração em `PayablePaymentDialog` já separa `link_origin`: só origem `canonical` oferece a reversão canônica; origem `legacy_adoption` ou pagamento sem associação usa o novo fluxo.
+
+Associação trabalha apenas com IDs explícitos de pagamento e saída. Exibe conta, favorecido, data, valor integral do pagamento, referência, capacidade disponível e ID da saída. Exige motivo e revisão antes de confirmar. Não cria saída nem pagamento. A correção desfaz somente a associação e preserva a baixa do título.
+
+Consulta e comando exigem `revision` da origem. A revisão exibida deve continuar atual; o servidor valida a mesma revisão antes de associar. Mudanças observadas no pagamento/candidata também bloqueiam a confirmação até nova revisão. Pedidos previamente incertos mantêm exatamente os IDs e a revisão originais, inclusive quando a nova consulta já mostra uma associação ou quando a retomada recebe rejeição transacional.
+
+Recuperação por empresa/responsável/pagamento em sessionStorage antes do envio. Armazenamento corrompido bloqueia novos comandos; falha de gravação impede envio. Primeira rejeição transacional conhecida libera seleção após rollback. Consulta falha ou em atualização não exibe candidatas antigas. Histórico e candidatas paginam independentemente pelo maior total, com vínculo ativo informado fora da página. Histórico evidencia intervenção manual, autor, data, motivo e reversões. Sem candidata, a interface orienta revisar registros existentes e não sugere pagar novamente.
+
+Validação: 21 testes passaram (legacyPayableAssociationReview 8, legacyPayableAssociationClient 4, payablePaymentLegacyBranch 1, payableMovementLink 3, payableLinkReversal 3, financeAuditScreen 2). Lint de todos os arquivos desta entrega passou. TypeScript global sessão 75722 encontrou falhas fora desta frente em DocumentChangeDialog, useDispatchRoutePlan, DriverCargoCustody, Geofences, driverExpenseSubmission e stopCoordinatesFrontend; nenhum arquivo financeiro desta entrega foi apontado. Código dessas outras frentes preservado.
+
+Contrato comparado às migrations 20260910143833 e 20260910143920, sem edição de SQL nesta entrega. Teste histórico de banco financePayableMovementLinks usa schema anterior ao campo obrigatório link_origin; integração da fixture está com o coordenador, sem relaxar o contrato do cliente.

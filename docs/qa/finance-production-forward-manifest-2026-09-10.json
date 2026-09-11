@@ -1,0 +1,2837 @@
+{
+  "version": 1,
+  "project_id": "qcvnsdrbcchaxvawcngk",
+  "captured_at": "2026-09-10T22:04:29.114Z",
+  "history_count": 429,
+  "history_latest": "20260910163922",
+  "read_only": true,
+  "approved_for_blind_apply": false,
+  "baseline_excluded": [
+    {
+      "file": "20260824224152_baseline.sql",
+      "version": "20260824224152",
+      "name": "baseline",
+      "sha256": "9a8fb331632f4bd29c89c64072e3f81587a9d428d80de12248b77c6193113305",
+      "remote": {
+        "version": "20260824224152",
+        "name": "harden_tenant_scoped_security_definer_rpcs"
+      },
+      "aliases": [],
+      "historical_byte_comparison": "different_stored_UTF8",
+      "historical_local_sha256": "9a8fb331632f4bd29c89c64072e3f81587a9d428d80de12248b77c6193113305"
+    }
+  ],
+  "operational_prerequisite_order": [
+    {
+      "file": "20260830062933_harden_dispatch_planned_route.sql",
+      "version": "20260830062933",
+      "name": "harden_dispatch_planned_route",
+      "sha256": "1376526e6a60e2ff9a16f59637a938a357cb6a22cf968c589c54b24794dd64af",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "1376526e6a60e2ff9a16f59637a938a357cb6a22cf968c589c54b24794dd64af"
+    },
+    {
+      "file": "20260830072744_harden_load_composition_integrity.sql",
+      "version": "20260830072744",
+      "name": "harden_load_composition_integrity",
+      "sha256": "8ef63c8d51e109fbabd384ffbcccddda55da39befacb517a81a3cf0574e7cde6",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "8ef63c8d51e109fbabd384ffbcccddda55da39befacb517a81a3cf0574e7cde6"
+    },
+    {
+      "file": "20260830080608_add_explicit_load_replanning.sql",
+      "version": "20260830080608",
+      "name": "add_explicit_load_replanning",
+      "sha256": "fe9a7a3fd7530c8286849acdd4abd220cabd7d3cc0c42dedae874e35d727ce4c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "fe9a7a3fd7530c8286849acdd4abd220cabd7d3cc0c42dedae874e35d727ce4c"
+    },
+    {
+      "file": "20260830085557_harden_document_composition_changes.sql",
+      "version": "20260830085557",
+      "name": "harden_document_composition_changes",
+      "sha256": "b24bc0586f00c926abd3bf6fd35580d5d3931ca26b91c07d93cbfe84463e4ca5",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "b24bc0586f00c926abd3bf6fd35580d5d3931ca26b91c07d93cbfe84463e4ca5"
+    },
+    {
+      "file": "20260830094049_harden_load_item_preparation_writer.sql",
+      "version": "20260830094049",
+      "name": "harden_load_item_preparation_writer",
+      "sha256": "53392f642304006af1b7c99d468cca16ad87686c647f9a0cc8e33b8432d8a783",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "53392f642304006af1b7c99d468cca16ad87686c647f9a0cc8e33b8432d8a783"
+    },
+    {
+      "file": "20260830102652_add_operational_document_outcomes.sql",
+      "version": "20260830102652",
+      "name": "add_operational_document_outcomes",
+      "sha256": "2dee850e906f79854703116e076f8bfc8aba7a60f1ea910138165be0d381fd14",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "2dee850e906f79854703116e076f8bfc8aba7a60f1ea910138165be0d381fd14"
+    },
+    {
+      "file": "20260830120554_version_delivery_proof_evidence.sql",
+      "version": "20260830120554",
+      "name": "version_delivery_proof_evidence",
+      "sha256": "7e7542955b620306316f0e8222153b48e0cee8b77ee4c6ba4df499e965de41a7",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "7e7542955b620306316f0e8222153b48e0cee8b77ee4c6ba4df499e965de41a7"
+    },
+    {
+      "file": "20260830124944_add_operational_document_corrections.sql",
+      "version": "20260830124944",
+      "name": "add_operational_document_corrections",
+      "sha256": "bb3182617bd76b22ca92fa2db0407eb7ee83cb8d7aa87a79b9cd3bf36c94b745",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "bb3182617bd76b22ca92fa2db0407eb7ee83cb8d7aa87a79b9cd3bf36c94b745"
+    },
+    {
+      "file": "20260830135338_introduce_delivery_attempt_allocations.sql",
+      "version": "20260830135338",
+      "name": "introduce_delivery_attempt_allocations",
+      "sha256": "eefd96194024a7cd4678b7c69c869f32946559113d848f4ada58d5185b7a5854",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "eefd96194024a7cd4678b7c69c869f32946559113d848f4ada58d5185b7a5854"
+    },
+    {
+      "file": "20260830142048_enable_audited_delivery_reallocation.sql",
+      "version": "20260830142048",
+      "name": "enable_audited_delivery_reallocation",
+      "sha256": "b39c73e86ed3881957b804e5ee5d39e774eeae9f5a425c4ff21402c4922f5987",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "b39c73e86ed3881957b804e5ee5d39e774eeae9f5a425c4ff21402c4922f5987"
+    },
+    {
+      "file": "20260830151949_audit_delivery_document_metadata.sql",
+      "version": "20260830151949",
+      "name": "audit_delivery_document_metadata",
+      "sha256": "1f3717d1e61e577e18ce7273a171fd545d21e0e70b59d9356edabc69f4388b64",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "1f3717d1e61e577e18ce7273a171fd545d21e0e70b59d9356edabc69f4388b64"
+    },
+    {
+      "file": "20260830161722_make_closing_reports_attempt_aware.sql",
+      "version": "20260830161722",
+      "name": "make_closing_reports_attempt_aware",
+      "sha256": "2dc6ff614419b48d11804dbdc67987b5c0cfc2554cf3e42b06fdc1e8dfef735e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "2dc6ff614419b48d11804dbdc67987b5c0cfc2554cf3e42b06fdc1e8dfef735e"
+    },
+    {
+      "file": "20260830165149_make_closing_drafts_atomic.sql",
+      "version": "20260830165149",
+      "name": "make_closing_drafts_atomic",
+      "sha256": "cf37591be626ea87e15c41fc34e668234c1d8080b6a3057dc605311c2a61781b",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "cf37591be626ea87e15c41fc34e668234c1d8080b6a3057dc605311c2a61781b"
+    },
+    {
+      "file": "20260830174819_audit_closing_lifecycle_and_charge_claims.sql",
+      "version": "20260830174819",
+      "name": "audit_closing_lifecycle_and_charge_claims",
+      "sha256": "151471e20fd75f0ef3335b521602506139cdd5d2632b5c9ef587525f9e3399a3",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "151471e20fd75f0ef3335b521602506139cdd5d2632b5c9ef587525f9e3399a3"
+    },
+    {
+      "file": "20260830183929_audit_receivable_payments_and_reversals.sql",
+      "version": "20260830183929",
+      "name": "audit_receivable_payments_and_reversals",
+      "sha256": "9e98c2312ec41de519557e1161ff595ec6b719709d2b07090963e65509d0d07f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "9e98c2312ec41de519557e1161ff595ec6b719709d2b07090963e65509d0d07f"
+    },
+    {
+      "file": "20260830192908_audit_client_invoice_lifecycle.sql",
+      "version": "20260830192908",
+      "name": "audit_client_invoice_lifecycle",
+      "sha256": "03cd774ed14b4f4eda00d93ef3479f362dd673b9a4d332e1783410d7127b4510",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "03cd774ed14b4f4eda00d93ef3479f362dd673b9a4d332e1783410d7127b4510"
+    }
+  ],
+  "financial_candidate_order": [
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "version": "20260909212104",
+      "name": "finance_ledger_foundation",
+      "sha256": "f14984f4b1c7c2c64ffc4fb0b257933cbc449b3759182e2932df8558d3db48f4",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "f14984f4b1c7c2c64ffc4fb0b257933cbc449b3759182e2932df8558d3db48f4"
+    },
+    {
+      "file": "20260909212514_finance_delivery_unloading.sql",
+      "version": "20260909212514",
+      "name": "finance_delivery_unloading",
+      "sha256": "31d527454b746dc9aed8b8c0755f7e9e6132f098ad5251ac937bb7fcbc01bae7",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "31d527454b746dc9aed8b8c0755f7e9e6132f098ad5251ac937bb7fcbc01bae7"
+    },
+    {
+      "file": "20260909213020_finance_movement_queries.sql",
+      "version": "20260909213020",
+      "name": "finance_movement_queries",
+      "sha256": "9e2ee8a95b50d4cdc4b78430ef54f1a26142b9f8ea5767c9bb609a61e69f0b16",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "9e2ee8a95b50d4cdc4b78430ef54f1a26142b9f8ea5767c9bb609a61e69f0b16"
+    },
+    {
+      "file": "20260909213959_finance_expense_batches.sql",
+      "version": "20260909213959",
+      "name": "finance_expense_batches",
+      "sha256": "3d24b8f562d043eccf99189255e19a1c9d4ce9827341a0348136562963ea0dc3",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "3d24b8f562d043eccf99189255e19a1c9d4ce9827341a0348136562963ea0dc3"
+    },
+    {
+      "file": "20260909215046_finance_delivery_supplier_guard.sql",
+      "version": "20260909215046",
+      "name": "finance_delivery_supplier_guard",
+      "sha256": "0f30ac3d6e4c5c98ac1fab74e3136546cf2868dd8908c61c520d1a19cd9e83e1",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "0f30ac3d6e4c5c98ac1fab74e3136546cf2868dd8908c61c520d1a19cd9e83e1"
+    },
+    {
+      "file": "20260909220020_finance_expense_workspace_queries.sql",
+      "version": "20260909220020",
+      "name": "finance_expense_workspace_queries",
+      "sha256": "2c3b7904bb41a6ebf110225559ef794b4e17c4f79bbad68ce74d0049ad92eda2",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "2c3b7904bb41a6ebf110225559ef794b4e17c4f79bbad68ce74d0049ad92eda2"
+    },
+    {
+      "file": "20260909220941_finance_receipt_evidence.sql",
+      "version": "20260909220941",
+      "name": "finance_receipt_evidence",
+      "sha256": "410293d35f3653c894643aa9f635128f13eb3a010f1ecc722aa0fbace7ac5188",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "410293d35f3653c894643aa9f635128f13eb3a010f1ecc722aa0fbace7ac5188"
+    },
+    {
+      "file": "20260909221405_finance_expense_history_queries.sql",
+      "version": "20260909221405",
+      "name": "finance_expense_history_queries",
+      "sha256": "c162e2b0cb35386737703f996872797854c4f66030a638f8a599688656f5ef17",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "c162e2b0cb35386737703f996872797854c4f66030a638f8a599688656f5ef17"
+    },
+    {
+      "file": "20260909222851_finance_statement_intake.sql",
+      "version": "20260909222851",
+      "name": "finance_statement_intake",
+      "sha256": "e7d153769b285614254438340edee8b1a609f778dac3ce7fe65a53f6b6f7a4e4",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "e7d153769b285614254438340edee8b1a609f778dac3ce7fe65a53f6b6f7a4e4"
+    },
+    {
+      "file": "20260909223737_finance_statement_source_verification.sql",
+      "version": "20260909223737",
+      "name": "finance_statement_source_verification",
+      "sha256": "59e80fcbe94a20e27021854d24178b3baba03ed93203a101daa551b56eb1458e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "59e80fcbe94a20e27021854d24178b3baba03ed93203a101daa551b56eb1458e"
+    },
+    {
+      "file": "20260909230507_finance_statement_queries.sql",
+      "version": "20260909230507",
+      "name": "finance_statement_queries",
+      "sha256": "670d252f1dfa660cc9e05cf895ccd1561c8e3a6bf275958ec36b4f210f904cae",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "670d252f1dfa660cc9e05cf895ccd1561c8e3a6bf275958ec36b4f210f904cae"
+    },
+    {
+      "file": "20260909231643_finance_statement_identity_review.sql",
+      "version": "20260909231643",
+      "name": "finance_statement_identity_review",
+      "sha256": "26f356955235506fa28f1cbc0b71a1fbe66ff45837e9b55fc2ec31c98b3cc3b4",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "26f356955235506fa28f1cbc0b71a1fbe66ff45837e9b55fc2ec31c98b3cc3b4"
+    },
+    {
+      "file": "20260909233625_finance_audit_queries.sql",
+      "version": "20260909233625",
+      "name": "finance_audit_queries",
+      "sha256": "4c5ffab49815e5f41e35ce68ed3321aa67bc0ac681bf491bb252c122c5303666",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "4c5ffab49815e5f41e35ce68ed3321aa67bc0ac681bf491bb252c122c5303666"
+    },
+    {
+      "file": "20260909234654_finance_legacy_driver_boundary.sql",
+      "version": "20260909234654",
+      "name": "finance_legacy_driver_boundary",
+      "sha256": "0e31b33f678c063c8600d6db2528c81fa5f18ef6fed1cd7ea456e1ded5ea8b36",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "0e31b33f678c063c8600d6db2528c81fa5f18ef6fed1cd7ea456e1ded5ea8b36"
+    },
+    {
+      "file": "20260909235237_finance_legacy_rpc_boundary.sql",
+      "version": "20260909235237",
+      "name": "finance_legacy_rpc_boundary",
+      "sha256": "58091908245304fc7d899158a0c59019627241d3adef726474d0c014845dc667",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "58091908245304fc7d899158a0c59019627241d3adef726474d0c014845dc667"
+    },
+    {
+      "file": "20260909235705_finance_legacy_receipt_boundary.sql",
+      "version": "20260909235705",
+      "name": "finance_legacy_receipt_boundary",
+      "sha256": "bc2ee41f0cc2814b1c0f13d0752f05f9da36747e24a8746ef13be14053fb82c6",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "bc2ee41f0cc2814b1c0f13d0752f05f9da36747e24a8746ef13be14053fb82c6"
+    },
+    {
+      "file": "20260910000731_finance_payroll_payment_projection.sql",
+      "version": "20260910000731",
+      "name": "finance_payroll_payment_projection",
+      "sha256": "88b308914ba6bcc1d718920f82b391cf60afce7f76a2b7715d3b7c3d641097d3",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "88b308914ba6bcc1d718920f82b391cf60afce7f76a2b7715d3b7c3d641097d3"
+    },
+    {
+      "file": "20260910002244_finance_payable_movement_links.sql",
+      "version": "20260910002244",
+      "name": "finance_payable_movement_links",
+      "sha256": "950528541ed07a28b12a83ff47212fe6534b02c6a5ac5f5a048d35e9d3006a43",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "950528541ed07a28b12a83ff47212fe6534b02c6a5ac5f5a048d35e9d3006a43"
+    },
+    {
+      "file": "20260910003529_finance_payable_link_reversal.sql",
+      "version": "20260910003529",
+      "name": "finance_payable_link_reversal",
+      "sha256": "6a74f52835c7afe46644109a9c415da5f907180b16b82b36321b9c3186740701",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "6a74f52835c7afe46644109a9c415da5f907180b16b82b36321b9c3186740701"
+    },
+    {
+      "file": "20260910004550_finance_fiscal_observation_queue.sql",
+      "version": "20260910004550",
+      "name": "finance_fiscal_observation_queue",
+      "sha256": "ca22534cc5e4cbdae362d97a62a35a4fb81ea0300687d9038b4cafc91e080cdf",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "ca22534cc5e4cbdae362d97a62a35a4fb81ea0300687d9038b4cafc91e080cdf"
+    },
+    {
+      "file": "20260910005509_finance_fiscal_receivable_basis.sql",
+      "version": "20260910005509",
+      "name": "finance_fiscal_receivable_basis",
+      "sha256": "ba09c06c28da321ec456f9738032c9ed68530805ea40358a4ae9f05f132e01c1",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "ba09c06c28da321ec456f9738032c9ed68530805ea40358a4ae9f05f132e01c1"
+    },
+    {
+      "file": "20260910010034_finance_fiscal_receivable_projection.sql",
+      "version": "20260910010034",
+      "name": "finance_fiscal_receivable_projection",
+      "sha256": "f34824f21040018028e20d4de22fc37d4b9fedecec3286496f96b7d78c6309b8",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "f34824f21040018028e20d4de22fc37d4b9fedecec3286496f96b7d78c6309b8"
+    },
+    {
+      "file": "20260910011121_finance_fiscal_cancellation_credits.sql",
+      "version": "20260910011121",
+      "name": "finance_fiscal_cancellation_credits",
+      "sha256": "f804d5aa34c45ff1cb63bdd0827d157e76ce75a22b54ad45a85172db95c1a02c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "f804d5aa34c45ff1cb63bdd0827d157e76ce75a22b54ad45a85172db95c1a02c"
+    },
+    {
+      "file": "20260910012152_finance_receivable_fiscal_context.sql",
+      "version": "20260910012152",
+      "name": "finance_receivable_fiscal_context",
+      "sha256": "330057896a657744cff7000aa1cbb317ffb6f7a7fda44b4234b41f714aa5ab6c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "330057896a657744cff7000aa1cbb317ffb6f7a7fda44b4234b41f714aa5ab6c"
+    },
+    {
+      "file": "20260910012756_finance_fiscal_queue_worker.sql",
+      "version": "20260910012756",
+      "name": "finance_fiscal_queue_worker",
+      "sha256": "3d209e4971a591725a5c5e859ebca9f18457e4f3659f656ab1cef8f3a8f31549",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "3d209e4971a591725a5c5e859ebca9f18457e4f3659f656ab1cef8f3a8f31549"
+    },
+    {
+      "file": "20260910013543_finance_bank_reconciliation_groups.sql",
+      "version": "20260910013543",
+      "name": "finance_bank_reconciliation_groups",
+      "sha256": "af173cc4a5e73d9af39d5d0fcdeb413c7402bb5a1d060746b2c6705af5fe53f3",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "af173cc4a5e73d9af39d5d0fcdeb413c7402bb5a1d060746b2c6705af5fe53f3"
+    },
+    {
+      "file": "20260910014238_finance_reconciliation_workspace.sql",
+      "version": "20260910014238",
+      "name": "finance_reconciliation_workspace",
+      "sha256": "dbc2b8731347a928d8686d04299d70904e4846f262a51faf85cb0dc76a9f0d83",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "dbc2b8731347a928d8686d04299d70904e4846f262a51faf85cb0dc76a9f0d83"
+    },
+    {
+      "file": "20260910015331_finance_reconciliation_history.sql",
+      "version": "20260910015331",
+      "name": "finance_reconciliation_history",
+      "sha256": "f4261dc666cb54f67fdfa51c8d34d5119771a5ded2a4a80d9b43af7de16beea5",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "f4261dc666cb54f67fdfa51c8d34d5119771a5ded2a4a80d9b43af7de16beea5"
+    },
+    {
+      "file": "20260910020543_finance_ofx_statement_intake.sql",
+      "version": "20260910020543",
+      "name": "finance_ofx_statement_intake",
+      "sha256": "9ca8114cbf73cae45a31b81de7b4ba5d47f14e77f2520581d32b2ae04fe7be66",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "9ca8114cbf73cae45a31b81de7b4ba5d47f14e77f2520581d32b2ae04fe7be66"
+    },
+    {
+      "file": "20260910021404_finance_native_statement_account.sql",
+      "version": "20260910021404",
+      "name": "finance_native_statement_account",
+      "sha256": "b7b6c9c7aee709a371652bd0aa0e837faf4a41fa446178b59bca2b1a9ea18d13",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "b7b6c9c7aee709a371652bd0aa0e837faf4a41fa446178b59bca2b1a9ea18d13"
+    },
+    {
+      "file": "20260910022059_finance_automatic_reference_reconciliation.sql",
+      "version": "20260910022059",
+      "name": "finance_automatic_reference_reconciliation",
+      "sha256": "3c3f6e1762fe872589ca0732bf97ba76f1535a65bec4454aa0f109ce6333926c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "3c3f6e1762fe872589ca0732bf97ba76f1535a65bec4454aa0f109ce6333926c"
+    },
+    {
+      "file": "20260910023208_finance_automatic_reconciliation_status.sql",
+      "version": "20260910023208",
+      "name": "finance_automatic_reconciliation_status",
+      "sha256": "cf95f50843e0df1d5064e315ad769542aa9dbfaee3ff13cd34ef3f27343baf5f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "cf95f50843e0df1d5064e315ad769542aa9dbfaee3ff13cd34ef3f27343baf5f"
+    },
+    {
+      "file": "20260910023911_finance_account_period_review.sql",
+      "version": "20260910023911",
+      "name": "finance_account_period_review",
+      "sha256": "aa651cfd209d54ede798ed74c29773660d05687c4ca004be2d255288cb98bd9e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "aa651cfd209d54ede798ed74c29773660d05687c4ca004be2d255288cb98bd9e"
+    },
+    {
+      "file": "20260910024438_finance_receivable_movement_projection.sql",
+      "version": "20260910024438",
+      "name": "finance_receivable_movement_projection",
+      "sha256": "09c86d71abb1f3716d6a62f0746d25bda5537d7ae10a6bb710e0190c9bdbf197",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "09c86d71abb1f3716d6a62f0746d25bda5537d7ae10a6bb710e0190c9bdbf197"
+    },
+    {
+      "file": "20260910025658_finance_receipt_allocation_corrections.sql",
+      "version": "20260910025658",
+      "name": "finance_receipt_allocation_corrections",
+      "sha256": "1d6084d521c55c9b784bc25e38d7335dfdef9f57a128bae31700b2aa1e45259f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "1d6084d521c55c9b784bc25e38d7335dfdef9f57a128bae31700b2aa1e45259f"
+    },
+    {
+      "file": "20260910030634_finance_explicit_receipt_refunds.sql",
+      "version": "20260910030634",
+      "name": "finance_explicit_receipt_refunds",
+      "sha256": "a8cc28abb1eda1b68d297d8319526557200f8ab46b6fc5a1adb619683b4bf0f1",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "a8cc28abb1eda1b68d297d8319526557200f8ab46b6fc5a1adb619683b4bf0f1"
+    },
+    {
+      "file": "20260910032730_finance_movement_receipt_trace.sql",
+      "version": "20260910032730",
+      "name": "finance_movement_receipt_trace",
+      "sha256": "3edcf907a3d165bc4db4b39f8c83fda02c289332f6f467667a8e83ff721e26cb",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "3edcf907a3d165bc4db4b39f8c83fda02c289332f6f467667a8e83ff721e26cb"
+    },
+    {
+      "file": "20260910033918_finance_internal_transfer_pairs.sql",
+      "version": "20260910033918",
+      "name": "finance_internal_transfer_pairs",
+      "sha256": "564288fe9c1c7cc1863019fc2c5ce090ca97a7bd4d765c2959c3b208daa3e0e4",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "564288fe9c1c7cc1863019fc2c5ce090ca97a7bd4d765c2959c3b208daa3e0e4"
+    },
+    {
+      "file": "20260910034731_finance_transfers_in_transit.sql",
+      "version": "20260910034731",
+      "name": "finance_transfers_in_transit",
+      "sha256": "4bb2e1e54b7f7a96f89a1e930af0465a54756ea42e411616a18165c8ed5b1308",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "4bb2e1e54b7f7a96f89a1e930af0465a54756ea42e411616a18165c8ed5b1308"
+    },
+    {
+      "file": "20260910035550_finance_transfer_period_position.sql",
+      "version": "20260910035550",
+      "name": "finance_transfer_period_position",
+      "sha256": "18d8b30e392638af036c6873ffd77dc41a07a1b01198c247c0b7ee95d819ef56",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "18d8b30e392638af036c6873ffd77dc41a07a1b01198c247c0b7ee95d819ef56"
+    },
+    {
+      "file": "20260910120756_finance_manual_expense_recording.sql",
+      "version": "20260910120756",
+      "name": "finance_manual_expense_recording",
+      "sha256": "a4688897bb9f84ef4ef91ba6f036fb369601b980c632832426db062cce7002dc",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "a4688897bb9f84ef4ef91ba6f036fb369601b980c632832426db062cce7002dc"
+    },
+    {
+      "file": "20260910121937_finance_retire_legacy_payable_writers.sql",
+      "version": "20260910121937",
+      "name": "finance_retire_legacy_payable_writers",
+      "sha256": "11eebb920bd34e6cc81468cdda1b7232db8a7d361de620135e6dad5335ae8f86",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "11eebb920bd34e6cc81468cdda1b7232db8a7d361de620135e6dad5335ae8f86"
+    },
+    {
+      "file": "20260910122628_finance_bank_transaction_browser_boundary.sql",
+      "version": "20260910122628",
+      "name": "finance_bank_transaction_browser_boundary",
+      "sha256": "dde957ddb2204641dd39523f0bab3e71c3442ba08605c69b434dbb0f6bed8163",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "dde957ddb2204641dd39523f0bab3e71c3442ba08605c69b434dbb0f6bed8163"
+    },
+    {
+      "file": "20260910123613_finance_retire_legacy_statement_import.sql",
+      "version": "20260910123613",
+      "name": "finance_retire_legacy_statement_import",
+      "sha256": "9d7d057e6f85a7de6db90b492041236f7f63a04833ccc5338a0753955906efa7",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "9d7d057e6f85a7de6db90b492041236f7f63a04833ccc5338a0753955906efa7"
+    },
+    {
+      "file": "20260910124258_finance_retire_legacy_reconciliation.sql",
+      "version": "20260910124258",
+      "name": "finance_retire_legacy_reconciliation",
+      "sha256": "422d50770dd0c2d919bc96921d047ede60d5e1e7f29b4ebfa898009845f93a2e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "422d50770dd0c2d919bc96921d047ede60d5e1e7f29b4ebfa898009845f93a2e"
+    },
+    {
+      "file": "20260910124716_finance_expense_cost_center_totals.sql",
+      "version": "20260910124716",
+      "name": "finance_expense_cost_center_totals",
+      "sha256": "04cb0d0d10595997c33e9b9c8b6d64f572fc9d2d235fbe79801e64c580a83ece",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "04cb0d0d10595997c33e9b9c8b6d64f572fc9d2d235fbe79801e64c580a83ece"
+    },
+    {
+      "file": "20260910125034_finance_manual_expense_cost_center.sql",
+      "version": "20260910125034",
+      "name": "finance_manual_expense_cost_center",
+      "sha256": "469be864296ae2be1c5ad57c049efc570df0a3e09869de657415ebc626086034",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "469be864296ae2be1c5ad57c049efc570df0a3e09869de657415ebc626086034"
+    },
+    {
+      "file": "20260910125357_finance_recorded_costs.sql",
+      "version": "20260910125357",
+      "name": "finance_recorded_costs",
+      "sha256": "4ff64ddafb49126e05b1e7ddc5925fe76dd63df00a1f380e0e6bd9e8db10099c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "4ff64ddafb49126e05b1e7ddc5925fe76dd63df00a1f380e0e6bd9e8db10099c"
+    },
+    {
+      "file": "20260910130032_finance_payroll_recorded_costs.sql",
+      "version": "20260910130032",
+      "name": "finance_payroll_recorded_costs",
+      "sha256": "e0d51628df54abeedfa0d78cd7b48632b7daf19ff43ae28dffe9875e77ceebae",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "e0d51628df54abeedfa0d78cd7b48632b7daf19ff43ae28dffe9875e77ceebae"
+    },
+    {
+      "file": "20260910130540_finance_settlement_movement_links.sql",
+      "version": "20260910130540",
+      "name": "finance_settlement_movement_links",
+      "sha256": "a05183495df24000b81fd2976a6723df0c4700dbdf2d82b5dca679e47e1f1205",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "a05183495df24000b81fd2976a6723df0c4700dbdf2d82b5dca679e47e1f1205"
+    },
+    {
+      "file": "20260910130921_finance_settlement_movement_options.sql",
+      "version": "20260910130921",
+      "name": "finance_settlement_movement_options",
+      "sha256": "3f1a107e4f02187638bf145d03842f860b8e13c16d11ba5515a615e989953821",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "3f1a107e4f02187638bf145d03842f860b8e13c16d11ba5515a615e989953821"
+    },
+    {
+      "file": "20260910130956_finance_statement_period_evidence.sql",
+      "version": "20260910130956",
+      "name": "finance_statement_period_evidence",
+      "sha256": "862a3329a13e7b22a29a5c10861f2d12b18d71221c2367c2692fa105eec82cd7",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "862a3329a13e7b22a29a5c10861f2d12b18d71221c2367c2692fa105eec82cd7"
+    },
+    {
+      "file": "20260910131149_finance_settlement_link_audit.sql",
+      "version": "20260910131149",
+      "name": "finance_settlement_link_audit",
+      "sha256": "5101428db9da57754866db67ed54bc9c649116adce21280045fb51e33fa2289f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "5101428db9da57754866db67ed54bc9c649116adce21280045fb51e33fa2289f"
+    },
+    {
+      "file": "20260910132406_finance_payroll_reimbursement_source_dedup.sql",
+      "version": "20260910132406",
+      "name": "finance_payroll_reimbursement_source_dedup",
+      "sha256": "d335fc5dcd74d283255283824ac7b39c3ed9f7160a87576d586352b125e157f4",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "d335fc5dcd74d283255283824ac7b39c3ed9f7160a87576d586352b125e157f4"
+    },
+    {
+      "file": "20260910132411_finance_settlement_link_reversals.sql",
+      "version": "20260910132411",
+      "name": "finance_settlement_link_reversals",
+      "sha256": "34cd9f338917b7c461acd7b81e104019312e7834c3c770a4c388f4cdc6dcdf52",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "34cd9f338917b7c461acd7b81e104019312e7834c3c770a4c388f4cdc6dcdf52"
+    },
+    {
+      "file": "20260910133352_finance_payroll_lifecycle_serialization.sql",
+      "version": "20260910133352",
+      "name": "finance_payroll_lifecycle_serialization",
+      "sha256": "d596834f30bdfddcd8b2410c9ba3c1a7318129cebd1c3fc1185c40d1f7506311",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "d596834f30bdfddcd8b2410c9ba3c1a7318129cebd1c3fc1185c40d1f7506311"
+    },
+    {
+      "file": "20260910133355_finance_new_settlement_payment_candidates.sql",
+      "version": "20260910133355",
+      "name": "finance_new_settlement_payment_candidates",
+      "sha256": "2228320c5bb307153155b0b33303f23c40da047efa2485551ae784d38576ef18",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "2228320c5bb307153155b0b33303f23c40da047efa2485551ae784d38576ef18"
+    },
+    {
+      "file": "20260910133421_finance_settlement_payment_recording.sql",
+      "version": "20260910133421",
+      "name": "finance_settlement_payment_recording",
+      "sha256": "33d7164beccdc66e575fc9e75801acb7fcdf0f4d90cb0563a8abfd9a7abbaee8",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "33d7164beccdc66e575fc9e75801acb7fcdf0f4d90cb0563a8abfd9a7abbaee8"
+    },
+    {
+      "file": "20260910133700_finance_retire_legacy_settlement_payment_writers.sql",
+      "version": "20260910133700",
+      "name": "finance_retire_legacy_settlement_payment_writers",
+      "sha256": "8cefdf5c92a4bfbd979a2685de8c46edbad0b31d5751453297d676aeb7545595",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "8cefdf5c92a4bfbd979a2685de8c46edbad0b31d5751453297d676aeb7545595"
+    },
+    {
+      "file": "20260910134943_finance_settlement_expense_context.sql",
+      "version": "20260910134943",
+      "name": "finance_settlement_expense_context",
+      "sha256": "7a26f770888e32c41bca109b571725d10c27b3f1c951a253416c4bcf1c30b92c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "7a26f770888e32c41bca109b571725d10c27b3f1c951a253416c4bcf1c30b92c"
+    },
+    {
+      "file": "20260910134948_finance_canonical_trip_cost_settlement.sql",
+      "version": "20260910134948",
+      "name": "finance_canonical_trip_cost_settlement",
+      "sha256": "05ab3155f07c0e92cf23cca56cc6f671562b4ac300ba973406652ec5c87d5c0e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "05ab3155f07c0e92cf23cca56cc6f671562b4ac300ba973406652ec5c87d5c0e"
+    },
+    {
+      "file": "20260910135125_finance_retire_bulk_obligation_projection.sql",
+      "version": "20260910135125",
+      "name": "finance_retire_bulk_obligation_projection",
+      "sha256": "fb9149d2b130d2811fc1ed9b8c596d3587218223c847cecc4ec5746afcdd5e54",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "fb9149d2b130d2811fc1ed9b8c596d3587218223c847cecc4ec5746afcdd5e54"
+    },
+    {
+      "file": "20260910140010_finance_account_opening_balances.sql",
+      "version": "20260910140010",
+      "name": "finance_account_opening_balances",
+      "sha256": "799f25034f6f3964b32e7da896ebffa589d8bb0fc623b03ae1cd1f13e5964c9c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "799f25034f6f3964b32e7da896ebffa589d8bb0fc623b03ae1cd1f13e5964c9c"
+    },
+    {
+      "file": "20260910141240_finance_cash_opening_counts.sql",
+      "version": "20260910141240",
+      "name": "finance_cash_opening_counts",
+      "sha256": "53cd98728a42edb363418b4aba292bf6d1ed9ed754739e3056f1eef644444b0a",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "53cd98728a42edb363418b4aba292bf6d1ed9ed754739e3056f1eef644444b0a"
+    },
+    {
+      "file": "20260910142143_finance_statement_coverage_approvals.sql",
+      "version": "20260910142143",
+      "name": "finance_statement_coverage_approvals",
+      "sha256": "cc8bea0528ceef3155cb1447a4cfeff9adf4cc09441aaa38e56beb896e0e1166",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "cc8bea0528ceef3155cb1447a4cfeff9adf4cc09441aaa38e56beb896e0e1166"
+    },
+    {
+      "file": "20260910142740_finance_legacy_adoption_inventory.sql",
+      "version": "20260910142740",
+      "name": "finance_legacy_adoption_inventory",
+      "sha256": "872ca49f8f8e033d43d279bed1452064f106782a5efdd642c3cb39cd1504c35c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "872ca49f8f8e033d43d279bed1452064f106782a5efdd642c3cb39cd1504c35c"
+    },
+    {
+      "file": "20260910142923_finance_statement_verification_reauthorization.sql",
+      "version": "20260910142923",
+      "name": "finance_statement_verification_reauthorization",
+      "sha256": "9ce386f8a93b46865569099495f6a47935b207f51f6fdee8c932bc1f8763273f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "9ce386f8a93b46865569099495f6a47935b207f51f6fdee8c932bc1f8763273f"
+    },
+    {
+      "file": "20260910143833_finance_legacy_payable_associations.sql",
+      "version": "20260910143833",
+      "name": "finance_legacy_payable_associations",
+      "sha256": "2948e859d766cbff838a170ab288b543bf0d133412e9ba526d1f7fdb3125e529",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "2948e859d766cbff838a170ab288b543bf0d133412e9ba526d1f7fdb3125e529"
+    },
+    {
+      "file": "20260910143920_finance_legacy_payable_association_options.sql",
+      "version": "20260910143920",
+      "name": "finance_legacy_payable_association_options",
+      "sha256": "9589b6cbb91b7c42b18f08c503f656f0ff0fa7cf43920b4eed5b1556cc4284bd",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "9589b6cbb91b7c42b18f08c503f656f0ff0fa7cf43920b4eed5b1556cc4284bd"
+    },
+    {
+      "file": "20260910145616_finance_legacy_receipt_associations.sql",
+      "version": "20260910145616",
+      "name": "finance_legacy_receipt_associations",
+      "sha256": "c0f2ba253350a39f0c8ec117df2f4883ad655fff1e0c65eeddac486fe6fa8848",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "c0f2ba253350a39f0c8ec117df2f4883ad655fff1e0c65eeddac486fe6fa8848"
+    },
+    {
+      "file": "20260910145659_finance_legacy_receivable_association_options.sql",
+      "version": "20260910145659",
+      "name": "finance_legacy_receivable_association_options",
+      "sha256": "c66ecf09556ad0a2cb30a57f9eaf4dfb3526b27708162af9257d9e44ca2a22f1",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "c66ecf09556ad0a2cb30a57f9eaf4dfb3526b27708162af9257d9e44ca2a22f1"
+    },
+    {
+      "file": "20260910150338_finance_legacy_receipt_movement_trace.sql",
+      "version": "20260910150338",
+      "name": "finance_legacy_receipt_movement_trace",
+      "sha256": "f5cc9ce1b8f221d55dd2fa7cfe0d06bbf6a3532cc109a286ab097f86be26c4cd",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "f5cc9ce1b8f221d55dd2fa7cfe0d06bbf6a3532cc109a286ab097f86be26c4cd"
+    },
+    {
+      "file": "20260910151011_finance_legacy_integrity_inventory.sql",
+      "version": "20260910151011",
+      "name": "finance_legacy_integrity_inventory",
+      "sha256": "606d077ab2ff859740ca5eebbd5526ccdd918b979768157c899db0adddeac083",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "606d077ab2ff859740ca5eebbd5526ccdd918b979768157c899db0adddeac083"
+    },
+    {
+      "file": "20260910151617_finance_receivable_portfolio_summary.sql",
+      "version": "20260910151617",
+      "name": "finance_receivable_portfolio_summary",
+      "sha256": "b0fd3bb3785762edbe496d28f48db926bc8c81815ab4448088ca4b768bbd6c50",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "b0fd3bb3785762edbe496d28f48db926bc8c81815ab4448088ca4b768bbd6c50"
+    },
+    {
+      "file": "20260910152557_finance_recorded_cost_summary.sql",
+      "version": "20260910152557",
+      "name": "finance_recorded_cost_summary",
+      "sha256": "1cc424b40ea451f602949ce6e68d4a23e76943252119badb86592725f66bf611",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "1cc424b40ea451f602949ce6e68d4a23e76943252119badb86592725f66bf611"
+    },
+    {
+      "file": "20260910152711_finance_fiscal_dashboard_summary.sql",
+      "version": "20260910152711",
+      "name": "finance_fiscal_dashboard_summary",
+      "sha256": "c005e52bf436e1187c046480e1adf16f15e86054f3c584628ba53e93d6aed0eb",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "c005e52bf436e1187c046480e1adf16f15e86054f3c584628ba53e93d6aed0eb"
+    },
+    {
+      "file": "20260910153731_finance_unbilled_freight_summary.sql",
+      "version": "20260910153731",
+      "name": "finance_unbilled_freight_summary",
+      "sha256": "fcc7dfe4f8d73ad0f4681a81b8b016887cf1f0339a8a72d7bfa2229b35135dc0",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "fcc7dfe4f8d73ad0f4681a81b8b016887cf1f0339a8a72d7bfa2229b35135dc0"
+    },
+    {
+      "file": "20260910154046_finance_receivables_paged_list.sql",
+      "version": "20260910154046",
+      "name": "finance_receivables_paged_list",
+      "sha256": "826d1663c923afb300a9fa08c88cb4dd0861b5a093e3ef49ac5c69f86b88d6c1",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "826d1663c923afb300a9fa08c88cb4dd0861b5a093e3ef49ac5c69f86b88d6c1"
+    },
+    {
+      "file": "20260910155442_finance_legacy_expense_cost_associations.sql",
+      "version": "20260910155442",
+      "name": "finance_legacy_expense_cost_associations",
+      "sha256": "74ba3d2af100d5c41643705037c9535836cda26cc88646a1360a06b13e718e19",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "4298e871896dbab854a3f6200c485d90fde8bb95a4c97d9b1c665c44c8647360"
+    },
+    {
+      "file": "20260910155523_finance_legacy_cost_readers.sql",
+      "version": "20260910155523",
+      "name": "finance_legacy_cost_readers",
+      "sha256": "f7e120e53e4639d9092de78f5c499827e46fac0cd52cea4ad9af50219a86ee63",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "f7e120e53e4639d9092de78f5c499827e46fac0cd52cea4ad9af50219a86ee63"
+    },
+    {
+      "file": "20260910160441_finance_maintenance_cost_context.sql",
+      "version": "20260910160441",
+      "name": "finance_maintenance_cost_context",
+      "sha256": "aa361402faf7a95a0f6ddea62d0f1107068c19e3a0ba1cab85755d0cab9d4495",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910160822_finance_legacy_cost_manual_audit.sql",
+      "version": "20260910160822",
+      "name": "finance_legacy_cost_manual_audit",
+      "sha256": "37b880bc8491a4d9348de4347c147b34977ea63feb39976dfd8a888db6d438bd",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910160950_finance_maintenance_labor_cost_associations.sql",
+      "version": "20260910160950",
+      "name": "finance_maintenance_labor_cost_associations",
+      "sha256": "920a5e306cbef22499dc6b24746a6583e28d62bd0536dc15c640d7e3abc6fa76",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910161129_finance_maintenance_labor_context.sql",
+      "version": "20260910161129",
+      "name": "finance_maintenance_labor_context",
+      "sha256": "4fc143c6d08ca1a1c0c429db3f4848a07b6bea1aea80387f63c928e737f895e6",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910161702_finance_maintenance_direct_part_associations.sql",
+      "version": "20260910161702",
+      "name": "finance_maintenance_direct_part_associations",
+      "sha256": "a9c7a78cd4a0a3434332b4aa4b23f7f4a79d24c76209d10361c130c92e2a1adf",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910161828_finance_maintenance_direct_part_context.sql",
+      "version": "20260910161828",
+      "name": "finance_maintenance_direct_part_context",
+      "sha256": "20933142fa6cf0974c26652300d2b69323681b2fb477ba9f6149c5e387261a1f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910162807_finance_account_period_closure_foundation.sql",
+      "version": "20260910162807",
+      "name": "finance_account_period_closure_foundation",
+      "sha256": "4dd0e61229f86c1826b50f945cceaad12ee2233188dfa0913522969ceccd9b29",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910162958_finance_account_period_close_snapshot.sql",
+      "version": "20260910162958",
+      "name": "finance_account_period_close_snapshot",
+      "sha256": "fc425b1e8b9e6ee22a04603bf2b86de1375ecc390512a847092c8267e8ff152c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "version": "20260910163109",
+      "name": "finance_account_period_closed_source_guards",
+      "sha256": "10a3e77207b379485e3ce4e1016ebd826c6ec83bb3e2316db218c5e5a40bc4bc",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910163116_finance_legacy_cut_reviews.sql",
+      "version": "20260910163116",
+      "name": "finance_legacy_cut_reviews",
+      "sha256": "6baa25c2e21533aae152f6c61fbda8ecb891541888b133f2c325dd546bc21e0d",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910164256_finance_account_period_history.sql",
+      "version": "20260910164256",
+      "name": "finance_account_period_history",
+      "sha256": "28589666e27f55dc604ce585ac3a424b7df9e84f05f97d24793289e404377301",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910164711_reassert_finance_relation_rls_and_grants.sql",
+      "version": "20260910164711",
+      "name": "reassert_finance_relation_rls_and_grants",
+      "sha256": "78d784966c181a7d2cc895a8607af8d3dec88d48db17b0ed30f495a8085ccee2",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910164923_finance_account_period_closure_evidence.sql",
+      "version": "20260910164923",
+      "name": "finance_account_period_closure_evidence",
+      "sha256": "882ed7914eb25e877f1ccbddc0930bd0473868002ea3b76140b9d05cd59eecae",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910164942_finance_closed_period_late_payment_composition.sql",
+      "version": "20260910164942",
+      "name": "finance_closed_period_late_payment_composition",
+      "sha256": "8909c59453111cdd2ca6d001f49707926c032c26a466a59adf3c5745e1c748e7",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910165830_finance_period_manual_audit.sql",
+      "version": "20260910165830",
+      "name": "finance_period_manual_audit",
+      "sha256": "af579d29457377bf3d612aafa5105af8939f7aba369565f2956ef53ed85a63e1",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910170213_finance_legacy_cut_settlement_mapping.sql",
+      "version": "20260910170213",
+      "name": "finance_legacy_cut_settlement_mapping",
+      "sha256": "2641e645cc06ec82195173094c88e7a67402bb9cc18a6b6de4f112a37388cd63",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910170454_finance_stock_acquisition_associations.sql",
+      "version": "20260910170454",
+      "name": "finance_stock_acquisition_associations",
+      "sha256": "8e56e0d16b593974ab2299713253c1282423793c21442c0f671c3bc6bdce9c7e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910170539_finance_stock_acquisition_readers.sql",
+      "version": "20260910170539",
+      "name": "finance_stock_acquisition_readers",
+      "sha256": "1f7f17c1f2b419c949824e5731c332e31935bfbfc9fd26481cc216fd0b2cfb2e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910171503_finance_stock_consumption_attributions.sql",
+      "version": "20260910171503",
+      "name": "finance_stock_consumption_attributions",
+      "sha256": "255b91a22d7e9dfe2a4bf43fa48c7c591d288d24976dc352cca653b57d58401c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910171734_finance_stock_consumption_readers.sql",
+      "version": "20260910171734",
+      "name": "finance_stock_consumption_readers",
+      "sha256": "0929a3da07490b2b35a2fd1515af100d8014e6182f2d56f0eca0fbfba8cd51f4",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910172624_finance_paid_projection_chains.sql",
+      "version": "20260910172624",
+      "name": "finance_paid_projection_chains",
+      "sha256": "81a04b56856933edce8341a07743d5b977e7a688b877d6cafebaf4fe680d4394",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910173336_reassert_finance_stock_relation_rls_and_grants.sql",
+      "version": "20260910173336",
+      "name": "reassert_finance_stock_relation_rls_and_grants",
+      "sha256": "ae61372988b72bc4e17c8ab5c07e32ae0b60b226378668ca62919919d88c2a9f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910173906_finance_cash_period_closure.sql",
+      "version": "20260910173906",
+      "name": "finance_cash_period_closure",
+      "sha256": "c5a8e1039831002b94b39f4ef870d5c641c835533df63c97c9961209ec0377e5",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910174142_finance_cash_period_count_readers.sql",
+      "version": "20260910174142",
+      "name": "finance_cash_period_count_readers",
+      "sha256": "503db8a0716759a73c7d3d9baac3b11c4af6801c800677dc6db811708bf3df68",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910174822_finance_cash_period_manual_audit.sql",
+      "version": "20260910174822",
+      "name": "finance_cash_period_manual_audit",
+      "sha256": "cef4cdafd97172a150bcf3c98d198ac10711b42afab992004506979737fc2c81",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910175310_finance_cash_account_identity_scope.sql",
+      "version": "20260910175310",
+      "name": "finance_cash_account_identity_scope",
+      "sha256": "0de48bf482ee3bed0aa4e8985b43382822a37e946f807bdfcb38d8fe89b5cc63",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910175641_finance_unpaid_expense_cancellation.sql",
+      "version": "20260910175641",
+      "name": "finance_unpaid_expense_cancellation",
+      "sha256": "20fa89e70daa64f04ea1c8c4590801e9e0a63ea9e8e5e4f4ae7879f9d65b5984",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910175733_finance_expense_cancellation_preview.sql",
+      "version": "20260910175733",
+      "name": "finance_expense_cancellation_preview",
+      "sha256": "f552240ad6b9b59c069c519729e75868180d51e764f4bb0b0d92026ed4ebafd0",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910180040_finance_payable_portfolio.sql",
+      "version": "20260910180040",
+      "name": "finance_payable_portfolio",
+      "sha256": "51773219434d93c0a7cade674b75381f5a5e2f4dcc6dbd9bd24fd04f52c482f5",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910180245_reassert_finance_cash_period_relation_rls_and_grants.sql",
+      "version": "20260910180245",
+      "name": "reassert_finance_cash_period_relation_rls_and_grants",
+      "sha256": "ed990a90b3b3fe18976e03ee8c53fbb9f13639f1e81dd48e2b3a082f665e617c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910181257_finance_unpaid_manual_expense_cancellation.sql",
+      "version": "20260910181257",
+      "name": "finance_unpaid_manual_expense_cancellation",
+      "sha256": "524e93c21de27fcb3bb5b46720bc8e340304efc6d2be086460e249e3d19cb50a",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910181549_finance_manual_expense_cancellation_preview.sql",
+      "version": "20260910181549",
+      "name": "finance_manual_expense_cancellation_preview",
+      "sha256": "6ed93d5ec9d655f67adbfd9edd29b6335336d3eaa013d6f15c30683a5f8b5ed4",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910182406_finance_expense_cancellation_manual_audit.sql",
+      "version": "20260910182406",
+      "name": "finance_expense_cancellation_manual_audit",
+      "sha256": "20740e5099f555dd58dff206adfc707e2ad139acda22b4906e415d89e7ef216b",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910182541_finance_movement_correction_foundation.sql",
+      "version": "20260910182541",
+      "name": "finance_movement_correction_foundation",
+      "sha256": "1085d55520ecf05a34ca2c5a64e22e2830b64cdb906b2ef5aa37a07d8d09d74a",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910182830_finance_movement_correction_history.sql",
+      "version": "20260910182830",
+      "name": "finance_movement_correction_history",
+      "sha256": "7885c5accd363b5b60828dbe785030c95eef3212f5de47f4912a3a324e2cc485",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910183438_finance_active_movement_period_projections.sql",
+      "version": "20260910183438",
+      "name": "finance_active_movement_period_projections",
+      "sha256": "0eb73159b24bf1afd731e24aa4153db833cdef03bd5612e4249e856f2fbccc0f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910183442_finance_reconciliation_active_movements.sql",
+      "version": "20260910183442",
+      "name": "finance_reconciliation_active_movements",
+      "sha256": "1ace7642c0c66c131627b5d860f0289782d8b5ff2c48bc2e21d96dc0ad206ac8",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910183506_finance_active_movement_financial_guards.sql",
+      "version": "20260910183506",
+      "name": "finance_active_movement_financial_guards",
+      "sha256": "130bc344d89633f918fefb977dd4d7d2a3a1769e3eaa4bf0bd6ff0079480dfaf",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910184213_finance_movement_active_reference.sql",
+      "version": "20260910184213",
+      "name": "finance_movement_active_reference",
+      "sha256": "8fbcdb2344bb125fa68f61647ce36c91db95f71e55eba09a4c7e24a746aebf3c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910184543_finance_active_movement_options.sql",
+      "version": "20260910184543",
+      "name": "finance_active_movement_options",
+      "sha256": "2220b56fd093ff7c47556ddb6d75a96aff19acfd750b87d757fa11de82590275",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910185338_finance_void_aware_monetary_proofs.sql",
+      "version": "20260910185338",
+      "name": "finance_void_aware_monetary_proofs",
+      "sha256": "de962a9c2d7ab108974c75fe5f9ec6430129b60d7725be75e9c1b4e17b0b8c0a",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910185517_finance_movement_recording_origin.sql",
+      "version": "20260910185517",
+      "name": "finance_movement_recording_origin",
+      "sha256": "d2e4601ab095e1245845036ab5c0965425e3f89443962789ca19690e6b1eaa2e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910190516_finance_movement_correction_context.sql",
+      "version": "20260910190516",
+      "name": "finance_movement_correction_context",
+      "sha256": "aefa6e937c708cf31e983c7bf6bdfef8a2e788ed68bcf0683a67b4c256367b32",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910190635_finance_movement_correction_preview.sql",
+      "version": "20260910190635",
+      "name": "finance_movement_correction_preview",
+      "sha256": "0a39c5eddc9c3ecb553c782ae3ccb7510333970cff0d8cefd07d2a25e3b8bd06",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910191905_finance_manual_movement_void_command.sql",
+      "version": "20260910191905",
+      "name": "finance_manual_movement_void_command",
+      "sha256": "6f57f662c965f24ccc010973232ea16b9ed44d0eed8480f0a47a72524237039b",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910192831_finance_manual_movement_void_public_dispatch.sql",
+      "version": "20260910192831",
+      "name": "finance_manual_movement_void_public_dispatch",
+      "sha256": "c90da6bb84d7733b920b818f78761b3d8bb3fce53e255a3b6371d4381d536595",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910193723_finance_period_money_package.sql",
+      "version": "20260910193723",
+      "name": "finance_period_money_package",
+      "sha256": "685ce9177c4e3b5202d7ac9e6eb13cd4f5963db001a14c16204b23290b624adf",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910195941_finance_receivable_temporal_foundation.sql",
+      "version": "20260910195941",
+      "name": "finance_receivable_temporal_foundation",
+      "sha256": "8246ff32ae6d1e95ed9b4dda8495315c08328e002266253dd2258b04a86269c3",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910201323_finance_receivable_captured_history.sql",
+      "version": "20260910201323",
+      "name": "finance_receivable_captured_history",
+      "sha256": "8a94f49b025db40e3a1629b091c0e33180720579e37c8fa04149cd28bca80fe6",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910202421_finance_receivable_payments_page.sql",
+      "version": "20260910202421",
+      "name": "finance_receivable_payments_page",
+      "sha256": "e0873d2419bb9663e6ddc2e3483e648c0366852ca5b0794fb38e7834557bdd7b",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910203516_finance_period_unloading_flow.sql",
+      "version": "20260910203516",
+      "name": "finance_period_unloading_flow",
+      "sha256": "12b288b8809da09d3dda8e3ee2c323b32e4defcc5650af25b6cc915ba436a2ae",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910205941_finance_unloading_receivable_source_guard.sql",
+      "version": "20260910205941",
+      "name": "finance_unloading_receivable_source_guard",
+      "sha256": "b8701c4f801c6840e3d37ce1ab048cc366a98f7c10be92adf3974d673e66ee09",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910210433_finance_unloading_receivable_context.sql",
+      "version": "20260910210433",
+      "name": "finance_unloading_receivable_context",
+      "sha256": "6bad5b960550ad173a507cb03dce6239a63c6108ef0a13681364ba2a30238e77",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910211156_finance_unloading_projection_repair.sql",
+      "version": "20260910211156",
+      "name": "finance_unloading_projection_repair",
+      "sha256": "c0e71109be86c5f43bc799b506479c6fa7103e4db1b9a38b5a500c61fcd8f482",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910211740_finance_unloading_projection_repair_preview.sql",
+      "version": "20260910211740",
+      "name": "finance_unloading_projection_repair_preview",
+      "sha256": "df7590dceae582bddf72f86008a62de2f083d2c41642a2ec3993155b0abd9e25",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910212550_finance_public_unloading_projection_repair.sql",
+      "version": "20260910212550",
+      "name": "finance_public_unloading_projection_repair",
+      "sha256": "0bbf8948dbbfe8bdfd4f5cbb157be6da61558d1a8387c1036038b619e0164d74",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    }
+  ],
+  "other_files_requiring_review": [
+    {
+      "file": "20260826002000_relocate_extensions.sql",
+      "version": "20260826002000",
+      "name": "relocate_extensions",
+      "sha256": "d92bb59a8b5cb5dcead33c8a0971f59348adbb7010707f89f194fb44fe93f624",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "d92bb59a8b5cb5dcead33c8a0971f59348adbb7010707f89f194fb44fe93f624"
+    },
+    {
+      "file": "20260826002200_index_all_foreign_keys.sql",
+      "version": "20260826002200",
+      "name": "index_all_foreign_keys",
+      "sha256": "3b3c9ac996c20e4867dcc6646eaf4668e174843050b4d844172b1970a3490e7b",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "3b3c9ac996c20e4867dcc6646eaf4668e174843050b4d844172b1970a3490e7b"
+    },
+    {
+      "file": "20260826002800_revoke_unsafe_legacy_rpc_signatures.sql",
+      "version": "20260826002800",
+      "name": "revoke_unsafe_legacy_rpc_signatures",
+      "sha256": "ca0306eb482ce4683ad06055943303b22e669a3524255ac632661af684999db9",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826002301",
+          "name": "revoke_unsafe_legacy_rpc_signatures"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "ca0306eb482ce4683ad06055943303b22e669a3524255ac632661af684999db9"
+    },
+    {
+      "file": "20260826002900_restore_rls_helper_execute.sql",
+      "version": "20260826002900",
+      "name": "restore_rls_helper_execute",
+      "sha256": "2d7e14a0ad8156190abbc3d007ec4882d2efff87ec93097e42b8b03732ba77d6",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826002408",
+          "name": "restore_rls_helper_execute"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "2d7e14a0ad8156190abbc3d007ec4882d2efff87ec93097e42b8b03732ba77d6"
+    },
+    {
+      "file": "20260826140344_consolidate_public_rls_policies.sql",
+      "version": "20260826140344",
+      "name": "consolidate_public_rls_policies",
+      "sha256": "cb3530cfcdf8aaa5737824509b8ac478ab978c6e8e2871daa0b59a70c3a26e6e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "cb3530cfcdf8aaa5737824509b8ac478ab978c6e8e2871daa0b59a70c3a26e6e"
+    },
+    {
+      "file": "20260826143000_fiscal_poll_dead_letters.sql",
+      "version": "20260826143000",
+      "name": "fiscal_poll_dead_letters",
+      "sha256": "79d12b5006b2129447c0f8f6a7515dbe4d713bc2e01fb30d86c14945ad8913ac",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826142151",
+          "name": "fiscal_poll_dead_letters"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "79d12b5006b2129447c0f8f6a7515dbe4d713bc2e01fb30d86c14945ad8913ac"
+    },
+    {
+      "file": "20260826153408_restrict_integration_metadata_to_operational_roles.sql",
+      "version": "20260826153408",
+      "name": "restrict_integration_metadata_to_operational_roles",
+      "sha256": "1684f8bb1b3e9889e47444cd9a07bb86a715d07aa7d96efb737c239348fa90ba",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826213612",
+          "name": "restrict_integration_metadata_to_operational_roles"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "1684f8bb1b3e9889e47444cd9a07bb86a715d07aa7d96efb737c239348fa90ba"
+    },
+    {
+      "file": "20260826160000_canonical_load_mutations.sql",
+      "version": "20260826160000",
+      "name": "canonical_load_mutations",
+      "sha256": "655c15f9905ad9e91f59a69c91e8722c555b8294d908471ab0dec58c0b93f689",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826213623",
+          "name": "canonical_load_mutations"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "655c15f9905ad9e91f59a69c91e8722c555b8294d908471ab0dec58c0b93f689"
+    },
+    {
+      "file": "20260826161000_storage_upload_limits.sql",
+      "version": "20260826161000",
+      "name": "storage_upload_limits",
+      "sha256": "f628476ce980febfc79dc170ad72fc7f8f6156980ee3b8c45db34a11907e470b",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826213631",
+          "name": "storage_upload_limits"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "f628476ce980febfc79dc170ad72fc7f8f6156980ee3b8c45db34a11907e470b"
+    },
+    {
+      "file": "20260826162000_fiscal_dead_letter_terminalize.sql",
+      "version": "20260826162000",
+      "name": "fiscal_dead_letter_terminalize",
+      "sha256": "384ab505f8fd85950550fc21c11c97bc0fbac15a9eda9fbd5fcf7c2b71f419f8",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826213640",
+          "name": "fiscal_dead_letter_terminalize"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "384ab505f8fd85950550fc21c11c97bc0fbac15a9eda9fbd5fcf7c2b71f419f8"
+    },
+    {
+      "file": "20260826163000_fiscal_webhook_inbox_claims.sql",
+      "version": "20260826163000",
+      "name": "fiscal_webhook_inbox_claims",
+      "sha256": "c9e663e01936f5b0b7f62444c3f154ee90679ec745f1d644e8231bf543753f5c",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826213649",
+          "name": "fiscal_webhook_inbox_claims"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "c9e663e01936f5b0b7f62444c3f154ee90679ec745f1d644e8231bf543753f5c"
+    },
+    {
+      "file": "20260826164000_harden_future_default_privileges.sql",
+      "version": "20260826164000",
+      "name": "harden_future_default_privileges",
+      "sha256": "3d9cd705f19a08a05889bda6d1ae30b49ec60fe2d0740e592fe4652fdb51a504",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826213657",
+          "name": "harden_future_default_privileges"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "3d9cd705f19a08a05889bda6d1ae30b49ec60fe2d0740e592fe4652fdb51a504"
+    },
+    {
+      "file": "20260826165000_require_privileged_mfa.sql",
+      "version": "20260826165000",
+      "name": "require_privileged_mfa",
+      "sha256": "e9394e318aec0b3d6d71bb2677c6f6172979b7af815adf7f18b23d26891d178c",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826214104",
+          "name": "require_privileged_mfa"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "e9394e318aec0b3d6d71bb2677c6f6172979b7af815adf7f18b23d26891d178c"
+    },
+    {
+      "file": "20260826170000_harden_portal_rpc_execution.sql",
+      "version": "20260826170000",
+      "name": "harden_portal_rpc_execution",
+      "sha256": "b1fc6690646c7d1247e28b227e45ae7f90d5222ce7a2042a8d9fb36a7fefd0fc",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826213733",
+          "name": "harden_portal_rpc_execution"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "b1fc6690646c7d1247e28b227e45ae7f90d5222ce7a2042a8d9fb36a7fefd0fc"
+    },
+    {
+      "file": "20260826171000_remove_permissive_policy_overlaps.sql",
+      "version": "20260826171000",
+      "name": "remove_permissive_policy_overlaps",
+      "sha256": "5f1a5e9d94e75706b33c5b16c6d8fa268ce07b73bae3e9d805ddced8d96726c5",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260826215934",
+          "name": "remove_permissive_policy_overlaps"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "5f1a5e9d94e75706b33c5b16c6d8fa268ce07b73bae3e9d805ddced8d96726c5"
+    },
+    {
+      "file": "20260828160000_remove_privileged_mfa.sql",
+      "version": "20260828160000",
+      "name": "remove_privileged_mfa",
+      "sha256": "b61e63e7b8b3ebf7fd7affc3ef6fa2b9541c1d0ef322a1de77294093920f32fe",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260828172412",
+          "name": "remove_privileged_mfa"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "b61e63e7b8b3ebf7fd7affc3ef6fa2b9541c1d0ef322a1de77294093920f32fe"
+    },
+    {
+      "file": "20260828181017_set_default_emitter_atomic.sql",
+      "version": "20260828181017",
+      "name": "set_default_emitter_atomic",
+      "sha256": "fa35f0b3cb82b58359f2c8b2de931a34dda9ec65e89f432837ff4b9b75dc54e9",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260828181403",
+          "name": "set_default_emitter_atomic"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "fa35f0b3cb82b58359f2c8b2de931a34dda9ec65e89f432837ff4b9b75dc54e9"
+    },
+    {
+      "file": "20260828185133_enforce_invite_only_auth_users.sql",
+      "version": "20260828185133",
+      "name": "enforce_invite_only_auth_users",
+      "sha256": "52df0c836064caaef754e0a3cbe86f76217ba4831f6e3d44f407e0432a43570d",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260828185518",
+          "name": "enforce_invite_only_auth_users"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "52df0c836064caaef754e0a3cbe86f76217ba4831f6e3d44f407e0432a43570d"
+    },
+    {
+      "file": "20260828185757_harden_auth_invite_authorizations.sql",
+      "version": "20260828185757",
+      "name": "harden_auth_invite_authorizations",
+      "sha256": "40d50775d4834153bc235659353ba7480cbf0bbeda4272886bfeaaf8eeb160a6",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260828185827",
+          "name": "harden_auth_invite_authorizations"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "40d50775d4834153bc235659353ba7480cbf0bbeda4272886bfeaaf8eeb160a6"
+    },
+    {
+      "file": "20260828210458_enforce_privileged_mfa_release.sql",
+      "version": "20260828210458",
+      "name": "enforce_privileged_mfa_release",
+      "sha256": "fa2a8126779f5b152fedadfbbc5ade8c665ee4310ee0139e1fca526a21d9577b",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "fa2a8126779f5b152fedadfbbc5ade8c665ee4310ee0139e1fca526a21d9577b"
+    },
+    {
+      "file": "20260829093000_complete_hub_fiscal_environment_contract.sql",
+      "version": "20260829093000",
+      "name": "complete_hub_fiscal_environment_contract",
+      "sha256": "10b4d6b9ace6974d38d6b6f9be7ca160e5a69e561b722b1a748a0dfb6050f71f",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260829133957",
+          "name": "complete_hub_fiscal_environment_contract"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "10b4d6b9ace6974d38d6b6f9be7ca160e5a69e561b722b1a748a0dfb6050f71f"
+    },
+    {
+      "file": "20260829161715_grant_portal_fiscal_scope_helper.sql",
+      "version": "20260829161715",
+      "name": "grant_portal_fiscal_scope_helper",
+      "sha256": "ff54694bf54db0d7ffc31d856db3b77261091757ad06e4709c2ec8ab90f1090f",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260829161509",
+          "name": "grant_portal_fiscal_scope_helper"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "ff54694bf54db0d7ffc31d856db3b77261091757ad06e4709c2ec8ab90f1090f"
+    },
+    {
+      "file": "20260830003721_require_driver_arrival_geolocation.sql",
+      "version": "20260830003721",
+      "name": "require_driver_arrival_geolocation",
+      "sha256": "adafe7a71244317337419a1870292b57aa0619fae6688bce8c6be9a53ce6e79a",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "adafe7a71244317337419a1870292b57aa0619fae6688bce8c6be9a53ce6e79a"
+    },
+    {
+      "file": "20260830005603_close_authenticated_security_definer_surface.sql",
+      "version": "20260830005603",
+      "name": "close_authenticated_security_definer_surface",
+      "sha256": "e629386ffc5c883707735c8682f33f6f96e456888af71c7ac509e85c78bc9aa7",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "e629386ffc5c883707735c8682f33f6f96e456888af71c7ac509e85c78bc9aa7"
+    },
+    {
+      "file": "20260830203548_audit_driver_expense_reviews.sql",
+      "version": "20260830203548",
+      "name": "audit_driver_expense_reviews",
+      "sha256": "0024490322b5048eb7465909383b21f1a149e5bd91ab4fd1e1335662150ab06c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "0024490322b5048eb7465909383b21f1a149e5bd91ab4fd1e1335662150ab06c"
+    },
+    {
+      "file": "20260830211707_make_driver_expense_creation_recoverable.sql",
+      "version": "20260830211707",
+      "name": "make_driver_expense_creation_recoverable",
+      "sha256": "e4653ae0a090e4e954dd1b25b6cd3d727aed7ddf757bdfd9652ceda164f93adf",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "e4653ae0a090e4e954dd1b25b6cd3d727aed7ddf757bdfd9652ceda164f93adf"
+    },
+    {
+      "file": "20260830221527_make_driver_chat_recoverable.sql",
+      "version": "20260830221527",
+      "name": "make_driver_chat_recoverable",
+      "sha256": "5e3f149f06dde92ba8bbdcbacff5a60a9864097ccf853dab4f56331bc894a91e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "5e3f149f06dde92ba8bbdcbacff5a60a9864097ccf853dab4f56331bc894a91e"
+    },
+    {
+      "file": "20260830224344_make_event_chat_recoverable.sql",
+      "version": "20260830224344",
+      "name": "make_event_chat_recoverable",
+      "sha256": "9fa8aa6da81198b4dab889199a6e3bc8c220dfe898d3ad9184f418af4bf197cf",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "9fa8aa6da81198b4dab889199a6e3bc8c220dfe898d3ad9184f418af4bf197cf"
+    },
+    {
+      "file": "20260830231003_enforce_expense_creation_mfa.sql",
+      "version": "20260830231003",
+      "name": "enforce_expense_creation_mfa",
+      "sha256": "e0af4f2f66662c19667b36617db691adb5f6065fd54305c4b385378a11705f74",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "e0af4f2f66662c19667b36617db691adb5f6065fd54305c4b385378a11705f74"
+    },
+    {
+      "file": "20260830233637_audit_driver_settlement_adjustments.sql",
+      "version": "20260830233637",
+      "name": "audit_driver_settlement_adjustments",
+      "sha256": "d1c2bd81d9fc7e6deb1c0942887d172406abc0bb63fef8875a51e20a4aa1031e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "d1c2bd81d9fc7e6deb1c0942887d172406abc0bb63fef8875a51e20a4aa1031e"
+    },
+    {
+      "file": "20260831021458_reconcile_control_tower_read_contracts.sql",
+      "version": "20260831021458",
+      "name": "reconcile_control_tower_read_contracts",
+      "sha256": "4004fee026dc604981d4e6f365b26d02ed9ea404a3cb8492df9a0858bb8f70b0",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "4004fee026dc604981d4e6f365b26d02ed9ea404a3cb8492df9a0858bb8f70b0"
+    },
+    {
+      "file": "20260831024934_make_control_tower_evaluation_atomic.sql",
+      "version": "20260831024934",
+      "name": "make_control_tower_evaluation_atomic",
+      "sha256": "e44f7145ed7ad1e40334c49da474f691373930f00ef4f15b93714617cee17f1e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "e44f7145ed7ad1e40334c49da474f691373930f00ef4f15b93714617cee17f1e"
+    },
+    {
+      "file": "20260831112949_make_trip_route_calculation_recoverable.sql",
+      "version": "20260831112949",
+      "name": "make_trip_route_calculation_recoverable",
+      "sha256": "5b5bc963fba993733ace1080147adaaa87781f0c4f6c8faace1aace0c1122f63",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "5b5bc963fba993733ace1080147adaaa87781f0c4f6c8faace1aace0c1122f63"
+    },
+    {
+      "file": "20260831114316_separate_planned_and_remaining_route_distance.sql",
+      "version": "20260831114316",
+      "name": "separate_planned_and_remaining_route_distance",
+      "sha256": "2d98cc3c643c8b9224761d65449554ffe8e22fb2db9008adb58c05d1f2d52dcf",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "2d98cc3c643c8b9224761d65449554ffe8e22fb2db9008adb58c05d1f2d52dcf"
+    },
+    {
+      "file": "20260831144530_attach_fiscal_invoice_gate.sql",
+      "version": "20260831144530",
+      "name": "attach_fiscal_invoice_gate",
+      "sha256": "83d8c3af17bdecede24977240b0d4a2c793e4a613c68b06835d490e4e233862f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "83d8c3af17bdecede24977240b0d4a2c793e4a613c68b06835d490e4e233862f"
+    },
+    {
+      "file": "20260831164442_remove_authenticator_requirement.sql",
+      "version": "20260831164442",
+      "name": "remove_authenticator_requirement",
+      "sha256": "afebc0abe625ece64d8938129ca57543b0d08f66a757da6dad1253c9e210b63b",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "afebc0abe625ece64d8938129ca57543b0d08f66a757da6dad1253c9e210b63b"
+    },
+    {
+      "file": "20260831213305_add_official_tax_registry.sql",
+      "version": "20260831213305",
+      "name": "add_official_tax_registry",
+      "sha256": "cd88b3b41591216251f3f4ab129c7715c018d1ad563d7395d75006fa6a93d0dd",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260831214749",
+          "name": "add_official_tax_registry"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "cd88b3b41591216251f3f4ab129c7715c018d1ad563d7395d75006fa6a93d0dd"
+    },
+    {
+      "file": "20260831215026_protect_fiscal_certificate_secrets.sql",
+      "version": "20260831215026",
+      "name": "protect_fiscal_certificate_secrets",
+      "sha256": "27c4143db3f5efd25ebb2939fe576252b61850cf5407a381964b09b5ae8460ba",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260831215043",
+          "name": "protect_fiscal_certificate_secrets"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "27c4143db3f5efd25ebb2939fe576252b61850cf5407a381964b09b5ae8460ba"
+    },
+    {
+      "file": "20260901003429_close_remaining_legacy_security_definer_acl.sql",
+      "version": "20260901003429",
+      "name": "close_remaining_legacy_security_definer_acl",
+      "sha256": "8deb137c75ba4c4089b2224d1f6a33e0b654ae50d5bcfc55a2a585e759cb2bb9",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "8deb137c75ba4c4089b2224d1f6a33e0b654ae50d5bcfc55a2a585e759cb2bb9"
+    },
+    {
+      "file": "20260901010000_add_operator_pod_and_occurrence_commands.sql",
+      "version": "20260901010000",
+      "name": "add_operator_pod_and_occurrence_commands",
+      "sha256": "0976944dc775ad62b121efa8bb6040920d37a931a94e9395859d40c1eca87a32",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "0976944dc775ad62b121efa8bb6040920d37a931a94e9395859d40c1eca87a32"
+    },
+    {
+      "file": "20260901135909_driver_load_fiscal_catalog.sql",
+      "version": "20260901135909",
+      "name": "driver_load_fiscal_catalog",
+      "sha256": "d6fbb976ce419613c3411b8d659f4d1335906aeb97eb629405ce03fe38813ac4",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "d6fbb976ce419613c3411b8d659f4d1335906aeb97eb629405ce03fe38813ac4"
+    },
+    {
+      "file": "20260901141149_make_load_payment_recoverable.sql",
+      "version": "20260901141149",
+      "name": "make_load_payment_recoverable",
+      "sha256": "555426ab41f13838648a680dd6a4eb57567d8f004c4ceb787cb37a3d3dd0c2f5",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "555426ab41f13838648a680dd6a4eb57567d8f004c4ceb787cb37a3d3dd0c2f5"
+    },
+    {
+      "file": "20260901143218_make_load_import_atomic.sql",
+      "version": "20260901143218",
+      "name": "make_load_import_atomic",
+      "sha256": "9ddb168f6a4191c56915197b672d877ca1b9db5f7ad620d74b98b7c7dab8d1eb",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "9ddb168f6a4191c56915197b672d877ca1b9db5f7ad620d74b98b7c7dab8d1eb"
+    },
+    {
+      "file": "20260901145247_make_driver_monitor_commands_recoverable.sql",
+      "version": "20260901145247",
+      "name": "make_driver_monitor_commands_recoverable",
+      "sha256": "b8a623535b1e0c909b118ec9968b0838e44500b27a4971dde4e60eb0b203db03",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "b8a623535b1e0c909b118ec9968b0838e44500b27a4971dde4e60eb0b203db03"
+    },
+    {
+      "file": "20260901181949_production_mdfe_load_lifecycle.sql",
+      "version": "20260901181949",
+      "name": "production_mdfe_load_lifecycle",
+      "sha256": "de77a951a0c7ecc19007de1514e05524bd5730c8191896d01ba369e4a5dd22b5",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "de77a951a0c7ecc19007de1514e05524bd5730c8191896d01ba369e4a5dd22b5"
+    },
+    {
+      "file": "20260901183111_harden_position_read_contracts.sql",
+      "version": "20260901183111",
+      "name": "harden_position_read_contracts",
+      "sha256": "74740801f65e67515071a10fcdd3d52fc1d9ba4724ad55069de6958d256356c9",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "74740801f65e67515071a10fcdd3d52fc1d9ba4724ad55069de6958d256356c9"
+    },
+    {
+      "file": "20260901190000_make_route_draft_delete_recoverable.sql",
+      "version": "20260901190000",
+      "name": "make_route_draft_delete_recoverable",
+      "sha256": "1417ae22f15381003d1c2108e1da5c80213f24e290bbdf39143882fbef915c93",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "1417ae22f15381003d1c2108e1da5c80213f24e290bbdf39143882fbef915c93"
+    },
+    {
+      "file": "20260901190100_add_cursor_operator_event_reader.sql",
+      "version": "20260901190100",
+      "name": "add_cursor_operator_event_reader",
+      "sha256": "59e3eb14e53ca5c9b7cd04d0e0b5b878eec164fc212910fcaff029d580a254a3",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260902015925",
+          "name": "add_cursor_operator_event_reader"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "59e3eb14e53ca5c9b7cd04d0e0b5b878eec164fc212910fcaff029d580a254a3"
+    },
+    {
+      "file": "20260901201500_make_load_aggregate_commands_atomic.sql",
+      "version": "20260901201500",
+      "name": "make_load_aggregate_commands_atomic",
+      "sha256": "11288823172337cc31422cd076603b0aff920802678b40d65d3a57e9a0d307bb",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260902020725",
+          "name": "make_load_aggregate_commands_atomic"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "11288823172337cc31422cd076603b0aff920802678b40d65d3a57e9a0d307bb"
+    },
+    {
+      "file": "20260901203000_add_keyset_load_control_reader.sql",
+      "version": "20260901203000",
+      "name": "add_keyset_load_control_reader",
+      "sha256": "c9f975f1dbcadfb476eca45eb6fd19e867763c9c9de4729db43bb9d74bf28c11",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "c9f975f1dbcadfb476eca45eb6fd19e867763c9c9de4729db43bb9d74bf28c11"
+    },
+    {
+      "file": "20260901210627_protect_linked_storage_evidence.sql",
+      "version": "20260901210627",
+      "name": "protect_linked_storage_evidence",
+      "sha256": "999e9ac0cf7984dc74c9731a503d05f47558afe31b0c868013c5f2d30875a17a",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260901213736",
+          "name": "protect_linked_storage_evidence"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "999e9ac0cf7984dc74c9731a503d05f47558afe31b0c868013c5f2d30875a17a"
+    },
+    {
+      "file": "20260901211644_add_operator_cursor_readers.sql",
+      "version": "20260901211644",
+      "name": "add_operator_cursor_readers",
+      "sha256": "cd8d726c66f05ff01e2351d235d8450ff02175203cb6669441e20a5e68e0f799",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260902015933",
+          "name": "add_operator_cursor_readers"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "cd8d726c66f05ff01e2351d235d8450ff02175203cb6669441e20a5e68e0f799"
+    },
+    {
+      "file": "20260901212053_revoke_replaced_dispatch_planner_acl.sql",
+      "version": "20260901212053",
+      "name": "revoke_replaced_dispatch_planner_acl",
+      "sha256": "24c17d455fff5f1b37bdf4ae0f8916fd3d2b35f336402f1fd9ac4bc0c5b8ce43",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260901213635",
+          "name": "revoke_replaced_dispatch_planner_acl"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "24c17d455fff5f1b37bdf4ae0f8916fd3d2b35f336402f1fd9ac4bc0c5b8ce43"
+    },
+    {
+      "file": "20260902004250_add_driver_fiscal_file_reader.sql",
+      "version": "20260902004250",
+      "name": "add_driver_fiscal_file_reader",
+      "sha256": "9f889b02f8daf64925895833c4ab349a63c0d26f023dbda53b6b1e7b541054e9",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260902020825",
+          "name": "add_driver_fiscal_file_reader"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "9f889b02f8daf64925895833c4ab349a63c0d26f023dbda53b6b1e7b541054e9"
+    },
+    {
+      "file": "20260902010528_add_driver_load_history_cursor.sql",
+      "version": "20260902010528",
+      "name": "add_driver_load_history_cursor",
+      "sha256": "f5fdf22cf3a76f7932a98b59dbfb0658b9f481b1ea642448f17992a761dd6b28",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260902015940",
+          "name": "add_driver_load_history_cursor"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "f5fdf22cf3a76f7932a98b59dbfb0658b9f481b1ea642448f17992a761dd6b28"
+    },
+    {
+      "file": "20260902010806_retire_legacy_driver_delivery_browser_acl.sql",
+      "version": "20260902010806",
+      "name": "retire_legacy_driver_delivery_browser_acl",
+      "sha256": "79bd485a39ad987c6feafe6abbb0a2da3de9529f00031d52daa711f61ed50ffe",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260902015801",
+          "name": "retire_legacy_driver_delivery_browser_acl"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "79bd485a39ad987c6feafe6abbb0a2da3de9529f00031d52daa711f61ed50ffe"
+    },
+    {
+      "file": "20260902011603_add_driver_event_history_cursor.sql",
+      "version": "20260902011603",
+      "name": "add_driver_event_history_cursor",
+      "sha256": "c04668cd509e02fd5f3367ef4ae479ee58aeb50889f423d2ff6fcefb328473bf",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260902015947",
+          "name": "add_driver_event_history_cursor"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "c04668cd509e02fd5f3367ef4ae479ee58aeb50889f423d2ff6fcefb328473bf"
+    },
+    {
+      "file": "20260902013811_enforce_atomic_load_number_allocation.sql",
+      "version": "20260902013811",
+      "name": "enforce_atomic_load_number_allocation",
+      "sha256": "222baa5349fbdcd589045aab4a14750c8fa13bdbefa4b3c3480ded2d3b4ce7aa",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260902020756",
+          "name": "enforce_atomic_load_number_allocation"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "222baa5349fbdcd589045aab4a14750c8fa13bdbefa4b3c3480ded2d3b4ce7aa"
+    },
+    {
+      "file": "20260902021339_retire_unbounded_reimport_cleanup_browser_acl.sql",
+      "version": "20260902021339",
+      "name": "retire_unbounded_reimport_cleanup_browser_acl",
+      "sha256": "f759b7d676da329700bb2b2d71c06b6a65c0be3d77ccac32d3f944395e4d1fcf",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "f759b7d676da329700bb2b2d71c06b6a65c0be3d77ccac32d3f944395e4d1fcf"
+    },
+    {
+      "file": "20260902021429_harden_planned_stop_coordinates.sql",
+      "version": "20260902021429",
+      "name": "harden_planned_stop_coordinates",
+      "sha256": "383386b43b1de4654448f66855e8c0407beb07eca2bbb9384e230ef577a0a50f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "383386b43b1de4654448f66855e8c0407beb07eca2bbb9384e230ef577a0a50f"
+    },
+    {
+      "file": "20260902022000_reconcile_disabled_ssx_cron.sql",
+      "version": "20260902022000",
+      "name": "reconcile_disabled_ssx_cron",
+      "sha256": "7a7dce52076bf05ba002e185abb6fc1e1f19c6478f90dd608e8572fb93e926b7",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260902021534",
+          "name": "reconcile_disabled_ssx_cron"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "7a7dce52076bf05ba002e185abb6fc1e1f19c6478f90dd608e8572fb93e926b7"
+    },
+    {
+      "file": "20260902022100_index_atomic_load_foreign_keys.sql",
+      "version": "20260902022100",
+      "name": "index_atomic_load_foreign_keys",
+      "sha256": "7d9f1e95cbbe4fb496549ae730617e5438e519c6a679123f87aa661c27ab4f52",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260902021653",
+          "name": "index_atomic_load_foreign_keys"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "7d9f1e95cbbe4fb496549ae730617e5438e519c6a679123f87aa661c27ab4f52"
+    },
+    {
+      "file": "20260908195720_prepare_durable_nfse_issue_batches.sql",
+      "version": "20260908195720",
+      "name": "prepare_durable_nfse_issue_batches",
+      "sha256": "01dc177509c9a49b21efabd22fe3f0c2bc1a6812b421682d21d7f7bc2c1cb2b3",
+      "remote": null,
+      "aliases": [
+        {
+          "version": "20260909221751",
+          "name": "prepare_durable_nfse_issue_batches"
+        }
+      ],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "01dc177509c9a49b21efabd22fe3f0c2bc1a6812b421682d21d7f7bc2c1cb2b3"
+    },
+    {
+      "file": "20260910131419_driver_delivery_receipt_foundation.sql",
+      "version": "20260910131419",
+      "name": "driver_delivery_receipt_foundation",
+      "sha256": "40a294871fff018b3e903407fb27d4b4e79d3f2201d5afd33b041a877aab3dfc",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "40a294871fff018b3e903407fb27d4b4e79d3f2201d5afd33b041a877aab3dfc"
+    },
+    {
+      "file": "20260910132149_require_driver_arrival_gps_cutover.sql",
+      "version": "20260910132149",
+      "name": "require_driver_arrival_gps_cutover",
+      "sha256": "261b7eddf6ac7505121924aabac156b25d56d863fa59f1818d8bb87ad0d8268c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "261b7eddf6ac7505121924aabac156b25d56d863fa59f1818d8bb87ad0d8268c"
+    },
+    {
+      "file": "20260910134223_physical_driver_journeys.sql",
+      "version": "20260910134223",
+      "name": "physical_driver_journeys",
+      "sha256": "02a69b5136041b6ce0d567073d1689910be417243a412cbf95bb139a1e8ed526",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "02a69b5136041b6ce0d567073d1689910be417243a412cbf95bb139a1e8ed526"
+    },
+    {
+      "file": "20260910134820_enforce_one_running_trip_per_driver.sql",
+      "version": "20260910134820",
+      "name": "enforce_one_running_trip_per_driver",
+      "sha256": "7ded3dd461f7e8c44c37933a4438f05350af0ec8d24f41e21ad3f99b0740215d",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "7ded3dd461f7e8c44c37933a4438f05350af0ec8d24f41e21ad3f99b0740215d"
+    },
+    {
+      "file": "20260910141902_add_delivery_receipt_pdf_access.sql",
+      "version": "20260910141902",
+      "name": "add_delivery_receipt_pdf_access",
+      "sha256": "6a829621cb2f53d5ddab9b612bac7465fa856a15dbf75fbda711a13dcb27dee8",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "6a829621cb2f53d5ddab9b612bac7465fa856a15dbf75fbda711a13dcb27dee8"
+    },
+    {
+      "file": "20260910142606_driver_trip_cargo_custody_cycle.sql",
+      "version": "20260910142606",
+      "name": "driver_trip_cargo_custody_cycle",
+      "sha256": "8705d623e376c95f45dd152ddbb9322257e7868e612a5a6154f28eca196e01bb",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "8705d623e376c95f45dd152ddbb9322257e7868e612a5a6154f28eca196e01bb"
+    },
+    {
+      "file": "20260910142613_driver_geocoding_geofence_tracking.sql",
+      "version": "20260910142613",
+      "name": "driver_geocoding_geofence_tracking",
+      "sha256": "f8ff5fdf714f9b84552b2353ac28f632a7574dcd284020ac0c0c749c5a1ee5d6",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "f8ff5fdf714f9b84552b2353ac28f632a7574dcd284020ac0c0c749c5a1ee5d6"
+    },
+    {
+      "file": "20260910143355_driver_physical_journey_payload.sql",
+      "version": "20260910143355",
+      "name": "driver_physical_journey_payload",
+      "sha256": "c92dccb7d6d72fecabdf10227a193afc6f66bcfb3eac26502cbb6248abc4b4a2",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "c92dccb7d6d72fecabdf10227a193afc6f66bcfb3eac26502cbb6248abc4b4a2"
+    },
+    {
+      "file": "20260910143433_add_delivery_receipt_email_batches.sql",
+      "version": "20260910143433",
+      "name": "add_delivery_receipt_email_batches",
+      "sha256": "ab3757645f15726cd529c4081cd5ba7e406797d655c5287124362cdd870fbb72",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "43c9bbfbea76742d6309f43caeb1c7d86f6323fe6f360a25ded7306059426ff0"
+    },
+    {
+      "file": "20260910154758_driver_operational_offline_commands.sql",
+      "version": "20260910154758",
+      "name": "driver_operational_offline_commands",
+      "sha256": "282bb488e8160afffd4bced5d82cc53401dc5dadb8c574e07fbd8dd77ac43aad",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "7367e8fd9aef7e3948dc3c245e30c5eb66dad073399e730388129d8b23b29e35"
+    },
+    {
+      "file": "20260910154811_complete_delivery_receipt_operations.sql",
+      "version": "20260910154811",
+      "name": "complete_delivery_receipt_operations",
+      "sha256": "19da792a657ff70481276ac3f9e5ea1f2286bb7af5d66151c3abe0a966653397",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "8d1a8763d65e97ea4d5289d55bdbfca1aee2de00b7c8280b0787c9db498cdc55"
+    },
+    {
+      "file": "20260910154838_address_resolution_tracking_operations.sql",
+      "version": "20260910154838",
+      "name": "address_resolution_tracking_operations",
+      "sha256": "5809cf148d512884aecb92ccb598f4f222a33614187a847cc94d7da019561087",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "no_version",
+      "historical_local_sha256": "cbb4dea1c5b0346d36776b611e20c9c8cdc5ba95dc5c84484d75938d54a7e611"
+    },
+    {
+      "file": "20260910160603_preserve_delivery_receipt_scan_integrity.sql",
+      "version": "20260910160603",
+      "name": "preserve_delivery_receipt_scan_integrity",
+      "sha256": "cf0c1269453cf4b9f3acb011ef6461ae9392ced9a6ba90afc4b29a48092835d5",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910170631_add_delivery_receipt_supplier_pdf_profiles.sql",
+      "version": "20260910170631",
+      "name": "add_delivery_receipt_supplier_pdf_profiles",
+      "sha256": "3a3b30f3bf04fbd61037142d803427c9be126225e7b2f36d54b9f15e82af8141",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910170901_harden_delivery_geofence_scope.sql",
+      "version": "20260910170901",
+      "name": "harden_delivery_geofence_scope",
+      "sha256": "ebbc2f563af375d22407d80af496756fefb40e710a1c9a78bc70f1480f4e4550",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910174335_add_delivery_receipt_ocr_queue.sql",
+      "version": "20260910174335",
+      "name": "add_delivery_receipt_ocr_queue",
+      "sha256": "9b5005e80d5b289cf60ffe062d22c5c832671cba4b951176ddeba737da0e502b",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910181353_add_delivery_receipt_quality_policies.sql",
+      "version": "20260910181353",
+      "name": "add_delivery_receipt_quality_policies",
+      "sha256": "7a76a2ad17e2183e36a560faac25a41a68c961499e94874398a9176f51f2dc1e",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910181420_add_delivery_receipt_supplier_channels.sql",
+      "version": "20260910181420",
+      "name": "add_delivery_receipt_supplier_channels",
+      "sha256": "0c505840573e7ea16bb9eaa99b32940fac118da557a82db4a9f51a22b8c9fd20",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910182124_enforce_driver_delivery_gps_and_refusal_evidence.sql",
+      "version": "20260910182124",
+      "name": "enforce_driver_delivery_gps_and_refusal_evidence",
+      "sha256": "0233425408c4bf081806efed785773bed34d2a8a5609a670714af1efa854494b",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910182454_auto_arrive_driver_stop_from_delivery_geofence.sql",
+      "version": "20260910182454",
+      "name": "auto_arrive_driver_stop_from_delivery_geofence",
+      "sha256": "758da361f9c27eff3a4dc2c82b88931c39df246b8a28d92620d8f7f18eebb8af",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910182855_complete_delivery_receipt_physical_return_workflow.sql",
+      "version": "20260910182855",
+      "name": "complete_delivery_receipt_physical_return_workflow",
+      "sha256": "74d97bd445ec60213c97e9d1fa357b42f65a7f1e5ae01d9610bcac6a32687cd4",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910183025_extend_delivery_receipt_operational_filters.sql",
+      "version": "20260910183025",
+      "name": "extend_delivery_receipt_operational_filters",
+      "sha256": "a92e26aca0815813d53433ae22dda106b9717eb637d7450c60e8da4bf8f80fab",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910190649_enforce_driver_delivery_receipt_evidence.sql",
+      "version": "20260910190649",
+      "name": "enforce_driver_delivery_receipt_evidence",
+      "sha256": "534a7b4f8dafaca41db2592ce6ab05306933ae45f476d638fdd86991db86b285",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910190950_harden_geofence_tracking_completion.sql",
+      "version": "20260910190950",
+      "name": "harden_geofence_tracking_completion",
+      "sha256": "cce1181308a0aabd7d0f0664cf3d5beb7d726e2d31acb95dbfbd681760bb66e5",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910191008_harden_trip_cargo_custody_integrity.sql",
+      "version": "20260910191008",
+      "name": "harden_trip_cargo_custody_integrity",
+      "sha256": "7aab72f5dc4b2b052f1a7edbf669f6edfd17842bce8619d5e2950b0a52bdd18f",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910191452_support_nfse_only_delivery_receipts.sql",
+      "version": "20260910191452",
+      "name": "support_nfse_only_delivery_receipts",
+      "sha256": "ec3877f199ef351a38750c7ec8f346fdbab6099bab243df56c814823a86cf97d",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910192455_complete_address_geocoding_automation.sql",
+      "version": "20260910192455",
+      "name": "complete_address_geocoding_automation",
+      "sha256": "23e71c600e55ed48fa027280e8b7969022936bcd02287c1a82862c6b32c11027",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910192744_canonicalize_delivery_receipt_email_filename.sql",
+      "version": "20260910192744",
+      "name": "canonicalize_delivery_receipt_email_filename",
+      "sha256": "d9c36ff0dc98a8cf9b8c0432035e4a4627e0be3021661267df0d97ce33d36fe1",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910193642_driver_app_observability.sql",
+      "version": "20260910193642",
+      "name": "driver_app_observability",
+      "sha256": "4e7f10815586e75ce061dfe409ad4adefc1f5be211d7af3b9374ca6df2f47db6",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910194438_complete_trip_cargo_seal_lifecycle.sql",
+      "version": "20260910194438",
+      "name": "complete_trip_cargo_seal_lifecycle",
+      "sha256": "b71870378963b708f7db16abd8933902c8ad9fbee42ea9d98e927dd7cbb11ece",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910194846_harden_fleet_geofence_editing.sql",
+      "version": "20260910194846",
+      "name": "harden_fleet_geofence_editing",
+      "sha256": "7c3217bee9e3ffe189ec0873c90add81aad3e3b69354a09ad3164dadc5efcb89",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910195852_preserve_geofence_fast_pass.sql",
+      "version": "20260910195852",
+      "name": "preserve_geofence_fast_pass",
+      "sha256": "0534ae1ce3ed0af26773e6fa30bfde24922f6ab80f0a43167d3b1737a90cbab1",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910203617_ssx_mapping_conflict_review.sql",
+      "version": "20260910203617",
+      "name": "ssx_mapping_conflict_review",
+      "sha256": "af3b5b48ce5a7f0697b6474ab9eb85c714223233e3138018dae9873c0e713f84",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910204500_delivery_receipt_email_history.sql",
+      "version": "20260910204500",
+      "name": "delivery_receipt_email_history",
+      "sha256": "314c5315166b5ac0b7502fd3211da1537a7471464a8a8a0b24c50b84c6ad474c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910204602_ensure_nfse_only_delivery_receipt.sql",
+      "version": "20260910204602",
+      "name": "ensure_nfse_only_delivery_receipt",
+      "sha256": "a8a3d930cec366015962de7e0fe5bd2abc7839757fcb0d13b761611d9c1e5f5c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910211000_canonical_destination_geocoding_idempotency.sql",
+      "version": "20260910211000",
+      "name": "canonical_destination_geocoding_idempotency",
+      "sha256": "d767b8347432294fda349e199361cb085a7a5b88f5d820713fafea62e52f33cc",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910211200_driver_delivery_fiscal_snapshot_gate.sql",
+      "version": "20260910211200",
+      "name": "driver_delivery_fiscal_snapshot_gate",
+      "sha256": "c66ac6bc9eb42963bf7bf38ef723b5d4b4bb818146156f95d013f861ad436ddd",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910211800_canonical_trip_cargo_close_gate.sql",
+      "version": "20260910211800",
+      "name": "canonical_trip_cargo_close_gate",
+      "sha256": "6432e4b580538f8dbfa518e40c98c4dc4b3cb43eddd81f4b7a027dfa7cdb21c0",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910213021_reconcile_legacy_cargo_gate_and_service_delivery_adapters.sql",
+      "version": "20260910213021",
+      "name": "reconcile_legacy_cargo_gate_and_service_delivery_adapters",
+      "sha256": "a7f723b4169fb7f5f85b3e21011bb789b6053904ccedc1e67ae745f99d1bda36",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    },
+    {
+      "file": "20260910213156_quarantine_legacy_settlements_until_cargo_close.sql",
+      "version": "20260910213156",
+      "name": "quarantine_legacy_settlements_until_cargo_close",
+      "sha256": "68a7b3d136871db47094bfa170b62c6abef78f2acc1fcfffd12d12a66ecd9d4c",
+      "remote": null,
+      "aliases": [],
+      "historical_byte_comparison": "not_compared",
+      "historical_local_sha256": null
+    }
+  ],
+  "already_registered_since_previous406": [
+    {
+      "version": "20260910125751",
+      "name": "workspace_tenant_foundation"
+    },
+    {
+      "version": "20260910131125",
+      "name": "active_tenant_auth_context"
+    },
+    {
+      "version": "20260910132033",
+      "name": "enforce_active_tenant_rls"
+    },
+    {
+      "version": "20260910132428",
+      "name": "shared_master_data_foundation"
+    },
+    {
+      "version": "20260910133110",
+      "name": "workspace_ssx_access_contract"
+    },
+    {
+      "version": "20260910134010",
+      "name": "enforce_tenant_storage_context"
+    },
+    {
+      "version": "20260910135800",
+      "name": "workspace_ssx_account_management"
+    },
+    {
+      "version": "20260910140823",
+      "name": "require_matching_active_tenant_claim"
+    },
+    {
+      "version": "20260910141506",
+      "name": "workspace_fleet_snapshot"
+    },
+    {
+      "version": "20260910142232",
+      "name": "synchronize_shared_master_projections"
+    },
+    {
+      "version": "20260910142818",
+      "name": "merge_existing_tenant_workspaces"
+    },
+    {
+      "version": "20260910144948",
+      "name": "finalize_active_tenant_rls_coverage"
+    },
+    {
+      "version": "20260910145706",
+      "name": "harden_ssx_credentials_and_browser_contract"
+    },
+    {
+      "version": "20260910150914",
+      "name": "add_ssx_position_quarantine"
+    },
+    {
+      "version": "20260910151622",
+      "name": "reassert_active_tenant_rls_release_gate"
+    },
+    {
+      "version": "20260910152456",
+      "name": "add_workspace_vehicle_position_reader"
+    },
+    {
+      "version": "20260910153507",
+      "name": "gate_ssx_administration_capability"
+    },
+    {
+      "version": "20260910154919",
+      "name": "add_ssx_workspace_dispatcher"
+    },
+    {
+      "version": "20260910161442",
+      "name": "expose_ssx_person_sync_settings"
+    },
+    {
+      "version": "20260910162008",
+      "name": "add_ssx_tracking_reference_catalog"
+    },
+    {
+      "version": "20260910163922",
+      "name": "add_ssx_governance_and_violations"
+    }
+  ],
+  "limits": [
+    "Captured history may change concurrently; recheck before each root-owned write.",
+    "Financial filename order includes all current candidate definitions, not a proven dependency closure.",
+    "An alias is not permission to replay nor proof of byte equivalence.",
+    "Operational guards must be retained; existing hash matches do not prove data/ACL constraints."
+  ]
+}

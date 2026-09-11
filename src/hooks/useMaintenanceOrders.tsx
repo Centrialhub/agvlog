@@ -58,7 +58,7 @@ export function useCreateMaintenanceOrder() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['maintenance_orders'] }),
+    onSuccess: () => Promise.all(['maintenance_orders','finance-maintenance-cost-context','finance-maintenance-labor-context','finance-maintenance-direct-part-context','finance-stock-consumption-context','finance-stock-consumption-preview','finance-legacy-cost-inventory'].map(key=>qc.invalidateQueries({queryKey:[key]}))),
   });
 }
 
@@ -73,7 +73,7 @@ export function useUpdateMaintenanceOrder() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['maintenance_orders'] }),
+    onSuccess: () => Promise.all(['maintenance_orders','finance-maintenance-cost-context','finance-maintenance-labor-context','finance-maintenance-direct-part-context','finance-stock-consumption-context','finance-stock-consumption-preview','finance-legacy-cost-inventory'].map(key=>qc.invalidateQueries({queryKey:[key]}))),
   });
 }
 
@@ -102,6 +102,6 @@ export function useAddMaintenancePart() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['maintenance_parts'] }),
+    onSuccess: () => Promise.all(['maintenance_parts','finance-maintenance-cost-context','finance-maintenance-labor-context','finance-maintenance-direct-part-context','finance-stock-consumption-context','finance-stock-consumption-preview','finance-legacy-cost-inventory'].map(key=>qc.invalidateQueries({queryKey:[key]}))),
   });
 }

@@ -29,7 +29,7 @@ export function useLoadDocumentChanges() {
     },
     send: async payload => {
       const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 30_000);
-      try { return await supabase.rpc('change_load_documents', { _payload: JSON.parse(JSON.stringify(payload)) }).abortSignal(controller.signal); }
+      try { return await supabase.rpc('change_load_documents_v2' as never, { _payload: JSON.parse(JSON.stringify(payload)) } as never).abortSignal(controller.signal); }
       finally { clearTimeout(timer); }
     },
   }), [assertContext]);

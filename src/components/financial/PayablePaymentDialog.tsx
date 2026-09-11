@@ -1,192 +1,53 @@
-import { useScopedAlerts } from '@/hooks/useAlertStore';
-import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { useSonnerToast } from '@/hooks/useSonnerToast';
-import {
-  useBankAccounts, useRegisterPayablePayment,
-  usePayablePayments, useReversePayablePayment,
-  uploadPaymentAttachment,
-  PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
-  type PaymentMethod,
-} from '@/hooks/useFinancialPayments';
-import { useTenant } from '@/hooks/useTenant';
-import type { Payable } from '@/hooks/usePayables';
-import { Trash2 } from 'lucide-react';
-import { getErrorMessage } from '@/lib/errors';
+import {useQueryClient} from '@tanstack/react-query';
+import {useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {Dialog,DialogContent,DialogHeader,DialogTitle} from '@/components/ui/dialog';
+import {Badge} from '@/components/ui/badge';
+import {usePayablePayments,PAYMENT_METHOD_LABELS,type PaymentMethod} from '@/hooks/useFinancialPayments';
+import {useTenant} from '@/hooks/useTenant';
+import {useAuth} from '@/hooks/useAuth';
+import type {Payable} from '@/hooks/usePayables';
+import {PayableMovementLink} from './PayableMovementLink';
+import {PayableLinkReversal} from './PayableLinkReversal';
+import {LegacyPayableAssociation} from './LegacyPayableAssociation';
+import {invalidateAccountReview} from '@/lib/financial/invalidateAccountReview';
 
-interface Props {
-  payable: Payable | null;
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
+interface Props{payable:Payable|null;open:boolean;onOpenChange:(open:boolean)=>void}
+const fmt=(value:number)=>value.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+export default function PayablePaymentDialog({payable,open,onOpenChange}:Props){
+ const {currentTenant}=useTenant(),{user}=useAuth(),qc=useQueryClient();
+ const [pagination,setPagination]=useState({payable:'',page:1});
+ const page=pagination.payable===payable?.id?pagination.page:1;
+ const {data:historyData,error:historyError,isFetching}=usePayablePayments(open?payable?.id??null:null,page);
+ const history=isFetching?[]:historyData?.rows??[];
+ if(!payable)return null;
+ function recorded(){
+  if(currentTenant)void invalidateAccountReview(qc,currentTenant.id);
+  for(const key of ['payables','payables_payments','payroll_entries','payroll_periods','payroll_period','finance-options','finance-payable-options','finance-expenses','finance-audit','finance-legacy-inventory','finance-settlement-expense-context'])void qc.invalidateQueries({queryKey:[key]});
+ }
+ return <Dialog open={open} onOpenChange={onOpenChange}>
+  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+   <DialogHeader><DialogTitle>Baixas — {payable.supplier_name}</DialogTitle></DialogHeader>
+   <p>Valor do título: <strong>{fmt(Number(payable.amount))}</strong></p>
+   <p className="text-sm text-muted-foreground">Use uma saída já registrada para dar baixa sem contar o dinheiro duas vezes. Se o envio ainda não estiver no sistema, <a href="/financial/movements" className="underline">registre a saída em Movimentações</a>.</p>
+   {open&&currentTenant&&user&&<PayableMovementLink key={`${currentTenant.id}:${user.id}:${payable.id}`} tenant={currentTenant.id} actor={user.id} payable={payable.id} onRecorded={recorded}/>}
+   {historyError?<p role="alert">Não foi possível carregar o histórico de baixas.</p>:history.length>0&&<section aria-label="Histórico de baixas" className="border rounded p-3 space-y-2">
+    <p className="font-medium">Histórico de baixas</p>
+    {history.map(payment=><div key={payment.id} className="border-b last:border-b-0 pb-2 text-sm">
+     <div className="font-medium">{fmt(Number(payment.amount))} <Badge variant="secondary">{PAYMENT_METHOD_LABELS[payment.method as PaymentMethod]||payment.method}</Badge></div>
+     <p>{new Date(payment.paid_at).toLocaleDateString('pt-BR')} · {payment.account_name||'—'}</p>
+     {payment.notes&&<p>{payment.notes}</p>}
+     {payment.reversal&&<div className="border-l-4 border-amber-600 pl-2">
+      <Badge variant="outline">Vínculo desfeito manualmente</Badge>
+      <p>{payment.reversal.actor_name} · {new Date(payment.reversal.created_at).toLocaleString('pt-BR')}</p>
+      <p>{payment.reversal.reason}</p><p>{payment.link_origin==='legacy_adoption'?'O pagamento antigo foi preservado; desfazer a associação não reabre o título.':'Esta baixa não compõe o total pago atual.'}</p>
+     </div>}
+     {payment.link_origin==='canonical'&&payment.link_id&&currentTenant&&user&&<PayableLinkReversal key={`${currentTenant.id}:${user.id}:${payment.link_id}`} tenant={currentTenant.id} actor={user.id} link={payment.link_id} reversed={!!payment.reversal} onRecorded={recorded}/>}
+     {payment.link_origin!=='canonical'&&currentTenant&&user&&<LegacyPayableAssociation key={`${currentTenant.id}:${user.id}:${payment.id}`} tenant={currentTenant.id} actor={user.id} payment={payment.id} onRecorded={recorded}/>}
+    </div>)}
+    <div className="flex justify-between"><Button variant="ghost" disabled={page===1||isFetching} onClick={()=>setPagination({payable:payable.id,page:page-1})}>Anterior</Button>
+     <span>Página {page}</span><Button variant="ghost" disabled={page*30>=(historyData?.total??0)||isFetching} onClick={()=>setPagination({payable:payable.id,page:page+1})}>Próxima</Button></div>
+   </section>}
+  </DialogContent>
+ </Dialog>;
 }
-
-const fmt = (v: number) => `R$ ${(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-
-export default function PayablePaymentDialog({ payable, open, onOpenChange }: Props) {
-  const { confirmAction } = useScopedAlerts();
-  const toast = useSonnerToast();
-  const { currentTenant } = useTenant();
-  const { data: accounts = [] } = useBankAccounts();
-  const { data: history = [] } = usePayablePayments(payable?.id ?? null);
-  const register = useRegisterPayablePayment();
-  const reverse = useReversePayablePayment();
-  const [amount, setAmount] = useState('');
-  const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
-  const [bankAccountId, setBankAccountId] = useState('');
-  const [method, setMethod] = useState<PaymentMethod>('pix');
-  const [notes, setNotes] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-
-  const remaining = payable ? Number(payable.amount) - Number(payable.paid_amount || 0) : 0;
-
-  useEffect(() => {
-    if (open && payable) {
-      setAmount(remaining > 0 ? remaining.toFixed(2) : '');
-      setPaidAt(new Date().toISOString().slice(0, 10));
-      setNotes('');
-      setFile(null);
-      if (!bankAccountId && accounts.length > 0) setBankAccountId(accounts[0].id);
-    }
-  }, [open, payable, accounts]); // eslint-disable-line
-
-  const handleSubmit = async () => {
-    if (!payable || !currentTenant) return;
-    const val = Number(amount);
-    if (!val || val <= 0) { toast.error('Informe um valor válido'); return; }
-    if (!bankAccountId) { toast.error('Selecione a conta bancária'); return; }
-    try {
-      let attachment_url: string | null = null;
-      if (file) attachment_url = await uploadPaymentAttachment(currentTenant.id, 'payable', file);
-      await register.mutateAsync({
-        payable_id: payable.id,
-        amount: val,
-        paid_at: new Date(paidAt + 'T12:00:00').toISOString(),
-        bank_account_id: bankAccountId,
-        method,
-        notes: notes || null,
-        attachment_url,
-      });
-      toast.success('Baixa registrada');
-      setAmount(''); setNotes(''); setFile(null);
-    } catch (error) {
-      toast.error(getErrorMessage(error, 'Não foi possível registrar a baixa.'));
-    }
-  };
-
-  const handleReverse = async (id: string) => {
-    if (!await confirmAction('Estornar esta baixa? A transação bancária vinculada também será removida.')) return;
-    try {
-      await reverse.mutateAsync(id);
-      toast.success('Baixa estornada');
-    } catch (error) {
-      toast.error(getErrorMessage(error, 'Não foi possível estornar a baixa.'));
-    }
-  };
-
-  if (!payable) return null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Baixa — {payable.supplier_name}</DialogTitle>
-        </DialogHeader>
-
-        <div className="rounded-md border bg-muted/30 p-3 grid grid-cols-3 gap-3 text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground">Valor original</p>
-            <p className="font-semibold">{fmt(Number(payable.amount))}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Já pago</p>
-            <p className="font-semibold text-green-600">{fmt(Number(payable.paid_amount || 0))}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Saldo</p>
-            <p className="font-semibold text-warning">{fmt(remaining)}</p>
-          </div>
-        </div>
-
-        {remaining > 0.005 && (
-          <div className="space-y-3 border rounded-md p-3">
-            <p className="text-sm font-medium">Nova baixa</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Valor pago (R$)</Label>
-                <Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} />
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Máx {fmt(remaining)} · valores menores geram baixa parcial
-                </p>
-              </div>
-              <div>
-                <Label>Data</Label>
-                <Input type="date" value={paidAt} onChange={e => setPaidAt(e.target.value)} />
-              </div>
-              <div>
-                <Label>Conta bancária *</Label>
-                <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                  <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                  <SelectContent>
-                    {accounts.map(a => (
-                      <SelectItem key={a.id} value={a.id}>{a.name}{a.bank_name ? ` — ${a.bank_name}` : ''}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Forma</Label>
-                <Select value={method} onValueChange={value => setMethod(value as PaymentMethod)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label>Observação</Label>
-              <Textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ex.: nº do comprovante" />
-            </div>
-            <div>
-              <Label>Comprovante (opcional)</Label>
-              <Input type="file" accept="image/*,application/pdf" onChange={e => setFile(e.target.files?.[0] || null)} />
-            </div>
-            <div className="flex justify-end">
-              <Button onClick={handleSubmit} disabled={register.isPending}>
-                {register.isPending ? 'Registrando...' : 'Registrar baixa'}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {history.length > 0 && (
-          <div className="border rounded-md p-3 space-y-2 max-h-64 overflow-y-auto">
-            <p className="text-sm font-medium">Histórico de baixas</p>
-            {history.map(h => (
-              <div key={h.id} className="flex items-center justify-between text-sm border-b last:border-b-0 pb-2 last:pb-0">
-                <div>
-                  <p className="font-medium">{fmt(Number(h.amount))} <Badge variant="secondary" className="ml-2 text-[10px]">{PAYMENT_METHOD_LABELS[h.method as PaymentMethodKey] || h.method}</Badge></p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(h.paid_at).toLocaleDateString('pt-BR')} · {h.bank_accounts?.name || '—'}
-                    {h.notes ? ` · ${h.notes}` : ''}
-                  </p>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => handleReverse(h.id)} className="text-destructive">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-type PaymentMethodKey = keyof typeof PAYMENT_METHOD_LABELS;

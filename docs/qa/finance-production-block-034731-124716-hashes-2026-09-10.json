@@ -1,0 +1,50 @@
+[
+  {
+    "index": 38,
+    "file": "20260910034731_finance_transfers_in_transit.sql",
+    "sha256": "4bb2e1e54b7f7a96f89a1e930af0465a54756ea42e411616a18165c8ed5b1308",
+    "matches_manifest": true
+  },
+  {
+    "index": 39,
+    "file": "20260910035550_finance_transfer_period_position.sql",
+    "sha256": "18d8b30e392638af036c6873ffd77dc41a07a1b01198c247c0b7ee95d819ef56",
+    "matches_manifest": true
+  },
+  {
+    "index": 40,
+    "file": "20260910120756_finance_manual_expense_recording.sql",
+    "sha256": "a4688897bb9f84ef4ef91ba6f036fb369601b980c632832426db062cce7002dc",
+    "matches_manifest": true
+  },
+  {
+    "index": 41,
+    "file": "20260910121937_finance_retire_legacy_payable_writers.sql",
+    "sha256": "11eebb920bd34e6cc81468cdda1b7232db8a7d361de620135e6dad5335ae8f86",
+    "matches_manifest": true
+  },
+  {
+    "index": 42,
+    "file": "20260910122628_finance_bank_transaction_browser_boundary.sql",
+    "sha256": "dde957ddb2204641dd39523f0bab3e71c3442ba08605c69b434dbb0f6bed8163",
+    "matches_manifest": true
+  },
+  {
+    "index": 43,
+    "file": "20260910123613_finance_retire_legacy_statement_import.sql",
+    "sha256": "9d7d057e6f85a7de6db90b492041236f7f63a04833ccc5338a0753955906efa7",
+    "matches_manifest": true
+  },
+  {
+    "index": 44,
+    "file": "20260910124258_finance_retire_legacy_reconciliation.sql",
+    "sha256": "422d50770dd0c2d919bc96921d047ede60d5e1e7f29b4ebfa898009845f93a2e",
+    "matches_manifest": true
+  },
+  {
+    "index": 45,
+    "file": "20260910124716_finance_expense_cost_center_totals.sql",
+    "sha256": "04cb0d0d10595997c33e9b9c8b6d64f572fc9d2d235fbe79801e64c580a83ece",
+    "matches_manifest": true
+  }
+]

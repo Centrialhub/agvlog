@@ -1,4 +1,5 @@
 import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
+import {createReceivablePaymentsPageDatabase} from './helpers/receivablePaymentsPageDatabase';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import type {PGlite} from '@electric-sql/pglite';
 import {afterAll,afterEach,beforeAll,beforeEach,describe,expect,it,vi} from 'vitest';
@@ -7,7 +8,7 @@ import {ReceivableFinancialRecoveryPanel} from '@/components/financial/Receivabl
 import ReceivablePaymentDialog from '@/components/financial/ReceivablePaymentDialog';
 import type {Receivable} from '@/hooks/useReceivables';
 import {pendingFinancialCommand} from '@/lib/financial/receivableFinancialOutbox';
-import {createReceivableFinancialDatabase,createFinancialScenario,financialCommand,financialPayload} from './helpers/receivableFinancialDatabase';
+import {createFinancialScenario,financialCommand,financialPayload} from './helpers/receivableFinancialDatabase';
 import {operationIds as i,operationRpc} from './helpers/operationOutcomeDatabase';
 vi.hoisted(async()=>{const {Blob,File}=await import('node:buffer');vi.stubGlobal('Blob',Blob);vi.stubGlobal('File',File);});
 const mock=vi.hoisted(()=>({rpc:vi.fn(),from:vi.fn(),upload:vi.fn(),tenant:'',actor:'',lost:false,delay:false,release:null as null|(()=>void)}));
@@ -16,7 +17,7 @@ vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:mock.actor}})}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mock.rpc,from:mock.from}}));
 vi.mock('@/lib/secureUpload',()=>({uploadSecureFile:mock.upload}));
 let db:PGlite;let client:QueryClient;let transport:Promise<unknown>=Promise.resolve();
-beforeAll(async()=>{({db}=await createReceivableFinancialDatabase());},30000);
+beforeAll(async()=>{db=await createReceivablePaymentsPageDatabase();},30000);
 afterAll(async()=>{await db?.close();vi.unstubAllGlobals();});
 beforeEach(async()=>{
  vi.clearAllMocks();localStorage.clear();mock.tenant=i.tenant;mock.actor=i.operator;mock.lost=false;mock.delay=false;mock.release=null;
@@ -28,10 +29,13 @@ beforeEach(async()=>{
   const run=()=>{if(pending)return pending;const work=async()=>{try{
    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);let data:unknown;
    if(name==='get_receivable_financial_context')data=(await operationRpc(db,'select get_receivable_financial_context($1,$2) result',[args._tenant_id,args._receivable_id])).rows[0].result;
+   else if(name==='get_finance_receivable_payments_page')data=(await operationRpc(db,'select get_finance_receivable_payments_page($1,$2,$3,$4) result',[args._tenant_id,args._receivable_id,args._page,args._expected_revision])).rows[0].result;
    else if(name==='apply_receivable_financial_command')data=(await operationRpc(db,'select apply_receivable_financial_command($1::jsonb) result',[JSON.stringify(args._payload)])).rows[0].result;
+   else if(name==='get_finance_receipt_movement_options')data=(await operationRpc(db,'select get_finance_receipt_movement_options($1,$2,$3,$4,$5) result',[args._tenant_id,args._account_id,args._date,args._search,args._page])).rows[0].result;
+   else if(name==='correct_finance_receipt_allocation')data=(await operationRpc(db,'select correct_finance_receipt_allocation($1::jsonb) result',[JSON.stringify(args._payload)])).rows[0].result;
    else throw new Error('Unexpected RPC '+name);
    if(mock.delay&&name==='get_receivable_financial_context'){mock.delay=false;await new Promise<void>(resolve=>{mock.release=resolve;});}
-   if(mock.lost&&name==='apply_receivable_financial_command'){mock.lost=false;return {data:null,error:{message:'Resposta perdida após confirmação no banco'}};}
+   if(mock.lost&&['apply_receivable_financial_command','correct_finance_receipt_allocation'].includes(name)){mock.lost=false;return {data:null,error:{message:'Resposta perdida após confirmação no banco'}};}
    return {data,error:null};
   }catch(error){return {data:null,error};}};pending=transport.then(work,work);transport=pending;return pending;};
   return {abortSignal:run,then:(resolve:()=>void,reject:()=>void)=>run().then(resolve,reject)};
@@ -47,6 +51,48 @@ async function choose(action='receive'){
 }
 async function net(){return (await db.query('select received_amount::float received from receivables')).rows[0];}
 describe('financial UI backed by real SQL commands',{timeout:15000},()=>{
+ it('loads and refunds the 501st payment through the real paged reader and canonical command',async()=>{
+  const s=await createFinancialScenario(db);await db.query("update tenant_memberships set role='admin' where tenant_id=$1 and user_id=$2",[i.tenant,i.operator]);
+  const original=await financialCommand(db,await financialPayload(db,s.receivable,{amount_cents:1,effective_date:'2025-01-01'}));
+  for(let index=0;index<500;index++){await financialCommand(db,await financialPayload(db,s.receivable,{amount_cents:1}));if(index%25===0)await new Promise(resolve=>setTimeout(resolve,0));}
+  const context=(await operationRpc<{result:{payments:{id:string}[];revision:string}}>(db,'select get_receivable_financial_context($1,$2) result',[i.tenant,s.receivable])).rows[0].result;
+  expect(context.payments).toHaveLength(500);expect(context.payments.some(payment=>payment.id===original.payment_id)).toBe(false);
+  render(<Story receivable={s.receivable}/>);
+  for(let page=1;page<=10;page++){await screen.findByText(`501 recebimento(s) no histórico completo · página ${page} de 11`);fireEvent.click(screen.getByRole('button',{name:'Próxima página de recebimentos'}));}
+  await screen.findByText(new RegExp(`Recebimento ${original.payment_id}`));fireEvent.click(screen.getByRole('button',{name:'Selecionar para devolução'}));
+  set('Motivo da operação','Devolução efetiva do primeiro recebimento');fireEvent.click(screen.getByLabelText('Confirmo que o dinheiro já foi devolvido ao pagador'));
+  fireEvent.click(screen.getByRole('button',{name:'Confirmar operação'}));await screen.findByText(/Pedido confirmado: Estornar recebimento/);
+  expect(calls().at(-1)?.[1]._payload).toMatchObject({payment_id:original.payment_id,expected_revision:context.revision});
+  expect(await net()).toEqual({received:5});expect((await db.query('select count(*)::int n from receivables_payments')).rows[0]).toEqual({n:501});
+  expect((await db.query('select count(*)::int n from bank_transactions')).rows[0]).toEqual({n:502});
+ },120000);
+ it('corrects an allocation only after review and recovers a lost response without changing cash',async()=>{
+  sessionStorage.clear();const s=await createFinancialScenario(db);await db.query("update tenant_memberships set role='admin' where tenant_id=$1 and user_id=$2",[i.tenant,i.operator]);
+  await financialCommand(db,await financialPayload(db,s.receivable));const view=render(<Story receivable={s.receivable}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Conferir vínculos'}));fireEvent.click(await screen.findByRole('button',{name:'Corrigir vínculo desta baixa'}));set('Motivo da correção','Recebimento associado ao título incorreto');
+  fireEvent.click(screen.getByRole('button',{name:'Revisar correção do vínculo'}));expect(mock.rpc.mock.calls.filter(([name])=>name==='correct_finance_receipt_allocation')).toHaveLength(0);
+  expect(screen.getByText(/Nenhuma saída de dinheiro será registrada/)).toBeInTheDocument();mock.lost=true;
+  fireEvent.click(screen.getByRole('button',{name:'Confirmar correção do vínculo'}));await screen.findByText('Resposta não confirmada. Retome a mesma correção.');
+  view.unmount();client.clear();render(<Story receivable={s.receivable}/>);fireEvent.click(await screen.findByRole('button',{name:'Conferir vínculos'}));fireEvent.click(await screen.findByRole('button',{name:'Retomar mesma correção'}));
+  await screen.findByText('Vínculo corrigido. O dinheiro registrado foi preservado.');
+  const correctionCalls=mock.rpc.mock.calls.filter(([name])=>name==='correct_finance_receipt_allocation');expect(correctionCalls).toHaveLength(2);expect(correctionCalls[0][1]._payload).toEqual(correctionCalls[1][1]._payload);
+  expect(await net()).toEqual({received:0});expect((await db.query('select * from finance_movements')).rows).toHaveLength(1);expect((await db.query('select * from bank_transactions')).rows).toHaveLength(1);
+  await screen.findByText(/Correção de vínculo por/);sessionStorage.clear();
+ });
+ it('does not send an allocation correction if its recovery record cannot be stored',async()=>{
+  sessionStorage.clear();const s=await createFinancialScenario(db);await db.query("update tenant_memberships set role='admin' where tenant_id=$1 and user_id=$2",[i.tenant,i.operator]);
+  await financialCommand(db,await financialPayload(db,s.receivable));render(<Story receivable={s.receivable}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Conferir vínculos'}));fireEvent.click(await screen.findByRole('button',{name:'Corrigir vínculo desta baixa'}));set('Motivo da correção','Corrigir o título selecionado na baixa');fireEvent.click(screen.getByRole('button',{name:'Revisar correção do vínculo'}));
+  vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('quota');});fireEvent.click(screen.getByRole('button',{name:'Confirmar correção do vínculo'}));
+  await screen.findByText('Não foi possível preservar o pedido. Nenhuma correção foi enviada.');expect(mock.rpc.mock.calls.filter(([name])=>name==='correct_finance_receipt_allocation')).toHaveLength(0);expect(await net()).toEqual({received:10});
+ });
+ it('selects a previously recorded entry and settles the title without duplicating cash',async()=>{
+  const s=await createFinancialScenario(db),payload=await financialPayload(db,s.receivable);
+  const movement=(await db.query<{id:string}>("insert into finance_movements(tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,description,beneficiary_name,created_by) values($1,$2,'in','receipt',1000,$3,'PIX anterior','Cliente QA',$4) returning id",[i.tenant,s.bank,payload.effective_date,i.operator])).rows[0].id;
+  render(<Story receivable={s.receivable}/>);await choose();fireEvent.click(screen.getByLabelText('Este dinheiro já tem uma entrada registrada'));
+  fireEvent.click(await screen.findByRole('radio',{name:/PIX anterior/}));fireEvent.click(screen.getByRole('button',{name:'Confirmar operação'}));await screen.findByText(/Pedido confirmado: Registrar recebimento/);
+  expect(calls()[0][1]._payload.movement_id).toBe(movement);expect(await net()).toEqual({received:10});expect((await db.query('select id from finance_movements')).rows).toEqual([{id:movement}]);
+ });
  it('requires explicit action and reason, records cents once and invalidates linked modules',async()=>{
   const s=await createFinancialScenario(db);const invalidation=vi.spyOn(client,'invalidateQueries');render(<Story receivable={s.receivable}/>);
   await screen.findByLabelText('Operação financeira');expect(screen.getByRole('button',{name:'Confirmar operação'})).toBeDisabled();await choose();
@@ -60,9 +106,9 @@ describe('financial UI backed by real SQL commands',{timeout:15000},()=>{
   expect(calls().map(([,args])=>args._payload.request_id)).toEqual([request,request]);expect((await db.query('select count(*)::int n from bank_transactions')).rows[0]).toEqual({n:1});expect(await net()).toEqual({received:10});
  });
  it('shows compensating reversals with original history preserved and a reusable open balance',async()=>{
-  const s=await createFinancialScenario(db);await db.query("update tenant_memberships set role='admin' where tenant_id=$1 and user_id=$2",[i.tenant,i.operator]);const payment=await financialCommand(db,await financialPayload(db,s.receivable,{amount_cents:24000}));
-  render(<Story receivable={s.receivable}/>);await choose('reverse');set('Recebimento a estornar',payment.payment_id!);fireEvent.click(screen.getByRole('button',{name:'Confirmar operação'}));await screen.findByText(/Pedido confirmado: Estornar recebimento/);
-  expect(await net()).toEqual({received:0});expect(within(screen.getByRole('region',{name:'Histórico de recebimentos'})).getByText(/Estornado — original preservado/)).toBeInTheDocument();
+  const s=await createFinancialScenario(db);await db.query("update tenant_memberships set role='admin' where tenant_id=$1 and user_id=$2",[i.tenant,i.operator]);await financialCommand(db,await financialPayload(db,s.receivable,{amount_cents:24000}));
+  render(<Story receivable={s.receivable}/>);await choose('reverse');fireEvent.click(await screen.findByRole('button',{name:'Selecionar para devolução'}));expect(screen.getByRole('button',{name:'Confirmar operação'})).toBeDisabled();fireEvent.click(screen.getByLabelText('Confirmo que o dinheiro já foi devolvido ao pagador'));fireEvent.click(screen.getByRole('button',{name:'Confirmar operação'}));await screen.findByText(/Pedido confirmado: Estornar recebimento/);
+  expect(await net()).toEqual({received:0});expect(within(screen.getByRole('region',{name:'Histórico completo de recebimentos'})).getByText(/Devolvido — original preservado/)).toBeInTheDocument();
   expect((await db.query('select count(*)::int n from receivables_payments')).rows[0]).toEqual({n:1});expect((await db.query('select count(*)::int n from bank_transactions')).rows[0]).toEqual({n:2});
  });
  it('hides administrative reversal from an operator',async()=>{

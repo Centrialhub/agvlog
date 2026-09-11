@@ -20,6 +20,7 @@ export function createFinancialOutbox(deps:Dependencies){
    deps.assertContext();let row=pendingFinancialCommand(deps.storage,tenant,actor);const uncertain=!!row;
    if(row&&input)throw new Error('Há uma operação financeira sem confirmação. Recupere o pedido existente antes de iniciar outra.');
    if(!row){if(!input)throw new Error('Nenhuma operação financeira pendente nesta sessão.');
+    if(input.action==='reverse'&&input.refund_kind!=='money_returned')throw new Error('Confirme que o dinheiro já foi devolvido antes de registrar a saída.');
     row={version:1,tenantId:tenant,actorId:actor,createdAt:new Date().toISOString(),payload:financialCommandSchema.parse({...input,version:1,tenant_id:tenant,actor_id:actor,request_id:deps.uuid()})};
     try{deps.storage.setItem(key,JSON.stringify(row));}catch{throw unavailable();}deps.changed();}
    const forget=()=>{try{deps.storage.removeItem(key);}catch{/* exact durable replay remains safe */}deps.changed();};

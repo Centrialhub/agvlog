@@ -25,23 +25,11 @@ describe('driver trip actions frontend', () => {
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledWith('/driver/stops?trip=trip');
   });
-  it('starts a planned trip and invalidates driver and operation views before navigation', async () => {
-    const invalidate = vi.spyOn(client, 'invalidateQueries');
+  it('routes a planned trip through mandatory cargo acceptance instead of starting it directly', async () => {
     const { result } = renderHook(useDriverTripActions, { wrapper });
     act(() => result.current.accessTrip('trip', 'planned', null));
-    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/driver/stops?trip=trip'));
-    expect(mocks.rpc).toHaveBeenCalledWith('driver_start_trip', { _trip_id: 'trip' });
-    for (const key of ['driver_active_trip','driver_my_trips','driver_my_loads','driver_all_assigned_loads','driver_trip','driver_stops','dispatch_trips','loads']) {
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: [key] });
-    }
-  });
-  it('does not navigate or report success when the backend refuses departure', async () => {
-    mocks.rpc.mockResolvedValue({ data: null, error: { code: '23514', message: 'Carga bloqueada pela operação' } });
-    const { result } = renderHook(useDriverTripActions, { wrapper });
-    act(() => result.current.accessTrip('trip', 'planned'));
-    await waitFor(() => expect(mocks.toast).toHaveBeenCalled());
-    expect(mocks.navigate).not.toHaveBeenCalled();
-    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ description: 'Carga bloqueada pela operação', variant: 'destructive' }));
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/driver/cargo?trip=trip'));
+    expect(mocks.rpc).not.toHaveBeenCalled();
   });
   it.each([
     { status: 'planned', load: 'in_transit' },
@@ -54,40 +42,11 @@ describe('driver trip actions frontend', () => {
     expect(mocks.navigate).not.toHaveBeenCalled();
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Revisão operacional necessária' }));
   });
-  it('keeps the action pending until the view refresh completes', async () => {
-    let release: () => void = () => undefined;
-    const pending = new Promise<void>(resolve => { release = resolve; });
-    vi.spyOn(client, 'invalidateQueries').mockReturnValue(pending);
+  it('never bypasses custody even when the planned trip is opened again', async () => {
     const { result } = renderHook(useDriverTripActions, { wrapper });
-    act(() => result.current.accessTrip('trip', 'planned'));
-    await waitFor(() => expect(result.current.isStartingTrip).toBe(true));
-    expect(mocks.navigate).not.toHaveBeenCalled();
-    await act(async () => release());
-    await waitFor(() => expect(mocks.navigate).toHaveBeenCalled());
+    act(() => { result.current.accessTrip('trip', 'planned'); result.current.accessTrip('trip', 'planned'); });
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/driver/cargo?trip=trip'));
+    expect(mocks.rpc).not.toHaveBeenCalled();
     await waitFor(() => expect(result.current.isStartingTrip).toBe(false));
-  });
-  it.each(['40001','40P01','55P03'])('refreshes both sides and requires manual retry after %s',async code=>{
-    const invalidate=vi.spyOn(client,'invalidateQueries');mocks.rpc.mockResolvedValue({data:null,error:{code,message:'technical lock conflict'}});
-    const {result}=renderHook(useDriverTripActions,{wrapper});act(()=>result.current.accessTrip('trip','planned'));
-    await waitFor(()=>expect(mocks.toast).toHaveBeenCalled());
-    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({description:expect.stringContaining('Outra operação alterou')}));
-    expect(mocks.rpc).toHaveBeenCalledTimes(1);expect(mocks.navigate).not.toHaveBeenCalled();
-    for(const key of ['loads','load','load_trip_state','driver_my_loads','dispatch_trips'])expect(invalidate).toHaveBeenCalledWith({queryKey:[key]});
-  });
-  it('does not claim success from a missing/uncertain start response',async()=>{
-    mocks.rpc.mockResolvedValue({data:null,error:null});const {result}=renderHook(useDriverTripActions,{wrapper});
-    act(()=>result.current.accessTrip('trip','planned'));await waitFor(()=>expect(mocks.toast).toHaveBeenCalled());
-    expect(mocks.navigate).not.toHaveBeenCalled();expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({description:expect.stringContaining('Não foi possível confirmar')}));
-  });
-  it('ignores a second immediate click while start and refresh are pending',async()=>{
-    const {result}=renderHook(useDriverTripActions,{wrapper});act(()=>{result.current.accessTrip('trip','planned');result.current.accessTrip('trip','planned');});
-    await waitFor(()=>expect(mocks.navigate).toHaveBeenCalled());expect(mocks.rpc).toHaveBeenCalledTimes(1);
-  });
-  it('still reports the mutation rejection if a follow-up refresh fails',async()=>{
-    vi.spyOn(client,'invalidateQueries').mockRejectedValue(new Error('offline'));
-    mocks.rpc.mockResolvedValue({data:null,error:{code:'23514',message:'Carga bloqueada'}});
-    const {result}=renderHook(useDriverTripActions,{wrapper});act(()=>result.current.accessTrip('trip','planned'));
-    await waitFor(()=>expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({description:'Carga bloqueada'})));
-    expect(mocks.navigate).not.toHaveBeenCalled();
   });
 });

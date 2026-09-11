@@ -1,0 +1,107 @@
+{
+  "scope": "Read-only review; no remote writes. Existing tests cited, not re-run in this review.",
+  "remote_catalog_count": 439,
+  "gate_body": " select false; ",
+  "target_relations_absent": 10,
+  "required_columns_present": 27,
+  "mixed_delivery_count": 1,
+  "mixed_count_source": "coordinator preflight; no record correction performed",
+  "approvals": [
+    {
+      "file": "20260909212514_finance_delivery_unloading.sql",
+      "sha256": "31d527454b746dc9aed8b8c0755f7e9e6132f098ad5251ac937bb7fcbc01bae7",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Descarga única por entrega, fornecedor da NF e conta a receber; preserva ancestralidade.",
+      "evidence": "financeExpenseBatchDatabase.test.ts; unloadingReceivableSourceGuard.test.ts"
+    },
+    {
+      "file": "20260909213020_finance_movement_queries.sql",
+      "sha256": "9e2ee8a95b50d4cdc4b78430ef54f1a26142b9f8ea5767c9bb609a61e69f0b16",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Leitura paginada de movimentos e get_finance_access; ambos respeitam stagedfalse.",
+      "evidence": "financeLedgerDatabase.test.ts"
+    },
+    {
+      "file": "20260909213959_finance_expense_batches.sql",
+      "sha256": "3d24b8f562d043eccf99189255e19a1c9d4ce9827341a0348136562963ea0dc3",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Lote, alocações e complemento payable; não registra novo dinheiro. Requer descarga e tabelas preexistentes.",
+      "evidence": "financeExpenseBatchDatabase.test.ts; expenseStatementJourney.test.ts"
+    },
+    {
+      "file": "20260909215046_finance_delivery_supplier_guard.sql",
+      "sha256": "0f30ac3d6e4c5c98ac1fab74e3136546cf2868dd8908c61c520d1a19cd9e83e1",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Triggers operacionais imediatos/diferidos. Legado misto1 permanece intacto; mutações futuras da composição precisam resolver mistura. Locks bloqueantes não são eliminados pelo gate.",
+      "evidence": "financeExpenseBatchDatabase.test.ts"
+    },
+    {
+      "file": "20260909220020_finance_expense_workspace_queries.sql",
+      "sha256": "2c3b7904bb41a6ebf110225559ef794b4e17c4f79bbad68ce74d0049ad92eda2",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Opções por viagem/fornecedor/centro/movimento; depende das três tabelas do lote e descarga.",
+      "evidence": "financeExpenseBatchDatabase.test.ts; activeMovementOptions.test.ts (cadeia posterior)"
+    },
+    {
+      "file": "20260909220941_finance_receipt_evidence.sql",
+      "sha256": "410293d35f3653c894643aa9f635128f13eb3a010f1ecc722aa0fbace7ac5188",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Retenção e verificação de Storage; roles anon recebem apenas helper booleano negado pelo gate. Sem mudança nos arquivos antigos.",
+      "evidence": "financeExpenseBatchDatabase.test.ts; financeStatementIntake.test.ts"
+    },
+    {
+      "file": "20260909221405_finance_expense_history_queries.sql",
+      "sha256": "c162e2b0cb35386737703f996872797854c4f66030a638f8a599688656f5ef17",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Histórico e totais de custo/alocação/complemento separados; guarda de acesso explícita.",
+      "evidence": "financeExpenseBatchDatabase.test.ts"
+    },
+    {
+      "file": "20260909222851_finance_statement_intake.sql",
+      "sha256": "e7d153769b285614254438340edee8b1a609f778dac3ce7fe65a53f6b6f7a4e4",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Bucket privado10MiB, originais imutáveis e linhas de evidência; mapped import não é conciliação.",
+      "evidence": "financeStatementIntake.test.ts"
+    },
+    {
+      "file": "20260909223737_finance_statement_source_verification.sql",
+      "sha256": "59e80fcbe94a20e27021854d24178b3baba03ed93203a101daa551b56eb1458e",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Registro service_role valida ator e revisão, mas NÃO usa gate can_access; manter worker sem acionamento até final. Não agenda cron.",
+      "evidence": "financeStatementIntake.test.ts:401,414"
+    },
+    {
+      "file": "20260909230507_finance_statement_queries.sql",
+      "sha256": "670d252f1dfa660cc9e05cf895ccd1561c8e3a6bf275958ec36b4f210f904cae",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Listas de importações/linhas, revisão pendente e histórico; sem alteração de dinheiro.",
+      "evidence": "financeStatementIntake.test.ts:369,380"
+    },
+    {
+      "file": "20260909231643_finance_statement_identity_review.sql",
+      "sha256": "26f356955235506fa28f1cbc0b71a1fbe66ff45837e9b55fc2ec31c98b3cc3b4",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Identidade manual/reversão append-only; mantém evidências originais e não liquida dinheiro. Depende readers230507 e verifications223737.",
+      "evidence": "financeStatementIntake.test.ts:316"
+    },
+    {
+      "file": "20260909233625_finance_audit_queries.sql",
+      "sha256": "4c5ffab49815e5f41e35ce68ed3321aa67bc0ac681bf491bb252c122c5303666",
+      "technical_review": "approved_for_inactive_installation_in_order",
+      "activation_approved": false,
+      "effects": "Índices e auditoria com ator/motivo, marca manual, datas SãoPaulo; guard can_access.",
+      "evidence": "financeStatementIntake.test.ts:305"
+    }
+  ]
+}

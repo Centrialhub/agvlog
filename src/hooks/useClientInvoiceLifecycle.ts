@@ -33,7 +33,7 @@ export function useClientInvoiceLifecycle(invoice?:string,report?:string){
  const run=async(work:()=>Promise<InvoiceResult>)=>{
   if(!tenant||!actor)throw new Error('Entre com uma sessão válida e selecione a empresa.');if(busy.current)throw new Error('Aguarde a operação de fatura em andamento.');assertContext();busy.current=true;setPending(true);
   try{const result=await work();assertContext();return result;}catch(cause){throw new Error(invoiceError(cause));}
-  finally{try{await Promise.all(['client-invoice-context','client-invoice-creation','client_invoices','client_invoice_detail','receivable-financial-context','receivables','closing-reports','closing-report','closing-action-context','eligible_ctes','eligible_nfse','financial_obligations','financial_matches_suggested'].map(key=>client.invalidateQueries({queryKey:[key]})));}
+  finally{try{await Promise.all(['client-invoice-context','client-invoice-creation','client_invoices','client_invoice_detail','receivable-financial-context','receivables','finance-receivable-portfolio','finance-fiscal-dashboard-summary','finance-unbilled-freight-summary','finance-unbilled-freight-origins','closing-reports','closing-report','closing-action-context','eligible_ctes','eligible_nfse','financial_obligations','financial_matches_suggested'].map(key=>client.invalidateQueries({queryKey:[key]})));}
    finally{busy.current=false;if(alive.current)setPending(false);}}
  };
  return {query,creation,quote,isPending,pending:recovery.pending,recoveryError:recovery.error,submit:(input:InvoiceCommandInput)=>run(()=>outbox.submit(tenant!,actor!,input)),recover:()=>run(()=>outbox.recover(tenant!,actor!))};

@@ -4,6 +4,18 @@ import StopDraftTable from '@/components/route-planning/StopDraftTable';
 import { regenerateStopsPreservingEdits } from '@/lib/route-planning/regenerateStops';
 import type { RouteStopDraft } from '@/lib/route-planning/routePlanningTypes';
 
+vi.mock('@/components/maps/LocationPicker', () => ({
+  LocationPicker: ({ onChange }: { onChange: (value: unknown) => void }) => <div>
+    <button onClick={() => onChange({ latitude: -16.7282, longitude: -43.8578, source: 'address_geocoded',
+      address: 'Rua QA, 10, Montes Claros - MG', provider: 'qa', accuracy_m: 50, confidence: 0.9,
+      audit: { selected_label: 'Rua QA' } })}>Escolher endereço QA</button>
+    <button onClick={() => onChange({ latitude: -16.7, longitude: -43.8, source: 'map_selected',
+      address: null, provider: 'leaflet_map', accuracy_m: null, confidence: 1, audit: { selected_interactively: true } })}>
+      Escolher ponto no mapa
+    </button>
+  </div>,
+}));
+
 const stop = (overrides: Partial<RouteStopDraft> = {}): RouteStopDraft => ({
   id: 'stop-1', client_id: 'client-1', recipient_name: 'Cliente QA', destination: 'Cliente QA - Montes Claros - MG',
   city: 'Montes Claros', state: 'MG', neighborhood: 'Centro', load_ids: ['load-1'],
@@ -15,20 +27,26 @@ const stop = (overrides: Partial<RouteStopDraft> = {}): RouteStopDraft => ({
 afterEach(cleanup);
 
 describe('planned stop coordinates in the operator UI', () => {
-  it('propagates the exact manually entered latitude and longitude without geocoding', () => {
+  it('uses an address result instead of exposing manual latitude and longitude', () => {
     const onUpdate = vi.fn();
-    render(<StopDraftTable stops={[stop()]} onMove={vi.fn()} onUpdate={onUpdate} />);
-    fireEvent.change(screen.getByLabelText('Latitude parada 1'), { target: { value: '-16.7282' } });
-    fireEvent.change(screen.getByLabelText('Longitude parada 1'), { target: { value: '-43.8578' } });
-    expect(onUpdate).toHaveBeenNthCalledWith(1, 'stop-1', { latitude: -16.7282 });
-    expect(onUpdate).toHaveBeenNthCalledWith(2, 'stop-1', { longitude: -43.8578 });
+    render(<StopDraftTable tenantId="tenant" stops={[stop()]} onMove={vi.fn()} onUpdate={onUpdate} />);
+    expect(screen.queryByLabelText(/Latitude/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Definir por endereço\/mapa/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Escolher endereço QA' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Usar este local' }));
+    expect(onUpdate).toHaveBeenCalledWith('stop-1', expect.objectContaining({
+      latitude: -16.7282, longitude: -43.8578, location_source: 'address_geocoded',
+      location_address: 'Rua QA, 10, Montes Claros - MG', location_provider: 'qa',
+    }));
   });
 
-  it('clears an entered coordinate instead of substituting zero or a centroid', () => {
+  it('allows correcting a legacy coordinate through a point selected on the map', () => {
     const onUpdate = vi.fn();
-    render(<StopDraftTable stops={[stop({ latitude: -16.7, longitude: -43.8 })]} onMove={vi.fn()} onUpdate={onUpdate} />);
-    fireEvent.change(screen.getByLabelText('Latitude parada 1'), { target: { value: '' } });
-    expect(onUpdate).toHaveBeenCalledWith('stop-1', { latitude: null });
+    render(<StopDraftTable tenantId="tenant" stops={[stop({ latitude: -16.7, longitude: -43.8 })]} onMove={vi.fn()} onUpdate={onUpdate} />);
+    fireEvent.click(screen.getByRole('button', { name: /Revisar endereço\/mapa/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Escolher ponto no mapa' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Usar este local' }));
+    expect(onUpdate).toHaveBeenCalledWith('stop-1', expect.objectContaining({ location_source: 'map_selected' }));
   });
 
   it('preserves verified coordinates when loads are regenerated or reordered', () => {

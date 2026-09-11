@@ -17,7 +17,8 @@ import { NavigationLauncher } from '@/components/driver/NavigationLauncher';
 
 import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
 import { DRIVER_TRIP_SELECT, isDriverTripStarted, normalizeDriverTrip } from '@/lib/driverTrip';
-import { markDriverArrival } from '@/lib/driver/driverArrival';
+import { getCurrentDriverLocation } from '@/lib/driverLocation';
+import { useDriverOperationalOffline } from '@/hooks/useDriverOperationalOffline';
 import { deliveryErrorMessage, invalidateDeliveryQueries } from '@/lib/driver/driverDeliverySubmission';
 import {
   getNextDriverStop,
@@ -25,6 +26,7 @@ import {
   readDriverRouteSnapshot,
   saveDriverRouteSnapshot,
 } from '@/lib/driver/offlineRouteSnapshot';
+import { driverOperationalSnapshotStore, type DriverOperationalSnapshot } from '@/lib/driver/driverOperationalOffline';
 
 
 const STATUS_LABELS: Record<string, string> = STOP_STATUS_LABELS;
@@ -48,6 +50,7 @@ export default function DriverStops() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const offlineCommands = useDriverOperationalOffline();
   const [searchParams] = useSearchParams();
   const tripIdParam = searchParams.get('trip');
   const driverQuery = useCurrentDriver();
@@ -95,10 +98,18 @@ export default function DriverStops() {
   const [cachedSnapshot, setCachedSnapshot] = useState(() => (
     readDriverRouteSnapshot(currentTenant?.id, user?.id)
   ));
+  const [operationalSnapshot, setOperationalSnapshot] = useState<DriverOperationalSnapshot | null>(null);
 
   useEffect(() => {
     setCachedSnapshot(readDriverRouteSnapshot(currentTenant?.id, user?.id));
   }, [currentTenant?.id, user?.id]);
+
+  useEffect(() => {
+    const snapshotTripId = activeTrip?.id ?? cachedSnapshot?.trip.id;
+    if (!currentTenant?.id || !user?.id || !snapshotTripId) { setOperationalSnapshot(null); return; }
+    void driverOperationalSnapshotStore.read(currentTenant.id, user.id, snapshotTripId)
+      .then(setOperationalSnapshot).catch(() => setOperationalSnapshot(null));
+  }, [activeTrip?.id, cachedSnapshot?.trip.id, currentTenant?.id, user?.id]);
 
   useEffect(() => {
     if (!currentTenant?.id || !user?.id || !driver || !activeTrip || stopsQuery.isError || stopsQuery.isPending) return;
@@ -128,6 +139,38 @@ export default function DriverStops() {
     if (savedSnapshot) setCachedSnapshot(savedSnapshot);
   }, [activeTrip, currentTenant?.id, driver, stops, stopsQuery.isError, stopsQuery.isPending, user?.id]);
 
+  useEffect(() => {
+    if (!currentTenant?.id || !user?.id || !driver || !activeTrip || stopsQuery.isError || stopsQuery.isPending) return;
+    void (async () => {
+      const existing = await driverOperationalSnapshotStore.read(currentTenant.id, user.id, activeTrip.id);
+      const next: DriverOperationalSnapshot = {
+        version: 1, tenantId: currentTenant.id, actorId: user.id, tripId: activeTrip.id, cachedAt: new Date().toISOString(),
+        trip: { id: activeTrip.id, status: activeTrip.status, actualStartAt: activeTrip.actual_start_at,
+          actualEndAt: activeTrip.actual_end_at ?? null, driver: { id: driver.id, name: driver.name ?? 'Motorista' },
+          vehicle: activeTrip.vehicle_id ? { id: activeTrip.vehicle_id, plate: activeTrip.vehicles?.plate ?? '', nickname: activeTrip.vehicles?.nickname ?? null } : null },
+        loads: activeTrip.loads ? [{ id: activeTrip.loads.id, loadNumber: activeTrip.loads.load_number,
+          status: activeTrip.loads.status, origin: activeTrip.loads.origin, destination: activeTrip.loads.destination,
+          volumeCount: existing?.loads.find(load => load.id === activeTrip.loads?.id)?.volumeCount ?? null,
+          palletCount: existing?.loads.find(load => load.id === activeTrip.loads?.id)?.palletCount ?? null,
+          weightKg: existing?.loads.find(load => load.id === activeTrip.loads?.id)?.weightKg ?? null }] : existing?.loads ?? [],
+        stops: stops.map(stop => ({ id: stop.id, order: stop.stop_order ?? null, status: stop.status,
+          destination: stop.destination ?? null, latitude: stop.latitude == null ? null : Number(stop.latitude),
+          longitude: stop.longitude == null ? null : Number(stop.longitude), notes: stop.notes ?? null,
+          client: stop.clients ? { id: stop.client_id ?? null, name: stop.clients.company_name } : null,
+          actualArrivalAt: stop.actual_arrival_at ?? null, actualDepartureAt: stop.actual_departure_at ?? null })),
+        documents: existing?.documents ?? [],
+        deliveryItemsByStop: existing?.deliveryItemsByStop,
+        instructions: [...new Set(stops.map(stop => stop.notes?.trim()).filter((note): note is string => !!note))],
+        checklist: existing?.checklist ?? { pre: { id: null, boundaryId: null, checkedItems: [] }, post: { id: null, boundaryId: null, checkedItems: [] } },
+        journey: existing?.journey ?? { events: [], lastStartId: null, lastEndId: null },
+        occurrences: existing?.occurrences ?? [],
+        cargo: existing?.cargo ?? null,
+      };
+      await driverOperationalSnapshotStore.put(next);
+      setOperationalSnapshot(next);
+    })().catch(() => { /* The legacy route snapshot remains available as fallback. */ });
+  }, [activeTrip, currentTenant?.id, driver, stops, stopsQuery.isError, stopsQuery.isPending, user?.id]);
+
   // Realtime: refresh stops when operator marks arrival/departure or updates status.
   useEffect(() => {
     if (!activeTrip?.id) return undefined;
@@ -146,30 +189,69 @@ export default function DriverStops() {
     };
   }, [activeTrip?.id, qc]);
 
+  const cachedRouteMatches = !!cachedSnapshot && (!activeTrip || cachedSnapshot.trip.id === activeTrip.id);
+  const operationalMatches = !!operationalSnapshot && (!activeTrip || operationalSnapshot.tripId === activeTrip.id);
+  const showingOfflineSnapshot = (operationalMatches || cachedRouteMatches) && (!activeTrip || stopsQuery.isError || !isOnline);
+  const storedTrip = operationalMatches ? {
+    id: operationalSnapshot.trip.id, status: operationalSnapshot.trip.status,
+    actual_start_at: operationalSnapshot.trip.actualStartAt, actual_end_at: operationalSnapshot.trip.actualEndAt,
+    vehicle_id: operationalSnapshot.trip.vehicle?.id ?? null,
+    vehicles: operationalSnapshot.trip.vehicle ? { plate: operationalSnapshot.trip.vehicle.plate, nickname: operationalSnapshot.trip.vehicle.nickname } : null,
+    loads: operationalSnapshot.loads[0] ? { id: operationalSnapshot.loads[0].id, load_number: operationalSnapshot.loads[0].loadNumber,
+      status: operationalSnapshot.loads[0].status, origin: operationalSnapshot.loads[0].origin, destination: operationalSnapshot.loads[0].destination } : null,
+  } : null;
+  const effectiveTrip = activeTrip ?? storedTrip ?? (cachedRouteMatches ? cachedSnapshot?.trip : null);
+  const queuedForTrip = offlineCommands.commands.filter(command => command.aggregateId === effectiveTrip?.id);
+  const storedStops = operationalMatches ? operationalSnapshot.stops.map(stop => ({ id: stop.id, stop_order: stop.order,
+    destination: stop.destination, status: stop.status, latitude: stop.latitude, longitude: stop.longitude, notes: stop.notes,
+    actual_arrival_at: stop.actualArrivalAt, actual_departure_at: stop.actualDepartureAt,
+    client_id: stop.client?.id ?? null, clients: stop.client ? { company_name: stop.client.name } : null })) : [];
+  const effectiveStops = ((!activeTrip || stopsQuery.isError || !isOnline) && operationalMatches ? storedStops
+    : showingOfflineSnapshot ? cachedSnapshot?.stops ?? [] : activeTrip ? stops : []).map(stop => {
+    const queuedArrival = queuedForTrip.find(command => command.kind === 'arrival'
+      && typeof command.payload === 'object' && command.payload !== null && !Array.isArray(command.payload)
+      && command.payload.stop_id === stop.id);
+    const queuedDeparture = queuedForTrip.find(command => command.kind === 'departure'
+      && typeof command.payload === 'object' && command.payload !== null && !Array.isArray(command.payload)
+      && command.payload.stop_id === stop.id);
+    return {
+      ...stop,
+      status: queuedArrival && ['pending', 'planned', 'arriving'].includes(stop.status) ? 'arrived' : stop.status,
+      actual_arrival_at: queuedArrival && !stop.actual_arrival_at ? queuedArrival.createdAt : stop.actual_arrival_at,
+      actual_departure_at: queuedDeparture && !stop.actual_departure_at ? queuedDeparture.createdAt : stop.actual_departure_at,
+      offline_pending: !!queuedArrival || !!queuedDeparture,
+    };
+  });
+
   const updateStop = useMutation({
     mutationFn: async ({ stopId, action }: { stopId: string; action: 'arrival' | 'depart' }) => {
-      if (!activeTrip || !isDriverTripStarted(activeTrip.status,activeTrip.actual_start_at)) {
+      if (!effectiveTrip || !isDriverTripStarted(effectiveTrip.status,effectiveTrip.actual_start_at)) {
         throw new Error('Inicie a viagem antes de registrar chegada ou saída.');
       }
-      const stop=stops.find(item=>item.id===stopId);
+      const stop=effectiveStops.find(item=>item.id===stopId);
       if (!stop || isStopTerminal(stop.status)) throw new Error('Parada encerrada ou reatribuída. Atualize a viagem.');
       if (action === 'arrival') {
-        await markDriverArrival(stopId);
-        return;
+        const location = await getCurrentDriverLocation();
+        return offlineCommands.submit({
+          kind: 'arrival', aggregateId: effectiveTrip.id,
+          payload: { trip_id: effectiveTrip.id, stop_id: stopId, latitude: location.latitude,
+            longitude: location.longitude, accuracy_m: location.accuracyM },
+        });
       }
       if (action === 'depart') {
         if (!stop.actual_arrival_at || !['arrived','servicing'].includes(stop.status)) throw new Error('Registre a chegada antes da saída.');
-        // Physical departure does not confirm document/load delivery.
-        const { error } = await supabase.rpc('driver_register_departure', {
-          _stop_id: stopId, _notes: undefined,
+        return offlineCommands.submit({
+          kind: 'departure', aggregateId: effectiveTrip.id,
+          payload: { trip_id: effectiveTrip.id, stop_id: stopId, notes: null },
         });
-        if (error) throw error;
-        return;
       }
+      throw new Error('Ação de parada inválida.');
     },
-    onSuccess: async () => {
-      await invalidateDeliveryQueries(qc);
-      toast({ title: 'Parada atualizada' });
+    onSuccess: async (result) => {
+      if (!result) return;
+      if (!result.queued) await invalidateDeliveryQueries(qc);
+      toast({ title: result.queued ? 'Ação salva no aparelho' : 'Parada atualizada',
+        description: result.queued ? 'Será sincronizada automaticamente quando houver conexão.' : undefined });
     },
     onError: (error: unknown) => toast({
       title: 'Erro',
@@ -186,10 +268,6 @@ export default function DriverStops() {
     updateStop.mutate({ stopId, action: 'depart' });
   };
 
-  const cachedRouteMatches = !!cachedSnapshot && (!activeTrip || cachedSnapshot.trip.id === activeTrip.id);
-  const showingOfflineSnapshot = cachedRouteMatches && (!activeTrip || stopsQuery.isError || !isOnline);
-  const effectiveTrip = activeTrip ?? (cachedRouteMatches ? cachedSnapshot?.trip : null);
-  const effectiveStops = showingOfflineSnapshot ? cachedSnapshot?.stops ?? [] : activeTrip ? stops : [];
   const pendingStops = getPendingDriverStops(effectiveStops);
   const nextStop = getNextDriverStop(effectiveStops);
   const tripResolutionQuery = tripIdParam ? specificTripQuery : autoTripQuery;
@@ -325,21 +403,22 @@ export default function DriverStops() {
                     />
                   )}
                   {['pending','planned','arriving'].includes(stop.status) && (
-                    <Button size="sm" className="text-xs" onClick={() => handleArrival(stop.id)} disabled={updateStop.isPending || !tripStarted || showingOfflineSnapshot}>
+                    <Button size="sm" className="text-xs" onClick={() => handleArrival(stop.id)} disabled={updateStop.isPending || !tripStarted}>
                       <ArrowRight className="h-3 w-3 mr-1" /> {updateStop.isPending ? 'Validando GPS…' : 'Cheguei'}
                     </Button>
                   )}
                   {['arrived','servicing'].includes(stop.status) && !stop.actual_departure_at && (
-                    <Button size="sm" variant="outline" className="text-xs" onClick={() => handleDeparture(stop.id)} disabled={updateStop.isPending || !tripStarted || !stop.actual_arrival_at || showingOfflineSnapshot}>
+                    <Button size="sm" variant="outline" className="text-xs" onClick={() => handleDeparture(stop.id)} disabled={updateStop.isPending || !tripStarted || !stop.actual_arrival_at}>
                       <CheckCircle className="h-3 w-3 mr-1" /> Registrar saída
                     </Button>
                   )}
                   {stop.actual_departure_at && <Badge variant="outline" className="text-[10px]">Saída registrada</Badge>}
+                  {stop.offline_pending && <Badge variant="outline" className="text-[10px]">Sincronização pendente</Badge>}
                   {isStopTerminal(stop.status) && (
                     <Badge variant="secondary" className="text-[10px]">Encerrada</Badge>
                   )}
                 </div>
-                {!showingOfflineSnapshot && !isStopTerminal(stop.status) && stop.actual_arrival_at && (
+                {!isStopTerminal(stop.status) && stop.actual_arrival_at && (
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground">Registrar saída não conclui a entrega. Informe o resultado e os comprovantes em Entregas.</p>
                     <Button variant="outline" size="sm" onClick={()=>navigate(`/driver/deliveries?trip=${effectiveTrip.id}`)}>Registrar resultado da entrega</Button>

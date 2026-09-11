@@ -3,31 +3,32 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { Landmark, Upload, RefreshCw, Play, Check, X, Link2, Plus } from 'lucide-react';
+import { Landmark, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   useBankAccounts, useCreateBankAccount, useBankTransactions, useFinancialObligations,
-  useSuggestedMatches, useSyncObligations, useImportBankStatement, useRunReconciliation,
-  useAcceptMatch, useRejectMatch, useCreateManualMatch, useCreateManualTransaction,
+  useSuggestedMatches,
+
   type FinancialObligation, type BankTransaction, type SuggestedMatch,
-  type BankAccountType, type BankTransactionType,
+  type BankAccountType,
 } from '@/hooks/useBankReconciliation';
-import {
-  parseWorkbook, buildParsedRows, computeFileHash, type ColumnMapping, type ParsedRow,
-} from '@/lib/bankStatementParser';
+import {ReconciliationStatementImport} from '@/components/financial/ReconciliationStatementImport';
 import { useListFilters } from '@/hooks/useListFilters';
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { matchesSearch, filterOptions } from '@/lib/listFilters';
-import { useCostCenters } from '@/hooks/useCostCenters';
+import {ReconciliationMovementEntry} from '@/components/financial/ReconciliationMovementEntry';
 import { getErrorMessage } from '@/lib/errors';
-import type { Json } from '@/integrations/supabase/types';
-import type { JsonObject } from '@/lib/jsonTypes';
+import FinanceStatements from './FinanceStatements';
+import {useTenant} from '@/hooks/useTenant';
+import {useAuth} from '@/hooks/useAuth';
+import {useFinanceAccess} from '@/hooks/useFinanceLedger';
+
 
 const OBLIGATION_TYPE_LABEL: Record<string, string> = {
   receivable: 'Recebível',
@@ -58,16 +59,27 @@ function fmt(n: number | null | undefined) {
   return (Number(n || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-function jsonRecord(value: Json): JsonObject {
-  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {};
-}
-
-function jsonNumber(value: Json, key: string): number {
-  return Number(jsonRecord(value)[key] ?? 0);
-}
-
 export default function BankReconciliation() {
-  const { toast } = useToast();
+  const {currentTenant,currentRole}=useTenant(),{user}=useAuth(),access=useFinanceAccess();
+  if(!currentTenant||!user)return <p>Entre e selecione a empresa.</p>;
+  if(!['owner','admin','operator'].includes(currentRole||''))return <p role="alert">Acesso financeiro não permitido.</p>;
+  if(access.isPending)return <p role="status">Verificando acesso…</p>;
+  if(access.error)return <p role="alert">Não foi possível verificar o acesso. <Button onClick={()=>void access.refetch()}>Tentar novamente</Button></p>;
+  if(!access.data)return <p role="alert">Acesso financeiro não permitido.</p>;
+  return <ReconciliationWorkspace key={`${currentTenant.id}:${user.id}`}/>;
+}
+
+function ReconciliationWorkspace(){
+  const [section,setSection]=useState('statements');
+  return <div className="space-y-4"><div className="flex items-center justify-between"><h1 className="text-2xl font-semibold">Conciliação bancária</h1><NewBankAccountDialog/></div>
+    <Tabs value={section} onValueChange={setSection}><TabsList><TabsTrigger value="statements">Extratos e conciliação</TabsTrigger><TabsTrigger value="legacy">Histórico anterior</TabsTrigger></TabsList>
+      <TabsContent value="statements">{section==='statements'&&<FinanceStatements/>}</TabsContent>
+      <TabsContent value="legacy">{section==='legacy'&&<LegacyBankReconciliation/>}</TabsContent>
+    </Tabs>
+  </div>;
+}
+
+function LegacyBankReconciliation() {
   const { data: accounts = [] } = useBankAccounts();
   const [accountId, setAccountId] = useState<string>('');
   const [periodStart, setPeriodStart] = useState(todayIso(-30));
@@ -80,8 +92,8 @@ export default function BankReconciliation() {
   const { data: suggested = [] } = useSuggestedMatches(effectiveAccount);
 
   const kpis = useMemo(() => {
-    const inflow = transactions.filter(t => t.amount > 0).reduce((s, t) => s + Number(t.amount), 0);
-    const outflow = transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+    const inflow = transactions.filter(t => t.transaction_type === 'credit').reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+    const outflow = transactions.filter(t => t.transaction_type === 'debit').reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
     const matched = transactions.filter(t => t.reconciliation_status === 'matched').length;
     const pending = transactions.filter(t => t.reconciliation_status === 'unmatched' || t.reconciliation_status === 'suggested').length;
     const txWithoutOrigin = transactions.filter(t => t.reconciliation_status === 'unmatched').length;
@@ -89,35 +101,20 @@ export default function BankReconciliation() {
     return { inflow, outflow, matched, pending, suggested: suggested.length, txWithoutOrigin, titlesWithoutTx };
   }, [transactions, obligations, suggested]);
 
-  const syncObg = useSyncObligations();
-  const runRecon = useRunReconciliation();
+
+
 
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Landmark className="h-6 w-6" /> Conciliação Bancária</h1>
-          <p className="text-sm text-muted-foreground">Importe extratos, gere sugestões e concilie títulos financeiros do sistema.</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Landmark className="h-6 w-6" /> Histórico anterior</h1>
+          <p className="text-sm text-muted-foreground">Consulta dos registros anteriores. Os status antigos não certificam a conciliação com os extratos preservados.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <NewBankAccountDialog />
-          <NewManualTransactionDialog accountId={effectiveAccount} />
-          <ImportStatementDialog accountId={effectiveAccount} periodStart={periodStart} periodEnd={periodEnd} />
-          <Button variant="outline" size="sm" onClick={() => syncObg.mutate({ from: periodStart, to: periodEnd }, {
-            onSuccess: result => toast({ title: 'Títulos sincronizados', description: JSON.stringify(result) }),
-            onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
-          })} disabled={syncObg.isPending}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Sincronizar títulos
-          </Button>
-          <Button size="sm" disabled={!effectiveAccount || runRecon.isPending} onClick={() => runRecon.mutate(
-            { bank_account_id: effectiveAccount, period_start: periodStart, period_end: periodEnd },
-            {
-              onSuccess: result => toast({ title: 'Conciliação executada', description: `${jsonNumber(result, 'auto')} auto · ${jsonNumber(result, 'suggested')} sugestões · ${jsonNumber(result, 'scanned')} transações` }),
-              onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
-            }
-          )}>
-            <Play className="h-4 w-4 mr-1" /> Rodar conciliação
-          </Button>
+
+          <ReconciliationMovementEntry account={effectiveAccount} />
+          <ReconciliationStatementImport account={effectiveAccount} start={periodStart} end={periodEnd} />
         </div>
       </div>
 
@@ -144,10 +141,10 @@ export default function BankReconciliation() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        <KpiCard label="Entradas banco" value={fmt(kpis.inflow)} />
-        <KpiCard label="Saídas banco" value={fmt(kpis.outflow)} />
-        <KpiCard label="Conciliados" value={String(kpis.matched)} />
+      <p className="text-sm">Consulta limitada a 1.000 transações, 1.000 títulos e 500 sugestões. Os totais abaixo se referem aos registros carregados, não ao saldo bancário ou fechamento do período.</p><div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <KpiCard label="Entradas listadas" value={fmt(kpis.inflow)} />
+        <KpiCard label="Saídas listadas" value={fmt(kpis.outflow)} />
+        <KpiCard label="Status antigo: conciliado" value={String(kpis.matched)} />
         <KpiCard label="Pendentes" value={String(kpis.pending)} />
         <KpiCard label="Sugestões" value={String(kpis.suggested)} />
         <KpiCard label="Sem origem" value={String(kpis.txWithoutOrigin)} />
@@ -163,7 +160,7 @@ export default function BankReconciliation() {
         </TabsList>
 
         <TabsContent value="extrato">
-          <ExtratoTab transactions={transactions} suggested={suggested} obligations={obligations} />
+          <ExtratoTab transactions={transactions} suggested={suggested} />
         </TabsContent>
         <TabsContent value="titulos">
           <TitulosTab obligations={obligations} />
@@ -238,471 +235,21 @@ function NewBankAccountDialog() {
   );
 }
 
-function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountId: string; periodStart: string; periodEnd: string }) {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [rowsRaw, setRowsRaw] = useState<Record<string, unknown>[]>([]);
-  const [mapping, setMapping] = useState<ColumnMapping>({ date: '', description: '', amount: '' });
-  const [preview, setPreview] = useState<ParsedRow[]>([]);
-  const [headerRowIndex, setHeaderRowIndex] = useState<number>(0);
-  const [matrix, setMatrix] = useState<unknown[][]>([]);
-  const [autoGuessFailed, setAutoGuessFailed] = useState(false);
-  const importMut = useImportBankStatement();
-
-  const reset = () => {
-    setFile(null); setHeaders([]); setRowsRaw([]); setMapping({ date: '', description: '', amount: '' });
-    setPreview([]); setHeaderRowIndex(0); setMatrix([]); setAutoGuessFailed(false);
-  };
-
-  const applyGuess = (hs: string[]) => {
-    const guess = (candidates: string[]) => hs.find(h => candidates.some(c => h.toLowerCase().includes(c))) || '';
-    const next: ColumnMapping = {
-      date: guess(['data', 'date', 'dt']),
-      description: guess(['descri', 'histor', 'memo', 'lanç', 'lanc']),
-      amount: guess(['valor', 'amount']),
-      inflow: guess(['crédito', 'credito', 'entrada', 'credit']),
-      outflow: guess(['débito', 'debito', 'saída', 'saida', 'debit']),
-      document: guess(['doc', 'referen']),
-      balance: guess(['saldo', 'balance']),
-    };
-    setMapping(next);
-    setAutoGuessFailed(!next.date || !next.description || (!next.amount && !next.inflow && !next.outflow));
-  };
-
-  const onFile = async (f: File) => {
-    setFile(f);
-    const { headers: hs, rows, headerRowIndex: idx, matrix: mx } = await parseWorkbook(f);
-    setHeaders(hs);
-    setRowsRaw(rows);
-    setHeaderRowIndex(idx);
-    setMatrix(mx);
-    applyGuess(hs);
-  };
-
-  const changeHeaderRow = async (newIdx: number) => {
-    if (!file || !matrix.length) return;
-    const clamped = Math.max(0, Math.min(newIdx, Math.min(matrix.length - 1, 19)));
-    const { headers: hs, rows, headerRowIndex: idx, matrix: mx } = await parseWorkbook(file, clamped);
-    setHeaders(hs); setRowsRaw(rows); setHeaderRowIndex(idx); setMatrix(mx);
-    applyGuess(hs);
-    setPreview([]);
-  };
-
-  const buildPreview = () => {
-    const parsed = buildParsedRows(rowsRaw, mapping, accountId || 'preview');
-    setPreview(parsed.slice(0, 10));
-    return parsed;
-  };
-
-  const submit = async () => {
-    if (!file || !accountId) return;
-    const parsed = buildParsedRows(rowsRaw, mapping, accountId);
-    if (parsed.length === 0) {
-      toast({
-        title: 'Nenhuma linha válida',
-        description: 'Verifique se as colunas Data, Descrição e Valor (ou Crédito/Débito) foram mapeadas corretamente e se a linha do cabeçalho está certa.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    const hash = await computeFileHash(file);
-    const mappingMetadata = Object.fromEntries(
-      Object.entries(mapping).map(([key, value]) => [key, value ?? null]),
-    ) as Record<string, Json>;
-    importMut.mutate({
-      bank_account_id: accountId,
-      file_name: file.name,
-      file_hash: hash,
-      period_start: periodStart,
-      period_end: periodEnd,
-      rows: parsed,
-      raw_metadata: { mapping: mappingMetadata, source_headers: headers },
-    }, {
-      onSuccess: result => {
-        toast({ title: 'Extrato importado', description: `${jsonNumber(result, 'rows_inserted')} novas · ${jsonNumber(result, 'rows_skipped')} ignoradas` });
-        reset(); setOpen(false);
-      },
-      onError: error => toast({ title: 'Erro', description: getErrorMessage(error, 'Falha ao importar'), variant: 'destructive' }),
-    });
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
-      <DialogTrigger asChild><Button size="sm" variant="outline" disabled={!accountId}><Upload className="h-4 w-4 mr-1" /> Importar extrato</Button></DialogTrigger>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader><DialogTitle>Importar extrato bancário</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <Input type="file" accept=".csv,.xls,.xlsx" onChange={e => e.target.files?.[0] && onFile(e.target.files[0])} />
-          {headers.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 text-xs bg-muted/40 rounded px-2 py-1.5">
-              <span className="text-muted-foreground">Cabeçalho detectado na linha</span>
-              <Input
-                type="number"
-                min={1}
-                max={Math.min(matrix.length, 20)}
-                value={headerRowIndex + 1}
-                onChange={(e) => changeHeaderRow(Number(e.target.value) - 1)}
-                className="h-7 w-16"
-              />
-              <span className="text-muted-foreground truncate max-w-full">
-                Colunas: {headers.slice(0, 6).join(' · ')}{headers.length > 6 ? ` (+${headers.length - 6})` : ''}
-              </span>
-            </div>
-          )}
-          {headers.length > 0 && autoGuessFailed && (
-            <div className="text-xs rounded border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 py-1.5">
-              Não foi possível identificar automaticamente as colunas Data / Descrição / Valor. Selecione manualmente abaixo (ou ajuste a linha do cabeçalho).
-            </div>
-          )}
-          {headers.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              <MappingSelect label="Data *" value={mapping.date} onChange={v => setMapping(m => ({ ...m, date: v }))} headers={headers} />
-              <MappingSelect label="Descrição *" value={mapping.description} onChange={v => setMapping(m => ({ ...m, description: v }))} headers={headers} />
-              <MappingSelect label="Valor (com sinal)" value={mapping.amount || ''} onChange={v => setMapping(m => ({ ...m, amount: v }))} headers={headers} />
-              <MappingSelect label="Entrada (crédito)" value={mapping.inflow || ''} onChange={v => setMapping(m => ({ ...m, inflow: v }))} headers={headers} />
-              <MappingSelect label="Saída (débito)" value={mapping.outflow || ''} onChange={v => setMapping(m => ({ ...m, outflow: v }))} headers={headers} />
-              <MappingSelect label="Documento" value={mapping.document || ''} onChange={v => setMapping(m => ({ ...m, document: v }))} headers={headers} />
-              <MappingSelect label="Saldo" value={mapping.balance || ''} onChange={v => setMapping(m => ({ ...m, balance: v }))} headers={headers} />
-              <MappingSelect label="Centro de Custo" value={mapping.costCenter || ''} onChange={v => setMapping(m => ({ ...m, costCenter: v }))} headers={headers} />
-            </div>
-          )}
-          {headers.length > 0 && (
-            <Button variant="outline" size="sm" onClick={buildPreview} disabled={!mapping.date || !mapping.description || (!mapping.amount && !mapping.inflow && !mapping.outflow)}>
-              Gerar preview
-            </Button>
-          )}
-          {preview.length > 0 && (
-            <div className="max-h-60 overflow-auto border rounded">
-              <Table>
-                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>Centro de Custo</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {preview.map((p, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-xs">{new Date(p.posted_at).toLocaleDateString('pt-BR')}</TableCell>
-                      <TableCell className="text-xs truncate max-w-[300px]">{p.description}</TableCell>
-                      <TableCell className="text-xs">{p.cost_center || '-'}</TableCell>
-                      <TableCell className="text-right text-xs">{fmt(p.amount)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button disabled={!accountId || !file || importMut.isPending || !mapping.date || !mapping.description} onClick={submit}>
-            {importMut.isPending ? 'Importando...' : 'Importar'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+function ExtratoTab({transactions,suggested}:{transactions:BankTransaction[];suggested:SuggestedMatch[]}) {
+ const {filters,setFilter,resetFilters,activeCount}=useListFilters({search:'',status:'all',direction:'all'},'tx_');
+ const filtered=transactions.filter(row=>matchesSearch(filters.search,row.description,row.document_number,row.cost_center)&&(filters.status==='all'||row.reconciliation_status===filters.status)&&(filters.direction==='all'||row.transaction_type===filters.direction));
+ return <Card><CardContent className="p-0"><div className="p-3"><ListFilterBar fields={[
+  {key:'search',label:'Buscar transação',type:'search',value:filters.search,onChange:value=>setFilter('search',value),placeholder:'Descrição, documento ou centro de custo'},
+  {key:'status',label:'Status anterior',value:filters.status,onChange:value=>setFilter('status',value),options:[{value:'all',label:'Todos'},...filterOptions(transactions.map(row=>row.reconciliation_status)).map(value=>({value,label:STATUS_LABEL[value]||value}))]},
+  {key:'direction',label:'Movimento',value:filters.direction,onChange:value=>setFilter('direction',value),options:[{value:'all',label:'Entradas e saídas'},{value:'credit',label:'Entradas'},{value:'debit',label:'Saídas'}]},
+ ]} onReset={resetFilters} activeCount={activeCount} resultCount={filtered.length} totalCount={transactions.length} description="Filtros sobre os registros históricos carregados."/></div>
+ <Table><TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>Centro de custo</TableHead><TableHead>Valor</TableHead><TableHead>Status anterior</TableHead><TableHead>Sugestão anterior</TableHead></TableRow></TableHeader><TableBody>
+ {filtered.map(t=><TableRow key={t.id}><TableCell>{new Date(t.posted_at).toLocaleDateString('pt-BR')}</TableCell><TableCell>{t.description}</TableCell><TableCell>{t.cost_center||'—'}</TableCell>
+ <TableCell>{t.transaction_type==='debit'?'Saída':'Entrada'} · {fmt(Math.abs(Number(t.amount)))}</TableCell><TableCell>{STATUS_LABEL[t.reconciliation_status]||t.reconciliation_status}</TableCell>
+ <TableCell>{suggested.filter(s=>s.bank_transaction_id===t.id).map(s=><p key={s.id}>{s.financial_obligations?.description||'Sem título'} · {fmt(s.amount_matched)} · sugestão não confirmada</p>)}</TableCell></TableRow>)}
+ {!filtered.length&&<TableRow><TableCell colSpan={6}>Nenhum registro histórico neste filtro.</TableCell></TableRow>}
+ </TableBody></Table></CardContent></Card>;
 }
-
-function NewManualTransactionDialog({ accountId }: { accountId: string }) {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    posted_at: todayIso(),
-    description: '',
-    amount: '',
-    type: 'debit' as BankTransactionType,
-    document_number: '',
-    cost_center: '',
-  });
-  const create = useCreateManualTransaction();
-  const { data: costCenters = [] } = useCostCenters();
-
-  const reset = () => setForm({
-    posted_at: todayIso(),
-    description: '',
-    amount: '',
-    type: 'debit',
-    document_number: '',
-    cost_center: '',
-  });
-
-  const handleSubmit = () => {
-    if (!accountId) return;
-    const amountNum = Math.abs(Number(form.amount));
-    const finalAmount = form.type === 'credit' ? amountNum : -amountNum;
-
-    create.mutate({
-      bank_account_id: accountId,
-      posted_at: form.posted_at,
-      description: form.description,
-      amount: finalAmount,
-      transaction_type: form.type,
-      document_number: form.document_number,
-      cost_center: form.cost_center,
-    }, {
-      onSuccess: () => {
-        toast({ title: 'Lançamento manual criado' });
-        setOpen(false);
-        reset();
-      },
-      onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
-    });
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) reset(); }}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={!accountId}>
-          <Plus className="h-4 w-4 mr-1" /> Lançamento manual
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Novo lançamento manual</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Data</Label>
-              <Input
-                type="date"
-                value={form.posted_at}
-                onChange={e => setForm(f => ({ ...f, posted_at: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Tipo</Label>
-              <Select
-                value={form.type}
-                onValueChange={value => setForm(f => ({ ...f, type: value as BankTransactionType }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="credit">Crédito (Entrada)</SelectItem>
-                  <SelectItem value="debit">Débito (Saída)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Descrição</Label>
-            <Input
-              placeholder="Ex: Pagamento fornecedor X"
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Valor (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0,00"
-                value={form.amount}
-                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Documento / Ref</Label>
-              <Input
-                placeholder="Opcional"
-                value={form.document_number}
-                onChange={e => setForm(f => ({ ...f, document_number: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Centro de Custo</Label>
-            <Select
-              value={form.cost_center}
-              onValueChange={v => setForm(f => ({ ...f, cost_center: v }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um centro de custo (opcional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Nenhum</SelectItem>
-                {costCenters.map(cc => (
-                  <SelectItem key={cc} value={cc}>{cc}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button
-            disabled={!form.description || !form.amount || create.isPending}
-            onClick={handleSubmit}
-          >
-            Salvar lançamento
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function MappingSelect({ label, value, onChange, headers }: { label: string; value: string; onChange: (v: string) => void; headers: string[] }) {
-  return (
-    <div>
-      <Label className="text-xs">{label}</Label>
-      <Select value={value || '__none__'} onValueChange={v => onChange(v === '__none__' ? '' : v)}>
-        <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__none__">—</SelectItem>
-          {headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
-
-function ExtratoTab({ transactions, suggested, obligations }: { transactions: BankTransaction[]; suggested: SuggestedMatch[]; obligations: FinancialObligation[] }) {
-  const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', direction: 'all' }, 'tx_');
-  const filtered = transactions.filter(row => matchesSearch(filters.search, row.description, row.document_number, row.cost_center) && (filters.status === 'all' || row.reconciliation_status === filters.status) && (filters.direction === 'all' || (filters.direction === 'in' ? row.amount > 0 : row.amount < 0)));
-  const accept = useAcceptMatch();
-  const reject = useRejectMatch();
-  const { toast } = useToast();
-  const [rejectId, setRejectId] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
-
-  const suggMap = useMemo(() => {
-    const m = new Map<string, SuggestedMatch>();
-    for (const s of suggested) m.set(s.bank_transaction_id, s);
-    return m;
-  }, [suggested]);
-
-  return (
-    <Card><CardContent className="p-0">
-      <div className="p-3"><ListFilterBar fields={[
-        { key: 'search', label: 'Buscar transação', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Descrição, documento ou centro de custo' },
-        { key: 'status', label: 'Conciliação', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, ...filterOptions(transactions.map(row => row.reconciliation_status)).map(value => ({ value, label: STATUS_LABEL[value] || value }))] },
-        { key: 'direction', label: 'Movimento', value: filters.direction, onChange: value => setFilter('direction', value), options: [{ value: 'all', label: 'Entradas e saídas' }, { value: 'in', label: 'Entradas' }, { value: 'out', label: 'Saídas' }] },
-      ]} onReset={resetFilters} activeCount={activeCount} resultCount={filtered.length} totalCount={transactions.length} description="Filtros do extrato; os indicadores acima mantêm o período completo." /></div>
-      <Table>
-        <TableHeader><TableRow>
-          <TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>C. Custo</TableHead><TableHead className="text-right">Valor</TableHead>
-          <TableHead>Status</TableHead><TableHead>Candidato</TableHead><TableHead>Ações</TableHead>
-        </TableRow></TableHeader>
-        <TableBody>
-          {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Sem transações para o período e filtros.</TableCell></TableRow>}
-          {filtered.map(t => {
-            const s = suggMap.get(t.id);
-            return (
-              <TableRow key={t.id}>
-                <TableCell className="text-xs">{new Date(t.posted_at).toLocaleDateString('pt-BR')}</TableCell>
-                <TableCell className="text-xs max-w-[380px] truncate">{t.description}</TableCell>
-                <TableCell className="text-xs">{t.cost_center || '-'}</TableCell>
-                <TableCell className={`text-right text-xs ${t.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(t.amount)}</TableCell>
-                <TableCell><Badge variant={t.reconciliation_status === 'matched' ? 'default' : 'secondary'} className="text-[10px]">{STATUS_LABEL[t.reconciliation_status] || t.reconciliation_status}</Badge></TableCell>
-                <TableCell className="text-xs">
-                  {s ? (
-                    <div>
-                      <div className="truncate max-w-[250px]">{s.financial_obligations?.description || '—'}</div>
-                      <div className="text-[10px] text-muted-foreground">Score {Number(s.confidence_score || 0).toFixed(0)} · {fmt(s.amount_matched)}</div>
-                    </div>
-                  ) : <span className="text-muted-foreground">—</span>}
-                </TableCell>
-                <TableCell>
-                  {s ? (
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => accept.mutate(s.id, {
-                        onSuccess: () => toast({ title: 'Match aceito' }),
-                        onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
-                      })}><Check className="h-3 w-3" /></Button>
-                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setRejectId(s.id); setRejectReason(''); }}><X className="h-3 w-3" /></Button>
-                      <ManualMatchDialog transaction={t} obligations={obligations} />
-                    </div>
-                  ) : (
-                    <ManualMatchDialog transaction={t} obligations={obligations} />
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-      <Dialog open={!!rejectId} onOpenChange={(v) => !v && setRejectId(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Rejeitar sugestão</DialogTitle></DialogHeader>
-          <Textarea rows={3} placeholder="Motivo" value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectId(null)}>Cancelar</Button>
-            <Button disabled={!rejectReason.trim()} onClick={() => rejectId && reject.mutate({ matchId: rejectId, reason: rejectReason }, {
-              onSuccess: () => { toast({ title: 'Sugestão rejeitada' }); setRejectId(null); },
-              onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
-            })}>Rejeitar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </CardContent></Card>
-  );
-}
-
-function ManualMatchDialog({ transaction, obligations }: { transaction: BankTransaction; obligations: FinancialObligation[] }) {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [pickedId, setPickedId] = useState<string | null>(null);
-  const [amount, setAmount] = useState('');
-  const [reason, setReason] = useState('');
-  const create = useCreateManualMatch();
-  const direction = transaction.amount >= 0 ? 'inflow' : 'outflow';
-  const candidates = useMemo(() => obligations.filter(o =>
-    o.direction === direction && Number(o.open_balance || 0) > 0 && o.status !== 'paid' && o.status !== 'cancelled'
-    && (search === '' || (o.description || '').toLowerCase().includes(search.toLowerCase()) || (o.counterparty_name || '').toLowerCase().includes(search.toLowerCase()))
-  ).slice(0, 100), [obligations, search, direction]);
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setPickedId(null); setAmount(''); setReason(''); setSearch(''); } }}>
-      <DialogTrigger asChild><Button size="sm" variant="ghost" className="h-7 px-2"><Link2 className="h-3 w-3" /></Button></DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>Conciliar manualmente</DialogTitle></DialogHeader>
-        <div className="text-xs text-muted-foreground">
-          Transação: {new Date(transaction.posted_at).toLocaleDateString('pt-BR')} · {transaction.description} · <b>{fmt(transaction.amount)}</b>
-        </div>
-        <Input placeholder="Buscar título por descrição ou contraparte..." value={search} onChange={e => setSearch(e.target.value)} />
-        <div className="max-h-64 overflow-auto border rounded">
-          <Table>
-            <TableHeader><TableRow><TableHead></TableHead><TableHead>Descrição</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Saldo</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {candidates.map(o => (
-                <TableRow key={o.id} className={pickedId === o.id ? 'bg-accent' : 'cursor-pointer'} onClick={() => { setPickedId(o.id); setAmount(String(Math.min(Math.abs(transaction.amount), Number(o.open_balance || 0)))); }}>
-                  <TableCell><input type="radio" checked={pickedId === o.id} readOnly /></TableCell>
-                  <TableCell className="text-xs">{o.description || '—'}<div className="text-[10px] text-muted-foreground">{o.counterparty_name}</div></TableCell>
-                  <TableCell className="text-xs">{OBLIGATION_TYPE_LABEL[o.obligation_type] || o.obligation_type}</TableCell>
-                  <TableCell className="text-right text-xs">{fmt(o.open_balance)}</TableCell>
-                </TableRow>
-              ))}
-              {candidates.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-4">Nenhum título compatível encontrado.</TableCell></TableRow>}
-            </TableBody>
-          </Table>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div><Label className="text-xs">Valor a conciliar</Label><Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} /></div>
-          <div><Label className="text-xs">Observação (opcional)</Label><Input value={reason} onChange={e => setReason(e.target.value)} /></div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button disabled={!pickedId || !Number(amount) || create.isPending} onClick={() => create.mutate({
-            bank_transaction_id: transaction.id,
-            financial_obligation_id: pickedId!,
-            amount_matched: Number(amount),
-            reason: reason || null,
-          }, {
-            onSuccess: () => { toast({ title: 'Conciliação criada' }); setOpen(false); setPickedId(null); setAmount(''); setReason(''); },
-            onError: error => toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' }),
-          })}>Conciliar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function TitulosTab({ obligations }: { obligations: FinancialObligation[] }) {
   return (
     <Card><CardContent className="p-0">
@@ -713,7 +260,7 @@ function TitulosTab({ obligations }: { obligations: FinancialObligation[] }) {
           <TableHead className="text-right">Saldo</TableHead><TableHead>Status</TableHead>
         </TableRow></TableHeader>
         <TableBody>
-          {obligations.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Rode "Sincronizar títulos" para popular o livro financeiro.</TableCell></TableRow>}
+          {obligations.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Nenhum título histórico nesta consulta.</TableCell></TableRow>}
           {obligations.map(o => (
             <TableRow key={o.id}>
               <TableCell className="text-xs">{o.due_date ? new Date(o.due_date).toLocaleDateString('pt-BR') : '—'}</TableCell>

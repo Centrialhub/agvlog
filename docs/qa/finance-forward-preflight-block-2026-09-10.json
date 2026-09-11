@@ -1,0 +1,44 @@
+[
+  {
+    "file": "20260830142048_enable_audited_delivery_reallocation.sql",
+    "sha256": "b39c73e86ed3881957b804e5ee5d39e774eeae9f5a425c4ff21402c4922f5987",
+    "output": "docs/qa/finance-forward-preflight-20260830142048.sql",
+    "checks": 45
+  },
+  {
+    "file": "20260830151949_audit_delivery_document_metadata.sql",
+    "sha256": "1f3717d1e61e577e18ce7273a171fd545d21e0e70b59d9356edabc69f4388b64",
+    "output": "docs/qa/finance-forward-preflight-20260830151949.sql",
+    "checks": 5
+  },
+  {
+    "file": "20260830161722_make_closing_reports_attempt_aware.sql",
+    "sha256": "2dc6ff614419b48d11804dbdc67987b5c0cfc2554cf3e42b06fdc1e8dfef735e",
+    "output": "docs/qa/finance-forward-preflight-20260830161722.sql",
+    "checks": 4
+  },
+  {
+    "file": "20260830165149_make_closing_drafts_atomic.sql",
+    "sha256": "cf37591be626ea87e15c41fc34e668234c1d8080b6a3057dc605311c2a61781b",
+    "output": "docs/qa/finance-forward-preflight-20260830165149.sql",
+    "checks": 2
+  },
+  {
+    "file": "20260830174819_audit_closing_lifecycle_and_charge_claims.sql",
+    "sha256": "151471e20fd75f0ef3335b521602506139cdd5d2632b5c9ef587525f9e3399a3",
+    "output": "docs/qa/finance-forward-preflight-20260830174819.sql",
+    "checks": 2
+  },
+  {
+    "file": "20260830183929_audit_receivable_payments_and_reversals.sql",
+    "sha256": "9e98c2312ec41de519557e1161ff595ec6b719709d2b07090963e65509d0d07f",
+    "output": "docs/qa/finance-forward-preflight-20260830183929.sql",
+    "checks": 2
+  },
+  {
+    "file": "20260830192908_audit_client_invoice_lifecycle.sql",
+    "sha256": "03cd774ed14b4f4eda00d93ef3479f362dd673b9a4d332e1783410d7127b4510",
+    "output": "docs/qa/finance-forward-preflight-20260830192908.sql",
+    "checks": 2
+  }
+]

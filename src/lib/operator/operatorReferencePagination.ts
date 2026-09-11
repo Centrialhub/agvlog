@@ -99,13 +99,14 @@ interface RpcResponse {
   error: unknown;
 }
 
-const rpc = supabase.rpc.bind(supabase) as unknown as (
-  name: 'list_operator_reference_page_v1',
-  args: ReferencePageArgs,
-) => PromiseLike<RpcResponse>;
-
 export async function callOperatorReferencePage(args: ReferencePageArgs): Promise<unknown> {
-  const { data, error } = await rpc('list_operator_reference_page_v1', args);
+  const client = supabase as unknown as {
+    rpc: (
+      name: 'list_operator_reference_page_v1',
+      rpcArgs: ReferencePageArgs,
+    ) => PromiseLike<RpcResponse>;
+  };
+  const { data, error } = await client.rpc('list_operator_reference_page_v1', args);
   if (error) throw error;
   return data;
 }

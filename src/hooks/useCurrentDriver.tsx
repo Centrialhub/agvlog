@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useTenant } from './useTenant';
 import { TRIP_ACTIVE_STATUSES, LOAD_ACTIVE_STATUSES } from '@/lib/status';
-import { DRIVER_TRIP_SELECT, normalizeDriverTrip } from '@/lib/driverTrip';
+import { DRIVER_TRIP_SELECT, normalizeDriverTrip, selectDriverCurrentTrip, type DriverTripQueryRow } from '@/lib/driverTrip';
 
 export interface CurrentDriver {
   id: string;
@@ -54,12 +54,14 @@ export function useActiveTrip(driverId: string | undefined) {
           .select(DRIVER_TRIP_SELECT)
           .eq('driver_id', driverId)
           .in('status', TRIP_ACTIVE_STATUSES)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(20);
 
         if (tripsError) throw tripsError;
 
-        if (activeStatusTrips && activeStatusTrips.length > 0) {
-          return normalizeDriverTrip(activeStatusTrips[0]);
+        const selectedTrip=selectDriverCurrentTrip((activeStatusTrips??[]) as DriverTripQueryRow[]);
+        if (selectedTrip) {
+          return normalizeDriverTrip(selectedTrip);
         }
 
         // 2. If no trip is explicitly active, look for LOADS assigned to the driver

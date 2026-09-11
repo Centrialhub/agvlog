@@ -1,0 +1,13 @@
+import {beforeEach,it,expect,vi} from 'vitest';
+import {readRecordedCostSummary} from '@/lib/financial/recordedCostSummaryClient';
+import {recordedCostSummarySchema} from '@/lib/financial/recordedCostSummaryContract';
+const rpc=vi.hoisted(()=>vi.fn());vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc}}));beforeEach(()=>rpc.mockReset());
+const tenant=crypto.randomUUID(),filters={from:null,to:null,category:null,costCenter:null};
+const result={version:1,tenant_id:tenant,from:null,to:null,category:null,cost_center:null,coverage:'recorded_batches_manual_and_payroll_remuneration',coverage_complete:false,excludes_bank_cash:true,total_count:1501,cancelled_count:1,invalid_count:0,payroll_unclassified_count:0,recorded_date_count:1,totals_valid:true,total_cents:'10000000000000001',categories:[{category:'payroll',item_count:1501,amount_cents:'10000000000000001'}],cost_centers:[{cost_center_id:null,cost_center_name:null,item_count:1501,amount_cents:'10000000000000001'}],months:[{month:'2026-09',item_count:1501,amount_cents:'10000000000000001'}],excluded_sources:['legacy_driver_expenses','maintenance_orders','settlement_composition','payroll_reimbursements_and_advances']};
+it('queries full declared coverage with explicit filters and preserves bigint cents',async()=>{rpc.mockResolvedValue({data:result,error:null});expect((await readRecordedCostSummary(tenant,filters)).total_cents).toBe('10000000000000001');expect(rpc).toHaveBeenCalledWith('get_finance_recorded_cost_summary',{_tenant_id:tenant,_from:null,_to:null,_category:null,_cost_center:null});});
+it('rejects wrong scope, fabricated complete coverage and inconsistent sums',async()=>{
+ for(const override of [{tenant_id:crypto.randomUUID()},{cost_center:'unassigned'},{coverage_complete:true},{excludes_bank_cash:false},{excluded_sources:[]},{categories:[{category:'payroll',item_count:1501,amount_cents:'100'}]},{total_count:1502}]){rpc.mockResolvedValue({data:{...result,...override},error:null});await expect(readRecordedCostSummary(tenant,filters)).rejects.toThrow();}
+});
+it('retains nullable invalid categories and months while refusing numeric totals for invalid sources',()=>{
+ const invalid={...result,total_count:1,invalid_count:1,totals_valid:false,total_cents:null,categories:[{category:null,item_count:1,amount_cents:null}],cost_centers:[{cost_center_id:null,cost_center_name:null,item_count:1,amount_cents:null}],months:[{month:null,item_count:1,amount_cents:null}]};expect(recordedCostSummarySchema.safeParse(invalid).success).toBe(true);expect(recordedCostSummarySchema.safeParse({...invalid,total_cents:'0'}).success).toBe(false);
+});

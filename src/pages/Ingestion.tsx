@@ -45,10 +45,9 @@ import { normalizeNfeAccessKey } from '@/lib/fiscalDocuments/nfeAccessKey';
 
 import { supabase } from '@/integrations/supabase/client';
 import type { Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/useTenant';
 import { useDrivers as useOperatorDrivers } from '@/hooks/useDrivers';
-import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { useAuth } from '@/hooks/useAuth';
 import { useItemPreparationWrites } from '@/hooks/useItemPreparationWrites';
 import { prepareOrderItems } from '@/lib/ingestion/prepareOrderItems';
@@ -73,10 +72,6 @@ interface OrtExtractionDocument extends Partial<Omit<OrtReviewDocument, 'documen
 interface OrtExtractionResponse {
   error?: string;
   documents?: OrtExtractionDocument[];
-}
-
-interface SsxInsertPersonResponse {
-  error?: unknown;
 }
 
 interface IngestionFileBuffer {
@@ -170,8 +165,6 @@ export default function Ingestion() {
   const { data: loads = [] } = useLoads();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
   const { currentTenant } = useTenant();
-  const { isEnabled } = useTenantCapabilities();
-  const ssxEnabled = isEnabled('ssx');
   const { user } = useAuth();
   const createDoc = useCreateFiscalDocument();
   const createOrder = useCreateOrder();
@@ -212,7 +205,6 @@ export default function Ingestion() {
   const [pickupOrderId, setPickupOrderId] = useState<string | null>(null);
   const [pickupOrder, setPickupOrder] = useState<PickupOrder | null>(null);
   const [noPickup, setNoPickup] = useState(false);
-  const [syncSsxClients, setSyncSsxClients] = useState(false);
 
   // Reprocess flag: when set via ?reprocess=BATCH_ID query param, the page acts
   // as a re-run of an existing ingestion batch. Deduplication against existing
@@ -245,23 +237,6 @@ export default function Ingestion() {
       // A preferência permanece válida nesta sessão mesmo sem persistência local.
     }
   }, []);
-
-  // Conta SSX ativa do tenant (1ª disponível) para sincronizar clientes recém-criados
-  const { data: ssxAccountForClients } = useQuery({
-    queryKey: ['ssx_account_for_client_sync', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return null;
-      const { data } = await supabase
-        .from('integration_accounts')
-        .select('id, username, status')
-        .eq('tenant_id', currentTenant.id)
-        .eq('status', 'ok')
-        .limit(1)
-        .maybeSingle();
-      return data || null;
-    },
-    enabled: !!currentTenant && ssxEnabled,
-  });
 
   const onlyDigits = (s: string | null | undefined) => String(s || '').replace(/\D/g, '');
 
@@ -1051,28 +1026,6 @@ export default function Ingestion() {
         });
       }
 
-      // Sincronização opcional com SSX (InsertPerson) para os clientes recém-criados
-      if (ssxEnabled && syncSsxClients && ssxAccountForClients?.id && currentTenant && clientsToSyncSsx.size > 0) {
-        let okCount = 0;
-        let errCount = 0;
-        for (const cId of clientsToSyncSsx) {
-          try {
-            const { data, error } = await supabase.functions.invoke<SsxInsertPersonResponse>('ssx-insert-person-client', {
-              body: { tenant_id: currentTenant.id, client_id: cId, integration_account_id: ssxAccountForClients.id },
-            });
-            if (error || data?.error) errCount++;
-            else okCount++;
-          } catch {
-            errCount++;
-          }
-        }
-        toast({
-          title: 'Sincronização SSX concluída',
-          description: `${okCount} cliente(s) sincronizados${errCount ? `, ${errCount} com erro` : ''}.`,
-          variant: errCount && !okCount ? 'destructive' : 'default',
-        });
-      }
-
       toast({
         title: 'NF-es salvas',
         description: loadLabel
@@ -1688,23 +1641,6 @@ export default function Ingestion() {
       )}
       {step === 2 && (
         <>
-        {ssxEnabled && ssxAccountForClients?.id && (
-          <div className="mb-3 flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
-            <div className="flex items-center gap-2">
-              <input
-                id="sync-ssx-clients"
-                type="checkbox"
-                className="h-4 w-4 accent-primary"
-                checked={syncSsxClients}
-                onChange={(e) => setSyncSsxClients(e.target.checked)}
-              />
-              <label htmlFor="sync-ssx-clients" className="cursor-pointer">
-                Sincronizar clientes recém-criados com a SSX (InsertPerson)
-              </label>
-            </div>
-            <span className="text-xs text-muted-foreground">conta: {ssxAccountForClients.username || 'SSX'}</span>
-          </div>
-        )}
         <ValidationStep
           docs={validatedDocs}
           orders={validatedOrders}

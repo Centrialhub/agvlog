@@ -4,6 +4,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { requireIntegrationCapability } from "../_shared/capabilities.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { requireActiveTenant } from "../_shared/active-tenant.ts";
 
 interface Body {
   action: "emit" | "cancel" | "consult";
@@ -46,6 +47,8 @@ Deno.serve(async (req) => {
     .from("nfse_documents").select("*").eq("id", body.nfse_id).maybeSingle();
   if (dErr) return json({ error: dErr.message }, 400);
   if (!doc) return json({ error: "NFS-e não encontrada" }, 404);
+  const tenantContextError = requireActiveTenant(req, doc.tenant_id);
+  if (tenantContextError) return tenantContextError;
 
   const { data: membership } = await admin
     .from("tenant_memberships")

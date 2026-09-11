@@ -1,3 +1,4 @@
+import {invalidateAccountReview} from '@/lib/financial/invalidateAccountReview';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
@@ -70,7 +71,7 @@ export function useCreatePayable() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['payables'] }),
+    onSuccess: async (data) => { await Promise.all([invalidateAccountReview(qc,data.tenant_id),qc.invalidateQueries({ queryKey: ['payables'] }),Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]),qc.invalidateQueries({ queryKey: ['finance-settlement-expense-context'] })]); },
   });
 }
 
@@ -91,6 +92,6 @@ export function useUpdatePayable() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['payables'] }),
+    onSuccess: async (data) => { await Promise.all([invalidateAccountReview(qc,data.tenant_id),qc.invalidateQueries({ queryKey: ['payables'] }),Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]),qc.invalidateQueries({ queryKey: ['finance-settlement-expense-context'] })]); },
   });
 }

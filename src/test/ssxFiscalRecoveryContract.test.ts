@@ -10,15 +10,18 @@ describe('SSX credential recovery contract', () => {
   const login = source('supabase', 'functions', 'ssx-login', 'index.ts');
   const pipeline = source('supabase', 'functions', 'agvlog-pipeline-run', 'index.ts');
   const settings = source('src', 'pages', 'Settings.tsx');
+  const workspaceManagement = source('supabase', 'migrations', '20260910135800_workspace_ssx_account_management.sql');
 
   it('resets stale authentication state when an administrator replaces credentials', () => {
-    expect(upsert).toContain('token_cache: null');
-    expect(upsert).toContain('token_expires_at: null');
-    expect(upsert).toContain('last_error: null');
+    expect(workspaceManagement).toContain('token_cache = null');
+    expect(workspaceManagement).toContain('token_expires_at = null');
+    expect(workspaceManagement).toContain('last_error = null');
     expect(upsert).toContain('"credential_reentry_required"');
     expect(upsert).toContain('delete settings[key]');
-    expect(upsert).toContain('hashauth: hashauth || currentHashauth');
-    expect(upsert).toContain('hashcode: hashcode || currentHashcode');
+    expect(upsert).toContain('_hashauth: effectiveHashauth');
+    expect(upsert).toContain('_hashcode: effectiveHashcentral');
+    expect(upsert).toContain('SSX_HASHAUTH_REQUIRED');
+    expect(upsert).toContain('upsert_workspace_ssx_account_v1');
   });
 
   it('distinguishes credential re-entry from provider rate limiting', () => {
@@ -39,6 +42,13 @@ describe('SSX credential recovery contract', () => {
     expect(settings).toContain('Deixe em branco para manter o atual');
     expect(settings).not.toContain('password_encrypted');
     expect(settings).not.toContain('token_cache');
+    expect(settings).toContain('delete_workspace_ssx_account_v1');
+  });
+
+  it('runs the ingestion pipeline through the workspace SSX registry', () => {
+    expect(pipeline).toContain('workspace_ssx_accounts');
+    expect(pipeline).toContain('registry.integration_account_id');
+    expect(pipeline).toContain('.eq("id", registry.integration_account_id)');
   });
 });
 

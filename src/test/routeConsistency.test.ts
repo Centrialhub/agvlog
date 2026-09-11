@@ -35,6 +35,25 @@ const baseLoad = (over: any = {}) => ({
 });
 
 describe('validateRouteConsistency', () => {
+  it('bloqueia a mistura manual de fornecedores mesmo quando o rascunho declara apenas um', () => {
+    const result = validateRouteConsistency({
+      loads: [baseLoad({ items: [
+        { fiscal_document_id: 'FD1', fiscal_documents: { supplier_id: 'supplier-1' } },
+        { fiscal_document_id: 'FD2', fiscal_documents: { supplier_id: 'supplier-2' } },
+      ] })],
+      stops: [baseStop({ fiscal_document_ids: ['FD1', 'FD2'], supplier_id: 'supplier-1' })],
+      vehicle_id: 'V1', driver_id: 'D1', planned_start_at: '2030-01-01T08:00',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.blockingErrors.join(' ')).toContain('fornecedores diferentes');
+  });
+
+  it('sinaliza fornecedor desconhecido sem inventar um responsável pela descarga', () => {
+    const result = validateRouteConsistency({ loads: [baseLoad()], stops: [baseStop()],
+      vehicle_id: 'V1', driver_id: 'D1', planned_start_at: '2030-01-01T08:00' });
+    expect(result.valid).toBe(true);
+    expect(result.warnings.join(' ')).toContain('fornecedor pendente');
+  });
   it('rota pronta sem warnings é válida', () => {
     const r = validateRouteConsistency({
       loads: [baseLoad()],

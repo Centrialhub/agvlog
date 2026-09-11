@@ -14,6 +14,10 @@ const superseded = readFileSync(
   'utf8',
 );
 const cutover = readFileSync('docs/qa/DRIVER-ARRIVAL-GPS-CUTOVER-2026-08-31.sql', 'utf8');
+const release = readFileSync(
+  'supabase/migrations/20260910132149_require_driver_arrival_gps_cutover.sql',
+  'utf8',
+);
 const baseline = readFileSync('supabase/migrations/20260824224152_baseline.sql', 'utf8');
 const legacyDefinition = baseline.match(
   /CREATE OR REPLACE FUNCTION public\.driver_mark_arrival\(_stop_id uuid\)[\s\S]*?END; \$function\$;/,
@@ -110,7 +114,7 @@ describe('driver arrival additive rollout in PostgreSQL', () => {
 
   it('cuts over only after validating both overloads and keeps the GPS RPC', async () => {
     await db.exec(additive);
-    await db.exec(cutover);
+    await db.exec(release);
     expect((await db.query(`select
       to_regprocedure('public.driver_mark_arrival(uuid)') legacy,
       to_regprocedure('public.driver_mark_arrival(uuid,double precision,double precision,double precision)') gps`)).rows)
@@ -137,5 +141,15 @@ describe('driver arrival additive rollout in PostgreSQL', () => {
     await db.exec('rollback');
     expect((await db.query(`select to_regprocedure('public.driver_mark_arrival(uuid)') legacy`)).rows)
       .toEqual([{legacy:'driver_mark_arrival(uuid)'}]);
+  });
+
+  it('keeps the automatic release equivalent to the reviewed cutover', () => {
+    for (const marker of [
+      '71506404e6bafbaeb3dc17a3e2530a1c',
+      '74a957d4c16ef52847b8c7c6859f5e20',
+      'drop function public.driver_mark_arrival(uuid)',
+      "notify pgrst, 'reload schema'",
+    ]) expect(release).toContain(marker);
+    expect(cutover).toContain('deliberately outside supabase/migrations');
   });
 });

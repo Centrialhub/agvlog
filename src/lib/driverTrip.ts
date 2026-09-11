@@ -69,6 +69,12 @@ export function normalizeDriverTrip(row: DriverTripQueryRow): DriverTrip {
   };
 }
 
+export function selectDriverCurrentTrip(rows: DriverTripQueryRow[]): DriverTripQueryRow | null {
+  const running=rows.filter(row=>row.status==='in_transit'||row.status==='in_progress');
+  if(running.length>1)throw new Error('Motorista possui mais de uma viagem em andamento. A operação precisa reconciliar o despacho.');
+  return running[0]??rows[0]??null;
+}
+
 export function resolveCanonicalTripLink(
   links: CanonicalLoadTripLink[] | null | undefined,
   activeStatuses: readonly string[],

@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ChevronUp, ChevronDown, AlertTriangle, Wand2, CheckCircle2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, AlertTriangle, Wand2, CheckCircle2, MapPin } from 'lucide-react';
 import type { RouteStopDraft } from '@/lib/route-planning/routePlanningTypes';
-import { coordinateFromInput } from '@/lib/route-planning/stopCoordinates';
+import type { ResolvedLocation } from '@/lib/geocoding';
+import { LocationPicker } from '@/components/maps/LocationPicker';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface Props {
+  tenantId: string;
   stops: RouteStopDraft[];
   onMove: (id: string, dir: 'up' | 'down') => void;
   onUpdate: (id: string, patch: Partial<RouteStopDraft>) => void;
@@ -34,8 +38,40 @@ const riskStyle = (level: string) => {
 };
 
 const riskLabel = (level: string) => level === 'critical' ? 'Crítico' : level === 'warning' ? 'Atenção' : 'Ok';
+const hasVerifiedLocation = (stop: RouteStopDraft) =>
+  typeof stop.latitude === 'number' && typeof stop.longitude === 'number'
+  && ['address_geocoded', 'map_selected'].includes(stop.location_source || '');
 
-export default function StopDraftTable({ stops, onMove, onUpdate }: Props) {
+export default function StopDraftTable({ tenantId, stops, onMove, onUpdate }: Props) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingAddress, setEditingAddress] = useState('');
+  const [editingLocation, setEditingLocation] = useState<ResolvedLocation | null>(null);
+  const editingStop = stops.find((stop) => stop.id === editingId) ?? null;
+
+  const openLocation = (stop: RouteStopDraft) => {
+    setEditingId(stop.id);
+    setEditingAddress(stop.location_address || stop.destination);
+    setEditingLocation(typeof stop.latitude === 'number' && typeof stop.longitude === 'number' ? {
+      latitude: stop.latitude, longitude: stop.longitude,
+      source: stop.location_source === 'address_geocoded' ? 'address_geocoded' : 'map_selected',
+      address: stop.location_address || stop.destination, provider: stop.location_provider || null,
+      accuracy_m: stop.location_accuracy_m ?? null, confidence: stop.location_confidence ?? null,
+      audit: stop.location_audit || {},
+    } : null);
+  };
+
+  const applyLocation = () => {
+    if (!editingStop || !editingLocation) return;
+    onUpdate(editingStop.id, {
+      latitude: editingLocation.latitude, longitude: editingLocation.longitude,
+      location_source: editingLocation.source, location_address: editingLocation.address || editingAddress,
+      location_provider: editingLocation.provider, location_accuracy_m: editingLocation.accuracy_m,
+      location_confidence: editingLocation.confidence, location_audit: editingLocation.audit,
+      geofence_radius_m: editingStop.geofence_radius_m || 500,
+      location_exception_reason: null,
+    });
+    setEditingId(null);
+  };
   if (stops.length === 0) {
     return (
       <div className="text-center py-8 text-sm text-muted-foreground border rounded-md">
@@ -52,7 +88,7 @@ export default function StopDraftTable({ stops, onMove, onUpdate }: Props) {
           <TableHead>Destinatário</TableHead>
           <TableHead>Cidade / Bairro</TableHead>
           <TableHead>NFs</TableHead>
-          <TableHead className="min-w-[225px]">Coordenadas da parada</TableHead>
+          <TableHead className="min-w-[225px]">Local da entrega</TableHead>
           <TableHead className="text-right">Peso</TableHead>
           <TableHead className="text-right">Vol.</TableHead>
           <TableHead className="text-right">Valor</TableHead>
@@ -95,31 +131,24 @@ export default function StopDraftTable({ stops, onMove, onUpdate }: Props) {
               )}
             </TableCell>
             <TableCell className="text-xs align-top">
-              <div className="grid grid-cols-2 gap-1">
-                <Input
-                  type="number"
-                  step="any"
-                  min={-90}
-                  max={90}
-                  aria-label={`Latitude parada ${idx + 1}`}
-                  value={s.latitude ?? ''}
-                  onChange={(event) => onUpdate(s.id, { latitude: coordinateFromInput(event.target.value) })}
-                  placeholder="Latitude"
-                  className="h-7 text-xs px-1"
-                />
-                <Input
-                  type="number"
-                  step="any"
-                  min={-180}
-                  max={180}
-                  aria-label={`Longitude parada ${idx + 1}`}
-                  value={s.longitude ?? ''}
-                  onChange={(event) => onUpdate(s.id, { longitude: coordinateFromInput(event.target.value) })}
-                  placeholder="Longitude"
-                  className="h-7 text-xs px-1"
-                />
-              </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">Informe o ponto físico de entrega.</p>
+              <Button type="button" size="sm" variant="outline" className="h-7 w-full justify-start"
+                onClick={() => openLocation(s)}>
+                <MapPin className="mr-1 h-3.5 w-3.5" />
+                {typeof s.latitude === 'number' && typeof s.longitude === 'number'
+                  ? 'Revisar endereço/mapa' : 'Definir por endereço/mapa'}
+              </Button>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {s.location_source === 'address_geocoded' ? 'Endereço geocodificado' :
+                  s.location_source === 'map_selected' ? 'Ponto selecionado no mapa' :
+                    typeof s.latitude === 'number' ? 'Coordenada legada: revise antes do despacho' : 'Localização pendente'}
+              </p>
+              {!hasVerifiedLocation(s) ? (
+                <Input value={s.location_exception_reason || ''}
+                  onChange={(event) => onUpdate(s.id, { location_exception_reason: event.target.value || null })}
+                  minLength={20} maxLength={1000}
+                  aria-label={`Justificativa de exceção da parada ${idx + 1}`}
+                  placeholder="Exceção auditada (mín. 20 caracteres)" className="mt-2 h-7 text-[11px]" />
+              ) : null}
             </TableCell>
             <TableCell className="text-xs text-right">{fmt(s.total_weight_kg)} kg</TableCell>
             <TableCell className="text-xs text-right">{s.total_pallet_count}</TableCell>
@@ -203,6 +232,20 @@ export default function StopDraftTable({ stops, onMove, onUpdate }: Props) {
         })}
       </TableBody>
     </Table>
+    <Dialog open={Boolean(editingStop)} onOpenChange={(open) => { if (!open) setEditingId(null); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Local da entrega</DialogTitle>
+          <DialogDescription>Use o endereço já conhecido e confirme o acesso exato no mapa.</DialogDescription>
+        </DialogHeader>
+        {editingStop ? <LocationPicker tenantId={tenantId} address={editingAddress} value={editingLocation}
+          onAddressChange={setEditingAddress} onChange={setEditingLocation} /> : null}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancelar</Button>
+          <Button type="button" disabled={!editingLocation} onClick={applyLocation}>Usar este local</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     </div>
   );
 }

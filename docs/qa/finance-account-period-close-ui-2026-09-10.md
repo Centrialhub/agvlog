@@ -1,0 +1,17 @@
+# Fechamento bancário, reabertura e revisão do corte — UI (2026-09-10)
+
+AccountPeriodClosePanel integrado na conferência por extrato e na consulta de contas/períodos de Movimentações. Preview e histórico carregam sob demanda. Elegibilidade bancária e capacidade administrativa são independentes; operadores consultam, owner/admin autorizados decidem. FinanceAccessBoundary mantém exclusão de motoristas/mistos. Datas e centavos vêm do servidor, sem lançar dinheiro.
+
+A decisão exige declaração de conferência, motivo e revisão vigente. Pedido durável por empresa/ator/conta preserva intervalo ou closure_id original após resposta incerta. Storage inválido bloqueia novas decisões. Primeiro rollback conhecido libera nova revisão. Falha/refetch oculta dados anteriores; revisão alterada impede confirmação. Reabertura usa histórico próprio, independentemente de preview bloqueado, e mostra descendentes que precisam ser reabertos antes, sem cascata.
+
+LegacyCutReview apresenta fontes examinadas (inclusive tabelas vazias), IDs e classificações, sem somar origens/contas desconhecidas. sources_reviewed obrigatório mesmo em manifesto vazio. Histórico manual preserva responsável/motivo; revisão vigente e capacidade administrativa vêm do servidor. Custos e detalhamento de gastos não se tornam automaticamente diferença bancária.
+
+Evidências do fechamento: botão por fechamento consulta envelope64923. Mostra saldos/banco/registros/naturezas preservados, autoria/reabertura e flags de integridade. Exportação local JSON mantém envelope fiel, inclusive snapshot e dependências; não cria signedURL nem busca arquivos originais. Não certifica autenticidade bancária. Divergência de integridade permanece visível e não vira sucesso por igualdade de valores. Dependências e movimentos paginam na apresentação.
+
+Validação: 20 testes de UI/cliente/entradas passaram antes da extensão de evidências; 5 novos testes de evidências + 6 regressões de fechamento passaram depois. ESLint escopo sem erros. Root validou SQL real de histórico/evidências com integridade, reabertura e capacidade. TSC74921 encerrou com quatro erros externos em driverDeliverySubmission e três unknown nos testes SQL concorrentes do root/bankagent; nenhum erro nos arquivos UI/client desta frente. Esses autores foram avisados. Validação global não aprovada por essa execução.
+
+Nenhum SQL nem implantação remota foi realizado nesta frente. Root coordena migrations, guards, classificador e testes reais de concorrência.
+
+Complemento do índice preservado: AccountPeriodEvidenceIndexPanel usa exclusivamente buildAccountPeriodEvidenceIndex sobre o registro salvo. Documentos de movimentos/extratos, intervenções manuais, referências ausentes e limites de cobertura têm paginação própria (30). Caminhos permanecem texto; não há navegação automática. Não promete cobertura de comprovantes de despesas/folha. Exportação original não foi modificada. Dois testes novos cobrem 1005 referências, autoria após reversão, ausência e dados inválidos; mais onze regressões passaram (13). Label de auditoria closed_period_composition_recorded incluído. TSC posterior não iniciado por orientação do coordenador enquanto core64942 muda.
+
+Validação final: TSC integrado 86497 terminou com código 0, sem diagnósticos. Após simplificar o texto do índice e incluir os quatro eventos manuais de auditoria, os 13 testes de evidências/índice/fechamento passaram; lint dos três arquivos alterados também passou. Exportação permanece fiel ao envelope autorizado e não busca arquivos originais.

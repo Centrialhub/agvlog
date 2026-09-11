@@ -15,7 +15,7 @@ import { normalizeCep, normalizeIbgeCity } from '@/lib/fiscal/fiscalAddress';
 import { resolveNFSeTomador, type TomadorData } from '@/lib/fiscal/nfseTomador';
 import { useClients } from '@/hooks/useClients';
 import { useEmitters } from '@/hooks/useEmitters';
-import { useCreateNFSe, useIssueNFSe, type NFSeDoc } from '@/hooks/useNFSe';
+import { useCreateNFSe, useIssueNFSeBatch, type NFSeDoc } from '@/hooks/useNFSe';
 import type { FiscalDocument } from '@/hooks/useFiscalDocuments';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
 import { formatCnpj, validateInsurance } from '@/lib/fiscal/insuranceValidation';
@@ -24,7 +24,11 @@ import { hasInsuranceProfile } from '@/lib/fiscal/insuranceProfile';
 import { Calculator, Save } from 'lucide-react';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
 import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
-import type { HubEnvironment } from '@/lib/fiscal/hubFiscalClient';
+import type { HubEnvironment, NFSeBatchResponse } from '@/lib/fiscal/hubFiscalClient';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
+import { allocateCurrency } from '@/lib/fiscal/nfseBatchAllocation';
 
 interface Props {
   open: boolean;
@@ -32,6 +36,14 @@ interface Props {
 }
 
 const SENTINEL_NONE = '__none__';
+type EmissionMode = 'individual' | 'unified';
+interface BatchAttempt {
+  mode: EmissionMode;
+  requestId: string;
+  environment: HubEnvironment;
+  sourceCount: number;
+  drafts: Record<string, { nfseDocumentId: string; label: string }>;
+}
 
 function num(value: unknown) { return Number(value ?? 0) || 0; }
 function onlyDigits(value: unknown) { return String(value ?? '').replace(/\D/g, ''); }
@@ -42,17 +54,43 @@ function errorMessage(error: unknown): string {
     : 'Falha ao processar emissão(ões)';
 }
 
-function partyCnpj(document: FiscalDocument, mode: 'remetente' | 'destinatario'): string {
-  return (mode === 'remetente' ? document.remitter_cnpj : document.recipient_cnpj) || '';
+function normalizedPartyIdentity(party: TomadorData): string {
+  return [
+    onlyDigits(party.cnpj),
+    String(party.nome || '').trim().toLocaleUpperCase('pt-BR'),
+    onlyDigits(party.ie),
+    String(party.endereco || '').trim().toLocaleUpperCase('pt-BR'),
+    String(party.numero || '').trim().toLocaleUpperCase('pt-BR'),
+    normalizeCep(party.cep),
+    normalizeIbgeCity(party.municipio_cod) || String(party.municipio || '').trim().toLocaleUpperCase('pt-BR'),
+    String(party.uf || '').trim().toLocaleUpperCase('pt-BR'),
+  ].join('|');
+}
+
+function isStoredBatchAttempt(value: unknown): value is BatchAttempt {
+  if (!value || typeof value !== 'object') return false;
+  const attempt = value as Partial<BatchAttempt>;
+  if (!['individual', 'unified'].includes(String(attempt.mode)) ||
+    !['sandbox', 'homologation', 'production'].includes(String(attempt.environment)) ||
+    typeof attempt.requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(attempt.requestId) ||
+    !Number.isInteger(attempt.sourceCount) || Number(attempt.sourceCount) < 1 ||
+    !attempt.drafts || typeof attempt.drafts !== 'object') return false;
+  const drafts = Object.values(attempt.drafts);
+  return drafts.length > 0 && drafts.every(draft =>
+    Boolean(draft) && typeof draft.nfseDocumentId === 'string' && /^[0-9a-f-]{36}$/i.test(draft.nfseDocumentId) &&
+    typeof draft.label === 'string' && draft.label.length <= 500,
+  );
 }
 
 export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const toast = useSonnerToast();
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const { data: clients = [] } = useClients();
   const { data: emitters = [] } = useEmitters();
   const create = useCreateNFSe();
   const [environment, setEnvironment] = useState<HubEnvironment>('production');
-  const issue = useIssueNFSe(environment);
+  const issueBatch = useIssueNFSeBatch(environment);
   const recalcFreight = useRecalculateInboundFreight();
   const { data: insuranceProfile } = useInsuranceProfile();
   const saveInsuranceProfile = useUpdateInsuranceProfile();
@@ -98,7 +136,13 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [observacoes, setObservacoes] = useState('');
   const [manualTomador, setManualTomador] = useState<TomadorData | null>(null);
   const [isEditingTomador, setIsEditingTomador] = useState(false);
-  const [agrupar, setAgrupar] = useState(false);
+  const [emissionMode, setEmissionMode] = useState<EmissionMode | null>(null);
+  const [batchAttempt, setBatchAttempt] = useState<BatchAttempt | null>(null);
+  const [batchResult, setBatchResult] = useState<NFSeBatchResponse | null>(null);
+  const batchStorageKey = useMemo(
+    () => currentTenant?.id && user?.id ? `agvlog:nfse-batch:${currentTenant.id}:${user.id}` : null,
+    [currentTenant?.id, user?.id],
+  );
 
   const suppliers = useMemo(() => clients.filter((client) => client.is_supplier), [clients]);
   const clientList = useMemo(() => clients.filter((client) => client.is_client !== false), [clients]);
@@ -112,12 +156,33 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     setServiceValues({});
     setManualTomador(null);
     setIsEditingTomador(false);
+    setEmissionMode(null);
+    setBatchAttempt(null);
+    setBatchResult(null);
+    if (batchStorageKey) {
+      try {
+        const stored = JSON.parse(sessionStorage.getItem(batchStorageKey) || 'null') as BatchAttempt | null;
+        if (isStoredBatchAttempt(stored)) {
+          setBatchAttempt(stored);
+          setEmissionMode(stored.mode);
+          setEnvironment(stored.environment);
+          setStep(3);
+        }
+      } catch {
+        sessionStorage.removeItem(batchStorageKey);
+      }
+    }
     const defEm = emitters.find(e => e.active && e.is_default) || emitters.find(e => e.active);
     if (defEm) {
       setEmitterId(defEm.id);
       setRegimeTributario(defEm.regime_tributario || '3');
     }
-  }, [open, emitters]);
+  }, [open, emitters, batchStorageKey]);
+
+  useEffect(() => {
+    if (!batchStorageKey || !batchAttempt) return;
+    sessionStorage.setItem(batchStorageKey, JSON.stringify(batchAttempt));
+  }, [batchAttempt, batchStorageKey]);
 
   const filters = useMemo(() => ({
     supplierId: supplierId !== SENTINEL_NONE ? supplierId : null,
@@ -231,7 +296,9 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   // Sincroniza o manualTomador quando o tomador derivado muda e o usuário NÃO está editando manualmente
   useEffect(() => {
     if (!isEditingTomador && tomador) {
-      setManualTomador(tomador);
+      setManualTomador((current) => (
+        current && JSON.stringify(current) === JSON.stringify(tomador) ? current : tomador
+      ));
     }
   }, [tomador, isEditingTomador]);
 
@@ -242,18 +309,55 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
   const allSameTomador = useMemo(() => {
     if (selectedDocs.length < 2) return true;
-    const first = onlyDigits(partyCnpj(selectedDocs[0], tomadorMode));
-    return selectedDocs.every((document) => onlyDigits(partyCnpj(document, tomadorMode)) === first);
-  }, [selectedDocs, tomadorMode]);
+    const identities = selectedDocs.map((document) => normalizedPartyIdentity(resolveNFSeTomador(document, tomadorMode, clients)));
+    return identities.every((identity) => identity === identities[0]);
+  }, [selectedDocs, tomadorMode, clients]);
 
-  const canAdvance = selectedDocs.length > 0 && (agrupar ? allSameTomador : true);
+  const requiresEmissionMode = selectedDocs.length > 1;
+  const effectiveEmissionMode: EmissionMode = batchAttempt?.mode ?? (requiresEmissionMode ? emissionMode ?? 'individual' : 'individual');
+  const canAdvance = selectedDocs.length > 0
+    && (!requiresEmissionMode || emissionMode !== null)
+    && (effectiveEmissionMode === 'unified' ? allSameTomador : true);
 
   const handleEmit = async () => {
+    if (batchAttempt) {
+      setIssuing(true);
+      try {
+        const result = await issueBatch.mutateAsync({
+          mode: batchAttempt.mode,
+          requestId: batchAttempt.requestId,
+          nfseDocumentIds: Object.values(batchAttempt.drafts).map(draft => draft.nfseDocumentId),
+        });
+        setBatchResult(result);
+        if (result.success) {
+          if (batchStorageKey) sessionStorage.removeItem(batchStorageKey);
+          toast.success('Emissão de NFS-e concluída. Confira o resultado por nota.');
+        }
+        else toast.error('O lote teve resultados pendentes ou com falha. Revise cada nota antes de tentar novamente.');
+      } catch (error: unknown) {
+        toast.error(errorMessage(error));
+      } finally {
+        setIssuing(false);
+      }
+      return;
+    }
     if (!emitterId) { toast.error('Selecione o emitente fiscal'); return; }
     
     setIssuing(true);
     try {
-      if (agrupar) {
+      let attempt: BatchAttempt = {
+        mode: effectiveEmissionMode,
+        requestId: crypto.randomUUID(),
+        environment,
+        sourceCount: selectedDocs.length,
+        drafts: {},
+      };
+      const rememberDraft = (sourceKey: string, nfseDocumentId: string, label: string) => {
+        attempt = {...attempt, drafts: {...attempt.drafts, [sourceKey]: {nfseDocumentId, label}}};
+        setBatchAttempt(attempt);
+      };
+
+      if (effectiveEmissionMode === 'unified') {
         // Lógica original de agrupamento
         const currentTomador = manualTomador || tomador;
         if (!currentTomador?.cnpj) { throw new Error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); }
@@ -318,19 +422,31 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
           fiscal_document_ids: fdIds,
           notes: observacoes.trim() || undefined,
         };
-        const created = await create.mutateAsync(payload);
-
-        await issue.mutateAsync(created.id);
+        if (!attempt.drafts.unified) {
+          const created = await create.mutateAsync(payload);
+          rememberDraft('unified', created.id, selectedDocs.map(d => d.invoice_number || d.id).join(', '));
+        }
       } else {
         // Emissão individual
         toast.info(`Iniciando emissão individual de ${selectedDocs.length} nota(s)...`);
+        const allocationEntries = selectedDocs.map((document) => ({
+          key: document.id,
+          weight: valorPorDoc(document),
+        }));
+        const deductionShares = allocateCurrency(num(valorDeducoes), allocationEntries);
+        const otherRetentionShares = allocateCurrency(num(outrasRetencoes), allocationEntries);
+        const insuredAmountShares = allocateCurrency(num(insuredAmount), allocationEntries);
+        const insurancePremiumShares = allocateCurrency(num(insurancePremium), allocationEntries);
         
         for (const d of selectedDocs) {
+          if (attempt.drafts[d.id]) continue;
           const docTomador = selectedDocs.length===1 && manualTomador ? manualTomador : resolveNFSeTomador(d,tomadorMode,clients);
           if (!docTomador.cnpj) throw new Error('Tomador sem CNPJ/CPF na NF '+d.invoice_number);
 
           const docValue = valorPorDoc(d);
-          const docBase = +(Math.max(0, docValue - (num(valorDeducoes) / selectedDocs.length))).toFixed(2);
+          const docDeductions = deductionShares[d.id];
+          const docOtherRetentions = otherRetentionShares[d.id];
+          const docBase = +(Math.max(0, docValue - docDeductions)).toFixed(2);
           const docIss = +(docBase * num(aliquotaIss) / 100).toFixed(2);
           const docRet = +(
             (issRetido ? docIss : 0) + 
@@ -339,11 +455,11 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             (docBase * num(aliqInss) / 100) + 
             (docBase * num(aliqIr) / 100) + 
             (docBase * num(aliqCsll) / 100) + 
-            (num(outrasRetencoes) / selectedDocs.length)
+            docOtherRetentions
           ).toFixed(2);
-          const docLiq = +(docValue - (num(valorDeducoes) / selectedDocs.length) - docRet).toFixed(2);
+          const docLiq = +(docValue - docDeductions - docRet).toFixed(2);
 
-          const description = `Prestacao de servico de transporte referente a NF ${d.invoice_number || d.access_key?.slice(-9)}`
+          const description = (descricao.trim() || `Prestacao de servico de transporte referente a NF ${d.invoice_number || d.access_key?.slice(-9)}`)
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
           const payload: Partial<NFSeDoc> = {
@@ -376,19 +492,19 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             valor_iss: docIss,
             valor_liquido: docLiq,
             valor_total: docValue,
-            valor_deducoes: +(num(valorDeducoes) / selectedDocs.length).toFixed(2),
+            valor_deducoes: docDeductions,
             valor_pis: +(docBase * num(aliqPis) / 100).toFixed(2),
             valor_cofins: +(docBase * num(aliqCofins) / 100).toFixed(2),
             valor_inss: +(docBase * num(aliqInss) / 100).toFixed(2),
             valor_ir: +(docBase * num(aliqIr) / 100).toFixed(2),
             valor_csll: +(docBase * num(aliqCsll) / 100).toFixed(2),
-            outras_retencoes: +(num(outrasRetencoes) / selectedDocs.length).toFixed(2),
+            outras_retencoes: docOtherRetentions,
             insurer_name: insurerName.trim() || null,
             insurer_cnpj: insurerCnpj.replace(/\D/g, '') || null,
             insurer_policy: insurerPolicy.trim() || null,
             insurer_endorsement: insurerEndorsement.trim() || null,
-            insured_amount: num(insuredAmount) || null,
-            insurance_premium: num(insurancePremium) || null,
+            insured_amount: insuredAmount > 0 ? insuredAmountShares[d.id] : null,
+            insurance_premium: insurancePremium > 0 ? insurancePremiumShares[d.id] : null,
             items: [{
               description: `NF ${d.invoice_number || ''} — ${d.remitter || ''}`.trim(),
               quantity: 1,
@@ -401,11 +517,20 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             notes: observacoes.trim() || undefined,
           };
           const created = await create.mutateAsync(payload);
-
-          await issue.mutateAsync(created.id);
+          rememberDraft(d.id, created.id, d.invoice_number || d.access_key?.slice(-9) || d.id);
         }
       }
-      onOpenChange(false);
+      const result = await issueBatch.mutateAsync({
+        mode: attempt.mode,
+        requestId: attempt.requestId,
+        nfseDocumentIds: Object.values(attempt.drafts).map(draft => draft.nfseDocumentId),
+      });
+      setBatchResult(result);
+      if (result.success) {
+        if (batchStorageKey) sessionStorage.removeItem(batchStorageKey);
+        toast.success('Emissão de NFS-e concluída. Confira o resultado por nota.');
+      }
+      else toast.error('O lote teve resultados pendentes ou com falha. Revise cada nota antes de tentar novamente.');
     } catch (error: unknown) {
       toast.error(errorMessage(error));
     } finally {
@@ -426,7 +551,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
 
-        <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issue.isPending || create.isPending} />
+        <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issueBatch.isPending || create.isPending || !!batchAttempt} />
 
         {step === 1 && (
           <div className="space-y-4">
@@ -483,6 +608,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   <TableRow>
                     <TableHead className="w-10">
                       <Checkbox
+                        aria-label="Selecionar todas as NFs disponíveis"
                         checked={docs.length > 0 && selectedDocs.length === docs.length}
                         onCheckedChange={v => toggleAll(!!v)}
                       />
@@ -505,6 +631,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                     <TableRow key={d.id} className={selected[d.id] ? 'bg-muted/40' : ''}>
                       <TableCell>
                         <Checkbox
+                          aria-label={`Selecionar NF ${d.invoice_number || d.access_key?.slice(-9) || d.id}`}
                           checked={!!selected[d.id]}
                           onCheckedChange={v => setSelected(s => ({ ...s, [d.id]: !!v }))}
                         />
@@ -522,11 +649,56 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
               </Table>
             </div>
 
-            {selectedDocs.length > 0 && agrupar && !allSameTomador && (
+            {selectedDocs.length > 1 && emissionMode === 'unified' && !allSameTomador && (
               <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-                As NFs selecionadas têm {tomadorMode === 'remetente' ? 'remetentes' : 'destinatários'} diferentes.
-                Para agrupar em uma única NFS-e, o tomador precisa ser único.
+                As NFs selecionadas têm dados fiscais divergentes para o {tomadorMode === 'remetente' ? 'remetente' : 'destinatário'}.
+                Para emitir uma única NFS-e, CNPJ/CPF, nome, inscrição e endereço do tomador precisam coincidir.
               </div>
+            )}
+
+            {selectedDocs.length > 1 && (
+              <fieldset className="rounded-md border bg-muted/20 p-4" aria-describedby="nfse-emission-mode-help">
+                <legend className="px-1 text-sm font-semibold">Como deseja emitir as NFS-e?</legend>
+                <p id="nfse-emission-mode-help" className="mb-3 text-xs text-muted-foreground">
+                  Esta escolha é obrigatória para múltiplas NFs e será aplicada antes de qualquer emissão.
+                </p>
+                <RadioGroup
+                  value={emissionMode ?? ''}
+                  onValueChange={(value) => setEmissionMode(value as EmissionMode)}
+                  aria-label="Modo de emissão das NFS-e"
+                  className="grid gap-3 sm:grid-cols-2"
+                >
+                  <Label
+                    htmlFor="nfse-emission-individual"
+                    className="flex cursor-pointer items-start gap-3 rounded-md border bg-background p-3 font-normal has-[[data-state=checked]]:border-primary"
+                  >
+                    <RadioGroupItem id="nfse-emission-individual" value="individual" className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium">Individual</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Emitir uma NFS-e para cada NF selecionada, repetindo as mesmas regras tributárias informadas.
+                      </span>
+                    </span>
+                  </Label>
+                  <Label
+                    htmlFor="nfse-emission-unified"
+                    className="flex cursor-pointer items-start gap-3 rounded-md border bg-background p-3 font-normal has-[[data-state=checked]]:border-primary"
+                  >
+                    <RadioGroupItem id="nfse-emission-unified" value="unified" className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium">Unificada</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Emitir uma única NFS-e consolidando todas as NFs selecionadas e seus valores.
+                      </span>
+                    </span>
+                  </Label>
+                </RadioGroup>
+                {emissionMode === null && (
+                  <p role="alert" className="mt-3 text-xs text-destructive">
+                    Selecione emissão individual ou unificada para continuar.
+                  </p>
+                )}
+              </fieldset>
             )}
 
             <div className="flex items-center justify-between border-t pt-3">
@@ -553,18 +725,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                     : <Calculator className="h-4 w-4 mr-1" />}
                   Recalcular frete
                 </Button>
-                <div className="flex items-center gap-2 border-r pr-3 mr-1">
-                  <Checkbox 
-                    id="agrupar-nfse"
-                    checked={agrupar} 
-                    onCheckedChange={v => setAgrupar(!!v)} 
-                  />
-                  <Label htmlFor="agrupar-nfse" className="text-xs cursor-pointer whitespace-nowrap">Agrupar</Label>
-                </div>
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs">Tomador é:</Label>
+                  <Label htmlFor="nfse-tomador-mode" className="text-xs">Tomador é:</Label>
                   <Select value={tomadorMode} onValueChange={(value) => setTomadorMode(value as 'remetente' | 'destinatario')}>
-                    <SelectTrigger className="w-40 h-8"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="nfse-tomador-mode" className="w-40 h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="remetente">Remetente</SelectItem>
                       <SelectItem value="destinatario">Destinatário</SelectItem>
@@ -625,6 +789,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                         <td className="p-2 text-right tabular-nums text-muted-foreground">R$ {freteCalc.toFixed(2)}</td>
                         <td className="p-2 text-right">
                           <Input
+                            aria-label={`Valor do serviço da NF ${d.invoice_number || d.access_key?.slice(-9) || d.id}`}
                             type="number"
                             step="0.01"
                             className="h-8 text-right"
@@ -650,6 +815,52 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
         {step === 3 && (
           <div className="space-y-4">
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-4" aria-label="Resumo da emissão">
+              <div className="text-sm font-semibold">Resumo da emissão</div>
+              <div className="mt-1 text-sm">
+                {effectiveEmissionMode === 'unified'
+                  ? `1 NFS-e unificada para ${selectedDocs.length || batchAttempt?.sourceCount || 0} NFs selecionadas.`
+                  : `${selectedDocs.length || batchAttempt?.sourceCount || Object.keys(batchAttempt?.drafts || {}).length} NFS-e, uma para cada NF selecionada.`}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {selectedDocs.length > 0
+                  ? `Valor total dos serviços: R$ ${totalServicos.toFixed(2)}. Revise os dados abaixo antes de confirmar.`
+                  : 'Comando recuperado desta sessão. Os mesmos rascunhos e identificador serão reutilizados com segurança.'}
+              </div>
+            </div>
+            {batchAttempt && !batchResult && (
+              <div role="status" className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm">
+                Os rascunhos deste comando foram preservados. Se o envio falhar ou ficar incerto, tente novamente pelo botão abaixo;
+                nenhuma NFS-e já preparada será recriada.
+              </div>
+            )}
+            {batchResult && (
+              <div className="rounded-md border p-4" aria-label="Resultado da emissão por NF">
+                <div className="font-semibold">Resultado por NF</div>
+                <div className="mt-3 space-y-2">
+                  {batchResult.results.map((result) => {
+                    const draft = Object.values(batchAttempt?.drafts || {}).find(item => item.nfseDocumentId === result.nfseDocumentId);
+                    const uncertain = !result.success && (result.status === 0 || result.status >= 500);
+                    return (
+                      <div key={result.nfseDocumentId} className="flex items-start justify-between gap-3 rounded border p-3 text-sm">
+                        <div>
+                          <div className="font-medium">{draft?.label || result.nfseDocumentId}</div>
+                          {result.error?.message && <div className="mt-1 text-xs text-muted-foreground">{result.error.message}</div>}
+                        </div>
+                        <Badge variant={result.success ? 'secondary' : 'destructive'}>
+                          {result.success ? 'Processada' : uncertain ? 'Conciliação necessária' : 'Falhou'}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+                {!batchResult.success && (
+                  <p role="alert" className="mt-3 text-xs text-destructive">
+                    Não há rollback automático. Antes de reenviar, confira os itens marcados para conciliação; a nova tentativa reutiliza o mesmo comando e os mesmos rascunhos.
+                  </p>
+                )}
+              </div>
+            )}
             <div className="rounded-md border bg-muted/30 p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
@@ -922,7 +1133,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
         <DialogFooter>
           {step > 1 && (
-            <Button variant="outline" onClick={() => setStep((step - 1) as 1 | 2)} disabled={issuing}>
+            <Button variant="outline" onClick={() => setStep((step - 1) as 1 | 2)} disabled={issuing || !!batchAttempt}>
               <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
             </Button>
           )}
@@ -933,10 +1144,14 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             </Button>
           )}
           {step === 3 && (
-            <Button onClick={handleEmit} disabled={issuing || create.isPending || issue.isPending || isFetching || !!docsError}>
-              {issuing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
-              Emitir NFS-e
-            </Button>
+            batchResult?.success ? (
+              <Button onClick={() => onOpenChange(false)}>Concluir</Button>
+            ) : (
+              <Button onClick={handleEmit} disabled={issuing || create.isPending || issueBatch.isPending || isFetching || !!docsError}>
+                {issuing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+                {batchAttempt ? 'Tentar novamente com segurança' : 'Emitir NFS-e'}
+              </Button>
+            )
           )}
         </DialogFooter>
       </DialogContent>

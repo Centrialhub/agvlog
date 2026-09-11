@@ -1,0 +1,25 @@
+# Fechamento das dependências operacionais e financeiras — 10/09/2026
+
+Inventário finito: finance-production-operational-financial-closure-inventory-2026-09-10.json, 185 arquivos únicos com SHA256. É a união do manifesto financeiro, 44 arquivos do manifesto motorista, quatro contratos de despesas/ajustes e dois contratos fiscais/autorização. NÃO é aprovação integral nem script de aplicação. O histórico429 é anterior ao rollout atual; confirmar aplicação por nome/catálogo e correspondência documentada. A fundação212104 original está marcada NÃO APLICAR: já incorporada no staged.
+
+## Ordem adicional após192908
+
+1. 20260830203548 revisão de despesas →30211707 criação recuperável →30231003 contratos em expense_creation_private →30233637 ajustes de acerto. Esta ordem é instalada por expenseReviewDatabase, expenseCreationDatabase, expenseMfaDatabase e settlementAdjustmentDatabase. Os nove hashes de30233637 incluem autorização, builder e helpers de entrega. Divergência exige revisão de compatibilidade, nunca remoção do guard. DML direto das despesas/itens deixa de ser caminho suportado; comandos preservam motivo, revisão e replay.
+2. 20260831144530 gate de faturamento fiscal após192908. A fundação31124505 e correções153911/160035/160938/161743/170755 e callback0901162058 constam no histórico capturado: verificar corpos atuais, NÃO reaplicar. A fixture fiscal instala essa cadeia real. 31164442 remove exigência de autenticador por decisão de produto e não consta no histórico antigo; revisar contra autorização/tenant atuais antes aplicar. Não é seguro voltar helpers atuais para versões antigas para satisfazer hashes intermediários.
+3. Continuar cadeia financeira ordenada do manifesto, preservando staged can_access=false e cron/worker separado. 134948 canonical_trip_cost_settlement precede o gate final de custódia; 130540 record_settlement_payment e suas correções devem existir antes213156. Gates de leitores/cancelamento/void e provas não são opcionais só porque o primeiro lote já funciona.
+4. Incorporar o subgrafo motorista de44 arquivos no manifesto driver-app-hosted-deployment-manifest, intercalando finance134948. Antes211800 exigir no catálogo: trip_cargo_controls (142606 e endurecimentos191008/194438), physical_journeys/physical_journey_trips (134223 e integrações), builder final, finance_expense_batches, leitores financeiros. Antes211200 exigir delivery_private e contratos de canhoto/NFS-e/GPS/scan do mesmo manifesto. Essa cadeia não se resume a142606.
+5. Ordem final:211200 snapshot fiscal →211800 gate fechamento carga →213021 resolução explícita de conflitos/retenção de provas e aposentadoria dos adapters service antigos →213156 quarentena de acertos legados →220847 seletor de movimento ativo. 220847 deve ficar após última redefinição211800: regressão raw/active foi reproduzida e corrigida nos cinco testes expenseStatementJourney.
+
+## Mudança material em213156
+
+Há INSERT real de quarentenas e auditoria durante instalação para TODOS acertos com dispatch_trip_id e custódia não encerrada. Não modifica seus valores/pagamentos, porém retira da lista utilizável e bloqueia aprovação/pagamento até regularização. Antes aplicar, contar por tenant/status (incluindo aprovados/pagos) e conferir capacidade do operador de consultar a fila. Não ocultar isso como simples DDL. Regularização histórica exige administrador, motivo e evidência; não deve ser executada automaticamente no rollout. Fechar custódia depois resolve quarentena e somente recalcula acertos mutáveis; aprovados/pagos/fechados permanecem preservados.
+
+## Provas existentes e lacuna real
+
+expenseStatementJourney: cinco testes reais de lote480/saída500/sobra20/OFX500/conciliação única, complemento530/payable30, gate de custódia aberta, exclusão de movimento invalidado e guard de patch. A fixture recorta apenas DDL e três funções/trigger de custódia: NÃO prova todo o fluxo físico do motorista.
+
+tripCargoClosedDownstreamGateDatabase e driverSettlementCargoQuarantineDatabase instalam os gates reais, mas usam builder/pagamento e delivery_context de fixture. São testes de gate, não prova integrada do builder financeiro final com ciclo completo de custódia. Não extrapolar seus resultados. unloadingBankPackageDatabase combina recebimento/projeção/fechamento reais, com limites operacionais/FKs documentados; não prova scanner, sessão Supabase hospedada ou browser.
+
+Nenhum ensaio novo executado nesta revisão. O JSON permite controlar uma lista finita; arquivos classificados inventory_not_whole_file_approval ainda precisam revisão de seu responsável e pré-condições adaptativas. A aplicação dos16 iniciais não completa o produto, e a união185 também não substitui verificação de ACL/guards efetivos e publicação do runtime. Worker fiscal, scanner/OCR, uploads, CORS e frontend continuam gates de disponibilidade separados.
+
+O coordenador informou140248 aplicada com sucesso após nova autorização explícita e11provas; contenção local não aplicada. Não houve escrita remota, PG ou TSC por este agente.

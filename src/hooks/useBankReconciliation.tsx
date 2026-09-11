@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
-import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import {invalidateAccountDirectory} from '@/lib/financial/invalidateAccountReview';
+import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 export type BankAccountType = 'checking' | 'savings' | 'cash' | 'company_card' | 'pix' | 'other';
 export type BankAccount = Omit<Tables<'bank_accounts'>, 'account_type'> & { account_type: BankAccountType };
@@ -11,8 +12,9 @@ export type UpdateBankAccountInput = TablesUpdate<'bank_accounts'> & { id: strin
 
 export function useBankAccounts() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['bank_accounts', currentTenant?.id],
+    queryKey: ['bank_accounts', currentTenant?.id,user?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data, error } = await supabase
@@ -23,7 +25,7 @@ export function useBankAccounts() {
       if (error) throw error;
       return (data || []) as unknown as BankAccount[];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant&&!!user,
   });
 }
 
@@ -41,7 +43,7 @@ export function useCreateBankAccount() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bank_accounts'] }),
+    onSuccess: data => invalidateAccountDirectory(qc,data.tenant_id),
   });
 }
 
@@ -53,7 +55,7 @@ export function useUpdateBankAccount() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bank_accounts'] }),
+    onSuccess: data => invalidateAccountDirectory(qc,data.tenant_id),
   });
 }
 
@@ -83,39 +85,6 @@ export function useBankTransactions(bankAccountId: string | null, periodStart: s
       return (data || []) as unknown as BankTransaction[];
     },
     enabled: !!currentTenant && !!bankAccountId,
-  });
-}
-
-export function useCreateManualTransaction() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payload: {
-      bank_account_id: string;
-      posted_at: string;
-      description: string;
-      amount: number;
-      transaction_type: 'credit' | 'debit';
-      document_number?: string;
-      cost_center?: string;
-    }) => {
-      const { data, error } = await supabase.from('bank_transactions').insert({
-        tenant_id: currentTenant!.id,
-        bank_account_id: payload.bank_account_id,
-        posted_at: payload.posted_at,
-        description: payload.description,
-        amount: payload.amount,
-        transaction_type: payload.transaction_type,
-        document_number: payload.document_number || null,
-        cost_center: payload.cost_center || null,
-        reconciliation_status: 'unmatched',
-      }).select().single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-    },
   });
 }
 
@@ -166,149 +135,5 @@ export function useSuggestedMatches(bankAccountId: string | null) {
       return bankAccountId ? rows.filter(r => r.bank_transactions?.bank_account_id === bankAccountId) : rows;
     },
     enabled: !!currentTenant,
-  });
-}
-
-export function useSyncObligations() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ from, to }: { from?: string | null; to?: string | null }) => {
-      const { data, error } = await supabase.rpc('sync_financial_obligations', {
-        _tenant_id: currentTenant!.id, _date_from: from ?? undefined, _date_to: to ?? undefined,
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['financial_obligations'] });
-    },
-  });
-}
-
-export function useImportBankStatement() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payload: {
-      bank_account_id: string;
-      file_name: string;
-      file_hash: string;
-      period_start: string;
-      period_end: string;
-      rows: Json[];
-      raw_metadata?: Json;
-    }) => {
-      const { data, error } = await supabase.rpc('import_bank_statement', {
-        _tenant_id: currentTenant!.id,
-        _bank_account_id: payload.bank_account_id,
-        _file_name: payload.file_name,
-        _file_hash: payload.file_hash,
-        _period_start: payload.period_start,
-        _period_end: payload.period_end,
-        _rows: payload.rows,
-        _raw_metadata: payload.raw_metadata ?? {},
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-      qc.invalidateQueries({ queryKey: ['bank_statement_imports'] });
-    },
-  });
-}
-
-export function useRunReconciliation() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payload: { bank_account_id: string; period_start: string; period_end: string }) => {
-      const { data, error } = await supabase.rpc('run_bank_reconciliation', {
-        _tenant_id: currentTenant!.id,
-        _bank_account_id: payload.bank_account_id,
-        _period_start: payload.period_start,
-        _period_end: payload.period_end,
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-      qc.invalidateQueries({ queryKey: ['financial_obligations'] });
-      qc.invalidateQueries({ queryKey: ['financial_matches_suggested'] });
-    },
-  });
-}
-
-export function useAcceptMatch() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (matchId: string) => {
-      const { error } = await supabase.rpc('accept_financial_match', { _match_id: matchId });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-      qc.invalidateQueries({ queryKey: ['financial_obligations'] });
-      qc.invalidateQueries({ queryKey: ['financial_matches_suggested'] });
-    },
-  });
-}
-
-export function useRejectMatch() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ matchId, reason }: { matchId: string; reason: string }) => {
-      const { error } = await supabase.rpc('reject_financial_match', { _match_id: matchId, _reason: reason });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-      qc.invalidateQueries({ queryKey: ['financial_obligations'] });
-      qc.invalidateQueries({ queryKey: ['financial_matches_suggested'] });
-    },
-  });
-}
-
-export function useCreateManualMatch() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payload: {
-      bank_transaction_id: string;
-      financial_obligation_id: string;
-      amount_matched: number;
-      reason?: string | null;
-    }) => {
-      const { error } = await supabase.rpc('create_manual_financial_match', {
-        _tenant_id: currentTenant!.id,
-        _bank_transaction_id: payload.bank_transaction_id,
-        _financial_obligation_id: payload.financial_obligation_id,
-        _amount_matched: payload.amount_matched,
-        _reason: payload.reason ?? undefined,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-      qc.invalidateQueries({ queryKey: ['financial_obligations'] });
-      qc.invalidateQueries({ queryKey: ['financial_matches_suggested'] });
-    },
-  });
-}
-
-export function useReverseMatch() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ matchId, reason }: { matchId: string; reason: string }) => {
-      const { error } = await supabase.rpc('reverse_financial_match', { _match_id: matchId, _reason: reason });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-      qc.invalidateQueries({ queryKey: ['financial_obligations'] });
-      qc.invalidateQueries({ queryKey: ['financial_matches_suggested'] });
-    },
   });
 }

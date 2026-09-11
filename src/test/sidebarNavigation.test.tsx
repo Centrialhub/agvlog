@@ -7,6 +7,14 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 afterEach(cleanup);
 describe('sidebar navigation', () => {
+  it('hides financial links until access is explicitly confirmed and removes them after denial',()=>{
+    const view=render(<MemoryRouter><TooltipProvider><SidebarNavigation query="financeiro" capabilityAvailable={()=>true}/></TooltipProvider></MemoryRouter>);
+    expect(screen.queryByRole('link',{name:'Contas a pagar'})).not.toBeInTheDocument();
+    view.rerender(<MemoryRouter><TooltipProvider><SidebarNavigation query="financeiro" capabilityAvailable={()=>true} financeAvailable/></TooltipProvider></MemoryRouter>);
+    expect(screen.getByRole('link',{name:'Contas a pagar'})).toBeInTheDocument();
+    view.rerender(<MemoryRouter><TooltipProvider><SidebarNavigation query="financeiro" capabilityAvailable={()=>true} financeAvailable={false}/></TooltipProvider></MemoryRouter>);
+    expect(screen.queryByRole('link',{name:'Contas a pagar'})).not.toBeInTheDocument();
+  });
   it('does not confuse neighboring routes and identifies detail pages', () => {
     expect(isNavigationActive('/operations-control', '/operations')).toBe(false);
     expect(findNavigationPage('/vehicles/123')?.item.href).toBe('/vehicles');

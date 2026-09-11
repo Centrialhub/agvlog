@@ -1,0 +1,3 @@
+import {readFileSync} from 'node:fs';
+import {createExpenseCancellationDatabase} from './expenseCancellationDatabase';
+export async function createManualExpenseCancellationDatabase(){const db=await createExpenseCancellationDatabase();await db.exec('create schema storage;create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,metadata jsonb);');for(const name of ['20260910120756_finance_manual_expense_recording','20260910125034_finance_manual_expense_cost_center','20260910181257_finance_unpaid_manual_expense_cancellation'])await db.exec(readFileSync(`supabase/migrations/${name}.sql`,'utf8'));return db;}

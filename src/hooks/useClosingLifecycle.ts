@@ -26,7 +26,7 @@ export function useClosingLifecycle(report?:string){
   if(!tenant||!actor)throw new Error('Entre com uma sessão válida e selecione a empresa.');if(busy.current)throw new Error('Aguarde a transição em andamento.');
   assertContext();busy.current=true;setPending(true);
   try{const result=await work();assertContext();return result;}catch(cause){throw new Error(closingLifecycleError(cause));}
-  finally{try{await Promise.all([client.invalidateQueries({queryKey:['closing-reports']}),client.invalidateQueries({queryKey:['closing-report']}),client.invalidateQueries({queryKey:['closing-action-context']})]);}
+  finally{try{await Promise.all([client.invalidateQueries({queryKey:['finance-receivable-portfolio']}),client.invalidateQueries({queryKey:['closing-reports']}),client.invalidateQueries({queryKey:['closing-report']}),client.invalidateQueries({queryKey:['closing-action-context']})]);}
    finally{busy.current=false;if(alive.current)setPending(false);}}
  };
  return {query,isPending,pending:recovery.pending,recoveryError:recovery.error,submit:(input:ClosingActionInput)=>run(()=>outbox.submit(tenant!,actor!,input)),recover:()=>run(()=>outbox.recover(tenant!,actor!))};

@@ -1,0 +1,1859 @@
+{
+  "version": 1,
+  "not_an_apply_script": true,
+  "history_snapshot_is_stale": true,
+  "finite_count": 185,
+  "files": [
+    {
+      "file": "20260830203548_audit_driver_expense_reviews.sql",
+      "sha256": "0024490322b5048eb7465909383b21f1a149e5bd91ab4fd1e1335662150ab06c",
+      "groups": [
+        "expenses_adjustments_fiscal"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "dependency_review_requires_live_preflight",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260830211707_make_driver_expense_creation_recoverable.sql",
+      "sha256": "e4653ae0a090e4e954dd1b25b6cd3d727aed7ddf757bdfd9652ceda164f93adf",
+      "groups": [
+        "expenses_adjustments_fiscal"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "dependency_review_requires_live_preflight",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260830231003_enforce_expense_creation_mfa.sql",
+      "sha256": "e0af4f2f66662c19667b36617db691adb5f6065fd54305c4b385378a11705f74",
+      "groups": [
+        "expenses_adjustments_fiscal"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "dependency_review_requires_live_preflight",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260830233637_audit_driver_settlement_adjustments.sql",
+      "sha256": "d1c2bd81d9fc7e6deb1c0942887d172406abc0bb63fef8875a51e20a4aa1031e",
+      "groups": [
+        "expenses_adjustments_fiscal"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "dependency_review_requires_live_preflight",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260831144530_attach_fiscal_invoice_gate.sql",
+      "sha256": "83d8c3af17bdecede24977240b0d4a2c793e4a613c68b06835d490e4e233862f",
+      "groups": [
+        "expenses_adjustments_fiscal"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "dependency_review_requires_live_preflight",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260831164442_remove_authenticator_requirement.sql",
+      "sha256": "afebc0abe625ece64d8938129ca57543b0d08f66a757da6dad1253c9e210b63b",
+      "groups": [
+        "auth_product_policy"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "requires_current_auth_policy_review_not_blind_apply",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909212104_finance_ledger_foundation.sql",
+      "sha256": "f14984f4b1c7c2c64ffc4fb0b257933cbc449b3759182e2932df8558d3db48f4",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": true
+    },
+    {
+      "file": "20260909212514_finance_delivery_unloading.sql",
+      "sha256": "31d527454b746dc9aed8b8c0755f7e9e6132f098ad5251ac937bb7fcbc01bae7",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909213020_finance_movement_queries.sql",
+      "sha256": "9e2ee8a95b50d4cdc4b78430ef54f1a26142b9f8ea5767c9bb609a61e69f0b16",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909213959_finance_expense_batches.sql",
+      "sha256": "3d24b8f562d043eccf99189255e19a1c9d4ce9827341a0348136562963ea0dc3",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909215046_finance_delivery_supplier_guard.sql",
+      "sha256": "0f30ac3d6e4c5c98ac1fab74e3136546cf2868dd8908c61c520d1a19cd9e83e1",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909220020_finance_expense_workspace_queries.sql",
+      "sha256": "2c3b7904bb41a6ebf110225559ef794b4e17c4f79bbad68ce74d0049ad92eda2",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909220941_finance_receipt_evidence.sql",
+      "sha256": "410293d35f3653c894643aa9f635128f13eb3a010f1ecc722aa0fbace7ac5188",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909221405_finance_expense_history_queries.sql",
+      "sha256": "c162e2b0cb35386737703f996872797854c4f66030a638f8a599688656f5ef17",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909222851_finance_statement_intake.sql",
+      "sha256": "e7d153769b285614254438340edee8b1a609f778dac3ce7fe65a53f6b6f7a4e4",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909223737_finance_statement_source_verification.sql",
+      "sha256": "59e80fcbe94a20e27021854d24178b3baba03ed93203a101daa551b56eb1458e",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909230507_finance_statement_queries.sql",
+      "sha256": "670d252f1dfa660cc9e05cf895ccd1561c8e3a6bf275958ec36b4f210f904cae",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909231643_finance_statement_identity_review.sql",
+      "sha256": "26f356955235506fa28f1cbc0b71a1fbe66ff45837e9b55fc2ec31c98b3cc3b4",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909233625_finance_audit_queries.sql",
+      "sha256": "4c5ffab49815e5f41e35ce68ed3321aa67bc0ac681bf491bb252c122c5303666",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909234654_finance_legacy_driver_boundary.sql",
+      "sha256": "0e31b33f678c063c8600d6db2528c81fa5f18ef6fed1cd7ea456e1ded5ea8b36",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909235237_finance_legacy_rpc_boundary.sql",
+      "sha256": "58091908245304fc7d899158a0c59019627241d3adef726474d0c014845dc667",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260909235705_finance_legacy_receipt_boundary.sql",
+      "sha256": "bc2ee41f0cc2814b1c0f13d0752f05f9da36747e24a8746ef13be14053fb82c6",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910000731_finance_payroll_payment_projection.sql",
+      "sha256": "88b308914ba6bcc1d718920f82b391cf60afce7f76a2b7715d3b7c3d641097d3",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910002244_finance_payable_movement_links.sql",
+      "sha256": "950528541ed07a28b12a83ff47212fe6534b02c6a5ac5f5a048d35e9d3006a43",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910003529_finance_payable_link_reversal.sql",
+      "sha256": "6a74f52835c7afe46644109a9c415da5f907180b16b82b36321b9c3186740701",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910004550_finance_fiscal_observation_queue.sql",
+      "sha256": "ca22534cc5e4cbdae362d97a62a35a4fb81ea0300687d9038b4cafc91e080cdf",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910005509_finance_fiscal_receivable_basis.sql",
+      "sha256": "ba09c06c28da321ec456f9738032c9ed68530805ea40358a4ae9f05f132e01c1",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910010034_finance_fiscal_receivable_projection.sql",
+      "sha256": "f34824f21040018028e20d4de22fc37d4b9fedecec3286496f96b7d78c6309b8",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910011121_finance_fiscal_cancellation_credits.sql",
+      "sha256": "f804d5aa34c45ff1cb63bdd0827d157e76ce75a22b54ad45a85172db95c1a02c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910012152_finance_receivable_fiscal_context.sql",
+      "sha256": "330057896a657744cff7000aa1cbb317ffb6f7a7fda44b4234b41f714aa5ab6c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910012756_finance_fiscal_queue_worker.sql",
+      "sha256": "3d209e4971a591725a5c5e859ebca9f18457e4f3659f656ab1cef8f3a8f31549",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910013543_finance_bank_reconciliation_groups.sql",
+      "sha256": "af173cc4a5e73d9af39d5d0fcdeb413c7402bb5a1d060746b2c6705af5fe53f3",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910014238_finance_reconciliation_workspace.sql",
+      "sha256": "dbc2b8731347a928d8686d04299d70904e4846f262a51faf85cb0dc76a9f0d83",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910015331_finance_reconciliation_history.sql",
+      "sha256": "f4261dc666cb54f67fdfa51c8d34d5119771a5ded2a4a80d9b43af7de16beea5",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910020543_finance_ofx_statement_intake.sql",
+      "sha256": "9ca8114cbf73cae45a31b81de7b4ba5d47f14e77f2520581d32b2ae04fe7be66",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910021404_finance_native_statement_account.sql",
+      "sha256": "b7b6c9c7aee709a371652bd0aa0e837faf4a41fa446178b59bca2b1a9ea18d13",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910022059_finance_automatic_reference_reconciliation.sql",
+      "sha256": "3c3f6e1762fe872589ca0732bf97ba76f1535a65bec4454aa0f109ce6333926c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910023208_finance_automatic_reconciliation_status.sql",
+      "sha256": "cf95f50843e0df1d5064e315ad769542aa9dbfaee3ff13cd34ef3f27343baf5f",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910023911_finance_account_period_review.sql",
+      "sha256": "aa651cfd209d54ede798ed74c29773660d05687c4ca004be2d255288cb98bd9e",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910024438_finance_receivable_movement_projection.sql",
+      "sha256": "09c86d71abb1f3716d6a62f0746d25bda5537d7ae10a6bb710e0190c9bdbf197",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910025658_finance_receipt_allocation_corrections.sql",
+      "sha256": "1d6084d521c55c9b784bc25e38d7335dfdef9f57a128bae31700b2aa1e45259f",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910030634_finance_explicit_receipt_refunds.sql",
+      "sha256": "a8cc28abb1eda1b68d297d8319526557200f8ab46b6fc5a1adb619683b4bf0f1",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910032730_finance_movement_receipt_trace.sql",
+      "sha256": "3edcf907a3d165bc4db4b39f8c83fda02c289332f6f467667a8e83ff721e26cb",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910033918_finance_internal_transfer_pairs.sql",
+      "sha256": "564288fe9c1c7cc1863019fc2c5ce090ca97a7bd4d765c2959c3b208daa3e0e4",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910034731_finance_transfers_in_transit.sql",
+      "sha256": "4bb2e1e54b7f7a96f89a1e930af0465a54756ea42e411616a18165c8ed5b1308",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910035550_finance_transfer_period_position.sql",
+      "sha256": "18d8b30e392638af036c6873ffd77dc41a07a1b01198c247c0b7ee95d819ef56",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910120756_finance_manual_expense_recording.sql",
+      "sha256": "a4688897bb9f84ef4ef91ba6f036fb369601b980c632832426db062cce7002dc",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910121937_finance_retire_legacy_payable_writers.sql",
+      "sha256": "11eebb920bd34e6cc81468cdda1b7232db8a7d361de620135e6dad5335ae8f86",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910122628_finance_bank_transaction_browser_boundary.sql",
+      "sha256": "dde957ddb2204641dd39523f0bab3e71c3442ba08605c69b434dbb0f6bed8163",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910123613_finance_retire_legacy_statement_import.sql",
+      "sha256": "9d7d057e6f85a7de6db90b492041236f7f63a04833ccc5338a0753955906efa7",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910124258_finance_retire_legacy_reconciliation.sql",
+      "sha256": "422d50770dd0c2d919bc96921d047ede60d5e1e7f29b4ebfa898009845f93a2e",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910124716_finance_expense_cost_center_totals.sql",
+      "sha256": "04cb0d0d10595997c33e9b9c8b6d64f572fc9d2d235fbe79801e64c580a83ece",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910125034_finance_manual_expense_cost_center.sql",
+      "sha256": "469be864296ae2be1c5ad57c049efc570df0a3e09869de657415ebc626086034",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910125357_finance_recorded_costs.sql",
+      "sha256": "4ff64ddafb49126e05b1e7ddc5925fe76dd63df00a1f380e0e6bd9e8db10099c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910130032_finance_payroll_recorded_costs.sql",
+      "sha256": "e0d51628df54abeedfa0d78cd7b48632b7daf19ff43ae28dffe9875e77ceebae",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910130540_finance_settlement_movement_links.sql",
+      "sha256": "a05183495df24000b81fd2976a6723df0c4700dbdf2d82b5dca679e47e1f1205",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910130921_finance_settlement_movement_options.sql",
+      "sha256": "3f1a107e4f02187638bf145d03842f860b8e13c16d11ba5515a615e989953821",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910130956_finance_statement_period_evidence.sql",
+      "sha256": "862a3329a13e7b22a29a5c10861f2d12b18d71221c2367c2692fa105eec82cd7",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910131149_finance_settlement_link_audit.sql",
+      "sha256": "5101428db9da57754866db67ed54bc9c649116adce21280045fb51e33fa2289f",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910131419_driver_delivery_receipt_foundation.sql",
+      "sha256": "40a294871fff018b3e903407fb27d4b4e79d3f2201d5afd33b041a877aab3dfc",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910132149_require_driver_arrival_gps_cutover.sql",
+      "sha256": "261b7eddf6ac7505121924aabac156b25d56d863fa59f1818d8bb87ad0d8268c",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910132406_finance_payroll_reimbursement_source_dedup.sql",
+      "sha256": "d335fc5dcd74d283255283824ac7b39c3ed9f7160a87576d586352b125e157f4",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910132411_finance_settlement_link_reversals.sql",
+      "sha256": "34cd9f338917b7c461acd7b81e104019312e7834c3c770a4c388f4cdc6dcdf52",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910133352_finance_payroll_lifecycle_serialization.sql",
+      "sha256": "d596834f30bdfddcd8b2410c9ba3c1a7318129cebd1c3fc1185c40d1f7506311",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910133355_finance_new_settlement_payment_candidates.sql",
+      "sha256": "2228320c5bb307153155b0b33303f23c40da047efa2485551ae784d38576ef18",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910133421_finance_settlement_payment_recording.sql",
+      "sha256": "33d7164beccdc66e575fc9e75801acb7fcdf0f4d90cb0563a8abfd9a7abbaee8",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910133700_finance_retire_legacy_settlement_payment_writers.sql",
+      "sha256": "8cefdf5c92a4bfbd979a2685de8c46edbad0b31d5751453297d676aeb7545595",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910134223_physical_driver_journeys.sql",
+      "sha256": "02a69b5136041b6ce0d567073d1689910be417243a412cbf95bb139a1e8ed526",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910134820_enforce_one_running_trip_per_driver.sql",
+      "sha256": "7ded3dd461f7e8c44c37933a4438f05350af0ec8d24f41e21ad3f99b0740215d",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910134943_finance_settlement_expense_context.sql",
+      "sha256": "7a26f770888e32c41bca109b571725d10c27b3f1c951a253416c4bcf1c30b92c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910134948_finance_canonical_trip_cost_settlement.sql",
+      "sha256": "05ab3155f07c0e92cf23cca56cc6f671562b4ac300ba973406652ec5c87d5c0e",
+      "groups": [
+        "driver_manifest",
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910135125_finance_retire_bulk_obligation_projection.sql",
+      "sha256": "fb9149d2b130d2811fc1ed9b8c596d3587218223c847cecc4ec5746afcdd5e54",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910140010_finance_account_opening_balances.sql",
+      "sha256": "799f25034f6f3964b32e7da896ebffa589d8bb0fc623b03ae1cd1f13e5964c9c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910141240_finance_cash_opening_counts.sql",
+      "sha256": "53cd98728a42edb363418b4aba292bf6d1ed9ed754739e3056f1eef644444b0a",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910141902_add_delivery_receipt_pdf_access.sql",
+      "sha256": "6a829621cb2f53d5ddab9b612bac7465fa856a15dbf75fbda711a13dcb27dee8",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910142143_finance_statement_coverage_approvals.sql",
+      "sha256": "cc8bea0528ceef3155cb1447a4cfeff9adf4cc09441aaa38e56beb896e0e1166",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910142606_driver_trip_cargo_custody_cycle.sql",
+      "sha256": "8705d623e376c95f45dd152ddbb9322257e7868e612a5a6154f28eca196e01bb",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910142613_driver_geocoding_geofence_tracking.sql",
+      "sha256": "f8ff5fdf714f9b84552b2353ac28f632a7574dcd284020ac0c0c749c5a1ee5d6",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910142740_finance_legacy_adoption_inventory.sql",
+      "sha256": "872ca49f8f8e033d43d279bed1452064f106782a5efdd642c3cb39cd1504c35c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910142923_finance_statement_verification_reauthorization.sql",
+      "sha256": "9ce386f8a93b46865569099495f6a47935b207f51f6fdee8c932bc1f8763273f",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910143355_driver_physical_journey_payload.sql",
+      "sha256": "c92dccb7d6d72fecabdf10227a193afc6f66bcfb3eac26502cbb6248abc4b4a2",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910143433_add_delivery_receipt_email_batches.sql",
+      "sha256": "ab3757645f15726cd529c4081cd5ba7e406797d655c5287124362cdd870fbb72",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910143833_finance_legacy_payable_associations.sql",
+      "sha256": "2948e859d766cbff838a170ab288b543bf0d133412e9ba526d1f7fdb3125e529",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910143920_finance_legacy_payable_association_options.sql",
+      "sha256": "9589b6cbb91b7c42b18f08c503f656f0ff0fa7cf43920b4eed5b1556cc4284bd",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910145616_finance_legacy_receipt_associations.sql",
+      "sha256": "c0f2ba253350a39f0c8ec117df2f4883ad655fff1e0c65eeddac486fe6fa8848",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910145659_finance_legacy_receivable_association_options.sql",
+      "sha256": "c66ecf09556ad0a2cb30a57f9eaf4dfb3526b27708162af9257d9e44ca2a22f1",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910150338_finance_legacy_receipt_movement_trace.sql",
+      "sha256": "f5cc9ce1b8f221d55dd2fa7cfe0d06bbf6a3532cc109a286ab097f86be26c4cd",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910151011_finance_legacy_integrity_inventory.sql",
+      "sha256": "606d077ab2ff859740ca5eebbd5526ccdd918b979768157c899db0adddeac083",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910151617_finance_receivable_portfolio_summary.sql",
+      "sha256": "b0fd3bb3785762edbe496d28f48db926bc8c81815ab4448088ca4b768bbd6c50",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910152557_finance_recorded_cost_summary.sql",
+      "sha256": "1cc424b40ea451f602949ce6e68d4a23e76943252119badb86592725f66bf611",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910152711_finance_fiscal_dashboard_summary.sql",
+      "sha256": "c005e52bf436e1187c046480e1adf16f15e86054f3c584628ba53e93d6aed0eb",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910153731_finance_unbilled_freight_summary.sql",
+      "sha256": "fcc7dfe4f8d73ad0f4681a81b8b016887cf1f0339a8a72d7bfa2229b35135dc0",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910154046_finance_receivables_paged_list.sql",
+      "sha256": "826d1663c923afb300a9fa08c88cb4dd0861b5a093e3ef49ac5c69f86b88d6c1",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910154758_driver_operational_offline_commands.sql",
+      "sha256": "282bb488e8160afffd4bced5d82cc53401dc5dadb8c574e07fbd8dd77ac43aad",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910154811_complete_delivery_receipt_operations.sql",
+      "sha256": "19da792a657ff70481276ac3f9e5ea1f2286bb7af5d66151c3abe0a966653397",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910154838_address_resolution_tracking_operations.sql",
+      "sha256": "5809cf148d512884aecb92ccb598f4f222a33614187a847cc94d7da019561087",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910155442_finance_legacy_expense_cost_associations.sql",
+      "sha256": "74ba3d2af100d5c41643705037c9535836cda26cc88646a1360a06b13e718e19",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910155523_finance_legacy_cost_readers.sql",
+      "sha256": "f7e120e53e4639d9092de78f5c499827e46fac0cd52cea4ad9af50219a86ee63",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910160441_finance_maintenance_cost_context.sql",
+      "sha256": "aa361402faf7a95a0f6ddea62d0f1107068c19e3a0ba1cab85755d0cab9d4495",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910160603_preserve_delivery_receipt_scan_integrity.sql",
+      "sha256": "cf0c1269453cf4b9f3acb011ef6461ae9392ced9a6ba90afc4b29a48092835d5",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910160822_finance_legacy_cost_manual_audit.sql",
+      "sha256": "37b880bc8491a4d9348de4347c147b34977ea63feb39976dfd8a888db6d438bd",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910160950_finance_maintenance_labor_cost_associations.sql",
+      "sha256": "920a5e306cbef22499dc6b24746a6583e28d62bd0536dc15c640d7e3abc6fa76",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910161129_finance_maintenance_labor_context.sql",
+      "sha256": "4fc143c6d08ca1a1c0c429db3f4848a07b6bea1aea80387f63c928e737f895e6",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910161702_finance_maintenance_direct_part_associations.sql",
+      "sha256": "a9c7a78cd4a0a3434332b4aa4b23f7f4a79d24c76209d10361c130c92e2a1adf",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910161828_finance_maintenance_direct_part_context.sql",
+      "sha256": "20933142fa6cf0974c26652300d2b69323681b2fb477ba9f6149c5e387261a1f",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910162807_finance_account_period_closure_foundation.sql",
+      "sha256": "4dd0e61229f86c1826b50f945cceaad12ee2233188dfa0913522969ceccd9b29",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910162958_finance_account_period_close_snapshot.sql",
+      "sha256": "fc425b1e8b9e6ee22a04603bf2b86de1375ecc390512a847092c8267e8ff152c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910163109_finance_account_period_closed_source_guards.sql",
+      "sha256": "10a3e77207b379485e3ce4e1016ebd826c6ec83bb3e2316db218c5e5a40bc4bc",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910163116_finance_legacy_cut_reviews.sql",
+      "sha256": "6baa25c2e21533aae152f6c61fbda8ecb891541888b133f2c325dd546bc21e0d",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910164256_finance_account_period_history.sql",
+      "sha256": "28589666e27f55dc604ce585ac3a424b7df9e84f05f97d24793289e404377301",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910164711_reassert_finance_relation_rls_and_grants.sql",
+      "sha256": "78d784966c181a7d2cc895a8607af8d3dec88d48db17b0ed30f495a8085ccee2",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910164923_finance_account_period_closure_evidence.sql",
+      "sha256": "882ed7914eb25e877f1ccbddc0930bd0473868002ea3b76140b9d05cd59eecae",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910164942_finance_closed_period_late_payment_composition.sql",
+      "sha256": "8909c59453111cdd2ca6d001f49707926c032c26a466a59adf3c5745e1c748e7",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910165830_finance_period_manual_audit.sql",
+      "sha256": "af579d29457377bf3d612aafa5105af8939f7aba369565f2956ef53ed85a63e1",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910170213_finance_legacy_cut_settlement_mapping.sql",
+      "sha256": "2641e645cc06ec82195173094c88e7a67402bb9cc18a6b6de4f112a37388cd63",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910170454_finance_stock_acquisition_associations.sql",
+      "sha256": "8e56e0d16b593974ab2299713253c1282423793c21442c0f671c3bc6bdce9c7e",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910170539_finance_stock_acquisition_readers.sql",
+      "sha256": "1f7f17c1f2b419c949824e5731c332e31935bfbfc9fd26481cc216fd0b2cfb2e",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910170631_add_delivery_receipt_supplier_pdf_profiles.sql",
+      "sha256": "3a3b30f3bf04fbd61037142d803427c9be126225e7b2f36d54b9f15e82af8141",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910170901_harden_delivery_geofence_scope.sql",
+      "sha256": "ebbc2f563af375d22407d80af496756fefb40e710a1c9a78bc70f1480f4e4550",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910171503_finance_stock_consumption_attributions.sql",
+      "sha256": "255b91a22d7e9dfe2a4bf43fa48c7c591d288d24976dc352cca653b57d58401c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910171734_finance_stock_consumption_readers.sql",
+      "sha256": "0929a3da07490b2b35a2fd1515af100d8014e6182f2d56f0eca0fbfba8cd51f4",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910172624_finance_paid_projection_chains.sql",
+      "sha256": "81a04b56856933edce8341a07743d5b977e7a688b877d6cafebaf4fe680d4394",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910173336_reassert_finance_stock_relation_rls_and_grants.sql",
+      "sha256": "ae61372988b72bc4e17c8ab5c07e32ae0b60b226378668ca62919919d88c2a9f",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910173906_finance_cash_period_closure.sql",
+      "sha256": "c5a8e1039831002b94b39f4ef870d5c641c835533df63c97c9961209ec0377e5",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910174142_finance_cash_period_count_readers.sql",
+      "sha256": "503db8a0716759a73c7d3d9baac3b11c4af6801c800677dc6db811708bf3df68",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910174335_add_delivery_receipt_ocr_queue.sql",
+      "sha256": "9b5005e80d5b289cf60ffe062d22c5c832671cba4b951176ddeba737da0e502b",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910174822_finance_cash_period_manual_audit.sql",
+      "sha256": "cef4cdafd97172a150bcf3c98d198ac10711b42afab992004506979737fc2c81",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910175310_finance_cash_account_identity_scope.sql",
+      "sha256": "0de48bf482ee3bed0aa4e8985b43382822a37e946f807bdfcb38d8fe89b5cc63",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910175641_finance_unpaid_expense_cancellation.sql",
+      "sha256": "20fa89e70daa64f04ea1c8c4590801e9e0a63ea9e8e5e4f4ae7879f9d65b5984",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910175733_finance_expense_cancellation_preview.sql",
+      "sha256": "f552240ad6b9b59c069c519729e75868180d51e764f4bb0b0d92026ed4ebafd0",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910180040_finance_payable_portfolio.sql",
+      "sha256": "51773219434d93c0a7cade674b75381f5a5e2f4dcc6dbd9bd24fd04f52c482f5",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910180245_reassert_finance_cash_period_relation_rls_and_grants.sql",
+      "sha256": "ed990a90b3b3fe18976e03ee8c53fbb9f13639f1e81dd48e2b3a082f665e617c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910181257_finance_unpaid_manual_expense_cancellation.sql",
+      "sha256": "524e93c21de27fcb3bb5b46720bc8e340304efc6d2be086460e249e3d19cb50a",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910181353_add_delivery_receipt_quality_policies.sql",
+      "sha256": "7a76a2ad17e2183e36a560faac25a41a68c961499e94874398a9176f51f2dc1e",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910181420_add_delivery_receipt_supplier_channels.sql",
+      "sha256": "0c505840573e7ea16bb9eaa99b32940fac118da557a82db4a9f51a22b8c9fd20",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910181549_finance_manual_expense_cancellation_preview.sql",
+      "sha256": "6ed93d5ec9d655f67adbfd9edd29b6335336d3eaa013d6f15c30683a5f8b5ed4",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910182124_enforce_driver_delivery_gps_and_refusal_evidence.sql",
+      "sha256": "0233425408c4bf081806efed785773bed34d2a8a5609a670714af1efa854494b",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910182406_finance_expense_cancellation_manual_audit.sql",
+      "sha256": "20740e5099f555dd58dff206adfc707e2ad139acda22b4906e415d89e7ef216b",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910182454_auto_arrive_driver_stop_from_delivery_geofence.sql",
+      "sha256": "758da361f9c27eff3a4dc2c82b88931c39df246b8a28d92620d8f7f18eebb8af",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910182541_finance_movement_correction_foundation.sql",
+      "sha256": "1085d55520ecf05a34ca2c5a64e22e2830b64cdb906b2ef5aa37a07d8d09d74a",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910182830_finance_movement_correction_history.sql",
+      "sha256": "7885c5accd363b5b60828dbe785030c95eef3212f5de47f4912a3a324e2cc485",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910182855_complete_delivery_receipt_physical_return_workflow.sql",
+      "sha256": "74d97bd445ec60213c97e9d1fa357b42f65a7f1e5ae01d9610bcac6a32687cd4",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910183025_extend_delivery_receipt_operational_filters.sql",
+      "sha256": "a92e26aca0815813d53433ae22dda106b9717eb637d7450c60e8da4bf8f80fab",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910183438_finance_active_movement_period_projections.sql",
+      "sha256": "0eb73159b24bf1afd731e24aa4153db833cdef03bd5612e4249e856f2fbccc0f",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910183442_finance_reconciliation_active_movements.sql",
+      "sha256": "1ace7642c0c66c131627b5d860f0289782d8b5ff2c48bc2e21d96dc0ad206ac8",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910183506_finance_active_movement_financial_guards.sql",
+      "sha256": "130bc344d89633f918fefb977dd4d7d2a3a1769e3eaa4bf0bd6ff0079480dfaf",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910184213_finance_movement_active_reference.sql",
+      "sha256": "8fbcdb2344bb125fa68f61647ce36c91db95f71e55eba09a4c7e24a746aebf3c",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910184543_finance_active_movement_options.sql",
+      "sha256": "2220b56fd093ff7c47556ddb6d75a96aff19acfd750b87d757fa11de82590275",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910185338_finance_void_aware_monetary_proofs.sql",
+      "sha256": "de962a9c2d7ab108974c75fe5f9ec6430129b60d7725be75e9c1b4e17b0b8c0a",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910185517_finance_movement_recording_origin.sql",
+      "sha256": "d2e4601ab095e1245845036ab5c0965425e3f89443962789ca19690e6b1eaa2e",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910190516_finance_movement_correction_context.sql",
+      "sha256": "aefa6e937c708cf31e983c7bf6bdfef8a2e788ed68bcf0683a67b4c256367b32",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910190635_finance_movement_correction_preview.sql",
+      "sha256": "0a39c5eddc9c3ecb553c782ae3ccb7510333970cff0d8cefd07d2a25e3b8bd06",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910190649_enforce_driver_delivery_receipt_evidence.sql",
+      "sha256": "534a7b4f8dafaca41db2592ce6ab05306933ae45f476d638fdd86991db86b285",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910190950_harden_geofence_tracking_completion.sql",
+      "sha256": "cce1181308a0aabd7d0f0664cf3d5beb7d726e2d31acb95dbfbd681760bb66e5",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910191008_harden_trip_cargo_custody_integrity.sql",
+      "sha256": "7aab72f5dc4b2b052f1a7edbf669f6edfd17842bce8619d5e2950b0a52bdd18f",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910191452_support_nfse_only_delivery_receipts.sql",
+      "sha256": "ec3877f199ef351a38750c7ec8f346fdbab6099bab243df56c814823a86cf97d",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910191905_finance_manual_movement_void_command.sql",
+      "sha256": "6f57f662c965f24ccc010973232ea16b9ed44d0eed8480f0a47a72524237039b",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910192455_complete_address_geocoding_automation.sql",
+      "sha256": "23e71c600e55ed48fa027280e8b7969022936bcd02287c1a82862c6b32c11027",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910192744_canonicalize_delivery_receipt_email_filename.sql",
+      "sha256": "d9c36ff0dc98a8cf9b8c0432035e4a4627e0be3021661267df0d97ce33d36fe1",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910192831_finance_manual_movement_void_public_dispatch.sql",
+      "sha256": "c90da6bb84d7733b920b818f78761b3d8bb3fce53e255a3b6371d4381d536595",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910193642_driver_app_observability.sql",
+      "sha256": "4e7f10815586e75ce061dfe409ad4adefc1f5be211d7af3b9374ca6df2f47db6",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910193723_finance_period_money_package.sql",
+      "sha256": "685ce9177c4e3b5202d7ac9e6eb13cd4f5963db001a14c16204b23290b624adf",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910194438_complete_trip_cargo_seal_lifecycle.sql",
+      "sha256": "b71870378963b708f7db16abd8933902c8ad9fbee42ea9d98e927dd7cbb11ece",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910194846_harden_fleet_geofence_editing.sql",
+      "sha256": "7c3217bee9e3ffe189ec0873c90add81aad3e3b69354a09ad3164dadc5efcb89",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910195852_preserve_geofence_fast_pass.sql",
+      "sha256": "0534ae1ce3ed0af26773e6fa30bfde24922f6ab80f0a43167d3b1737a90cbab1",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910195941_finance_receivable_temporal_foundation.sql",
+      "sha256": "8246ff32ae6d1e95ed9b4dda8495315c08328e002266253dd2258b04a86269c3",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910201323_finance_receivable_captured_history.sql",
+      "sha256": "8a94f49b025db40e3a1629b091c0e33180720579e37c8fa04149cd28bca80fe6",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910202421_finance_receivable_payments_page.sql",
+      "sha256": "e0873d2419bb9663e6ddc2e3483e648c0366852ca5b0794fb38e7834557bdd7b",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910203516_finance_period_unloading_flow.sql",
+      "sha256": "12b288b8809da09d3dda8e3ee2c323b32e4defcc5650af25b6cc915ba436a2ae",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910203617_ssx_mapping_conflict_review.sql",
+      "sha256": "af3b5b48ce5a7f0697b6474ab9eb85c714223233e3138018dae9873c0e713f84",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910204500_delivery_receipt_email_history.sql",
+      "sha256": "314c5315166b5ac0b7502fd3211da1537a7471464a8a8a0b24c50b84c6ad474c",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910204602_ensure_nfse_only_delivery_receipt.sql",
+      "sha256": "a8a3d930cec366015962de7e0fe5bd2abc7839757fcb0d13b761611d9c1e5f5c",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910205941_finance_unloading_receivable_source_guard.sql",
+      "sha256": "b8701c4f801c6840e3d37ce1ab048cc366a98f7c10be92adf3974d673e66ee09",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910210433_finance_unloading_receivable_context.sql",
+      "sha256": "6bad5b960550ad173a507cb03dce6239a63c6108ef0a13681364ba2a30238e77",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910211000_canonical_destination_geocoding_idempotency.sql",
+      "sha256": "d767b8347432294fda349e199361cb085a7a5b88f5d820713fafea62e52f33cc",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910211156_finance_unloading_projection_repair.sql",
+      "sha256": "c0e71109be86c5f43bc799b506479c6fa7103e4db1b9a38b5a500c61fcd8f482",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910211200_driver_delivery_fiscal_snapshot_gate.sql",
+      "sha256": "c66ac6bc9eb42963bf7bf38ef723b5d4b4bb818146156f95d013f861ad436ddd",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910211740_finance_unloading_projection_repair_preview.sql",
+      "sha256": "df7590dceae582bddf72f86008a62de2f083d2c41642a2ec3993155b0abd9e25",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910211800_canonical_trip_cargo_close_gate.sql",
+      "sha256": "6432e4b580538f8dbfa518e40c98c4dc4b3cb43eddd81f4b7a027dfa7cdb21c0",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910212550_finance_public_unloading_projection_repair.sql",
+      "sha256": "0bbf8948dbbfe8bdfd4f5cbb157be6da61558d1a8387c1036038b619e0164d74",
+      "groups": [
+        "financial_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910213021_reconcile_legacy_cargo_gate_and_service_delivery_adapters.sql",
+      "sha256": "a7f723b4169fb7f5f85b3e21011bb789b6053904ccedc1e67ae745f99d1bda36",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910213156_quarantine_legacy_settlements_until_cargo_close.sql",
+      "sha256": "68a7b3d136871db47094bfa170b62c6abef78f2acc1fcfffd12d12a66ecd9d4c",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910220847_finance_cargo_expense_active_movements.sql",
+      "sha256": "e43bad1fcf218eb51b2feba659e8a119ddce40be066afb483cf05d1e230b0ee6",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910221301_decouple_ssx_dispatcher_from_address_tracking.sql",
+      "sha256": "8a222cb526db862befeea4e4cef7d2c6bd70dd9b75cc68be0c2659ebee12ac9f",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    },
+    {
+      "file": "20260910223000_harden_ssx_mapping_conflict_active_tenant.sql",
+      "sha256": "c5a82e8fbe289787c52e9a83692c2a147026103f9fa3fb7d8ba4288a071f4b99",
+      "groups": [
+        "driver_manifest"
+      ],
+      "registered_in_old_snapshot": [],
+      "review_state": "inventory_not_whole_file_approval",
+      "staged_original_do_not_apply": false
+    }
+  ]
+}

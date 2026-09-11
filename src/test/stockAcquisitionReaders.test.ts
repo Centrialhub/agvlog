@@ -1,0 +1,33 @@
+// @vitest-environment node
+import {readFileSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
+import {beforeAll,beforeEach,afterEach,afterAll,it,expect} from 'vitest';
+import {createStockConsumptionDatabase} from './helpers/stockConsumptionDatabase';
+import {financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
+import {stockAcquisitionContextSchema,stockAcquisitionInventorySchema} from '@/lib/financial/stockAcquisitionContract';
+let db:Awaited<ReturnType<typeof createStockConsumptionDatabase>>;const item=randomUUID(),inbound=randomUUID(),supplier=randomUUID();
+beforeAll(async()=>{db=await createStockConsumptionDatabase();await db.exec('create table finance_statement_imports(id uuid,tenant_id uuid,file_name text);create table finance_statement_rows(id uuid,tenant_id uuid,source_row integer)');for(const file of ['20260909233625_finance_audit_queries.sql','20260910160441_finance_maintenance_cost_context.sql','20260910170539_finance_stock_acquisition_readers.sql','20260910171734_finance_stock_consumption_readers.sql'])await db.exec(readFileSync(`supabase/migrations/${file}`,'utf8'));},30000);
+beforeEach(async()=>{await db.exec('begin');await db.query("insert into stock_items(id,tenant_id,name,category,unit,active) values($1,$2,'Filtros de óleo','filter','un',true)",[item,i.tenant]);await db.query("insert into stock_movements(id,tenant_id,stock_item_id,movement_type,quantity,unit_cost,total_cost,reason,moved_at) values($1,$2,$3,'inbound',2,25,50,'purchase','2026-01-20T14:00:00Z')",[inbound,i.tenant,item]);await db.query("insert into clients(id,tenant_id,company_name,active) values($1,$2,'Fornecedor de estoque',true)",[supplier,i.tenant]);});
+afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
+async function context(page=1,search=''){return stockAcquisitionContextSchema.parse((await financeAs<{v:unknown}>(db,i.operator,'select get_finance_stock_acquisition_context($1,$2,$3,$4) v',[i.tenant,inbound,page,search])).rows[0].v);}
+async function inventory(page=1,search=''){return stockAcquisitionInventorySchema.parse((await financeAs<{v:unknown}>(db,i.operator,'select get_finance_stock_acquisition_inventory($1,$2,$3) v',[i.tenant,page,search])).rows[0].v);}
+async function costs(count=1){const items=Array.from({length:count},()=>({id:randomUUID(),category:'maintenance',description:'Compra de filtros',amount_cents:5000,occurred_on:'2026-01-20',supplier_id:supplier,supplier_name:'Fornecedor de estoque',document_number:'NF estoque 123',no_receipt_reason:'Documento sob conferência',payee_type:'supplier',allocations:[]}));await financeAs(db,i.operator,'select record_finance_expense_batch($1)',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),context:'maintenance',description:'Compra de filtros de manutenção',reason:'Registro da compra de filtros',items}]);return items;}
+it('paginates actual expense candidates with exact document supplier and literal search',async()=>{await costs(31);const first=await context(),last=await context(2);expect(first.total).toBe(31);expect(first.candidates).toHaveLength(30);expect(last.candidates).toHaveLength(1);expect(first.source).toMatchObject({quantity:'2',total_cost_cents:'5000',movement_date:'2026-01-20'});expect(first.candidates[0]).toMatchObject({supplier_id:supplier,document_number:'NF estoque 123',issue:null});expect((await context(1,'%')).total).toBe(0);});
+it('lists all inbound sources beyond 1000 and keeps malformed amounts and dates visible',async()=>{
+ await db.query("insert into stock_movements(id,tenant_id,stock_item_id,movement_type,quantity,unit_cost,total_cost,reason,moved_at) select gen_random_uuid(),$1,$2,'inbound',1,25,25,'purchase','2026-01-21'::timestamptz from generate_series(1,1004)",[i.tenant,item]);
+ await db.query("update stock_movements set quantity='NaN',total_cost='NaN',moved_at='infinity' where id=$1",[inbound]);
+ const first=await inventory(),last=await inventory(34);expect(first).toMatchObject({total:1005,associated_count:0,unassociated_count:1005});expect(first.rows).toHaveLength(30);expect(last.rows).toHaveLength(15);expect(first.rows.find(row=>row.id===inbound)).toMatchObject({quantity:null,total_cost_cents:null,movement_date:null});expect((await inventory(1,inbound)).total).toBe(1);
+});
+it('keeps association history available outside candidate filters and reverses through the actual command',async()=>{
+ await costs();const before=await context(),candidate=before.candidates[0];
+ await financeAs(db,i.operator,'select associate_finance_stock_acquisition($1)',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),inbound_movement_id:inbound,cost_id:candidate.cost_id,revision:candidate.revision,quantity:'2',document_number:candidate.document_number,same_purchase_confirmed:true,reason:'Compra e documento conferidos pelo financeiro'}]);
+ const linked=await context(2,'ausente');expect(linked.active_link?.cost_id).toBe(candidate.cost_id);expect(linked.history.total).toBe(1);expect((await inventory()).associated_count).toBe(1);
+ await financeAs(db,i.operator,'select reverse_finance_stock_acquisition_association($1)',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),link_id:linked.active_link!.id,revision:linked.active_link!.revision,reason:'Desfazer associação após conferência documental'}]);
+ const after=await context();expect(after.active_link).toBeNull();expect(after.history.rows[0].reversal?.actor_id).toBe(i.operator);expect((await inventory()).unassociated_count).toBe(1);
+ const audit=(await financeAs<{v:{manual_count:number;rows:Array<{actor_id:string;manual_intervention:boolean}>}}>(db,i.operator,'select list_finance_audit_events($1,$2) v',[i.tenant,{manual_only:true}])).rows[0].v;expect(audit.manual_count).toBe(2);expect(audit.rows.every(row=>row.manual_intervention&&row.actor_id===i.operator)).toBe(true);
+});
+it('denies drivers and another tenant and rejects invalid pagination',async()=>{await expect(inventory(0)).rejects.toThrow('finance_invalid_filters');await expect(financeAs(db,i.driverUser,'select get_finance_stock_acquisition_inventory($1)',[i.tenant])).rejects.toThrow('finance_access_denied');await expect(financeAs(db,i.operator,'select get_finance_stock_acquisition_context($1,$2)',[i.otherTenant,inbound])).rejects.toThrow();});
+it('preserves fractional-cent declared unit prices alongside the exact line total',async()=>{
+ await db.query('update stock_movements set quantity=3,unit_cost=0.00333333,total_cost=0.01 where id=$1',[inbound]);
+ expect((await context()).source).toMatchObject({unit_cost_cents:null,unit_cost_decimal:'0.00333333',total_cost_cents:'1',unit_price_policy:'rounded_extended_total_cents_v1'});
+});

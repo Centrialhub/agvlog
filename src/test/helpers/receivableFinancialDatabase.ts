@@ -9,8 +9,8 @@ export async function installReceivableFinancialFixture(db:PGlite){
  const start=baseline.indexOf('CREATE OR REPLACE FUNCTION public.reverse_receivable_payment('),end=baseline.indexOf('$function$;',start)+12;
  if(start<0)throw new Error('Missing actual reversal baseline');await db.exec(baseline.slice(start,end));
 }
-export async function createReceivableFinancialDatabase(candidate=true){
- const value=await createClosingLifecycleDatabase();await installReceivableFinancialFixture(value.db);if(candidate)await value.db.exec(receivableFinancialSql());return value;
+export async function createReceivableFinancialDatabase(candidate=true,explicitRefunds=true){
+ const value=await createClosingLifecycleDatabase();await installReceivableFinancialFixture(value.db);if(candidate){await value.db.exec(receivableFinancialSql());if(explicitRefunds)await value.db.exec(readFileSync('supabase/migrations/20260910030634_finance_explicit_receipt_refunds.sql','utf8'));}return value;
 }
 export interface FinancialContext {revision:string;receivable_id:string;report_id:string|null;invoice_id:string|null;amount_cents:number;received_cents:number;open_cents:number;status:string;can_receive:boolean;can_reverse:boolean;can_reconcile:boolean;requires_reconciliation:boolean;payments:Array<{id:string;reversed_at:string|null}>}
 export async function financialContext(db:PGlite,receivable:string){return (await operationRpc<{result:FinancialContext}>(db,'select get_receivable_financial_context($1,$2) result',[i.tenant,receivable])).rows[0].result;}
@@ -28,7 +28,7 @@ export async function financialPayload(db:PGlite,receivable:string,options:Recor
   expected_revision:(await financialContext(db,receivable)).revision,action:'receive',reason:'Conferência financeira QA',amount_cents:1000,effective_date:date,bank_account_id:'cf600000-0000-4000-8000-000000000001',method:'pix',...options};
 }
 export function reversalPayload(payload:Awaited<ReturnType<typeof financialPayload>>,payment:string){
- const {amount_cents:_,bank_account_id:__,method:___,...rest}=payload;return {...rest,action:'reverse',payment_id:payment};
+ const {amount_cents:_,bank_account_id:__,method:___,...rest}=payload;return {...rest,action:'reverse',payment_id:payment,refund_kind:'money_returned'};
 }
 export async function financialCommand(db:PGlite,payload:unknown){
  return (await operationRpc<{result:{payment_id:string|null;reversal_id:string|null;command_id:string;bank_transaction_id:string|null;received_cents:number;open_cents:number;revision:string}}>(db,'select apply_receivable_financial_command($1::jsonb) result',[JSON.stringify(payload)])).rows[0].result;

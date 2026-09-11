@@ -1,0 +1,19 @@
+import {paidMovementVoidLabels} from './paidMovementVoidLabels';
+import {z} from 'zod';
+const uuid=z.string().uuid(),count=z.number().int().nonnegative();
+export const legacyIntegrityRowSchema=z.object({source_table:z.string(),source_id:uuid,date_status:z.enum(['valid','missing','nonfinite']),occurred_on:z.string().nullable(),raw_date:z.string().nullable(),account_id:uuid.nullable(),account_status:z.enum(['identified','unresolved','not_in_tenant']),amount_cents:z.string().regex(/^\d+$/).nullable(),raw_amount:z.string().nullable(),direction:z.enum(['in','out','unknown']),issues:z.array(z.string()),context:z.record(z.unknown())}).superRefine((row,ctx)=>{
+ if((row.date_status==='valid')!==!!row.occurred_on)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Data e classificação incompatíveis.'});
+ if(row.account_status==='identified'&&!row.account_id)ctx.addIssue({code:z.ZodIssueCode.custom,message:'Conta identificada sem referência.'});
+});
+export type LegacyIntegrityRow=z.infer<typeof legacyIntegrityRowSchema>;
+// The inventory may report additional reasons without hiding the affected record.
+const section=z.object({total:count,rows:z.array(legacyIntegrityRowSchema).max(30)});
+export const legacyIntegritySchema=z.object({version:z.literal(1),tenant_id:uuid,scope:z.literal('tenant'),page:z.number().int().positive(),page_size:z.literal(30),total:count,counts_by_source:z.record(count),counts_by_issue:z.record(count),identified_account:section,unknown_account:section.extend({scope:z.literal('tenant'),not_additive_across_accounts:z.literal(true)}),legacy_integration_status:z.literal('not_reviewed'),can_close:z.literal(false)}).superRefine((data,ctx)=>{
+ if(data.total!==data.identified_account.total+data.unknown_account.total||data.identified_account.rows.some(row=>row.account_status!=='identified')||data.unknown_account.rows.some(row=>row.account_status==='identified'))ctx.addIssue({code:z.ZodIssueCode.custom,message:'Grupos de integridade incompatíveis.'});
+});
+export const legacyIntegritySourceLabels:Record<string,string>={receivables_payments:'Recebimento',receivable_payment_reversals:'Devolução de recebimento',payables_payments:'Pagamento de título',driver_settlement_payments:'Pagamento de acerto',closing_report_payments:'Recebimento de fechamento',load_payments:'Recebimento de carga',employee_advances:'Adiantamento de funcionário',bank_transactions:'Registro bancário antigo',payroll_entry_items:'Crédito da folha'};
+export const legacyIntegrityIssueLabels:Record<string,string>={date_missing:'Data ausente.',date_nonfinite:'Data inválida ou infinita.',amount_invalid:'Valor inválido ou não identificado.',direction_unknown:'Sentido do dinheiro não identificado.',parent_not_in_tenant:'Registro de origem não encontrado nesta empresa.',account_unresolved:'Conta não identificada.',account_not_in_tenant:'Conta referenciada não encontrada nesta empresa.',receipt_alias_missing:'Recebimento correspondente não identificado.',receipt_alias_mismatch:'Referência do recebimento incompatível com a origem.',money_source_missing:'Movimentação de dinheiro de origem não identificada.',payroll_origin_not_in_tenant:'Origem da folha não encontrada nesta empresa.',payable_not_in_tenant:'Título a pagar não encontrado nesta empresa.',bank_source_not_in_tenant:'Registro bancário de origem não encontrado nesta empresa.',bank_source_mismatch:'Registro bancário incompatível com a origem.',import_not_in_tenant:'Importação de origem não encontrada nesta empresa.',referencing_source_mismatch:'Registro que referencia a origem apresenta dados incompatíveis.'};
+legacyIntegrityIssueLabels.receivable_not_in_tenant='Título a receber não encontrado nesta empresa.';
+legacyIntegrityIssueLabels.parent_reference_mismatch='A referência ao registro de origem é incompatível.';
+
+Object.assign(legacyIntegrityIssueLabels,paidMovementVoidLabels);

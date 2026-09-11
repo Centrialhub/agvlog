@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import {readPayrollProjection,readPayrollPeriods} from '@/lib/financial/ledgerClient';
+import type {PayrollPaymentSummary} from '@/lib/financial/payrollPaymentContract';
 
 // ---------------- Constants / labels ----------------
 export const PAYROLL_PERIOD_STATUSES = ['draft','calculated','under_review','approved','closed','cancelled'] as const;
@@ -12,7 +14,7 @@ export const PAYROLL_PERIOD_STATUS_LABELS: Record<PayrollPeriodStatus,string> = 
   approved: 'Aprovada', closed: 'Fechada', cancelled: 'Cancelada',
 };
 export const PAYROLL_PAYMENT_STATUS_LABELS: Record<string,string> = {
-  unpaid: 'Não paga', partial: 'Parcial', paid: 'Paga',
+  unpaid: 'Não paga', partial: 'Parcial', paid: 'Paga',review:'Conferir',cancelled:'Cancelada',
 };
 
 export const PAYROLL_ITEM_TYPE_LABELS: Record<string,string> = {
@@ -45,7 +47,7 @@ export const ADVANCE_STATUS_LABELS: Record<string,string> = {
 
 // ---------------- Types ----------------
 export type PayrollPeriod = Omit<Tables<'payroll_periods'>, 'status'> & { status: PayrollPeriodStatus };
-export type PayrollEntry = Tables<'payroll_entries'>;
+export type PayrollEntry = Tables<'payroll_entries'> & {payment_summary?:PayrollPaymentSummary};
 export type PayrollEntryItem = Omit<Tables<'payroll_entry_items'>, 'nature'> & {
   nature: 'credit' | 'debit' | 'already_paid' | 'info';
 };
@@ -61,41 +63,37 @@ export function usePayrollPeriods() {
     queryKey: ['payroll_periods', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.from('payroll_periods').select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('period_start', { ascending: false });
-      if (error) throw error;
-      return (data || []) as unknown as PayrollPeriod[];
+      return await readPayrollPeriods(currentTenant.id) as unknown as PayrollPeriod[];
     },
     enabled: !!currentTenant,
+    refetchOnWindowFocus:true,
+    refetchInterval:30000,
   });
 }
 
 export function usePayrollPeriod(id?: string) {
+  const {currentTenant}=useTenant();
   return useQuery({
-    queryKey: ['payroll_period', id],
+    queryKey: ['payroll_period', id,currentTenant?.id],
     queryFn: async () => {
-      if (!id) return null;
-      const { data, error } = await supabase.from('payroll_periods').select('*').eq('id', id).maybeSingle();
-      if (error) throw error;
-      return data as unknown as PayrollPeriod | null;
+      if (!id||!currentTenant) return null;
+      return (await readPayrollPeriods(currentTenant.id,id))[0] as unknown as PayrollPeriod | null ?? null;
     },
-    enabled: !!id,
+    enabled: !!id&&!!currentTenant,
   });
 }
 
 export function usePayrollEntries(periodId?: string) {
+  const {currentTenant}=useTenant();
   return useQuery({
-    queryKey: ['payroll_entries', periodId],
+    queryKey: ['payroll_entries', periodId,currentTenant?.id],
     queryFn: async () => {
-      if (!periodId) return [];
-      const { data, error } = await supabase.from('payroll_entries').select('*, employees(name, doc_cpf, branch, department)')
-        .eq('payroll_period_id', periodId)
-        .order('created_at');
-      if (error) throw error;
-      return (data || []) as unknown as (PayrollEntry & { employees?: { name: string; doc_cpf: string | null; branch: string | null; department: string | null } })[];
+      if (!periodId||!currentTenant) return [];
+      return await readPayrollProjection(currentTenant.id,periodId) as unknown as (PayrollEntry & { employees?: { name: string|null; doc_cpf: string | null; branch: string | null; department: string | null } })[];
     },
-    enabled: !!periodId,
+    enabled: !!periodId&&!!currentTenant,
+    refetchOnWindowFocus:true,
+    refetchInterval:30000,
   });
 }
 
@@ -133,6 +131,7 @@ export function useGeneratePayrollPeriod() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payroll_periods'] });
       qc.invalidateQueries({ queryKey: ['payroll_entries'] });
+      Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]);
     },
   });
 }
@@ -146,6 +145,7 @@ export function useRecalculatePayrollEntry() {
     },
     onSuccess: (_d, entry_id) => {
       qc.invalidateQueries({ queryKey: ['payroll_entries'] });
+      Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]);
       qc.invalidateQueries({ queryKey: ['payroll_entry_items', entry_id] });
     },
   });
@@ -161,6 +161,7 @@ export function useApprovePayrollPeriod() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payroll_periods'] });
       qc.invalidateQueries({ queryKey: ['payroll_entries'] });
+      Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]);
       qc.invalidateQueries({ queryKey: ['payables'] });
     },
   });
@@ -173,7 +174,7 @@ export function useClosePayrollPeriod() {
       const { error } = await supabase.rpc('close_payroll_period', { _period_id: period_id, _reason: reason ?? undefined });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll_periods'] }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['payroll_periods'] }); void Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]); },
   });
 }
 
@@ -195,6 +196,7 @@ export function useAddPayrollManualItem() {
     },
     onSuccess: (_d, args) => {
       qc.invalidateQueries({ queryKey: ['payroll_entries'] });
+      Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]);
       qc.invalidateQueries({ queryKey: ['payroll_entry_items', args.entry.id] });
     },
   });
@@ -214,6 +216,7 @@ export function useDeletePayrollItem() {
     },
     onSuccess: (item) => {
       qc.invalidateQueries({ queryKey: ['payroll_entries'] });
+      Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]);
       qc.invalidateQueries({ queryKey: ['payroll_entry_items', item.payroll_entry_id] });
     },
   });

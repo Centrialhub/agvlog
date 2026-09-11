@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { corsHeaders } from "../_shared/cors.ts";
+import { requireActiveTenant } from "../_shared/active-tenant.ts";
 
 const jsonResp = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -56,6 +57,8 @@ Deno.serve(async (req) => {
     const files = Array.isArray(body?.files) ? body.files : [];
     const tenantId = typeof body?.tenantId === "string" ? body.tenantId : "";
     if (!tenantId) return jsonResp({ error: "Tenant obrigatório" }, 400);
+    const tenantContextError = requireActiveTenant(req, tenantId);
+    if (tenantContextError) return tenantContextError;
     const { data: membership, error: membershipError } = await anonClient
       .from("tenant_memberships")
       .select("tenant_id, role")

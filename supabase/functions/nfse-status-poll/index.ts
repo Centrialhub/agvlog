@@ -10,6 +10,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
 import { requireIntegrationCapability } from '../_shared/capabilities.ts';
 import { isCronRequest } from '../_shared/cron-auth.ts';
+import { requireActiveTenant } from '../_shared/active-tenant.ts';
 import {
   classifyFiscalProviderStatus,
   getHubFiscalDocument,
@@ -78,6 +79,8 @@ Deno.serve(withFiscalCors(async (req) => {
       if (!effectiveTenantId) {
         return json(400, { success: false, error: { code: 'TENANT_REQUIRED', message: 'tenant_id ou nfse_id é obrigatório' } });
       }
+      const tenantContextError = requireActiveTenant(req, effectiveTenantId);
+      if (tenantContextError) return tenantContextError;
       const { data: membership } = await admin.from('tenant_memberships')
         .select('role').eq('tenant_id', effectiveTenantId).eq('user_id', callerId!)
         .eq('active', true).maybeSingle();

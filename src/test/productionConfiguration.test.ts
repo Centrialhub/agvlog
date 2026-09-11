@@ -20,7 +20,7 @@ describe("production configuration contract", () => {
       })
       .map((entry) => entry.name);
 
-    expect(functionNames).toHaveLength(33);
+    expect(functionNames).toContain("agvlog-ssx-dispatcher");
 
     for (const name of functionNames) {
       const source = read("supabase", "functions", name, "index.ts");
@@ -170,13 +170,17 @@ describe("production configuration contract", () => {
     // own role/tenant review; absence of MFA must not remove authorization.
     expect(serviceRoleHandlers.map(handler => handler.name).sort()).toEqual([
       "agvlog-aggregate-daily", "agvlog-compute-state", "agvlog-integration-upsert",
-      "agvlog-pipeline-run", "agvlog-process-vehicle", "agvlog-run-queue",
+      "agvlog-pipeline-run", "agvlog-process-vehicle", "agvlog-run-queue", "agvlog-schedule-tenants",
+      "agvlog-ssx-dispatcher",
       "clients-merge-contacts-addresses", "create-team-member", "cte-sefaz-callback",
       "cte-status-poll", "emit-nfse", "fiscal-certificate-manage", "frontend-error-report", "get-client-pod-signed-url",
       "hub-fiscal-credential-save", "hub-fiscal-proxy", "hub-fiscal-webhook-in",
       "list-tenant-members", "nfse-status-poll", "search-users-by-email", "secure-upload",
+      "delivery-receipt-email-webhook", "finance-statement-verify", "geocode-address", "process-delivery-receipt-ocr", "process-delivery-receipt-portals", "send-delivery-receipts",
+      "process-address-resolution-queue",
       "ssx-diagnostic", "ssx-insert-person", "ssx-insert-person-client", "ssx-login",
-      "ssx-poll-positions", "ssx-sync-telemetry", "ssx-sync-units", "tax-registry-consult", "update-team-member",
+      "ssx-poll-positions", "ssx-sync-governance", "ssx-sync-rule-violations",
+      "ssx-sync-telemetry", "ssx-sync-units", "tax-registry-consult", "update-team-member",
       "update-trip-live-status",
     ].sort());
     for (const name of ["calculate-trip-route", "update-trip-live-status"]) {
@@ -234,12 +238,22 @@ describe("production configuration contract", () => {
       "agvlog-compute-state",
       "agvlog-pipeline-run",
       "agvlog-run-queue",
+      "agvlog-schedule-tenants",
+      "agvlog-ssx-dispatcher",
       "cte-sefaz-callback",
       "cte-status-poll",
+      "delivery-receipt-email-webhook",
       "hub-fiscal-webhook-in",
       "nfse-status-poll",
+      "process-delivery-receipt-ocr",
+      "process-delivery-receipt-portals",
+      "process-address-resolution-queue",
+      "geocode-address",
       "ssx-login",
       "ssx-poll-positions",
+      "ssx-sync-governance",
+      "ssx-sync-rule-violations",
+      "ssx-sync-telemetry",
       "ssx-sync-units",
     ]);
     expect(

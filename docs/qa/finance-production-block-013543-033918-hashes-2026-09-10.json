@@ -1,0 +1,93 @@
+[
+  {
+    "file": "20260910013543_finance_bank_reconciliation_groups.sql",
+    "sha256": "af173cc4a5e73d9af39d5d0fcdeb413c7402bb5a1d060746b2c6705af5fe53f3",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910014238_finance_reconciliation_workspace.sql",
+    "sha256": "dbc2b8731347a928d8686d04299d70904e4846f262a51faf85cb0dc76a9f0d83",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910015331_finance_reconciliation_history.sql",
+    "sha256": "f4261dc666cb54f67fdfa51c8d34d5119771a5ded2a4a80d9b43af7de16beea5",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910020543_finance_ofx_statement_intake.sql",
+    "sha256": "9ca8114cbf73cae45a31b81de7b4ba5d47f14e77f2520581d32b2ae04fe7be66",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910021404_finance_native_statement_account.sql",
+    "sha256": "b7b6c9c7aee709a371652bd0aa0e837faf4a41fa446178b59bca2b1a9ea18d13",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910022059_finance_automatic_reference_reconciliation.sql",
+    "sha256": "3c3f6e1762fe872589ca0732bf97ba76f1535a65bec4454aa0f109ce6333926c",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": true
+  },
+  {
+    "file": "20260910023208_finance_automatic_reconciliation_status.sql",
+    "sha256": "cf95f50843e0df1d5064e315ad769542aa9dbfaee3ff13cd34ef3f27343baf5f",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910023911_finance_account_period_review.sql",
+    "sha256": "aa651cfd209d54ede798ed74c29773660d05687c4ca004be2d255288cb98bd9e",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910024438_finance_receivable_movement_projection.sql",
+    "sha256": "09c86d71abb1f3716d6a62f0746d25bda5537d7ae10a6bb710e0190c9bdbf197",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910025658_finance_receipt_allocation_corrections.sql",
+    "sha256": "1d6084d521c55c9b784bc25e38d7335dfdef9f57a128bae31700b2aa1e45259f",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910030634_finance_explicit_receipt_refunds.sql",
+    "sha256": "a8cc28abb1eda1b68d297d8319526557200f8ab46b6fc5a1adb619683b4bf0f1",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910032730_finance_movement_receipt_trace.sql",
+    "sha256": "3edcf907a3d165bc4db4b39f8c83fda02c289332f6f467667a8e83ff721e26cb",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  },
+  {
+    "file": "20260910033918_finance_internal_transfer_pairs.sql",
+    "sha256": "564288fe9c1c7cc1863019fc2c5ce090ca97a7bd4d765c2959c3b208daa3e0e4",
+    "review": "entire_sql_read",
+    "installation": "staged_only_subject_to_live_preflight",
+    "cron_requires_same_transaction_pause": false
+  }
+]

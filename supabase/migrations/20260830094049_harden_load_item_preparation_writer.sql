@@ -9,7 +9,13 @@ begin
  if not exists(select 1 from pg_attribute where attrelid='public.idempotency_keys'::regclass and attname='response_body'
    and atttypid='jsonb'::regtype and not attnotnull and not atthasdef and not attisdropped)
   or not exists(select 1 from pg_class where oid='public.idempotency_keys'::regclass and relrowsecurity)
-  or exists(select 1 from pg_policy where polrelid='public.idempotency_keys'::regclass and polcmd<>'r')
+  or exists(select 1 from pg_policy where polrelid='public.idempotency_keys'::regclass
+    -- Only the exact additional restrictive workspace policy is compatible.
+    and (polcmd<>'r' or polname='agvlog_active_tenant_context')
+    and not coalesce((polname='agvlog_active_tenant_context' and polcmd='*' and not polpermissive
+      and polroles=array[(select oid from pg_roles where rolname='authenticated')]::oid[]
+      and pg_get_expr(polqual,polrelid)='private.is_request_tenant_member(tenant_id)'
+      and pg_get_expr(polwithcheck,polrelid)='private.is_request_tenant_member(tenant_id)'),false))
   or not exists(select 1 from pg_policy where polrelid='public.idempotency_keys'::regclass and polname='agvlog_select_authenticated'
    and md5(replace(pg_get_expr(polqual,polrelid),E'\r\n',E'\n'))='a5e2fc2cb8bbeb71640ea0bc13d8b3a8') then
    raise exception 'Load item preparation requires protected response cache';end if;

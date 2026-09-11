@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.108.2",
+    "@supabase/supabase-js/cors": "npm:@supabase/supabase-js@2.108.2/cors",
+    "pdf-lib": "npm:pdf-lib@1.17.1"
+  }
+}

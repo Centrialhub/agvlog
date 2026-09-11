@@ -48,7 +48,10 @@ const views = new Set(captures(activeSql, /^CREATE(?: OR REPLACE)? VIEW public\.
 const functions = new Set(
   captures(activeSql, /^CREATE(?: OR REPLACE)? FUNCTION public\.([a-zA-Z0-9_]+)\(/gim),
 );
-const buckets = new Set(captures(activeSql, /INSERT INTO storage\.buckets .*?VALUES \('([^']+)'/g));
+const buckets = new Set(captures(
+  activeSql,
+  /INSERT INTO\s+storage\.buckets\s*\([^;]*?\)\s*VALUES\s*\(\s*'([^']+)'/gi,
+));
 
 const functionGrantStatements = [
   ...activeSql.matchAll(/^GRANT EXECUTE ON FUNCTION\s+([\s\S]*?)\s+TO\s+([^;]+);/gim),
@@ -156,6 +159,11 @@ describe('Supabase baseline contract', () => {
       'evaluate_trip_live_status_v1',
       'prepare_trip_route_v1',
       'commit_trip_route_v1',
+      'claim_delivery_receipt_email_v1',
+      'complete_delivery_receipt_email_v1',
+      'fail_delivery_receipt_email_v1',
+      'inspect_finance_statement_source',
+      'get_finance_access',
     ]);
     expect([...invoked].filter((name) => !functions.has(name))).toEqual([]);
     expect([...invoked].filter((name) => !(callerJwtFunctions.has(name)
@@ -256,9 +264,17 @@ describe('Supabase baseline contract', () => {
     expect(cteReport).toContain("_tenant_id: currentTenant.id");
   });
 
-  it('links CT-e batch receivables tenant-safely and idempotently', () => {
+  it('projects authorized CT-e receivables tenant-safely and idempotently', () => {
     const migration = readFileSync(
       join(migrationsDir, '20260828121520_link_cte_receivables.sql'),
+      'utf8',
+    );
+    const observation = readFileSync(
+      join(migrationsDir, '20260910004550_finance_fiscal_observation_queue.sql'),
+      'utf8',
+    );
+    const projection = readFileSync(
+      join(migrationsDir, '20260910010034_finance_fiscal_receivable_projection.sql'),
       'utf8',
     );
     const billing = readFileSync(join(root, 'src', 'hooks', 'useBilling.tsx'), 'utf8');
@@ -268,8 +284,13 @@ describe('Supabase baseline contract', () => {
     expect(migration).toContain('references public.cte_documents (tenant_id, id)');
     expect(migration).toContain('on delete set null (cte_document_id)');
     expect(migration).toContain('create unique index if not exists receivables_tenant_cte_document_uidx');
-    expect(billing).toContain("onConflict: 'tenant_id,cte_document_id'");
-    expect(billing).toContain('ignoreDuplicates: true');
+    expect(observation).toContain("new.environment<>'production'");
+    expect(observation).toContain("new.status not in('authorized','cancel_processing','cancel_rejected','cancelled','rejected','denied','inutilized')");
+    expect(observation).toContain('unique(tenant_id,emission_id,snapshot_hash)');
+    expect(projection).toContain("if e.status in('authorized','cancel_rejected') then");
+    expect(projection).toContain('insert into public.receivables(tenant_id,client_id,cte_document_id,fiscal_document_id');
+    expect(projection).toContain('unique(tenant_id,doc_type,source_id),unique(tenant_id,doc_type,fiscal_identity)');
+    expect(billing).not.toMatch(/\.from\(['"]receivables['"]\)[\s\S]{0,160}\.(?:insert|upsert)\(/);
     expect(billing).not.toMatch(/net_amount:\s*document\.net_value/);
     expect(billing).not.toMatch(/issue_date:\s*new Date/);
   });

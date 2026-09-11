@@ -37,14 +37,15 @@ import {
 } from '@/lib/driverTrip';
 import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
 import TripOperationalEventsPanel from '@/components/control-tower/TripOperationalEventsPanel';
-import { coordinateFromInput, isValidLatitude, isValidLongitude } from '@/lib/route-planning/stopCoordinates';
+import { LocationPicker } from '@/components/maps/LocationPicker';
+import type { ResolvedLocation } from '@/lib/geocoding';
 
 interface DispatchStopInput {
   destination: string;
   client_id: string;
   fiscal_document_ids: string[];
-  latitude: string;
-  longitude: string;
+  location: ResolvedLocation | null;
+  location_exception_reason: string;
 }
 
 function useLoad(id: string | undefined) {
@@ -170,28 +171,33 @@ export default function LoadDetail() {
     notes: '',
   });
   const [dispatchStops, setDispatchStops] = useState<DispatchStopInput[]>([]);
+  const [editingLocationStop, setEditingLocationStop] = useState<number | null>(null);
   const dispatchDocuments=useMemo(()=>Array.from(new Set(items.map(item=>item.fiscal_document_id)
     .filter((documentId):documentId is string=>Boolean(documentId)))),[items]);
 
   // Auto-populate stops from load items when dialog opens
   const populateStopsFromItems = () => {
+    setEditingLocationStop(null);
     if (items.length === 0) {
-      setDispatchStops([{ destination: load?.destination || '', client_id: '',fiscal_document_ids:[], latitude:'', longitude:'' }]);
+      setDispatchStops([{ destination: load?.destination || '', client_id: '',fiscal_document_ids:[], location:null,location_exception_reason:'' }]);
       return;
     }
     // A carga expõe hoje um único destino consolidado, independentemente da
     // quantidade de itens. O operador pode refinar as paradas no planejamento.
     const stops: DispatchStopInput[] = [];
     const destination = load?.destination || '';
-    if (destination) stops.push({ destination, client_id: '',fiscal_document_ids:dispatchDocuments, latitude:'', longitude:'' });
+    if (destination) stops.push({ destination, client_id: '',fiscal_document_ids:dispatchDocuments, location:null,location_exception_reason:'' });
     if (stops.length === 0) {
-      stops.push({ destination: load?.destination || '', client_id: '',fiscal_document_ids:dispatchDocuments, latitude:'', longitude:'' });
+      stops.push({ destination: load?.destination || '', client_id: '',fiscal_document_ids:dispatchDocuments, location:null,location_exception_reason:'' });
     }
     setDispatchStops(stops);
   };
 
-  const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '',fiscal_document_ids:[], latitude:'', longitude:'' }]);
-  const removeStop = (idx: number) => setDispatchStops(s => s.filter((_, i) => i !== idx));
+  const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '',fiscal_document_ids:[], location:null,location_exception_reason:'' }]);
+  const removeStop = (idx: number) => {
+    setDispatchStops(s => s.filter((_, i) => i !== idx));
+    setEditingLocationStop(null);
+  };
   const updateStop = (idx: number, field: string, value: string) =>
     setDispatchStops(s => s.map((stop, i) => i === idx ? { ...stop, [field]: value } : stop));
 
@@ -205,25 +211,27 @@ export default function LoadDetail() {
       if(items.some(item=>!item.fiscal_document_id))throw new Error('Esta carga contém itens manuais. O fluxo de baixa desses itens ainda precisa ser habilitado.');
       if(validStops.some(stop=>!stop.destination.trim() || stop.fiscal_document_ids.length===0))
         throw new Error('Informe o destino e distribua os documentos de cada parada.');
-      const locatedStops=validStops.map(stop=>({
-        ...stop,
-        parsedLatitude:coordinateFromInput(stop.latitude),
-        parsedLongitude:coordinateFromInput(stop.longitude),
-      }));
-      const invalidLocation=locatedStops.findIndex(stop=>!isValidLatitude(stop.parsedLatitude) || !isValidLongitude(stop.parsedLongitude));
-      if(invalidLocation>=0)throw new Error(`Parada ${invalidLocation+1}: informe latitude e longitude válidas antes do despacho.`);
+      const invalidLocation=validStops.findIndex(stop=>!stop.location&&stop.location_exception_reason.trim().length<20);
+      if(invalidLocation>=0)throw new Error(`Parada ${invalidLocation+1}: confirme o local por endereço/mapa ou registre uma exceção operacional detalhada.`);
       const assigned=validStops.flatMap(stop=>stop.fiscal_document_ids);
       if(assigned.length!==dispatchDocuments.length || new Set(assigned).size!==dispatchDocuments.length
         || dispatchDocuments.some(document=>!assigned.includes(document)))throw new Error('Distribua cada documento exatamente uma vez.');
-      const stopsPayload = locatedStops.map((s, idx) => ({
+      const stopsPayload = validStops.map((s, idx) => ({
         id:`stop-${idx}`,recipient_name:s.destination,load_ids:[load.id],invoice_numbers:[],
         total_weight_kg:0,total_volume_m3:0,total_pallet_count:0,total_value:0,service_time_minutes:20,
         priority:0,risk_level:'normal' as const,manual_order:idx+1,notes:idx===0?dispatchForm.notes:undefined,
         destination: s.destination,
         client_id: s.client_id || null,
         fiscal_document_ids: s.fiscal_document_ids,
-        latitude:s.parsedLatitude,
-        longitude:s.parsedLongitude,
+        latitude:s.location?.latitude ?? null,
+        longitude:s.location?.longitude ?? null,
+        location_source:s.location?.source || 'legacy_coordinates' as const,
+        location_address:s.location?.address || s.destination,
+        location_provider:s.location?.provider || null,
+        location_accuracy_m:s.location?.accuracy_m ?? null,
+        location_confidence:s.location?.confidence ?? null,
+        location_audit:s.location?.audit || {},
+        location_exception_reason:s.location ? null : s.location_exception_reason,
       }));
       const tripId = await dispatchPlan.dispatchRoute({
           attempt_scope:`load:${load.id}`,
@@ -528,7 +536,8 @@ export default function LoadDetail() {
                             <Input
                               aria-label={`Destino parada ${idx+1}`}
                               value={stop.destination}
-                              onChange={e => updateStop(idx, 'destination', e.target.value)}
+                              onChange={e => setDispatchStops(previous=>previous.map((item,n)=>n===idx
+                                ? {...item,destination:e.target.value,location:null}:item))}
                               placeholder={`Destino parada ${idx + 1}`}
                               className="h-8 text-xs"
                             />
@@ -538,14 +547,27 @@ export default function LoadDetail() {
                               </Button>
                             )}
                           </div>
-                          <div className="grid grid-cols-2 gap-2 pl-7">
-                            <Input type="number" step="any" min={-90} max={90}
-                              aria-label={`Latitude parada ${idx+1}`} value={stop.latitude}
-                              onChange={event=>updateStop(idx,'latitude',event.target.value)} placeholder="Latitude" className="h-8 text-xs" />
-                            <Input type="number" step="any" min={-180} max={180}
-                              aria-label={`Longitude parada ${idx+1}`} value={stop.longitude}
-                              onChange={event=>updateStop(idx,'longitude',event.target.value)} placeholder="Longitude" className="h-8 text-xs" />
+                          <div className="space-y-2 pl-7">
+                            <Button type="button" size="sm" variant="outline"
+                              onClick={()=>setEditingLocationStop(current=>current===idx?null:idx)}>
+                              {stop.location ? 'Local verificado — revisar' : 'Confirmar endereço ou ponto no mapa'}
+                            </Button>
+                            {editingLocationStop===idx?<div className="pt-1">
+                              <LocationPicker tenantId={currentTenant?.id || ''} idPrefix={`dispatch-stop-${idx}`}
+                                address={stop.destination} value={stop.location}
+                                onAddressChange={value=>setDispatchStops(previous=>previous.map((item,n)=>n===idx
+                                  ? {...item,destination:value,location:null}:item))}
+                                onChange={location=>setDispatchStops(previous=>previous.map((item,n)=>n===idx
+                                  ? {...item,location,location_exception_reason:''}:item))}/>
+                            </div>:null}
                           </div>
+                          {!stop.location?<div className="space-y-1 pl-7">
+                            <Label htmlFor={`dispatch-stop-exception-${idx}`} className="text-xs">Exceção operacional (mínimo 20 caracteres)</Label>
+                            <Textarea id={`dispatch-stop-exception-${idx}`} rows={2} maxLength={1000}
+                              value={stop.location_exception_reason}
+                              onChange={event=>updateStop(idx,'location_exception_reason',event.target.value)}
+                              placeholder="Justifique por que esta parada pode ser despachada sem localização verificada."/>
+                          </div>:null}
                         </div>
                       ))}
                     </div>

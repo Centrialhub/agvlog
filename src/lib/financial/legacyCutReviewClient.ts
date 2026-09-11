@@ -1,0 +1,7 @@
+import {supabase} from '@/integrations/supabase/client';
+import {legacyCutReviewSchema,legacyCutCommandSchema,legacyCutResultSchema,type LegacyCutCommand} from './legacyCutReviewContract';
+type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{message:string;code?:string}|null}>;
+export class LegacyCutRejectedError extends Error {}
+async function rpc(name:string,args:Record<string,unknown>){const {data,error}=await(supabase.rpc as unknown as Rpc)(name,args);if(error){if(['22023','23514','23505','40001','42501','55000'].includes(error.code||''))throw new LegacyCutRejectedError(error.message);throw new Error(error.message);}return data;}
+export async function readLegacyCutReview(tenant:string,account:string,from:string,to:string){const result=legacyCutReviewSchema.parse(await rpc('get_finance_legacy_cut_review',{_tenant_id:tenant,_account_id:account,_from:from,_to:to}));if(result.tenant_id!==tenant||result.account_id!==account||result.from!==from||result.to!==to)throw new Error('Revisão fora do corte.');return result;}
+export async function submitLegacyCutReview(command:LegacyCutCommand){legacyCutCommandSchema.parse(command);const result=legacyCutResultSchema.parse(await rpc('review_finance_legacy_cut',{_payload:command}));if(result.tenant_id!==command.tenant_id||result.account_id!==command.account_id||result.from!==command.from||result.to!==command.to||result.request_id!==command.request_id||result.revision!==command.revision)throw new Error('Confirmação fora da revisão do corte.');return result;}

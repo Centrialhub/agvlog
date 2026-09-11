@@ -67,6 +67,12 @@ describe("tenant integration capabilities", () => {
     expect(cron).toContain("IF ssx_effective THEN");
     expect(cron).toContain("IF fiscal_effective THEN");
     expect(cron).toContain("'ssx_kill_switch'");
+    expect(cron).toMatch(
+      /count\(\*\) filter \(where policy\.feature_key in \('ssx_enabled', 'ssx_kill_switch'\)\) = 2/i,
+    );
+    expect(cron).toMatch(
+      /bool_or\(policy\.enabled\) filter \(where policy\.feature_key = 'ssx_kill_switch'\), true\)/i,
+    );
     expect(cron).toContain("'fiscal_kill_switch'");
     expect(cron.indexOf("'agvlog-daily-aggregate'")).toBeLessThan(
       cron.indexOf("END IF;", cron.indexOf("IF ssx_effective THEN")),

@@ -1,0 +1,4 @@
+import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
+import {Button} from '@/components/ui/button';
+import {MovementCorrectionReview} from './MovementCorrectionReview';
+export function MovementCorrectionDialog({tenant,actor,movementId,onClose}:{tenant:string;actor:string;movementId:string;onClose:()=>void}){return <Dialog open onOpenChange={open=>{if(!open)onClose();}}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>Conferir correção do movimento</DialogTitle><DialogDescription>Revise os registros relacionados e o efeito previsto. A invalidação exige conferência atual e confirmação explícita com motivo.</DialogDescription></DialogHeader><MovementCorrectionReview key={`${tenant}:${actor}:${movementId}`} tenant={tenant} actor={actor} movementId={movementId}/><Button variant="outline" onClick={onClose}>Fechar conferência</Button></DialogContent></Dialog>;}

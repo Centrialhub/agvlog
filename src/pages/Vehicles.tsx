@@ -32,7 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Pencil, Trash2, User } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, User } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
 
@@ -54,7 +54,7 @@ export default function Vehicles() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<VehicleRow | null>(null);
 
-  const { data: vehicles = [], isLoading } = useQuery({
+  const { data: vehicles = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['vehicles', 'registry', currentTenant?.id, user?.id],
     queryFn: async () => {
       if (!currentTenant || !user) return [];
@@ -178,6 +178,17 @@ export default function Vehicles() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Carregando...
+                  </TableCell>
+                </TableRow>
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center">
+                    <div role="alert" className="flex flex-col items-center gap-3 text-destructive">
+                      <span>Não foi possível carregar os veículos: {error instanceof Error ? error.message : 'erro inesperado'}.</span>
+                      <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
+                        <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : filteredVehicles.length === 0 ? (

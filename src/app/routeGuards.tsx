@@ -1,5 +1,7 @@
 import { lazy, Suspense, type PropsWithChildren } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
+import {FinanceAccessBoundary} from '@/components/financial/FinanceAccessBoundary';
+import {isFinancialPath} from '@/lib/financial/financeRoutes';
 
 import AppLayout from "@/components/layout/AppLayout";
 import DriverLayout from "@/components/layout/DriverLayout";
@@ -103,6 +105,7 @@ export function CapabilityGate({
 
 function ProtectedContent({ children, gate }: Required<ProtectedRouteProps>) {
   const { loading, currentRole } = useTenant();
+  const {pathname}=useLocation();
 
   if (loading) return <FullPageLoader />;
 
@@ -116,11 +119,12 @@ function ProtectedContent({ children, gate }: Required<ProtectedRouteProps>) {
     </Suspense>
   );
 
-  return (
+  const page=(
     <Layout>
-      {content}
+      {isFinancialPath(pathname)?<FinanceAccessBoundary>{content}</FinanceAccessBoundary>:content}
     </Layout>
   );
+  return page;
 }
 
 export function ProtectedRoute({ children, gate = "internal" }: ProtectedRouteProps) {

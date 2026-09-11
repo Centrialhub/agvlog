@@ -1,4 +1,5 @@
 import { AlertTriangle, Construction } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -7,12 +8,16 @@ interface IntegrationUnavailableProps {
   capability: "ssx" | "fiscal";
   degraded?: boolean;
   onRetry?: () => void;
+  actionHref?: string;
+  actionLabel?: string;
 }
 
 export function IntegrationUnavailable({
   capability,
   degraded = false,
   onRetry,
+  actionHref,
+  actionLabel,
 }: IntegrationUnavailableProps) {
   const label = capability === "ssx" ? "SSX" : "Emissão fiscal";
   return (
@@ -29,6 +34,11 @@ export function IntegrationUnavailable({
           {degraded && onRetry ? (
             <Button type="button" variant="outline" size="sm" onClick={onRetry}>
               Tentar novamente
+            </Button>
+          ) : null}
+          {actionHref && actionLabel ? (
+            <Button asChild type="button" size="sm">
+              <Link to={actionHref}>{actionLabel}</Link>
             </Button>
           ) : null}
         </AlertDescription>

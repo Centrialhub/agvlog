@@ -22,6 +22,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "test:driver-offline-browser": "playwright test -c playwright.driver-offline.config.ts",
     "e2e:critical:3": "playwright test --grep @critical --repeat-each=3",
     "db:start": "supabase start",
     "db:reset:test": "supabase db reset --local",

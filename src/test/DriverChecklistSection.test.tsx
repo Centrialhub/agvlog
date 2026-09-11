@@ -4,8 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DriverChecklistSection } from '@/components/driver/DriverChecklistSection';
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), toast: vi.fn() }));
-vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: mocks.rpc } }));
+const mocks = vi.hoisted(() => ({ submit: vi.fn(), toast: vi.fn() }));
+vi.mock('@/hooks/useDriverOperationalOffline', () => ({ useDriverOperationalOffline: () => ({
+  commands: [], submit: mocks.submit,
+}) }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mocks.toast }) }));
 let container: HTMLDivElement;
 let root: Root;
@@ -14,7 +16,7 @@ const defaults = { title: 'Pré-Viagem', kind: 'pre' as const, items: ['Pneus', 
   savedItems: [] as number[], savedId: null as string | null, boundaryId: null as string | null, disabled: false };
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.rpc.mockResolvedValue({ data: 'saved', error: null });
+  mocks.submit.mockResolvedValue({ queued: false, state: 'confirmed' });
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
   client = new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
@@ -51,8 +53,9 @@ describe('checklist draft and revision safety', () => {
     await render({savedId:'previous',boundaryId:'shift'});
     await act(async () => checkbox(0).click());
     await act(async () => button('Salvar Pré-Viagem').click());
-    expect(mocks.rpc).toHaveBeenCalledWith('driver_save_checklist', {
-      _trip_id:'trip',_kind:'pre',_payload:{checked_items:[0],total_items:2,expected_checklist_id:'previous',expected_boundary_id:'shift'},
+    expect(mocks.submit).toHaveBeenCalledWith({ kind:'checklist',aggregateId:'trip',payload:{trip_id:'trip',kind:'pre',checklist_payload:{
+      checked_items:[0],total_items:2,expected_checklist_id:'previous',expected_boundary_id:'shift',expected_boundary_request_id:null,
+    }},
     });
     expect(invalidate).toHaveBeenCalledWith({queryKey:['checklist_status']});
     expect(invalidate).toHaveBeenCalledWith({queryKey:['driver_journey_events']});
@@ -60,7 +63,7 @@ describe('checklist draft and revision safety', () => {
     expect(invalidate).toHaveBeenCalledWith({queryKey:['product-history']});
   });
   it('preserves a failed draft and displays the backend error', async () => {
-    mocks.rpc.mockResolvedValue({data:null,error:{message:'O turno mudou'}});
+    mocks.submit.mockRejectedValue(new Error('O turno mudou'));
     await render(); await act(async () => checkbox(0).click());
     await act(async () => button('Salvar Pré-Viagem').click());
     expect(checkbox(0)).toHaveAttribute('aria-checked','true');

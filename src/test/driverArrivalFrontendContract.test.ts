@@ -26,13 +26,32 @@ describe('driver arrival frontend contract', () => {
     expect(directRpcCallers).toEqual(['src/lib/driver/driverArrival.ts']);
   });
 
-  it.each([
-    'src/pages/driver/DriverStops.tsx',
-    'src/pages/driver/DriverDeliveries.tsx',
-  ])('%s delegates arrival to the shared GPS gateway', (path) => {
-    const source = readFileSync(join(projectRoot, path), 'utf8');
-    expect(source).toContain("import { markDriverArrival } from '@/lib/driver/driverArrival'");
-    expect(source).toMatch(/markDriverArrival\([^)]*\.id|markDriverArrival\(stopId\)/);
+  it('keeps the delivery screen on the durable shared GPS gateway', () => {
+    const source = readFileSync(join(projectRoot, 'src/pages/driver/DriverDeliveries.tsx'), 'utf8');
+    expect(source).toContain("import { getCurrentDriverLocation } from '@/lib/driverLocation'");
+    expect(source).toContain('const operationalCommands = useDriverOperationalOffline()');
+    expect(source).toContain("operationalCommands.submit({kind:'arrival'");
+    expect(source).toContain('latitude:location.latitude');
+    expect(source).toContain('longitude:location.longitude');
+    expect(source).toContain('accuracy_m:location.accuracyM');
+  });
+
+  it('captures GPS evidence before queuing an idempotent arrival from the stops screen', () => {
+    const source = readFileSync(join(projectRoot, 'src/pages/driver/DriverStops.tsx'), 'utf8');
+    expect(source).toContain("import { getCurrentDriverLocation } from '@/lib/driverLocation'");
+    expect(source).toContain('const location = await getCurrentDriverLocation()');
+    expect(source).toContain("kind: 'arrival'");
+    expect(source).toContain('latitude: location.latitude');
+    expect(source).toContain('longitude: location.longitude');
+    expect(source).toContain('accuracy_m: location.accuracy');
+  });
+
+  it('keeps offline arrival replay behind the server-side GPS gateway', () => {
+    const migration = readFileSync(
+      join(projectRoot, 'supabase/migrations/20260910154758_driver_operational_offline_commands.sql'),
+      'utf8',
+    );
+    expect(migration).toMatch(/when 'arrival'[\s\S]*?public\.driver_mark_arrival\(/);
   });
 
   it('keeps the generated Data API contract limited to GPS evidence', () => {

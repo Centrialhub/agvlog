@@ -5,7 +5,7 @@ export interface RouteForValidation {
   loads: Array<{
     id: string;
     destination?: string | null;
-    items: Array<{ fiscal_document_id: string | null }>;
+    items: Array<{ fiscal_document_id: string | null; fiscal_documents?: { supplier_id?: string | null } | null }>;
     total_pallet_count?: number | null;
     total_weight_kg?: number | null;
     total_volume_m3?: number | null;
@@ -66,6 +66,7 @@ export function validateRouteConsistency(
   const loadIdsSet = new Set(route.loads.map((l) => l.id));
   const allLoadFdIds = new Set<string>();
   const documentLoads=new Map<string,Set<string>>();
+  const documentSuppliers = new Map<string, Set<string>>();
   route.loads.forEach(load=>{
     if(load.items.length===0 || load.items.some(item=>!item.fiscal_document_id))
       blocking.push('Há carga sem documentos ou com itens manuais. O fluxo de baixa desses itens ainda precisa ser habilitado.');
@@ -73,6 +74,9 @@ export function validateRouteConsistency(
       if(!item.fiscal_document_id)return;
       const ids=documentLoads.get(item.fiscal_document_id) || new Set<string>();ids.add(load.id);
       documentLoads.set(item.fiscal_document_id,ids);
+      const suppliers = documentSuppliers.get(item.fiscal_document_id) || new Set<string>();
+      if (item.fiscal_documents?.supplier_id) suppliers.add(item.fiscal_documents.supplier_id);
+      documentSuppliers.set(item.fiscal_document_id, suppliers);
     });
   });
   route.loads.forEach((l) =>
@@ -92,6 +96,15 @@ export function validateRouteConsistency(
     }
     if (!s.fiscal_document_ids.length) blocking.push(`Parada ${i}: distribua os documentos desta entrega.`);
     if (!s.city) warnings.push(`Parada ${i}: sem cidade.`);
+    const suppliers = new Set(s.fiscal_document_ids.flatMap(id => [...(documentSuppliers.get(id) || [])]));
+    if (suppliers.size > 1) {
+      blocking.push(`Parada ${i}: NFs de fornecedores diferentes. Recalcule as entregas.`);
+    } else if (suppliers.size === 1 && s.supplier_id && !suppliers.has(s.supplier_id)) {
+      blocking.push(`Parada ${i}: fornecedor mudou. Recalcule as entregas.`);
+    }
+    if (s.fiscal_document_ids.some(id => !documentSuppliers.get(id)?.size)) {
+      warnings.push(`Parada ${i}: fornecedor pendente; cobrança de descarga indisponível.`);
+    }
     s.load_ids.forEach((lid) => {
       if (!loadIdsSet.has(lid)) {
         blocking.push(`Parada ${i}: referencia carga removida da rota.`);

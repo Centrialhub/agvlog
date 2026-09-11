@@ -10,6 +10,8 @@ const internalRoutes = [
   "/operations", "/operations-control", "/events", "/ingestion", "/ingestion-reports",
   "/productivity", "/settings", "/expense-approval", "/integration-health", "/team",
   "/data-audit", "/regions", "/freight", "/route-planning", "/receivables", "/financial",
+  "/financial/movements", "/financial/recorded-expenses", "/financial/statements",
+  "/financial/audit", "/financial/fiscal-queue",
   "/driver-settlements", "/cost-centers", "/bank-reconciliation", "/payables",
   "/client-invoices", "/billing-edi", "/operational-routes", "/employees", "/incidents",
   "/payroll", "/assets", "/maintenance-orders", "/stock", "/checklists", "/reallocation",

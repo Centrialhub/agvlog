@@ -31,6 +31,37 @@ Fontes de verdade obrigatórias para toda mudança operacional. Telas que tocam 
 - Lista canônica de status **ativos** vive em `src/lib/status/stopStatus.ts` (`STOP_ACTIVE_STATUSES`).
 - O motorista usa comandos físicos e de entrega separados: chegada por `driver_mark_arrival` com GPS, saída por `driver_register_departure`, resultado por `driver_record_delivery_outcome` e notas por `driver_record_delivery_note`. Os wrappers genéricos legados não são APIs de browser.
 
+## Máquina operacional do App Motorista
+
+O fluxo abaixo é uma cadeia coordenada, mas cada agregado mantém sua própria fonte de verdade. Nenhum status posterior deve ser usado para reescrever silenciosamente um anterior.
+
+| Agregado | Transição principal | Ator autorizado | Evidência/bloqueio | Recuperação |
+|---|---|---|---|---|
+| Carga | atribuída → aceita → conferida → liberada | motorista designado; operação revisa divergências | veículo, volumes documentais, peso, pallets, documentos pares, lacres e fotos no Storage | comando idempotente; divergência fica pendente até revisão |
+| Lacre | installed → removed/broken/missing | motorista designado instala e concilia no retorno; operação acompanha divergências | foto individual na instalação e na resolução, ator/data do servidor e motivo; uma evidência não pode provar dois lacres | estado terminal é imutável; rompimento/ausência abre divergência e bloqueia encerramento normal |
+| Viagem | planejada/loading → in_transit → completed | motorista designado inicia/retorna; operação encerra | uma viagem em andamento por motorista, checklist pré/pós e custódia | outbox preserva a mesma `request_id`; conflito exige atenção |
+| Parada | pending → arrived → resultado terminal | motorista designado ou entrada SSX na próxima parada | chegada sempre tem GPS ou evidência SSX/geofence; sequência é obrigatória | estado SSX interno recupera chegada quando a próxima parada já está dentro |
+| Entrega | arrived → delivered/partial/returned/refused | motorista designado | total/parcial exige recebedor, scan original+processado aceito, assinatura e GPS; recusa/devolução exige foto e itens/documentos afetados | rascunho e blobs ficam no IndexedDB; reenvio conserva a chave idempotente |
+| Canhoto digital | pending_upload → uploaded/pending_validation → validated/rejected | motorista captura; operacional valida | exatamente um canhoto por entrega; NF-e, NFS-e, CT-e e referência operacional são pares | rejeição gera substituição versionada, nunca sobrescrita |
+| Canhoto físico | pending_return → received/missing/waived | operacional registra; exceção somente owner/admin | viagem não fecha normalmente enquanto houver papel pendente | extravio abre ocorrência; dispensa exige motivo e auditoria |
+| Envio ao fornecedor | not_sent → queued/sending → sent/delivered ou failed/bounced | operacional | PDF individual ≤5 MiB, lote por fornecedor, destinatários e modelo versionados | lease, reenvio idempotente e webhook deduplicado |
+
+Regras transversais:
+
+- A entrega é a unidade do canhoto. Documentos são referências pesquisáveis e nunca multiplicam o comprovante.
+- NFS-e pode ser associada diretamente à parada; não depende de NF-e ou CT-e intermediária.
+- A confirmação captura e envia um snapshot fiscal imutável de NF-e e NFS-e vinculadas à parada. O writer trava a parada e os documentos, recalcula a revisão e rejeita realocação concorrente com conflito auditável. CT-e é referência pesquisável opcional e nunca é precondição do canhoto.
+- Um conflito de snapshot não confirma a entrega e não recebe ACK. Original, processado, thumbnail, assinatura e demais fotos continuam retidos até a operação decidir pelo descarte da tentativa; o motorista então cria uma nova tentativa com novo `request_id` e snapshot atual.
+- Comandos offline só liberam progressão depois que payload, vínculos fiscais e todos os blobs obrigatórios foram persistidos no aparelho.
+- A outbox é reproduzida em ordem causal por viagem: chegada e demais comandos operacionais anteriores precisam receber ACK antes da entrega posterior. A tela de entregas aplica o mesmo overlay local de chegada usado pela tela de paradas.
+- Sincronização aplica novamente autorização, tenant, viagem, parada e revisão no servidor. Cache offline nunca concede autorização remota.
+- Evidência confirmada não é descartada em timeout, token expirado ou conflito; o registro muda para `needs_attention` quando a reconciliação automática não é segura.
+- Geofences de entrega derivam da localização verificada da parada e são somente leitura no cadastro de frota. Geofences de frota são editadas pelo RPC canônico, nunca por `UPDATE` direto.
+- O cursor do tracking é o par estável `(captured_at, point_key)`. O processador lê páginas limitadas até receber página vazia e preserva eventos de geofence em reconstruções idempotentes; um fast-pass somente é válido quando um único ponto profundamente interno está delimitado por dois pontos inequivocamente externos.
+- O dispatcher de workspace é o único scheduler ativo do pipeline SSX/geocodificação e respeita `tenant_tracking_schedules.poll_interval_minutes` e `full_sync_interval_hours`; intervalos fixos no worker são proibidos.
+- Um conflito SSX nunca sobrescreve vínculo automaticamente. `ssx_mapping_conflicts` preserva recorrência, SLA, candidatos e vínculo anterior; somente a RPC de resolução por operador/admin pode criar o novo vínculo, com ator e motivo, mantendo vínculo ativo único e o bloqueio de viagem em andamento.
+- `trip_cargo_controls.status='closed'` é o gate canônico para gerar/liberar settlement, registrar pagamento, oferecer a viagem a consumidores financeiros e concluir jornadas físicas. `dispatch_trips.status='completed'` sozinho não autoriza consumo financeiro. Registros legados sem esse gate ficam em quarentena; a reconciliação histórica é administrativa, idempotente e auditável, sem recalcular acertos já aprovados, pagos ou fechados.
+
 ## Status público da mercadoria
 
 - Calculado por `public.get_public_shipment_status(_fiscal_document_id)`.

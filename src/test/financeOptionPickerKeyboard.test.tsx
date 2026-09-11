@@ -1,0 +1,6 @@
+import {cleanup,fireEvent,render,screen} from '@testing-library/react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {afterEach,it,expect,vi} from 'vitest';
+import {FinanceOptionPicker} from '@/components/financial/FinanceOptionPicker';
+vi.mock('@/lib/financial/ledgerClient',()=>({readExpenseOptions:vi.fn(async()=>({total:1,rows:[{id:crypto.randomUUID(),label:'Fornecedor de teste'}]}))}));afterEach(()=>cleanup());
+it('focuses search on opening and returns to the selector after choosing or escaping',async()=>{const change=vi.fn();render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><FinanceOptionPicker tenant={crypto.randomUUID()} actor={crypto.randomUUID()} kind="suppliers" label="Fornecedor 1" value={null} onChange={change}/></QueryClientProvider>);const trigger=screen.getByRole('button',{name:'Fornecedor 1: Selecionar'});fireEvent.click(trigger);expect(screen.getByLabelText('Buscar Fornecedor 1')).toHaveFocus();fireEvent.click(await screen.findByRole('button',{name:'Fornecedor de teste'}));expect(trigger).toHaveFocus();expect(change).toHaveBeenCalledOnce();fireEvent.click(trigger);fireEvent.keyDown(screen.getByLabelText('Buscar Fornecedor 1'),{key:'Escape'});expect(trigger).toHaveFocus();expect(trigger).toHaveAttribute('aria-expanded','false');});

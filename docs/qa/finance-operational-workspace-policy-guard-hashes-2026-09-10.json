@@ -1,0 +1,26 @@
+[
+  {
+    "file": "20260830080608_add_explicit_load_replanning.sql",
+    "before_sha256": "fe9a7a3fd7530c8286849acdd4abd220cabd7d3cc0c42dedae874e35d727ce4c",
+    "after_sha256": "dca2fdf910e9ebf0531025b51c649d0059ff8ebd8fc287662197e90d83f21142",
+    "only_exact_guard_replaced": true
+  },
+  {
+    "file": "20260830085557_harden_document_composition_changes.sql",
+    "before_sha256": "b24bc0586f00c926abd3bf6fd35580d5d3931ca26b91c07d93cbfe84463e4ca5",
+    "after_sha256": "0e168794581f3c4803406ee6b837d2f65820447d13d93140937ec854a5fb5d3c",
+    "only_exact_guard_replaced": true
+  },
+  {
+    "file": "20260830094049_harden_load_item_preparation_writer.sql",
+    "before_sha256": "53392f642304006af1b7c99d468cca16ad87686c647f9a0cc8e33b8432d8a783",
+    "after_sha256": "c4960e744b0b5edb39c93d7ba5a7dac17e4700d94f2526a95295ab82004d9594",
+    "only_exact_guard_replaced": true
+  },
+  {
+    "file": "20260830102652_add_operational_document_outcomes.sql",
+    "before_sha256": "2dee850e906f79854703116e076f8bfc8aba7a60f1ea910138165be0d381fd14",
+    "after_sha256": "c98dcf3b440b0580f916bbafbc41408dbe242d9b9c1dbb892c8dde3f9d7e0959",
+    "only_exact_guard_replaced": true
+  }
+]

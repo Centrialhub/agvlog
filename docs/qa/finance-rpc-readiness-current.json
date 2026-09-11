@@ -1,0 +1,2555 @@
+{
+  "version": 1,
+  "generated_at": "2026-09-10T23:14:07.676Z",
+  "scope": {
+    "directory": "src/lib/financial",
+    "known_hooks": [
+      "useFinanceLedger",
+      "useBankReconciliation",
+      "useBilling",
+      "useClientInvoiceLifecycle",
+      "useClosingLifecycle",
+      "useDriverSettlements",
+      "useExpenseCreation",
+      "useExpenseReview",
+      "useFinancialPayments",
+      "usePayables",
+      "usePayroll",
+      "useReceivableFinancial",
+      "useReceivables",
+      "useReceivablePortfolio",
+      "useFiscalDashboardSummary",
+      "useRecordedCostSummary",
+      "useReceivableUnloadingOrigin"
+    ]
+  },
+  "files": [
+    "src/hooks/useBankReconciliation.tsx",
+    "src/hooks/useBilling.tsx",
+    "src/hooks/useClientInvoiceLifecycle.ts",
+    "src/hooks/useClosingLifecycle.ts",
+    "src/hooks/useDriverSettlements.tsx",
+    "src/hooks/useExpenseCreation.ts",
+    "src/hooks/useExpenseReview.ts",
+    "src/hooks/useFinanceLedger.ts",
+    "src/hooks/useFinancialPayments.tsx",
+    "src/hooks/useFiscalDashboardSummary.ts",
+    "src/hooks/usePayables.tsx",
+    "src/hooks/usePayroll.tsx",
+    "src/hooks/useReceivableFinancial.ts",
+    "src/hooks/useReceivablePortfolio.ts",
+    "src/hooks/useReceivableUnloadingOrigin.ts",
+    "src/hooks/useReceivables.tsx",
+    "src/hooks/useRecordedCostSummary.ts",
+    "src/lib/financial/accountDirectoryClient.ts",
+    "src/lib/financial/accountOpeningClient.ts",
+    "src/lib/financial/accountOpeningContract.ts",
+    "src/lib/financial/accountPeriodCloseClient.ts",
+    "src/lib/financial/accountPeriodCloseContract.ts",
+    "src/lib/financial/accountPeriodContract.ts",
+    "src/lib/financial/accountPeriodEvidenceClient.ts",
+    "src/lib/financial/accountPeriodEvidenceContract.ts",
+    "src/lib/financial/accountPeriodEvidenceIndex.ts",
+    "src/lib/financial/automaticReconciliationContract.ts",
+    "src/lib/financial/cashOpeningClient.ts",
+    "src/lib/financial/cashOpeningContract.ts",
+    "src/lib/financial/cashPeriodClient.ts",
+    "src/lib/financial/cashPeriodContract.ts",
+    "src/lib/financial/clientInvoiceCommands.ts",
+    "src/lib/financial/clientInvoiceList.ts",
+    "src/lib/financial/clientInvoiceOutbox.ts",
+    "src/lib/financial/expenseBatchContract.ts",
+    "src/lib/financial/expenseBatchEntryUx.ts",
+    "src/lib/financial/expenseCancellationClient.ts",
+    "src/lib/financial/expenseCancellationContract.ts",
+    "src/lib/financial/expenseCreationCommands.ts",
+    "src/lib/financial/expenseCreationOutbox.ts",
+    "src/lib/financial/expenseHistoryContract.ts",
+    "src/lib/financial/expenseReceiptUpload.ts",
+    "src/lib/financial/expenseRequest.ts",
+    "src/lib/financial/expenseReviewCommands.ts",
+    "src/lib/financial/expenseReviewOutbox.ts",
+    "src/lib/financial/financeAuditContract.ts",
+    "src/lib/financial/financeRoutes.ts",
+    "src/lib/financial/fiscalDashboardClient.ts",
+    "src/lib/financial/fiscalDashboardContract.ts",
+    "src/lib/financial/fiscalQueueContract.ts",
+    "src/lib/financial/internalTransferContract.ts",
+    "src/lib/financial/invalidateAccountReview.ts",
+    "src/lib/financial/ledgerClient.ts",
+    "src/lib/financial/ledgerContract.ts",
+    "src/lib/financial/legacyCostAssociationClient.ts",
+    "src/lib/financial/legacyCostAssociationContract.ts",
+    "src/lib/financial/legacyCutReviewClient.ts",
+    "src/lib/financial/legacyCutReviewContract.ts",
+    "src/lib/financial/legacyIntegrityClient.ts",
+    "src/lib/financial/legacyIntegrityContract.ts",
+    "src/lib/financial/legacyInventoryClient.ts",
+    "src/lib/financial/legacyPayableAssociationClient.ts",
+    "src/lib/financial/legacyPayableAssociationContract.ts",
+    "src/lib/financial/legacyReceivableAssociationClient.ts",
+    "src/lib/financial/legacyReceivableAssociationContract.ts",
+    "src/lib/financial/maintenanceCostContextClient.ts",
+    "src/lib/financial/maintenanceCostContextContract.ts",
+    "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+    "src/lib/financial/maintenanceDirectPartAssociationContract.ts",
+    "src/lib/financial/maintenanceLaborAssociationClient.ts",
+    "src/lib/financial/maintenanceLaborAssociationContract.ts",
+    "src/lib/financial/manualExpenseCancellationClient.ts",
+    "src/lib/financial/manualExpenseCancellationContract.ts",
+    "src/lib/financial/manualExpenseContract.ts",
+    "src/lib/financial/movementCorrectionPreviewClient.ts",
+    "src/lib/financial/movementCorrectionPreviewContract.ts",
+    "src/lib/financial/movementReceiptTraceContract.ts",
+    "src/lib/financial/movementUseErrors.ts",
+    "src/lib/financial/movementVoidCommandClient.ts",
+    "src/lib/financial/movementVoidCommandContract.ts",
+    "src/lib/financial/nativeStatementAccountContract.ts",
+    "src/lib/financial/paidMovementVoidLabels.ts",
+    "src/lib/financial/payableMovementContract.ts",
+    "src/lib/financial/payablePortfolioClient.ts",
+    "src/lib/financial/payablePortfolioContract.ts",
+    "src/lib/financial/payablePortfolioLabels.ts",
+    "src/lib/financial/payrollPaymentContract.ts",
+    "src/lib/financial/periodEvidenceClient.ts",
+    "src/lib/financial/periodMoneyIssueLabels.ts",
+    "src/lib/financial/periodMoneyPackageClient.ts",
+    "src/lib/financial/periodMoneyPackageContract.ts",
+    "src/lib/financial/periodUnloadingFlowClient.ts",
+    "src/lib/financial/periodUnloadingFlowContract.ts",
+    "src/lib/financial/periodUnloadingFlowLabels.ts",
+    "src/lib/financial/previousClosedMoneyMonth.ts",
+    "src/lib/financial/receiptCorrectionContract.ts",
+    "src/lib/financial/receivableCommands.ts",
+    "src/lib/financial/receivableFinancialOutbox.ts",
+    "src/lib/financial/receivableHistoryClient.ts",
+    "src/lib/financial/receivableHistoryContract.ts",
+    "src/lib/financial/receivableMovementContract.ts",
+    "src/lib/financial/receivablePaymentsClient.ts",
+    "src/lib/financial/receivablePaymentsContract.ts",
+    "src/lib/financial/receivablePortfolioClient.ts",
+    "src/lib/financial/receivablePortfolioContract.ts",
+    "src/lib/financial/receivableTotals.ts",
+    "src/lib/financial/receivablesPageClient.ts",
+    "src/lib/financial/receivablesPageContract.ts",
+    "src/lib/financial/reconciliationContract.ts",
+    "src/lib/financial/reconciliationHistoryContract.ts",
+    "src/lib/financial/recordedCostCategories.ts",
+    "src/lib/financial/recordedCostSummaryClient.ts",
+    "src/lib/financial/recordedCostSummaryContract.ts",
+    "src/lib/financial/recordedCostsContract.ts",
+    "src/lib/financial/settlementAdjustmentCommands.ts",
+    "src/lib/financial/settlementAdjustmentOutbox.ts",
+    "src/lib/financial/settlementExpenseContextClient.ts",
+    "src/lib/financial/settlementExpenseContextContract.ts",
+    "src/lib/financial/settlementListResponse.ts",
+    "src/lib/financial/settlementMovementClient.ts",
+    "src/lib/financial/settlementMovementContract.ts",
+    "src/lib/financial/settlementPaymentClient.ts",
+    "src/lib/financial/settlementPaymentContract.ts",
+    "src/lib/financial/statementCoverageClient.ts",
+    "src/lib/financial/statementCoverageContract.ts",
+    "src/lib/financial/statementHistoryContract.ts",
+    "src/lib/financial/statementImportClient.ts",
+    "src/lib/financial/statementImportContract.ts",
+    "src/lib/financial/statementImportStore.ts",
+    "src/lib/financial/statementImportWorkflow.ts",
+    "src/lib/financial/statementReviewContract.ts",
+    "src/lib/financial/stockAcquisitionClient.ts",
+    "src/lib/financial/stockAcquisitionContract.ts",
+    "src/lib/financial/stockConsumptionClient.ts",
+    "src/lib/financial/stockConsumptionContract.ts",
+    "src/lib/financial/transferPeriodContract.ts",
+    "src/lib/financial/transferStageContract.ts",
+    "src/lib/financial/unbilledFreightClient.ts",
+    "src/lib/financial/unbilledFreightContract.ts",
+    "src/lib/financial/unloadingProjectionRepairClient.ts",
+    "src/lib/financial/unloadingProjectionRepairCommandClient.ts",
+    "src/lib/financial/unloadingProjectionRepairCommandContract.ts",
+    "src/lib/financial/unloadingProjectionRepairContract.ts",
+    "src/lib/financial/unloadingProjectionRepairOutbox.ts"
+  ],
+  "calls": [
+    {
+      "file": "src/hooks/useClientInvoiceLifecycle.ts",
+      "line": 17,
+      "column": 54,
+      "name": "get_client_invoice_action_context",
+      "argument_names": [
+        "_invoice_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useClientInvoiceLifecycle.ts",
+      "line": 20,
+      "column": 54,
+      "name": "get_client_invoice_creation_context",
+      "argument_names": [
+        "_draft",
+        "_report_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useClientInvoiceLifecycle.ts",
+      "line": 24,
+      "column": 32,
+      "name": "get_client_invoice_creation_context",
+      "argument_names": [
+        "_draft",
+        "_report_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useClientInvoiceLifecycle.ts",
+      "line": 29,
+      "column": 21,
+      "name": "apply_client_invoice_command",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useClosingLifecycle.ts",
+      "line": 16,
+      "column": 54,
+      "name": "get_closing_report_action_context",
+      "argument_names": [
+        "_report_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useClosingLifecycle.ts",
+      "line": 21,
+      "column": 21,
+      "name": "apply_closing_report_action",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 92,
+      "column": 37,
+      "name": "list_driver_settlements",
+      "argument_names": [
+        "_date_from",
+        "_date_to",
+        "_driver_id",
+        "_only_expense_pending",
+        "_only_km_pending",
+        "_only_needs_recalculation",
+        "_only_no_freight",
+        "_page",
+        "_page_size",
+        "_search",
+        "_status",
+        "_tenant_id",
+        "_vehicle_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 122,
+      "column": 37,
+      "name": "list_driver_settlement_filter_options",
+      "argument_names": [
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 166,
+      "column": 37,
+      "name": "generate_pending_driver_settlements",
+      "argument_names": [
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 195,
+      "column": 39,
+      "name": "recalculate_manual_expense_settlement",
+      "argument_names": [
+        "_settlement_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 202,
+      "column": 37,
+      "name": "generate_driver_settlement",
+      "argument_names": [
+        "_dispatch_trip_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 222,
+      "column": 37,
+      "name": "update_driver_settlement_status",
+      "argument_names": [
+        "_allow_exceptions",
+        "_new_status",
+        "_reason",
+        "_settlement_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 262,
+      "column": 37,
+      "name": "update_driver_settlement_km_review",
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 284,
+      "column": 37,
+      "name": "settle_zero_driver_settlement",
+      "argument_names": [
+        "_reason",
+        "_settlement_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 329,
+      "column": 37,
+      "name": "list_available_loads_for_settlement",
+      "argument_names": [
+        "_driver_id",
+        "_include_settlement_id",
+        "_limit",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 356,
+      "column": 37,
+      "name": "create_manual_driver_settlement",
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 374,
+      "column": 31,
+      "name": "attach_loads_to_driver_settlement",
+      "argument_names": [
+        "_load_ids",
+        "_settlement_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 394,
+      "column": 31,
+      "name": "detach_load_from_driver_settlement",
+      "argument_names": [
+        "_load_id",
+        "_settlement_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 414,
+      "column": 31,
+      "name": "delete_driver_settlement",
+      "argument_names": [
+        "_reason",
+        "_settlement_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useExpenseCreation.ts",
+      "line": 18,
+      "column": 54,
+      "name": "get_expense_creation_context",
+      "argument_names": [
+        "_source_id",
+        "_source_type",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useExpenseCreation.ts",
+      "line": 24,
+      "column": 75,
+      "name": "get_expense_receipt_status",
+      "argument_names": [
+        "_receipt",
+        "_request_id",
+        "_source_id",
+        "_source_type",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useExpenseCreation.ts",
+      "line": 25,
+      "column": 34,
+      "name": "create_driver_expense_command",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useExpenseReview.ts",
+      "line": 15,
+      "column": 54,
+      "name": "list_driver_expenses_for_review",
+      "argument_names": [
+        "_offset",
+        "_status",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useExpenseReview.ts",
+      "line": 25,
+      "column": 54,
+      "name": "get_driver_expense_review_context",
+      "argument_names": [
+        "_expense_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useExpenseReview.ts",
+      "line": 30,
+      "column": 21,
+      "name": "review_driver_expense",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 120,
+      "column": 37,
+      "name": "generate_payroll_period",
+      "argument_names": [
+        "_include_drivers",
+        "_include_non_drivers",
+        "_period_end",
+        "_period_name",
+        "_period_start",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 143,
+      "column": 31,
+      "name": "recalculate_payroll_entry",
+      "argument_names": [
+        "_entry_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 158,
+      "column": 31,
+      "name": "approve_payroll_period",
+      "argument_names": [
+        "_period_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 174,
+      "column": 31,
+      "name": "close_payroll_period",
+      "argument_names": [
+        "_period_id",
+        "_reason"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 187,
+      "column": 37,
+      "name": "add_payroll_manual_item",
+      "argument_names": [
+        "_amount",
+        "_description",
+        "_entry_id",
+        "_nature",
+        "_reason"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 210,
+      "column": 31,
+      "name": "delete_payroll_entry_item",
+      "argument_names": [
+        "_item_id",
+        "_reason"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 308,
+      "column": 37,
+      "name": "register_employee_advance",
+      "argument_names": [
+        "_advance_date",
+        "_amount",
+        "_create_payable",
+        "_employee_id",
+        "_mark_paid",
+        "_payment_method",
+        "_payment_reference",
+        "_reason",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useReceivableFinancial.ts",
+      "line": 17,
+      "column": 54,
+      "name": "get_receivable_financial_context",
+      "argument_names": [
+        "_receivable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useReceivableFinancial.ts",
+      "line": 22,
+      "column": 21,
+      "name": "apply_receivable_financial_command",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/accountOpeningClient.ts",
+      "line": 5,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/accountOpeningClient.ts",
+      "line": 6,
+      "column": 145,
+      "name": "get_finance_account_opening",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/accountOpeningClient.ts",
+      "line": 7,
+      "column": 168,
+      "name": "record_finance_account_opening",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/accountOpeningClient.ts",
+      "line": 8,
+      "column": 179,
+      "name": "reverse_finance_account_opening",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/accountPeriodCloseClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/accountPeriodCloseClient.ts",
+      "line": 6,
+      "column": 139,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/accountPeriodCloseClient.ts",
+      "line": 8,
+      "column": 162,
+      "name": "preview_finance_account_period_close",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/accountPeriodCloseClient.ts",
+      "line": 11,
+      "column": 148,
+      "name": "get_finance_account_period_history",
+      "argument_names": [
+        "_account_id",
+        "_limit",
+        "_offset",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/accountPeriodEvidenceClient.ts",
+      "line": 4,
+      "column": 118,
+      "name": "get_finance_account_period_evidence",
+      "argument_names": [
+        "_account_id",
+        "_closure_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/cashOpeningClient.ts",
+      "line": 9,
+      "column": 27,
+      "name": "record_finance_cash_opening",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/cashPeriodClient.ts",
+      "line": 7,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/cashPeriodClient.ts",
+      "line": 8,
+      "column": 138,
+      "name": "get_finance_cash_period_counts",
+      "argument_names": [
+        "_account_id",
+        "_page",
+        "_period_end",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/cashPeriodClient.ts",
+      "line": 9,
+      "column": 157,
+      "name": "preview_finance_cash_period_close",
+      "argument_names": [
+        "_account_id",
+        "_count_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/cashPeriodClient.ts",
+      "line": 10,
+      "column": 366,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/expenseCancellationClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/expenseCancellationClient.ts",
+      "line": 6,
+      "column": 135,
+      "name": "preview_finance_expense_cancellation",
+      "argument_names": [
+        "_expense_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/expenseCancellationClient.ts",
+      "line": 7,
+      "column": 190,
+      "name": "cancel_finance_expense",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/fiscalDashboardClient.ts",
+      "line": 4,
+      "column": 114,
+      "name": "get_finance_fiscal_dashboard_summary",
+      "argument_names": [
+        "_client_id",
+        "_doc_type",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 34,
+      "column": 47,
+      "name": "list_finance_recorded_costs",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 38,
+      "column": 53,
+      "name": "record_finance_manual_expense",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 42,
+      "column": 54,
+      "name": "get_finance_manual_expense_movements",
+      "argument_names": [
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 46,
+      "column": 48,
+      "name": "get_finance_transfer_period_position",
+      "argument_names": [
+        "_account_id",
+        "_cutoff",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 50,
+      "column": 53,
+      "name": "record_finance_transfer_stage",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 54,
+      "column": 50,
+      "name": "get_finance_pending_transfers",
+      "argument_names": [
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 58,
+      "column": 56,
+      "name": "record_finance_internal_transfer",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 62,
+      "column": 54,
+      "name": "get_finance_movement_receipt_trace",
+      "argument_names": [
+        "_movement_id",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 66,
+      "column": 58,
+      "name": "correct_finance_receipt_allocation",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 70,
+      "column": 57,
+      "name": "get_finance_receipt_movement_options",
+      "argument_names": [
+        "_account_id",
+        "_date",
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 74,
+      "column": 48,
+      "name": "get_finance_account_period_review",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 78,
+      "column": 58,
+      "name": "get_finance_automatic_reconciliation_status",
+      "argument_names": [
+        "_import_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 82,
+      "column": 33,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 92,
+      "column": 33,
+      "name": "get_finance_access",
+      "argument_names": [
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 101,
+      "column": 56,
+      "name": "get_finance_native_statement_account",
+      "argument_names": [
+        "_import_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 105,
+      "column": 55,
+      "name": "list_finance_reconciliation_options",
+      "argument_names": [
+        "_import_id",
+        "_kind",
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 109,
+      "column": 55,
+      "name": "list_finance_reconciliation_history",
+      "argument_names": [
+        "_import_id",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 113,
+      "column": 62,
+      "name": "reverse_finance_bank_reconciliation",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 117,
+      "column": 55,
+      "name": "get_finance_reconciliation_context",
+      "argument_names": [
+        "_bank_entry_ids",
+        "_movement_ids",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 122,
+      "column": 54,
+      "name": "reconcile_finance_bank_group",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 126,
+      "column": 45,
+      "name": "list_finance_fiscal_queue",
+      "argument_names": [
+        "_page",
+        "_status",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 131,
+      "column": 56,
+      "name": "get_finance_payable_movements",
+      "argument_names": [
+        "_page",
+        "_payable_id",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 135,
+      "column": 55,
+      "name": "apply_finance_payable_movement",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 139,
+      "column": 55,
+      "name": "reverse_finance_payable_link",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 143,
+      "column": 55,
+      "name": "get_finance_payable_payment_history",
+      "argument_names": [
+        "_page",
+        "_payable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 147,
+      "column": 52,
+      "name": "get_finance_payroll_entries",
+      "argument_names": [
+        "_period_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 152,
+      "column": 59,
+      "name": "get_finance_payroll_periods",
+      "argument_names": [
+        "_period_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 157,
+      "column": 47,
+      "name": "list_finance_audit_events",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 161,
+      "column": 47,
+      "name": "list_finance_movements",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 168,
+      "column": 51,
+      "name": "record_finance_movement",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 173,
+      "column": 51,
+      "name": "get_finance_expense_options",
+      "argument_names": [
+        "_kind",
+        "_page",
+        "_search",
+        "_tenant_id",
+        "_trip_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 180,
+      "column": 55,
+      "name": "record_finance_expense_batch",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 187,
+      "column": 49,
+      "name": "list_finance_expenses",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 191,
+      "column": 85,
+      "name": "intake_finance_statement",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 193,
+      "column": 56,
+      "name": "review_finance_statement_identity",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 198,
+      "column": 55,
+      "name": "reverse_finance_identity_review",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 202,
+      "column": 53,
+      "name": "list_finance_identity_candidates",
+      "argument_names": [
+        "_page",
+        "_row_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 206,
+      "column": 22,
+      "name": "finance_statement_original_ready",
+      "argument_names": [
+        "_file_hash",
+        "_source_path",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 210,
+      "column": 48,
+      "name": "list_finance_statements",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 214,
+      "column": 49,
+      "name": "list_finance_statement_lines",
+      "argument_names": [
+        "_filters",
+        "_import_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyCostAssociationClient.ts",
+      "line": 5,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyCostAssociationClient.ts",
+      "line": 6,
+      "column": 133,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyCostAssociationClient.ts",
+      "line": 7,
+      "column": 133,
+      "name": "get_finance_legacy_expense_cost_context",
+      "argument_names": [
+        "_expense_id",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyCostAssociationClient.ts",
+      "line": 8,
+      "column": 131,
+      "name": "get_finance_legacy_cost_inventory",
+      "argument_names": [
+        "_page",
+        "_source",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyCutReviewClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyCutReviewClient.ts",
+      "line": 6,
+      "column": 142,
+      "name": "get_finance_legacy_cut_review",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyCutReviewClient.ts",
+      "line": 7,
+      "column": 156,
+      "name": "review_finance_legacy_cut",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyIntegrityClient.ts",
+      "line": 4,
+      "column": 90,
+      "name": "get_finance_legacy_integrity_inventory",
+      "argument_names": [
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyInventoryClient.ts",
+      "line": 9,
+      "column": 27,
+      "name": "get_finance_legacy_adoption_inventory",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_page",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyPayableAssociationClient.ts",
+      "line": 5,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyPayableAssociationClient.ts",
+      "line": 6,
+      "column": 139,
+      "name": "get_finance_legacy_payable_association",
+      "argument_names": [
+        "_page",
+        "_payment_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyPayableAssociationClient.ts",
+      "line": 7,
+      "column": 142,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyReceivableAssociationClient.ts",
+      "line": 5,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyReceivableAssociationClient.ts",
+      "line": 6,
+      "column": 145,
+      "name": "get_finance_legacy_receivable_association",
+      "argument_names": [
+        "_page",
+        "_payment_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyReceivableAssociationClient.ts",
+      "line": 7,
+      "column": 151,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/maintenanceCostContextClient.ts",
+      "line": 4,
+      "column": 109,
+      "name": "get_finance_maintenance_cost_context",
+      "argument_names": [
+        "_order_id",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+      "line": 6,
+      "column": 162,
+      "name": "get_finance_maintenance_direct_part_context",
+      "argument_names": [
+        "_page",
+        "_part_id",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+      "line": 7,
+      "column": 166,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/maintenanceLaborAssociationClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/maintenanceLaborAssociationClient.ts",
+      "line": 6,
+      "column": 153,
+      "name": "get_finance_maintenance_labor_context",
+      "argument_names": [
+        "_order_id",
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/maintenanceLaborAssociationClient.ts",
+      "line": 7,
+      "column": 151,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/manualExpenseCancellationClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/manualExpenseCancellationClient.ts",
+      "line": 6,
+      "column": 147,
+      "name": "preview_finance_manual_expense_cancellation",
+      "argument_names": [
+        "_payable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/manualExpenseCancellationClient.ts",
+      "line": 7,
+      "column": 214,
+      "name": "cancel_finance_manual_expense",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/movementCorrectionPreviewClient.ts",
+      "line": 4,
+      "column": 108,
+      "name": "preview_finance_movement_correction",
+      "argument_names": [
+        "_movement_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/movementVoidCommandClient.ts",
+      "line": 8,
+      "column": 26,
+      "name": "void_finance_manual_movement",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/payablePortfolioClient.ts",
+      "line": 6,
+      "column": 26,
+      "name": "get_finance_payable_portfolio",
+      "argument_names": [
+        "_filters",
+        "_page",
+        "_revision",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/periodEvidenceClient.ts",
+      "line": 14,
+      "column": 27,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/periodEvidenceClient.ts",
+      "line": 18,
+      "column": 46,
+      "name": "get_finance_statement_period_evidence",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/periodEvidenceClient.ts",
+      "line": 22,
+      "column": 90,
+      "name": "record_finance_period_evidence_review",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/periodMoneyPackageClient.ts",
+      "line": 6,
+      "column": 26,
+      "name": "get_finance_period_money_package",
+      "argument_names": [
+        "_account_ids",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/periodUnloadingFlowClient.ts",
+      "line": 15,
+      "column": 26,
+      "name": "get_finance_period_unloading_flow",
+      "argument_names": [
+        "_account_ids",
+        "_expected_revision",
+        "_from",
+        "_page",
+        "_supplier_id",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/receivableHistoryClient.ts",
+      "line": 10,
+      "column": 26,
+      "name": "get_finance_receivable_history",
+      "argument_names": [
+        "_expected_revision",
+        "_page",
+        "_receivable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/receivablePaymentsClient.ts",
+      "line": 9,
+      "column": 26,
+      "name": "get_finance_receivable_payments_page",
+      "argument_names": [
+        "_expected_revision",
+        "_page",
+        "_receivable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/receivablePortfolioClient.ts",
+      "line": 4,
+      "column": 112,
+      "name": "get_finance_receivable_portfolio_summary",
+      "argument_names": [
+        "_client_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/receivablesPageClient.ts",
+      "line": 6,
+      "column": 27,
+      "name": "get_finance_receivables_page",
+      "argument_names": [
+        "_client_id",
+        "_from",
+        "_page",
+        "_search",
+        "_status",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/recordedCostSummaryClient.ts",
+      "line": 4,
+      "column": 115,
+      "name": "get_finance_recorded_cost_summary",
+      "argument_names": [
+        "_category",
+        "_cost_center",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/settlementExpenseContextClient.ts",
+      "line": 5,
+      "column": 27,
+      "name": "get_finance_settlement_expense_context",
+      "argument_names": [
+        "_page",
+        "_settlement_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/settlementMovementClient.ts",
+      "line": 6,
+      "column": 27,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/settlementMovementClient.ts",
+      "line": 11,
+      "column": 58,
+      "name": "link_finance_settlement_payment",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/settlementMovementClient.ts",
+      "line": 15,
+      "column": 59,
+      "name": "get_finance_settlement_payment_movements",
+      "argument_names": [
+        "_page",
+        "_payment_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/settlementMovementClient.ts",
+      "line": 20,
+      "column": 58,
+      "name": "reverse_finance_settlement_link",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/settlementPaymentClient.ts",
+      "line": 9,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/settlementPaymentClient.ts",
+      "line": 11,
+      "column": 103,
+      "name": "record_finance_settlement_payment",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/settlementPaymentClient.ts",
+      "line": 15,
+      "column": 61,
+      "name": "get_finance_settlement_payment_candidates",
+      "argument_names": [
+        "_amount_cents",
+        "_page",
+        "_settlement_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/statementCoverageClient.ts",
+      "line": 5,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/statementCoverageClient.ts",
+      "line": 6,
+      "column": 144,
+      "name": "get_finance_statement_coverage_review",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/statementCoverageClient.ts",
+      "line": 8,
+      "column": 18,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/stockAcquisitionClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/stockAcquisitionClient.ts",
+      "line": 6,
+      "column": 152,
+      "name": "get_finance_stock_acquisition_context",
+      "argument_names": [
+        "_inbound_movement_id",
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/stockAcquisitionClient.ts",
+      "line": 7,
+      "column": 151,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/stockAcquisitionClient.ts",
+      "line": 10,
+      "column": 140,
+      "name": "get_finance_stock_acquisition_inventory",
+      "argument_names": [
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/stockConsumptionClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/stockConsumptionClient.ts",
+      "line": 6,
+      "column": 140,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/stockConsumptionClient.ts",
+      "line": 7,
+      "column": 164,
+      "name": "get_finance_stock_consumption_context",
+      "argument_names": [
+        "_movement_id",
+        "_page",
+        "_part_id",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/stockConsumptionClient.ts",
+      "line": 8,
+      "column": 220,
+      "name": "preview_finance_stock_consumption",
+      "argument_names": [
+        "_lines",
+        "_movement_id",
+        "_part_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/unbilledFreightClient.ts",
+      "line": 4,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/unbilledFreightClient.ts",
+      "line": 7,
+      "column": 140,
+      "name": "get_finance_unbilled_freight_summary",
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/unbilledFreightClient.ts",
+      "line": 8,
+      "column": 176,
+      "name": "list_finance_unbilled_freight_origins",
+      "argument_names": [
+        "_page",
+        "_state"
+      ],
+      "arguments_complete": false,
+      "resolution": "dynamic_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/unloadingProjectionRepairClient.ts",
+      "line": 8,
+      "column": 26,
+      "name": "get_finance_unloading_projection_repair_context",
+      "argument_names": [
+        "_charge_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/unloadingProjectionRepairCommandClient.ts",
+      "line": 9,
+      "column": 16,
+      "name": "repair_finance_unloading_projection",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "literal_named_arguments",
+      "via": "supabase.rpc"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 262,
+      "column": 37,
+      "name": "update_driver_settlement_km_review",
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 356,
+      "column": 37,
+      "name": "create_manual_driver_settlement",
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_arguments",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/accountOpeningClient.ts",
+      "line": 5,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/accountPeriodCloseClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/accountPeriodCloseClient.ts",
+      "line": 6,
+      "column": 139,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/cashPeriodClient.ts",
+      "line": 7,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/cashPeriodClient.ts",
+      "line": 10,
+      "column": 366,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/expenseCancellationClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 82,
+      "column": 33,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyCostAssociationClient.ts",
+      "line": 5,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyCostAssociationClient.ts",
+      "line": 6,
+      "column": 133,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyCutReviewClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyPayableAssociationClient.ts",
+      "line": 5,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyPayableAssociationClient.ts",
+      "line": 7,
+      "column": 142,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/legacyReceivableAssociationClient.ts",
+      "line": 5,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/legacyReceivableAssociationClient.ts",
+      "line": 7,
+      "column": 151,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+      "line": 7,
+      "column": 166,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/maintenanceLaborAssociationClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/maintenanceLaborAssociationClient.ts",
+      "line": 7,
+      "column": 151,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/manualExpenseCancellationClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/periodEvidenceClient.ts",
+      "line": 14,
+      "column": 27,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/settlementMovementClient.ts",
+      "line": 6,
+      "column": 27,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/settlementPaymentClient.ts",
+      "line": 9,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/statementCoverageClient.ts",
+      "line": 5,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/statementCoverageClient.ts",
+      "line": 8,
+      "column": 18,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/stockAcquisitionClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/stockAcquisitionClient.ts",
+      "line": 7,
+      "column": 151,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/stockConsumptionClient.ts",
+      "line": 5,
+      "column": 85,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/stockConsumptionClient.ts",
+      "line": 6,
+      "column": 140,
+      "name": null,
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "resolution": "dynamic_name",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/unbilledFreightClient.ts",
+      "line": 4,
+      "column": 86,
+      "name": null,
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_name",
+      "via": "supabase.rpc"
+    },
+    {
+      "file": "src/lib/financial/unbilledFreightClient.ts",
+      "line": 7,
+      "column": 140,
+      "name": "get_finance_unbilled_freight_summary",
+      "argument_names": [],
+      "arguments_complete": false,
+      "resolution": "dynamic_arguments",
+      "via": "local_adapter"
+    },
+    {
+      "file": "src/lib/financial/unbilledFreightClient.ts",
+      "line": 8,
+      "column": 176,
+      "name": "list_finance_unbilled_freight_origins",
+      "argument_names": [
+        "_page",
+        "_state"
+      ],
+      "arguments_complete": false,
+      "resolution": "dynamic_arguments",
+      "via": "local_adapter"
+    }
+  ],
+  "limits": [
+    "Supabase imported client and local direct wrappers/aliases only; arbitrary intermodule wrappers and chained schema clients are not resolved.",
+    "Argument value types/undefined omission, PostgreSQL semantic behavior, RLS, execution and activation are not certified.",
+    "Dynamic calls are unresolved; SQL excludes dynamic names and marks dynamic argument objects.",
+    "All literal RPC names in the scoped financial files are included, including legacy names without finance prefix."
+  ]
+}

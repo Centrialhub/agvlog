@@ -6,7 +6,7 @@ import DriverStops from '@/pages/driver/DriverStops';
 const mocks=vi.hoisted(()=>({
   stop:{} as Record<string,unknown>,tripStatus:'in_transit',started:true,selected:null as string|null,
   driverPending:false,driverError:null as unknown,readError:null as unknown,
-  rpc:vi.fn(),arrival:vi.fn(),invalidate:vi.fn(),toast:vi.fn(),navigate:vi.fn(),eq:vi.fn(),
+  rpc:vi.fn(),location:vi.fn(),submit:vi.fn(),invalidate:vi.fn(),toast:vi.fn(),navigate:vi.fn(),eq:vi.fn(),
 }));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'tenant'}})}));
 vi.mock('@/hooks/useCurrentDriver',()=>({
@@ -17,7 +17,8 @@ vi.mock('@/hooks/useCurrentDriver',()=>({
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:mocks.toast})}));
 vi.mock('react-router-dom',()=>({useNavigate:()=>mocks.navigate,useSearchParams:()=>[
   new URLSearchParams(mocks.selected?{trip:mocks.selected}:{}),vi.fn()]}));
-vi.mock('@/lib/driver/driverArrival',()=>({markDriverArrival:mocks.arrival}));
+vi.mock('@/lib/driverLocation',()=>({getCurrentDriverLocation:mocks.location}));
+vi.mock('@/hooks/useDriverOperationalOffline',()=>({useDriverOperationalOffline:()=>({commands:[],submit:mocks.submit})}));
 vi.mock('@/lib/driver/driverDeliverySubmission',async original=>({
   ...await original<typeof import('@/lib/driver/driverDeliverySubmission')>(),invalidateDeliveryQueries:mocks.invalidate,
 }));
@@ -39,7 +40,9 @@ beforeEach(()=>{
   mocks.driverError=null;mocks.readError=null;
   mocks.stop={id:'stop',status:'arrived',destination:'Rua QA',actual_arrival_at:'2026-08-29T12:00:00Z',actual_departure_at:null,
     clients:{company_name:'Cliente QA'}};
-  mocks.rpc.mockResolvedValue({data:'event',error:null});mocks.arrival.mockResolvedValue('arrival');
+  mocks.rpc.mockResolvedValue({data:'event',error:null});
+  mocks.location.mockResolvedValue({latitude:-15.8,longitude:-43.3,accuracyM:10});
+  mocks.submit.mockResolvedValue({queued:false,state:'confirmed'});
   mocks.invalidate.mockImplementation(async()=>{await client.invalidateQueries({queryKey:['driver_stops']});});
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
 });
@@ -67,19 +70,20 @@ describe('driver stops rendered frontend',()=>{
   it.each(['pending','planned','arriving'])('offers GPS arrival for %s stops',async status=>{
     mocks.stop={...mocks.stop,status,actual_arrival_at:null};renderPage();
     fireEvent.click(await screen.findByRole('button',{name:'Cheguei'}));
-    await waitFor(()=>expect(mocks.arrival).toHaveBeenCalledWith('stop'));
+    await waitFor(()=>expect(mocks.submit).toHaveBeenCalledWith(expect.objectContaining({kind:'arrival',aggregateId:'trip',
+      payload:expect.objectContaining({trip_id:'trip',stop_id:'stop',latitude:-15.8,longitude:-43.3,accuracy_m:10})})));
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
   it('surfaces a GPS/geofence rejection and permits an identical retry',async()=>{
     mocks.stop={...mocks.stop,status:'pending',actual_arrival_at:null};
-    mocks.arrival.mockRejectedValueOnce({code:'23514',message:'Você está fora do raio permitido para esta parada'});
+    mocks.submit.mockRejectedValueOnce(new Error('Você está fora do raio permitido para esta parada'));
     renderPage();fireEvent.click(await screen.findByRole('button',{name:'Cheguei'}));
     await waitFor(()=>expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
       description:'Você está fora do raio permitido para esta parada',variant:'destructive',
     })));
     fireEvent.click(screen.getByRole('button',{name:'Cheguei'}));
-    await waitFor(()=>expect(mocks.arrival).toHaveBeenCalledTimes(2));
-    expect(mocks.arrival.mock.calls[1]).toEqual(mocks.arrival.mock.calls[0]);
+    await waitFor(()=>expect(mocks.submit).toHaveBeenCalledTimes(2));
+    expect(mocks.submit.mock.calls[1]).toEqual(mocks.submit.mock.calls[0]);
   });
   it('disables departure before a real start and before arrival',async()=>{
     mocks.started=false;renderPage();expect(await screen.findByRole('button',{name:'Registrar saída'})).toBeDisabled();
@@ -89,11 +93,11 @@ describe('driver stops rendered frontend',()=>{
     mocks.stop.actual_arrival_at=null;renderPage();expect(await screen.findByRole('button',{name:'Registrar saída'})).toBeDisabled();
   });
   it('records departure through the compatible API and refreshes interconnected queries',async()=>{
-    mocks.rpc.mockImplementation(async()=>{mocks.stop={...mocks.stop,actual_departure_at:'2026-08-29T12:30:00Z'};return {data:'event',error:null};});
+    mocks.submit.mockImplementation(async()=>{mocks.stop={...mocks.stop,actual_departure_at:'2026-08-29T12:30:00Z'};return {queued:false,state:'confirmed'};});
     renderPage();fireEvent.click(await screen.findByRole('button',{name:'Registrar saída'}));
     expect(await screen.findByText('Saída registrada')).toBeInTheDocument();
-    expect(mocks.rpc).toHaveBeenCalledTimes(1);
-    expect(mocks.rpc).toHaveBeenCalledWith('driver_register_departure',{_stop_id:'stop',_notes:undefined});
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+    expect(mocks.submit).toHaveBeenCalledWith({kind:'departure',aggregateId:'trip',payload:{trip_id:'trip',stop_id:'stop',notes:null}});
     expect(mocks.invalidate).toHaveBeenCalled();
     expect(screen.queryByRole('button',{name:'Registrar saída'})).not.toBeInTheDocument();
     expect(screen.getByText(/Registrar saída não conclui a entrega/)).toBeInTheDocument();
@@ -101,12 +105,12 @@ describe('driver stops rendered frontend',()=>{
     expect(mocks.navigate).toHaveBeenCalledWith('/driver/deliveries?trip=trip');
   });
   it('surfaces a backend error and permits an identical retry',async()=>{
-    mocks.rpc.mockResolvedValueOnce({data:null,error:{code:'23514',message:'Registre a chegada antes da saída'}});
+    mocks.submit.mockRejectedValueOnce(new Error('Registre a chegada antes da saída'));
     renderPage();fireEvent.click(await screen.findByRole('button',{name:'Registrar saída'}));
     await waitFor(()=>expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({description:'Registre a chegada antes da saída'})));
     fireEvent.click(screen.getByRole('button',{name:'Registrar saída'}));
-    await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledTimes(2));
-    expect(mocks.rpc.mock.calls[1]).toEqual(mocks.rpc.mock.calls[0]);
+    await waitFor(()=>expect(mocks.submit).toHaveBeenCalledTimes(2));
+    expect(mocks.submit.mock.calls[1]).toEqual(mocks.submit.mock.calls[0]);
   });
   it('does not offer mutations or describe refusal as successful delivery',async()=>{
     mocks.stop.status='refused';renderPage();expect(await screen.findByText('Recusada')).toBeInTheDocument();

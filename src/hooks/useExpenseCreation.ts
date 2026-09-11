@@ -7,7 +7,7 @@ import {creationError,parseCreationContext,type ExpenseCreationInput,type Expens
 import {EXPENSE_CREATION_CHANGED,createExpenseCreationOutbox,pendingExpenseCreation} from '@/lib/financial/expenseCreationOutbox';
 import {uploadExpenseReceipt} from '@/lib/financial/expenseReceiptUpload';
 import {expenseRequest} from '@/lib/financial/expenseRequest';
-const invalidations=['expense-creation-context','expense-review-context','expense_approval','driver_expenses','ops_expenses_count','driver_settlements','driver_settlement'];
+const invalidations=['finance-legacy-cost-context','finance-legacy-cost-inventory','expense-creation-context','expense-review-context','expense_approval','driver_expenses','ops_expenses_count','driver_settlements','driver_settlement'];
 export function useExpenseCreation(type?:'trip'|'settlement',source?:string){
  const {currentTenant}=useTenant(),{user}=useAuth();const tenant=currentTenant?.id,actor=user?.id,client=useQueryClient();
  const latest=useRef({tenant,actor});latest.current={tenant,actor};const alive=useRef(true),busy=useRef(false);const [isPending,setPending]=useState(false),[revision,setRevision]=useState(0);

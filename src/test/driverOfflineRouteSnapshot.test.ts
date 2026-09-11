@@ -34,10 +34,34 @@ describe('driver route offline snapshot', () => {
     const storage = memoryStorage();
     const saved = saveDriverRouteSnapshot(route, storage, new Date('2026-09-01T12:00:00Z'));
     expect(saved?.cachedAt).toBe('2026-09-01T12:00:00.000Z');
-    const snapshot = readDriverRouteSnapshot('tenant', 'user', storage);
+    const snapshot = readDriverRouteSnapshot('tenant', 'user', storage, new Date('2026-09-01T12:05:00Z').getTime());
     expect(snapshot?.driver.name).toBe('Motorista QA');
     expect(getNextDriverStop(snapshot?.stops ?? [])?.id).toBe('next');
     expect(readDriverRouteSnapshot('tenant', 'other-user', storage)).toBeNull();
+  });
+
+  it('rejects malformed version-one snapshots instead of returning a partial route', () => {
+    const storage = memoryStorage();
+    const key = 'agvlog:driver-route:v1:tenant:user';
+    const malformed = {
+      ...route,
+      version: 1,
+      cachedAt: '2026-09-01T12:00:00.000Z',
+      driver: { id: 'driver' },
+    };
+    storage.setItem(key, JSON.stringify(malformed));
+
+    expect(readDriverRouteSnapshot('tenant', 'user', storage, new Date('2026-09-01T12:05:00Z').getTime())).toBeNull();
+    expect(storage.getItem(key)).toBeNull();
+  });
+
+  it('rejects invalid timestamps instead of keeping a snapshot forever', () => {
+    const storage = memoryStorage();
+    const key = 'agvlog:driver-route:v1:tenant:user';
+    storage.setItem(key, JSON.stringify({ ...route, version: 1, cachedAt: 'not-a-date' }));
+
+    expect(readDriverRouteSnapshot('tenant', 'user', storage)).toBeNull();
+    expect(storage.getItem(key)).toBeNull();
   });
 
   it('expires old routes and clears driver snapshots on logout', () => {

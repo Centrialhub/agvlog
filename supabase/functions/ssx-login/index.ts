@@ -14,6 +14,10 @@ import {
   corsHeaders,
   logIntegration,
   getTenantRole,
+  getWorkspaceRoleForAccount,
+  normalizeSsxBaseUrl,
+  requireWorkspaceAccountContext,
+  decryptAesGcm,
 } from "../_shared/ssx-utils.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -22,23 +26,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function safeUpstreamFailure(status: number, responseText: string): string {
-  let detail = '';
-  try {
-    const parsed = JSON.parse(responseText) as Record<string, unknown>;
-    const error = parsed.error && typeof parsed.error === 'object'
-      ? parsed.error as Record<string, unknown>
-      : {};
-    const candidate = error.message ?? error.code ?? parsed.message ?? parsed.Message;
-    if (typeof candidate === 'string' || typeof candidate === 'number') detail = String(candidate);
-  } catch {
-    // Non-JSON upstream bodies are intentionally not persisted or returned.
-  }
-  const sanitized = detail
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
-    .replace(/(password|senha|token|secret|cookie)\s*[:=]\s*[^,;\s]+/gi, '$1=[redacted]')
-    .slice(0, 200);
-  return `HTTP ${status}${sanitized ? `: ${sanitized}` : ''}`;
+function safeUpstreamFailure(status: number): string {
+  return `SSX login rejected with HTTP ${status}`;
 }
 
 Deno.serve(async (req) => {
@@ -83,7 +72,11 @@ Deno.serve(async (req) => {
     }
 
     if (!isCron && callerId) {
-      const memberRole = await getTenantRole(supabase, account.tenant_id, callerId);
+      const tenantContextError=await requireWorkspaceAccountContext(req,supabase,integration_account_id);
+      if(tenantContextError)return tenantContextError;
+      const memberRole=account.workspace_id
+        ?await getWorkspaceRoleForAccount(supabase,account.workspace_id,callerId)
+        :await getTenantRole(supabase,account.tenant_id,callerId);
       if (!memberRole || !["owner", "admin"].includes(memberRole)) {
         return jsonResp({ error: "Forbidden: admin role required" }, 403);
       }
@@ -122,7 +115,7 @@ Deno.serve(async (req) => {
     }
 
     // Login endpoint does NOT use api_version prefix
-    const baseUrl = (account.base_url || "").replace(/\/$/, "");
+    const baseUrl = normalizeSsxBaseUrl(account.base_url);
     const loginUrl = `${baseUrl}/Login`;
 
     let password = account.password_encrypted || '';
@@ -173,11 +166,11 @@ Deno.serve(async (req) => {
         method: "POST", headers: { Accept: "application/json" },
       });
       responseText = await ssxResponse.text();
-    } catch (fetchErr: unknown) {
+    } catch {
       const failure = nextLoginBackoff(settings);
       await supabase.from("integration_accounts").update({
         status: "degraded",
-        last_error: `SSX unreachable: ${errorMessage(fetchErr)}`,
+        last_error: "SSX network request failed",
         settings: failure.settings,
         updated_at: new Date().toISOString(),
       }).eq("id", integration_account_id);
@@ -185,17 +178,17 @@ Deno.serve(async (req) => {
       await logIntegration(supabase, {
         tenant_id: account.tenant_id, integration_account_id,
         action: "ssx_login", endpoint: loginUrl,
-        success: false, error_message: `SSX unreachable: ${errorMessage(fetchErr)}`,
+        success: false, error_message: "SSX network request failed",
         duration_ms: Date.now() - startTime,
       });
-      return jsonResp({ error: "SSX unreachable", details: errorMessage(fetchErr), retry_at: failure.retryAt }, 502);
+      return jsonResp({ error: "SSX unreachable", retry_at: failure.retryAt }, 502);
     }
 
     const duration = Date.now() - startTime;
     console.log(`[SSX:login] POST ${loginUrl} | status=${ssxResponse.status} | ${duration}ms`);
 
     if (!ssxResponse.ok) {
-      const failureSummary = safeUpstreamFailure(ssxResponse.status, responseText);
+      const failureSummary = safeUpstreamFailure(ssxResponse.status);
       const failure = nextLoginBackoff(settings);
       const newStatus = ssxResponse.status === 401 ? "invalid_credentials" : "degraded";
       await supabase.from("integration_accounts").update({
@@ -218,16 +211,17 @@ Deno.serve(async (req) => {
       }, 502);
     }
 
-    // Parse token
-    let token: string;
+    // Parse the exact ResultToken schema published by Tracking OpenAPI.
+    let token = "";
     let expiresInSeconds: number | null = null;
     try {
-      const parsed = JSON.parse(responseText);
-      token = parsed.AccessToken || parsed.access_token || parsed.Token || parsed.token || responseText;
-      expiresInSeconds = parsed.ExpiresIn || parsed.expires_in || null;
-      if (typeof token === "object") token = JSON.stringify(token);
+      const parsed = JSON.parse(responseText) as JsonObject;
+      token = typeof parsed.AccessToken === "string" ? parsed.AccessToken.trim() : "";
+      expiresInSeconds = typeof parsed.ExpiresIn === "number" && Number.isInteger(parsed.ExpiresIn)
+        ? parsed.ExpiresIn
+        : null;
     } catch {
-      token = responseText.trim().replace(/^"/, "").replace(/"$/, "");
+      token = "";
     }
 
     if (!token || token.length < 10) {
@@ -269,8 +263,8 @@ Deno.serve(async (req) => {
     const expiresAt = new Date(nowMs + ttlMs).toISOString();
     const nowIso = new Date(nowMs).toISOString();
 
-    // On login success: clear admin skip, backoff, and admin token cache
-    // so sync retries immediately with fresh tokens
+    // On login success: clear backoff metadata. The Administration bearer token
+    // is stored separately and invalidated automatically when credentials change.
     const updatedSettings = { ...settings };
     delete updatedSettings.skip_admin_until;
     delete updatedSettings.last_admin_error;
@@ -335,27 +329,4 @@ function nextLoginBackoff(settings: JsonObject): {
     },
     retryAt,
   };
-}
-
-async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
-  const parts = encrypted.split(":");
-  if (parts.length !== 4) throw new Error("Invalid encrypted format");
-  const ivHex = parts[2];
-  const ctHex = parts[3];
-
-  const keyBytes = hexToBytes(keyHex.padEnd(64, "0").slice(0, 64));
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
-  const iv = hexToBytes(ivHex);
-  const ct = hexToBytes(ctHex);
-
-  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
-  return new TextDecoder().decode(decrypted);
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
 }

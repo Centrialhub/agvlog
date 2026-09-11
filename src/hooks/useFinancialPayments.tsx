@@ -1,7 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
+import { useAuth } from './useAuth';
 import { uploadSecureFile } from '@/lib/secureUpload';
+import {readPayablePaymentHistory} from '@/lib/financial/ledgerClient';
 
 export const PAYMENT_METHODS = ['pix','boleto','ted','doc','dinheiro','cartao','debito_automatico','other'] as const;
 export type PaymentMethod = typeof PAYMENT_METHODS[number];
@@ -11,27 +13,11 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   debito_automatico: 'Débito automático', other: 'Outro',
 };
 
-export interface ManualExpensePayload {
-  supplier_name: string;
-  supplier_id: string | null;
-  category: string;
-  description: string;
-  amount: number;
-  due_date: string | null;
-  competence_date: string | null;
-  document_number: string | null;
-  notes: string | null;
-  pay_now: boolean;
-  paid_at: string | null;
-  bank_account_id: string | null;
-  method: string;
-  attachment_url: string | null;
-}
-
 export function useBankAccounts() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['bank_accounts', currentTenant?.id],
+    queryKey: ['finance-active-accounts', currentTenant?.id,user?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data, error } = await supabase
@@ -43,91 +29,23 @@ export function useBankAccounts() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant&&!!user,
   });
 }
 
-export function usePayablePayments(payableId: string | null) {
+export function usePayablePayments(payableId: string | null,page=1) {
+  const {currentTenant}=useTenant();
   return useQuery({
-    queryKey: ['payables_payments', payableId],
+    queryKey: ['payables_payments', payableId,currentTenant?.id,page],
     queryFn: async () => {
-      if (!payableId) return [];
-      const { data, error } = await supabase
-        .from('payables_payments')
-        .select('*, bank_accounts(name)')
-        .eq('payable_id', payableId)
-        .order('paid_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
+      if (!payableId||!currentTenant) throw new Error('Selecione a empresa e o título.');
+      return readPayablePaymentHistory(currentTenant.id,payableId,page);
     },
-    enabled: !!payableId,
+    enabled: !!payableId&&!!currentTenant,
   });
 }
 
 
-
-export function useRegisterPayablePayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (args: {
-      payable_id: string; amount: number; paid_at: string;
-      bank_account_id: string; method: PaymentMethod;
-      notes?: string | null; attachment_url?: string | null;
-    }) => {
-      const { data, error } = await supabase.rpc('register_payable_payment', {
-        _payable_id: args.payable_id,
-        _amount: args.amount,
-        _paid_at: args.paid_at,
-        _bank_account_id: args.bank_account_id,
-        _method: args.method,
-        _notes: args.notes ?? undefined,
-        _attachment_url: args.attachment_url ?? undefined,
-      });
-      if (error) throw error;
-      return data as string;
-    },
-    onSuccess: (_d, v) => {
-      qc.invalidateQueries({ queryKey: ['payables'] });
-      qc.invalidateQueries({ queryKey: ['payables_payments', v.payable_id] });
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-    },
-  });
-}
-
-export function useReversePayablePayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payment_id: string) => {
-      const { error } = await supabase.rpc('reverse_payable_payment', { _payment_id: payment_id });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['payables'] });
-      qc.invalidateQueries({ queryKey: ['payables_payments'] });
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-    },
-  });
-}
-
-
-
-export function useCreateManualExpense() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payload: ManualExpensePayload) => {
-      const { data, error } = await supabase.rpc('create_manual_expense', {
-        _payload: { ...payload, tenant_id: currentTenant!.id },
-      });
-      if (error) throw error;
-      return data as string;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['payables'] });
-      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
-    },
-  });
-}
 
 export async function uploadPaymentAttachment(tenantId: string, kind: 'payable'|'receivable', file: File): Promise<string | null> {
   return uploadSecureFile({

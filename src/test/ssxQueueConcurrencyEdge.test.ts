@@ -49,6 +49,11 @@ vi.mock('@supabase/supabase-js', () => ({
         if (name === 'ack_vehicle_processing_queue_v1') {
           return { data: state.ackResults.shift() ?? true, error: null };
         }
+        if (name === 'read_vehicle_position_processing_page_v1') {
+          return state.positionsError
+            ? { data: null, error: { message: 'synthetic positions failure' } }
+            : { data: [], error: null };
+        }
         throw new Error(`Unexpected RPC ${name}`);
       },
       from: (table: string) => {
@@ -129,7 +134,10 @@ describe('SSX queue Edge worker claim concurrency', () => {
     const response = await request();
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: true, processed: 1, errors: 0, superseded: 0 });
-    expect(state.rpcCalls).toEqual([
+    expect(state.rpcCalls.filter(call => [
+      'claim_vehicle_processing_queue_v1',
+      'ack_vehicle_processing_queue_v1',
+    ].includes(call.name))).toEqual([
       { name: 'claim_vehicle_processing_queue_v1', args: { _tenant_id: 'tenant', _limit: 1 } },
       { name: 'ack_vehicle_processing_queue_v1', args: {
         _tenant_id: 'tenant', _vehicle_id: 'vehicle-a',

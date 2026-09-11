@@ -1,3 +1,4 @@
+import {movementUseError} from './movementUseErrors';
 import {z} from 'zod';
 const id=z.string().uuid();const revision=z.string().regex(/^[a-f0-9]{32}$/);const cents=z.number().int().nonnegative().max(99999999999999);
 export const financialAction=z.enum(['receive','reverse','reconcile']);
@@ -6,9 +7,9 @@ export const financialActionLabels:Record<FinancialAction,string>={receive:'Regi
 const base={version:z.literal(1),tenant_id:id,actor_id:id,request_id:id,receivable_id:id,expected_revision:revision,reason:z.string().trim().min(5).max(2000)};
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const financialCommandSchema=z.discriminatedUnion('action',[
- z.object({...base,action:z.literal('receive'),amount_cents:cents.positive(),effective_date:date,bank_account_id:id,
+ z.object({...base,action:z.literal('receive'),amount_cents:cents.positive(),effective_date:date,bank_account_id:id,movement_id:id.optional(),
   method:z.enum(['pix','boleto','ted','doc','dinheiro','cartao','debito_automatico','other']),notes:z.string().max(2000).nullable().optional(),attachment_path:z.string().max(1000).nullable().optional()}).strict(),
- z.object({...base,action:z.literal('reverse'),effective_date:date,payment_id:id}).strict(),
+ z.object({...base,action:z.literal('reverse'),effective_date:date,payment_id:id,refund_kind:z.literal('money_returned').optional()}).strict(),
  z.object({...base,action:z.literal('reconcile')}).strict(),
 ]);
 export type FinancialCommand=z.infer<typeof financialCommandSchema>;
@@ -16,21 +17,28 @@ type Input<T>=T extends FinancialCommand?Omit<T,'version'|'tenant_id'|'actor_id'
 export type FinancialCommandInput=Input<FinancialCommand>;
 const contextSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,receivable_id:id,invoice_id:id.nullable(),report_id:id.nullable(),reference:z.string(),revision,
  status:z.string(),amount_cents:cents.positive(),received_cents:cents,open_cents:cents,requires_reconciliation:z.boolean(),reconciliation_reason:z.string().nullable(),
- can_receive:z.boolean(),can_reverse:z.boolean(),can_reconcile:z.boolean(),history_complete:z.boolean(),payment_count:z.number().int().nonnegative(),
+ source_issue:z.literal('finance_unloading_source_mismatch').nullable().optional(),
+ source_revision:revision.nullable().optional(),
+ can_receive:z.boolean(),can_reverse:z.boolean(),can_reconcile:z.boolean(),fiscal_block_reason:z.enum(['fiscal_origin_suspended','fiscal_origin_cancelled','fiscal_origin_credit_pending','fiscal_origin_review','fiscal_authorization_unavailable']).nullable().optional(),history_complete:z.boolean(),payment_count:z.number().int().nonnegative(),
  bank_accounts:z.array(z.object({id,name:z.string()}).strict()),payments:z.array(z.object({id,amount_cents:cents.positive(),received_at:z.string(),method:z.string().nullable(),notes:z.string().nullable(),
-  bank_account_id:id.nullable(),bank_account_name:z.string().nullable(),attachment_path:z.string().nullable(),reversed_at:z.string().nullable(),reversal_reason:z.string().nullable()}).strict())}).strict();
+  bank_account_id:id.nullable(),bank_account_name:z.string().nullable(),attachment_path:z.string().nullable(),reversed_at:z.string().nullable(),reversal_reason:z.string().nullable(),credit_id:id.nullable().optional(),
+  allocation_correction:z.object({id,actor_id:id,actor_name:z.string(),reason:z.string(),created_at:z.string()}).nullable().optional()}).strict())}).strict();
 export type FinancialContext=z.infer<typeof contextSchema>;
+export const receivablePaymentSchema=contextSchema.shape.payments.element;
+export type ReceivablePayment=z.infer<typeof receivablePaymentSchema>;
 export function parseFinancialContext(value:unknown,tenant:string,actor:string,receivable:string){
  const parsed=contextSchema.safeParse(value);if(!parsed.success)throw new Error('Contexto financeiro incompatível. Atualize antes de confirmar.');const row=parsed.data;
- if(row.tenant_id!==tenant||row.actor_id!==actor||row.receivable_id!==receivable||(!row.requires_reconciliation&&(row.status==='cancelled'?row.received_cents!==0||row.open_cents!==0:row.received_cents+row.open_cents!==row.amount_cents)))
+ if(row.tenant_id!==tenant||row.actor_id!==actor||row.receivable_id!==receivable||(row.source_issue&&(row.can_receive||!row.source_revision))||(!row.requires_reconciliation&&(row.status==='cancelled'?row.received_cents!==0||row.open_cents!==0:row.received_cents+row.open_cents!==row.amount_cents)))
   throw new Error('Contexto financeiro incompatível com a sessão.');return row;
 }
 const resultSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,request_id:id,receivable_id:id,action:financialAction,confirmed:z.literal(true),command_id:id,
- payment_id:id.nullable(),reversal_id:id.nullable(),bank_transaction_id:id.nullable(),revision,received_cents:cents,open_cents:cents,report_id:id.nullable(),invoice_id:id.nullable()}).strict();
+ payment_id:id.nullable(),reversal_id:id.nullable(),bank_transaction_id:id.nullable(),movement_id:id.optional(),refund_kind:z.literal('money_returned').optional(),revision,received_cents:cents,open_cents:cents,report_id:id.nullable(),invoice_id:id.nullable()}).strict();
 export type FinancialResult=z.infer<typeof resultSchema>;
 export function parseFinancialResult(value:unknown,payload:FinancialCommand){
  const parsed=resultSchema.safeParse(value);if(!parsed.success)throw new Error('Operação sem confirmação compatível. Recupere o mesmo pedido.');const row=parsed.data;
  if(row.tenant_id!==payload.tenant_id||row.actor_id!==payload.actor_id||row.receivable_id!==payload.receivable_id||row.request_id!==payload.request_id||row.action!==payload.action
+  ||row.movement_id!==(payload.action==='receive'?payload.movement_id:undefined)
+  ||row.refund_kind!==(payload.action==='reverse'?payload.refund_kind:undefined)
   ||(payload.action==='receive'&&(!row.payment_id||!row.bank_transaction_id||row.reversal_id!==null||row.received_cents<payload.amount_cents))
   ||(payload.action==='reverse'&&(row.payment_id!==payload.payment_id||!row.reversal_id||!row.bank_transaction_id))
   ||(payload.action==='reconcile'&&(row.payment_id!==null||row.reversal_id!==null||row.bank_transaction_id!==null)))
@@ -42,7 +50,15 @@ export function parseMoneyCents(raw:string){
  if(!Number.isSafeInteger(amount)||amount<=0||amount>99999999999999)throw new Error('Informe um valor positivo válido.');return amount;
 }
 export function financialError(cause:unknown){
+ const movementError=movementUseError(cause);if(movementError)return movementError;
  const raw=cause instanceof Error?cause.message:typeof cause==='object'&&cause!==null&&'message' in cause?String(cause.message):'';
+ if(/finance_unloading_source_busy/.test(raw))return 'A descarga está sendo alterada em outra operação. Atualize a consulta e recupere primeiro qualquer pedido sem confirmação.';
+ if(/finance_unloading_source_mismatch/.test(raw))return 'O título diverge da descarga original. Confira o fornecedor e o valor da origem antes de registrar outro recebimento.';
+ if(/finance_unloading_source_immutable|finance_unloading_status_requires_command/.test(raw))return 'Este título foi gerado por uma descarga. Fornecedor, valor e situação financeira precisam ser tratados pela origem e pelos comandos financeiros.';
+ if(/financial_refund_confirmation_required/.test(raw))return 'Confirme que o dinheiro já foi devolvido. Para corrigir apenas a baixa, use a correção de vínculo.';
+ if(/finance_receipt_movement_capacity_exceeded/.test(raw))return 'A entrada não tem saldo disponível suficiente. Atualize a seleção antes de confirmar.';
+ if(/finance_receipt_movement_incompatible/.test(raw))return 'A entrada selecionada não corresponde à empresa, conta, data ou natureza deste recebimento.';
+ if(/financial_fiscal_source_not_collectible/.test(raw))return 'O documento fiscal não permite receber neste momento. Confira a autorização, o cancelamento e as pendências financeiras da origem.';
  if(/context_changed|concurrent_change/.test(raw))return 'O título mudou ou está em uso. Atualize o estado; recupere primeiro qualquer pedido sem confirmação.';
  if(/not_authorized|permission denied/.test(raw))return 'Sua sessão não tem permissão para esta operação financeira.';
  if(/requires_reconciliation/.test(raw))return 'O histórico e as projeções financeiras divergem. É necessária uma conciliação explícita antes de registrar valores.';

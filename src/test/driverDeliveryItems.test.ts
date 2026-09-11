@@ -6,7 +6,8 @@ const envelope=()=>({tenant_id:'tenant',actor_id:'actor',trip_id:'trip',stop_id:
 }]});
 describe('driver allocation-specific read contract',()=>{
  it('preserves historical outcomes and quantities so finalizers can exclude completed notes',()=>{
-  expect(readDriverDeliveryItems(envelope(),context)).toEqual([{id:'item',sku:'invoice',name:'Produto',qty:2,unit:'UN',price:0,documentStatus:'returned'}]);
+  expect(readDriverDeliveryItems(envelope(),context)).toEqual([{id:'item',fiscalDocumentId:'invoice',attemptId:null,
+    isHistorical:true,sku:'invoice',name:'Produto',qty:2,unit:'UN',price:0,documentStatus:'returned'}]);
  });
  it.each(['tenant_id','actor_id','trip_id','stop_id'])('rejects a response for another %s',key=>{
   expect(()=>readDriverDeliveryItems({...envelope(),[key]:'other'},context)).toThrow('Não foi possível conferir');

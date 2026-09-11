@@ -1,0 +1,9 @@
+import {z} from 'zod';
+export const cashDenominations=[1,5,10,25,50,100,200,500,1000,2000,5000,10000,20000] as const;
+export const cashCountsSchema=z.array(z.object({denomination_cents:z.number().int().refine(n=>cashDenominations.includes(n as typeof cashDenominations[number])),quantity:z.number().int().min(0).max(999999999)}).strict()).min(1).max(13).refine(rows=>new Set(rows.map(row=>row.denomination_cents)).size===rows.length).refine(rows=>rows.every(row=>Number.isSafeInteger(row.denomination_cents)&&Number.isSafeInteger(row.quantity))&&rows.reduce((sum,row)=>sum+BigInt(row.denomination_cents)*BigInt(row.quantity),0n)<=99999999999999n);
+const uuid=z.string().uuid(),date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/),cents=z.string().regex(/^\d+$/);
+export const cashOpeningCommandSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,account_id:uuid,effective_from:date,custodian_name:z.string().trim().min(2).max(200),reason:z.string().trim().min(10).max(2000),counts:cashCountsSchema}).strict();
+export type CashOpeningCommand=z.infer<typeof cashOpeningCommandSchema>;
+export const cashOpeningEvidenceSchema=z.object({version:z.literal(1),type:z.literal('cash_count_v1'),currency:z.literal('BRL'),effective_from:date,timezone:z.literal('America/Sao_Paulo'),counted_at_boundary:z.literal('start_of_day'),custodian_name:z.string(),counts:cashCountsSchema,total_cents:cents});
+export const cashOpeningResultSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,opening_id:uuid,balance_cents:cents,evidence_type:z.literal('cash_count_v1'),confirmed:z.literal(true),cash_created:z.literal(false)});
+export function totalCashCounts(rows:CashOpeningCommand['counts']){return rows.reduce((sum,row)=>sum+BigInt(row.denomination_cents)*BigInt(row.quantity),0n).toString();}

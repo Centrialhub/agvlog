@@ -1,0 +1,90 @@
+[
+  {
+    "requested": "public.client_invoice_charges",
+    "present": true
+  },
+  {
+    "requested": "public.closing_report_action_requests",
+    "present": false
+  },
+  {
+    "requested": "public.closing_report_charge_claims",
+    "present": false
+  },
+  {
+    "requested": "public.delivery_attempts",
+    "present": false
+  },
+  {
+    "requested": "public.driver_physical_journeys",
+    "present": false
+  },
+  {
+    "requested": "public.driver_settlements",
+    "present": true
+  },
+  {
+    "requested": "public.finance_account_openings",
+    "present": false
+  },
+  {
+    "requested": "public.finance_commands",
+    "present": false
+  },
+  {
+    "requested": "public.finance_expense_batches",
+    "present": false
+  },
+  {
+    "requested": "public.finance_expense_items",
+    "present": false
+  },
+  {
+    "requested": "public.finance_fiscal_observations",
+    "present": false
+  },
+  {
+    "requested": "public.finance_fiscal_receivable_origins",
+    "present": false
+  },
+  {
+    "requested": "public.finance_movements",
+    "present": false
+  },
+  {
+    "requested": "public.finance_period_evidence_reviews",
+    "present": false
+  },
+  {
+    "requested": "public.finance_statement_imports",
+    "present": false
+  },
+  {
+    "requested": "public.finance_statement_sources",
+    "present": false
+  },
+  {
+    "requested": "public.fiscal_source_reservations",
+    "present": true
+  },
+  {
+    "requested": "public.hub_fiscal_emissions",
+    "present": true
+  },
+  {
+    "requested": "public.payroll_entry_items",
+    "present": true
+  },
+  {
+    "requested": "public.receivable_financial_commands",
+    "present": false
+  },
+  {
+    "requested": "public.tenant_workspaces",
+    "present": false
+  },
+  {
+    "requested": "public.workspaces",
+    "present": false
+  }
+]

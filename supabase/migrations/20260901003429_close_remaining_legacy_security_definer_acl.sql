@@ -25,6 +25,8 @@ begin
   ] loop
     if to_regprocedure(signature) is null then
       raise exception 'Legacy ACL target is missing: %', signature;
+    elsif not has_function_privilege('service_role', to_regprocedure(signature), 'EXECUTE') then
+      raise exception 'Legacy service recovery ACL is not ready: %', signature;
     end if;
   end loop;
 
@@ -37,7 +39,8 @@ begin
     'public.apply_receivable_financial_command(jsonb)'
   ] loop
     if to_regprocedure(signature) is null
-       or not has_function_privilege('authenticated', to_regprocedure(signature), 'EXECUTE') then
+       or not has_function_privilege('authenticated', to_regprocedure(signature), 'EXECUTE')
+       or has_function_privilege('anon', to_regprocedure(signature), 'EXECUTE') then
       raise exception 'Canonical authenticated RPC is not ready: %', signature;
     end if;
   end loop;
@@ -82,3 +85,32 @@ revoke all privileges on function
   public.register_receivable_payment(uuid,numeric,timestamptz,uuid,text,text,text),
   public.reverse_receivable_payment(uuid)
 from public, anon, authenticated;
+
+do $postflight$
+declare
+  signature text;
+begin
+  foreach signature in array array[
+    'public.add_driver_settlement_adjustment(uuid,text,numeric,text,text)',
+    'public.remove_driver_settlement_adjustment(uuid,uuid,text)',
+    'public.add_driver_settlement_manual_expense(uuid,text,numeric,timestamptz,text,text,boolean,text,text)',
+    'public.driver_create_expense(uuid,text,numeric,text,text,timestamptz,text,text,text,text,numeric,boolean,text,boolean,text,boolean)',
+    'public.create_client_invoice(jsonb)',
+    'public.generate_client_invoice_from_closing(uuid)',
+    'public.cancel_client_invoice(uuid,text)',
+    'public.next_closing_report_number(uuid,date)',
+    'public.close_closing_report(uuid)',
+    'public.cancel_closing_report(uuid,text)',
+    'public.reopen_closing_report(uuid,text)',
+    'public.register_closing_report_payment(uuid,jsonb)',
+    'public.register_receivable_payment(uuid,numeric,timestamptz,uuid,text,text,text)',
+    'public.reverse_receivable_payment(uuid)'
+  ] loop
+    if has_function_privilege('authenticated', to_regprocedure(signature), 'EXECUTE')
+       or has_function_privilege('anon', to_regprocedure(signature), 'EXECUTE')
+       or not has_function_privilege('service_role', to_regprocedure(signature), 'EXECUTE') then
+      raise exception 'Legacy ACL closure postcondition failed: %', signature;
+    end if;
+  end loop;
+end;
+$postflight$;

@@ -1,0 +1,254 @@
+{
+  "applied": [
+    {
+      "file": "supabase/migrations/20260830192908_audit_client_invoice_lifecycle.sql",
+      "sha256": "03cd774ed14b4f4eda00d93ef3479f362dd673b9a4d332e1783410d7127b4510"
+    },
+    {
+      "file": "supabase/migrations/20260830203548_audit_driver_expense_reviews.sql",
+      "sha256": "0024490322b5048eb7465909383b21f1a149e5bd91ab4fd1e1335662150ab06c"
+    },
+    {
+      "file": "supabase/migrations/20260830211707_make_driver_expense_creation_recoverable.sql",
+      "sha256": "e4653ae0a090e4e954dd1b25b6cd3d727aed7ddf757bdfd9652ceda164f93adf"
+    },
+    {
+      "file": "supabase/migrations/20260909212104_finance_ledger_foundation.sql",
+      "sha256": "f14984f4b1c7c2c64ffc4fb0b257933cbc449b3759182e2932df8558d3db48f4"
+    },
+    {
+      "file": "supabase/migrations/20260909212514_finance_delivery_unloading.sql",
+      "sha256": "31d527454b746dc9aed8b8c0755f7e9e6132f098ad5251ac937bb7fcbc01bae7"
+    },
+    {
+      "file": "supabase/migrations/20260909213020_finance_movement_queries.sql",
+      "sha256": "9e2ee8a95b50d4cdc4b78430ef54f1a26142b9f8ea5767c9bb609a61e69f0b16"
+    },
+    {
+      "file": "supabase/migrations/20260909213959_finance_expense_batches.sql",
+      "sha256": "3d24b8f562d043eccf99189255e19a1c9d4ce9827341a0348136562963ea0dc3"
+    },
+    {
+      "file": "supabase/migrations/20260909215046_finance_delivery_supplier_guard.sql",
+      "sha256": "0f30ac3d6e4c5c98ac1fab74e3136546cf2868dd8908c61c520d1a19cd9e83e1"
+    },
+    {
+      "file": "supabase/migrations/20260909220020_finance_expense_workspace_queries.sql",
+      "sha256": "2c3b7904bb41a6ebf110225559ef794b4e17c4f79bbad68ce74d0049ad92eda2"
+    },
+    {
+      "file": "supabase/migrations/20260909220941_finance_receipt_evidence.sql",
+      "sha256": "410293d35f3653c894643aa9f635128f13eb3a010f1ecc722aa0fbace7ac5188"
+    },
+    {
+      "file": "supabase/migrations/20260909221405_finance_expense_history_queries.sql",
+      "sha256": "c162e2b0cb35386737703f996872797854c4f66030a638f8a599688656f5ef17"
+    },
+    {
+      "file": "supabase/migrations/20260909222851_finance_statement_intake.sql",
+      "sha256": "e7d153769b285614254438340edee8b1a609f778dac3ce7fe65a53f6b6f7a4e4"
+    },
+    {
+      "file": "supabase/migrations/20260909223737_finance_statement_source_verification.sql",
+      "sha256": "59e80fcbe94a20e27021854d24178b3baba03ed93203a101daa551b56eb1458e"
+    },
+    {
+      "file": "supabase/migrations/20260909230507_finance_statement_queries.sql",
+      "sha256": "670d252f1dfa660cc9e05cf895ccd1561c8e3a6bf275958ec36b4f210f904cae"
+    },
+    {
+      "file": "supabase/migrations/20260909231643_finance_statement_identity_review.sql",
+      "sha256": "26f356955235506fa28f1cbc0b71a1fbe66ff45837e9b55fc2ec31c98b3cc3b4"
+    },
+    {
+      "file": "supabase/migrations/20260909233625_finance_audit_queries.sql",
+      "sha256": "4c5ffab49815e5f41e35ce68ed3321aa67bc0ac681bf491bb252c122c5303666"
+    },
+    {
+      "file": "supabase/migrations/20260830231003_enforce_expense_creation_mfa.sql",
+      "sha256": "e0af4f2f66662c19667b36617db691adb5f6065fd54305c4b385378a11705f74"
+    },
+    {
+      "file": "supabase/rollouts/finance_settlement_adjustments_current_auth.sql",
+      "sha256": "d8acaef4c913ba66492a92a8da36fed73c7dabdc2a695d4a4ff12504aec5d447"
+    },
+    {
+      "file": "supabase/migrations/20260909234654_finance_legacy_driver_boundary.sql",
+      "sha256": "0e31b33f678c063c8600d6db2528c81fa5f18ef6fed1cd7ea456e1ded5ea8b36"
+    },
+    {
+      "file": "supabase/rollouts/finance_adjustment_legacy_wrapper_compat.sql",
+      "sha256": "f42bbd33b3acd7d5a32f87f3409fdb97b5361683682a41d2d14cffbefa83170b"
+    },
+    {
+      "file": "supabase/migrations/20260909235237_finance_legacy_rpc_boundary.sql",
+      "sha256": "58091908245304fc7d899158a0c59019627241d3adef726474d0c014845dc667"
+    },
+    {
+      "file": "supabase/migrations/20260910230200_finance_expense_review_read_boundary.sql",
+      "sha256": "af47d1268b947f0eb117dba3f6a9314589ff0052b31e10750f5d7a86c3a5dcf2"
+    },
+    {
+      "file": "supabase/migrations/20260909235705_finance_legacy_receipt_boundary.sql",
+      "sha256": "bc2ee41f0cc2814b1c0f13d0752f05f9da36747e24a8746ef13be14053fb82c6"
+    },
+    {
+      "file": "supabase/rollouts/finance_expense_adjustment_internal_only_policy.sql",
+      "sha256": "fedaf54088b6a912133340ff9f5eeee33d8f813cc82d865195b024e787b25e06"
+    },
+    {
+      "file": "supabase/migrations/20260910000731_finance_payroll_payment_projection.sql",
+      "sha256": "88b308914ba6bcc1d718920f82b391cf60afce7f76a2b7715d3b7c3d641097d3"
+    },
+    {
+      "file": "supabase/migrations/20260910002244_finance_payable_movement_links.sql",
+      "sha256": "950528541ed07a28b12a83ff47212fe6534b02c6a5ac5f5a048d35e9d3006a43"
+    },
+    {
+      "file": "supabase/migrations/20260910003529_finance_payable_link_reversal.sql",
+      "sha256": "6a74f52835c7afe46644109a9c415da5f907180b16b82b36321b9c3186740701"
+    },
+    {
+      "file": "supabase/migrations/20260910004550_finance_fiscal_observation_queue.sql",
+      "sha256": "ca22534cc5e4cbdae362d97a62a35a4fb81ea0300687d9038b4cafc91e080cdf"
+    },
+    {
+      "file": "supabase/migrations/20260910005509_finance_fiscal_receivable_basis.sql",
+      "sha256": "ba09c06c28da321ec456f9738032c9ed68530805ea40358a4ae9f05f132e01c1"
+    },
+    {
+      "file": "supabase/migrations/20260910010034_finance_fiscal_receivable_projection.sql",
+      "sha256": "f34824f21040018028e20d4de22fc37d4b9fedecec3286496f96b7d78c6309b8"
+    },
+    {
+      "file": "supabase/rollouts/20260910231716_finance_fiscal_credits_invoice_compat.sql",
+      "sha256": "24858ffa8ab16a1dae0a4e51d7249561e89f2975dacc8f82bd2797bc2a53a6a3"
+    },
+    {
+      "file": "supabase/migrations/20260910012152_finance_receivable_fiscal_context.sql",
+      "sha256": "330057896a657744cff7000aa1cbb317ffb6f7a7fda44b4234b41f714aa5ab6c"
+    },
+    {
+      "file": "supabase/migrations/20260910012756_finance_fiscal_queue_worker.sql",
+      "sha256": "3d209e4971a591725a5c5e859ebca9f18457e4f3659f656ab1cef8f3a8f31549"
+    },
+    {
+      "file": "supabase/migrations/20260910013543_finance_bank_reconciliation_groups.sql",
+      "sha256": "af173cc4a5e73d9af39d5d0fcdeb413c7402bb5a1d060746b2c6705af5fe53f3"
+    },
+    {
+      "file": "supabase/migrations/20260910014238_finance_reconciliation_workspace.sql",
+      "sha256": "dbc2b8731347a928d8686d04299d70904e4846f262a51faf85cb0dc76a9f0d83"
+    },
+    {
+      "file": "supabase/migrations/20260910015331_finance_reconciliation_history.sql",
+      "sha256": "f4261dc666cb54f67fdfa51c8d34d5119771a5ded2a4a80d9b43af7de16beea5"
+    },
+    {
+      "file": "supabase/migrations/20260910020543_finance_ofx_statement_intake.sql",
+      "sha256": "9ca8114cbf73cae45a31b81de7b4ba5d47f14e77f2520581d32b2ae04fe7be66"
+    },
+    {
+      "file": "supabase/migrations/20260910021404_finance_native_statement_account.sql",
+      "sha256": "b7b6c9c7aee709a371652bd0aa0e837faf4a41fa446178b59bca2b1a9ea18d13"
+    },
+    {
+      "file": "supabase/migrations/20260910022059_finance_automatic_reference_reconciliation.sql",
+      "sha256": "3c3f6e1762fe872589ca0732bf97ba76f1535a65bec4454aa0f109ce6333926c"
+    },
+    {
+      "file": "supabase/migrations/20260910023208_finance_automatic_reconciliation_status.sql",
+      "sha256": "cf95f50843e0df1d5064e315ad769542aa9dbfaee3ff13cd34ef3f27343baf5f"
+    },
+    {
+      "file": "supabase/migrations/20260910023911_finance_account_period_review.sql",
+      "sha256": "aa651cfd209d54ede798ed74c29773660d05687c4ca004be2d255288cb98bd9e"
+    },
+    {
+      "file": "supabase/migrations/20260910024438_finance_receivable_movement_projection.sql",
+      "sha256": "09c86d71abb1f3716d6a62f0746d25bda5537d7ae10a6bb710e0190c9bdbf197"
+    },
+    {
+      "file": "supabase/rollouts/20260910232134_finance_receipt_correction_invoice_compat.sql",
+      "sha256": "fbb305cdef1341198697b1ba529e59382fc57bf7a07939aefcfff99334b23132"
+    },
+    {
+      "file": "supabase/migrations/20260910030634_finance_explicit_receipt_refunds.sql",
+      "sha256": "a8cc28abb1eda1b68d297d8319526557200f8ab46b6fc5a1adb619683b4bf0f1"
+    },
+    {
+      "file": "supabase/migrations/20260910032730_finance_movement_receipt_trace.sql",
+      "sha256": "3edcf907a3d165bc4db4b39f8c83fda02c289332f6f467667a8e83ff721e26cb"
+    },
+    {
+      "file": "supabase/migrations/20260910033918_finance_internal_transfer_pairs.sql",
+      "sha256": "564288fe9c1c7cc1863019fc2c5ce090ca97a7bd4d765c2959c3b208daa3e0e4"
+    },
+    {
+      "file": "supabase/migrations/20260910034731_finance_transfers_in_transit.sql",
+      "sha256": "4bb2e1e54b7f7a96f89a1e930af0465a54756ea42e411616a18165c8ed5b1308"
+    },
+    {
+      "file": "supabase/migrations/20260910035550_finance_transfer_period_position.sql",
+      "sha256": "18d8b30e392638af036c6873ffd77dc41a07a1b01198c247c0b7ee95d819ef56"
+    },
+    {
+      "file": "supabase/migrations/20260910120756_finance_manual_expense_recording.sql",
+      "sha256": "a4688897bb9f84ef4ef91ba6f036fb369601b980c632832426db062cce7002dc"
+    },
+    {
+      "file": "supabase/migrations/20260910121937_finance_retire_legacy_payable_writers.sql",
+      "sha256": "11eebb920bd34e6cc81468cdda1b7232db8a7d361de620135e6dad5335ae8f86"
+    },
+    {
+      "file": "supabase/migrations/20260910122628_finance_bank_transaction_browser_boundary.sql",
+      "sha256": "dde957ddb2204641dd39523f0bab3e71c3442ba08605c69b434dbb0f6bed8163"
+    },
+    {
+      "file": "supabase/migrations/20260910123613_finance_retire_legacy_statement_import.sql",
+      "sha256": "9d7d057e6f85a7de6db90b492041236f7f63a04833ccc5338a0753955906efa7"
+    },
+    {
+      "file": "supabase/migrations/20260910124258_finance_retire_legacy_reconciliation.sql",
+      "sha256": "422d50770dd0c2d919bc96921d047ede60d5e1e7f29b4ebfa898009845f93a2e"
+    },
+    {
+      "file": "supabase/migrations/20260910124716_finance_expense_cost_center_totals.sql",
+      "sha256": "04cb0d0d10595997c33e9b9c8b6d64f572fc9d2d235fbe79801e64c580a83ece"
+    },
+    {
+      "file": "supabase/migrations/20260910125034_finance_manual_expense_cost_center.sql",
+      "sha256": "469be864296ae2be1c5ad57c049efc570df0a3e09869de657415ebc626086034"
+    },
+    {
+      "file": "supabase/migrations/20260910125357_finance_recorded_costs.sql",
+      "sha256": "4ff64ddafb49126e05b1e7ddc5925fe76dd63df00a1f380e0e6bd9e8db10099c"
+    },
+    {
+      "file": "supabase/migrations/20260910130032_finance_payroll_recorded_costs.sql",
+      "sha256": "e0d51628df54abeedfa0d78cd7b48632b7daf19ff43ae28dffe9875e77ceebae"
+    },
+    {
+      "file": "supabase/migrations/20260910130540_finance_settlement_movement_links.sql",
+      "sha256": "a05183495df24000b81fd2976a6723df0c4700dbdf2d82b5dca679e47e1f1205"
+    },
+    {
+      "file": "supabase/migrations/20260910130921_finance_settlement_movement_options.sql",
+      "sha256": "3f1a107e4f02187638bf145d03842f860b8e13c16d11ba5515a615e989953821"
+    },
+    {
+      "file": "supabase/migrations/20260910130956_finance_statement_period_evidence.sql",
+      "sha256": "862a3329a13e7b22a29a5c10861f2d12b18d71221c2367c2692fa105eec82cd7"
+    },
+    {
+      "file": "supabase/migrations/20260910131149_finance_settlement_link_audit.sql",
+      "sha256": "5101428db9da57754866db67ed54bc9c649116adce21280045fb51e33fa2289f"
+    },
+    {
+      "file": "supabase/migrations/20260910132406_finance_payroll_reimbursement_source_dedup.sql",
+      "sha256": "d335fc5dcd74d283255283824ac7b39c3ed9f7160a87576d586352b125e157f4"
+    }
+  ],
+  "excluded": "Non-financial operational migrations within interval are not installed; real operational fixture and selected baseline dependencies only.",
+  "cron": "No cron schema/scheduler stubs. Original worker migration takes explicit absent-pg_cron branch; worker funcs real."
+}

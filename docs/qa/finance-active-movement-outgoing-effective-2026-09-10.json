@@ -1,0 +1,158 @@
+{
+  "domain": "outgoing",
+  "definitions": [
+    {
+      "signature": "finance_private.apply_payable_movement(jsonb)",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.apply_payable_movement(_payload jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare t uuid; actor uuid:=auth.uid();request uuid; cents bigint; payment uuid; link uuid;\n p public.payables%rowtype;m public.finance_movements%rowtype;old_command public.finance_commands%rowtype;\n paid numeric;result jsonb;actor_name text;\nbegin\n if jsonb_typeof(_payload) is distinct from 'object' then raise exception 'finance_invalid_payload' using errcode='22023';end if;\n t:=(_payload->>'tenant_id')::uuid; request:=(_payload->>'request_id')::uuid;\n if not finance_private.can_access(t) then raise exception 'finance_access_denied' using errcode='42501';end if;\n if request is null or _payload->>'version' is distinct from '1'\n or exists(select 1 from jsonb_object_keys(_payload) k where k not in('version','tenant_id','request_id','movement_id','payable_id','amount_cents','method','reason'))\n or coalesce(_payload->>'amount_cents','') !~ '^[0-9]{1,14}$'\n or length(btrim(coalesce(_payload->>'reason',''))) not between 5 and 2000\n or coalesce(_payload->>'method','') not in('pix','boleto','ted','doc','dinheiro','cartao','debito_automatico','other') then\n  raise exception 'finance_invalid_payload' using errcode='22023';end if;\n perform pg_advisory_xact_lock(hashtextextended(t::text||':finance',0));\n select * into old_command from public.finance_commands where tenant_id=t and request_id=request;\n if found then\n  if old_command.actor_id<>actor or old_command.action<>'apply_payable_movement' or old_command.payload<>_payload then\n   raise exception 'finance_request_conflict' using errcode='23505';end if;\n  return old_command.result;\n end if;\n cents:=(_payload->>'amount_cents')::bigint;\n select * into p from public.payables where id=(_payload->>'payable_id')::uuid and tenant_id=t for update;\n if not found or p.status not in('approved','partial') then raise exception 'finance_payable_not_payable' using errcode='22023';end if;\n select * into m from public.finance_movements where id=(_payload->>'movement_id')::uuid and tenant_id=t;\n if not found or m.direction<>'out' or m.nature='transfer' then raise exception 'finance_invalid_payment_movement' using errcode='22023';end if;\n if p.driver_id is not null and m.driver_id is distinct from p.driver_id then raise exception 'finance_payment_driver_mismatch' using errcode='22023';end if;\n select coalesce(sum(amount),0) into paid from finance_private.active_payable_payments where tenant_id=t and payable_id=p.id;\n if cents<=0 or paid<0 or paid<>trunc(paid,2) or paid+cents::numeric/100>p.amount then\n  raise exception 'finance_payable_overpaid' using errcode='23514';end if;\n if finance_private.movement_used_cents(t,m.id)+cents>m.amount_cents then raise exception 'finance_movement_overallocated' using errcode='23514';end if;\n insert into public.payables_payments(tenant_id,payable_id,amount,paid_at,bank_account_id,method,notes,attachment_url,bank_transaction_id,created_by)\n values(t,p.id,cents::numeric/100,(m.occurred_on+time '12:00') at time zone 'America/Sao_Paulo',m.bank_account_id,\n  _payload->>'method',btrim(_payload->>'reason'),m.receipt_path,null,actor) returning id into payment;\n insert into public.finance_payable_movement_links(tenant_id,movement_id,payable_id,payment_id,amount_cents,created_by)\n values(t,m.id,p.id,payment,cents,actor) returning id into link;\n result:=jsonb_build_object('version',1,'tenant_id',t,'request_id',request,'link_id',link,'payment_id',payment,'payable_id',p.id,'movement_id',m.id,'amount_cents',cents::text,'bank_confirmation','not_evaluated');\n select coalesce(nullif(raw_user_meta_data->>'full_name',''),email,actor::text) into actor_name from auth.users where id=actor;\n insert into public.finance_events(tenant_id,entity_type,entity_id,action,actor_id,actor_name,reason,after_data)\n values(t,'payable_payment',payment,'payable_movement_applied',actor,coalesce(actor_name,actor::text),btrim(_payload->>'reason'),result||jsonb_build_object('manual_intervention',true));\n insert into public.finance_commands(tenant_id,request_id,actor_id,action,payload,result) values(t,request,actor,'apply_payable_movement',_payload,result);\n return result;\nend;\n$function$\n",
+      "sha256": "74fe1455f31fbfad00ec92a55710717fb35cf8b5e6877b4ff506844cf994d94b"
+    },
+    {
+      "signature": "finance_private.check_movement_use()",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.check_movement_use()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare m public.finance_movements%rowtype;p public.payables_payments%rowtype;issue text;begin\n if not finance_private.can_access(new.tenant_id) then raise exception 'finance_access_denied' using errcode='42501';end if;\n perform pg_advisory_xact_lock(hashtextextended(new.tenant_id::text||':finance',0));\n if not finance_private.can_access(new.tenant_id) then raise exception 'finance_access_denied' using errcode='42501';end if;\n select * into m from public.finance_movements where tenant_id=new.tenant_id and id=new.movement_id;\n if not found or m.direction<>'out' or m.nature='transfer' then raise exception 'finance_invalid_payment_movement' using errcode='22023';end if;\n if finance_private.movement_used_cents(new.tenant_id,new.movement_id)+new.amount_cents>m.amount_cents then raise exception 'finance_movement_overallocated' using errcode='23514';end if;\n if tg_table_name='finance_payable_movement_links' then\n  if exists(select 1 from public.finance_payable_movement_links l where l.tenant_id=new.tenant_id and l.payment_id=new.payment_id\n   and (l.origin='canonical' or new.origin='canonical' or not exists(select 1 from public.finance_payable_link_reversals r where r.tenant_id=l.tenant_id and r.link_id=l.id))) then\n   raise exception 'finance_payment_already_linked' using errcode='23505';end if;\n  select * into p from public.payables_payments where tenant_id=new.tenant_id and id=new.payment_id;\n  if not found or p.payable_id is distinct from new.payable_id or p.amount is null or p.amount::text in('NaN','Infinity','-Infinity')\n   or p.amount*100 is distinct from new.amount_cents::numeric or p.bank_account_id is distinct from m.bank_account_id then raise exception 'finance_payment_link_mismatch' using errcode='23514';end if;\n  if new.origin='legacy_adoption' then\n   issue:=finance_private.legacy_payable_payment_issue(new.tenant_id,new.payment_id);\n   if issue is not null then raise exception '%',issue using errcode='23514';end if;\n   if m.occurred_on is distinct from (p.paid_at at time zone 'America/Sao_Paulo')::date\n    or exists(select 1 from public.payables title where title.tenant_id=new.tenant_id and title.id=p.payable_id and title.driver_id is not null and title.driver_id is distinct from m.driver_id) then raise exception 'finance_legacy_movement_mismatch' using errcode='23514';end if;\n  elsif p.bank_transaction_id is not null then raise exception 'finance_payment_link_mismatch' using errcode='23514';end if;\n end if;\n return new;\nend$function$\n",
+      "sha256": "1f609a80516644d80965a3371c854ac2edf01e6ef05bc0f390bbf334acaf9030"
+    },
+    {
+      "signature": "finance_private.check_settlement_movement_link()",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.check_settlement_movement_link()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare payment public.driver_settlement_payments%rowtype;driver uuid;m public.finance_movements%rowtype;\nbegin\n if not finance_private.can_access(new.tenant_id) then raise exception 'finance_access_denied' using errcode='42501';end if;\n perform pg_advisory_xact_lock(hashtextextended(new.tenant_id::text||':finance',0));\n if not finance_private.can_access(new.tenant_id) then raise exception 'finance_access_denied' using errcode='42501';end if;\n if exists(select 1 from public.finance_settlement_movement_links l where l.tenant_id=new.tenant_id and l.payment_id=new.payment_id\n  and not exists(select 1 from public.finance_settlement_link_reversals r where r.tenant_id=l.tenant_id and r.link_id=l.id)) then\n  raise exception 'finance_settlement_payment_already_linked' using errcode='23505';end if;\n select * into payment from public.driver_settlement_payments where id=new.payment_id and tenant_id=new.tenant_id for share;\n if not found or payment.settlement_id<>new.settlement_id or payment.amount*100<>new.amount_cents then raise exception 'finance_settlement_payment_mismatch' using errcode='23514';end if;\n select s.driver_id into driver from public.driver_settlements s where s.id=new.settlement_id and s.tenant_id=new.tenant_id for share;\n if not found or driver is null then raise exception 'finance_settlement_payment_mismatch' using errcode='23514';end if;\n select * into m from public.finance_movements where tenant_id=new.tenant_id and id=new.movement_id;\n if not found or m.direction<>'out' or m.nature='transfer' or m.driver_id is distinct from driver\n or payment.paid_at is null or m.occurred_on<>(payment.paid_at at time zone 'America/Sao_Paulo')::date then\n  raise exception 'finance_settlement_movement_mismatch' using errcode='23514';end if;\n if finance_private.movement_used_cents(new.tenant_id,new.movement_id)+new.amount_cents>m.amount_cents then raise exception 'finance_movement_overallocated' using errcode='23514';end if;\n return new;\nend$function$\n",
+      "sha256": "67d29818c62081a8236b1e33462220db9852b13123c7938c5adb732546808076"
+    },
+    {
+      "signature": "finance_private.movement_used_cents(uuid,uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.movement_used_cents(_tenant uuid, _movement uuid)\n RETURNS numeric\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n select coalesce(sum(amount_cents),0) from (\n  select amount_cents from public.finance_expense_allocations where tenant_id=_tenant and movement_id=_movement\n  union all\n  select l.amount_cents from public.finance_payable_movement_links l where l.tenant_id=_tenant and l.movement_id=_movement\n   and not exists(select 1 from public.finance_payable_link_reversals r where r.link_id=l.id and r.tenant_id=_tenant)\n  union all\n  select l.amount_cents from public.finance_settlement_movement_links l where l.tenant_id=_tenant and l.movement_id=_movement\n   and not exists(select 1 from public.finance_settlement_link_reversals r where r.link_id=l.id and r.tenant_id=_tenant)\n ) allocations;\n$function$\n",
+      "sha256": "e6124cbb6a36202a253529d588ed2ec90e571c07ccbba644d7e0ce084057ffd7"
+    },
+    {
+      "signature": "finance_private.receipt_movement_used_cents(uuid,uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.receipt_movement_used_cents(_tenant uuid, _movement uuid)\n RETURNS numeric\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n select trunc(coalesce(sum(cents),0)) from(\n  select p.amount*100 cents from public.finance_receivable_movement_links l join public.receivables_payments p on p.tenant_id=l.tenant_id and p.id=l.payment_id\n   where l.tenant_id=_tenant and l.movement_id=_movement and l.action='receive' and not exists(select 1 from public.finance_receipt_allocation_corrections c where c.tenant_id=p.tenant_id and c.payment_id=p.id)\n  union all select l.amount_cents from public.finance_legacy_receipt_movement_links l where l.tenant_id=_tenant and l.movement_id=_movement\n   and not exists(select 1 from public.finance_legacy_receipt_link_reversals r where r.tenant_id=l.tenant_id and r.link_id=l.id)\n ) usage;\n$function$\n",
+      "sha256": "c1b5e41777f91d728cd5ba7b7b83206178d6e98aaab43ebca9886eddfa19c6cb"
+    }
+  ],
+  "triggers": [
+    {
+      "table_name": "driver_settlement_payments",
+      "name": "a_finance_active_payment_reference",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER a_finance_active_payment_reference BEFORE INSERT OR UPDATE ON driver_settlement_payments FOR EACH ROW EXECUTE FUNCTION finance_private.guard_payment_active_movement_references()"
+    },
+    {
+      "table_name": "driver_settlement_payments",
+      "name": "finance_active_payment_reference_final",
+      "enabled": "O",
+      "definition": "CREATE CONSTRAINT TRIGGER finance_active_payment_reference_final AFTER INSERT OR UPDATE ON driver_settlement_payments DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION finance_private.guard_payment_active_movement_references()"
+    },
+    {
+      "table_name": "driver_settlement_payments",
+      "name": "finance_settlement_payment_preserve",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER finance_settlement_payment_preserve BEFORE DELETE OR UPDATE ON driver_settlement_payments FOR EACH ROW EXECUTE FUNCTION finance_private.protect_linked_settlement_payment()"
+    },
+    {
+      "table_name": "finance_expense_allocations",
+      "name": "a_finance_active_movement_reference",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER a_finance_active_movement_reference BEFORE INSERT OR UPDATE ON finance_expense_allocations FOR EACH ROW EXECUTE FUNCTION finance_private.guard_active_financial_movement_reference()"
+    },
+    {
+      "table_name": "finance_expense_allocations",
+      "name": "finance_expense_shared_capacity",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER finance_expense_shared_capacity BEFORE INSERT ON finance_expense_allocations FOR EACH ROW EXECUTE FUNCTION finance_private.check_movement_use()"
+    },
+    {
+      "table_name": "finance_expense_allocations",
+      "name": "preserve_finance",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER preserve_finance BEFORE DELETE OR UPDATE ON finance_expense_allocations FOR EACH ROW EXECUTE FUNCTION finance_private.preserve_event()"
+    },
+    {
+      "table_name": "finance_legacy_receipt_movement_links",
+      "name": "a_finance_active_movement_reference",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER a_finance_active_movement_reference BEFORE INSERT OR UPDATE ON finance_legacy_receipt_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.guard_active_financial_movement_reference()"
+    },
+    {
+      "table_name": "finance_payable_movement_links",
+      "name": "a_finance_active_movement_reference",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER a_finance_active_movement_reference BEFORE INSERT OR UPDATE ON finance_payable_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.guard_active_financial_movement_reference()"
+    },
+    {
+      "table_name": "finance_payable_movement_links",
+      "name": "finance_payable_shared_capacity",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER finance_payable_shared_capacity BEFORE INSERT ON finance_payable_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.check_movement_use()"
+    },
+    {
+      "table_name": "finance_payable_movement_links",
+      "name": "preserve_finance_payable_link",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER preserve_finance_payable_link BEFORE DELETE OR UPDATE ON finance_payable_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.preserve_event()"
+    },
+    {
+      "table_name": "finance_receivable_movement_links",
+      "name": "a_finance_active_movement_reference",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER a_finance_active_movement_reference BEFORE INSERT OR UPDATE ON finance_receivable_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.guard_active_financial_movement_reference()"
+    },
+    {
+      "table_name": "finance_settlement_movement_links",
+      "name": "a_finance_active_movement_reference",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER a_finance_active_movement_reference BEFORE INSERT OR UPDATE ON finance_settlement_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.guard_active_financial_movement_reference()"
+    },
+    {
+      "table_name": "finance_settlement_movement_links",
+      "name": "finance_settlement_capacity",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER finance_settlement_capacity BEFORE INSERT ON finance_settlement_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.check_settlement_movement_link()"
+    },
+    {
+      "table_name": "finance_settlement_movement_links",
+      "name": "finance_settlement_links_immutable",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER finance_settlement_links_immutable BEFORE DELETE OR UPDATE ON finance_settlement_movement_links FOR EACH ROW EXECUTE FUNCTION finance_private.preserve_event()"
+    },
+    {
+      "table_name": "payables_payments",
+      "name": "a_finance_active_payment_reference",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER a_finance_active_payment_reference BEFORE INSERT OR UPDATE ON payables_payments FOR EACH ROW EXECUTE FUNCTION finance_private.guard_payment_active_movement_references()"
+    },
+    {
+      "table_name": "payables_payments",
+      "name": "finance_active_payment_reference_final",
+      "enabled": "O",
+      "definition": "CREATE CONSTRAINT TRIGGER finance_active_payment_reference_final AFTER INSERT OR UPDATE ON payables_payments DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION finance_private.guard_payment_active_movement_references()"
+    },
+    {
+      "table_name": "payables_payments",
+      "name": "finance_payable_payment_capacity",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER finance_payable_payment_capacity BEFORE INSERT ON payables_payments FOR EACH ROW EXECUTE FUNCTION finance_private.check_payable_payment_insert()"
+    },
+    {
+      "table_name": "payables_payments",
+      "name": "finance_preserve_linked_payment",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER finance_preserve_linked_payment BEFORE DELETE OR UPDATE ON payables_payments FOR EACH ROW EXECUTE FUNCTION finance_private.protect_linked_payment()"
+    },
+    {
+      "table_name": "payables_payments",
+      "name": "recalc",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER recalc AFTER INSERT OR DELETE OR UPDATE ON payables_payments FOR EACH ROW EXECUTE FUNCTION _recalc_payable_paid()"
+    },
+    {
+      "table_name": "receivables_payments",
+      "name": "a_finance_active_payment_reference",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER a_finance_active_payment_reference BEFORE INSERT OR UPDATE ON receivables_payments FOR EACH ROW EXECUTE FUNCTION finance_private.guard_payment_active_movement_references()"
+    },
+    {
+      "table_name": "receivables_payments",
+      "name": "finance_active_payment_reference_final",
+      "enabled": "O",
+      "definition": "CREATE CONSTRAINT TRIGGER finance_active_payment_reference_final AFTER INSERT OR UPDATE ON receivables_payments DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION finance_private.guard_payment_active_movement_references()"
+    }
+  ]
+}

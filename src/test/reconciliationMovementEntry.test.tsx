@@ -1,0 +1,20 @@
+import {cleanup,fireEvent,render,screen} from '@testing-library/react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {MemoryRouter} from 'react-router-dom';
+import {afterEach,expect,it,vi} from 'vitest';
+import {ReconciliationMovementEntry} from '@/components/financial/ReconciliationMovementEntry';
+vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'tenant'}})}));
+vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'actor'}})}));
+vi.mock('@/components/financial/MovementEntryDialog',()=>({MovementEntryDialog:({initialAccount,onRecorded}:{initialAccount:string;onRecorded:()=>void})=><button onClick={onRecorded}>Confirmar em {initialAccount}</button>}));
+afterEach(cleanup);
+it('uses the selected account and distinguishes a recorded movement from statement evidence',()=>{
+ const client=new QueryClient({defaultOptions:{queries:{staleTime:Infinity}}});
+ const opening=['finance-account-opening','tenant','actor','conta-principal','2026-09-01','2026-09-30'];
+ const otherCompany=['finance-account-opening','another-tenant','actor','conta-principal'];
+ client.setQueryData(opening,{book:{closing_cents:'10000'}});client.setQueryData(otherCompany,{book:{closing_cents:'10000'}});
+ render(<MemoryRouter><QueryClientProvider client={client}><ReconciliationMovementEntry account="conta-principal"/></QueryClientProvider></MemoryRouter>);
+ fireEvent.click(screen.getByRole('button',{name:'Registrar movimentação'}));fireEvent.click(screen.getByRole('button',{name:'Confirmar em conta-principal'}));
+ expect(screen.getByRole('status')).toHaveTextContent('não foi criada uma linha de extrato');expect(screen.getByRole('link',{name:'Consultar movimentações'})).toHaveAttribute('href','/financial/movements');
+ expect(client.getQueryState(opening)?.isInvalidated).toBe(true);
+ expect(client.getQueryState(otherCompany)?.isInvalidated).toBe(false);
+});

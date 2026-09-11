@@ -100,6 +100,37 @@ describe('remaining SECURITY DEFINER browser ACL closure', () => {
     }
   });
 
+  it('fails closed before revocation when a canonical RPC is exposed to anon', async () => {
+    await db.exec('begin');
+    try {
+      await db.exec('grant execute on function public.apply_client_invoice_command(jsonb) to anon');
+      await expect(db.exec(migration)).rejects.toThrow('Canonical authenticated RPC is not ready');
+      await db.exec('rollback');
+      const result = await db.query<{ allowed: boolean }>(`
+        select has_function_privilege(
+          'authenticated',
+          'public.create_client_invoice(jsonb)',
+          'EXECUTE'
+        ) allowed
+      `);
+      expect(result.rows[0].allowed).toBe(true);
+    } finally {
+      await db.exec('rollback');
+    }
+  });
+
+  it('fails closed when the backend recovery ACL would not be preserved', async () => {
+    await db.exec('begin');
+    try {
+      await db.exec(`revoke execute on function
+        public.create_client_invoice(jsonb) from service_role`);
+      await expect(db.exec(migration)).rejects.toThrow('Legacy service recovery ACL is not ready');
+      await db.exec('rollback');
+    } finally {
+      await db.exec('rollback');
+    }
+  });
+
   it('removes only browser execution and preserves service and canonical access', async () => {
     await db.exec('begin');
     try {

@@ -1,0 +1,9 @@
+import {supabase} from '@/integrations/supabase/client';
+import {legacyReceivableContextSchema,legacyReceivablePendingSchema,legacyReceivableAssociateResultSchema,legacyReceivableReverseResultSchema,type LegacyReceivablePending} from './legacyReceivableAssociationContract';
+type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{message:string;code?:string}|null}>;
+export class LegacyReceivableRejectedError extends Error {}
+async function rpc(name:string,args:Record<string,unknown>){const {data,error}=await (supabase.rpc as unknown as Rpc)(name,args);if(error){if(['22023','23514','23505','40001','42501','55000'].includes(error.code||''))throw new LegacyReceivableRejectedError(error.message);throw new Error(error.message);}return data;}
+export async function readLegacyReceivableAssociation(tenant:string,payment:string,page=1){const data=legacyReceivableContextSchema.parse(await rpc('get_finance_legacy_receivable_association',{_tenant_id:tenant,_payment_id:payment,_page:page}));if(data.tenant_id!==tenant||data.payment_id!==payment||data.page!==page)throw new Error('Consulta fora do recebimento.');return data;}
+export async function submitLegacyReceivableAssociation(pending:LegacyReceivablePending){legacyReceivablePendingSchema.parse(pending);const raw=await rpc(pending.kind==='associate'?'associate_finance_legacy_receivable_payment':'reverse_finance_legacy_receivable_association',{_payload:pending.command});const result=pending.kind==='associate'?legacyReceivableAssociateResultSchema.parse(raw):legacyReceivableReverseResultSchema.parse(raw);
+ if(result.tenant_id!==pending.command.tenant_id||result.request_id!==pending.command.request_id||(pending.kind==='associate'&&(result.payment_id!==pending.command.payment_id||result.movement_id!==pending.command.movement_id))||(pending.kind==='reverse'&&result.link_id!==pending.command.link_id))throw new Error('Confirmação fora da associação.');return result;
+}

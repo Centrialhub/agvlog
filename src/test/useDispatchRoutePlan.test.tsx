@@ -13,6 +13,7 @@ const trip='80000000-0000-4000-8000-000000000001';
 const stop=(id:string,order:number):RouteStopDraft=>({id,recipient_name:id,destination:id,load_ids:['load'],
   fiscal_document_ids:[`doc-${id}`],invoice_numbers:[],total_weight_kg:1,total_volume_m3:1,total_pallet_count:1,
   total_value:1,latitude:order===1?-23.51:-23.52,longitude:order===1?-46.61:-46.62,
+  location_source:'address_geocoded',location_address:`Rua ${id}, 10`,location_provider:'test',
   service_time_minutes:20,priority:0,risk_level:'normal',manual_order:order});
 const payload:DispatchRoutePayload={attempt_scope:'route',vehicle_id:'vehicle',driver_id:'driver',planned_start_at:'2026-09-01T12:00:00Z',
   route_name:'Rota QA',load_ids:['load'],stops:[stop('second',2),stop('first',1)],planning_draft_id:'draft'};
@@ -31,7 +32,7 @@ describe('route planning frontend contract after idempotency RLS hardening',()=>
   it('dispatches through the existing RPC without reading internal idempotency keys',async()=>{
     const {result}=renderHook(useDispatchRoutePlan,{wrapper});
     await act(async()=>{expect(await result.current.dispatchRoute(payload)).toBe(trip);});
-    expect(mock.rpc).toHaveBeenCalledWith('dispatch_planned_route',{_payload:expect.objectContaining({
+    expect(mock.rpc).toHaveBeenCalledWith('dispatch_planned_route_v3',{_payload:expect.objectContaining({
       tenant_id:'tenant',driver_id:'driver',vehicle_id:'vehicle',load_ids:['load'],planning_draft_id:'draft',
       stops:[expect.objectContaining({destination:'first',latitude:-23.51,longitude:-46.61}),
         expect.objectContaining({destination:'second',latitude:-23.52,longitude:-46.62})],
@@ -60,7 +61,7 @@ describe('route planning frontend contract after idempotency RLS hardening',()=>
   it('uses the new tenant context after rerender instead of a stale tenant',async()=>{
     const {result,rerender}=renderHook(useDispatchRoutePlan,{wrapper});mock.tenant={id:'other-tenant'};rerender();
     await act(async()=>{await result.current.dispatchRoute(payload);});
-    expect(mock.rpc).toHaveBeenCalledWith('dispatch_planned_route',{_payload:expect.objectContaining({tenant_id:'other-tenant'})});
+    expect(mock.rpc).toHaveBeenCalledWith('dispatch_planned_route_v3',{_payload:expect.objectContaining({tenant_id:'other-tenant'})});
   });
   it('refuses an unauthenticated attempt without touching the RPC',async()=>{
     mock.user=null;const {result}=renderHook(useDispatchRoutePlan,{wrapper});
@@ -79,8 +80,17 @@ describe('route planning frontend contract after idempotency RLS hardening',()=>
   it('blocks a stop without valid explicit coordinates before creating an outbox request',async()=>{
     const {result}=renderHook(useDispatchRoutePlan,{wrapper});
     const invalid={...payload,stops:[{...payload.stops[0],latitude:null}]};
-    await expect(result.current.dispatchRoute(invalid)).rejects.toThrow('latitude e longitude válidas');
+    await expect(result.current.dispatchRoute(invalid)).rejects.toThrow('confirme o local por endereço/mapa');
     expect(mock.rpc).not.toHaveBeenCalled();expect(localStorage.length).toBe(0);
+  });
+  it('allows a detailed audited exception when a verified coordinate is unavailable',async()=>{
+    const {result}=renderHook(useDispatchRoutePlan,{wrapper});
+    const exceptional={...payload,stops:[{...payload.stops[0],latitude:null,longitude:null,location_source:'legacy_coordinates' as const,
+      location_exception_reason:'Acesso rural sem referência cartográfica; validar por telefone antes da saída.'}]};
+    await act(async()=>{await result.current.dispatchRoute(exceptional);});
+    expect(mock.rpc).toHaveBeenCalledWith('dispatch_planned_route_v3',{_payload:expect.objectContaining({stops:[expect.objectContaining({
+      location_exception_reason:expect.stringContaining('Acesso rural'),
+    })]})});
   });
   it('retains an uncertain reply after remount and explicitly replays the original payload/key',async()=>{
     mock.rpc.mockImplementationOnce(()=>({abortSignal:()=>Promise.resolve({data:null,error:null})}));

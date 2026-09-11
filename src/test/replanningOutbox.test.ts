@@ -74,8 +74,10 @@ describe('durable explicit replanning',()=>{
     expect(first).toBe(second);resolve({data:result,error:null});await first;expect(send).toHaveBeenCalledTimes(1);
   });
   it('validates explicit new destinations and does not accept guessed/blank coordinates',()=>{
-    expect(isReplanningPayload({...payload,target_stop:{mode:'new',destination:'Destino',latitude:0,longitude:0,client_id:null}})).toBe(true);
-    expect(isReplanningPayload({...payload,target_stop:{mode:'new',destination:'Destino',latitude:NaN,longitude:0,client_id:null}})).toBe(false);
+    const location={location_source:'address_geocoded' as const,location_address:'Rua QA, 10',location_provider:'qa',
+      location_accuracy_m:50,location_confidence:0.9,location_audit:{},geofence_radius_m:500};
+    expect(isReplanningPayload({...payload,target_stop:{mode:'new',destination:'Destino',latitude:0,longitude:0,client_id:null,...location}})).toBe(true);
+    expect(isReplanningPayload({...payload,target_stop:{mode:'new',destination:'Destino',latitude:NaN,longitude:0,client_id:null,...location}})).toBe(false);
     expect(isConfirmedReplanning({...result,target_stop_id:null},{...payload,target_stop:{mode:'unassigned'}},request)).toBe(true);
   });
 });

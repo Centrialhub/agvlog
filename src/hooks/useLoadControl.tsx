@@ -331,7 +331,7 @@ export function useRegisterPayment() {
     } finally {
       try {
         await Promise.all([
-          'load-control', 'load_payments', 'load-status-history', 'receivables',
+          'load-control', 'load_payments', 'load-status-history', 'receivables','finance-receivable-portfolio',
           'receivables_payments', 'bank_transactions', 'closing-reports', 'client_invoices',
         ].map(key => qc.invalidateQueries({ queryKey: [key] })));
       } finally {

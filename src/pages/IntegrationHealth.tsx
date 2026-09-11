@@ -1,18 +1,24 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { INTEGRATION_ACCOUNT_SAFE_SELECT } from '@/integrations/supabase/selects';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
 import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Activity, CheckCircle, XCircle, AlertTriangle, Clock, Truck, Radio, Database } from 'lucide-react';
 import { summarizeTelemetryFreshness } from '@/lib/telemetryFreshness';
 import { IntegrationUnavailable } from '@/components/integrations/IntegrationUnavailable';
 import { useFleetPositions } from '@/hooks/usePositions';
+import {useWorkspaceSsxAccounts} from '@/hooks/useWorkspaceSsxAccounts';
+import {evaluateSsxReadiness} from '@/lib/ssxReadiness';
+import { parseTrackingObservability } from '@/lib/trackingObservability';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
+import { SsxMappingConflictReview, type SsxMappingConflict } from '@/components/integrations/SsxMappingConflictReview';
 
 function formatTime(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -25,6 +31,8 @@ export default function IntegrationHealth() {
   const { isEnabled, isLoading: capabilitiesLoading, error: capabilitiesError, refetch: refetchCapabilities } = useTenantCapabilities();
   const ssxEnabled = isEnabled('ssx');
   const positionsQuery = useFleetPositions(isAdmin && ssxEnabled);
+  const queryClient = useQueryClient();
+  const toast = useSonnerToast();
 
   const { data: tenant } = useQuery({
     queryKey: ['tenant_health_detail', currentTenant?.id],
@@ -37,16 +45,38 @@ export default function IntegrationHealth() {
     refetchInterval: 30000,
   });
 
-  const { data: accounts = [], isLoading: accountsLoading } = useQuery({
-    queryKey: ['integration_accounts_health', currentTenant?.id],
+  const {data:accounts=[],isLoading:accountsLoading}=useWorkspaceSsxAccounts(!!currentTenant&&isAdmin&&ssxEnabled);
+
+  const observabilityQuery = useQuery({
+    queryKey: ['tracking-observability', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data } = await supabase.from('integration_accounts')
-        .select(INTEGRATION_ACCOUNT_SAFE_SELECT)
-        .eq('tenant_id', currentTenant.id);
-      return data || [];
+      if (!currentTenant) return null;
+      const { data, error } = await supabase.rpc('get_tracking_observability_v1' as never, {
+        _tenant_id: currentTenant.id,
+      } as never);
+      if (error) throw error;
+      return parseTrackingObservability(data);
     },
-    enabled: !!currentTenant && isAdmin && ssxEnabled,
+    enabled: Boolean(currentTenant && isAdmin && ssxEnabled),
+    refetchInterval: 30000,
+  });
+
+  const scheduleMutation = useMutation({
+    mutationFn: async (schedule: { enabled: boolean; pollMinutes: number; fullSyncHours: number }) => {
+      if (!currentTenant) throw new Error('Empresa não selecionada.');
+      const { error } = await supabase.rpc('update_tracking_schedule_v1' as never, { _payload: {
+        tenant_id: currentTenant.id,
+        enabled: schedule.enabled,
+        poll_interval_minutes: schedule.pollMinutes,
+        full_sync_interval_hours: schedule.fullSyncHours,
+      } } as never);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success('Agendamento SSX atualizado.');
+      await queryClient.invalidateQueries({ queryKey: ['tracking-observability', currentTenant?.id] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Falha ao atualizar agendamento.'),
   });
 
   const activeVehiclesQuery = useQuery({
@@ -85,22 +115,18 @@ export default function IntegrationHealth() {
   ]);
   const positionStatsError = positionsQuery.error || activeVehiclesQuery.error;
 
-  const { data: mappingConflicts = [] } = useQuery({
-    queryKey: ['mapping_conflicts', currentTenant?.id],
+  const { data: mappingConflicts = [] } = useQuery<SsxMappingConflict[]>({
+    queryKey: ['ssx_mapping_conflicts', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data: logs } = await supabase
-        .from('integration_logs')
-        .select('metadata, created_at')
-        .eq('tenant_id', currentTenant.id)
-        .eq('action', 'ssx_sync_units')
-        .eq('success', true)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      const latest = logs?.[0];
-      if (!latest) return [];
-      const meta = latest.metadata as any;
-      return meta?.conflict_details || [];
+      const { data, error } = await supabase.rpc('list_ssx_mapping_conflicts_v1' as never, {
+        _tenant_id: currentTenant.id,
+        _status: 'open',
+        _limit: 200,
+        _offset: 0,
+      } as never);
+      if (error) throw error;
+      return (Array.isArray(data) ? data : []) as SsxMappingConflict[];
     },
     enabled: !!currentTenant && isAdmin && ssxEnabled,
   });
@@ -111,15 +137,24 @@ export default function IntegrationHealth() {
   if (capabilitiesError) {
     return <IntegrationUnavailable capability="ssx" degraded onRetry={() => { void refetchCapabilities(); }} />;
   }
-  if (!capabilitiesLoading && !ssxEnabled) return <IntegrationUnavailable capability="ssx" />;
+  if (!capabilitiesLoading && !ssxEnabled) {
+    return (
+      <IntegrationUnavailable
+        capability="ssx"
+        actionHref="/settings?tab=integration"
+        actionLabel="Atualizar credencial SSX"
+      />
+    );
+  }
 
   const operationalStatus = accountsLoading
     ? 'loading'
     : accounts.length === 0
       ? 'not_configured'
-      : accounts.some((account) => ['degraded', 'invalid_credentials'].includes(account.status))
-        ? 'degraded'
-        : 'healthy';
+      : accounts.every((account) => account.status === 'ok')
+        ? 'healthy'
+        : 'degraded';
+  const observability = observabilityQuery.data;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -177,6 +212,55 @@ export default function IntegrationHealth() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Observabilidade operacional</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          {observabilityQuery.error ? <p role="alert" className="text-sm text-destructive">Falha ao consultar métricas reais de tracking.</p> : null}
+          {observability ? <>
+            <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-3 lg:grid-cols-6">
+              <Metric label="Links SSX ativos" value={observability.trackerLinks.active} alert={observability.trackerLinks.conflicts > 0} />
+              <Metric label="Conflitos em viagens" value={observability.trackerLinks.conflicts} alert={observability.trackerLinks.conflicts > 0} />
+              <Metric label="Geofences de frota" value={observability.geofences.fleet} />
+              <Metric label="Geofences de entrega" value={observability.geofences.delivery} />
+              <Metric label="Eventos em 24h" value={observability.geofences.events24h} />
+              <Metric label="Fila tracking/erros" value={`${observability.queue.pending}/${observability.queue.errors}`} alert={observability.queue.errors > 0} />
+            </div>
+            <div className="flex flex-wrap items-center gap-3 rounded-md border p-3 text-sm">
+              <span>Endereços: {observability.addresses.pending} pendentes, {observability.addresses.ambiguous} ambíguos, {observability.addresses.error} com erro.</span>
+              <Button asChild size="sm" variant="outline"><Link to="/address-resolution">Abrir fila</Link></Button>
+              <span className="ml-auto text-xs text-muted-foreground">Última geofence avaliada: {formatTime(observability.geofences.lastEvaluatedAt)}</span>
+            </div>
+          </> : <p className="text-sm text-muted-foreground">Carregando métricas...</p>}
+        </CardContent>
+      </Card>
+
+      {observability ? <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Agendamento por empresa</CardTitle></CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1"><p className="text-xs text-muted-foreground">Coleta de posições</p>
+            <Select value={String(observability.schedule.pollMinutes)} disabled={scheduleMutation.isPending}
+              onValueChange={(value) => scheduleMutation.mutate({ ...observability.schedule, pollMinutes: Number(value) })}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent>
+                {[1,3,5,10,15].map((minutes) => <SelectItem key={minutes} value={String(minutes)}>A cada {minutes} min</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1"><p className="text-xs text-muted-foreground">Sincronização completa</p>
+            <Select value={String(observability.schedule.fullSyncHours)} disabled={scheduleMutation.isPending}
+              onValueChange={(value) => scheduleMutation.mutate({ ...observability.schedule, fullSyncHours: Number(value) })}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent>
+                {[1,3,6,12,24].map((hours) => <SelectItem key={hours} value={String(hours)}>A cada {hours} h</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="button" variant={observability.schedule.enabled ? 'outline' : 'default'} disabled={scheduleMutation.isPending}
+            onClick={() => scheduleMutation.mutate({ ...observability.schedule, enabled: !observability.schedule.enabled })}>
+            {observability.schedule.enabled ? 'Pausar agenda' : 'Ativar agenda'}
+          </Button>
+          <div className="text-xs text-muted-foreground">Última execução: {formatTime(observability.schedule.lastFinishedAt)} · status {observability.schedule.lastStatus || '—'} · falhas consecutivas {observability.schedule.consecutiveFailures}</div>
+        </CardContent>
+      </Card> : null}
 
       {/* Position Freshness */}
       <Card>
@@ -270,27 +354,7 @@ export default function IntegrationHealth() {
         </CardContent>
       </Card>
 
-      {/* Mapping Conflicts */}
-      {mappingConflicts.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-4 w-4" /> Conflitos de Mapeamento ({mappingConflicts.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {mappingConflicts.map((c: any, i: number) => (
-                <div key={i} className="text-xs p-2 rounded bg-destructive/5 border border-destructive/20">
-                  <span className="font-medium">{c.unit_code}</span>: {c.reason}
-                  {c.ssx_plate && <span> · Placa SSX: {c.ssx_plate}</span>}
-                  {c.linked_vehicle_plate && <span> · Vinculado a: {c.linked_vehicle_plate}</span>}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <SsxMappingConflictReview conflicts={mappingConflicts} />
 
       {/* Readiness Gates */}
       <Card>
@@ -307,42 +371,20 @@ export default function IntegrationHealth() {
   );
 }
 
+function Metric({ label, value, alert = false }: { label: string; value: number | string; alert?: boolean }) {
+  return <div className={`rounded-md border p-3 ${alert ? 'border-destructive/40 bg-destructive/5' : ''}`}>
+    <p className={`text-2xl font-bold ${alert ? 'text-destructive' : ''}`}>{value}</p>
+    <p className="text-xs text-muted-foreground">{label}</p>
+  </div>;
+}
+
 function ReadinessGates({ tenant, positionStats, mappingConflicts, accounts }: {
   tenant: any;
   positionStats: any;
   mappingConflicts: any[];
   accounts?: any[];
 }) {
-  const gates = [
-    {
-      label: 'Integração SSX autenticada',
-      met: !accounts || accounts.length === 0 || accounts.some((a: any) => ['ok', 'degraded'].includes(a.status)),
-    },
-    {
-      label: 'Pipeline automático rodando há 24h+',
-      met: tenant?.last_successful_poll_at &&
-        (Date.now() - new Date(tenant.last_successful_poll_at).getTime()) < 30 * 60 * 1000,
-    },
-    {
-      label: 'Fleet-map atualizando automaticamente',
-      met: positionStats?.fresh > 0,
-    },
-    {
-      label: 'Baixa incidência de rate limit recente',
-      met: !tenant?.last_rate_limit_at ||
-        (Date.now() - new Date(tenant.last_rate_limit_at).getTime()) > 60 * 60 * 1000,
-    },
-    {
-      label: 'Conflitos de mapeamento visíveis e controlados',
-      met: mappingConflicts.length === 0,
-    },
-    {
-      label: 'Maioria dos veículos ativos com posição coerente',
-      met: positionStats && positionStats.total > 0 && positionStats.fresh / positionStats.total > 0.3,
-    },
-  ];
-
-  const allMet = gates.every(g => g.met);
+  const {gates,allMet}=evaluateSsxReadiness({accounts,health:tenant,positionStats,mappingConflicts});
 
   return (
     <div className="space-y-2">

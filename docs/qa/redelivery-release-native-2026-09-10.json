@@ -1,0 +1,11 @@
+{
+  "sql_sha256": "b39c73e86ed3881957b804e5ee5d39e774eeae9f5a425c4ff21402c4922f5987",
+  "existing_cases_sha256": "9a8822c54036476bcab1b57f48ef1bd1501278124e805c32608ba36bdd1433b6",
+  "supplement_sha256": "3c72bcc4f61196aabfd0e0e7b0d6d7d0b4c5f002023aa4325775a684e67765ef",
+  "runner_sha256": "125e19954a4bdf8a59c800e6d20793446da8c6880d820085c45988a0895eaa70",
+  "exit_code": 0,
+  "passed": 9,
+  "session": 21514,
+  "postgres": "17.11",
+  "stopped": true
+}

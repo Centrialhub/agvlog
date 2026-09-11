@@ -53,6 +53,11 @@ vi.mock('@/hooks/useOperationalRoutes',()=>({useOperationalRoutes:()=>({data:[]}
 vi.mock('@/hooks/route-planning/useCustomerDeliveryWindowsForRouting',()=>({useCustomerDeliveryWindowsForRouting:()=>({data:[]})}));
 vi.mock('@/components/loads/LoadRomaneioTabs',()=>({default:()=>null}));
 vi.mock('@/components/control-tower/TripOperationalEventsPanel',()=>({default:()=>null}));
+vi.mock('@/components/maps/LocationPicker',()=>({LocationPicker:({idPrefix,address,onChange}:{idPrefix?:string;address:string;
+  onChange:(value:unknown)=>void})=><button type="button" aria-label={`Selecionar localização ${idPrefix}`}
+    onClick={()=>onChange({latitude:idPrefix==='dispatch-stop-1'?-22.9:-23.55052,
+      longitude:idPrefix==='dispatch-stop-1'?-43.2:-46.633308,source:'map_selected',address,
+      provider:'test-map',accuracy_m:null,confidence:1,audit:{selected_interactively:true}})}>Selecionar no mapa</button>}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mock.rpc,from:(table:string)=>{
   const rows=table==='fiscal_documents'?[{id:'doc-1',invoice_number:'1'},{id:'doc-2',invoice_number:'2'}]:table==='drivers'?[{id:'driver',name:'Motorista QA',active:true}]:[];
   const query={select:()=>query,eq:()=>query,is:()=>query,in:()=>query,order:()=>query,
@@ -74,7 +79,7 @@ beforeEach(()=>{vi.clearAllMocks();localStorage.clear();mock.tripId=null;mock.lo
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});});
 afterEach(()=>{cleanup();client.clear();});
 const show=(page:'load'|'routes')=>render(<QueryClientProvider client={client}>{page==='load'?<LoadDetail/>:<RoutePlanning/>}</QueryClientProvider>);
-const dispatchCalls=()=>mock.rpc.mock.calls.filter(([name])=>name==='dispatch_planned_route');
+const dispatchCalls=()=>mock.rpc.mock.calls.filter(([name])=>name==='dispatch_planned_route_v3');
 async function seedPending(){
   const body:DispatchWirePayload={tenant_id:'tenant',driver_id:'driver',vehicle_id:'vehicle',planned_start_at:'2030-01-01T10:00:00Z',
     route_name:'Rota sem resposta',load_ids:['load'],stops:[],planning_draft_id:null};
@@ -96,15 +101,15 @@ describe('real planning screens with isolated transport (not authenticated brows
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));
     const dialog=await screen.findByRole('dialog');expect(within(dialog).getByLabelText('Motorista')).toHaveAttribute('role','combobox');
     expect(within(dialog).getByLabelText('Veículo')).toHaveAttribute('role','combobox');
-    fireEvent.change(within(dialog).getByLabelText('Latitude parada 1'),{target:{value:'-23.55052'}});
-    fireEvent.change(within(dialog).getByLabelText('Longitude parada 1'),{target:{value:'-46.633308'}});
+    fireEvent.click(within(dialog).getByRole('button',{name:'Confirmar endereço ou ponto no mapa'}));
+    fireEvent.click(within(dialog).getByLabelText('Selecionar localização dispatch-stop-0'));
     fireEvent.change(within(dialog).getByLabelText('Observações da primeira parada'),{target:{value:'Descarregar na portaria'}});
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 1/}));
     await waitFor(()=>expect(dispatchCalls()).toHaveLength(1));
-    expect(mock.rpc).toHaveBeenCalledWith('dispatch_planned_route',{_payload:expect.objectContaining({
+    expect(mock.rpc).toHaveBeenCalledWith('dispatch_planned_route_v3',{_payload:expect.objectContaining({
       tenant_id:'tenant',idempotency_key:expect.any(String),load_ids:['load'],
       stops:[expect.objectContaining({fiscal_document_ids:['doc-1','doc-2'],load_ids:['load'],notes:'Descarregar na portaria',
-        latitude:-23.55052,longitude:-46.633308})],
+        latitude:-23.55052,longitude:-46.633308,location_source:'map_selected'})],
     })});
     await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith({title:'Viagem criada com sucesso'}));
   });
@@ -126,18 +131,30 @@ describe('real planning screens with isolated transport (not authenticated brows
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 1/}));
     await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({
-      description:expect.stringContaining('latitude e longitude válidas'),
+      description:expect.stringContaining('confirme o local por endereço/mapa'),
     })));
     expect(dispatchCalls()).toHaveLength(0);
   });
+  it('LoadDetail sends a detailed audited exception when location cannot be verified',async()=>{
+    show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Exceção operacional (mínimo 20 caracteres)'),{
+      target:{value:'Acesso rural ainda sem endereço cartográfico confirmado.'},
+    });
+    fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 1/}));
+    await waitFor(()=>expect(dispatchCalls()).toHaveLength(1));
+    expect(dispatchCalls()[0][1]._payload.stops).toEqual([expect.objectContaining({
+      latitude:null,longitude:null,location_source:'legacy_coordinates',
+      location_exception_reason:'Acesso rural ainda sem endereço cartográfico confirmado.',
+    })]);
+  });
   it('LoadDetail assigns separate documents to two stops using the actual selector',async()=>{
     show('load');fireEvent.click(await screen.findByRole('button',{name:'Despachar'}));const dialog=await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Latitude parada 1'),{target:{value:'-23.5'}});
-    fireEvent.change(within(dialog).getByLabelText('Longitude parada 1'),{target:{value:'-46.6'}});
+    fireEvent.click(within(dialog).getAllByRole('button',{name:'Confirmar endereço ou ponto no mapa'})[0]);
+    fireEvent.click(within(dialog).getByLabelText('Selecionar localização dispatch-stop-0'));
     fireEvent.click(within(dialog).getByRole('button',{name:'+ Parada'}));
     fireEvent.change(within(dialog).getByLabelText('Destino parada 2'),{target:{value:'Segundo destino'}});
-    fireEvent.change(within(dialog).getByLabelText('Latitude parada 2'),{target:{value:'-22.9'}});
-    fireEvent.change(within(dialog).getByLabelText('Longitude parada 2'),{target:{value:'-43.2'}});
+    fireEvent.click(within(dialog).getByRole('button',{name:'Confirmar endereço ou ponto no mapa'}));
+    fireEvent.click(within(dialog).getByLabelText('Selecionar localização dispatch-stop-1'));
     fireEvent.change(within(dialog).getByLabelText('Documento 2'),{target:{value:'1'}});
     expect(within(dialog).getByLabelText('Documento 2')).toHaveValue('1');
     fireEvent.click(within(dialog).getByRole('button',{name:/Criar Viagem com 2/}));

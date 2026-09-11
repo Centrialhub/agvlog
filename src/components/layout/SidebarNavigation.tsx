@@ -6,15 +6,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { IntegrationCapability } from '@/hooks/useTenantCapabilities';
 import { cn } from '@/lib/utils';
 import { findNavigationPage, searchNavigation, type NavigationItem } from './navigation';
+import {isFinancialPath} from '@/lib/financial/financeRoutes';
 
 interface Props {
   collapsed?: boolean;
   query: string;
   capabilityAvailable: (capability: IntegrationCapability) => boolean;
   onNavigate?: () => void;
+  financeAvailable?:boolean;
 }
 
-export function SidebarNavigation({ collapsed = false, query, capabilityAvailable, onNavigate }: Props) {
+export function SidebarNavigation({ collapsed = false, query, capabilityAvailable, onNavigate, financeAvailable=false }: Props) {
   const id = useId();
   const [popover, setPopover] = useState<string | null>(null);
   const { pathname } = useLocation();
@@ -24,7 +26,7 @@ export function SidebarNavigation({ collapsed = false, query, capabilityAvailabl
   useEffect(() => {
     if (activeSectionId) setOpenSections(previous => ({ ...previous, [activeSectionId]: true }));
   }, [activeSectionId]);
-  const sections = searchNavigation(query);
+  const sections = searchNavigation(query).map(section=>({...section,items:section.items.filter(item=>financeAvailable||!isFinancialPath(item.href))})).filter(section=>section.items.length>0);
 
   function renderItem(item: NavigationItem) {
     const active = current?.item.href === item.href;

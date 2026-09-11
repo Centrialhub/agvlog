@@ -22,7 +22,7 @@ beforeEach(async()=>{
   Object.defineProperty(navigator,'locks',{configurable:true,value:{request:(_key:string,work:()=>Promise<unknown>)=>work()}});
   client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
   mock.rpc.mockImplementation((name:string,args:{_payload:unknown})=>({abortSignal:async()=>{
-    expect(name).toBe('dispatch_planned_route');
+    expect(name).toBe('dispatch_planned_route_v3');
     await db.query('select set_config($1,$2,false)',['request.jwt.claim.sub',mock.actor]);
     try{
       const id=await dispatchPlanning(db,args._payload);
@@ -35,7 +35,8 @@ afterEach(()=>{cleanup();client.clear();});
 const payload=():DispatchRoutePayload=>{
   const planned=planningPayload();return {...planned,attempt_scope:'route',planning_draft_id:i.draft,
     stops:planned.stops.map((stop,n)=>({...stop,id:String(n),recipient_name:'Cliente QA',invoice_numbers:[],total_weight_kg:10,
-      total_pallet_count:1,total_volume_m3:1,total_value:0,priority:0,risk_level:'normal' as const}))};
+      total_pallet_count:1,total_volume_m3:1,total_value:0,priority:0,risk_level:'normal' as const,
+      location_source:'address_geocoded' as const,location_address:'Rua QA, 10',location_provider:'test'}))};
 };
 function DriverPlanningHarness(){
   const dispatch=useDispatchRoutePlan();const [trip,setTrip]=useState('');const [error,setError]=useState('');

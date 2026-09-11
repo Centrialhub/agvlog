@@ -12,6 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getErrorMessage } from '@/lib/errors';
+import { LocationPicker } from '@/components/maps/LocationPicker';
+import type { ResolvedLocation } from '@/lib/geocoding';
 
 interface Props {
   api: ReturnType<typeof useLoadReplanning>; sourceId: string; targetId: string; itemIds: string[];
@@ -20,11 +22,11 @@ interface Props {
 export function LoadReplanningPanel({ api, sourceId, targetId, itemIds, disabled, onConfirmed }: Props) {
   const { currentTenant } = useTenant(); const { user } = useAuth();
   const [open, setOpen] = useState(false); const [choice, setChoice] = useState(''); const [reason, setReason] = useState('');
-  const [destination, setDestination] = useState(''); const [latitude, setLatitude] = useState(''); const [longitude, setLongitude] = useState('');
+  const [destination, setDestination] = useState(''); const [location, setLocation] = useState<ResolvedLocation | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     setOpen(false); setChoice(''); setReason(''); setError(null);
-    setDestination(''); setLatitude(''); setLongitude('');
+    setDestination(''); setLocation(null);
   }, [sourceId, targetId, currentTenant?.id, user?.id]);
   const query = useQuery({
     queryKey: ['load_replanning_context', currentTenant?.id, user?.id, sourceId, targetId],
@@ -51,10 +53,11 @@ export function LoadReplanningPanel({ api, sourceId, targetId, itemIds, disabled
       let target: ReplanningTarget;
       if (choice === 'unassigned') target = { mode: 'unassigned' };
       else if (choice === 'new') {
-        if (!destination.trim() || !latitude.trim() || !longitude.trim() || !Number.isFinite(Number(latitude))
-          || !Number.isFinite(Number(longitude)) || Math.abs(Number(latitude)) > 90 || Math.abs(Number(longitude)) > 180)
-          throw new Error('Informe destino, latitude e longitude válidos; a localização não será presumida.');
-        target = { mode: 'new', destination: destination.trim(), latitude: Number(latitude), longitude: Number(longitude), client_id: null };
+        if (!destination.trim() || !location) throw new Error('Informe o endereço e confirme o ponto no mapa.');
+        target = { mode: 'new', destination: destination.trim(), latitude: location.latitude, longitude: location.longitude, client_id: null,
+          location_source: location.source, location_address: location.address || destination.trim(),
+          location_provider: location.provider, location_accuracy_m: location.accuracy_m,
+          location_confidence: location.confidence, location_audit: location.audit, geofence_radius_m: 500 };
       } else target = { mode: 'existing', stop_id: choice };
       submitted = true;
       const result = await api.submit({ source_load_id: sourceId, target_load_id: targetId, item_ids: itemIds,
@@ -101,10 +104,8 @@ export function LoadReplanningPanel({ api, sourceId, targetId, itemIds, disabled
           {choice === 'new' && <>
             <div><Label htmlFor="replanning-destination">Endereço/destino da nova parada</Label>
               <Input id="replanning-destination" value={destination} onChange={event => setDestination(event.target.value)} disabled={api.isPending} /></div>
-            <div className="grid grid-cols-2 gap-2"><div><Label htmlFor="replanning-latitude">Latitude</Label>
-              <Input id="replanning-latitude" type="number" step="any" min="-90" max="90" value={latitude} onChange={event => setLatitude(event.target.value)} disabled={api.isPending} /></div>
-              <div><Label htmlFor="replanning-longitude">Longitude</Label>
-                <Input id="replanning-longitude" type="number" step="any" min="-180" max="180" value={longitude} onChange={event => setLongitude(event.target.value)} disabled={api.isPending} /></div></div>
+            {currentTenant ? <LocationPicker tenantId={currentTenant.id} address={destination} value={location}
+              onAddressChange={setDestination} onChange={setLocation} disabled={api.isPending} /> : null}
           </>}
           <div><Label htmlFor="replanning-reason">Motivo do replanejamento</Label>
             <Textarea id="replanning-reason" value={reason} maxLength={2000} onChange={event => setReason(event.target.value)} disabled={api.isPending} /></div>

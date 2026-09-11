@@ -54,7 +54,7 @@ export function useCreateStockItem() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['stock_items'] }),
+    onSuccess: () => Promise.all(['stock_items','finance-maintenance-cost-context','finance-maintenance-labor-context','finance-maintenance-direct-part-context','finance-stock-acquisition-context','finance-stock-consumption-context','finance-stock-consumption-preview','finance-stock-cost-inventory','finance-legacy-cost-inventory'].map(key=>qc.invalidateQueries({queryKey:[key]}))),
   });
 }
 
@@ -68,7 +68,7 @@ export function useUpdateStockItem() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['stock_items'] }),
+    onSuccess: () => Promise.all(['stock_items','finance-maintenance-cost-context','finance-maintenance-labor-context','finance-maintenance-direct-part-context','finance-stock-acquisition-context','finance-stock-consumption-context','finance-stock-consumption-preview','finance-stock-cost-inventory','finance-legacy-cost-inventory'].map(key=>qc.invalidateQueries({queryKey:[key]}))),
   });
 }
 
@@ -117,6 +117,14 @@ export function useCreateStockMovement() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['stock_movements'] });
+      qc.invalidateQueries({queryKey:['finance-maintenance-cost-context']});
+      qc.invalidateQueries({queryKey:['finance-maintenance-labor-context']});
+      qc.invalidateQueries({queryKey:['finance-maintenance-direct-part-context']});
+      qc.invalidateQueries({queryKey:['finance-stock-acquisition-context']});
+      qc.invalidateQueries({queryKey:['finance-stock-consumption-context']});
+      qc.invalidateQueries({queryKey:['finance-stock-consumption-preview']});
+      qc.invalidateQueries({queryKey:['finance-stock-cost-inventory']});
+      qc.invalidateQueries({queryKey:['finance-legacy-cost-inventory']});
       qc.invalidateQueries({ queryKey: ['stock_items'] });
     },
   });

@@ -7147,30 +7147,84 @@ export type Database = {
       geofences: {
         Row: {
           category: string | null
+          center_lat: number | null
+          center_lng: number | null
           created_at: string
+          dispatch_stop_id: string | null
           enabled: boolean
+          enter_margin_m: number
+          exit_margin_m: number
           geometry: unknown
           id: string
+          location_accuracy_m: number | null
+          location_audit: Json
+          location_confidence: number | null
+          location_provider: string | null
+          location_resolved_at: string | null
+          location_resolved_by: string | null
           name: string
+          radius_m: number | null
+          radius_policy_key: string | null
+          scope_kind: string
+          shape_kind: string
+          source_address: string | null
+          source_kind: string
           tenant_id: string
+          transition_confirmations: number
         }
         Insert: {
           category?: string | null
+          center_lat?: number | null
+          center_lng?: number | null
           created_at?: string
+          dispatch_stop_id?: string | null
           enabled?: boolean
+          enter_margin_m?: number
+          exit_margin_m?: number
           geometry?: unknown
           id?: string
+          location_accuracy_m?: number | null
+          location_audit?: Json
+          location_confidence?: number | null
+          location_provider?: string | null
+          location_resolved_at?: string | null
+          location_resolved_by?: string | null
           name: string
+          radius_m?: number | null
+          radius_policy_key?: string | null
+          scope_kind?: string
+          shape_kind?: string
+          source_address?: string | null
+          source_kind?: string
           tenant_id: string
+          transition_confirmations?: number
         }
         Update: {
           category?: string | null
+          center_lat?: number | null
+          center_lng?: number | null
           created_at?: string
+          dispatch_stop_id?: string | null
           enabled?: boolean
+          enter_margin_m?: number
+          exit_margin_m?: number
           geometry?: unknown
           id?: string
+          location_accuracy_m?: number | null
+          location_audit?: Json
+          location_confidence?: number | null
+          location_provider?: string | null
+          location_resolved_at?: string | null
+          location_resolved_by?: string | null
           name?: string
+          radius_m?: number | null
+          radius_policy_key?: string | null
+          scope_kind?: string
+          shape_kind?: string
+          source_address?: string | null
+          source_kind?: string
           tenant_id?: string
+          transition_confirmations?: number
         }
         Relationships: [
           {
@@ -17177,6 +17231,95 @@ export type Database = {
         Returns: {
           items: Json
           total_count: number
+        }[]
+      }
+      get_current_driver_journey_v1: {
+        Args: never
+        Returns: Json
+      }
+      get_workspace_ssx_accounts_v1: {
+        Args: { _tenant_id: string }
+        Returns: {
+          base_url: string
+          created_at: string
+          id: string
+          last_error: string | null
+          last_login_at: string | null
+          migration_state: string
+          provider: string
+          settings: Json
+          status: string
+          tenant_id: string
+          token_expires_at: string | null
+          updated_at: string
+          username: string
+          workspace_id: string
+        }[]
+      }
+      integration_account_matches_tenant_workspace_v1: {
+        Args: { _integration_account_id: string; _tenant_id: string }
+        Returns: boolean
+      }
+      delete_workspace_ssx_account_v1: {
+        Args: { _integration_account_id: string; _tenant_id: string }
+        Returns: undefined
+      }
+      upsert_workspace_ssx_account_v1: {
+        Args: {
+          _base_url: string
+          _hashauth: string | null
+          _hashcode: string | null
+          _integration_account_id: string | null
+          _password_encrypted: string
+          _settings: Json
+          _tenant_id: string
+          _username: string
+        }
+        Returns: string
+      }
+      set_active_tenant_context_v1: {
+        Args: { _tenant_id: string }
+        Returns: Json
+      }
+      get_workspace_vehicle_position_v1: {
+        Args: { _tenant_id: string; _vehicle_id: string }
+        Returns: {
+          captured_at: string
+          lat: number
+          lng: number
+        }[]
+      }
+      list_workspace_fleet_snapshot_v1: {
+        Args: { _tenant_id: string }
+        Returns: {
+          active: boolean
+          body_type: string | null
+          captured_at: string | null
+          created_at: string
+          current_driver_id: string | null
+          heading: number | null
+          id: string
+          last_movement_at: string | null
+          lat: number | null
+          lng: number | null
+          max_pallets: number | null
+          max_volume_m3: number | null
+          max_weight_kg: number | null
+          movement_state: string | null
+          nickname: string | null
+          plate: string
+          received_at: string | null
+          renavam: string | null
+          source_tenant_id: string | null
+          source_vehicle_id: string | null
+          speed: number | null
+          state_updated_at: string | null
+          stopped_duration_seconds: number
+          stopped_since: string | null
+          tags: Json
+          tenant_id: string
+          type: string | null
+          uf: string | null
         }[]
       }
       list_load_control_page_v2: {

@@ -14,8 +14,7 @@ const mock = vi.hoisted(() => ({
   vehicleId: '40000000-0000-4000-8000-000000000001',
   positionShouldFail: true,
   positionCalls: 0,
-  positionSelects: [] as string[],
-  positionFilters: [] as Array<{ column: string; value: unknown }>,
+  positionRpcArgs: [] as Array<{ _tenant_id: string; _vehicle_id: string }>,
 }));
 
 const trip = {
@@ -96,30 +95,31 @@ vi.mock('@/integrations/supabase/client', () => {
 
   return {
     supabase: {
+      rpc: async (
+        name: string,
+        args: { _tenant_id: string; _vehicle_id: string },
+      ) => {
+        if (name !== 'get_workspace_vehicle_position_v1') {
+          return { data: null, error: { message: `unexpected RPC: ${name}` } };
+        }
+        mock.positionCalls += 1;
+        mock.positionRpcArgs.push(args);
+        if (mock.positionShouldFail) {
+          return { data: null, error: { message: 'internal telemetry detail' } };
+        }
+        return {
+          data: [{ lat: -15.802, lng: -43.313, captured_at: new Date().toISOString() }],
+          error: null,
+        };
+      },
       from: (table: string) => {
         const builder: Record<string, unknown> = {};
-        builder.select = (columns: string) => {
-          if (table === 'positions_last') mock.positionSelects.push(columns);
-          return builder;
-        };
-        builder.eq = (column: string, value: unknown) => {
-          if (table === 'positions_last') mock.positionFilters.push({ column, value });
-          return builder;
-        };
+        builder.select = () => builder;
+        builder.eq = () => builder;
         builder.not = () => builder;
         builder.order = () => builder;
         builder.limit = () => builder;
-        builder.maybeSingle = async () => {
-          if (table !== 'positions_last') return responseFor(table);
-          mock.positionCalls += 1;
-          if (mock.positionShouldFail) {
-            return { data: null, error: { message: 'internal telemetry detail' } };
-          }
-          return {
-            data: { lat: -15.802, lng: -43.313, captured_at: new Date().toISOString() },
-            error: null,
-          };
-        };
+        builder.maybeSingle = async () => responseFor(table);
         builder.then = (
           resolve: (value: { data: unknown; error: unknown }) => unknown,
           reject?: (reason: unknown) => unknown,
@@ -153,8 +153,7 @@ function renderHome() {
 beforeEach(() => {
   mock.positionShouldFail = true;
   mock.positionCalls = 0;
-  mock.positionSelects = [];
-  mock.positionFilters = [];
+  mock.positionRpcArgs = [];
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -173,11 +172,10 @@ describe('driver home tracking', () => {
     expect(screen.getByText('Posição do veículo indisponível')).toBeInTheDocument();
     expect(screen.queryByText('internal telemetry detail')).not.toBeInTheDocument();
     expect(screen.getByTestId('driver-delivery-map')).toHaveTextContent('sem posição atual');
-    expect(mock.positionSelects).toEqual(['lat, lng, captured_at']);
-    expect(mock.positionFilters).toEqual([
-      { column: 'tenant_id', value: mock.tenantId },
-      { column: 'vehicle_id', value: mock.vehicleId },
-    ]);
+    expect(mock.positionRpcArgs).toEqual([{
+      _tenant_id: mock.tenantId,
+      _vehicle_id: mock.vehicleId,
+    }]);
 
     mock.positionShouldFail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Tentar atualizar posição' }));
@@ -187,17 +185,15 @@ describe('driver home tracking', () => {
     });
     expect(screen.queryByText('Posição do veículo indisponível')).not.toBeInTheDocument();
     expect(mock.positionCalls).toBe(2);
-    expect(mock.positionFilters).toEqual([
-      { column: 'tenant_id', value: mock.tenantId },
-      { column: 'vehicle_id', value: mock.vehicleId },
-      { column: 'tenant_id', value: mock.tenantId },
-      { column: 'vehicle_id', value: mock.vehicleId },
+    expect(mock.positionRpcArgs).toEqual([
+      { _tenant_id: mock.tenantId, _vehicle_id: mock.vehicleId },
+      { _tenant_id: mock.tenantId, _vehicle_id: mock.vehicleId },
     ]);
   });
 
   it('keeps low-cost foreground polling explicit in the query contract', () => {
     const source = readFileSync(join(process.cwd(), 'src', 'hooks', 'useDriverHomeVehiclePosition.ts'), 'utf8');
-    expect(source).toContain(".select('lat, lng, captured_at')");
+    expect(source).toContain(".rpc('get_workspace_vehicle_position_v1'");
     expect(source).toContain('refetchInterval: 30_000');
     expect(source).toContain('refetchIntervalInBackground: false');
     expect(source).toContain('retry: false');

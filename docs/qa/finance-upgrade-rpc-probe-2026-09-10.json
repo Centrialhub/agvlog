@@ -1,0 +1,23 @@
+{
+  "scope": "explicit_name_allowlist_not_all_functions",
+  "rows": [
+    {
+      "schema": "public",
+      "name": "_build_driver_settlement",
+      "arguments": "_tenant_id uuid, _dispatch_trip_id uuid",
+      "security_definer": true
+    },
+    {
+      "schema": "public",
+      "name": "approve_payroll_period",
+      "arguments": "_period_id uuid",
+      "security_definer": true
+    },
+    {
+      "schema": "public",
+      "name": "generate_payroll_period",
+      "arguments": "_tenant_id uuid, _period_start date, _period_end date, _period_name text, _include_drivers boolean, _include_non_drivers boolean",
+      "security_definer": true
+    }
+  ]
+}
