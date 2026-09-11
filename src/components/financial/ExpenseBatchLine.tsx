@@ -45,7 +45,7 @@ export function ExpenseBatchLine({ tenant, actor, trip, batchRequest, context, l
         {!line.supplier && field('supplierName','Estabelecimento / prestador')}
         <FinanceOptionPicker tenant={tenant} actor={actor} kind="centers" label={`Centro de custo ${index+1}`} value={line.center} onChange={center=>onChange({...line,center})}/>
         {field('document','Número do documento')}
-        <p className="text-sm">Fotos JPEG/PNG são validadas antes do registro. Alterar origem, viagem ou entrega exige preparar o comprovante novamente.</p><label className="block text-sm">Comprovante<Input aria-label={`Comprovante ${index+1}`} type="file" accept="image/jpeg,image/png" onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);}}/></label>
+        <p className="text-sm">Fotos JPEG/PNG: até 5 MB (5.242.880 bytes), 2 megapixels e 4.096 pixels por lado. A validação também pode rejeitar imagens que excedam os recursos de processamento; nesse caso, envie uma versão menor. Alterar origem, viagem ou entrega exige preparar o comprovante novamente.</p><label className="block text-sm">Comprovante<Input aria-label={`Comprovante ${index+1}`} type="file" accept="image/jpeg,image/png" onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);}}/></label>
         {line.preparedReceipt||line.receiptPath ? <p className="text-sm">{line.preparedReceipt?'Cópia validada preparada para o lote':'Anexado'}: {line.receiptName}</p> : field('noReceiptReason','Motivo sem comprovante')}
       </div></details>
       {error && <p role="alert">{error}</p>}{uploading && <p role="status">Enviando comprovante…</p>}

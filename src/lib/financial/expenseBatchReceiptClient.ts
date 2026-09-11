@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
 import {uploadRecoverableFinanceArtifact} from './uploadArtifactRecovery';
+import {uploadArtifactStatus} from './uploadArtifactContract';
 import type {PreparedExpenseReceipt} from './expenseBatchContract';
 import {expenseReceiptIntentCommandSchema,expenseReceiptIntentResultSchema} from './expenseBatchReceiptContract';
 export {expenseReceiptIntentCommandSchema,expenseReceiptIntentResultSchema} from './expenseBatchReceiptContract';
@@ -24,6 +25,6 @@ export async function prepareBatchReceipt(input:Input,actor:string,file:File):Pr
  if(format!=='jpeg'&&format!=='png')throw new Error('Neste lote, selecione uma foto JPEG ou PNG. Outros formatos não possuem cópia validada para anexação.');
  const intent=await prepareExpenseReceiptIntent(input,actor);
  const artifact=await uploadRecoverableFinanceArtifact({tenantId:input.tenant_id,actorId:actor,sourceType:'expense_draft',sourceId:intent.intent_id,file,format});
- if(!artifact.usable||artifact.state!=='sanitized_derivative')throw new Error('O arquivo permaneceu protegido em quarentena e não foi anexado ao gasto. Selecione uma foto válida para tentar novamente.');
+ if(!artifact.usable||artifact.state!=='sanitized_derivative')throw new Error(uploadArtifactStatus(artifact)+' Nenhum comprovante foi vinculado a este gasto.');
  return {intentId:intent.intent_id,artifactId:artifact.artifact_id,tenantId:input.tenant_id,actorId:actor,batchRequestId:input.batch_request_id,expenseId:input.expense_id,context:input.context,tripId:input.trip_id,stopId:input.stop_id,sha256:artifact.original.sha256,name:file.name};
 }

@@ -1,6 +1,7 @@
 import {unloadingCancellationLabels} from './unloadingCancellationLabels';
 export const unloadingCostCorrectionLabels:Record<string,string>={
  ...unloadingCancellationLabels,
+ finance_expense_money_dependency:'Este custo possui vínculos com dinheiro registrado e exige regularização antes da correção. Confira os pagamentos e envios relacionados.',
  finance_expense_cost_unverified:'O valor vigente do custo não foi comprovado. Confira o histórico antes de corrigir.',
  finance_expense_cost_chain_invalid:'O histórico de alterações do custo está inconsistente e precisa de conferência.',
  finance_unloading_cost_unchanged:'O valor proposto é igual ao custo vigente.',
