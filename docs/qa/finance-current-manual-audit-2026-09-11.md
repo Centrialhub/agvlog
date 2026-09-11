@@ -7,3 +7,5 @@ Não reescreve eventos, não converte conciliação automática em manual, não 
 SQL SHA256 db1ec8ab64ac31b82d146f0715c6a0ce99b8f9a30e4194b16a7b1be6ffeabb40
 
 Arquivos delimitados: migração94523, financeAuditContract.ts, financeCurrentManualAudit.test.ts, predecessor SQL de auditoria, esta QA. Aplicação remota ainda pendente no momento do commit.
+
+Atualização de publicação: migração aplicada em produção como 20260911095031; corpo posterior confirmado como 0efd075f0793baa6e919d8551d34ba92. Rótulos publicados com sucesso no Sites versão 30 em 2026-09-11T10:01:20.362162+00:00. Evidência completa em finance-sites30-release-2026-09-11.md.
