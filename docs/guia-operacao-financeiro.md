@@ -9,6 +9,7 @@ Selecione a empresa correta antes de trabalhar. A barra lateral reúne as págin
 | Página | Uso principal | Rota |
 | --- | --- | --- |
 | Painel financeiro | Visão de carteira, custos e pendências | `/financial` |
+| Previsão de caixa | Conferir entradas e saídas esperadas e preservar previsões | `/financial/cash-forecast` |
 | Movimentações | Registrar entradas, saídas e transferências que aconteceram fora do sistema | `/financial/movements` |
 | Gastos conferidos | Lançar vários gastos e consultar categorias, comprovantes e envios utilizados | `/financial/recorded-expenses` |
 | Contas a pagar | Organizar obrigações e associar pagamentos registrados | `/payables` |
@@ -73,3 +74,17 @@ Complementos ainda abertos, acertos ou folha já materializados e períodos fech
 ## Conferência de folhas extensas
 
 Em Folha de pagamento, use a busca por nome, identificação, departamento ou filial e o filtro de situação de pagamento. A lista mostra até 50 funcionários por página. Os totais e as ações de aprovação e fechamento sempre abrangem a folha inteira. Clique no nome do funcionário para abrir seu detalhe.
+
+## Créditos de clientes
+
+Em **Contas a receber → Créditos de clientes**, escolha o crédito e um título do mesmo pagador. Confira o valor disponível, o saldo do título e a prévia; registre o motivo antes de confirmar. Aplicar um crédito liquida o título sem registrar uma nova entrada no banco.
+
+No histórico de aplicações, a liberação devolve disponibilidade ao crédito e pode reabrir o saldo do título. Ela não devolve dinheiro ao cliente. Autor, motivo e vínculos permanecem registrados. A devolução financeira de crédito disponível é um fluxo separado ainda em desenvolvimento.
+
+As telas distinguem **dinheiro recebido**, **crédito aplicado** e **liquidado**. Não some crédito ao caixa bancário. Um crédito com origem não verificada apresenta saldo indeterminado e exige conferência.
+
+## Previsão de caixa e datas esperadas
+
+Use **Previsão de caixa** para conferir fontes e pendências antes de preservar uma previsão. O vencimento original permanece separado da data esperada informada pelo financeiro. Revisar ou remover uma data esperada exige motivo e mantém o histórico.
+
+Quando a origem muda, a data esperada pode exigir nova conferência. Um título totalmente liquidado conserva o histórico, mas não exige uma data para saldo zero. Se o saldo reabrir, a pendência reaparece. As previsões preservadas não são reescritas por alterações posteriores.
