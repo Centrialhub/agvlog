@@ -1,0 +1,80 @@
+{
+  "files": [
+    {
+      "path": "src/lib/financial/costDispositionReturnContract.ts",
+      "sha256": "6a5aa02cc4227cab46070f75151d2b2939fb9f54182a7f556c44ac8f400d341c"
+    },
+    {
+      "path": "src/lib/financial/costDispositionReturnClient.ts",
+      "sha256": "84be74ddc6b50206e9690364f6cb0e499b86016efddd33bf4b1dd8c29d6c751f"
+    },
+    {
+      "path": "src/lib/financial/costDispositionReturnLabels.ts",
+      "sha256": "eb13138fa03101f5bff9f40e82f1c60fd92f799a97aeff45728a661a7464699e"
+    },
+    {
+      "path": "src/lib/financial/costDispositionReturnOutbox.ts",
+      "sha256": "0a77b9e57a0a8656141e8a9ae2648706d89cfa546e6d9e7f8a6c19ebfe29e5d2"
+    },
+    {
+      "path": "src/lib/financial/expenseCostFundingContract.ts",
+      "sha256": "16fc23d849495db6099f4442958a886212faedd2bd8e999fad74d97f73b58938"
+    },
+    {
+      "path": "src/lib/financial/costDispositionsContract.ts",
+      "sha256": "f3a1e24afba63a17bcc19a702d91a22f3bc989611be9bf7c15822d81e28b817f"
+    },
+    {
+      "path": "src/components/financial/CostDispositionReturnConfirmation.tsx",
+      "sha256": "e704a4704d91134663bf1114e93fa5d2a1d6c06c6ce981722a1e7c9a20c829dd"
+    },
+    {
+      "path": "src/components/financial/CostDispositionReturnDialog.tsx",
+      "sha256": "ebba848fc6f56cb5f592be43c90e9d7e23fb10f82333c3d5a6e10d23044c610f"
+    },
+    {
+      "path": "src/components/financial/CostDispositionReturnHistory.tsx",
+      "sha256": "62bccca3772dcde1c2d65ad356ffb914075ba603de5e0e26c4a8c8454b0e99ef"
+    },
+    {
+      "path": "src/components/financial/CostReturnMovementPicker.tsx",
+      "sha256": "ebfe108310dfa0b8c6132dacaf1c5cdbf8eaaf59a7350d0b6796684a2cf4f82a"
+    },
+    {
+      "path": "src/components/financial/CostDispositionsPanel.tsx",
+      "sha256": "fb731aeb00faee499d5bf7357ae9c68dc6c19c25ffb2447b8f3cf6e470d7609e"
+    },
+    {
+      "path": "src/components/financial/ExpenseCostCoverage.tsx",
+      "sha256": "a713525d27d226cbdb105f21bb95ac4e56a5a8bd60602223c2d4e4eafd5a17ec"
+    },
+    {
+      "path": "src/components/financial/ExpenseFundingSummary.tsx",
+      "sha256": "85220c57e4ed71987393ff7df9672557a30a768e9ee3a58d238d32773147c095"
+    },
+    {
+      "path": "src/pages/FinanceExpenses.tsx",
+      "sha256": "5422e151e9ea8792820bc7170e57862fc77a40f8e29b0123a7c05f33f490091e"
+    },
+    {
+      "path": "src/test/costDispositionReturnContract.test.ts",
+      "sha256": "aa20a16dcfc45b18ce7d06f84d4b62ceae2171c3df8228c56c5f0c549a7608ed"
+    },
+    {
+      "path": "src/test/costDispositionReturnClient.test.ts",
+      "sha256": "4835803bc2722e8d4be55d84fbc24a660dab111e01458dfbd321ffebfa826064"
+    },
+    {
+      "path": "src/test/costDispositionReturnOutbox.test.ts",
+      "sha256": "9bda18c5fa37072f017a6eea95017c559fe60bb1cf3c4aea87831f2a1a2687ad"
+    },
+    {
+      "path": "src/test/costDispositionReturnPanel.test.tsx",
+      "sha256": "d419398ec91030860cd329b34c0915fec12ce2b89b8a8ed58f6b339df63065e5"
+    },
+    {
+      "path": "src/test/helpers/costDispositionReturnFixture.ts",
+      "sha256": "cc3765a36b113826733aa44524361b19f28e529976362b046c1f94b53d22249b"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+Native PostgreSQL: 17.11 (loopback, disposable fixture)
+Native factory compiled on PostgreSQL; cost150/paid150/regularized120 established.
+PASS canonical receive holds input; waiting return rechecks revision and rolls back
+PASS return holds input; waiting canonical receive cannot reuse it
+PASS legacy association holds input; waiting return rolls back after reservation changes
+PASS return holds input; waiting legacy association cannot reuse it
+PASS row-first movement lock fails fast40001 without deadlock or extra return
+CORE SHA256 dff497b45ea51da7287c628da7208630bc6456e6b617ff5f9f49319bbe5675b4
+5 cost return native tests passed.
+Disposable PostgreSQL stopped. Diagnostic files retained under node_modules/.cache/qa-postgres.

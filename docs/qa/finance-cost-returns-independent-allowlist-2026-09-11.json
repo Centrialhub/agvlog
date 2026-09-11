@@ -1,0 +1,46 @@
+{
+  "scope": "Independent recorded-return tests and native concurrency evidence only; no staging or commit performed",
+  "files": [
+    {
+      "path": "scripts/test-delivery-concurrency.mjs",
+      "sha256": "eac58463071933bd12b3338696dfef1549e505b2543040470cca70f366ba717d",
+      "note": "Runner edit only adds finance-cost-returns selection and dispatch"
+    },
+    {
+      "path": "scripts/test-finance-cost-returns-native-cases.mjs",
+      "sha256": "8e42a682121655b0e75582735bc49d966ab060bcff7af95b3ba263073906a475",
+      "note": ""
+    },
+    {
+      "path": "src/test/helpers/costReturnNativeFixture.ts",
+      "sha256": "3ae45f2d2c3bab2d035c8e249ecdf08017f581a5a9db10f678d9a084da8fb2e9",
+      "note": ""
+    },
+    {
+      "path": "src/test/costDispositionReturnsIndependent.test.ts",
+      "sha256": "a17ee7a35dadcfc830a3d1fb10be831af25719aa35a6f011717ca1c59916a147",
+      "note": ""
+    },
+    {
+      "path": "docs/qa/finance-cost-returns-native-2026-09-11.log",
+      "sha256": "fd372e4dbbadb504a9e9f844f5f24e19a29bc8200014907e4524f5711b936e06",
+      "note": "Ignored log; include explicitly only if retaining native execution evidence"
+    },
+    {
+      "path": "docs/qa/finance-cost-returns-independent-2026-09-11.md",
+      "sha256": "5f0a5347ed4945bed2a402608b816ae69dc678fd6f939b426c7d114281b195a7",
+      "note": ""
+    },
+    {
+      "path": "docs/qa/finance-cost-returns-independent-2026-09-11.json",
+      "sha256": "2a4c87bdb7ecb42e4cbbd6d763504901af77b421fa0883eed6136bbed8dcf306",
+      "note": ""
+    }
+  ],
+  "include_manifest_itself": "docs/qa/finance-cost-returns-independent-allowlist-2026-09-11.json",
+  "not_included": [
+    "docs/qa/finance-cost-disposition-reader-predecessors-2026-09-11.json (older untracked capture; not needed by this return fixture)",
+    "core74603 and public80545 are owned by their authors",
+    "runtime binaries/cache and any unrelated changes"
+  ]
+}

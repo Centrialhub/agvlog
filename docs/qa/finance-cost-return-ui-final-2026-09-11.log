@@ -1,0 +1,19 @@
+
+ RUN  v3.2.7 F:/agvlog-main
+
+ ✓ src/test/financeExpenseHistoryScreen.test.tsx (10 tests) 800ms
+ ✓ src/test/payablePortfolioPanel.test.tsx (7 tests) 414ms
+ ✓ src/test/costDispositionReturnPanel.test.tsx (6 tests) 290ms
+ ✓ src/test/settlementExpenseContext.test.tsx (4 tests) 156ms
+ ✓ src/test/costDispositionsPanel.test.tsx (2 tests) 156ms
+ ✓ src/test/expenseFundingSummary.test.tsx (2 tests) 78ms
+ ✓ src/test/costDispositionReturnOutbox.test.ts (3 tests) 9ms
+ ✓ src/test/costDispositionReturnClient.test.ts (2 tests) 7ms
+ ✓ src/test/costDispositionReturnContract.test.ts (3 tests) 8ms
+ ✓ src/test/expenseCostPresentation.test.ts (9 tests) 3ms
+
+ Test Files  10 passed (10)
+      Tests  48 passed (48)
+   Start at  05:16:13
+   Duration  15.73s (transform 667ms, setup 2.27s, collect 2.88s, tests 1.92s, environment 6.15s, prepare 1.06s)
+

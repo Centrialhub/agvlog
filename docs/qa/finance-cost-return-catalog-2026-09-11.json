@@ -1,0 +1,102 @@
+[
+  {
+    "signature": "finance_private.check_cost_disposition_return()",
+    "prosrc_md5": "fbd259b34a8ac55ec0271e3b6a5f5cf8",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.cost_disposition_return_context(uuid,uuid,uuid,text)",
+    "prosrc_md5": "66b093bd5759ea47a87cfcffcae78048",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.cost_dispositions(uuid,integer,text)",
+    "prosrc_md5": "c95bf921f4144a9d225d282cb57bef9c",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+  },
+  {
+    "signature": "finance_private.cost_return_movement_options(uuid,uuid,text,integer,text)",
+    "prosrc_md5": "33189cc4ecd61d31602f94c349aaae92",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.expense_cost_coverage(uuid,uuid)",
+    "prosrc_md5": "8c9ee6819131d28a86b015d234dfe4ef",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.expense_cost_effective(uuid,uuid)",
+    "prosrc_md5": "de49565ea3e3325d16c4141e007a5311",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.guard_cost_disposition_return()",
+    "prosrc_md5": "789d12a626b189ec4aaba999ade71cbf",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.receipt_movement_used_cents(uuid,uuid)",
+    "prosrc_md5": "09ac7f454ff10e20328534f3c2dd236e",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.record_cost_disposition_return(jsonb)",
+    "prosrc_md5": "678cbaa8029ff25d022354086f1d0528",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.unloading_cost_regularization_context(uuid,uuid,jsonb)",
+    "prosrc_md5": "438852b7075d393eb49a9255fb23c9d7",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  }
+]

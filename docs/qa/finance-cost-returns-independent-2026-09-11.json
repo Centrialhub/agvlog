@@ -1,0 +1,38 @@
+{
+  "core_sql_sha256": "dff497b45ea51da7287c628da7208630bc6456e6b617ff5f9f49319bbe5675b4",
+  "native": {
+    "result": "5 PASS",
+    "exit_code": 0,
+    "runtime": "PostgreSQL17.11",
+    "stopped": true,
+    "log": "docs/qa/finance-cost-returns-native-2026-09-11.log"
+  },
+  "pglite": {
+    "result": "8 PASS across core and independent tests",
+    "exit_code": 0,
+    "latest_run": "05:10:49",
+    "duration_seconds": 5.34
+  },
+  "files": [
+    {
+      "path": "src/test/costDispositionReturnsIndependent.test.ts",
+      "sha256": "a17ee7a35dadcfc830a3d1fb10be831af25719aa35a6f011717ca1c59916a147"
+    },
+    {
+      "path": "src/test/helpers/costReturnNativeFixture.ts",
+      "sha256": "3ae45f2d2c3bab2d035c8e249ecdf08017f581a5a9db10f678d9a084da8fb2e9"
+    },
+    {
+      "path": "scripts/test-finance-cost-returns-native-cases.mjs",
+      "sha256": "8e42a682121655b0e75582735bc49d966ab060bcff7af95b3ba263073906a475"
+    },
+    {
+      "path": "scripts/test-delivery-concurrency.mjs",
+      "sha256": "eac58463071933bd12b3338696dfef1549e505b2543040470cca70f366ba717d"
+    },
+    {
+      "path": "docs/qa/finance-cost-returns-native-2026-09-11.log",
+      "sha256": "fd372e4dbbadb504a9e9f844f5f24e19a29bc8200014907e4524f5711b936e06"
+    }
+  ]
+}
