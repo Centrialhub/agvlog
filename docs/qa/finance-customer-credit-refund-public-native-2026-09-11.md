@@ -34,3 +34,11 @@ Hashes e allowlist estão no JSON adjacente. A própria documentação MD/JSON t
 ## Suplemento: fechamento e reabertura reais
 
 `src/test/customerCreditRefundPeriodClose.test.ts` passou (1 PGlite às08:20:22, lint0). Saída200 de10/08/2026, evidência de extrato com entrada bancária negativa200, conciliação única, saldo inicial1000/final800, cobertura, corte legado e fechamento usam helpers/writers reais completos. Após close, preview devoluçãoeligible/can_executefalse comcredit_refund_period_closed e writer23514 semrefund. Após reopen auditado, novaprévia elegível e devolução200 registrada, crédito disponível400. Movimento original e registros bancários byte-equivalentes; constraints diferidas verificadas. Nenhuma função de período simulada e nenhum PostgreSQL nativo repetido.
+
+## Correção de compatibilidade com a ordem publicada
+
+A primeira instalação de10629 foi revertida pelo preflight: o pin do helper de previsão ainda era ancestral. Comparado o corpo completo instalado por02519, a correção altera exclusivamente esse pin para MD5 d2c1776dfadc5267578077be619ca9bd, mantendo ACL e demais18 predecessores. SHA atual10629: 92d6f6c50e2ef490f47ae5dc177488840ac84d06298c9012d196dde03047a0d0. Nenhuma alteração em04822.
+
+A nova fixture instala01312→02519→03921→04429→04822→10629. O teste reproduziu a rejeição antes da correção. Depois, cinco casos PGlite passaram com saída0 (sessão33674,08:29:20): quatro públicos, incluindo preparação do runner nativo e projeção após devolução, mais fechamento/reabertura real. A preparação confirma o MD5 publicado e a API instalada sem iniciar PostgreSQL.
+
+As seis disputas nativas anteriores continuam registradas exclusivamente contra SHA89ae43b8ab488c1112651c719b3a62487049d51077c67e719abe59406ca37299. Não foram repetidas após a troca isolada do pin. A fixture e o hash esperado do runner foram atualizados para futuras execuções.

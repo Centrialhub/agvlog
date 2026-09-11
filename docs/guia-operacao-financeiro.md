@@ -79,7 +79,7 @@ Em Folha de pagamento, use a busca por nome, identificação, departamento ou fi
 
 Em **Contas a receber → Créditos de clientes**, escolha o crédito e um título do mesmo pagador. Confira o valor disponível, o saldo do título e a prévia; registre o motivo antes de confirmar. Aplicar um crédito liquida o título sem registrar uma nova entrada no banco.
 
-No histórico de aplicações, a liberação devolve disponibilidade ao crédito e pode reabrir o saldo do título. Ela não devolve dinheiro ao cliente. Autor, motivo e vínculos permanecem registrados. A devolução financeira de crédito disponível é um fluxo separado ainda em desenvolvimento.
+No histórico de aplicações, a liberação devolve disponibilidade ao crédito e pode reabrir o saldo do título. Ela não devolve dinheiro ao cliente. Autor, motivo e vínculos permanecem registrados. A devolução financeira de crédito disponível tem uma conferência separada, descrita abaixo.
 
 As telas distinguem **dinheiro recebido**, **crédito aplicado** e **liquidado**. Não some crédito ao caixa bancário. Um crédito com origem não verificada apresenta saldo indeterminado e exige conferência.
 
@@ -88,3 +88,10 @@ As telas distinguem **dinheiro recebido**, **crédito aplicado** e **liquidado**
 Use **Previsão de caixa** para conferir fontes e pendências antes de preservar uma previsão. O vencimento original permanece separado da data esperada informada pelo financeiro. Revisar ou remover uma data esperada exige motivo e mantém o histórico.
 
 Quando a origem muda, a data esperada pode exigir nova conferência. Um título totalmente liquidado conserva o histórico, mas não exige uma data para saldo zero. Se o saldo reabrir, a pendência reaparece. As previsões preservadas não são reescritas por alterações posteriores.
+## Vincular devolução de crédito ao cliente
+
+No crédito selecionado, abra **Conferir devolução de dinheiro**. Escolha uma saída que já foi registrada em Movimentações e confira destinatário, documento, conta, data e valor disponível. O sistema não faz o pagamento e não cria outra saída para registrar a devolução.
+
+A prévia mostra quanto restará do crédito e da saída após o vínculo. É necessário comprovar o mesmo pagador pelo documento; nome parecido não basta. Informe o motivo e confirme apenas o valor efetivamente devolvido. Devoluções parciais permanecem no histórico com autoria.
+
+Saídas de períodos fechados não podem receber um novo vínculo sem reabertura auditada. Um pedido sem resposta deve ser recuperado com a identidade original. O mesmo saldo não pode ser usado simultaneamente para devolver dinheiro e aplicar crédito em outro título.

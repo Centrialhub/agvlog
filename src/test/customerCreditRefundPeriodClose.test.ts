@@ -1,13 +1,12 @@
 // @vitest-environment node
-import {readFileSync} from 'node:fs';import {randomUUID} from 'node:crypto';import {it,expect} from 'vitest';
-import {createCustomerCreditRefundDatabase,seedCustomerCreditRefundSource} from './helpers/customerCreditRefundDatabase';
+import {randomUUID} from 'node:crypto';import {it,expect} from 'vitest';
+import {createCustomerCreditRefundPublicDatabase} from './helpers/customerCreditRefundPublicDatabase';
+import {seedCustomerCreditRefundSource} from './helpers/customerCreditRefundDatabase';
 import {seedAccountCloseStatement} from './helpers/accountPeriodCloseDatabase';
 import {financeIds as i,financeAs} from './helpers/financeLedgerDatabase';
 import {customerCreditRefundPreviewSchema,customerCreditRefundResultSchema} from '@/lib/financial/customerCreditRefundContract';
 it('real bank close prevents refund attribution until audited reopening, preserving the outgoing money',async()=>{
- const db=await createCustomerCreditRefundDatabase();try{
-  await db.exec('revoke all on function public.apply_client_invoice_command(jsonb) from public,anon,service_role;grant execute on function public.apply_client_invoice_command(jsonb) to authenticated');
-  for(const n of ['20260911103921_finance_customer_credit_public_catalog','20260911104822_finance_customer_credit_recorded_refunds','20260911110629_finance_customer_credit_refund_public_catalog'])await db.exec(readFileSync('supabase/migrations/'+n+'.sql','utf8'));
+ const db=await createCustomerCreditRefundPublicDatabase();try{
   const source=await seedCustomerCreditRefundSource(db);const scope={account_id:i.account,from:'2026-08-01',to:'2026-08-31'};
   const base=()=>({version:1,tenant_id:i.tenant,request_id:randomUUID(),reason:'Real closed period customer refund review'});
   async function rpc<T>(name:string,args:unknown[]){return(await financeAs<{v:T}>(db,i.operator,`select ${name}(${args.map((_,n)=>'$'+(n+1)).join(',')}) v`,args)).rows[0].v;}

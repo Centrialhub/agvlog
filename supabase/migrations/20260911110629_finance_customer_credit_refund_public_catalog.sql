@@ -10,7 +10,7 @@ do $pins$declare x record;p record;begin
 ('finance_private.customer_credit_source_evidence(uuid,uuid)','3184b4aa2eddc8ac7d7f831d6ffac48c',true,'s',false),
 ('finance_private.customer_refund_document(text)','3deb390554bc5d220a1d07f63f55c7bd',false,'i',false),
 ('finance_private.customer_refund_movement_origin(uuid,uuid)','636f7ec1bddbeedaf100be81ffcd54e1',true,'s',false),
-('finance_private.forecast_customer_credit_evidence(uuid,uuid)','0d52a40e865dba8396d54c1eaed99d90',true,'s',false),
+('finance_private.forecast_customer_credit_evidence(uuid,uuid)','d2c1776dfadc5267578077be619ca9bd',true,'s',false),
 ('finance_private.guard_customer_credit_application_insert()','22d45c1723d4a474dec714e19b961f9f',true,'v',false),
 ('finance_private.guard_customer_credit_refund()','2a6abf385b149446f1dde294f90c4fa0',true,'v',false),
 ('finance_private.movement_used_before_customer_refunds(uuid,uuid)','cc216802448c49d665d2b5d2e2335415',true,'s',false),

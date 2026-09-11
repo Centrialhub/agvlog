@@ -1,11 +1,14 @@
+import {prepareCustomerCreditRefundNative} from './helpers/customerCreditRefundNativeFixture';
 // @vitest-environment node
 import {readFileSync} from 'node:fs';import {randomUUID} from 'node:crypto';import {it,expect} from 'vitest';
 import {customerCreditRefundOptionsSchema,customerCreditRefundPreviewSchema,customerCreditRefundResultSchema} from '@/lib/financial/customerCreditRefundContract';
+import {cashForecastCollectorSchema} from '@/lib/financial/cashForecastCollectorContract';
 import {customerCreditPreviewSchema,customerCreditOptionsSchema} from '@/lib/financial/customerCreditContract';
-import {createCustomerCreditRefundDatabase,seedCustomerCreditRefundSource} from './helpers/customerCreditRefundDatabase';import {financeIds as i} from './helpers/financeLedgerDatabase';import {operationRpc} from './helpers/operationOutcomeDatabase';
+import {createCustomerCreditRefundPublicDatabase} from './helpers/customerCreditRefundPublicDatabase';
+import {seedCustomerCreditRefundSource} from './helpers/customerCreditRefundDatabase';import {financeIds as i} from './helpers/financeLedgerDatabase';import {operationRpc} from './helpers/operationOutcomeDatabase';
 const candidate='supabase/migrations/20260911110629_finance_customer_credit_refund_public_catalog.sql';
 interface Page{rows:Array<Record<string,unknown>>;total:number;next_offset:number|null;revision:string}
-async function setup(publish=true){const db=await createCustomerCreditRefundDatabase();await db.exec('revoke all on function public.apply_client_invoice_command(jsonb) from public,anon,service_role;grant execute on function public.apply_client_invoice_command(jsonb) to authenticated');await db.exec(readFileSync('supabase/migrations/20260911103921_finance_customer_credit_public_catalog.sql','utf8'));await db.exec(readFileSync('supabase/migrations/20260911104822_finance_customer_credit_recorded_refunds.sql','utf8'));if(publish)await db.exec(readFileSync(candidate,'utf8'));const source=await seedCustomerCreditRefundSource(db);return{db,source};}
+async function setup(publish=true){const db=await createCustomerCreditRefundPublicDatabase(publish);const source=await seedCustomerCreditRefundSource(db);return{db,source};}
 it('paginates real eligible outgoing money, records/replays refund and keeps application UI backward compatible',async()=>{
  const{db,source}=await setup();try{
   const movements:string[]=[];for(let n=0;n<32;n++){const doc=n===31?'22333444000182':n===0?'11.222.333/0001-81':'11222333000181';movements.push((await db.query<{v:{movement_id:string}}>('select record_finance_movement($1) v',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),bank_account_id:i.account,direction:'out',nature:'refund',amount_cents:20000,occurred_on:source.day,description:'Refund candidate '+n,beneficiary_name:'Crédito para previsão',beneficiary_document:doc,reason:'Actual outgoing statement refund fixture'}])).rows[0].v.movement_id);}
@@ -18,6 +21,7 @@ it('paginates real eligible outgoing money, records/replays refund and keeps app
   await expect(options({offset:30,expected_revision:first.revision})).rejects.toMatchObject({code:'40001'});const history=await options({kind:'history'});expect(history.rows).toHaveLength(1);expect(history.rows[0]).toMatchObject({outgoing_movement_id:movements[0],amount_cents:'10000'});expect(JSON.stringify(history)).not.toContain('source_snapshot');
   const appliedPreview=(await operationRpc<{v:{credit:Record<string,unknown>}}>(db,'select preview_finance_customer_credit_application($1,$2,$3,$4,null) v',[i.tenant,source.credit,source.target,'10000'])).rows[0].v;customerCreditPreviewSchema.parse(appliedPreview);expect(appliedPreview.credit).toMatchObject({returned_cents:'10000',available_cents:'50000'});expect(appliedPreview.credit).not.toHaveProperty('refund_history');
   const credits=(await operationRpc<{v:Page}>(db,'select get_finance_customer_credit_options($1,$2) v',[i.tenant,{kind:'credits'}])).rows[0].v;customerCreditOptionsSchema.parse(credits);expect(credits.rows[0]).toMatchObject({returned_cents:'10000',available_cents:'50000'});
+  const forecast=cashForecastCollectorSchema.parse((await db.query<{v:unknown}>('select finance_private.cash_forecast_collect($1,current_date-1,current_date+30) v',[i.tenant])).rows[0].v);expect(forecast.unassigned_credit_cents).toBe('50000');expect(forecast.credits.find(x=>x.credit_id===source.credit)).toMatchObject({valid:true,amount_cents:'50000'});
   expect((await db.query('select to_jsonb(b) v from bank_transactions b order by id')).rows).toEqual(bankBefore);await db.exec('set constraints all immediate');
  }finally{await db.close();}
 },30000);
@@ -35,5 +39,12 @@ it('refuses an altered void guard before any public refund API is created',async
   await db.exec('savepoint wrong_guard;drop trigger a_customer_credit_refund_void on finance_movement_voids;create trigger a_customer_credit_refund_void before insert on finance_movement_voids for each row when(false) execute function finance_private.guard_customer_credit_refund()');
   await expect(db.exec(readFileSync(candidate,'utf8'))).rejects.toMatchObject({code:'55000',message:'finance_credit_refund_public_guard_changed:a_customer_credit_refund_void'});await db.exec('rollback to wrong_guard');
   expect((await db.query<{v:unknown}>("select to_regprocedure('public.record_finance_customer_credit_refund(jsonb)') v")).rows[0].v).toBe(null);
+ }finally{await db.close();}
+},30000);
+
+it('prepares the native runner using the same published-order database without starting PostgreSQL',async()=>{
+ const{db}=await prepareCustomerCreditRefundNative();try{
+ expect((await db.query<{hash:string}>("select md5(replace(prosrc,E'\\r\\n',E'\\n')) hash from pg_proc where oid='finance_private.forecast_customer_credit_evidence(uuid,uuid)'::regprocedure")).rows[0].hash).toBe('d2c1776dfadc5267578077be619ca9bd');
+ expect((await db.query<{v:boolean}>("select to_regprocedure('public.record_finance_customer_credit_refund(jsonb)') is not null v")).rows[0].v).toBe(true);
  }finally{await db.close();}
 },30000);

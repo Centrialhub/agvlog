@@ -8,7 +8,7 @@ import {financeIds as i} from '../src/test/helpers/financeLedgerDatabase.ts';
 
 // Same TypeScript fixture; only PGlite's client transport is replaced by persistent psql.
 export async function runCreditRefundNative({query,contested,literal:q,session,finish}){
- const files=[["supabase/migrations/20260911104822_finance_customer_credit_recorded_refunds.sql", "bcbbd8ad479aa263320ada12def8f15e742c4c7c84fc169d4f99e60aa4da1d79"], ["supabase/migrations/20260911110629_finance_customer_credit_refund_public_catalog.sql", "89ae43b8ab488c1112651c719b3a62487049d51077c67e719abe59406ca37299"]];for(const[file,hash]of files)assert.equal(createHash('sha256').update(readFileSync(file)).digest('hex'),hash);
+ const files=[["supabase/migrations/20260911104822_finance_customer_credit_recorded_refunds.sql", "bcbbd8ad479aa263320ada12def8f15e742c4c7c84fc169d4f99e60aa4da1d79"], ["supabase/migrations/20260911110629_finance_customer_credit_refund_public_catalog.sql", "92d6f6c50e2ef490f47ae5dc177488840ac84d06298c9012d196dde03047a0d0"]];for(const[file,hash]of files)assert.equal(createHash('sha256').update(readFileSync(file)).digest('hex'),hash);
 
  const database='finance_credit_refund_qa';await query('create database '+database);const connection=session('open-complement-fixture',database);
  async function execute(sql){const marker='__QA_'+randomUUID().replaceAll('-','')+'__';const offset=connection.output.length;connection.send(sql+';select '+q(marker)+';');const deadline=Date.now()+45000;while(!connection.output.slice(offset).includes(marker)){assert.ok(!connection.exited,connection.error);assert.ok(Date.now()<deadline,'Fixture SQL timeout: '+sql.slice(0,180));await delay(10);}return connection.output.slice(offset,connection.output.indexOf(marker,offset));}
