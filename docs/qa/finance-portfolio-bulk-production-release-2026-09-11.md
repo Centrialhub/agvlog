@@ -1,0 +1,9 @@
+# Portfolio bulk production release — 2026-09-11
+
+Main implementation b1fee1b1. Local migration 20260911113458_finance_receivable_portfolio_bulk_evidence.sql SHA256 e948a5d8592dbfc5fb8b559b9adccefec7eb456b5c302e9657a8971f3ec84a3a applied successfully to production qcvnsdrbcchaxvawcngk as 20260911114901. Postcheck normalized function MD5 cd10de42b2e3a1567dc2de034048e7f0 matches reviewed body. SECURITY DEFINER, STABLE, empty search path and authenticated-only EXECUTE preserved; anon and service_role denied. Only summary function replaced, no financial data generated.
+
+Root differential rerun30110:9passed, exit0. Root first batch26154 had16pass/1failure due new test expecting historical payer identity to change after tax_id edit; both scalar oracle and candidate correctly retained historical evidence. Reviewer corrected that expectation, verified audit deletion rejected and invalid fiscal source causes null totals. No product guard weakened. Two core tests and six exact-cent parser/total tests passed in first batch. Actual application typecheck95759 exited0; initial bare tsc command targets empty root files and is NOT counted as application validation.
+
+Native benchmark3295 exited0, PostgreSQL17 stopped. Candidate summary p95 142.38ms for10k unpaid manual titles vs previous baseline14.89s; scalar control in same candidate database15.53s. Twenty samples, unchanged totals, server119.58ms,185sharedhits,zeroTEMP. Benchmark installed f6b528 precursor; final e948 only adds ledger predecessor pin, same function MD5. No production distribution/concurrency or authenticated hosted latency claim.
+
+Invoice exact-cent parser and KPI aggregation committed4e3b5f04 and typechecked, but NOT yet published in Sites. Live frontend remains release34. Backend summary optimization is immediately available to its existing RPC. Full authenticated hosted QA and additional planned residual writeoff feature remain outstanding; goal active.
