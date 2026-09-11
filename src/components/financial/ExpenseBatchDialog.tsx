@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import {ExpenseBatchPaste} from './ExpenseBatchPaste';
+import {appendPastedExpenses} from '@/lib/financial/expenseBatchPaste';
+import { useEffect, useRef, useState, type SetStateAction } from 'react';
 import { z } from 'zod';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -23,7 +25,11 @@ export function ExpenseBatchDialog(props:{tenant:string;actor:string;onClose:()=
 function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:string;actor:string;onClose:()=>void;onRecorded:()=>void}) {
   const key=`finance-expense-batch:${tenant}:${actor}`;
   const [restored]=useState(()=>restore(key));
-  const [saved,setSaved]=useState(restored.saved),[busy,setBusy]=useState(false),[uploadCount,setUploadCount]=useState(0);
+  const [saved,publishSaved]=useState(restored.saved),[busy,setBusy]=useState(false),[uploadCount,setUploadCount]=useState(0);
+  // Serialize draft edits before React renders: upload completions and paste must
+  // see the latest draft, and a rejected paste must throw to its initiating handler.
+  const currentSaved=useRef(restored.saved);
+  const setSaved=(update:SetStateAction<typeof saved>)=>{const next=typeof update==='function'?update(currentSaved.current):update;currentSaved.current=next;publishSaved(next);};
   const uploadBusy=uploadCount>0;const setUploadBusy=(value:boolean)=>setUploadCount(count=>Math.max(0,count+(value?1:-1)));
   const sending=useRef(false),body=useRef<HTMLDivElement>(null);
   const [detailsExpanded,setDetailsExpanded]=useState(true),[focusTarget,setFocusTarget]=useState<{id:string;field:string}|null>(null);
@@ -81,6 +87,7 @@ function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:stri
           {uploadBusy&&<p role="status">Preparando comprovante. Você pode preencher outros gastos; a origem do lote e o registro final permanecem bloqueados.</p>}
           <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded border bg-background p-3"><Button type="button" data-add-expense variant="outline" disabled={draft.lines.length>=200} onClick={()=>addLine()}>Adicionar gasto</Button><Button type="button" variant="outline" onClick={()=>setDetailsExpanded(!detailsExpanded)}>{detailsExpanded?'Recolher detalhes dos gastos':'Expandir detalhes dos gastos'}</Button><span className="text-sm">{draft.lines.length}/200 gastos · Total {formatFinanceCents(total.toString())} · Vinculado {formatFinanceCents(allocated.toString())} · Complemento {formatFinanceCents((total>allocated?total-allocated:0n).toString())}</span>{allocated>total&&<span className="text-destructive">Excesso vinculado: {formatFinanceCents((allocated-total).toString())}</span>}</div>
           <p className="text-sm text-muted-foreground">Ctrl+Enter em um gasto adiciona o próximo. Reutilizar dados mantém categoria, descrição, data e favorecido; valor, comprovante, documento, entrega e vínculos devem ser conferidos novamente.</p>
+          <ExpenseBatchPaste context={draft.context} existingCount={draft.lines.length} disabled={locked||storageFailed} onAppend={(rows,context)=>{if(locked||storageFailed||context!==draft.context)throw Error('A origem do lote mudou. Confira a colagem novamente.');setSaved(old=>{if(old.request||old.draft.context!==context)throw Error('O lote mudou. Confira a colagem novamente.');return {...old,draft:appendPastedExpenses(old.draft,rows)};});setReview(false);}}/>
           {draft.lines.map((line,index)=><ExpenseBatchLine key={line.id} tenant={tenant} actor={actor} batchRequest={saved.batchRequest!} context={draft.context} trip={draft.context==='trip'?draft.trip?.id||null:null} line={line} index={index}
             onChange={next=>{setSaved(old=>({...old,draft:normalize({...old.draft,lines:old.draft.lines.map(current=>current.id===next.id?next:current)})}));setReview(false);}}
             onRemove={()=>removeLine(line.id)} onUploadBusy={setUploadBusy} detailsExpanded={detailsExpanded} revealDetails={focusTarget?.id===line.id} onRepeat={draft.lines.length<200?()=>addLine(line.id,true):undefined} onAddAfter={()=>addLine(line.id)}/>)}

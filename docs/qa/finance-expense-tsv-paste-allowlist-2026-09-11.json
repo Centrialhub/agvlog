@@ -1,0 +1,22 @@
+[
+  {
+    "path": "src/lib/financial/expenseBatchPaste.ts",
+    "sha256": "e1537ddaf76a7f94796f660ba3250f15ed49fab8df6754d91cb2499801eb157e"
+  },
+  {
+    "path": "src/components/financial/ExpenseBatchPaste.tsx",
+    "sha256": "a8f2481472423d45b956fa0481a8aa89cfcd67fdc05948fa1612913a98d700a7"
+  },
+  {
+    "path": "src/components/financial/ExpenseBatchDialog.tsx",
+    "sha256": "7169d155bfcc7ab4d297d37595730a6748dc793019c1ed7e53c48e26709884c8"
+  },
+  {
+    "path": "src/test/expenseBatchPaste.test.ts",
+    "sha256": "182cd01fbef82fad1d7188110523399e27c118d494410fde57332d4ce8d8ae42"
+  },
+  {
+    "path": "src/test/expenseBatchPasteDialog.test.tsx",
+    "sha256": "b405e03c9b79abc499f11bbfb17a72821c5e18cbba61caa8b86fbfc3799f3664"
+  }
+]
