@@ -58,3 +58,18 @@ Se a tela preservar um pedido sem confirmação, use a recuperação apresentada
 ## Origem fiscal
 
 A fila de recebíveis fiscais expõe pendências e inconsistências. Autorização, cancelamento e rejeição precisam ser tratados pela origem fiscal; um diagnóstico de XML não autoriza cobrança por si só. O preview de evidência não emite documento fiscal nem promove automaticamente uma evidência não verificada a conta a receber.
+
+
+## Custo já coberto por envio ou pagamento
+
+No detalhe de uma descarga, administradores podem abrir a regularização de custo já coberto. Confira as fontes, os responsáveis e quanto de cada envio ou pagamento corresponde ao custo correto. A confirmação registra autor e motivo e preserva os lançamentos originais.
+
+Exemplo: saíram R$ 150, mas o custo correto é R$ 120. O sistema conserva a saída de R$ 150 e mostra R$ 30 sob responsabilidade do motorista ou a recuperar do prestador, conforme a origem. Essa pendência aparece no painel financeiro. Ela não significa que o dinheiro já voltou, e não libera o movimento original para outra baixa.
+
+O complemento registrado representa a obrigação histórica; consulte também a cobertura econômica e a pendência. Uma conta histórica de R$ 150 paga continua paga em R$ 150, mesmo quando o custo é retificado e há um valor a recuperar separado.
+
+Complementos ainda abertos, acertos ou folha já materializados e períodos fechados podem exigir um plano adicional antes da correção. A tela informa os vínculos que impedem a operação. A resolução da pendência por devolução ou compensação ainda está em desenvolvimento e não deve ser presumida.
+
+## Conferência de folhas extensas
+
+Em Folha de pagamento, use a busca por nome, identificação, departamento ou filial e o filtro de situação de pagamento. A lista mostra até 50 funcionários por página. Os totais e as ações de aprovação e fechamento sempre abrangem a folha inteira. Clique no nome do funcionário para abrir seu detalhe.
