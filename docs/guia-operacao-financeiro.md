@@ -108,3 +108,8 @@ Para desfazer um ajuste, selecione sua reversão no histórico. É possível rev
 Uma alteração de saldo pode exigir revisão da data esperada na Previsão de caixa. Um título integralmente encerrado não tem entrada futura a agendar. Se a reversão reabrir saldo, confira a data novamente. As previsões já preservadas mantêm os valores e o histórico da captura original.
 
 Se a resposta da confirmação não chegar, recupere o pedido pendente exibido na tela antes de iniciar outro. A recuperação conserva a identidade e os valores do pedido original. Cancelamento fiscal continua sendo tratado a partir da evidência fiscal recebida; desconto e perda não geram crédito fictício a devolver.
+## Colar gastos de uma planilha
+
+Na grade de gastos, use **Colar linhas de planilha**. Copie as células nas colunas Categoria, Descrição, Valor e Data. Fornecedor, Documento e Vencimento são opcionais, nessa ordem; o cabeçalho também é opcional. Exemplo de valor: 1.234,56; datas aceitam 11/09/2026 ou 2026-09-11.
+
+Clique em **Conferir colagem**, corrija as linhas com erro e escolha **Adicionar linhas ao rascunho**. Essa ação preserva os gastos existentes e não envia o lote. O limite total é de 200 gastos. Depois confira favorecidos, comprovantes, descargas e vínculos com os envios, seguindo a revisão normal do lote. Fórmulas não são executadas.
