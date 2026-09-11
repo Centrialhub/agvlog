@@ -1,0 +1,58 @@
+[
+  {
+    "path": "src/lib/financial/payableApprovalContract.ts",
+    "sha256": "7a4314b24596542cff17775ae58c67fe49a39ef7c7c04a8fc45be4e65f897f5e"
+  },
+  {
+    "path": "src/lib/financial/payableApprovalClient.ts",
+    "sha256": "2363b74746309052ac6733a76873a7db99ff961ce845bb3f719cdc4becc1d6e0"
+  },
+  {
+    "path": "src/lib/financial/payableApprovalOutbox.ts",
+    "sha256": "03c5f28eb2847674354ed85b6b47b17a8c866f0601dfa5f4a91c88da3073b436"
+  },
+  {
+    "path": "src/components/financial/PayableApprovalConfirmation.tsx",
+    "sha256": "6a4bb72e927016749aa644cb116dc6fd289782f0da212117e363095df4aa93af"
+  },
+  {
+    "path": "src/components/financial/PayableApprovalDialog.tsx",
+    "sha256": "213e7c1c4b45c970fc1d8ad7487eba271568d961a7ce952b9f9893b175abfe6a"
+  },
+  {
+    "path": "src/hooks/usePayables.tsx",
+    "sha256": "0e48f92ed77c38afd62499d04c08c1884686093401c6c68811c5888878e3ceb8"
+  },
+  {
+    "path": "src/pages/Payables.tsx",
+    "sha256": "be879208d8fc100adbf6c48464063296138fd7f2ad95f3b3977b204f589f53e6"
+  },
+  {
+    "path": "src/lib/financial/invalidateAccountReview.ts",
+    "sha256": "67d19599dbc3d581e8b9f3df09335f8455bf876fbaba5b3d70a9c570902ec12f"
+  },
+  {
+    "path": "src/test/payableApprovalClient.test.ts",
+    "sha256": "94ae2e83e33327015b438e93a82e83f4375aa887ac3fbc08808645e57e09db7a"
+  },
+  {
+    "path": "src/test/payableApprovalOutbox.test.ts",
+    "sha256": "eef9c7d9527b09370da66acd8de7e631b05c5c6a4272259b9428b8fbae686760"
+  },
+  {
+    "path": "src/test/payableApprovalPanel.test.tsx",
+    "sha256": "2cb98a265e768d91447132e29d7fa2c8120cd7c3569078b4f703f6b0a952549e"
+  },
+  {
+    "path": "src/test/payableApprovalUpdateGuard.test.tsx",
+    "sha256": "215dca5a7adb8bd6955d5bd97ac8170746de152cf3eb2f07e1e83d7998585cb5"
+  },
+  {
+    "path": "src/test/payablesServerManagement.test.tsx",
+    "sha256": "f8b4cb9c68e0c91485f697f32d78e91a04ec457b14369064f0a2ba05ddb2477a"
+  },
+  {
+    "path": "src/test/helpers/payableApprovalFixture.ts",
+    "sha256": "b0bbf74dbb816966a8bb0f978a545f05689d79a584e56c75ead0ff2504866e88"
+  }
+]

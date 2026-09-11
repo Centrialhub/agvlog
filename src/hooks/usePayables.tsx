@@ -76,19 +76,17 @@ export function useCreatePayable() {
 }
 
 export function useUpdatePayable() {
-  const { user } = useAuth();
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: UpdatePayableInput) => {
       const patch: TablesUpdate<'payables'> = { ...values, updated_at: new Date().toISOString() };
-      if (values.status === 'approved' && !values.approved_at) {
-        patch.approved_at = new Date().toISOString();
-        patch.approved_by = user?.id;
-      }
+      if (!currentTenant) throw new Error('Selecione a empresa antes de atualizar.');
+      if (values.status === 'approved' || values.approved_at !== undefined || values.approved_by !== undefined) throw new Error('A aprovação exige conferência de valor e revisão.');
       if (values.status === 'paid' && !values.paid_at) {
         patch.paid_at = new Date().toISOString();
       }
-      const { data, error } = await supabase.from('payables').update(patch).eq('id', id).select().single();
+      const { data, error } = await supabase.from('payables').update(patch).eq('tenant_id', currentTenant.id).eq('id', id).select().single();
       if (error) throw error;
       return data;
     },

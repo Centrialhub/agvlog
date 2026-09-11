@@ -1,0 +1,87 @@
+{
+  "functions": [
+    {
+      "signature": "approve_finance_payable(jsonb)",
+      "prosrc_md5": "fb22a06d888b514ac17a5397962ad811",
+      "prosecdef": false,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "signature": "finance_private.approve_payable_revision(jsonb)",
+      "prosrc_md5": "178c5d334368ee2fcd4d9c7ff9910504",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.dispatch_payable_revision_approval(jsonb)",
+      "prosrc_md5": "97836de12fc800d7f10e467ee2b9e263",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "signature": "finance_private.guard_payable_revision_approval()",
+      "prosrc_md5": "b221a4388773b4f9de274025249825e7",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.payable_approval_context(uuid,uuid)",
+      "prosrc_md5": "d4afbd3294fc9c0edb4808a793ee9867",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.preview_payable_revision_approval(uuid,uuid)",
+      "prosrc_md5": "1ba14c2bfffe00c1c1b9738375986f54",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "signature": "preview_finance_payable_approval(uuid,uuid)",
+      "prosrc_md5": "1ebaa64d384cadceecd4516815b33397",
+      "prosecdef": false,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres,authenticated=X/postgres}"
+    }
+  ],
+  "triggers": [
+    {
+      "tgname": "a_payable_revision_approval",
+      "relation": "payables",
+      "function": "finance_private.guard_payable_revision_approval()",
+      "tgtype": 19,
+      "tgenabled": "O",
+      "tgdeferrable": false,
+      "tginitdeferred": false,
+      "tgnargs": 0,
+      "qual": null
+    }
+  ]
+}

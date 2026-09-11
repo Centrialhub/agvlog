@@ -1,3 +1,4 @@
+import {PayableApprovalDialog} from '@/components/financial/PayableApprovalDialog';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -52,6 +53,8 @@ function PayablesWorkspace() {
   const [pendingReceipt, setPendingReceipt] = useState<File | null>(null);
   const [paymentPayable, setPaymentPayable] = useState<Payable | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
+  const [approvalId,setApprovalId]=useState<string|null>(null);
+  const [originalStatus,setOriginalStatus]=useState<string|null>(null);
 
   const resetForm = () => {
     setForm({ ...emptyForm });
@@ -62,6 +65,7 @@ function PayablesWorkspace() {
 
   const openEdit = (p: Payable) => {
     setEditingId(p.id);
+    setOriginalStatus(p.status);
     setForm({
       supplier_name: p.supplier_name || '',
       category: p.category || 'supplier',
@@ -136,7 +140,8 @@ function PayablesWorkspace() {
         receipt_url: receiptPath,
       };
       if (editingId) {
-        await updateMut.mutateAsync({ id: editingId, ...values });
+        const {status,...fields}=values;
+        await updateMut.mutateAsync({ id: editingId, ...fields, ...(status!==originalStatus?{status}:{}) });
         toast.success('Conta atualizada');
       } else {
         await createMut.mutateAsync(values);
@@ -234,7 +239,7 @@ function PayablesWorkspace() {
                 <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {PAYABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{PAYABLE_STATUS_LABELS[s]}</SelectItem>)}
+                    {PAYABLE_STATUSES.filter(s=>s!=='approved'||originalStatus==='approved'&&!!editingId).map(s => <SelectItem key={s} value={s} disabled={s==='approved'}>{PAYABLE_STATUS_LABELS[s]}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -245,6 +250,7 @@ function PayablesWorkspace() {
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={resetForm}>Cancelar</Button>
+              {editingId&&<Button variant="outline" onClick={()=>{setApprovalId(editingId);resetForm();}}>Conferir aprovação</Button>}
               <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending}>
                 {editingId ? 'Salvar' : 'Criar'}
               </Button>
@@ -252,6 +258,7 @@ function PayablesWorkspace() {
           </div>
         </DialogContent>
       </Dialog>
+      {approvalId&&currentTenant&&user&&<PayableApprovalDialog tenant={currentTenant.id} actor={user.id} payableId={approvalId} open onOpenChange={open=>{if(!open)setApprovalId(null);}}/>}
       <PayablePaymentDialog
         payable={paymentPayable}
         open={!!paymentPayable}

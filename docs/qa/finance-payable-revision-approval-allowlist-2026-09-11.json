@@ -1,0 +1,13 @@
+{
+  "purpose": "Candidate approval fix and native evidence only; no remote application or commit",
+  "files": {
+    "supabase/migrations/20260911085400_finance_payable_revision_approval.sql": "e73cccc830084d57d72f707c722c909125f93f58be2ae91c2153a55296ea7aba",
+    "src/test/payableRevisionApproval.test.ts": "1e08b457da6a2f6e44554a3572616db4d5d45dfc518361dba0f9006295ac3631",
+    "scripts/test-finance-open-complement-native.mjs": "58eddb37cc758d181fc0a3b420e7607e3570c5286e1be8c98fc87338cd76e34c",
+    "scripts/test-finance-open-complement-native-cases.mjs": "f8a00f79a34da2bc8ed0e76998d0c0889f6b7f65df66067164e991111d28d523",
+    "src/test/helpers/openComplementNativeFixture.ts": "4d1f45a523ffbc8ce42a006336a8e78914ea47f1c9cfd1a0e212e754b095e6c8",
+    "docs/qa/finance-payable-approval-core-catalog-2026-09-11.json": "ee65f659991ce6692a95de113d490499e1326e910a13e8c08c8eeb6f4129e329",
+    "docs/qa/finance-payable-revision-approval-2026-09-11.md": "b27c437ca76cd685331f6d5bcfbd126f7d5acdd3b1977dab52bd5e3ddc97d1ac",
+    "docs/qa/finance-payable-revision-approval-native-2026-09-11.json": "36961b9efbe4aff298982b442bc56b817643aab2e81c227e11ad952e2ecbd42a"
+  }
+}

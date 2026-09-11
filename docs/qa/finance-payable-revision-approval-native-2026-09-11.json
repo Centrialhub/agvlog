@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-09-11T09:07:29.671569+00:00",
+  "runtime": "PostgreSQL17.11 disposable loopback",
+  "execution_session": 55886,
+  "exit_code": 0,
+  "passed_cases": 8,
+  "functional_findings": 0,
+  "postgres_stopped": true,
+  "migration_hashes": {
+    "supabase\\migrations\\20260911081653_finance_unloading_open_complement_corrections.sql": "98f6a882b590b0680c836e495a28cdd60521cbad5f7a470dea47b9544475310b",
+    "supabase\\migrations\\20260911085400_finance_payable_revision_approval.sql": "e73cccc830084d57d72f707c722c909125f93f58be2ae91c2153a55296ea7aba",
+    "supabase\\migrations\\20260911083307_finance_unloading_open_complement_public_boundary.sql": "901a6f1e06a03e738bb77395c90b1b7e7f16776b60fe664fd3a111e23c63848c"
+  },
+  "proofs": [
+    "payment first rejects stale correction40001",
+    "correction first rejects payment50; revised approval and payment20 work",
+    "approval first rejects stale correction40001",
+    "raw approval waiting on correction denied;20 remains pending",
+    "approval API displayed50 waits then40001; new displayed20 approval succeeds",
+    "materialization first protects150 and rejects correctionNOWAIT",
+    "correction first rejects builderNOWAIT; retry snapshots120",
+    "row-first payable rejects correction40001 without partial mutation"
+  ]
+}

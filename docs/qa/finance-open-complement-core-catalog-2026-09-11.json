@@ -1,0 +1,62 @@
+[
+  {
+    "signature": "finance_private.check_open_complement_chain()",
+    "prosrc_md5": "179ff0060662c0abfbc745c5d53e2666",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.correct_unloading_open_complement(jsonb)",
+    "prosrc_md5": "d4444827f2e0140018a248c26a6df0c9",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.expense_cost_effective(uuid,uuid)",
+    "prosrc_md5": "03dc3252d3f8dfaefcf1c0dc789d1e73",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.guard_open_complement_source()",
+    "prosrc_md5": "712031e564fac4d33c4f56f591ad2cdd",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.open_complement_source(uuid,uuid)",
+    "prosrc_md5": "199f6f21d17aca428da688f27326882d",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.unloading_open_complement_context(uuid,uuid,text)",
+    "prosrc_md5": "e2a3c0217730b6e354aba59be90418fb",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  }
+]

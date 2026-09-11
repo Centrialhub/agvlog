@@ -1,17 +1,20 @@
 import {render,screen,fireEvent,waitFor} from '@testing-library/react';
 import {beforeEach,it,expect,vi} from 'vitest';
 import Payables from '@/pages/Payables';
-const mock=vi.hoisted(()=>({tenant:'11111111-1111-4111-8111-111111111111',id:'22222222-2222-4222-8222-222222222222',single:vi.fn(),eq:vi.fn(),select:vi.fn(),from:vi.fn()}));
+const mock=vi.hoisted(()=>({tenant:'11111111-1111-4111-8111-111111111111',id:'22222222-2222-4222-8222-222222222222',single:vi.fn(),eq:vi.fn(),select:vi.fn(),from:vi.fn(),mutate:vi.fn()}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{from:mock.from}}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'33333333-3333-4333-8333-333333333333'}})}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:mock.tenant}})}));
 vi.mock('@/hooks/useSonnerToast',()=>({useSonnerToast:()=>({error:vi.fn(),success:vi.fn()})}));
-vi.mock('@/hooks/usePayables',async()=>{const real=await vi.importActual<typeof import('@/hooks/usePayables')>('@/hooks/usePayables');return {...real,usePayables:()=>{throw new Error('unbounded list is forbidden');},useCreatePayable:()=>({isPending:false}),useUpdatePayable:()=>({isPending:false})};});
+vi.mock('@/hooks/usePayables',async()=>{const real=await vi.importActual<typeof import('@/hooks/usePayables')>('@/hooks/usePayables');return {...real,usePayables:()=>{throw new Error('unbounded list is forbidden');},useCreatePayable:()=>({isPending:false}),useUpdatePayable:()=>({isPending:false,mutateAsync:mock.mutate})};});
 vi.mock('@/components/financial/FinanceAccessBoundary',()=>({FinanceAccessBoundary:({children}:{children:React.ReactNode})=>children}));
-vi.mock('@/components/financial/PayablePortfolioPanel',()=>({PayablePortfolioPanel:({onOpen}:{onOpen:(id:string,action:string)=>void})=><button onClick={()=>onOpen(mock.id,'payments')}>Abrir baixa da página</button>}));
+vi.mock('@/components/financial/PayablePortfolioPanel',()=>({PayablePortfolioPanel:({onOpen}:{onOpen:(id:string,action:string)=>void})=><><button onClick={()=>onOpen(mock.id,'payments')}>Abrir baixa da página</button><button onClick={()=>onOpen(mock.id,'edit')}>Editar conta</button></>}));
 vi.mock('@/components/financial/PayablePaymentDialog',()=>({default:({payable}:{payable:{id:string}|null})=>payable?<p>Pagamento {payable.id}</p>:null}));
 vi.mock('@/components/financial/ManualExpenseDialog',()=>({default:()=>null}));
 vi.mock('@/components/financial/FiscalXmlUpload',()=>({default:()=>null}));
+vi.mock('@/components/financial/PayableApprovalDialog',()=>({PayableApprovalDialog:({payableId}:{payableId:string})=><p>Prévia de aprovação {payableId}</p>}));
 beforeEach(()=>{vi.clearAllMocks();mock.from.mockReturnValue({select:mock.select});mock.select.mockReturnValue({eq:mock.eq});mock.eq.mockReturnValue({eq:mock.eq,single:mock.single});mock.single.mockResolvedValue({data:{id:mock.id,tenant_id:mock.tenant},error:null});});
 it('opens only the selected tenant-scoped title, without fetching an unbounded list',async()=>{render(<Payables/>);expect(mock.from).not.toHaveBeenCalled();fireEvent.click(screen.getByText('Abrir baixa da página'));await screen.findByText(`Pagamento ${mock.id}`);expect(mock.from).toHaveBeenCalledWith('payables');expect(mock.eq).toHaveBeenNthCalledWith(1,'tenant_id',mock.tenant);expect(mock.eq).toHaveBeenNthCalledWith(2,'id',mock.id);expect(mock.single).toHaveBeenCalledOnce();});
 it('rejects a detail from another tenant instead of opening its payment dialog',async()=>{mock.single.mockResolvedValue({data:{id:mock.id,tenant_id:crypto.randomUUID()},error:null});render(<Payables/>);fireEvent.click(screen.getByText('Abrir baixa da página'));await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Conta fora da empresa solicitada'));expect(screen.queryByText(`Pagamento ${mock.id}`)).not.toBeInTheDocument();});
+
+it('opens revision approval separately and saving an approved title does not resend approved status',async()=>{mock.single.mockResolvedValue({data:{id:mock.id,tenant_id:mock.tenant,supplier_name:'Fornecedor',amount:20,status:'approved'},error:null});render(<Payables/>);fireEvent.click(screen.getByText('Editar conta'));await screen.findByText('Conferir aprovação');fireEvent.click(screen.getByText('Salvar'));await waitFor(()=>expect(mock.mutate).toHaveBeenCalled());expect(mock.mutate.mock.calls[0][0]).not.toHaveProperty('status');fireEvent.click(screen.getByText('Editar conta'));await screen.findByText('Conferir aprovação');fireEvent.click(screen.getByText('Conferir aprovação'));await screen.findByText(`Prévia de aprovação ${mock.id}`);expect(mock.mutate).toHaveBeenCalledOnce();});

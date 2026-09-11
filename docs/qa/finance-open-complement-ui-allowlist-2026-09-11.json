@@ -1,0 +1,68 @@
+{
+  "files": [
+    {
+      "path": "src/lib/financial/expenseOpenComplementContract.ts",
+      "sha256": "4bec51915941c1904fb39420361d361d6dbdaa1791817858ef3de4f61780f548"
+    },
+    {
+      "path": "src/lib/financial/unloadingOpenComplementContract.ts",
+      "sha256": "5b6f6f3f8787bdeaee322a6187214b889d64d55cf2fb029bdacf954607a3e585"
+    },
+    {
+      "path": "src/lib/financial/unloadingOpenComplementClient.ts",
+      "sha256": "6b8e2961da22ff9b3e839c30d7502306c937f316cf1abd5056e61680c7e25cb3"
+    },
+    {
+      "path": "src/lib/financial/unloadingOpenComplementOutbox.ts",
+      "sha256": "696db0d2f11bd4f80fb9d8ab8e631df59f103209c7b730cfaac96eeeddf8499a"
+    },
+    {
+      "path": "src/lib/financial/unloadingOpenComplementLabels.ts",
+      "sha256": "f9ac1688e18664208d9227790a53b5f8d16e7e02444e76024dae43e99e3e0e23"
+    },
+    {
+      "path": "src/lib/financial/unloadingCostCorrectionContract.ts",
+      "sha256": "a8731a884e1549976f19d013f6db121bb7782305c5329ce590349bff779d9fb1"
+    },
+    {
+      "path": "src/components/financial/UnloadingOpenComplementDialog.tsx",
+      "sha256": "793c0ddce97f69515e2170475c5fd6051eba68cbae22c6cddace328ecf2174c3"
+    },
+    {
+      "path": "src/components/financial/UnloadingOpenComplementConfirmation.tsx",
+      "sha256": "4b5530e0d6f1cb32de176ac6dbbfa7fa44970b2301c862bb8c076f3647a91fe2"
+    },
+    {
+      "path": "src/components/financial/ExpenseOpenComplementHistory.tsx",
+      "sha256": "f826dcefb6a656377f4521ab73c50fb5ebb6c47e27046b141d2866195606894c"
+    },
+    {
+      "path": "src/components/financial/ExpenseHistoryDetail.tsx",
+      "sha256": "e314179b2d84317d2aee760262930ab5d8c9daba3cef94be82ab27607aec1a44"
+    },
+    {
+      "path": "src/components/financial/ExpenseCostHistory.tsx",
+      "sha256": "f564b47790995aadb634b7ab601eaee8cb12e480f63c8b97649d1d10f481dd05"
+    },
+    {
+      "path": "src/test/unloadingOpenComplementContract.test.ts",
+      "sha256": "f395dfd2ae040e873294942cc6bcbe91408a665889e22463e94aedcd96eb6b43"
+    },
+    {
+      "path": "src/test/unloadingOpenComplementClient.test.ts",
+      "sha256": "41c810217f35e473df939129fb7980c5a370b4428d3b52a15f54ec091f6c97ab"
+    },
+    {
+      "path": "src/test/unloadingOpenComplementOutbox.test.ts",
+      "sha256": "e373c23daee8f312c9b0d38803954579b79f0bd7b1a281f463b2a5dd925ec414"
+    },
+    {
+      "path": "src/test/unloadingOpenComplementPanel.test.tsx",
+      "sha256": "547201c4d0ca1584dc444175132078c8207e4f9ee4994522c43b2edf826ac1a4"
+    },
+    {
+      "path": "src/test/helpers/unloadingOpenComplementFixture.ts",
+      "sha256": "2500fe3db9da9a50988ba6f124a048e67360dc3af2de2b52d788d141848d013c"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+[
+  {
+    "signature": "finance_private.expense_cost_coverage(uuid,uuid)",
+    "prosrc_md5": "8c9ee6819131d28a86b015d234dfe4ef",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.expense_cost_effective(uuid,uuid)",
+    "prosrc_md5": "de49565ea3e3325d16c4141e007a5311",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.guard_effective_unloading_cost()",
+    "prosrc_md5": "fd0ba9ed44140afda72e537254a2ec8a",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.movement_used_cents(uuid,uuid)",
+    "prosrc_md5": "cc216802448c49d665d2b5d2e2335415",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": null
+  },
+  {
+    "signature": "finance_private.unloading_cost_cancellation_context(uuid,uuid)",
+    "prosrc_md5": "b13dc12e8c106cfc97a8fad79dc6e366",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  }
+]

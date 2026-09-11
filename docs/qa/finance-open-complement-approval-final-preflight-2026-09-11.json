@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "path": "supabase/migrations/20260911090910_finance_open_complement_approval_final_preflight.sql",
+      "sha256": "5aa5869d811a1474516aeb6804395491a7ac04c7512798acc2ba3649300bb447"
+    },
+    {
+      "path": "src/test/openComplementApprovalFinalPreflight.test.ts",
+      "sha256": "443c6a60e1f5c6991312c21a2b67bdff6b6191697fea296719945edf146d182a"
+    },
+    {
+      "path": "docs/qa/finance-open-complement-approval-final-preflight-2026-09-11.md",
+      "sha256": "722fb813c165e86125d4931757514707186c5bc7eec7877c7dce4f06866ce4b5"
+    }
+  ],
+  "tests": 5,
+  "exit_code": 0,
+  "remote_mutations": false,
+  "processes_active": false
+}
