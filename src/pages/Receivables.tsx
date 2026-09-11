@@ -1,3 +1,4 @@
+import {UnloadingCancellationDialog} from '@/components/financial/UnloadingCancellationDialog';
 import {UnloadingOriginCorrectionDialog} from '@/components/financial/UnloadingOriginCorrectionDialog';
 import {UnloadingProjectionRepairDialog} from '@/components/financial/UnloadingProjectionRepairDialog';
 import {financialError} from '@/lib/financial/receivableCommands';
@@ -41,6 +42,7 @@ function ReceivablesScreen() {
   const [historyOpen,setHistoryOpen]=useState(false);
   const [repairCharge,setRepairCharge]=useState<string|null>(null);
   const [correctionCharge,setCorrectionCharge]=useState<string|null>(null);
+  const [cancellationCharge,setCancellationCharge]=useState<string|null>(null);
   const {currentRole}=useTenant();
   const {currentTenant}=useTenant();const {user}=useAuth();
   const { data: clients = [] } = useClients();
@@ -255,7 +257,7 @@ function ReceivablesScreen() {
               <FiscalXmlUpload perspective="receiver" onExtracted={(d) => applyXmlToForm(d)} />
             </div>:null}
             {originPending&&<p role="alert">{originQuery.error?"Não foi possível verificar a origem. O salvamento permanece bloqueado.":"Verificando a origem do título…"}{originQuery.error&&<Button variant="link" onClick={()=>void originQuery.refetch()}>Verificar origem novamente</Button>}</p>}
-            {unloadingOrigin&&<div className="rounded border p-3"><p>Recebível de descarga · origem {unloadingOrigin.id} · entrega {unloadingOrigin.delivery_stop_id}</p><p>Fornecedor devedor: {typeof unloadingOrigin.source_snapshot.supplier_name==="string"?unloadingOrigin.source_snapshot.supplier_name:"Nome preservado não informado"} · {unloadingOrigin.supplier_id}</p><p>Valor da descarga: {formatFinanceCents(unloadingOrigin.amount_cents)}</p><p>Fornecedor, valor e status são protegidos pela origem. Apenas descrição, vencimento, referência e observações podem ser editados aqui.</p><Button variant="outline" onClick={()=>setRepairCharge(unloadingOrigin.id)}>Conferir reparação do título</Button>{['owner','admin'].includes(currentRole||'')&&<Button variant="outline" onClick={()=>setCorrectionCharge(unloadingOrigin.id)}>Corrigir cobrança da descarga</Button>}</div>}
+            {unloadingOrigin&&<div className="rounded border p-3"><p>Recebível de descarga · origem {unloadingOrigin.id} · entrega {unloadingOrigin.delivery_stop_id}</p><p>Fornecedor devedor original: {typeof unloadingOrigin.source_snapshot.supplier_name==="string"?unloadingOrigin.source_snapshot.supplier_name:"Nome preservado não informado"} · {unloadingOrigin.supplier_id}</p><p>Valor original da descarga: {formatFinanceCents(unloadingOrigin.amount_cents)}</p><p>Estes dados preservam a origem e podem diferir da cobrança vigente após uma alteração auditada. Consulte a conferência da cobrança para verificar a versão vigente.</p><p>Fornecedor, valor e status são protegidos pela origem. Apenas descrição, vencimento, referência e observações podem ser editados aqui.</p><Button variant="outline" onClick={()=>setRepairCharge(unloadingOrigin.id)}>Conferir reparação do título</Button>{['owner','admin'].includes(currentRole||'')&&<Button variant="outline" onClick={()=>setCorrectionCharge(unloadingOrigin.id)}>Corrigir cobrança da descarga</Button>}{['owner','admin'].includes(currentRole||'')&&<Button variant="outline" onClick={()=>setCancellationCharge(unloadingOrigin.id)}>Conferir cancelamento da descarga</Button>}</div>}
             <div><Label>Descrição</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -285,6 +287,7 @@ function ReceivablesScreen() {
       </Dialog>
       {repairCharge&&currentTenant&&user&&<UnloadingProjectionRepairDialog key={`${currentTenant.id}:${user.id}:${repairCharge}`} tenant={currentTenant.id} actor={user.id} chargeId={repairCharge} onClose={()=>setRepairCharge(null)}/>}
       {correctionCharge&&currentTenant&&user&&<UnloadingOriginCorrectionDialog key={`${currentTenant.id}:${user.id}:${correctionCharge}`} tenant={currentTenant.id} actor={user.id} chargeId={correctionCharge} open onOpenChange={open=>{if(!open)setCorrectionCharge(null);}}/>}
+      {cancellationCharge&&currentTenant&&user&&<UnloadingCancellationDialog key={`${currentTenant.id}:${user.id}:${cancellationCharge}`} tenant={currentTenant.id} actor={user.id} chargeId={cancellationCharge} open onOpenChange={open=>{if(!open)setCancellationCharge(null);}}/>}
       <ReceivablePaymentDialog
         receivable={paymentReceivable}
         open={!!paymentReceivable}

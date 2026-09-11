@@ -1,0 +1,8 @@
+import {z} from 'zod';
+import {supabase} from '@/integrations/supabase/client';
+import {unloadingCancellationPreviewSchema,unloadingCancellationCommandSchema,type UnloadingCancellationCommand} from './unloadingCancellationContract';
+export class UnloadingCancellationUnavailableError extends Error{constructor(){super('O cancelamento coordenado ainda não está disponível neste ambiente. Nenhuma alteração foi enviada.');}}
+type Response={data:unknown;error:unknown};type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<Response>;
+const request=z.object({tenantId:z.string().uuid(),actorId:z.string().uuid(),chargeId:z.string().uuid(),effectiveOn:z.string().regex(/^\d{4}-\d{2}-\d{2}$/)});
+export async function readUnloadingCancellationPreview(input:z.infer<typeof request>){const scope=request.parse(input);const {data,error}=await(supabase.rpc as unknown as Rpc)('preview_finance_unloading_cancellation',{_tenant_id:scope.tenantId,_charge_id:scope.chargeId,_effective_on:scope.effectiveOn});if(error){const code=typeof error==='object'&&error!==null&&'code' in error?String(error.code):'';if(['PGRST202','42883'].includes(code))throw new UnloadingCancellationUnavailableError();throw error;}const result=unloadingCancellationPreviewSchema.parse(data);if(result.tenant_id!==scope.tenantId||result.actor_id!==scope.actorId||result.charge_id!==scope.chargeId||result.effective_on!==scope.effectiveOn)throw new Error('Consulta fora da empresa, sessão, descarga ou data solicitadas.');return result;}
+export async function sendUnloadingCancellation(command:UnloadingCancellationCommand):Promise<Response>{unloadingCancellationCommandSchema.parse(command);return await(supabase.rpc as unknown as Rpc)('cancel_finance_unloading',{_payload:command});}
