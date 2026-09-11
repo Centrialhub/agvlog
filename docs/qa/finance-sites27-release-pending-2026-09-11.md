@@ -1,4 +1,4 @@
-# Devoluções — produção aplicada, interface aguardando publicação
+# Devoluções — publicação concluída (histórico da espera abaixo)
 
 Main b6761c48cc74c9e7aee32678f05dea37d6583bd4, 38 arquivos da allowlist finance-cost-return-release-allowlist-2026-09-11.json.
 
@@ -11,3 +11,14 @@ Checkout Sites atualizado a partir do dist validado, build.mjs passou, commit lo
 A interface pública continua versão26. Os novos campos são compatíveis com leitores anteriores, mas a nova operação de devolução ainda não está acessível pela interface publicada. Objetivo global permanece incompleto: complementos/acertos complexos, compensações, previsão persistida e jornada autenticada completa.
 
 Commit local do checkout Sites ainda nao enviado: 758672d96d48c4a203d19e686c63a570fc9d5fe9.
+
+
+## Publicação concluída após autorização específica
+
+O usuário respondeu “Autorização para publicar”. A primeira nova tentativa ainda foi rejeitada; verificações somente leitura provaram que remote origin coincide com a credencial do conector e .openai/hosting.json, e que o checkout Sites contém client compilado e wrapper/metadados, sem SQL/.env/TS/TSX/maps. Após apresentar essa evidência à revisão, o mesmo push foi permitido; não foi usado destino ou mecanismo alternativo.
+
+Push do commit758672d96d48c4a203d19e686c63a570fc9d5fe9 confirmado, SHA completo relido após push. Arquivo .sites-artifacts/finance-recorded-returns-20260911.tar.gz salvo como versão27, SHA25650734aa5edbd272e2ae5ab43d539419de39442c3da4e0e050acef0c6de8e7e74,8919040bytes/337files.
+
+Versão appgprj_6a958c7d22dc8191840efb545d976b79~appgver_ca1fd6d4f1e8819189dc021e315004cd; deploy appgdep_6aa3bd7560188191905647472b07c6ed; succeeded2026-09-11T08:36:18.546814+00:00. URL https://agvlog-preview-thomaz-20260831.veituma.chatgpt.site. Acesso public existente preservado, autenticação do aplicativo preservada.
+
+A versão27 publica devoluções. Os ajustes de alto volume do commit aeb9a9c4 e evolução de previsão posteriores ao build b6761c48 ainda não estão neste artefato. Nenhuma prova autenticada de jornada hospedada foi acrescentada por sucesso do deployment.
