@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const uuid=z.string().uuid(),count=z.number().int().nonnegative(),money=z.string().regex(/^\d+$/);
+const uuid=z.string().uuid(),count=z.number().int().nonnegative(),money=z.string().regex(/^\d+$/).nullable();
 export interface RecordedCostFilters {page:number;from:string;to:string;search:string;cost_center:string;category:string}
 export const recordedCostsSchema=z.object({version:z.literal(1),tenant_id:uuid,page:z.number().int().positive(),page_size:z.literal(30),total:count,total_cents:money,
  cancelled_count:count,needs_review_count:count,recorded_date_count:count,coverage:z.enum(['recorded_batches_and_manual_expenses','recorded_batches_manual_and_payroll_remuneration']),

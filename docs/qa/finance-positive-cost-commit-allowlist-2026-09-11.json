@@ -1,0 +1,1816 @@
+{
+  "version": 1,
+  "head": "c7c6eed5c594e5d8c38f43f377af3c79827de75f",
+  "scope": "Positive unloading cost correction: 60519 + 60700 + 62534 and UI integration",
+  "production_status_source": "Parent reports applied aliases 20260911063118/20260911063135/20260911063213; not independently queried by this inventory.",
+  "files": [
+    {
+      "path": "src/components/financial/ExpenseHistoryDetail.tsx",
+      "status": "modified",
+      "sha256": "9e9fc59514b1db68bbf4bb56e0e959af9c3372745c49dd7be612c890ec9fed8a"
+    },
+    {
+      "path": "src/components/financial/ExpenseUnloadingHistory.tsx",
+      "status": "modified",
+      "sha256": "65053f5d6e6b26107aefe4098d1ca8da40e8f9fd2f6abe49c740ae20bd239dc5"
+    },
+    {
+      "path": "src/components/financial/ExpenseCostHistory.tsx",
+      "status": "untracked",
+      "sha256": "027b8e4c888d451b5618c23988f0193ab260695a52cb8ff5885223cf5890617c"
+    },
+    {
+      "path": "src/components/financial/PayablePortfolioPanel.tsx",
+      "status": "modified",
+      "sha256": "360b95560a0142314f0e6e0f13a27b62f927d98675d02015e873da456efb38ba"
+    },
+    {
+      "path": "src/components/financial/RecordedCosts.tsx",
+      "status": "modified",
+      "sha256": "73a210ccf94e5ea17060bb0642056677330954056e440fd0b6490f269af049e4"
+    },
+    {
+      "path": "src/components/financial/SettlementExpenseContext.tsx",
+      "status": "modified",
+      "sha256": "80b7d0e4947d6112cedfeeee83d04aab5be9f5f098314e466a9ebba34935656e"
+    },
+    {
+      "path": "src/components/financial/UnloadingCostCorrectionConfirmation.tsx",
+      "status": "untracked",
+      "sha256": "49bcfc78e1241e48ad83393f8a01483c5e5cd9e7e7e31ce846c2c68d962dcc97"
+    },
+    {
+      "path": "src/components/financial/UnloadingCostCorrectionDialog.tsx",
+      "status": "untracked",
+      "sha256": "565c80b288c24d23297298b5386b28d8f9f90c2e8ba7e7e2becee99dea74d004"
+    },
+    {
+      "path": "src/lib/financial/expenseHistoryContract.ts",
+      "status": "modified",
+      "sha256": "de759d09e997b9c912995d27a8eede66a67d33ac7936dcdd618a4e7975961dd9"
+    },
+    {
+      "path": "src/lib/financial/expenseCostPresentation.ts",
+      "status": "untracked",
+      "sha256": "0ded1610490c28d6b37b9e2c1664323bccd16173f6a3427a7195087e96a6f31d"
+    },
+    {
+      "path": "src/lib/financial/payablePortfolioContract.ts",
+      "status": "modified",
+      "sha256": "e317c23ce7a68c20d251debd02df6298ce55a2ca027455c7a1267e8db2c97c21"
+    },
+    {
+      "path": "src/lib/financial/recordedCostsContract.ts",
+      "status": "modified",
+      "sha256": "2cd994485cda06b2525c6d402373c8cb1368d6b36d4636e6bfa39940423c567a"
+    },
+    {
+      "path": "src/lib/financial/settlementExpenseContextContract.ts",
+      "status": "modified",
+      "sha256": "2c7efcf64c7c286fec6f1813e312360dc4d1a7dc128af9018771ed12ab21cf41"
+    },
+    {
+      "path": "src/lib/financial/unloadingCostCorrectionClient.ts",
+      "status": "untracked",
+      "sha256": "c117d6c058c70a6107d363981c0c785679a994e13f7c808bbd26b04b317da48b"
+    },
+    {
+      "path": "src/lib/financial/unloadingCostCorrectionContract.ts",
+      "status": "untracked",
+      "sha256": "e74ad4ee108cbe8a43a793c59a79e4adf4de44f6716899b4afe76ba6c2b5bd63"
+    },
+    {
+      "path": "src/lib/financial/unloadingCostCorrectionLabels.ts",
+      "status": "untracked",
+      "sha256": "0be9e42365d04afdc0fd8e8f5795aa594c7f06b8aa0036c0d793535abb6e77c1"
+    },
+    {
+      "path": "src/lib/financial/unloadingCostCorrectionOutbox.ts",
+      "status": "untracked",
+      "sha256": "f301a133046def980eda9337a117327d6a85ff94bc2339adcba105f079f49abb"
+    },
+    {
+      "path": "src/pages/FinanceExpenses.tsx",
+      "status": "modified",
+      "sha256": "6bd59bb77da05e5793785270ff802fd491ea2cfcb664245b827b88b5d652926f"
+    },
+    {
+      "path": "src/test/expenseUnloadingHistory.test.tsx",
+      "status": "modified",
+      "sha256": "d001c0eaa3fcc222879eb256c83e4cb4f9cf1b0456514f67d7c6ba9c6d8db8ca"
+    },
+    {
+      "path": "src/test/financeExpenseHistoryScreen.test.tsx",
+      "status": "modified",
+      "sha256": "8b85590adce1958231fa7e8797f0284d9912b6c97de91773a6b2f837291afde5"
+    },
+    {
+      "path": "src/test/recordedCosts.test.tsx",
+      "status": "modified",
+      "sha256": "281b374c08ccc709f82f9852d914764746f2a0ead7a9f159d1bc1da3557b48ad"
+    },
+    {
+      "path": "src/test/settlementExpenseContext.test.tsx",
+      "status": "modified",
+      "sha256": "c38022aa7529962c1025e07ad0f9cc22ea9345569930331c8fed0f55f1bd9f57"
+    },
+    {
+      "path": "src/test/effectiveCostReaders.test.ts",
+      "status": "untracked",
+      "sha256": "cf0654c05f0698d4453f1003ae7e569a38bbd99daabe100bd701df2c36c6d4d7"
+    },
+    {
+      "path": "src/test/expenseCostPresentation.test.ts",
+      "status": "untracked",
+      "sha256": "48a412eb814175fa2dd62ec490ed08cc206a2baad8de8e54337d2a6edb637dde"
+    },
+    {
+      "path": "src/test/publicUnloadingCostCorrection.test.ts",
+      "status": "untracked",
+      "sha256": "0dd37b0c12e2a7cecab428fec5ace3543e68d421654ab8a052372ff8e54f5198"
+    },
+    {
+      "path": "src/test/unloadingCostCorrection.test.ts",
+      "status": "untracked",
+      "sha256": "ddea2f314b6fa0c08c18e872b40d8c30ab4ab690a5549eb07941a6de4ff7e1fc"
+    },
+    {
+      "path": "src/test/unloadingCostCorrectionContract.test.ts",
+      "status": "untracked",
+      "sha256": "326049ac0040f72f912444ab3dc8274115cb34496748d118d8c3e9f7fed93f58"
+    },
+    {
+      "path": "src/test/unloadingCostCorrectionOutbox.test.ts",
+      "status": "untracked",
+      "sha256": "e96f3c9db4890fc6dea3020f30aa5f293e746ca03c7270ec8b1ed483e8187a40"
+    },
+    {
+      "path": "src/test/unloadingCostCorrectionPanel.test.tsx",
+      "status": "untracked",
+      "sha256": "d22d966505b2c06deb8bbe00396cb1fb984322e5de5ba692d4766109ddd48243"
+    },
+    {
+      "path": "src/test/helpers/effectiveCostReadersDatabase.ts",
+      "status": "untracked",
+      "sha256": "f4d5c3dcd8c74906edb9ad9a12508876de6d77c83f1268c1be77fca9d5f73bb0"
+    },
+    {
+      "path": "src/test/helpers/unloadingCostCorrectionDatabase.ts",
+      "status": "untracked",
+      "sha256": "5c2a6cfe00cfc2b3aa8671342318fe691f7b857ffc7b4cf43a4e6b4afb240ed7"
+    },
+    {
+      "path": "src/test/helpers/unloadingCostCorrectionFixture.ts",
+      "status": "untracked",
+      "sha256": "c1e8a074c9e119b8f8618d9ab06f251077038139df3ab39171fee33add1b8925"
+    },
+    {
+      "path": "supabase/migrations/20260911060519_finance_unloading_cost_amendments.sql",
+      "status": "untracked",
+      "sha256": "85df0dba24b4dfd938114d8b91df78f36c14eaeffe71e64b5d89a813d619dc6c"
+    },
+    {
+      "path": "supabase/migrations/20260911060700_finance_effective_cost_readers.sql",
+      "status": "untracked",
+      "sha256": "dde185d7a99f91a1e90d64aa90f9cb2382354f5418ec503088ffe9e96c23fee4"
+    },
+    {
+      "path": "supabase/migrations/20260911062534_finance_unloading_cost_public_boundary.sql",
+      "status": "untracked",
+      "sha256": "d4f4f613e7b76174ec68d4ead7331eca73feb2bceba7fbe870d39faf9689c736"
+    },
+    {
+      "path": "docs/qa/finance-corrected-expense-history-ui-2026-09-11.md",
+      "status": "untracked",
+      "sha256": "045d12908b99e6ce14305cc27f71d87b6f3ea431764e4517e0efca4bf14e50dd"
+    },
+    {
+      "path": "docs/qa/finance-effective-cost-readers-2026-09-11.json",
+      "status": "untracked",
+      "sha256": "79bee9c1127f558103920a10dd17136d593059ee16b003001e83b505ba295021"
+    },
+    {
+      "path": "docs/qa/finance-effective-cost-readers-2026-09-11.md",
+      "status": "untracked",
+      "sha256": "1fde80a4782a9d548d0cbf6f278f60cb7c9623d46ebbc4fbda9900852cc79f3e"
+    },
+    {
+      "path": "docs/qa/finance-public-cost-correction-independent-2026-09-11.md",
+      "status": "untracked",
+      "sha256": "43200365225d264f6e60b97f2d3315d1f675a0ee08bee17d0503dbb94e92b2a9"
+    },
+    {
+      "path": "docs/qa/finance-unloading-positive-cost-core-2026-09-11.md",
+      "status": "untracked",
+      "sha256": "c429c1d4d4026c8ede336077de6be341ca334b6336c8726baa69d17b6947fc90"
+    },
+    {
+      "path": "docs/qa/finance-unloading-positive-cost-correction-proposal-2026-09-11.md",
+      "status": "untracked",
+      "sha256": "0f51afa71a05f9719c87f611f756d222fc9fce992743013df10517d87ead997b"
+    },
+    {
+      "path": "docs/qa/finance-unloading-positive-cost-ui-2026-09-11.md",
+      "status": "untracked",
+      "sha256": "2ac8db52d6d18da7a3c3ef599f34fd92b7fdc2e057463b9ce85016db8ac82e5d"
+    }
+  ],
+  "dependency_audit": {
+    "method": "TypeScript AST static imports/exports and literal migration filenames; recursive imported TS/TSX. Dynamic file paths and runtime SQL graph not proven by this inventory.",
+    "scanned_typescript_files": 161,
+    "dependencies": [
+      {
+        "path": "src/components/auth/TenantDataBoundary.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useTenant.tsx"
+        ]
+      },
+      {
+        "path": "src/components/cost-centers/CostCenterManager.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/pages/CostCenters.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/components/driver/NavigationLauncher.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/driver/NextDestinationCard.tsx"
+        ]
+      },
+      {
+        "path": "src/components/driver/NextDestinationCard.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/lib/driver/offlineRouteSnapshot.ts"
+        ]
+      },
+      {
+        "path": "src/components/financial/ExpenseArtifactPanel.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseHistoryDetail.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/ExpenseBatchDialog.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/pages/FinanceExpenses.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/ExpenseBatchLine.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseBatchDialog.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/ExpenseCancellationReview.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseHistoryDetail.tsx",
+          "src/components/financial/RecordedCosts.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/ExpenseReceiptDialog.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseHistoryDetail.tsx",
+          "src/components/financial/ManualExpenseCancellationReview.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/FinanceAccessBoundary.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/UnloadingCostCorrectionDialog.tsx",
+          "src/components/financial/ExpenseCancellationReview.tsx",
+          "src/components/financial/PayablePortfolioPanel.tsx",
+          "src/components/financial/ManualExpenseCancellationReview.tsx",
+          "src/components/financial/SettlementExpenseContext.tsx",
+          "src/components/financial/StockAcquisitionInventory.tsx",
+          "src/components/financial/StockAcquisitionAssociation.tsx",
+          "src/components/financial/StockConsumptionAttribution.tsx",
+          "src/components/financial/MaintenanceDirectPartAssociation.tsx",
+          "src/components/financial/MaintenanceLaborAssociation.tsx",
+          "src/components/financial/MaintenanceCostContextPanel.tsx",
+          "src/components/financial/LegacyCostAssociation.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/FinanceOptionPicker.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/PayablePortfolioPanel.tsx",
+          "src/components/financial/ExpenseBatchDialog.tsx",
+          "src/components/financial/ExpenseBatchLine.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/LegacyCostAssociation.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/LegacyCostInventory.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/LegacyCostInventory.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/pages/FinanceExpenses.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/MaintenanceCostContextPanel.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/LegacyCostInventory.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/MaintenanceDirectPartAssociation.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/MaintenanceCostContextPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/MaintenanceLaborAssociation.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/MaintenanceCostContextPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/ManualExpenseCancellationReview.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/RecordedCosts.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/StockAcquisitionAssociation.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/StockAcquisitionInventory.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/StockAcquisitionInventory.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/LegacyCostInventory.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/StockConsumptionAttribution.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/MaintenanceCostContextPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/StockConsumptionHistory.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/StockConsumptionAttribution.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/StockConsumptionPreviewDetails.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/StockConsumptionAttribution.tsx"
+        ]
+      },
+      {
+        "path": "src/components/financial/StockConsumptionSelectionEditor.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/StockConsumptionAttribution.tsx"
+        ]
+      },
+      {
+        "path": "src/components/ui/badge.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/driver/NextDestinationCard.tsx",
+          "src/components/cost-centers/CostCenterManager.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/components/ui/button.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/driver/NavigationLauncher.tsx",
+          "src/components/financial/UnloadingCostCorrectionDialog.tsx",
+          "src/components/financial/FinanceAccessBoundary.tsx",
+          "src/components/financial/UnloadingCostCorrectionConfirmation.tsx",
+          "src/components/financial/ExpenseCostHistory.tsx",
+          "src/components/financial/ExpenseArtifactPanel.tsx",
+          "src/components/financial/ExpenseCancellationReview.tsx",
+          "src/components/financial/ExpenseHistoryDetail.tsx",
+          "src/components/financial/FinanceOptionPicker.tsx",
+          "src/components/financial/PayablePortfolioPanel.tsx",
+          "src/components/financial/ManualExpenseCancellationReview.tsx",
+          "src/components/financial/RecordedCosts.tsx",
+          "src/components/financial/SettlementExpenseContext.tsx",
+          "src/components/financial/StockAcquisitionInventory.tsx",
+          "src/components/financial/StockAcquisitionAssociation.tsx",
+          "src/components/financial/StockConsumptionAttribution.tsx",
+          "src/components/financial/StockConsumptionSelectionEditor.tsx",
+          "src/components/financial/MaintenanceDirectPartAssociation.tsx",
+          "src/components/financial/MaintenanceLaborAssociation.tsx",
+          "src/components/financial/MaintenanceCostContextPanel.tsx",
+          "src/components/financial/LegacyCostInventory.tsx",
+          "src/components/financial/LegacyCostAssociation.tsx",
+          "src/components/financial/ExpenseBatchDialog.tsx",
+          "src/components/financial/ExpenseBatchLine.tsx",
+          "src/pages/FinanceExpenses.tsx",
+          "src/pages/CostCenters.tsx",
+          "src/components/cost-centers/CostCenterManager.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/components/ui/card.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/driver/NextDestinationCard.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/components/ui/dialog.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/driver/NavigationLauncher.tsx",
+          "src/components/financial/UnloadingCostCorrectionDialog.tsx",
+          "src/components/financial/ExpenseHistoryDetail.tsx",
+          "src/components/financial/ExpenseReceiptDialog.tsx",
+          "src/components/financial/StockAcquisitionAssociation.tsx",
+          "src/components/financial/StockConsumptionAttribution.tsx",
+          "src/components/financial/MaintenanceDirectPartAssociation.tsx",
+          "src/components/financial/MaintenanceLaborAssociation.tsx",
+          "src/components/financial/MaintenanceCostContextPanel.tsx",
+          "src/components/financial/LegacyCostAssociation.tsx",
+          "src/components/financial/ExpenseBatchDialog.tsx"
+        ]
+      },
+      {
+        "path": "src/components/ui/input.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseArtifactPanel.tsx",
+          "src/components/financial/FinanceOptionPicker.tsx",
+          "src/components/financial/PayablePortfolioPanel.tsx",
+          "src/components/financial/RecordedCosts.tsx",
+          "src/components/financial/StockAcquisitionInventory.tsx",
+          "src/components/financial/StockAcquisitionAssociation.tsx",
+          "src/components/financial/StockConsumptionAttribution.tsx",
+          "src/components/financial/StockConsumptionSelectionEditor.tsx",
+          "src/components/financial/MaintenanceDirectPartAssociation.tsx",
+          "src/components/financial/MaintenanceLaborAssociation.tsx",
+          "src/components/financial/ExpenseBatchDialog.tsx",
+          "src/components/financial/ExpenseBatchLine.tsx",
+          "src/pages/FinanceExpenses.tsx",
+          "src/components/cost-centers/CostCenterManager.tsx"
+        ]
+      },
+      {
+        "path": "src/components/ui/select.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/components/ui/table.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/RecordedCosts.tsx",
+          "src/pages/FinanceExpenses.tsx",
+          "src/components/cost-centers/CostCenterManager.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/components/ui/tabs.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/pages/CostCenters.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/components/ui/textarea.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseCancellationReview.tsx",
+          "src/components/financial/ManualExpenseCancellationReview.tsx",
+          "src/components/financial/StockAcquisitionAssociation.tsx",
+          "src/components/financial/StockConsumptionAttribution.tsx",
+          "src/components/financial/MaintenanceDirectPartAssociation.tsx",
+          "src/components/financial/MaintenanceLaborAssociation.tsx",
+          "src/components/financial/LegacyCostAssociation.tsx"
+        ]
+      },
+      {
+        "path": "src/components/ui/toast.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/use-toast.ts"
+        ]
+      },
+      {
+        "path": "src/hooks/use-toast.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useAuth.tsx"
+        ]
+      },
+      {
+        "path": "src/hooks/useAlertStore.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useSonnerToast.ts"
+        ]
+      },
+      {
+        "path": "src/hooks/useAuth.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useTenant.tsx",
+          "src/hooks/useFinanceLedger.ts",
+          "src/components/financial/ExpenseReceiptDialog.tsx",
+          "src/hooks/usePayables.tsx",
+          "src/components/financial/SettlementExpenseContext.tsx",
+          "src/hooks/useMaintenanceOrders.tsx",
+          "src/pages/FinanceExpenses.tsx",
+          "src/pages/CostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/hooks/useCostCenters.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/cost-centers/CostCenterManager.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/hooks/useFinanceLedger.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/FinanceAccessBoundary.tsx",
+          "src/pages/FinanceExpenses.tsx",
+          "src/pages/CostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/hooks/useMaintenanceOrders.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/MaintenanceCostContextPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/hooks/useOnlineStatus.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useTenant.tsx"
+        ]
+      },
+      {
+        "path": "src/hooks/usePayables.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/PayablePortfolioPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/hooks/useSonnerToast.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useCostCenters.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/hooks/useTenant.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseHistoryDetail.tsx",
+          "src/components/financial/FinanceAccessBoundary.tsx",
+          "src/hooks/useFinanceLedger.ts",
+          "src/hooks/usePayables.tsx",
+          "src/components/financial/SettlementExpenseContext.tsx",
+          "src/hooks/useMaintenanceOrders.tsx",
+          "src/pages/FinanceExpenses.tsx",
+          "src/pages/CostCenters.tsx",
+          "src/hooks/useCostCenters.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/integrations/supabase/client.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useAuth.tsx",
+          "src/lib/tenantMemberships.ts",
+          "src/hooks/useTenant.tsx",
+          "src/lib/financial/ledgerClient.ts",
+          "src/lib/financial/unloadingCostCorrectionClient.ts",
+          "src/lib/financial/expenseArtifactClient.ts",
+          "src/lib/financial/uploadArtifactClient.ts",
+          "src/lib/financial/expenseCancellationClient.ts",
+          "src/components/financial/ExpenseReceiptDialog.tsx",
+          "src/hooks/usePayables.tsx",
+          "src/lib/financial/payablePortfolioClient.ts",
+          "src/lib/financial/manualExpenseCancellationClient.ts",
+          "src/lib/financial/settlementExpenseContextClient.ts",
+          "src/lib/financial/stockAcquisitionClient.ts",
+          "src/lib/financial/stockConsumptionClient.ts",
+          "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+          "src/lib/financial/maintenanceLaborAssociationClient.ts",
+          "src/lib/financial/maintenanceCostContextClient.ts",
+          "src/hooks/useMaintenanceOrders.tsx",
+          "src/lib/financial/legacyCostAssociationClient.ts",
+          "src/lib/secureUpload.ts",
+          "src/hooks/useCostCenters.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/integrations/supabase/createAppClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/integrations/supabase/client.ts"
+        ]
+      },
+      {
+        "path": "src/integrations/supabase/types.ts",
+        "tracked": true,
+        "used_by": [
+          "src/integrations/supabase/createAppClient.ts",
+          "src/lib/driver/driverOfflineOutbox.ts",
+          "src/lib/loads/replanning.ts",
+          "src/lib/driver/driverExpenseOfflineStore.ts",
+          "src/hooks/usePayables.tsx",
+          "src/hooks/useMaintenanceOrders.tsx",
+          "src/hooks/useCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/auth/authSessionCoordination.ts",
+        "tracked": true,
+        "used_by": [
+          "src/integrations/supabase/createAppClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/auth/boundedAuthFetch.ts",
+        "tracked": true,
+        "used_by": [
+          "src/integrations/supabase/createAppClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/driver/driverExpenseOfflineStore.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useAuth.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/driver/driverOfflineOutbox.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useAuth.tsx",
+          "src/lib/driver/driverExpenseOfflineStore.ts"
+        ]
+      },
+      {
+        "path": "src/lib/driver/navigation.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/driver/NavigationLauncher.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/driver/offlineRouteSnapshot.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useAuth.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/errors.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/accountPeriodContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/automaticReconciliationContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/expenseArtifactClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseArtifactPanel.tsx",
+          "src/lib/financial/expenseArtifactOutbox.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/expenseArtifactOutbox.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseArtifactPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/expenseBatchContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts",
+          "src/components/financial/ExpenseHistoryDetail.tsx",
+          "src/components/financial/FinanceOptionPicker.tsx",
+          "src/components/financial/PayablePortfolioPanel.tsx",
+          "src/components/financial/RecordedCosts.tsx",
+          "src/components/financial/SettlementExpenseContext.tsx",
+          "src/pages/FinanceExpenses.tsx",
+          "src/components/financial/ExpenseBatchDialog.tsx",
+          "src/components/financial/ExpenseBatchLine.tsx",
+          "src/lib/financial/expenseBatchEntryUx.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/expenseBatchEntryUx.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseBatchDialog.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/expenseCancellationClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseCancellationReview.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/expenseCancellationContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/expenseHistoryContract.ts",
+          "src/lib/financial/unloadingCancellationLabels.ts",
+          "src/components/financial/ExpenseCancellationReview.tsx",
+          "src/lib/financial/expenseCancellationClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/expenseCreationCommands.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/driver/driverExpenseOfflineStore.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/expenseReviewCommands.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/LegacyCostAssociation.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/financeAuditContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/fiscalQueueContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/internalTransferContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/invalidateAccountReview.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/UnloadingCostCorrectionDialog.tsx",
+          "src/components/financial/ExpenseCancellationReview.tsx",
+          "src/hooks/usePayables.tsx",
+          "src/components/financial/ManualExpenseCancellationReview.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/ledgerClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/FinanceAccessBoundary.tsx",
+          "src/hooks/useFinanceLedger.ts",
+          "src/components/financial/FinanceOptionPicker.tsx",
+          "src/components/financial/RecordedCosts.tsx",
+          "src/pages/FinanceExpenses.tsx",
+          "src/components/financial/ExpenseBatchDialog.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/ledgerContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts",
+          "src/lib/financial/expenseBatchContract.ts",
+          "src/hooks/useFinanceLedger.ts",
+          "src/components/financial/UnloadingCostCorrectionConfirmation.tsx",
+          "src/components/financial/UnloadingCostCorrectionDialog.tsx",
+          "src/lib/financial/expenseCostPresentation.ts",
+          "src/components/financial/ExpenseCostHistory.tsx",
+          "src/components/financial/ExpenseUnloadingHistory.tsx",
+          "src/components/financial/ExpenseCancellationReview.tsx",
+          "src/components/financial/ExpenseHistoryDetail.tsx",
+          "src/components/financial/FinanceOptionPicker.tsx",
+          "src/components/financial/PayablePortfolioPanel.tsx",
+          "src/components/financial/ManualExpenseCancellationReview.tsx",
+          "src/components/financial/RecordedCosts.tsx",
+          "src/components/financial/SettlementExpenseContext.tsx",
+          "src/components/financial/StockAcquisitionAssociation.tsx",
+          "src/components/financial/StockAcquisitionInventory.tsx",
+          "src/components/financial/StockConsumptionPreviewDetails.tsx",
+          "src/components/financial/StockConsumptionHistory.tsx",
+          "src/components/financial/StockConsumptionAttribution.tsx",
+          "src/components/financial/MaintenanceDirectPartAssociation.tsx",
+          "src/components/financial/MaintenanceLaborAssociation.tsx",
+          "src/components/financial/MaintenanceCostContextPanel.tsx",
+          "src/components/financial/LegacyCostInventory.tsx",
+          "src/components/financial/LegacyCostAssociation.tsx",
+          "src/pages/FinanceExpenses.tsx",
+          "src/components/financial/ExpenseBatchDialog.tsx",
+          "src/components/financial/ExpenseBatchLine.tsx",
+          "src/lib/financial/expenseBatchEntryUx.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/legacyCostAssociationClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/LegacyCostInventory.tsx",
+          "src/components/financial/LegacyCostAssociation.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/legacyCostAssociationContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/legacyCostAssociationClient.ts",
+          "src/components/financial/LegacyCostInventory.tsx",
+          "src/components/financial/LegacyCostAssociation.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/maintenanceCostContextClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/MaintenanceCostContextPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/maintenanceCostContextContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/maintenanceCostContextClient.ts",
+          "src/components/financial/MaintenanceCostContextPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/MaintenanceDirectPartAssociation.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/maintenanceDirectPartAssociationContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/MaintenanceDirectPartAssociation.tsx",
+          "src/lib/financial/maintenanceDirectPartAssociationClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/maintenanceLaborAssociationClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/MaintenanceLaborAssociation.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/maintenanceLaborAssociationContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/MaintenanceLaborAssociation.tsx",
+          "src/lib/financial/maintenanceLaborAssociationClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/manualExpenseCancellationClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ManualExpenseCancellationReview.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/manualExpenseCancellationContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ManualExpenseCancellationReview.tsx",
+          "src/lib/financial/manualExpenseCancellationClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/manualExpenseContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/movementReceiptTraceContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/movementUseErrors.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerContract.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/nativeStatementAccountContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/paidMovementVoidLabels.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/payablePortfolioLabels.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/payableMovementContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/manualExpenseContract.ts",
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/payablePortfolioClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/PayablePortfolioPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/payablePortfolioLabels.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/PayablePortfolioPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/payrollPaymentContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/receiptCorrectionContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/receivableMovementContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/reconciliationContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/reconciliationHistoryContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/recordedCostSummaryContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/effectiveCostReaders.test.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/settlementExpenseContextClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/SettlementExpenseContext.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/statementHistoryContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/statementImportContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts",
+          "src/lib/financial/statementHistoryContract.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/statementReviewContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/stockAcquisitionClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/StockAcquisitionAssociation.tsx",
+          "src/components/financial/StockAcquisitionInventory.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/stockAcquisitionContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/StockAcquisitionAssociation.tsx",
+          "src/lib/financial/stockAcquisitionClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/stockConsumptionClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/StockConsumptionAttribution.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/stockConsumptionContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/StockConsumptionSelectionEditor.tsx",
+          "src/components/financial/StockConsumptionPreviewDetails.tsx",
+          "src/components/financial/StockConsumptionHistory.tsx",
+          "src/components/financial/StockConsumptionAttribution.tsx",
+          "src/lib/financial/stockConsumptionClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/transferPeriodContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/transferStageContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/ledgerClient.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/unloadingCancellationLabels.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/unloadingCostCorrectionLabels.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/unloadingOriginCorrectionContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/unloadingCostCorrectionContract.ts",
+          "src/lib/financial/expenseHistoryContract.ts",
+          "src/test/expenseUnloadingHistory.test.tsx",
+          "src/test/helpers/unloadingOriginCorrectionFixture.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/uploadArtifactClient.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/uploadArtifactRecovery.ts"
+        ]
+      },
+      {
+        "path": "src/lib/financial/uploadArtifactContract.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/statementImportContract.ts",
+          "src/lib/financial/expenseArtifactClient.ts",
+          "src/lib/financial/uploadArtifactClient.ts",
+          "src/components/financial/ExpenseArtifactPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/financial/uploadArtifactRecovery.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseArtifactPanel.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/loads/operationDocumentOutcome.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/expenseCreationCommands.ts",
+          "src/lib/financial/expenseReviewCommands.ts"
+        ]
+      },
+      {
+        "path": "src/lib/loads/replanning.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/loads/operationDocumentOutcome.ts"
+        ]
+      },
+      {
+        "path": "src/lib/notificationScope.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/use-toast.ts",
+          "src/hooks/useAuth.tsx",
+          "src/components/auth/TenantDataBoundary.tsx",
+          "src/hooks/useAlertStore.ts",
+          "src/hooks/useSonnerToast.ts"
+        ]
+      },
+      {
+        "path": "src/lib/observability/correlation.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/secureUpload.ts"
+        ]
+      },
+      {
+        "path": "src/lib/secureUpload.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/financial/ExpenseBatchLine.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/tenant/activeTenantContext.ts",
+        "tracked": true,
+        "used_by": [
+          "src/integrations/supabase/createAppClient.ts",
+          "src/hooks/useTenant.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/tenantMemberships.ts",
+        "tracked": true,
+        "used_by": [
+          "src/hooks/useAuth.tsx",
+          "src/hooks/useTenant.tsx"
+        ]
+      },
+      {
+        "path": "src/lib/uploadPolicy.ts",
+        "tracked": true,
+        "used_by": [
+          "src/lib/financial/uploadArtifactRecovery.ts",
+          "src/lib/financial/uploadArtifactClient.ts",
+          "src/lib/secureUpload.ts"
+        ]
+      },
+      {
+        "path": "src/lib/utils.ts",
+        "tracked": true,
+        "used_by": [
+          "src/components/ui/toast.tsx",
+          "src/components/ui/badge.tsx",
+          "src/components/ui/card.tsx",
+          "src/components/ui/button.tsx",
+          "src/components/ui/dialog.tsx",
+          "src/components/driver/NavigationLauncher.tsx",
+          "src/components/ui/input.tsx",
+          "src/components/ui/textarea.tsx",
+          "src/components/ui/table.tsx",
+          "src/components/ui/tabs.tsx",
+          "src/components/ui/select.tsx",
+          "src/pages/LegacyCostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/pages/CostCenters.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/test/recordedCosts.test.tsx"
+        ]
+      },
+      {
+        "path": "src/pages/LegacyCostCenters.tsx",
+        "tracked": true,
+        "used_by": [
+          "src/pages/CostCenters.tsx"
+        ]
+      },
+      {
+        "path": "src/test/helpers/accountPeriodCloseDatabase.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/closedPeriodLateCompositionDatabase.ts",
+          "src/test/unloadingCostCorrection.test.ts"
+        ]
+      },
+      {
+        "path": "src/test/helpers/cashPeriodCloseDatabase.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/periodMoneyPackageDatabase.ts"
+        ]
+      },
+      {
+        "path": "src/test/helpers/closedPeriodLateCompositionDatabase.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/paidProjectionChainDatabase.ts"
+        ]
+      },
+      {
+        "path": "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/effectiveCostReaders.test.ts",
+          "src/test/helpers/unloadingCostCorrectionDatabase.ts"
+        ]
+      },
+      {
+        "path": "src/test/helpers/financeLedgerDatabase.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingProjectionRepairDatabase.ts",
+          "src/test/helpers/accountPeriodCloseDatabase.ts",
+          "src/test/effectiveCostReaders.test.ts",
+          "src/test/publicUnloadingCostCorrection.test.ts",
+          "src/test/unloadingCostCorrection.test.ts"
+        ]
+      },
+      {
+        "path": "src/test/helpers/paidProjectionChainDatabase.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/cashPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "src/test/helpers/periodMoneyPackageDatabase.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingBankPackageDatabase.ts"
+        ]
+      },
+      {
+        "path": "src/test/helpers/unloadingBankPackageDatabase.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingProjectionRepairDatabase.ts"
+        ]
+      },
+      {
+        "path": "src/test/helpers/unloadingOriginCorrectionFixture.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingCostCorrectionFixture.ts"
+        ]
+      },
+      {
+        "path": "src/test/helpers/unloadingProjectionRepairDatabase.ts",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260824224152_baseline.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingBankPackageDatabase.ts",
+          "src/test/helpers/unloadingProjectionRepairDatabase.ts",
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260830183929_audit_receivable_payments_and_reversals.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingBankPackageDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260909212514_finance_delivery_unloading.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts",
+          "src/test/helpers/unloadingBankPackageDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260909213959_finance_expense_batches.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts",
+          "src/test/helpers/closedPeriodLateCompositionDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260909222851_finance_statement_intake.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260909223737_finance_statement_source_verification.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260909230507_finance_statement_queries.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260909231643_finance_statement_identity_review.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260909233625_finance_audit_queries.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260909235237_finance_legacy_rpc_boundary.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910002244_finance_payable_movement_links.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts",
+          "src/test/helpers/closedPeriodLateCompositionDatabase.ts",
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910003529_finance_payable_link_reversal.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910010034_finance_fiscal_receivable_projection.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingProjectionRepairDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910011121_finance_fiscal_cancellation_credits.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingBankPackageDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910013543_finance_bank_reconciliation_groups.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910015331_finance_reconciliation_history.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910020543_finance_ofx_statement_intake.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910021404_finance_native_statement_account.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910022059_finance_automatic_reference_reconciliation.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910023911_finance_account_period_review.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910024438_finance_receivable_movement_projection.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts",
+          "src/test/helpers/unloadingBankPackageDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910025658_finance_receipt_allocation_corrections.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910030634_finance_explicit_receipt_refunds.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingBankPackageDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910033918_finance_internal_transfer_pairs.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts",
+          "src/test/helpers/periodMoneyPackageDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910034731_finance_transfers_in_transit.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts",
+          "src/test/helpers/periodMoneyPackageDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910125357_finance_recorded_costs.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910130032_finance_payroll_recorded_costs.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910130540_finance_settlement_movement_links.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910130956_finance_statement_period_evidence.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910132411_finance_settlement_link_reversals.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts",
+          "src/test/helpers/closedPeriodLateCompositionDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910134943_finance_settlement_expense_context.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910134948_finance_canonical_trip_cost_settlement.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910140010_finance_account_opening_balances.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910141240_finance_cash_opening_counts.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910142143_finance_statement_coverage_approvals.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910145616_finance_legacy_receipt_associations.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts",
+          "src/test/helpers/closedPeriodLateCompositionDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910151011_finance_legacy_integrity_inventory.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910152557_finance_recorded_cost_summary.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910155442_finance_legacy_expense_cost_associations.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910162807_finance_account_period_closure_foundation.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910162958_finance_account_period_close_snapshot.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910163109_finance_account_period_closed_source_guards.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910163116_finance_legacy_cut_reviews.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910164923_finance_account_period_closure_evidence.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910164942_finance_closed_period_late_payment_composition.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/closedPeriodLateCompositionDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910170213_finance_legacy_cut_settlement_mapping.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/accountPeriodCloseDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910175641_finance_unpaid_expense_cancellation.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910175733_finance_expense_cancellation_preview.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910180040_finance_payable_portfolio.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910181257_finance_unpaid_manual_expense_cancellation.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts",
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910203516_finance_period_unloading_flow.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingBankPackageDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910205941_finance_unloading_receivable_source_guard.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingBankPackageDatabase.ts",
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910210433_finance_unloading_receivable_context.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingBankPackageDatabase.ts",
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260910211156_finance_unloading_projection_repair.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260911040123_finance_upload_quarantine_artifacts_v2.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260911042754_finance_expense_quarantine_receipt_links.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260911044823_finance_expense_receipt_artifact_status.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260911045402_finance_unloading_origin_amendments.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260911050116_finance_payable_portfolio_global_filters.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260911051405_finance_unloading_origin_economic_flow.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260911051729_finance_expense_unloading_effective_origin.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/effectiveCostReadersDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260911053349_finance_coordinated_unloading_cancellation.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/coordinatedUnloadingCancellationDatabase.ts"
+        ]
+      },
+      {
+        "path": "supabase/migrations/20260911054915_finance_unloading_cancelled_claim_cost_resolution.sql",
+        "tracked": true,
+        "used_by": [
+          "src/test/helpers/unloadingCostCorrectionDatabase.ts"
+        ]
+      }
+    ],
+    "missing": []
+  },
+  "excluded": [
+    "src/lib/financial/unloadingCancellationLabels.ts: prior 54915 cancellation labels, separate from positive correction",
+    "Other untracked/modified operational, SSX, driver, forward-chain, deployment, secret and temporary files."
+  ],
+  "limitations": [
+    "No stage/commit/deployment performed.",
+    "Docs retain contemporaneous local-test statements; production application is parent-reported, not certified by filename.",
+    "Shared modified UI files inspected as positive-cost-only diffs, except explicitly excluded prior cancellation labels."
+  ]
+}

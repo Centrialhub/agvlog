@@ -1,3 +1,4 @@
+import {expenseCurrentCost,expenseCostMoney} from '@/lib/financial/expenseCostPresentation';
 import {LegacyCostInventory} from '@/components/financial/LegacyCostInventory';
 import {useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
@@ -27,7 +28,8 @@ function ExpenseWorkspace({tenant,actor}:{tenant:string;actor:string}){
   const [filters,setFilters]=useState(initial),[draft,setDraft]=useState(initial),[entry,setEntry]=useState(false);
   const [selected,setSelected]=useState<ExpenseHistoryRow|null>(null),[notice,setNotice]=useState('');
   const qc=useQueryClient(),query=useQuery({queryKey:['finance-expenses',tenant,actor,filters],retry:false,queryFn:()=>readExpenseHistory(tenant,filters)});
-  const page=query.data;
+  const page=query.isFetching||query.isError?undefined:query.data;
+  const selectedRow=page?.rows.find(row=>row.id===selected?.id);
   return <div className="space-y-5"><div className="flex items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Gastos conferidos</h1>
     <p className="text-sm text-muted-foreground">Gastos registrados em lote, com categorias, comprovantes e utilização dos envios.</p></div><Button onClick={()=>setEntry(true)}>Conferir gastos em lote</Button></div>
     {notice&&<p role="status">{notice}</p>}<LegacyCostInventory tenant={tenant} actor={actor}/>
@@ -43,26 +45,27 @@ function ExpenseWorkspace({tenant,actor}:{tenant:string;actor:string}){
       <Button type="submit">Filtrar</Button>
     </form>
     {query.isPending&&<p role="status">Carregando gastos…</p>}{query.error&&<p role="alert">{financeError(query.error)} <Button onClick={()=>void query.refetch()}>Atualizar</Button></p>}
-    {page&&!query.error&&<><div className="grid gap-3 sm:grid-cols-4">{[['Gastos',formatFinanceCents(page.total_cents)],['Vinculado a envios',formatFinanceCents(page.allocated_cents)],
-      ['Complementos gerados',formatFinanceCents(page.complement_cents)],['Sem comprovante',String(page.missing_receipt_count)]].map(([label,value])=><div key={label} className="rounded border p-4"><p className="text-sm">{label}</p><p className="text-xl font-semibold">{value}</p></div>)}</div>
+    {page&&!query.error&&<><div className="grid gap-3 sm:grid-cols-4">{[['Gastos',expenseCostMoney(page.total_cents)],['Vinculado a envios',formatFinanceCents(page.allocated_cents)],
+      ['Complementos gerados',expenseCostMoney(page.complement_cents)],['Sem comprovante',String(page.missing_receipt_count)]].map(([label,value])=><div key={label} className="rounded border p-4"><p className="text-sm">{label}</p><p className="text-xl font-semibold">{value}</p></div>)}</div>
+      {!!page.cost_needs_review_count&&<p role="alert">{page.cost_needs_review_count} gasto(s) com origem de custo pendente de conferência. Totais afetados estão indisponíveis.</p>}
       <p className="text-xs text-muted-foreground">{page.active_count} ativo(s) e {page.cancelled_count} cancelado(s). Totais dos gastos ativos do filtro; cancelados permanecem no histórico. Complementos gerados incluem títulos que podem já ter sido pagos; consulte o status no detalhe.</p>
-      <div className="flex flex-wrap gap-2">{page.categories.map(c=><span key={c.category} className="rounded bg-muted px-3 py-1 text-sm">{expenseCategories[c.category as keyof typeof expenseCategories]||c.category}: {formatFinanceCents(c.amount_cents)}</span>)}</div>
+      <div className="flex flex-wrap gap-2">{page.categories.map(c=><span key={c.category} className="rounded bg-muted px-3 py-1 text-sm">{expenseCategories[c.category as keyof typeof expenseCategories]||c.category}: {expenseCostMoney(c.amount_cents)}</span>)}</div>
       <section aria-label="Gastos por centro de custo" className="space-y-2"><h2 className="font-semibold">Por centro de custo</h2>
         <p className="text-xs text-muted-foreground">Cada gasto conferido é contado uma vez. Envios e títulos de complemento não são somados novamente. Estes totais não incluem despesas registradas fora dos lotes.</p>
         {filters.cost_center&&<Button variant="outline" onClick={()=>{setFilters({...filters,cost_center:'',page:1});setDraft({...draft,cost_center:''});}}>Todos os centros</Button>}
         <div className="flex flex-wrap gap-2">{(page.cost_centers||[]).map(center=><Button key={center.cost_center_id||'unassigned'} variant="outline" onClick={()=>{
           const cost_center=center.cost_center_id||'unassigned';setFilters({...filters,cost_center,page:1});setDraft({...draft,cost_center});setSelected(null);
-        }}>{center.cost_center_name||'Sem centro de custo'}: {formatFinanceCents(center.amount_cents)} · {center.item_count} gasto(s)</Button>)}</div>
+        }}>{center.cost_center_name||'Sem centro de custo'}: {expenseCostMoney(center.amount_cents)} · {center.item_count} gasto(s)</Button>)}</div>
       </section>
-      <div className="rounded border"><Table><TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Gasto / prestador</TableHead><TableHead>Categoria</TableHead><TableHead>Comprovante</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Revisão</TableHead></TableRow></TableHeader>
+      <div className="rounded border"><Table><TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Gasto / prestador</TableHead><TableHead>Categoria</TableHead><TableHead>Comprovante</TableHead><TableHead className="text-right">Valor vigente / histórico</TableHead><TableHead>Revisão</TableHead></TableRow></TableHeader>
         <TableBody>{page.rows.map(row=><TableRow key={row.id}><TableCell>{row.occurred_on.split('-').reverse().join('/')}</TableCell><TableCell><p>{row.description}</p>{row.cancelled&&<p className="text-amber-700">Cancelado — excluído dos totais ativos</p>}<p className="text-xs text-muted-foreground">{row.supplier_name}</p></TableCell>
-          <TableCell>{expenseCategories[row.category as keyof typeof expenseCategories]||row.category}</TableCell><TableCell>{row.receipt_path?'Anexado':(row.receipt_artifact_count??0)>0?'Anexado posteriormente':row.no_receipt_reason?'Ausente — justificado':'Ausente — sem justificativa'}</TableCell><TableCell className="text-right">{formatFinanceCents(row.amount_cents)}</TableCell>
+          <TableCell>{expenseCategories[row.category as keyof typeof expenseCategories]||row.category}</TableCell><TableCell>{row.receipt_path?'Anexado':(row.receipt_artifact_count??0)>0?'Anexado posteriormente':row.no_receipt_reason?'Ausente — justificado':'Ausente — sem justificativa'}</TableCell><TableCell className="text-right">{expenseCostMoney(expenseCurrentCost(row))}{!!row.cost_origin?.history.length&&<p className="text-xs text-amber-700">Retificado · original {formatFinanceCents(row.amount_cents)}</p>}</TableCell>
           <TableCell><Button variant="ghost" aria-label={`Detalhar ${row.description}`} onClick={()=>setSelected(row)}>Detalhar</Button></TableCell></TableRow>)}
           {!page.rows.length&&<TableRow><TableCell colSpan={6} className="py-8 text-center">Nenhum gasto neste filtro.</TableCell></TableRow>}</TableBody></Table></div>
       <div className="flex items-center justify-between"><Button variant="outline" disabled={filters.page===1||query.isFetching} onClick={()=>setFilters({...filters,page:filters.page-1})}>Anterior</Button>
         <span>Página {page.page} de {Math.max(1,Math.ceil(page.total/page.page_size))}</span><Button variant="outline" disabled={page.page*page.page_size>=page.total||query.isFetching} onClick={()=>setFilters({...filters,page:filters.page+1})}>Próxima</Button></div>
     </>}
-    {selected&&<ExpenseHistoryDetail actor={actor} row={page?.rows.find(row=>row.id===selected.id)||selected} onClose={()=>setSelected(null)}/>}
+    {selected&&<ExpenseHistoryDetail actor={actor} row={selectedRow||selected} currentUnavailable={!selectedRow} onClose={()=>setSelected(null)}/>}
     {entry&&<ExpenseBatchDialog tenant={tenant} actor={actor} onClose={()=>setEntry(false)} onRecorded={()=>{
       setEntry(false);setNotice('Lote registrado. Os gastos e vínculos estão disponíveis para revisão.');
       void qc.invalidateQueries({queryKey:['finance-recorded-costs',tenant,actor]});

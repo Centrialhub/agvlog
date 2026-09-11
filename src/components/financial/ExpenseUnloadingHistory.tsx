@@ -9,7 +9,7 @@ export function ExpenseUnloadingHistory({row}:{row:Pick<ExpenseHistoryRow,'tenan
   const current=matches&&origin.verified?origin.effective:null;
   return <section className="space-y-3 rounded border p-3 text-sm" aria-label="Cobrança de descarga">
     <h3 className="font-medium">Reembolso de descarga</h3>
-    <p>Custo registrado: {formatFinanceCents(row.amount_cents)} · {row.supplier_name}</p>
+    <p>Custo original registrado: {formatFinanceCents(row.amount_cents)} · {row.supplier_name}</p>
     {!current?<p role="status">Cobrança vigente não confirmada nesta consulta. Consulte o título antes de registrar o recebimento.</p>:<>
       <p className="font-medium">{current.status==='cancelled'?'Direito de cobrança cancelado':'Direito de cobrança vigente'}: {formatFinanceCents(current.amount_cents)} · {current.supplier_name||'Fornecedor sem nome cadastrado'}</p>
       <p>O direito de cobrança informa o valor recuperável. Baixas e saldo em aberto devem ser consultados no título.</p>

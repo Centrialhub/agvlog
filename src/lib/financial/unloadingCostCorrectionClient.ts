@@ -1,0 +1,7 @@
+import {z} from 'zod';
+import {supabase} from '@/integrations/supabase/client';
+import {unloadingCostCorrectionPreviewSchema,unloadingCostCorrectionCommandSchema,type UnloadingCostCorrectionCommand} from './unloadingCostCorrectionContract';
+type Response={data:unknown;error:unknown};type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<Response>;
+const scope=z.object({tenantId:z.string().uuid(),actorId:z.string().uuid(),chargeId:z.string().uuid(),amountCents:z.string().regex(/^[1-9]\d{0,13}$/)});
+export async function readUnloadingCostCorrectionPreview(input:z.infer<typeof scope>){const request=scope.parse(input);const {data,error}=await(supabase.rpc as unknown as Rpc)('get_finance_unloading_cost_correction_context',{_tenant_id:request.tenantId,_charge_id:request.chargeId,_amount_cents:request.amountCents});if(error)throw error;const result=unloadingCostCorrectionPreviewSchema.parse(data);if(result.tenant_id!==request.tenantId||result.actor_id!==request.actorId||result.charge_id!==request.chargeId||result.target.amount_cents!==request.amountCents)throw Error('Consulta fora da empresa, sessão, descarga ou valor solicitado.');return result;}
+export async function sendUnloadingCostCorrection(command:UnloadingCostCorrectionCommand):Promise<Response>{unloadingCostCorrectionCommandSchema.parse(command);return await(supabase.rpc as unknown as Rpc)('correct_finance_unloading_cost',{_payload:command});}

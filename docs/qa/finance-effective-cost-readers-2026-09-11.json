@@ -1,0 +1,25 @@
+{
+  "files": [
+    {
+      "path": "supabase/migrations/20260911060700_finance_effective_cost_readers.sql",
+      "sha256": "dde185d7a99f91a1e90d64aa90f9cb2382354f5418ec503088ffe9e96c23fee4"
+    },
+    {
+      "path": "src/test/effectiveCostReaders.test.ts",
+      "sha256": "cf0654c05f0698d4453f1003ae7e569a38bbd99daabe100bd701df2c36c6d4d7"
+    },
+    {
+      "path": "src/test/helpers/effectiveCostReadersDatabase.ts",
+      "sha256": "f4d5c3dcd8c74906edb9ad9a12508876de6d77c83f1268c1be77fca9d5f73bb0"
+    }
+  ],
+  "tests": {
+    "vitest": 7,
+    "result": "passed",
+    "started_local": "2026-09-11 03:25:12",
+    "duration_seconds": 5.31,
+    "eslint": "passed"
+  },
+  "remote_mutations": false,
+  "native_postgres": false
+}

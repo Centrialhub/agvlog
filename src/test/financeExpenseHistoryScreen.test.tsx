@@ -17,9 +17,50 @@ const row={id:crypto.randomUUID(),tenant_id:tenant,batch_id:crypto.randomUUID(),
 const result={version:1,tenant_id:tenant,page:1,page_size:30,total:31,total_cents:'155000',allocated_cents:'155000',complement_cents:'0',missing_receipt_count:31,
   cost_centers:[{cost_center_id:null,cost_center_name:null,amount_cents:'155000',item_count:31}],
   categories:[{category:'food',amount_cents:'155000',item_count:31}],rows:[row]};
-function mount(){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><FinanceExpenses/></QueryClientProvider>);}
+function mount(client=new QueryClient({defaultOptions:{queries:{retry:false}}})){return render(<QueryClientProvider client={client}><FinanceExpenses/></QueryClientProvider>);}
 beforeEach(()=>{vi.clearAllMocks();mocks.role='operator';mocks.access=true;mocks.history.mockResolvedValue(result);});
 describe('recorded expense history screen',()=>{
+  it('preserves an open correction review while refreshing the surrounding expense list',async()=>{
+    mocks.role='admin';mocks.history.mockResolvedValueOnce({...result,rows:[{...row,unloading_id:crypto.randomUUID()}]}).mockImplementation(()=>new Promise(()=>{}));
+    const client=new QueryClient({defaultOptions:{queries:{retry:false}}});mount(client);
+    fireEvent.click(await screen.findByRole('button',{name:'Detalhar Almoço da viagem'}));
+    fireEvent.click(screen.getByRole('button',{name:'Conferir correção do custo da descarga'}));
+    expect(screen.getByRole('dialog',{name:'Corrigir custo e obrigação da descarga'})).toBeInTheDocument();
+    void client.invalidateQueries({queryKey:['finance-expenses',tenant,actor]});
+    await waitFor(()=>expect(screen.getByText(/Atualizando o detalhe/)).toBeInTheDocument());
+    expect(screen.getByRole('dialog',{name:'Corrigir custo e obrigação da descarga'})).toBeInTheDocument();
+    expect(screen.queryByText('Custo vigente registrado: R$ 50,00')).not.toBeInTheDocument();
+  });
+
+  it('offers cost correction from an unloading expense only for an administrator',async()=>{
+    mocks.history.mockResolvedValue({...result,rows:[{...row,unloading_id:crypto.randomUUID()}]});
+    const operator=mount();fireEvent.click(await screen.findByRole('button',{name:'Detalhar Almoço da viagem'}));
+    expect(screen.queryByRole('button',{name:'Conferir correção do custo da descarga'})).not.toBeInTheDocument();operator.unmount();
+    mocks.role='admin';mount();fireEvent.click(await screen.findByRole('button',{name:'Detalhar Almoço da viagem'}));
+    expect(await screen.findByRole('button',{name:'Conferir correção do custo da descarga'})).toBeInTheDocument();
+  });
+
+  it('uses the verified corrected cost in the list and payable detail while preserving its original',async()=>{
+    const expense={...row,amount_cents:15000,allocated_cents:0,payable_id:crypto.randomUUID(),payable_status:'pending',unloading_id:crypto.randomUUID(),allocations:[],cancelled:false};
+    const origin={version:1,tenant_id:tenant,expense_id:expense.id,charge_id:expense.unloading_id,payable_id:expense.payable_id,verified:true,issue:null,original_amount_cents:'15000',effective_amount_cents:'12000',revision:'a'.repeat(32),history:[{id:crypto.randomUUID(),ordinal:1,previous_id:null,request_id:crypto.randomUUID(),before_amount_cents:'15000',after_amount_cents:'12000',approval_reset:true,actor_id:actor,actor_name:'Maria Financeiro',reason:'Recibo corrigido após conferência',created_at:'2026-09-11T06:00:00Z',revision_after:'a'.repeat(32)}]};
+    mocks.history.mockResolvedValue({...result,total_cents:'12000',complement_cents:'12000',rows:[{...expense,cost_origin:origin,effective_amount_cents:'12000'}]});
+    mount();await screen.findByText(/Retificado · original R\$ 150,00/);
+    fireEvent.click(screen.getByRole('button',{name:'Detalhar Almoço da viagem'}));
+    expect(await screen.findByText('Custo vigente registrado: R$ 120,00')).toBeInTheDocument();
+    expect(screen.getByText('R$ 120,00 · Pendente')).toBeInTheDocument();
+    expect(screen.getByText('De R$ 150,00 para R$ 120,00')).toBeInTheDocument();
+    expect(screen.getByText(/A aprovação anterior foi retirada/)).toBeInTheDocument();
+    expect(screen.getByText('Motivo: Recibo corrigido após conferência')).toBeInTheDocument();
+  });
+  it('shows unavailable current cost and totals instead of using the original when evidence is missing',async()=>{
+    mocks.history.mockResolvedValue({...result,total_cents:null,complement_cents:null,cost_needs_review_count:1,categories:[{category:'food',amount_cents:null,item_count:1}],cost_centers:[],rows:[{...row,cost_origin:null,effective_amount_cents:null}]});
+    mount();expect(await screen.findByText(/1 gasto\(s\) com origem de custo pendente/)).toBeInTheDocument();
+    expect(screen.getAllByText('A conferir').length).toBeGreaterThan(1);
+    fireEvent.click(screen.getByRole('button',{name:'Detalhar Almoço da viagem'}));
+    expect(await screen.findByText('Custo vigente registrado: A conferir')).toBeInTheDocument();
+    expect(screen.getByText(/O valor original não substitui/)).toBeInTheDocument();
+  });
+
   it('identifies a later attachment without claiming the original receipt existed',async()=>{
     mocks.history.mockResolvedValue({...result,rows:[{...row,receipt_artifact_count:1}]});
     mount();expect(await screen.findByText('Anexado posteriormente')).toBeInTheDocument();

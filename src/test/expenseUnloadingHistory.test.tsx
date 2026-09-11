@@ -10,7 +10,7 @@ const row={tenant_id:tenant,unloading_id:charge,receivable_id:receivable,amount_
 describe('expense unloading history',()=>{
  it('separates original cost, current collection right and the dated audit history',()=>{
   render(<ExpenseUnloadingHistory row={{...row,unloading_origin:origin()}}/>);
-  expect(screen.getByText('Custo registrado: R$ 150,00 · Prestador do serviço')).toBeInTheDocument();
+  expect(screen.getByText('Custo original registrado: R$ 150,00 · Prestador do serviço')).toBeInTheDocument();
   expect(screen.getByText('Direito de cobrança vigente: R$ 120,00 · Fornecedor corrigido')).toBeInTheDocument();
   expect(screen.getByText('Registro original da cobrança: R$ 150,00 · Fornecedor original')).toBeInTheDocument();
   expect(screen.getByText('Maria Financeiro · Correção da cobrança conferida')).toBeInTheDocument();
@@ -20,7 +20,7 @@ describe('expense unloading history',()=>{
   const value=origin();value.effective={...value.effective!,status:'cancelled',amount_cents:'0'};
   render(<ExpenseUnloadingHistory row={{...row,unloading_origin:value}}/>);
   expect(screen.getByText(/Direito de cobrança cancelado: R\$ 0,00/)).toBeInTheDocument();
-  expect(screen.getByText(/Custo registrado: R\$ 150,00/)).toBeInTheDocument();
+  expect(screen.getByText(/Custo original registrado: R\$ 150,00/)).toBeInTheDocument();
  });
  it.each(['absent','unverified','wrong tenant','wrong charge'])('does not substitute expense amount for an unconfirmed right: %s',kind=>{
   const value=origin();if(kind==='unverified'){value.verified=false;value.effective=null;value.issue='chain_unverified';}if(kind==='wrong tenant')value.tenant_id=crypto.randomUUID();if(kind==='wrong charge')value.charge_id=crypto.randomUUID();
