@@ -154,7 +154,7 @@ Deno.serve(withFiscalCors(async (request) => {
         if(!validUuid(tenantId)||!validUuid(artifact)||!validUuid(expense))return response(400,{error:'upload_invalid_request'});
         const tenantError=requireActiveTenant(request,tenantId);if(tenantError)return tenantError;
         const preview=await previewExpenseArtifact(tenantId,expense,artifact,{
-          read:()=>callerClient.rpc('get_finance_upload_artifact',{_tenant_id:tenantId,_artifact_id:artifact}),
+          read:()=>callerClient.rpc('get_finance_expense_receipt_artifacts',{_tenant_id:tenantId,_expense_id:expense}),
           sign:(target,path)=>callerClient.storage.from(target).createSignedUrl(path,300),
         });
         return response(200,preview);
@@ -181,7 +181,7 @@ Deno.serve(withFiscalCors(async (request) => {
         if(access.error||access.data!==true)return response(403,{error:'finance_access_denied'});
       }
       const cleanupResult = await secureCleanup({tenant:tenantId,actor:user.id,bucket,paths,correlationId},{
-        authorize: args => callerClient.rpc("authorize_secure_upload_cleanup_v1",args),
+        authorize: async args => await callerClient.rpc("authorize_secure_upload_cleanup_v1",args),
         consumeQuota: () => consumeQuota(adminClient,fingerprint,"cleanup"),
         remove: (targetBucket,targetPaths) => adminClient.storage.from(targetBucket).remove(targetPaths),
       });

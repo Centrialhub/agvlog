@@ -1,0 +1,121 @@
+{
+  "head": "0b38abfe84a14aaa77aaa6143eb3cd73b466fe38",
+  "scope": "Integrated prepared batch receipt SQL, Edge, UI, tests and reviews",
+  "migration_sha256": "3c43f6aaa74571d03f86fb9533989098bdf689c12f5a3ac453dc4537dde3f215",
+  "production_migration": "20260911070636",
+  "edge_version": 25,
+  "files": [
+    {
+      "path": "src/components/financial/ExpenseBatchDialog.tsx",
+      "sha256": "eebd4670fe19d073061368112a66663d22e3bacefe98df73ce9aa0f8803b3621"
+    },
+    {
+      "path": "src/components/financial/ExpenseBatchLine.tsx",
+      "sha256": "c294f7c4da4527296096ab46dfba82e56b7a075621ea24236fe163c5fff2f348"
+    },
+    {
+      "path": "src/lib/financial/expenseArtifactClient.ts",
+      "sha256": "98985988889f2ed72cc61a48cd773b7815174478bb14fdf0658f3fd3610aaad4"
+    },
+    {
+      "path": "src/lib/financial/expenseBatchContract.ts",
+      "sha256": "71b199ca33d652d3ff21cf864606770a0abc8475815e837ed47c661ef9904996"
+    },
+    {
+      "path": "src/lib/financial/uploadArtifactContract.ts",
+      "sha256": "f63ca0e9e6f31703679958647d0cc78990569cf39b690016f09889a613257d4f"
+    },
+    {
+      "path": "src/lib/financial/expenseBatchReceiptClient.ts",
+      "sha256": "9e863f535b127c59ad2a228873b37cce401dbe65ecb62f23f5cfc4407fd157eb"
+    },
+    {
+      "path": "src/lib/financial/expenseBatchReceiptContract.ts",
+      "sha256": "4d418d54f426e204c5bdcc09d8f43f1f9833b8f5aff4f0d06c269fa989f86363"
+    },
+    {
+      "path": "src/test/expenseArtifactPreview.test.ts",
+      "sha256": "4f7c2f9f392476660ad359cbcc548ddd2117f65a8d330376159d862a6370c8a0"
+    },
+    {
+      "path": "src/test/quarantineWorkflow.test.ts",
+      "sha256": "29dd2c186fa207ccb56b5a04508f12831bf1da904e28b820636e0dd9172a2a4c"
+    },
+    {
+      "path": "src/test/expenseArtifactPreparedClient.test.ts",
+      "sha256": "c23f3ded5aa6b50ad51ad77e867f494a3b9ea113e6d4bd8b3bd550bbd8546871"
+    },
+    {
+      "path": "src/test/expenseBatchPreparedReceipt.test.tsx",
+      "sha256": "9085fd158fc723f4c709d3bdca9e371043784c98c708b3182f4f3946d18a7100"
+    },
+    {
+      "path": "src/test/expenseBatchReceiptClient.test.ts",
+      "sha256": "4a5e5df1ea0da6b6c32145c70e747f318f1006ea5e19e9d48309f8e33a015825"
+    },
+    {
+      "path": "src/test/helpers/preparedReceiptCostIntegrationDatabase.ts",
+      "sha256": "88121855dd3ce6f732c1f429a4d6c3f77ba86464208e2899b53fd349414dd8c5"
+    },
+    {
+      "path": "src/test/helpers/preparedReceiptImageCallback.ts",
+      "sha256": "6f37fe086d901590e79ec1b666b961098b0a00b5c9584d8b191049c54118fe1f"
+    },
+    {
+      "path": "src/test/preparedExpenseBatchReceipt.test.ts",
+      "sha256": "f4739112df79b242ca6ebfaa6ccac6f656e9f0380a5e6b8673ed0b4cfc5f82f3"
+    },
+    {
+      "path": "src/test/preparedReceiptBatchIndependent.test.ts",
+      "sha256": "d2c087dfba8f417107b77a3165dfaaeeb7fb3165a7329e36e971451360b7099d"
+    },
+    {
+      "path": "src/test/preparedReceiptCostIntegration.test.ts",
+      "sha256": "2e3ae4399f23a72f9f4953b92e25cb1b878537d0ec83491478d999e5cc7d8d6b"
+    },
+    {
+      "path": "supabase/functions/secure-upload/artifact-preview.ts",
+      "sha256": "4a8c88c3731ae75525d6e2f357e44503a0fc186d071bfa7272ff940f62904cf3"
+    },
+    {
+      "path": "supabase/functions/secure-upload/index.ts",
+      "sha256": "90e0dcf8b3a6bd75f99da8ee13d9fc44c14eed42beaa03d00d65a4f45d5d23d7"
+    },
+    {
+      "path": "supabase/functions/secure-upload/quarantine-workflow.ts",
+      "sha256": "160b29a5a52914115ee5d464ac4d07cadf670237ea644a45889d8bb1d9fa3310"
+    },
+    {
+      "path": "supabase/migrations/20260911064852_finance_batch_prepared_receipt_intents.sql",
+      "sha256": "3c43f6aaa74571d03f86fb9533989098bdf689c12f5a3ac453dc4537dde3f215"
+    },
+    {
+      "path": "docs/qa/finance-batch-prepared-receipt-design-2026-09-11.md",
+      "sha256": "8aa1f9663e91f34280d31038d82647ea6861f3208317b7c71f7f5347adda1d5d"
+    },
+    {
+      "path": "docs/qa/finance-batch-prepared-receipt-predecessors-2026-09-11.json",
+      "sha256": "12c7d0450b07bdf450ac389a87b3b040b9737bce17afcc8ac6cd97bb1ca16c37"
+    },
+    {
+      "path": "docs/qa/finance-batch-prepared-receipt-sql-2026-09-11.md",
+      "sha256": "c3eadb548a5e0f39abee88324087ec21d2c134737ccfc3e51f17be30d1a8fcc2"
+    },
+    {
+      "path": "docs/qa/finance-expense-batch-prepared-receipts-ui-2026-09-11.md",
+      "sha256": "fd9b0e8fc9ad23cd3e088aa947987766542a018f5b8fe6cc5b08dd31200cf970"
+    },
+    {
+      "path": "docs/qa/finance-prepared-receipt-edge-2026-09-11.md",
+      "sha256": "bdd44f1940e27d1af2147e73a41e38e644c77863648c1d3a428c1085e9f39c32"
+    },
+    {
+      "path": "docs/qa/finance-prepared-receipt-independent-2026-09-11.md",
+      "sha256": "19faba0431acb9d4410fdc9427b241594448de91c67d26da47e7434b3e3108f5"
+    },
+    {
+      "path": "docs/qa/finance-prepared-receipt-independent-2026-09-11.json",
+      "sha256": "f46e61ad9a8aa7d3335bc635f9b80a25739009f175935a3eb742b4be79ecf8b5"
+    }
+  ]
+}

@@ -1,16 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { uploadSecureFile } from '@/lib/secureUpload';
+import {prepareBatchReceipt} from '@/lib/financial/expenseBatchReceiptClient';
 import { expenseCategories, type ExpenseLineDraft } from '@/lib/financial/expenseBatchContract';
 import { formatFinanceCents, parseFinanceAmount } from '@/lib/financial/ledgerContract';
 import { FinanceOptionPicker } from './FinanceOptionPicker';
 
-export function ExpenseBatchLine({ tenant, actor, trip, line, index, onChange, onRemove, onUploadBusy, onRepeat, onAddAfter, detailsExpanded = true, revealDetails = false }: {
-  tenant: string; actor: string; trip: string | null; line: ExpenseLineDraft; index: number;
+export function ExpenseBatchLine({ tenant, actor, trip, batchRequest, context, line, index, onChange, onRemove, onUploadBusy, onRepeat, onAddAfter, detailsExpanded = true, revealDetails = false }: {
+  tenant: string; actor: string; batchRequest:string; context:'trip'|'office'|'personnel'|'maintenance'|'other'; trip: string | null; line: ExpenseLineDraft; index: number;
   onChange: (value: ExpenseLineDraft) => void; onRemove: () => void; onUploadBusy: (busy: boolean) => void;
   onRepeat?: () => void; onAddAfter?: () => void; detailsExpanded?: boolean; revealDetails?: boolean;
 }) {
+  const uploadingRef=useRef(false);const active=useRef(true);useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
+  const scope=`${tenant}:${actor}:${batchRequest}:${context}:${trip}:${line.id}:${line.category==='unloading'?line.delivery?.id:null}`;const currentScope=useRef(scope);currentScope.current=scope;
   const [expanded,setExpanded]=useState(detailsExpanded);useEffect(()=>setExpanded(detailsExpanded),[detailsExpanded]);
   useEffect(()=>{if(revealDetails)setExpanded(true);},[revealDetails]);
   const [error,setError] = useState(''), [uploading,setUploading] = useState(false);
@@ -20,13 +22,13 @@ export function ExpenseBatchLine({ tenant, actor, trip, line, index, onChange, o
   const allocated = line.allocations.reduce((sum,a) => sum+BigInt(parseFinanceAmount(a.amount) || 0),0n);
   const remaining = BigInt(parseFinanceAmount(line.amount) || 0)-allocated;
   async function upload(file: File) {
-    setUploading(true);onUploadBusy(true);setError('');
+    if(uploadingRef.current)return;uploadingRef.current=true;
+    setUploading(true);onUploadBusy(true);setError('');onChange({...line,preparedReceipt:null,receiptPath:'',receiptName:''});
     try {
-      const path = await uploadSecureFile({tenantId:tenant,bucket:'receipts',folder:'finance-batches',kind:'proof',file});
-      if (!path.startsWith(`${tenant}/finance-batches/`)) throw new Error('Comprovante fora do contexto esperado.');
-      onChange({...line,receiptPath:path,receiptName:file.name});
-    } catch (cause) {setError(cause instanceof Error?cause.message:'Falha no envio do comprovante.');}
-    finally {setUploading(false);onUploadBusy(false);}
+      const preparedReceipt=await prepareBatchReceipt({tenant_id:tenant,batch_request_id:batchRequest,expense_id:line.id,context,trip_id:context==='trip'?trip:null,stop_id:line.category==='unloading'?line.delivery?.id??null:null},actor,file);
+      if(active.current&&currentScope.current===scope)onChange({...line,preparedReceipt,receiptPath:'',receiptName:file.name,noReceiptReason:''});
+    } catch (cause) {if(active.current)setError(cause instanceof Error?cause.message:'Falha no envio do comprovante.');}
+    finally {uploadingRef.current=false;if(active.current)setUploading(false);onUploadBusy(false);}
   }
   return <section className="space-y-3 rounded-lg border p-4" aria-label={`Gasto ${index+1}`} data-expense-id={line.id} onKeyDown={event=>{if(!event.defaultPrevented&&event.ctrlKey&&!event.altKey&&!event.shiftKey&&event.key==='Enter'&&onAddAfter){event.preventDefault();onAddAfter();}}}>
     <div className="flex items-center justify-between"><strong>Gasto {index+1}</strong><div className="flex gap-2">{onRepeat&&<Button type="button" variant="outline" disabled={uploading} onClick={onRepeat}>Reutilizar dados do gasto {index+1}</Button>}<Button type="button" variant="ghost" disabled={uploading} onClick={onRemove}>Remover gasto {index+1}</Button></div></div>
@@ -38,13 +40,13 @@ export function ExpenseBatchLine({ tenant, actor, trip, line, index, onChange, o
       </div>
       {line.category==='unloading' && <FinanceOptionPicker tenant={tenant} actor={actor} kind="deliveries" trip={trip} label={`Entrega ${index+1}`} value={line.delivery} onChange={delivery=>onChange({...line,delivery})}/>}
       {line.delivery?.delivery && <p className="text-sm">Conta a receber de descarga: <strong>{line.delivery.delivery.supplier_name}</strong></p>}
-      <details open={expanded} onToggle={event=>setExpanded(event.currentTarget.open)}><summary className="cursor-pointer text-sm">Fornecedor, comprovante e detalhes · {line.receiptPath?`Comprovante: ${line.receiptName}`:line.noReceiptReason.trim().length>=5?'Sem comprovante: ausência justificada':'Comprovante ou justificativa pendente'}</summary><div className="mt-3 space-y-3">
+      <details open={expanded} onToggle={event=>setExpanded(event.currentTarget.open)}><summary className="cursor-pointer text-sm">Fornecedor, comprovante e detalhes · {(line.preparedReceipt||line.receiptPath)?`Comprovante: ${line.receiptName}`:line.noReceiptReason.trim().length>=5?'Sem comprovante: ausência justificada':'Comprovante ou justificativa pendente'}</summary><div className="mt-3 space-y-3">
         <FinanceOptionPicker tenant={tenant} actor={actor} kind="suppliers" label={`Fornecedor ${index+1}`} value={line.supplier} onChange={supplier=>onChange({...line,supplier})}/>
         {!line.supplier && field('supplierName','Estabelecimento / prestador')}
         <FinanceOptionPicker tenant={tenant} actor={actor} kind="centers" label={`Centro de custo ${index+1}`} value={line.center} onChange={center=>onChange({...line,center})}/>
         {field('document','Número do documento')}
-        <label className="block text-sm">Comprovante<Input aria-label={`Comprovante ${index+1}`} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);}}/></label>
-        {line.receiptPath ? <p className="text-sm">Anexado: {line.receiptName}</p> : field('noReceiptReason','Motivo sem comprovante')}
+        <p className="text-sm">Fotos JPEG/PNG são validadas antes do registro. Alterar origem, viagem ou entrega exige preparar o comprovante novamente.</p><label className="block text-sm">Comprovante<Input aria-label={`Comprovante ${index+1}`} type="file" accept="image/jpeg,image/png" onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);}}/></label>
+        {line.preparedReceipt||line.receiptPath ? <p className="text-sm">{line.preparedReceipt?'Cópia validada preparada para o lote':'Anexado'}: {line.receiptName}</p> : field('noReceiptReason','Motivo sem comprovante')}
       </div></details>
       {error && <p role="alert">{error}</p>}{uploading && <p role="status">Enviando comprovante…</p>}
       <div className="space-y-2"><p className="text-sm font-medium">Vincular aos envios já realizados</p>

@@ -15,9 +15,11 @@ export type FinanceOption = z.infer<typeof financeOptionSchema>;
 export type ExpenseOptionKind = 'trips' | 'movements' | 'suppliers' | 'centers' | 'deliveries';
 export const expenseOptionsSchema = z.object({ version: z.literal(1), tenant_id: uuid, kind: z.string(), trip_id: uuid.nullable(),
   page: z.number().int().positive(), total: z.number().int().nonnegative(), rows: z.array(financeOptionSchema) });
+export const preparedExpenseReceiptSchema = z.object({intentId:uuid,artifactId:uuid,tenantId:uuid,actorId:uuid,batchRequestId:uuid,expenseId:uuid,context:z.enum(['trip','office','personnel','maintenance','other']),tripId:uuid.nullable(),stopId:uuid.nullable(),sha256:z.string().regex(/^[a-f0-9]{64}$/),name:z.string()}).strict();
+export type PreparedExpenseReceipt = z.infer<typeof preparedExpenseReceiptSchema>;
 export const expenseLineDraftSchema = z.object({ id: uuid, category: z.enum(Object.keys(expenseCategories) as [keyof typeof expenseCategories, ...Array<keyof typeof expenseCategories>]),
   description: z.string(), amount: z.string(), date: z.string(), supplier: financeOptionSchema.nullable(), supplierName: z.string(),
-  center: financeOptionSchema.nullable(), document: z.string(), receiptPath: z.string(), receiptName: z.string(), noReceiptReason: z.string(),
+  preparedReceipt:preparedExpenseReceiptSchema.nullable().optional(), center: financeOptionSchema.nullable(), document: z.string(), receiptPath: z.string(), receiptName: z.string(), noReceiptReason: z.string(),
   dueDate: z.string(), payeeType: z.enum(['driver', 'supplier']), delivery: financeOptionSchema.nullable(),
   allocations: z.array(z.object({ movement: financeOptionSchema, amount: z.string() })),
 });
@@ -50,7 +52,7 @@ export function newExpenseLine(context: ExpenseBatchDraft['context']): ExpenseLi
     document: '', receiptPath: '', receiptName: '', noReceiptReason: '', dueDate: '', payeeType: context === 'trip' ? 'driver' : 'supplier',
     delivery: null, allocations: [] };
 }
-export function buildExpenseBatch(draft: ExpenseBatchDraft, tenant: string, request: string) {
+export function buildExpenseBatch(draft: ExpenseBatchDraft, tenant: string, request: string, actor?:string) {
   if (!draft.description.trim() || draft.reason.trim().length < 5 || !draft.lines.length || draft.lines.length > 200
     || (draft.context === 'trip' && !draft.trip)) throw new Error('Informe contexto, descrição, motivo e pelo menos um gasto.');
   const used = new Map<string,bigint>();
@@ -58,7 +60,9 @@ export function buildExpenseBatch(draft: ExpenseBatchDraft, tenant: string, requ
     const fail = (message: string): never => { throw new Error(`Gasto ${index+1}: ${message}`); };
     const cents = parseFinanceAmount(line.amount);
     if (!cents || !line.description.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(line.date)) fail('informe valor, descrição e data.');
-    if (!line.receiptPath && line.noReceiptReason.trim().length < 5) fail('anexe o comprovante ou justifique sua ausência.');
+    const prepared=line.preparedReceipt;
+    if(prepared&&(prepared.tenantId!==tenant||(actor!==undefined&&prepared.actorId!==actor)||prepared.batchRequestId!==request||prepared.expenseId!==line.id||prepared.context!==draft.context||prepared.tripId!==(draft.context==='trip'?draft.trip?.id??null:null)||prepared.stopId!==(line.category==='unloading'?line.delivery?.id??null:null)))fail('comprovante preparado pertence a outra origem; selecione o arquivo novamente.');
+    if (!prepared && !line.receiptPath && line.noReceiptReason.trim().length < 5) fail('anexe o comprovante ou justifique sua ausência.');
     if (line.receiptPath && !line.receiptPath.startsWith(`${tenant}/`)) fail('comprovante pertence a outra empresa.');
     if (!line.supplier && !line.supplierName.trim()) fail('informe quem forneceu o produto ou serviço.');
     const seen = new Set<string>();
@@ -77,11 +81,11 @@ export function buildExpenseBatch(draft: ExpenseBatchDraft, tenant: string, requ
     if (allocated < BigInt(cents!) && line.payeeType === 'driver' && !draft.trip?.driver_id) fail('selecione o favorecido do complemento.');
     const delivery = line.delivery?.delivery;
     if (line.category === 'unloading' && (draft.context !== 'trip' || !delivery || delivery.issue || !delivery.supplier_id
-      || delivery.trip_id !== draft.trip?.id || !line.receiptPath)) fail('selecione uma entrega válida e anexe o comprovante da descarga.');
+      || delivery.trip_id !== draft.trip?.id || (!line.receiptPath&&!prepared))) fail('selecione uma entrega válida e anexe o comprovante da descarga.');
     return { id: line.id, category: line.category, description: line.description.trim(), amount_cents: cents!, occurred_on: line.date,
       supplier_name: line.supplier?.label || line.supplierName.trim(), ...(line.supplier ? {supplier_id: line.supplier.id} : {}),
       ...(line.center ? {cost_center_id: line.center.id} : {}), ...(line.document ? {document_number: line.document} : {}),
-      ...(line.receiptPath ? {receipt_path: line.receiptPath} : {no_receipt_reason: line.noReceiptReason.trim()}),
+      ...(prepared?{receipt_intent_id:prepared.intentId,receipt_artifact_id:prepared.artifactId}:line.receiptPath ? {receipt_path: line.receiptPath} : {no_receipt_reason: line.noReceiptReason.trim()}),
       ...(line.dueDate ? {due_date: line.dueDate} : {}), payee_type: line.payeeType, allocations,
       ...(line.category === 'unloading' ? {stop_id: line.delivery!.id, delivery_revision: delivery!.revision} : {}) };
   });

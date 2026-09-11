@@ -6,11 +6,11 @@ const uuid=z.string().uuid();
 export const expenseArtifactCommandSchema=z.object({version:z.literal(2),tenant_id:uuid,request_id:uuid,expense_id:uuid,artifact_id:uuid,reason:z.string().trim().min(5).max(2000)}).strict();
 export type ExpenseArtifactCommand=z.infer<typeof expenseArtifactCommandSchema>;
 const resultSchema=z.object({version:z.literal(2),tenant_id:uuid,request_id:uuid,expense_id:uuid,artifact_id:uuid,link_id:uuid,confirmed:z.literal(true)});
-export const expenseArtifactsSchema=z.object({version:z.literal(2),tenant_id:uuid,expense_id:uuid,receipts:z.array(z.object({link_id:uuid,artifact_id:uuid,actor_id:uuid,request_id:uuid,reason:z.string(),created_at:z.string(),evidence:uploadArtifactSchema}))});
+export const expenseArtifactsSchema=z.object({version:z.literal(2),tenant_id:uuid,expense_id:uuid,receipts:z.array(z.object({link_id:uuid,artifact_id:uuid,receipt_intent_id:uuid.nullable().optional(),actor_id:uuid,request_id:uuid,reason:z.string(),created_at:z.string(),evidence:uploadArtifactSchema}))});
 export async function readExpenseArtifacts(tenant:string,expense:string){
  const result=await(supabase.rpc as unknown as Rpc)('get_finance_expense_receipt_artifacts',{_tenant_id:tenant,_expense_id:expense});if(result.error)throw result.error;
  const data=expenseArtifactsSchema.parse(result.data);
- if(data.tenant_id!==tenant||data.expense_id!==expense||data.receipts.some(row=>row.evidence.tenant_id!==tenant||row.evidence.source_type!=='expense_item'||row.evidence.source_id!==expense||row.artifact_id!==row.evidence.artifact_id))throw new Error('Comprovantes fora do gasto solicitado.');return data;
+ if(data.tenant_id!==tenant||data.expense_id!==expense||data.receipts.some(row=>row.evidence.tenant_id!==tenant||!(row.evidence.source_type==='expense_item'?row.evidence.source_id===expense&&row.receipt_intent_id==null:row.evidence.source_type==='expense_draft'&&!!row.receipt_intent_id&&row.evidence.source_id===row.receipt_intent_id)||row.artifact_id!==row.evidence.artifact_id))throw new Error('Comprovantes fora do gasto solicitado.');return data;
 }
 export class ExpenseArtifactRejectedError extends Error{}
 export async function sendExpenseArtifact(command:ExpenseArtifactCommand){

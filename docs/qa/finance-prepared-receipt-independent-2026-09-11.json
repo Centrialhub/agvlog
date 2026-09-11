@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-11",
+  "test_start_local": "04:05:21",
+  "passed": 6,
+  "test_files": 2,
+  "vitest_exit": 0,
+  "eslint_exit": 0,
+  "duration_seconds": 4.8,
+  "sql_edits": false,
+  "remote_writes": false,
+  "files": [
+    {
+      "path": "supabase/migrations/20260911064852_finance_batch_prepared_receipt_intents.sql",
+      "sha256": "3c43f6aaa74571d03f86fb9533989098bdf689c12f5a3ac453dc4537dde3f215"
+    },
+    {
+      "path": "src/test/preparedReceiptBatchIndependent.test.ts",
+      "sha256": "d2c087dfba8f417107b77a3165dfaaeeb7fb3165a7329e36e971451360b7099d"
+    },
+    {
+      "path": "src/test/preparedReceiptCostIntegration.test.ts",
+      "sha256": "2e3ae4399f23a72f9f4953b92e25cb1b878537d0ec83491478d999e5cc7d8d6b"
+    },
+    {
+      "path": "src/test/helpers/preparedReceiptCostIntegrationDatabase.ts",
+      "sha256": "88121855dd3ce6f732c1f429a4d6c3f77ba86464208e2899b53fd349414dd8c5"
+    },
+    {
+      "path": "src/test/helpers/preparedReceiptImageCallback.ts",
+      "sha256": "6f37fe086d901590e79ec1b666b961098b0a00b5c9584d8b191049c54118fe1f"
+    },
+    {
+      "path": "src/test/helpers/unloadingCostCorrectionDatabase.ts",
+      "sha256": "5c2a6cfe00cfc2b3aa8671342318fe691f7b857ffc7b4cf43a4e6b4afb240ed7"
+    },
+    {
+      "path": "src/test/helpers/effectiveCostReadersDatabase.ts",
+      "sha256": "f4d5c3dcd8c74906edb9ad9a12508876de6d77c83f1268c1be77fca9d5f73bb0"
+    }
+  ]
+}

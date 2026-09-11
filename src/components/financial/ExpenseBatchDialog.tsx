@@ -10,19 +10,21 @@ import { FinanceOptionPicker } from './FinanceOptionPicker';
 import { ExpenseBatchLine } from './ExpenseBatchLine';
 import { repeatExpenseLineDetails, expenseErrorField } from '@/lib/financial/expenseBatchEntryUx';
 
-const savedSchema = z.object({draft:expenseBatchDraftSchema,request:z.string().uuid().nullable()});
+const savedSchema = z.object({draft:expenseBatchDraftSchema,request:z.string().uuid().nullable(),batchRequest:z.string().uuid().optional()});
 function restore(key:string):{saved:z.infer<typeof savedSchema>;error:boolean} {
-  const empty:z.infer<typeof savedSchema>={request:null,draft:{context:'trip',trip:null,description:'Gastos conferidos no retorno',reason:'Conferência dos gastos e comprovantes',lines:[newExpenseLine('trip')]}};
+  const empty:z.infer<typeof savedSchema>={request:null,batchRequest:crypto.randomUUID(),draft:{context:'trip',trip:null,description:'Gastos conferidos no retorno',reason:'Conferência dos gastos e comprovantes',lines:[newExpenseLine('trip')]}};
   try {
     const raw=sessionStorage.getItem(key);if(raw===null)return {saved:empty,error:false};
-    const parsed=savedSchema.safeParse(JSON.parse(raw));if(parsed.success)return {saved:parsed.data,error:false};
+    const parsed=savedSchema.safeParse(JSON.parse(raw));if(parsed.success)return {saved:{...parsed.data,batchRequest:parsed.data.request||parsed.data.batchRequest||crypto.randomUUID()},error:false};
   }catch{/* Keep the original storage untouched when recovery cannot be verified. */}
   return {saved:empty,error:true};
 }
-export function ExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:string;actor:string;onClose:()=>void;onRecorded:()=>void}) {
+export function ExpenseBatchDialog(props:{tenant:string;actor:string;onClose:()=>void;onRecorded:()=>void}){return <ScopedExpenseBatchDialog key={`${props.tenant}:${props.actor}`} {...props}/>;}
+function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:string;actor:string;onClose:()=>void;onRecorded:()=>void}) {
   const key=`finance-expense-batch:${tenant}:${actor}`;
   const [restored]=useState(()=>restore(key));
-  const [saved,setSaved]=useState(restored.saved),[busy,setBusy]=useState(false),[uploadBusy,setUploadBusy]=useState(false);
+  const [saved,setSaved]=useState(restored.saved),[busy,setBusy]=useState(false),[uploadCount,setUploadCount]=useState(0);
+  const uploadBusy=uploadCount>0;const setUploadBusy=(value:boolean)=>setUploadCount(count=>Math.max(0,count+(value?1:-1)));
   const sending=useRef(false),body=useRef<HTMLDivElement>(null);
   const [detailsExpanded,setDetailsExpanded]=useState(true),[focusTarget,setFocusTarget]=useState<{id:string;field:string}|null>(null);
   const [error,setError]=useState(''),[storageFailed,setStorageFailed]=useState(false),[review,setReview]=useState(false);
@@ -30,7 +32,8 @@ export function ExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:str
   const draft=saved.draft, locked=busy||uploadBusy||!!saved.request||restored.error;
   useEffect(()=>{if(restored.error)return;try{sessionStorage.setItem(key,JSON.stringify(saved));setStorageFailed(false);}catch{setStorageFailed(true);}},[key,saved,restored.error]);
   useEffect(()=>{if(!focusTarget)return;const timer=window.setTimeout(()=>{const section=body.current?.querySelector(`[data-expense-id="${focusTarget.id}"]`);const control=body.current?.querySelector<HTMLElement>(focusTarget.id?`[data-expense-id="${focusTarget.id}"] [aria-label^="${focusTarget.field} "]`:`[data-add-expense]`)||Array.from(section?.querySelectorAll(`button`)||[]).find(button=>button.textContent?.trim().startsWith(`${focusTarget.field} `));control?.focus();setFocusTarget(null);},0);return()=>window.clearTimeout(timer);},[focusTarget]);
-  const change=(next:ExpenseBatchDraft)=>{setSaved(old=>({...old,draft:next}));setReview(false);};
+  const normalize=(next:ExpenseBatchDraft)=>({...next,lines:next.lines.map(line=>{const r=line.preparedReceipt;if(r&&(r.tenantId!==tenant||r.actorId!==actor||r.context!==next.context||r.tripId!==(next.context==='trip'?next.trip?.id??null:null)||r.stopId!==(line.category==='unloading'?line.delivery?.id??null:null)))return {...line,preparedReceipt:null,receiptName:''};return line;})});
+  const change=(next:ExpenseBatchDraft)=>{setSaved(old=>({...old,draft:normalize(next)}));setReview(false);};
   function addLine(after?:string,repeat=false){if(locked||draft.lines.length>=200)return;const index=after?draft.lines.findIndex(line=>line.id===after):draft.lines.length-1,source=draft.lines[index],line=repeat&&source?repeatExpenseLineDetails(source,draft.context):newExpenseLine(draft.context),lines=[...draft.lines];lines.splice(index+1,0,line);change({...draft,lines});setFocusTarget({id:line.id,field:repeat?'Valor':'Categoria'});}
   function removeLine(id:string){if(locked)return;const index=draft.lines.findIndex(line=>line.id===id),lines=draft.lines.filter(line=>line.id!==id);change({...draft,lines});const next=lines[Math.min(index,lines.length-1)];setFocusTarget({id:next?.id||'',field:'Categoria'});}
   const total=draft.lines.reduce((sum,line)=>sum+BigInt(parseFinanceAmount(line.amount)||0),0n);
@@ -40,15 +43,15 @@ export function ExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:str
   });}
   const allocated=[...movements.values()].reduce((sum,m)=>sum+m.used,0n);
   function check() {
-    try{buildExpenseBatch(draft,tenant,saved.request||crypto.randomUUID());setError('');setReview(true);}
+    try{buildExpenseBatch(draft,tenant,saved.request||saved.batchRequest!,actor);setError('');setReview(true);}
     catch(cause){const message=cause instanceof Error?cause.message:'Revise os gastos.';setError(message);setDetailsExpanded(true);const match=/^Gasto (\d+):/.exec(message),line=match?draft.lines[Number(match[1])-1]:undefined;if(line){const field=expenseErrorField(line,message);setFocusTarget({id:line.id,field});}}
   }
   async function submit() {
     if(sending.current||uploadBusy||storageFailed||restored.error)return;
     let command;
-    const request=saved.request||crypto.randomUUID();
-    try{command=buildExpenseBatch(draft,tenant,request);}catch(cause){setError(cause instanceof Error?cause.message:'Revise os gastos.');return;}
-    const attempt={draft,request};
+    const request=saved.request||saved.batchRequest!;
+    try{command=buildExpenseBatch(draft,tenant,request,actor);}catch(cause){setError(cause instanceof Error?cause.message:'Revise os gastos.');return;}
+    const attempt={draft,request,batchRequest:request};
     try{sessionStorage.setItem(key,JSON.stringify(attempt));}catch{setStorageFailed(true);return;}
     sending.current=true;setSaved(attempt);setBusy(true);setError('');
     try{await recordExpenseBatch(command);sessionStorage.removeItem(key);onRecorded();}
@@ -74,8 +77,8 @@ export function ExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:str
           </div>
           <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded border bg-background p-3"><Button type="button" data-add-expense variant="outline" disabled={draft.lines.length>=200} onClick={()=>addLine()}>Adicionar gasto</Button><Button type="button" variant="outline" onClick={()=>setDetailsExpanded(!detailsExpanded)}>{detailsExpanded?'Recolher detalhes dos gastos':'Expandir detalhes dos gastos'}</Button><span className="text-sm">{draft.lines.length}/200 gastos · Total {formatFinanceCents(total.toString())} · Vinculado {formatFinanceCents(allocated.toString())} · Complemento {formatFinanceCents((total>allocated?total-allocated:0n).toString())}</span>{allocated>total&&<span className="text-destructive">Excesso vinculado: {formatFinanceCents((allocated-total).toString())}</span>}</div>
           <p className="text-sm text-muted-foreground">Ctrl+Enter em um gasto adiciona o próximo. Reutilizar dados mantém categoria, descrição, data e favorecido; valor, comprovante, documento, entrega e vínculos devem ser conferidos novamente.</p>
-          {draft.lines.map((line,index)=><ExpenseBatchLine key={line.id} tenant={tenant} actor={actor} trip={draft.context==='trip'?draft.trip?.id||null:null} line={line} index={index}
-            onChange={next=>change({...draft,lines:draft.lines.map(current=>current.id===next.id?next:current)})}
+          {draft.lines.map((line,index)=><ExpenseBatchLine key={line.id} tenant={tenant} actor={actor} batchRequest={saved.batchRequest!} context={draft.context} trip={draft.context==='trip'?draft.trip?.id||null:null} line={line} index={index}
+            onChange={next=>{setSaved(old=>({...old,draft:normalize({...old.draft,lines:old.draft.lines.map(current=>current.id===next.id?next:current)})}));setReview(false);}}
             onRemove={()=>removeLine(line.id)} onUploadBusy={setUploadBusy} detailsExpanded={detailsExpanded} revealDetails={focusTarget?.id===line.id} onRepeat={draft.lines.length<200?()=>addLine(line.id,true):undefined} onAddAfter={()=>addLine(line.id)}/>)}
         </fieldset>
         <div className="rounded-lg bg-muted p-4 text-sm" aria-label="Resumo do lote"><p>{draft.lines.length} gastos · Total {formatFinanceCents(total.toString())} · Vinculado {formatFinanceCents(allocated.toString())}</p>

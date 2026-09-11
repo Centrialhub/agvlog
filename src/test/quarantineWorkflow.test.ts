@@ -52,3 +52,12 @@ it('publishes a successful image only under its derived path and preserves proce
  const failed=await setup('png');failed.deps.image=async()=>{throw new Error('image_processing_budget');};
  const result=await quarantineUpload(failed.input,failed.deps);expect(result.state).toBe('quarantined');expect(result.usable).toBe(false);expect(failed.put).toHaveBeenCalledTimes(1);expect(result.issues).toEqual(['image_processing_budget']);
 });
+it('reserves prepared expense evidence under its intent without bypassing source authorization',async()=>{
+ const s=await setup('jpeg');s.input.sourceType='expense_draft';s.input.sourceId=artifact;s.dto.source_type='expense_draft';s.dto.source_id=artifact;
+ s.deps.image=async()=>({state:'sanitized_derivative',method:'jpeg-png-reencode-v1',mime:'image/jpeg',bytes:new Uint8Array([1,2,3])});
+ const result=await quarantineUpload(s.input,s.deps);
+ expect(s.deps.caller).toHaveBeenCalledWith('reserve_finance_upload_artifact',{_payload:expect.objectContaining({source_type:'expense_draft',source_id:artifact})});
+ expect(result.source_type).toBe('expense_draft');expect(result.source_id).toBe(artifact);expect(result.usable).toBe(true);
+ const denied=await setup('jpeg');denied.input.sourceType='expense_draft';denied.deps.caller=async()=>({data:null,error:new Error('intent_denied')});
+ await expect(quarantineUpload(denied.input,denied.deps)).rejects.toThrow('intent_denied');expect(denied.put).not.toHaveBeenCalled();expect(denied.deps.service).not.toHaveBeenCalled();
+});

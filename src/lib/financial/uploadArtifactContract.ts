@@ -2,7 +2,7 @@ import {z} from 'zod';
 const uuid=z.string().uuid(),hash=z.string().regex(/^[a-f0-9]{64}$/);
 export const uploadArtifactSchema=z.object({
  version:z.literal(2),tenant_id:uuid,actor_id:uuid,request_id:uuid,artifact_id:uuid,
- source_type:z.enum(['trip','settlement','bank_account','expense_item']),source_id:uuid,
+ source_type:z.enum(['trip','settlement','bank_account','expense_item','expense_draft']),source_id:uuid,
  state:z.enum(['quarantined','validated_data','sanitized_derivative','rejected','validation_failed']),
  original:z.object({sha256:hash,size_bytes:z.number().int().positive().max(10485760),format:z.enum(['ofx','csv','jpeg','png','pdf','xls','xlsx','unknown']),received:z.boolean()}),
  usable:z.boolean(),issues:z.array(z.string()),

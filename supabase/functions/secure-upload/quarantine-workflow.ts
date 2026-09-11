@@ -19,7 +19,7 @@ const record=(value:unknown):Record<string,unknown>=>{
 const uuid=(value:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 export async function quarantineUpload(input:{tenant:string;actor:string;request:string;sourceType:string;sourceId:string;format:string;mime:string;bytes:Uint8Array;delimiter?:';'|','|'\t'},deps:QuarantineDependencies):Promise<Record<string,unknown>>{
  const {tenant,actor,request,sourceType,sourceId,format,mime,bytes}=input;
- if(![tenant,actor,request,sourceId].every(uuid)||!['trip','settlement','bank_account','expense_item'].includes(sourceType)||!['ofx','csv','jpeg','png','pdf','xls','xlsx','unknown'].includes(format)||!bytes.length||bytes.length>10485760)throw new Error('upload_invalid_request');
+ if(![tenant,actor,request,sourceId].every(uuid)||!['trip','settlement','bank_account','expense_item','expense_draft'].includes(sourceType)||!['ofx','csv','jpeg','png','pdf','xls','xlsx','unknown'].includes(format)||!bytes.length||bytes.length>10485760)throw new Error('upload_invalid_request');
  const sha256=await quarantineSha256(bytes);
  const rpc=async(fn:Rpc,name:string,args:Record<string,unknown>)=>{const result=await fn(name,args);if(result.error)throw result.error;return record(result.data);};
  const check=(value:unknown)=>{
