@@ -1,0 +1,45 @@
+{
+  "tests": "cashForecastCollector.test.ts10 + cashForecastCollectorCredit.test.ts1:11 PASS",
+  "remote_applied": false,
+  "native_pg": false,
+  "files": [
+    {
+      "path": "supabase/migrations/20260911082303_finance_cash_forecast_private_collector.sql",
+      "sha256": "02b8a14f05a80dcf53f8f2a628ed8f2d5060debb8ca593d9be6370e6df554097"
+    },
+    {
+      "path": "src/lib/financial/cashForecastCollectorContract.ts",
+      "sha256": "1e4b01e1e316f8ad60f8c74053b8eb45392d8d2ed84162268e85d027e143e316"
+    },
+    {
+      "path": "src/test/helpers/cashForecastCollectorDatabase.ts",
+      "sha256": "da1c146d73127c6de0ef0a71178c3d4cedd628734fd3ad6805a2d3bf9f41d451"
+    },
+    {
+      "path": "src/test/cashForecastCollector.test.ts",
+      "sha256": "4c32863d5756e1439a9557443478c9627673ce697740f43cdd17ae823507779a"
+    },
+    {
+      "path": "src/test/cashForecastCollectorCredit.test.ts",
+      "sha256": "138887f1eec4f7fc152b52e3c6574c43378fca878060fb06c8b0e6cd1fed8fa8"
+    },
+    {
+      "path": "docs/qa/finance-cash-forecast-private-collector-2026-09-11.md",
+      "sha256": "606846527de0cc7143607421e2253a7e2a175559b2cb3147f918325d048deb0e"
+    },
+    {
+      "path": "docs/qa/finance-cash-forecast-private-catalog-2026-09-11.json",
+      "sha256": "1a67b3f4bc4115b9a576d14d6bae1c7de8b5b88722d7b7cb8c77e0622ff266d7"
+    },
+    {
+      "path": "docs/qa/finance-cash-forecast-server-collector-proposal-2026-09-11.md",
+      "sha256": "9d98944f14fde4c66a97da007e32c03ed2d6473f7dc3701f10172831fa257142"
+    }
+  ],
+  "scope": "private_local_only",
+  "lint": "4 TypeScript files:0",
+  "dependencies": [
+    "src/lib/financial/cashForecastCollectorProjection.ts owned by root",
+    "existing monetary/fiscal test helpers unchanged"
+  ]
+}

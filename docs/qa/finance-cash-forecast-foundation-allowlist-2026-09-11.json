@@ -1,0 +1,27 @@
+{
+  "files": [
+    "docs/qa/finance-cash-forecast-collector-adapter-2026-09-11.md",
+    "docs/qa/finance-cash-forecast-private-catalog-2026-09-11.json",
+    "docs/qa/finance-cash-forecast-private-collector-2026-09-11.json",
+    "docs/qa/finance-cash-forecast-private-collector-2026-09-11.md",
+    "docs/qa/finance-cash-forecast-projection-core-2026-09-11.md",
+    "docs/qa/finance-cash-forecast-pure-projection-2026-09-11.md",
+    "docs/qa/finance-cash-forecast-pure-projection-allowlist-2026-09-11.json",
+    "docs/qa/finance-cash-forecast-server-collector-proposal-2026-09-11.md",
+    "src/lib/financial/cashForecastCollectorContract.ts",
+    "src/lib/financial/cashForecastCollectorProjection.ts",
+    "src/lib/financial/cashForecastProjection.ts",
+    "src/test/cashForecastCollector.test.ts",
+    "src/test/cashForecastCollectorCredit.test.ts",
+    "src/test/cashForecastCollectorProjection.test.ts",
+    "src/test/cashForecastCompanyBasis.test.ts",
+    "src/test/cashForecastSqlProjection.test.ts",
+    "src/test/cashForecastSqlProjectionCollected.test.ts",
+    "src/test/helpers/cashForecastCollectorDatabase.ts",
+    "src/test/helpers/cashForecastPureProjectionDatabase.ts",
+    "supabase/migrations/20260911082303_finance_cash_forecast_private_collector.sql",
+    "supabase/migrations/20260911084618_finance_cash_forecast_pure_projection.sql"
+  ],
+  "include_manifest_itself": "docs/qa/finance-cash-forecast-foundation-allowlist-2026-09-11.json",
+  "scope": "Private collector and projector, pure adapter only; snapshot journal and public readers excluded"
+}

@@ -1,0 +1,44 @@
+{
+  "scope": "local_fixture_catalog_not_production",
+  "functions": [
+    {
+      "signature": "finance_private.cash_forecast_collect(uuid,date,date)",
+      "source_md5": "f05aa53d0b085c6d89f177234a65b24c",
+      "security_definer": true,
+      "volatility": "s",
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}",
+      "authenticated": false,
+      "anon": false,
+      "service_role": false
+    },
+    {
+      "signature": "finance_private.forecast_customer_credit_evidence(uuid,uuid)",
+      "source_md5": "0d52a40e865dba8396d54c1eaed99d90",
+      "security_definer": true,
+      "volatility": "s",
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}",
+      "authenticated": false,
+      "anon": false,
+      "service_role": false
+    },
+    {
+      "signature": "finance_private.forecast_movement_evidence(uuid,uuid)",
+      "source_md5": "5ea1d66232a8b9337f2f7843c0c6ac9a",
+      "security_definer": true,
+      "volatility": "s",
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": "{postgres=X/postgres}",
+      "authenticated": false,
+      "anon": false,
+      "service_role": false
+    }
+  ]
+}

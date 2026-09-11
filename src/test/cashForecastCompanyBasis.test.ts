@@ -15,7 +15,7 @@ it('rejects omitted, duplicate and foreign account components',()=>{
 });
 it('rejects incorrect sums and upgrades of provisional proof',()=>{
  const v=input();v.base.amount_cents='12501';expect(()=>projectCashForecast(v)).toThrow('soma');
- v.base.amount_cents='12500';v.base.components[0].confirmation='provisional';expect(()=>projectCashForecast(v)).toThrow('Confirmação consolidada');
+ v.base.amount_cents='12500';v.base.components[0].confirmation='provisional';expect(()=>projectCashForecast(v)).toThrow('ConfirmaÃ§Ã£o consolidada');
  v.base.confirmation='provisional';expect(projectCashForecast(v).base.confirmation).toBe('provisional');
 });
 it('does not turn an account without evidence into zero cash or a fabricated source ID',()=>{

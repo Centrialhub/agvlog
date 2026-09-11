@@ -65,7 +65,7 @@ const component = z.object({
   source_revision:z.string().min(1),amount_cents:signed.nullable(),
   confirmation:z.enum(['bank_confirmed','cash_count','provisional','unverified']),
 }).strict();
-const companyBasisObject=forecastBasisObject.extend({version:z.literal(2),base:z.object({
+const companyBasisObject=forecastBasisObject.extend({version:z.literal(2),unassigned_credit_cents:cents.nullable(),base:z.object({
   as_of:day,amount_cents:signed.nullable(),confirmation:z.enum(['bank_confirmed','cash_count','mixed_confirmed','provisional','unverified']),
   components:z.array(component).min(1),
 }).strict()});
@@ -78,13 +78,13 @@ export const cashForecastCompanyBasisSchema=companyBasisObject.superRefine((basi
   invalid('A base deve comprovar cada conta selecionada exatamente uma vez.');
  for(const p of parts){
   if(p.account_kind==='unsupported'&&p.confirmation!=='unverified')invalid('Tipo de conta desconhecido exige saldo indeterminado.');
-  if((p.amount_cents===null)!==(p.confirmation==='unverified'))invalid('Componente sem saldo exige confirmação indeterminada.');
+  if((p.amount_cents===null)!==(p.confirmation==='unverified'))invalid('Componente sem saldo exige confirmaÃ§Ã£o indeterminada.');
   if(p.confirmation!=='unverified'&&(!p.source_id||!p.source_table))invalid('Componente determinado exige origem preservada.');
-  if(p.confirmation==='bank_confirmed'&&p.account_kind!=='bank'||p.confirmation==='cash_count'&&p.account_kind!=='cash')invalid('Confirmação incompatível com o tipo de conta.');
+  if(p.confirmation==='bank_confirmed'&&p.account_kind!=='bank'||p.confirmation==='cash_count'&&p.account_kind!=='cash')invalid('ConfirmaÃ§Ã£o incompatÃ­vel com o tipo de conta.');
  }
  const unknown=parts.some(p=>p.amount_cents===null||p.confirmation==='unverified');
  const confirmation=unknown?'unverified':parts.some(p=>p.confirmation==='provisional')?'provisional':new Set(parts.map(p=>p.confirmation)).size>1?'mixed_confirmed':parts[0].confirmation;
- if(basis.base.confirmation!==confirmation)invalid('Confirmação consolidada diverge das contas.');
+ if(basis.base.confirmation!==confirmation)invalid('ConfirmaÃ§Ã£o consolidada diverge das contas.');
  if(!unknown&&parts.reduce((sum,p)=>sum+BigInt(p.amount_cents!),0n).toString()!==basis.base.amount_cents)invalid('Saldo consolidado diverge da soma das contas.');
 });
 export type CashForecastBasis = z.infer<typeof cashForecastBasisSchema>;
@@ -116,7 +116,8 @@ export function projectCashForecast(input: CashForecastBasis | CashForecastCompa
     return { ...row, remaining_cents: remaining.toString(), timing };
   });
   const issues = [...basis.source_issues];
-  if (BigInt(basis.unassigned_credit_cents) > 0n) issues.push({ code: 'unassigned_customer_credit', source_ids: [] });
+  if (basis.unassigned_credit_cents === null) issues.push({ code: 'customer_credit_balance_unverified', source_ids: [] });
+  else if (BigInt(basis.unassigned_credit_cents) > 0n) issues.push({ code: 'unassigned_customer_credit', source_ids: [] });
   if (basis.base.amount_cents === null) issues.push({ code: 'base_balance_unverified', source_ids: 'components' in basis.base ? basis.base.components.flatMap(p=>p.source_id?[p.source_id]:[]) : [basis.base.source_id] });
   // An unbilled-only source problem does not invalidate independently proven titles.
   // Missing scope stays conservative for previously captured inputs.

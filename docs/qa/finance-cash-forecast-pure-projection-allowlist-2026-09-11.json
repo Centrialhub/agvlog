@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "path": "supabase/migrations/20260911084618_finance_cash_forecast_pure_projection.sql",
+      "sha256": "0bea07fc2e81b8395dcaaf75ae2f0a1e73c1b478eb7e8fd4c7d58ad49eebc89f"
+    },
+    {
+      "path": "src/test/cashForecastSqlProjection.test.ts",
+      "sha256": "8e2c0b1ae183aae6d0d7bd991e752b8c0eb41c8143c309699b1033368d8efc15"
+    },
+    {
+      "path": "src/test/cashForecastSqlProjectionCollected.test.ts",
+      "sha256": "9e6e3c1af52176ddade23a7e9f3395ae8ea5f3b0f436285f5b3d9dbda5bbd2fb"
+    },
+    {
+      "path": "src/test/helpers/cashForecastPureProjectionDatabase.ts",
+      "sha256": "6361bbdec1e51080f2c6f1f1f26ba7e4f514c5b54b21f972d2b5ae8d1e405a0b"
+    }
+  ]
+}
