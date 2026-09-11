@@ -49,6 +49,8 @@ O extrato determina o que aconteceu na conta bancária. Diferença de caixa exig
 
 ## Comprovantes e respostas incertas
 
+No modal **Conferir gastos em lote**, selecione a foto JPEG ou PNG em cada linha. O sistema prepara uma cópia validada antes de registrar o lote; a descarga exige esse comprovante ou um comprovante legado válido. Se a validação falhar, a tela mantém a pendência e informa que o arquivo não foi anexado. Trocar a viagem, entrega ou contexto exige preparar novamente o comprovante correspondente. Esse fluxo está disponível também para sede, pessoal, manutenção e outros gastos.
+
 O detalhe do gasto permite consultar e anexar evidências. Um comprovante anexado depois é identificado como posterior; ele não apaga a informação original de ausência. A validação de formato de arquivo não certifica a autenticidade do comprovante.
 
 Se a tela preservar um pedido sem confirmação, use a recuperação apresentada. Não refaça o mesmo lançamento com outro pedido para contornar uma resposta perdida. A confirmação do comando e a atualização da consulta são etapas distintas: uma falha ao atualizar a lista pode ocorrer depois de o registro ter sido confirmado.
