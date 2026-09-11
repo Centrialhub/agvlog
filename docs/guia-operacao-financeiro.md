@@ -97,7 +97,7 @@ A prévia mostra quanto restará do crédito e da saída após o vínculo. É ne
 Saídas de períodos fechados não podem receber um novo vínculo sem reabertura auditada. Um pedido sem resposta deve ser recuperado com a identidade original. O mesmo saldo não pode ser usado simultaneamente para devolver dinheiro e aplicar crédito em outro título.
 ## Descontos, perdas e reversões de saldo
 
-Em implementação e validação; este fluxo ainda não está publicado.
+Publicado em 11/09/2026. A validação completa com sessão autenticada no ambiente publicado ainda está pendente.
 
 Em **Contas a receber**, abra a conferência do título e escolha **Conferir desconto ou perda**. Informe a categoria, o valor e a data econômica. Use **Conferir valores e autorização** para ver a composição atual e a proposta. A confirmação exige permissão da gestão e um motivo explícito.
 

@@ -5,3 +5,5 @@ CLI-created migration20260911121356_finance_receivable_adjustment_public_catalog
 Root test09:16:34 passed with actual SET LOCAL ROLE authenticated: preview/parser, write/result parser, exact idempotent replay, history/parser, other-company denial, direct raw writer denial, mixed-driver replay denial, constraint flush. Focused lint exited0. No production changes from this candidate.
 
 Pending final core freeze: add exact core fingerprints (currently metadata/trigger/journal preflight only), full final rerun, typecheck/build and publication together with all new consumers. Do not deploy this candidate alone. Core15046 is still being reviewed for temporal and fiscal scenarios.
+## Final release supersedes candidate status
+All 23 exact core fingerprints were pinned. Final root 9 tests passed at 09:28:24. Application typecheck56950 and build11334 exited0. Three migrations applied successfully and catalog verified in finance-adjustment-production-release-2026-09-11.md. Sites36 succeeded at 2026-09-11T12:34:00.750164Z. Authenticated hosted end-to-end acceptance remains unproven.
