@@ -27,3 +27,11 @@ it('requires real provenance and account-compatible confirmation for a determine
  const v=input();v.base.components[0].source_id=null;expect(()=>projectCashForecast(v)).toThrow('origem preservada');
  v.base.components[0].source_id=id();v.base.components[0].confirmation='cash_count';v.base.confirmation='cash_count';expect(()=>projectCashForecast(v)).toThrow('tipo de conta');
 });
+
+
+it('preserves unsupported account kinds as unknown instead of pretending they are bank accounts',()=>{
+ const v=input();v.base.components[0].account_kind='unsupported';expect(()=>projectCashForecast(v)).toThrow('Tipo de conta desconhecido');
+ v.base.components[0].confirmation='unverified';v.base.components[0].amount_cents=null;v.base.amount_cents=null;v.base.confirmation='unverified';
+ const projected=projectCashForecast(v);expect(projected.confirmed.complete).toBe(false);
+ expect('components' in projected.base&&projected.base.components[0].account_kind).toBe('unsupported');
+});

@@ -60,7 +60,7 @@ const validateBasis = (basis: z.infer<typeof forecastBasisObject> | z.infer<type
     ctx.addIssue({ code: 'custom', message: 'Saldo-base indeterminado exige diagnÃ³stico.' });
 };
 const component = z.object({
-  account_id:z.string().uuid(), account_kind:z.enum(['bank','cash']),
+  account_id:z.string().uuid(), account_kind:z.enum(['bank','cash','unsupported']),
   source_table:z.string().min(1).nullable(),source_id:z.string().uuid().nullable(),
   source_revision:z.string().min(1),amount_cents:signed.nullable(),
   confirmation:z.enum(['bank_confirmed','cash_count','provisional','unverified']),
@@ -77,6 +77,7 @@ export const cashForecastCompanyBasisSchema=companyBasisObject.superRefine((basi
  if(parts.length!==basis.account_ids.length||new Set(parts.map(p=>p.account_id)).size!==parts.length||parts.some(p=>!basis.account_ids.includes(p.account_id)))
   invalid('A base deve comprovar cada conta selecionada exatamente uma vez.');
  for(const p of parts){
+  if(p.account_kind==='unsupported'&&p.confirmation!=='unverified')invalid('Tipo de conta desconhecido exige saldo indeterminado.');
   if((p.amount_cents===null)!==(p.confirmation==='unverified'))invalid('Componente sem saldo exige confirmação indeterminada.');
   if(p.confirmation!=='unverified'&&(!p.source_id||!p.source_table))invalid('Componente determinado exige origem preservada.');
   if(p.confirmation==='bank_confirmed'&&p.account_kind!=='bank'||p.confirmation==='cash_count'&&p.account_kind!=='cash')invalid('Confirmação incompatível com o tipo de conta.');
