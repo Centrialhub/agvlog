@@ -1,0 +1,50 @@
+{
+  "validation": "9 PGlite tests passed 03:21:18, invoice and advance company boundaries; shared fixture loads real auth bodies, no native PG concurrency claim",
+  "files": [
+    {
+      "sha256": "4f3d851ea80e360b35af80ef6bf56ed40c07da2d2695ccd56881870e713a9185",
+      "path": "src/test/employeeAdvanceCompanyBoundary.test.ts"
+    },
+    {
+      "sha256": "5cd80c2fb4f95a27e4fee55ca8be2d96467db262ae5f64f85968e3107a95bf22",
+      "path": "src/test/financeInvoiceCompanyBoundary.test.ts"
+    },
+    {
+      "sha256": "ff3956f39b1b7c10f426ff233e7bf58478da332abb314d570fbfaae45b50a0bd",
+      "path": "src/test/helpers/canonicalCompanyCompatibilityDatabase.ts"
+    },
+    {
+      "sha256": "32449002ad91c32a212f6dff57690a11e02e52e32b6b6e67fec14560e902e9c3",
+      "path": "supabase/migrations/20260911025149_finance_receivable_invoice_active_read_boundary.sql"
+    },
+    {
+      "sha256": "33ca92e34615eb1c31e1b38e8428a5d0c4e7b775795afb128830ed5fbc738768",
+      "path": "supabase/migrations/20260911025214_finance_client_invoice_active_command_boundary.sql"
+    },
+    {
+      "sha256": "193f630161cb120961bc990b2067f19a6b7a168250c652a16ee798f08bbe1b52",
+      "path": "supabase/migrations/20260911025737_finance_closing_active_company_boundary.sql"
+    },
+    {
+      "sha256": "0483bc9c613e3652d78b1aaecf2592784fb471e3d9e293cb94f47df681c81b98",
+      "path": "supabase/migrations/20260911030051_finance_billable_sources_active_company_boundary.sql"
+    },
+    {
+      "sha256": "ede46058efcb4a817f0c014033e218a9df593142ddce1dce1c3856db2227be7b",
+      "path": "supabase/migrations/20260911035125_finance_employee_advance_active_company_boundary.sql"
+    },
+    {
+      "sha256": "4e6f8dcdef1c3400c4b2a1ae8ef03aac70b19c637b0851f201389cf3eefaa4a1",
+      "path": "supabase/migrations/20260911035306_delivery_operations_active_company_finance_metrics_boundary.sql"
+    }
+  ],
+  "scope": "Previously applied company boundaries now preserved in main; no redeployment or data changes",
+  "remote_history_versions": [
+    "20260911030147",
+    "20260911030157",
+    "20260911030206",
+    "20260911030353",
+    "20260911040757",
+    "20260911040825"
+  ]
+}

@@ -1,0 +1,39 @@
+// @vitest-environment node
+import {readFileSync} from 'node:fs';
+import {afterEach,expect,it} from 'vitest';
+import {createCanonicalCompanyCompatibilityDatabase} from './helpers/canonicalCompanyCompatibilityDatabase';
+const read=(name:string)=>readFileSync('supabase/migrations/'+name+'.sql','utf8');
+const baseline=read('20260824224152_baseline');
+const opened:Array<Awaited<ReturnType<typeof createCanonicalCompanyCompatibilityDatabase>>>=[];
+const tenant='10000000-0000-4000-8000-000000000001',other='10000000-0000-4000-8000-000000000002',actor='20000000-0000-4000-8000-000000000001',employee='30000000-0000-4000-8000-000000000001';
+function fn(sql:string,name:string){const start=sql.toLowerCase().indexOf('create or replace function public.'+name+'(');const end=sql.indexOf('$function$;',sql.indexOf('AS $function$',start));if(start<0||end<0)throw Error(name);return sql.slice(start,end+11);}
+async function setup(){const db=await createCanonicalCompanyCompatibilityDatabase();opened.push(db);
+ for(const table of ['employees','employee_advances','payables']){const start=baseline.indexOf('CREATE TABLE public.'+table+' (');await db.exec(baseline.slice(start,baseline.indexOf('\n);',start)+3));const defaults=baseline.match(new RegExp('ALTER TABLE ONLY public\\.'+table+' ALTER COLUMN[^;]+;','g'))??[];for(const sql of defaults)await db.exec(sql);}
+ // Defaults read from MAINDB pg_attrdef on2026-09-11; baseline dump omits them.
+ for(const table of ['employees','employee_advances','payables'])await db.exec('alter table '+table+' alter column id set default gen_random_uuid(),alter column created_at set default now(),alter column updated_at set default now()');
+ await db.exec("alter table employees alter column status set default 'active',alter column version set default 1;alter table payables alter column source_metadata set default '{}',alter column source set default 'system',alter column paid_amount set default 0;");
+ await db.exec("alter table payables add primary key(id);create unique index payable_origin on payables(tenant_id,source_table,source_id,category) where source_table is not null and source_id is not null;create table drivers(id uuid,tenant_id uuid,user_id uuid,active boolean);create schema finance_private;grant usage on schema finance_private to authenticated;");
+ const foundation=read('20260909212104_finance_ledger_foundation');const start=foundation.indexOf('create function finance_private.can_access(');await db.exec(foundation.slice(start,foundation.indexOf('create table public.finance_movements',start)));
+ const boundary=read('20260909235237_finance_legacy_rpc_boundary');await db.exec(boundary.slice(0,boundary.indexOf('-- Wrap')));await db.exec(read('20260910224136_finance_active_workspace_access'));
+ await db.exec(fn(baseline,'register_employee_advance'));await db.exec('revoke all on function register_employee_advance(uuid,uuid,numeric,date,text,text,text,boolean,boolean) from public,anon;grant execute on function register_employee_advance(uuid,uuid,numeric,date,text,text,text,boolean,boolean) to authenticated,service_role;');
+ await db.query('insert into tenants values($1),($2)',[tenant,other]);await db.query('insert into auth.users values($1)',[actor]);await db.query("insert into tenant_memberships values($1,$3,true,'admin'),($2,$3,true,'admin')",[tenant,other,actor]);await db.query('select set_config(\'request.jwt.claim.sub\',$1,true)',[actor]);await claim(db,tenant);await db.query("insert into employees(id,tenant_id,name) values($1,$2,'Empregado')",[employee,tenant]);return db;}
+async function claim(db:typeof opened[number],t:string){await db.query("select set_config('request.jwt.claims',$1,true),set_config('request.headers',$2,true)",[JSON.stringify({role:'authenticated',active_tenant_id:t}),JSON.stringify({'x-agvlog-tenant-id':t})]);}
+async function call(db:typeof opened[number],paid=false){await db.exec('savepoint call;set role authenticated');try{const r=await db.query('select register_employee_advance($1,$2,100,current_date,null,null,null,true,$3) id',[tenant,employee,paid]);await db.exec('reset role;release savepoint call');return r;}catch(e){await db.exec('rollback to savepoint call');throw e;}}
+afterEach(async()=>{for(const db of opened.splice(0)){await db.exec('rollback');await db.close();}});
+it('reproduces another-company creation, then guards current company, mixed driver and paid shortcut',async()=>{const db=await setup();await claim(db,other);await expect(call(db)).resolves.toBeDefined();await db.exec(read('20260911035125_finance_employee_advance_active_company_boundary'));await expect(call(db)).rejects.toMatchObject({code:'42501'});await claim(db,tenant);await expect(call(db,true)).rejects.toMatchObject({code:'55000'});await expect(call(db)).resolves.toBeDefined();expect((await db.query("select count(*)::int n from employee_advances where status='approved' and payable_id is not null")).rows).toEqual([{n:2}]);expect((await db.query("select count(*)::int n from payables where status='pending' and paid_amount=0")).rows).toEqual([{n:2}]);await db.query('insert into drivers values(gen_random_uuid(),$1,$2,true)',[tenant,actor]);await expect(call(db)).rejects.toMatchObject({code:'42501'});});
+it('rejects source drift atomically',async()=>{const db=await setup();await db.exec('revoke execute on function register_employee_advance(uuid,uuid,numeric,date,text,text,text,boolean,boolean) from authenticated');await expect(db.exec(read('20260911035125_finance_employee_advance_active_company_boundary'))).rejects.toThrow('finance_advance_boundary_contract_changed');});
+
+it('keeps operational metrics available but hides financial counts and enforces current company',async()=>{
+ const db=await setup();
+ await db.exec("create table delivery_receipt_email_templates(id uuid,tenant_id uuid,supplier_name text);create table delivery_receipt_email_batches(id uuid,tenant_id uuid,supplier_name text,receipt_ids uuid[],recipients text[],subject text,body_text text,status text,attempt_count integer,last_error text,retry_after_at timestamptz,created_at timestamptz,updated_at timestamptz,sent_at timestamptz,delivered_at timestamptz,bounced_at timestamptz);create table delivery_receipts(tenant_id uuid,is_active boolean,digital_status text,pdf_path text,physical_status text,previous_receipt_id uuid);create table driver_expenses(tenant_id uuid,approval_status text,no_receipt boolean,receipt_url text);");
+ const source=read('20260910154811_complete_delivery_receipt_operations'),start=source.indexOf('create or replace function public.get_delivery_receipt_operations_v1('),end=source.indexOf('$function$;',source.indexOf('as $function$',start));await db.exec(source.slice(start,end+11));
+ await db.exec('revoke all on function get_delivery_receipt_operations_v1(uuid) from public,anon,service_role;grant execute on function get_delivery_receipt_operations_v1(uuid) to authenticated');
+ await db.exec(read('20260911035306_delivery_operations_active_company_finance_metrics_boundary'));
+ await db.query("insert into driver_expenses values($1,'pending',true,null)",[tenant]);
+ async function get(t=tenant){await db.exec('savepoint reader;set role authenticated');try{const r=await db.query<{value:{expenses:unknown,receipts:{total:number}}}>('select get_delivery_receipt_operations_v1($1) value',[t]);await db.exec('reset role;release savepoint reader');return r.rows[0].value;}catch(e){await db.exec('rollback to savepoint reader');throw e;}}
+ expect((await get()).expenses).toEqual({pending:1,approved:0,rejected:0,without_receipt:1});
+ await claim(db,other);await expect(get()).rejects.toMatchObject({code:'42501'});await claim(db,tenant);
+ await db.exec("create or replace function finance_private.can_access(_tenant uuid) returns boolean language sql stable security definer set search_path='' as $$select false$$");
+ const result=await get();expect(result.expenses).toBeNull();expect(result.receipts.total).toBe(0);
+});
+
