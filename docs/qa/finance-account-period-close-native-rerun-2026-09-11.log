@@ -1,0 +1,18 @@
+Native PostgreSQL: 17.11 (loopback, disposable fixture)
+20260910162807_finance_account_period_closure_foundation.sql SHA256 4dd0e61229f86c1826b50f945cceaad12ee2233188dfa0913522969ceccd9b29
+20260910162958_finance_account_period_close_snapshot.sql SHA256 fc425b1e8b9e6ee22a04603bf2b86de1375ecc390512a847092c8267e8ff152c
+20260910163109_finance_account_period_closed_source_guards.sql SHA256 10a3e77207b379485e3ce4e1016ebd826c6ec83bb3e2316db218c5e5a40bc4bc
+20260910163116_finance_legacy_cut_reviews.sql SHA256 6baa25c2e21533aae152f6c61fbda8ecb891541888b133f2c325dd546bc21e0d
+20260910164923_finance_account_period_closure_evidence.sql SHA256 882ed7914eb25e877f1ccbddc0930bd0473868002ea3b76140b9d05cd59eecae
+20260910164942_finance_closed_period_late_payment_composition.sql SHA256 8909c59453111cdd2ca6d001f49707926c032c26a466a59adf3c5745e1c748e7
+PASS real reconciled money closes against retroactive movement without mutation
+PASS snapshot and every dependency remain exact across reopening and replay
+PASS close serializes against another source review and retains the approved source
+PASS revoked administrator cannot close after waiting on tenant lock
+PASS same close request racing replays one immutable closure
+PASS late real payable commands compete only for frozen capacity and preserve money
+PASS late exact incoming projection commits only with complete receipt bank movement chain
+PASS unlinked and foreign-account late payments roll back at deferred boundary
+PASS next month closes contiguously with equal anchor and predecessor cannot reopen
+9 account period close native tests passed.
+Disposable PostgreSQL stopped. Diagnostic files retained under node_modules/.cache/qa-postgres.

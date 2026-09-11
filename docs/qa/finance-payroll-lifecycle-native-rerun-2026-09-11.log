@@ -1,0 +1,15 @@
+Native PostgreSQL: 17.11 (loopback, disposable fixture)
+Payroll candidate 20260910000731_finance_payroll_payment_projection.sql SHA256 88b308914ba6bcc1d718920f82b391cf60afce7f76a2b7715d3b7c3d641097d3
+Payroll candidate 20260910132406_finance_payroll_reimbursement_source_dedup.sql SHA256 402e7da46ec96f8e582f513fdbd75a80e070bb1dc7bca10c8bc855eb74d5161a
+Payroll candidate 20260910133352_finance_payroll_lifecycle_serialization.sql SHA256 2dbc81ea2638980cb3f9c5bd0ec5c8668807bb1a818288191a724d549aa52b6b
+PASS generation holding payroll locks lets approval wait and calculate the committed version
+PASS approval first prevents queued generation from overwriting a protected payroll
+PASS manual credit before approval is included once in the approved payable
+PASS manual credit after concurrent approval is rejected without changing totals or payable
+PASS direct recomputation queued after approval cannot change the approved entry
+PASS recomputation then approval share lock order without entry-period deadlock
+PASS access revoked while approval waits rejects all approval writes
+PASS browser table writes are revoked and privileged edits cannot alter approved totals
+PASS approval ignores a cancelled entry without recomputing or locking its items
+9 payroll lifecycle native tests passed.
+Disposable PostgreSQL stopped. Diagnostic files retained under node_modules/.cache/qa-postgres.

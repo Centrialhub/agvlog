@@ -1,0 +1,244 @@
+{
+  "date": "2026-09-11",
+  "head": "719eb511b64369e252592cc1297204339d3fc84e",
+  "runtime": "PostgreSQL17.11 loopback disposable fixture",
+  "execution": "Two separate processes, sequential; first reported stopped and exit0 before second started.",
+  "suites": [
+    {
+      "name": "finance-account-period-close",
+      "exit_code": 0,
+      "passed": [
+        "PASS real reconciled money closes against retroactive movement without mutation",
+        "PASS snapshot and every dependency remain exact across reopening and replay",
+        "PASS close serializes against another source review and retains the approved source",
+        "PASS revoked administrator cannot close after waiting on tenant lock",
+        "PASS same close request racing replays one immutable closure",
+        "PASS late real payable commands compete only for frozen capacity and preserve money",
+        "PASS late exact incoming projection commits only with complete receipt bank movement chain",
+        "PASS unlinked and foreign-account late payments roll back at deferred boundary",
+        "PASS next month closes contiguously with equal anchor and predecessor cannot reopen"
+      ],
+      "stopped": true,
+      "log": "docs/qa/finance-account-period-close-native-rerun-2026-09-11.log",
+      "log_sha256": "8819c60faf98de0a2ceb91de5bd5d441b6677108c17c6854c06d08020d5b47af"
+    },
+    {
+      "name": "finance-payroll-lifecycle",
+      "exit_code": 0,
+      "passed": [
+        "PASS generation holding payroll locks lets approval wait and calculate the committed version",
+        "PASS approval first prevents queued generation from overwriting a protected payroll",
+        "PASS manual credit before approval is included once in the approved payable",
+        "PASS manual credit after concurrent approval is rejected without changing totals or payable",
+        "PASS direct recomputation queued after approval cannot change the approved entry",
+        "PASS recomputation then approval share lock order without entry-period deadlock",
+        "PASS access revoked while approval waits rejects all approval writes",
+        "PASS browser table writes are revoked and privileged edits cannot alter approved totals",
+        "PASS approval ignores a cancelled entry without recomputing or locking its items"
+      ],
+      "stopped": true,
+      "log": "docs/qa/finance-payroll-lifecycle-native-rerun-2026-09-11.log",
+      "log_sha256": "ae6572d27a1aaef556de74f07c47bccd0c8b65b60ad4e735ab44b749985dbd36"
+    }
+  ],
+  "sources": [
+    {
+      "path": "scripts/test-delivery-concurrency.mjs",
+      "sha256": "461e2693b9ec99c100c44544535fac713f926c1b40944420d22d5c81cfbb9cea"
+    },
+    {
+      "path": "scripts/test-finance-account-period-close-native-cases.mjs",
+      "sha256": "f10f0fd9e7b5c47d45e8ff7326399b8e266da829e6ec894284cde2b6f88c0c70"
+    },
+    {
+      "path": "scripts/test-finance-payroll-lifecycle-native-cases.mjs",
+      "sha256": "f8a4b39c2205d07b56ea06d7ca36545f6f5a8374473be9ca5ebf44302225b5b8"
+    },
+    {
+      "path": "src/test/helpers/financeLedgerDatabase.ts",
+      "sha256": "8624447dfb86d37eb638ddebb0488e3bf520418b6c49000bb876f3ca7dd55832"
+    }
+  ],
+  "referenced_sql_sources": [
+    {
+      "path": "supabase/migrations/20260824224152_baseline.sql",
+      "sha256": "9a8fb331632f4bd29c89c64072e3f81587a9d428d80de12248b77c6193113305"
+    },
+    {
+      "path": "supabase/migrations/20260830042313_harden_driver_stop_departure.sql",
+      "sha256": "e21f8e1059036cbaf49c56e030be70f1917083728a534a3c5d92ea23cdccacf7"
+    },
+    {
+      "path": "supabase/migrations/20260830183929_audit_receivable_payments_and_reversals.sql",
+      "sha256": "9e98c2312ec41de519557e1161ff595ec6b719709d2b07090963e65509d0d07f"
+    },
+    {
+      "path": "supabase/migrations/20260831232458_add_gps_driver_arrival_rpc.sql",
+      "sha256": "5a096b0df1b1eaeda49ced5fe8dc67197e30be2444e2b9d51b037edb8ea19d0a"
+    },
+    {
+      "path": "supabase/migrations/20260909212104_finance_ledger_foundation.sql",
+      "sha256": "f14984f4b1c7c2c64ffc4fb0b257933cbc449b3759182e2932df8558d3db48f4"
+    },
+    {
+      "path": "supabase/migrations/20260909212514_finance_delivery_unloading.sql",
+      "sha256": "31d527454b746dc9aed8b8c0755f7e9e6132f098ad5251ac937bb7fcbc01bae7"
+    },
+    {
+      "path": "supabase/migrations/20260909213020_finance_movement_queries.sql",
+      "sha256": "9e2ee8a95b50d4cdc4b78430ef54f1a26142b9f8ea5767c9bb609a61e69f0b16"
+    },
+    {
+      "path": "supabase/migrations/20260909213959_finance_expense_batches.sql",
+      "sha256": "3d24b8f562d043eccf99189255e19a1c9d4ce9827341a0348136562963ea0dc3"
+    },
+    {
+      "path": "supabase/migrations/20260909220941_finance_receipt_evidence.sql",
+      "sha256": "410293d35f3653c894643aa9f635128f13eb3a010f1ecc722aa0fbace7ac5188"
+    },
+    {
+      "path": "supabase/migrations/20260909222851_finance_statement_intake.sql",
+      "sha256": "e7d153769b285614254438340edee8b1a609f778dac3ce7fe65a53f6b6f7a4e4"
+    },
+    {
+      "path": "supabase/migrations/20260909223737_finance_statement_source_verification.sql",
+      "sha256": "59e80fcbe94a20e27021854d24178b3baba03ed93203a101daa551b56eb1458e"
+    },
+    {
+      "path": "supabase/migrations/20260909230507_finance_statement_queries.sql",
+      "sha256": "670d252f1dfa660cc9e05cf895ccd1561c8e3a6bf275958ec36b4f210f904cae"
+    },
+    {
+      "path": "supabase/migrations/20260909231643_finance_statement_identity_review.sql",
+      "sha256": "26f356955235506fa28f1cbc0b71a1fbe66ff45837e9b55fc2ec31c98b3cc3b4"
+    },
+    {
+      "path": "supabase/migrations/20260909233625_finance_audit_queries.sql",
+      "sha256": "4c5ffab49815e5f41e35ce68ed3321aa67bc0ac681bf491bb252c122c5303666"
+    },
+    {
+      "path": "supabase/migrations/20260910000731_finance_payroll_payment_projection.sql",
+      "sha256": "88b308914ba6bcc1d718920f82b391cf60afce7f76a2b7715d3b7c3d641097d3"
+    },
+    {
+      "path": "supabase/migrations/20260910002244_finance_payable_movement_links.sql",
+      "sha256": "950528541ed07a28b12a83ff47212fe6534b02c6a5ac5f5a048d35e9d3006a43"
+    },
+    {
+      "path": "supabase/migrations/20260910003529_finance_payable_link_reversal.sql",
+      "sha256": "6a74f52835c7afe46644109a9c415da5f907180b16b82b36321b9c3186740701"
+    },
+    {
+      "path": "supabase/migrations/20260910013543_finance_bank_reconciliation_groups.sql",
+      "sha256": "af173cc4a5e73d9af39d5d0fcdeb413c7402bb5a1d060746b2c6705af5fe53f3"
+    },
+    {
+      "path": "supabase/migrations/20260910015331_finance_reconciliation_history.sql",
+      "sha256": "f4261dc666cb54f67fdfa51c8d34d5119771a5ded2a4a80d9b43af7de16beea5"
+    },
+    {
+      "path": "supabase/migrations/20260910020543_finance_ofx_statement_intake.sql",
+      "sha256": "9ca8114cbf73cae45a31b81de7b4ba5d47f14e77f2520581d32b2ae04fe7be66"
+    },
+    {
+      "path": "supabase/migrations/20260910021404_finance_native_statement_account.sql",
+      "sha256": "b7b6c9c7aee709a371652bd0aa0e837faf4a41fa446178b59bca2b1a9ea18d13"
+    },
+    {
+      "path": "supabase/migrations/20260910022059_finance_automatic_reference_reconciliation.sql",
+      "sha256": "3c3f6e1762fe872589ca0732bf97ba76f1535a65bec4454aa0f109ce6333926c"
+    },
+    {
+      "path": "supabase/migrations/20260910023911_finance_account_period_review.sql",
+      "sha256": "aa651cfd209d54ede798ed74c29773660d05687c4ca004be2d255288cb98bd9e"
+    },
+    {
+      "path": "supabase/migrations/20260910024438_finance_receivable_movement_projection.sql",
+      "sha256": "09c86d71abb1f3716d6a62f0746d25bda5537d7ae10a6bb710e0190c9bdbf197"
+    },
+    {
+      "path": "supabase/migrations/20260910025658_finance_receipt_allocation_corrections.sql",
+      "sha256": "fa548e79da43d1e6ec083cd20bcb1765812e5afd8cb7dc84447c19ac0d1b9745"
+    },
+    {
+      "path": "supabase/migrations/20260910033918_finance_internal_transfer_pairs.sql",
+      "sha256": "564288fe9c1c7cc1863019fc2c5ce090ca97a7bd4d765c2959c3b208daa3e0e4"
+    },
+    {
+      "path": "supabase/migrations/20260910034731_finance_transfers_in_transit.sql",
+      "sha256": "4bb2e1e54b7f7a96f89a1e930af0465a54756ea42e411616a18165c8ed5b1308"
+    },
+    {
+      "path": "supabase/migrations/20260910130540_finance_settlement_movement_links.sql",
+      "sha256": "a05183495df24000b81fd2976a6723df0c4700dbdf2d82b5dca679e47e1f1205"
+    },
+    {
+      "path": "supabase/migrations/20260910130956_finance_statement_period_evidence.sql",
+      "sha256": "15b27ade6edb13d6352a7e33b48226f9afae580c347f915578b7bf51170cd40c"
+    },
+    {
+      "path": "supabase/migrations/20260910132406_finance_payroll_reimbursement_source_dedup.sql",
+      "sha256": "402e7da46ec96f8e582f513fdbd75a80e070bb1dc7bca10c8bc855eb74d5161a"
+    },
+    {
+      "path": "supabase/migrations/20260910132411_finance_settlement_link_reversals.sql",
+      "sha256": "34cd9f338917b7c461acd7b81e104019312e7834c3c770a4c388f4cdc6dcdf52"
+    },
+    {
+      "path": "supabase/migrations/20260910133352_finance_payroll_lifecycle_serialization.sql",
+      "sha256": "2dbc81ea2638980cb3f9c5bd0ec5c8668807bb1a818288191a724d549aa52b6b"
+    },
+    {
+      "path": "supabase/migrations/20260910140010_finance_account_opening_balances.sql",
+      "sha256": "799f25034f6f3964b32e7da896ebffa589d8bb0fc623b03ae1cd1f13e5964c9c"
+    },
+    {
+      "path": "supabase/migrations/20260910141240_finance_cash_opening_counts.sql",
+      "sha256": "53cd98728a42edb363418b4aba292bf6d1ed9ed754739e3056f1eef644444b0a"
+    },
+    {
+      "path": "supabase/migrations/20260910142143_finance_statement_coverage_approvals.sql",
+      "sha256": "cc8bea0528ceef3155cb1447a4cfeff9adf4cc09441aaa38e56beb896e0e1166"
+    },
+    {
+      "path": "supabase/migrations/20260910145616_finance_legacy_receipt_associations.sql",
+      "sha256": "c0f2ba253350a39f0c8ec117df2f4883ad655fff1e0c65eeddac486fe6fa8848"
+    },
+    {
+      "path": "supabase/migrations/20260910151011_finance_legacy_integrity_inventory.sql",
+      "sha256": "263a8970e0e64426c49c7f83335c6abc8d6554131e02acf037a03aa4dbf012cc"
+    },
+    {
+      "path": "supabase/migrations/20260910162807_finance_account_period_closure_foundation.sql",
+      "sha256": "4dd0e61229f86c1826b50f945cceaad12ee2233188dfa0913522969ceccd9b29"
+    },
+    {
+      "path": "supabase/migrations/20260910162958_finance_account_period_close_snapshot.sql",
+      "sha256": "fc425b1e8b9e6ee22a04603bf2b86de1375ecc390512a847092c8267e8ff152c"
+    },
+    {
+      "path": "supabase/migrations/20260910163109_finance_account_period_closed_source_guards.sql",
+      "sha256": "10a3e77207b379485e3ce4e1016ebd826c6ec83bb3e2316db218c5e5a40bc4bc"
+    },
+    {
+      "path": "supabase/migrations/20260910163116_finance_legacy_cut_reviews.sql",
+      "sha256": "6baa25c2e21533aae152f6c61fbda8ecb891541888b133f2c325dd546bc21e0d"
+    },
+    {
+      "path": "supabase/migrations/20260910164923_finance_account_period_closure_evidence.sql",
+      "sha256": "882ed7914eb25e877f1ccbddc0930bd0473868002ea3b76140b9d05cd59eecae"
+    },
+    {
+      "path": "supabase/migrations/20260910164942_finance_closed_period_late_payment_composition.sql",
+      "sha256": "8909c59453111cdd2ca6d001f49707926c032c26a466a59adf3c5745e1c748e7"
+    }
+  ],
+  "source_inventory_note": "Literal SQL references in runner/cases/base helper; not a claim that every migration is installed whole. Cases extract selected baseline tables/functions and later DDL/functions as explicitly documented.",
+  "limitations": [
+    "Not full Supabase production schema, remote database or authenticated browser test.",
+    "Closure statement verifications are seeded rows_match; no real uploaded file, Storage authenticity or Edge parsing proof.",
+    "Closure sources use selected baseline tables without unrelated FK graph; late composition has selected real functions and DDL. Later amendments/cash/proof refinements are not all installed.",
+    "Payroll active_payable_payments is a raw fixture view; is_tenant_admin/is_tenant_operator_or_admin are fixture adapters to can_access. It proves tested lock/revocation paths, not complete current role/claim policies or full payment reversal graph.",
+    "No SQL or scripts changed. No production writes."
+  ]
+}
