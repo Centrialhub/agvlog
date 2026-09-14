@@ -1,3 +1,4 @@
+import {z} from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { movementListSchema, movementResultSchema, type MovementCommand, type MovementFilters } from './ledgerContract';
 import { expenseOptionsSchema, expenseBatchResultSchema, type ExpenseBatchCommand, type ExpenseOptionKind } from './expenseBatchContract';
@@ -158,8 +159,9 @@ export async function readFinanceAudit(tenant:string,filters:FinanceAuditFilters
   if(result.tenant_id!==tenant||result.page!==filters.page||result.page_size!==filters.page_size||result.rows.some(row=>row.tenant_id!==tenant))throw new Error('Auditoria fora do contexto.');return result;
 }
 export async function readFinanceMovements(tenant: string, filters: MovementFilters) {
+  if(filters.driver_id!==undefined)z.string().uuid().parse(filters.driver_id);
   const page = movementListSchema.parse(await rpc('list_finance_movements', { _tenant_id: tenant, _filters: filters }));
-  if (page.tenant_id !== tenant || page.page !== filters.page || page.page_size !== filters.page_size || page.rows.some(row => row.tenant_id !== tenant)) {
+  if (page.tenant_id !== tenant || page.page !== filters.page || page.page_size !== filters.page_size || page.rows.some(row => row.tenant_id !== tenant || (filters.driver_id!==undefined && row.driver_id!==filters.driver_id))) {
     throw new Error('Finance response scope mismatch');
   }
   return page;

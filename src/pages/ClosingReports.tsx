@@ -63,7 +63,9 @@ function ClosingReportsScreen() {
   const active=useRef(true);useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
   const [filters, setFilters] = useState<ClosingFilters>({});
   const [applied, setApplied] = useState<ClosingFilters>({});
-  const { data: rows = [], isLoading } = useClosingReportsList(applied);
+  const list = useClosingReportsList(applied);
+  const isLoading=list.isPending||list.isFetching, unavailable=isLoading||list.isError;
+  const rows=useMemo(()=>unavailable?[]:list.data??[],[unavailable,list.data]);
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
   const { data: clients = [] } = useClients();
@@ -161,14 +163,14 @@ function ClosingReportsScreen() {
         {/* ------- LIST ------- */}
         <TabsContent value="list" className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-            <Kpi label="Em aberto" value={kpis.open} />
-            <Kpi label="Fechados" value={kpis.closed} />
-            <Kpi label="Enviados" value={kpis.sent} />
-            <Kpi label="Pagos" value={kpis.paid} />
-            <Kpi label="Vencidos" value={kpis.overdue} tone="destructive" />
-            <Kpi label="Valor total" value={brl(kpis.totalValue)} />
-            <Kpi label="Frete total" value={brl(kpis.totalFreight)} />
-            <Kpi label="Saldo em aberto" value={brl(kpis.openAmount)} />
+            <Kpi label="Em aberto" value={unavailable?'Não conferido':kpis.open} />
+            <Kpi label="Fechados" value={unavailable?'Não conferido':kpis.closed} />
+            <Kpi label="Enviados" value={unavailable?'Não conferido':kpis.sent} />
+            <Kpi label="Pagos" value={unavailable?'Não conferido':kpis.paid} />
+            <Kpi label="Vencidos" value={unavailable?'Não conferido':kpis.overdue} tone="destructive" />
+            <Kpi label="Valor total" value={unavailable?'Não conferido':brl(kpis.totalValue)} />
+            <Kpi label="Frete total" value={unavailable?'Não conferido':brl(kpis.totalFreight)} />
+            <Kpi label="Saldo em aberto" value={unavailable?'Não conferido':brl(kpis.openAmount)} />
           </div>
 
           <Card>
@@ -255,8 +257,9 @@ function ClosingReportsScreen() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isLoading && <TableRow><TableCell colSpan={11}>Carregando…</TableCell></TableRow>}
-                  {!isLoading && rows.length === 0 && <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground">Nenhum fechamento.</TableCell></TableRow>}
+                  {isLoading && <TableRow><TableCell colSpan={11}><p role="status">Consultando fechamentos…</p></TableCell></TableRow>}
+                  {list.isError && <TableRow><TableCell colSpan={11}><p role="alert">Não foi possível consultar os fechamentos.</p><Button onClick={()=>void list.refetch()}>Tentar consultar fechamentos novamente</Button></TableCell></TableRow>}
+                  {!unavailable && rows.length === 0 && <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground">Nenhum fechamento.</TableCell></TableRow>}
                   {rows.map(r => (
                     <TableRow key={r.id}>
                       <TableCell className="font-mono text-xs">{r.closing_number}</TableCell>

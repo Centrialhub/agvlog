@@ -71,7 +71,7 @@ export default function BankReconciliation() {
 
 function ReconciliationWorkspace(){
   const [section,setSection]=useState('statements');
-  return <div className="space-y-4"><div className="flex items-center justify-between"><h1 className="text-2xl font-semibold">Conciliação bancária</h1><NewBankAccountDialog/></div>
+  return <div className="space-y-4"><div className="flex items-center justify-between"><h1 className="text-2xl font-semibold">Conciliação bancária</h1><div className="flex flex-wrap gap-2"><ReconciliationMovementEntry/><NewBankAccountDialog/></div></div>
     <Tabs value={section} onValueChange={setSection}><TabsList><TabsTrigger value="statements">Extratos e conciliação</TabsTrigger><TabsTrigger value="legacy">Histórico anterior</TabsTrigger></TabsList>
       <TabsContent value="statements">{section==='statements'&&<FinanceStatements/>}</TabsContent>
       <TabsContent value="legacy">{section==='legacy'&&<LegacyBankReconciliation/>}</TabsContent>

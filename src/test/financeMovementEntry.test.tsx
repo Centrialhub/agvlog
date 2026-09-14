@@ -58,3 +58,10 @@ describe('movement entry recovery', () => {
     expect(sessionStorage.getItem(key)).toBe(raw);expect(mocks.record).not.toHaveBeenCalled();
   });
 });
+
+it('defaults a fresh send to the selected driver without replacing a restored draft',()=>{
+ const first=render(<MovementEntryDialog tenant={tenant} actor={actor} initialDriver={{id:'driver',name:'Motorista João'}} onClose={vi.fn()} onRecorded={vi.fn()}/>);
+ expect(screen.getByLabelText('Motorista beneficiário')).toHaveValue('driver');expect(screen.getByLabelText('Beneficiário / pagador')).toHaveValue('Motorista João');fill();first.unmount();
+ render(<MovementEntryDialog tenant={tenant} actor={actor} initialDriver={{id:'another',name:'Outro motorista'}} onClose={vi.fn()} onRecorded={vi.fn()}/>);
+ expect(screen.getByLabelText('Motorista beneficiário')).toHaveValue('driver');expect(screen.getByLabelText('Beneficiário / pagador')).toHaveValue('Motorista João');expect(screen.getByLabelText('Valor (R$)')).toHaveValue('500,00');
+});

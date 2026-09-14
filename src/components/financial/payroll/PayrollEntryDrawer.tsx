@@ -26,11 +26,15 @@ import { payrollPaymentIssues, payrollPaymentLabels } from '@/lib/financial/payr
 import { formatPayrollCurrency } from './formatPayrollCurrency';
 
 export function EntryDrawer({ entry: selectedEntry, period, onClose }: { entry: PayrollEntry | null; period: PayrollPeriod | null; onClose: () => void }) {
-  const { data: currentEntries = [], error: paymentError } = usePayrollEntries(selectedEntry?.payroll_period_id);
-  const entry = currentEntries.find(row => row.id === selectedEntry?.id) ?? selectedEntry;
+  const paymentQuery=usePayrollEntries(selectedEntry?.payroll_period_id);
+  const paymentBusy=paymentQuery.isPending||paymentQuery.isFetching;
+  const paymentError=paymentQuery.error;
+  const entry=!paymentBusy&&!paymentError?paymentQuery.data?.find(row=>row.id===selectedEntry?.id)??null:null;
   const { promptAction } = useScopedAlerts();
   const toast = useSonnerToast();
-  const { data: items = [] } = usePayrollEntryItems(entry?.id);
+  const itemQuery=usePayrollEntryItems(selectedEntry?.id);
+  const itemsBusy=itemQuery.isPending||itemQuery.isFetching;
+  const items=itemsBusy||itemQuery.isError?[]:itemQuery.data??[];
   const recalc = useRecalculatePayrollEntry();
   const addItem = useAddPayrollManualItem();
   const delItem = useDeletePayrollItem();
@@ -39,10 +43,10 @@ export function EntryDrawer({ entry: selectedEntry, period, onClose }: { entry: 
   const [manualReason, setManualReason] = useState('');
   const [manualNature, setManualNature] = useState<'credit' | 'debit'>('debit');
 
-  const locked = !period || period.status === 'approved' || period.status === 'closed' || period.status === 'cancelled';
+  const locked = paymentBusy||!!paymentError||itemsBusy||itemQuery.isError||!entry||!period || period.status === 'approved' || period.status === 'closed' || period.status === 'cancelled';
 
   const handleAdd = async () => {
-    if (!entry) return;
+    if (!entry||locked) return;
     const amount = Number(manualAmt);
     if (!manualDesc.trim() || !amount || amount <= 0) { toast.error('Descrição e valor obrigatórios'); return; }
     if (!manualReason.trim()) { toast.error('Motivo do ajuste obrigatório'); return; }
@@ -56,6 +60,7 @@ export function EntryDrawer({ entry: selectedEntry, period, onClose }: { entry: 
   };
 
   const handleDelete = async (item: PayrollEntryItem) => {
+    if(locked)return;
     const reason = await promptAction('Informe por que este item deve ser removido.', {
       title: 'Excluir item da folha',
       label: 'Motivo da exclusão',
@@ -66,9 +71,12 @@ export function EntryDrawer({ entry: selectedEntry, period, onClose }: { entry: 
   };
 
   return (
-    <Sheet open={!!entry} onOpenChange={open => !open && onClose()}>
+    <Sheet open={!!selectedEntry} onOpenChange={open => !open && onClose()}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader><SheetTitle>Detalhe da folha</SheetTitle></SheetHeader>
+        {selectedEntry&&paymentBusy&&<p role="status">Conferindo valores da folha…</p>}
+        {selectedEntry&&paymentError&&<><p role="alert">Não foi possível consultar os valores da folha.</p><Button onClick={()=>void paymentQuery.refetch()}>Tentar consultar folha novamente</Button></>}
+        {selectedEntry&&!paymentBusy&&!paymentError&&!entry&&<p role="status">Entrada não encontrada na consulta atual.</p>}
         {entry && (
           <div className="space-y-4 mt-4">
             <div className="grid grid-cols-4 gap-2 text-sm">
@@ -89,7 +97,7 @@ export function EntryDrawer({ entry: selectedEntry, period, onClose }: { entry: 
               <Table>
                 <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Descrição</TableHead><TableHead>Nat.</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="w-10"></TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {items.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">Sem itens</TableCell></TableRow>
+                  {itemsBusy?<TableRow><TableCell colSpan={5}><p role="status">Consultando itens da folha…</p></TableCell></TableRow>:itemQuery.isError?<TableRow><TableCell colSpan={5}><p role="alert">Não foi possível consultar os itens da folha.</p><Button onClick={()=>void itemQuery.refetch()}>Tentar consultar itens novamente</Button></TableCell></TableRow>:items.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">Sem itens</TableCell></TableRow>
                     : items.map(item => (
                       <TableRow key={item.id}>
                         <TableCell className="text-xs">{PAYROLL_ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}</TableCell>

@@ -18,3 +18,5 @@ it('uses the selected account and distinguishes a recorded movement from stateme
  expect(client.getQueryState(opening)?.isInvalidated).toBe(true);
  expect(client.getQueryState(otherCompany)?.isInvalidated).toBe(false);
 });
+
+it('opens manual entry before any statement or account has been selected',()=>{render(<MemoryRouter><QueryClientProvider client={new QueryClient()}><ReconciliationMovementEntry/></QueryClientProvider></MemoryRouter>);const button=screen.getByRole('button',{name:'Registrar movimentação'});expect(button).toBeEnabled();fireEvent.click(button);expect(screen.getByRole('button',{name:'Confirmar em'})).toBeInTheDocument();});

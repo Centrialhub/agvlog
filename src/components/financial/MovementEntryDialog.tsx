@@ -15,21 +15,21 @@ const formSchema = z.object({ account: z.string(), driver: z.string(), amount: z
 });
 type Form = z.infer<typeof formSchema>;
 const savedSchema = z.object({ form: formSchema, request: z.string().uuid().nullable() });
-function initialForm(initialAccount = ''): Form {
+function initialForm(initialAccount = '', initialDriver?: {id:string;name:string}): Form {
   const date = new Date(); date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-  return { account: initialAccount, driver: '', amount: '', date: date.toISOString().slice(0, 10), description: '',
-    beneficiary: '', reference: '', reason: '', nature: 'driver_advance', direction: 'out' };
+  return { account: initialAccount, driver: initialDriver?.id ?? '', amount: '', date: date.toISOString().slice(0, 10), description: '',
+    beneficiary: initialDriver?.name ?? '', reference: '', reason: '', nature: 'driver_advance', direction: 'out' };
 }
-function restore(key: string, initialAccount = '') {
-  const empty={form:initialForm(initialAccount),request:null};
+function restore(key: string, initialAccount = '', initialDriver?: {id:string;name:string}) {
+  const empty={form:initialForm(initialAccount,initialDriver),request:null};
   try { const raw=sessionStorage.getItem(key);if(raw===null)return {saved:empty,error:''};return {saved:savedSchema.parse(JSON.parse(raw)),error:''}; }
   catch { return {saved:empty,error:'Não foi possível recuperar o pedido original. Novos envios estão bloqueados; confira o histórico antes de recuperar o armazenamento.'}; }
 }
-export function MovementEntryDialog({ tenant, actor, onClose, onRecorded, initialAccount }: {
-  tenant: string; actor: string; onClose: () => void; onRecorded: () => void; initialAccount?: string;
+export function MovementEntryDialog({ tenant, actor, onClose, onRecorded, initialAccount, initialDriver }: {
+  tenant: string; actor: string; onClose: () => void; onRecorded: () => void; initialAccount?: string; initialDriver?: {id:string;name:string};
 }) {
   const key = `finance-movement-draft:${tenant}:${actor}`;
-  const [restored] = useState(() => restore(key, initialAccount));
+  const [restored] = useState(() => restore(key, initialAccount,initialDriver));
   const [saved, setSaved] = useState(restored.saved);
   const sending=useRef(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -64,6 +64,7 @@ export function MovementEntryDialog({ tenant, actor, onClose, onRecorded, initia
     <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" onInteractOutside={event => { if (busy) event.preventDefault(); }}>
       <DialogHeader><DialogTitle>Registrar movimentação realizada</DialogTitle>
         <DialogDescription>Informe o dinheiro já enviado ou recebido. A confirmação pelo extrato será feita na conciliação.</DialogDescription></DialogHeader>
+      {initialDriver && form.driver !== initialDriver.id && <p role="status">Há um rascunho recuperado para outro contexto. Confira o motorista e os dados originais antes de registrar; a seleção do acerto não substituiu esse pedido.</p>}
       <form onSubmit={event => { event.preventDefault(); if (!busy) void submit(); }} className="space-y-4">
         <fieldset disabled={busy || !!saved.request || !!restored.error} className="grid gap-4 sm:grid-cols-2">
           <div><Label htmlFor="movement-nature">Natureza</Label><select id="movement-nature" className="h-10 w-full rounded-md border bg-background px-3" value={form.nature} onChange={e => {

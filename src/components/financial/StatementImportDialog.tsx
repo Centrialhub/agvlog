@@ -54,7 +54,7 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
       onChange={e=>updateMapping({...mapping,[key]:e.target.value===''?undefined:Number(e.target.value)})}>
       {!required&&<option value="">Não disponível</option>}{(layout?.matrix[mapping.header_row]||[]).map((header,index)=><option key={index} value={index}>{index+1}. {String(header??'Sem título')}</option>)}</select></label>;
   return <Dialog open onOpenChange={open=>{if(!open&&!busy)onClose();}}><DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl" onInteractOutside={e=>{if(busy)e.preventDefault();}}>
-    <DialogHeader><DialogTitle>Importar e conferir extrato</DialogTitle><DialogDescription>O original fica privado em quarentena. OFX e CSV são conferidos por uma cópia de dados validada; conta, cobertura e saldos exigem conferência separada.</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>Importar e conferir extrato</DialogTitle><DialogDescription>Importação de lançamentos: OFX ou CSV. PDF, Excel e imagens podem ser preservados como arquivo de origem, mas não importam lançamentos. Conta, cobertura e saldos exigem conferência separada.</DialogDescription></DialogHeader>
     {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
     {!loaded&&<Button disabled={busy} onClick={()=>void loadPending().catch(()=>setError('Recuperação indisponível. Nenhuma importação foi enviada.'))}>Abrir recuperação</Button>}
     {loaded&&pending?<div className="space-y-3"><p className="font-medium">{pending.file_name} · {pending.command.rows.length} registros</p><p>Próxima etapa: {stageLabel[pending.phase]}</p>
@@ -95,7 +95,7 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
         <p className="text-xs text-muted-foreground">Use valor com sinal ou crédito/débito separados. Preencha identificador único apenas quando o banco fornecer essa identificação; descrição ou valor não servem como identificador.</p>
       </>}
       <label className="block text-sm">Observação da conferência<Input value={reason} onChange={e=>{setReason(e.target.value);setPrepared(null);}}/></label>
-      <Button variant="outline" disabled={!layout||!file} onClick={()=>void prepare()}>Preparar prévia</Button>
+      <Button variant="outline" disabled={!layout||!file||!/\.(ofx|csv)$/i.test(file.name)} onClick={()=>void prepare()}>Preparar prévia</Button>
     </fieldset>
     {prepared&&<div className="space-y-3 rounded border p-4"><p>{prepared.pending.command.rows.length} registros · Entradas {formatFinanceCents(prepared.totals.inflow_cents)} · Saídas {formatFinanceCents(prepared.totals.outflow_cents)}</p>
       <div className="max-h-52 overflow-auto text-sm">{prepared.pending.command.rows.slice(0,20).map((row,index)=><p key={index}>{row.posted_on} · {row.description} · {formatFinanceCents(row.amount_cents)}</p>)}</div>

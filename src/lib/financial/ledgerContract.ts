@@ -26,7 +26,7 @@ export const movementResultSchema = z.object({
   movement_id: z.string().uuid(), confirmed: z.literal(true),
 });
 export type Movement = z.infer<typeof movementSchema>;
-export interface MovementFilters { page: number; page_size: number; search: string; from: string; to: string; direction: string; account_id: string }
+export interface MovementFilters { page: number; page_size: number; search: string; from: string; to: string; direction: string; account_id: string; driver_id?: string }
 export interface MovementCommand {
   version: 1; tenant_id: string; request_id: string; bank_account_id: string;
   direction: 'in' | 'out'; nature: keyof typeof movementNatures; amount_cents: number; occurred_on: string;

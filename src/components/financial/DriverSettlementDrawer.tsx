@@ -1,3 +1,4 @@
+import {DriverSettlementSends} from './DriverSettlementSends';
 import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useEffect, useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -275,12 +276,13 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             </div>
 
             <Tabs defaultValue="loads">
-              <TabsList>
+              <TabsList className="h-auto flex-wrap">
                 <TabsTrigger value="loads">Romaneios ({loadItems.length})</TabsTrigger>
                 <TabsTrigger value="docs">Notas ({docItems.length})</TabsTrigger>
                 <TabsTrigger value="expenses">Despesas</TabsTrigger>
                 <TabsTrigger value="km">KM</TabsTrigger>
                 <TabsTrigger value="adjustments">Ajustes ({adjItems.length})</TabsTrigger>
+                <TabsTrigger value="sends">Envios ao motorista</TabsTrigger>
                 <TabsTrigger value="payments">Pagamentos ({payments.length})</TabsTrigger>
                 <TabsTrigger value="history">Histórico ({events.length})</TabsTrigger>
               </TabsList>
@@ -483,6 +485,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 <SettlementAdjustments settlementId={s.id}/>
               </TabsContent>
 
+              <TabsContent value="sends">{s.driver_id?<DriverSettlementSends key={`${s.tenant_id}:${s.driver_id}`} tenant={s.tenant_id} driver={{id:s.driver_id,name:s.drivers?.name ?? "Motorista"}}/>:<p role="alert">Este acerto não tem motorista identificado. Confira o cadastro antes de consultar ou registrar envios.</p>}</TabsContent>
               <TabsContent value="payments" className="space-y-3">
                 <Button variant="outline" disabled={needsRecalc} onClick={() => setPayOpen(true)}>Registrar ou retomar pagamento</Button>
                 <Button variant="outline" onClick={() => { setPaymentRecoveryOnly(true); setPayOpen(true); }}>Retomar pagamento anterior</Button>
