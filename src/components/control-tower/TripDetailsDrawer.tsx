@@ -1,3 +1,5 @@
+import {TripCancellationDialog} from './TripCancellationDialog';
+import {useTenant} from '@/hooks/useTenant';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,6 +38,8 @@ export default function TripDetailsDrawer({
 }) {
   const { toast } = useToast();
   const { user } = useAuth();
+  const {currentTenant,currentRole}=useTenant();
+  const [cancellation,setCancellation]=useState<{tenant:string;actor:string;trip:string}|null>(null);
   const client = useQueryClient();
   const [recalculating, setRecalculating] = useState(false);
 
@@ -58,7 +62,7 @@ export default function TripDetailsDrawer({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <><Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
           <div className="flex items-center gap-2">
@@ -161,6 +165,7 @@ export default function TripDetailsDrawer({
 
         {/* Ações */}
         <div className="flex flex-col gap-2">
+          {user&&currentTenant?.id===trip.tenant_id&&['owner','admin','operator'].includes(currentRole||'')&&<Button variant="outline" size="sm" onClick={()=>setCancellation({tenant:trip.tenant_id,actor:user.id,trip:trip.trip_id})}>Cancelar viagem incorreta</Button>}
           <Button size="sm" variant="outline" onClick={handleRecalc} disabled={recalculating}>
             <RefreshCw className={`h-3.5 w-3.5 mr-2 ${recalculating ? 'animate-spin' : ''}`} />
             Recalcular rota (OSRM)
@@ -176,6 +181,7 @@ export default function TripDetailsDrawer({
         </div>
       </SheetContent>
     </Sheet>
+    {open&&cancellation&&cancellation.trip===trip.trip_id&&<TripCancellationDialog {...cancellation} onClose={()=>setCancellation(null)} onCancelled={()=>{setCancellation(null);onOpenChange(false);toast({title:"Viagem cancelada",description:"O planejamento foi cancelado e o histórico foi preservado."});}}/>}</>
   );
 }
 

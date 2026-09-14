@@ -1,0 +1,308 @@
+[
+  {
+    "table_name": "checklist_executions",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "delivery_document_outcomes",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "delivery_receipt_physical_events",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "delivery_receipts",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "dispatch_events",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "dispatch_stops",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "dispatch_stops",
+    "column_name": "tenant_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "dispatch_stops",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "dispatch_stops",
+    "column_name": "actual_arrival_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "dispatch_stops",
+    "column_name": "actual_departure_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "dispatch_stops",
+    "column_name": "status",
+    "data_type": "text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "dispatch_trip_loads",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "dispatch_trips",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "dispatch_trips",
+    "column_name": "tenant_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "dispatch_trips",
+    "column_name": "load_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "dispatch_trips",
+    "column_name": "status",
+    "data_type": "text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "dispatch_trips",
+    "column_name": "actual_start_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "dispatch_trips",
+    "column_name": "actual_end_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "driver_delivery_fiscal_conflicts",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "driver_expenses",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "driver_operational_command_receipts",
+    "column_name": "trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "driver_settlement_cargo_quarantines",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "driver_settlements",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "finance_expense_batches",
+    "column_name": "trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "fiscal_documents",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "fiscal_documents",
+    "column_name": "tenant_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "fiscal_documents",
+    "column_name": "document_type",
+    "data_type": "text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "fiscal_documents",
+    "column_name": "load_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "fiscal_documents",
+    "column_name": "status",
+    "data_type": "text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "fiscal_documents",
+    "column_name": "cte_emitted_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "fiscal_documents",
+    "column_name": "cte_emitted_outbound_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "fiscal_documents",
+    "column_name": "nfse_emitted_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "incidents",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "loads",
+    "column_name": "trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "nfse_documents",
+    "column_name": "trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "operational_events",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "payables",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "physical_journey_trips",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "physical_journeys",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "physical_journeys",
+    "column_name": "status",
+    "data_type": "text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "physical_journeys",
+    "column_name": "actual_start_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "physical_journeys",
+    "column_name": "actual_end_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "proof_of_delivery",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "route_runs",
+    "column_name": "trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "trip_alerts",
+    "column_name": "trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "trip_cargo_controls",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "trip_cargo_historical_reconciliations",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "trip_live_status",
+    "column_name": "trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "trip_routes",
+    "column_name": "trip_id",
+    "data_type": "uuid",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "trip_stops",
+    "column_name": "trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "vehicle_fueling",
+    "column_name": "dispatch_trip_id",
+    "data_type": "uuid",
+    "is_nullable": "YES"
+  }
+]

@@ -52,6 +52,7 @@ export default function FiscalXmlUpload({ onExtracted, perspective, className }:
       <input
         ref={inputRef}
         type="file"
+        aria-label="Selecionar XML fiscal"
         accept=".xml,text/xml,application/xml"
         className="hidden"
         onChange={(e) => {

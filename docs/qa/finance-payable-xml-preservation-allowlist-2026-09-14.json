@@ -1,0 +1,85 @@
+{
+  "scope": "Local candidate only; no deployment or fiscal issuance",
+  "files": [
+    {
+      "path": "supabase/migrations/20260914195721_finance_payable_xml_preserved_attachments.sql",
+      "sha256": "33c66225d776545f1ac80060e70be703fe33b05cce714c381addf4cc14e49af6"
+    },
+    {
+      "path": "supabase/functions/finance-payable-xml/index.ts",
+      "sha256": "fa04e38b31ed236b1353fc45f640dbb3ac2ca636578b21ecf5fe242fd6ad5112"
+    },
+    {
+      "path": "supabase/functions/finance-payable-xml/workflow.ts",
+      "sha256": "27a235be91d62c50475e0b7274491f8882ee5b326a56537be232dfbf2a740d58"
+    },
+    {
+      "path": "supabase/functions/finance-payable-xml/xml.ts",
+      "sha256": "602f70cfd587ea82236e5b31598ad66e941455628f3586bb7f47754bb31528bb"
+    },
+    {
+      "path": "supabase/functions/finance-payable-xml/deno.json",
+      "sha256": "20b9587ac0c7b2f4b9cf4ca3533a9a9593064a6a657d4b8ac839c5c4d55c6c31"
+    },
+    {
+      "path": "src/lib/financial/payableXmlContract.ts",
+      "sha256": "35647ac3c416e33086b7d9978337b39d0ae92a14f0ca38750f8687b87db44942"
+    },
+    {
+      "path": "src/lib/financial/payableXmlClient.ts",
+      "sha256": "e2cc0e1cebb7f66248b5252aade388774a619a8b9f4f4db6eae965219b5bb525"
+    },
+    {
+      "path": "src/lib/financial/payableXmlOutbox.ts",
+      "sha256": "582203a5e18e08ce02a7c123cc541131c72dcf15d7c7c27d26f3282956608259"
+    },
+    {
+      "path": "src/hooks/usePayableXmlSave.ts",
+      "sha256": "71d9b38ebaa01b8af358a767212e9eb73fc5d2679b81393bbb1aadfa6228fe8d"
+    },
+    {
+      "path": "src/components/financial/PayableXmlHistory.tsx",
+      "sha256": "bb982a97e6f6959fdda19534d7f20bde45ba4418ed517f1d1184fa50fdc1551a"
+    },
+    {
+      "path": "src/pages/Payables.tsx",
+      "sha256": "8773b932d3b63fd84d23f8d38bc2daf60fc19225ed629e7f40f2edf142977ed1"
+    },
+    {
+      "path": "src/components/financial/FiscalXmlUpload.tsx",
+      "sha256": "2e904bae879ce0faf7f1d0e7d39d024223e28875cd0a2d941ad45cf0fd2d4795"
+    },
+    {
+      "path": "src/test/helpers/payableNfeFixture.ts",
+      "sha256": "56ab527de20ceeae6e1158fc3cf934ce53d10ca4df4a4de113b973a3d2aa702a"
+    },
+    {
+      "path": "src/test/payableXmlPreservation.test.ts",
+      "sha256": "559f194d932a93ddb78a1fc2d6725883758be22b4254ecffb94d52a71116bcc0"
+    },
+    {
+      "path": "src/test/payableXmlPreservationDatabase.test.ts",
+      "sha256": "958ed8fddb54d968764a1e104ca6b5c196cb28ddba57952b9a02460e471cbaa8"
+    },
+    {
+      "path": "src/test/payableXmlTransport.test.ts",
+      "sha256": "46c62ecc8003895e3123ffa11f4882d6dd3c22ee22391f10652aa9cde690862d"
+    },
+    {
+      "path": "src/test/payableXmlOutbox.test.ts",
+      "sha256": "b2e5317f49059d5af88a648e5403603dc5b49356b7a532f7fcfa8979d4d65a23"
+    },
+    {
+      "path": "src/test/payablesXmlFailure.test.tsx",
+      "sha256": "8198a654e437f5bd3fd02e06ea11967bf5a39a3754ab05558c2dec3dee16e50e"
+    },
+    {
+      "path": "src/test/payablesServerManagement.test.tsx",
+      "sha256": "be7b969b18ffcf72e669b0d418012b1968ede68a49160df1bca666eb401f32d2"
+    },
+    {
+      "path": "src/test/payableXmlFinancialGuardReview.test.ts",
+      "sha256": "4f0647280e6502818daa36591aa828d9b6a869ac03955a6883aba5a23adc46f7"
+    }
+  ]
+}

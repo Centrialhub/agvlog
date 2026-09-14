@@ -1,0 +1,62 @@
+[
+  {
+    "signature": "private.cancel_planned_dispatch_trip(jsonb)",
+    "source_md5": "e6848eab1f4208a03f277f0025ae113a",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "private.dispatch_trip_cancellation_context(uuid,uuid)",
+    "source_md5": "e886db6cf5d0e3f0d0578659dd87266d",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "private.guard_cancelled_physical_journey()",
+    "source_md5": "5161ce908b68db0c60c274b13c024a96",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "private.guard_cancelled_trip_reference()",
+    "source_md5": "ea0d974f44a14ae7078b60b7bd4977a5",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "private.guard_cancelled_trip_stop_reference()",
+    "source_md5": "6f3c9558c594ff161c8c428f3873c9e6",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "private.preserve_dispatch_trip_cancellation()",
+    "source_md5": "cf35367a251561b0d3fec04bb945f254",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "acl": "{postgres=X/postgres}"
+  }
+]

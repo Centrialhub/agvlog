@@ -23,7 +23,9 @@ import ManualExpenseDialog from '@/components/financial/ManualExpenseDialog';
 import { useTenant } from '@/hooks/useTenant';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 import { getErrorMessage } from '@/lib/errors';
-import { uploadSecureFile } from '@/lib/secureUpload';
+import {usePayableXmlSave} from '@/hooks/usePayableXmlSave';
+import {payableXmlMoney} from '@/lib/financial/payableXmlContract';
+import {PayableXmlHistory} from '@/components/financial/PayableXmlHistory';
 
 const emptyForm = {
   supplier_name: '',
@@ -43,6 +45,7 @@ function PayablesWorkspace() {
   const { currentTenant } = useTenant();
   const {user}=useAuth();
   const [detailBusy,setDetailBusy]=useState(false),[detailError,setDetailError]=useState('');
+  const [saveBusy,setSaveBusy]=useState(false),[saveError,setSaveError]=useState('');const saving=useRef(false);
   const request=useRef(0);
   useEffect(()=>()=>{request.current+=1;},[]);
   const createMut = useCreatePayable();
@@ -55,16 +58,17 @@ function PayablesWorkspace() {
   const [manualOpen, setManualOpen] = useState(false);
   const [approvalId,setApprovalId]=useState<string|null>(null);
   const [originalStatus,setOriginalStatus]=useState<string|null>(null);
+  const originalPayable=useRef<Payable|null>(null);const xml=usePayableXmlSave(currentTenant!.id,user!.id);
 
   const resetForm = () => {
     setForm({ ...emptyForm });
-    setEditingId(null);
-    setPendingReceipt(null);
+    setEditingId(null);originalPayable.current=null;
+    setPendingReceipt(null);setSaveError('');
     setDialogOpen(false);
   };
 
   const openEdit = (p: Payable) => {
-    setEditingId(p.id);
+    setEditingId(p.id);originalPayable.current=p;
     setOriginalStatus(p.status);
     setForm({
       supplier_name: p.supplier_name || '',
@@ -82,7 +86,7 @@ function PayablesWorkspace() {
   };
 
   const applyXmlToForm = async (data: ParsedFiscalXml, file: File) => {
-    setPendingReceipt(file);
+    setPendingReceipt(file);setSaveError('');
     setForm(prev => ({
       ...prev,
       supplier_name: data.emitter.name || prev.supplier_name,
@@ -101,18 +105,8 @@ function PayablesWorkspace() {
     }));
   };
 
-  const uploadReceipt = async (file: File): Promise<string | null> => {
-    if (!currentTenant) return null;
-    return uploadSecureFile({
-      tenantId: currentTenant.id,
-      bucket: 'receipts',
-      folder: 'payables',
-      file,
-      kind: 'financial',
-    });
-  };
-
   const handleSave = async () => {
+    if(saving.current)return;
     if (!form.supplier_name.trim()) {
       toast.error('Informe o fornecedor');
       return;
@@ -121,12 +115,13 @@ function PayablesWorkspace() {
       toast.error('Informe um valor válido');
       return;
     }
+    saving.current=true;setSaveBusy(true);setSaveError('');const generation=request.current;
     try {
-      let receiptPath: string | undefined;
-      if (pendingReceipt) {
-        try { receiptPath = (await uploadReceipt(pendingReceipt)) || undefined; }
-        catch (error) { toast.error('Falha ao anexar XML: ' + getErrorMessage(error)); }
+      if(pendingReceipt){
+        await xml.save(pendingReceipt,{supplier_name:form.supplier_name.trim(),category:form.category,description:form.description||null,amount_cents:payableXmlMoney(form.amount),due_date:form.due_date||null,competence_date:form.competence_date||null,document_number:form.document_number||null,status:form.status as 'pending'|'approved'|'paid'|'overdue'|'cancelled',notes:form.notes||null},originalPayable.current);
+        if(generation===request.current){toast.success('Conta salva com XML original preservado');resetForm();}return;
       }
+      if(generation!==request.current)return;
       const values = {
         supplier_name: form.supplier_name.trim(),
         category: form.category,
@@ -137,7 +132,6 @@ function PayablesWorkspace() {
         document_number: form.document_number || null,
         status: form.status,
         notes: form.notes || null,
-        receipt_url: receiptPath,
       };
       if (editingId) {
         const {status,...fields}=values;
@@ -149,8 +143,8 @@ function PayablesWorkspace() {
       }
       resetForm();
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Não foi possível salvar a conta.'));
-    }
+      const message=getErrorMessage(error, 'Não foi possível salvar a conta.');setSaveError(message);toast.error(message);
+    }finally{saving.current=false;setSaveBusy(false);}
   };
 
   async function openAccount(id:string,action:'edit'|'payments'){
@@ -185,16 +179,22 @@ function PayablesWorkspace() {
         </div>
       </div>
 
+      {xml.pending&&<section className="rounded border p-3"><p>Salvamento com XML sem confirmação: {xml.pending.payload.fields.supplier_name} · valor {Number(xml.pending.payload.fields.amount_cents)/100} · pedido {xml.pending.payload.request_id}.</p><p>Recupere o pedido original antes de criar outra conta.</p><Button disabled={xml.busy} onClick={()=>void xml.recover().then(()=>{resetForm();toast.success('Salvamento original confirmado');}).catch(()=>{})}>Recuperar salvamento com XML</Button></section>}
+      {xml.error&&!dialogOpen&&<p role="alert">{xml.error}</p>}{xml.confirmed&&<p role="status">Conta {xml.confirmed} salva; XML original preservado.</p>}{xml.cacheWarning&&<p role="alert">{xml.cacheWarning}</p>}
       {detailBusy&&<p role="status">Abrindo conta selecionada…</p>}
       {detailError&&<p role="alert">{detailError}</p>}
       {currentTenant&&user&&<PayablePortfolioPanel tenant={currentTenant.id} actor={user.id} onOpen={(id,action)=>void openAccount(id,action)}/>}
 
-      <Dialog open={dialogOpen} onOpenChange={o => { if (!o) resetForm(); setDialogOpen(o); }}>
+      <Dialog open={dialogOpen} onOpenChange={o => { if(saving.current)return; if (!o) resetForm(); setDialogOpen(o); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editingId ? 'Editar conta' : 'Nova conta a pagar'}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
+          {xml.pending&&<div><p>Pedido original: {xml.pending.payload.fields.supplier_name} · documento {xml.pending.payload.fields.document_number||'não informado'} · valor R$ {(Number(xml.pending.payload.fields.amount_cents)/100).toFixed(2)}.</p><Button onClick={()=>void xml.recover().then(()=>{resetForm();toast.success('Salvamento original confirmado');}).catch(()=>{})} disabled={xml.busy}>Recuperar pedido original</Button></div>}
+          {editingId&&<PayableXmlHistory key={editingId} tenant={currentTenant!.id} actor={user!.id} payableId={editingId}/>}
+          <fieldset disabled={saveBusy||xml.busy||!!xml.pending} className="space-y-4">
+            {saveError&&<p role="alert">{saveError}</p>}
             <div className="rounded-md border bg-muted/30 p-3">
               <FiscalXmlUpload perspective="payer" onExtracted={applyXmlToForm} />
+              {pendingReceipt&&<p className="text-sm">XML selecionado: {pendingReceipt.name}. Até 2 MB, NF-e. A leitura preenche os campos; o original será preservado privadamente ao salvar, sem comprovação fiscal ou antivírus.</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -251,11 +251,11 @@ function PayablesWorkspace() {
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={resetForm}>Cancelar</Button>
               {editingId&&<Button variant="outline" onClick={()=>{setApprovalId(editingId);resetForm();}}>Conferir aprovação</Button>}
-              <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending}>
+              <Button onClick={handleSave} disabled={saveBusy || createMut.isPending || updateMut.isPending}>
                 {editingId ? 'Salvar' : 'Criar'}
               </Button>
             </div>
-          </div>
+          </fieldset>
         </DialogContent>
       </Dialog>
       {approvalId&&currentTenant&&user&&<PayableApprovalDialog tenant={currentTenant.id} actor={user.id} payableId={approvalId} open onOpenChange={open=>{if(!open)setApprovalId(null);}}/>}

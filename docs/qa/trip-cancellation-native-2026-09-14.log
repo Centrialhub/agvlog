@@ -1,0 +1,7 @@
+Native PostgreSQL: 17.11 (loopback, disposable fixture)
+PASS cancellation first rejects concurrent new expense without residue
+PASS expense first makes cancellation preview stale; original expense retained
+PASS cancellation first prevents waiting direct departure from reactivating trip
+PASS direct departure first makes cancellation stale; departure untouched
+4 native cases passed; 0 functional gaps found.
+Disposable PostgreSQL stopped. Diagnostic files retained under node_modules/.cache/qa-postgres.
