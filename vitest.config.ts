@@ -1,6 +1,9 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { fileURLToPath } from "node:url";
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
@@ -10,7 +13,7 @@ export default defineConfig({
     // PGlite/WASM suites are CPU-heavy; keeping worker fan-out bounded prevents
     // Vitest's coordinator RPC from starving while preserving file isolation.
     maxWorkers: 4,
-    setupFiles: ["./src/test/setup.ts"],
+    setupFiles: [path.resolve(projectRoot, "src/test/setup.ts")],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     coverage: {
       provider: "v8",
@@ -32,6 +35,6 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: { "@": path.resolve(projectRoot, "src") },
   },
 });
