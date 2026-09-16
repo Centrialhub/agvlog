@@ -17574,6 +17574,7 @@ export type Database = {
         }
         Returns: Json
       }
+      mutate_fleet_geofence_v1: { Args: { _payload: Json }; Returns: Json }
       next_client_invoice_number: {
         Args: {
           _installment?: number
