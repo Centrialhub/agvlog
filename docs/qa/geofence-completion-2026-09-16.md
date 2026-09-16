@@ -7,10 +7,12 @@ O backend de geofence de entrega e de frota está ativo no projeto Supabase de p
 como fonte de verdade e falha de forma segura quando a origem não representa um único
 destinatário.
 
-O frontend correspondente está implementado e validado localmente, mas ainda não foi
-publicado: esta estação não possui vínculo `.vercel/project.json` nem sessão autenticada
-no Vercel. A migração que remove totalmente a escrita direta legada de geofences permanece
-deliberadamente não aplicada até que o frontend novo possa ser publicado na mesma janela.
+O frontend correspondente está implementado, validado localmente e publicado em preview
+isolado a partir do commit `e88452de09056b1469c38984258b79b8b3110d67`. O artefato foi
+inspecionado no navegador e está pronto para promoção. A produção ainda serve o frontend
+anterior porque a promoção exige confirmação operacional. A migração que remove totalmente
+a escrita direta legada de geofences permanece deliberadamente não aplicada até o frontend
+novo ser promovido e verificado na mesma janela.
 
 ## Comportamento entregue
 
@@ -29,15 +31,17 @@ deliberadamente não aplicada até que o frontend novo possa ser publicado na me
   os estados `Aguardando endereço` e `Endereço sincronizado`.
 - A RPC livre legada `upsert_geofence(...)` não é mais executável por `authenticated`;
   somente `service_role` mantém compatibilidade de recuperação interna.
-- RLS ficou explícita e sem políticas permissivas sobrepostas: membros leem; administradores
-  inserem, atualizam e excluem.
+- RLS ficou explícita e sem políticas permissivas sobrepostas. Durante a fase de expansão,
+  membros leem e administradores ainda podem inserir, atualizar e excluir para manter o
+  frontend antigo funcional. O frontend novo já usa `mutate_fleet_geofence_v1`; a migração
+  de contração revoga essas escritas diretas depois da promoção.
 
 ## Evidência de produção
 
-Verificação feita em 2026-09-16 às 13:04 BRT:
+Verificação atualizada em 2026-09-16 às 14:41 BRT:
 
 - cron `address-resolution-queue-every-minute`: ativo, agenda `* * * * *`;
-- últimas cinco execuções observadas: `succeeded`;
+- últimas cinco execuções observadas, entre 14:37 e 14:41 BRT: `succeeded`;
 - Edge Function `geocode-address`: ativa, versão 9, hash
   `61f5bc5192944bcc353c31607ae83fd373d23507f92532c405714ebf312875f5`;
 - chamada sem autenticação: HTTP `401 {"error":"unauthorized"}`;
@@ -45,6 +49,20 @@ Verificação feita em 2026-09-16 às 13:04 BRT:
 - índices de FK/worker: presentes;
 - RPC legada para `authenticated`: revogada;
 - geofences existentes: 0; nenhum geofence incorreto foi criado.
+
+O RPC canônico de frota foi exercitado no projeto de produção com o contexto real de um
+administrador autenticado. O teste criou uma cerca temporária, desativou-a, repetiu a mesma
+requisição e a excluiu. A repetição produziu exatamente uma linha no
+`operator_command_ledger`, a exclusão produziu sua própria confirmação e a cerca temporária
+deixou de existir. Permaneceram apenas as duas entradas de auditoria do teste.
+
+O preview Vercel
+`https://agvlogistica-p7lv5obua-centrialhubs-projects.vercel.app` está `Ready` e corresponde
+ao commit `e88452de09056b1469c38984258b79b8b3110d67`. O `release.json` retornou HTTP 200,
+`application/json` e `buildHash` `2ff4fa726deea02f`. O bundle
+`Geofences-9agF0f3S.js` contém a sincronização automática, o estado `Aguardando endereço` e
+o RPC `mutate_fleet_geofence_v1`, não contém exclusão direta e não gerou avisos ou erros no
+console da tela de autenticação.
 
 As duas paradas não terminais existentes são legadas e agregadas:
 
@@ -56,9 +74,10 @@ as duas entradas foram marcadas como `ignored` com a fonte ausente, em vez de fa
 posição a partir do nome da rota. Elas precisam ser replanejadas em paradas por destinatário
 ou receber um endereço de entrega explícito.
 
-No mesmo instante, o backlog de clientes continha 916 itens pendentes, 66 ambíguos e 22 com
-erro; nenhum resultado abaixo do limiar foi promovido a endereço verificado. Esses números
-são transitórios enquanto o cron continua processando a fila.
+Às 14:41 BRT, o backlog de clientes continha 532 itens pendentes, 354 ambíguos e 118 com
+erro; os dois itens de `dispatch_stop` continuavam corretamente como `ignored`. O aumento
+das filas de revisão é esperado à medida que o worker classifica o backlog, e nenhum
+resultado abaixo do limiar foi promovido a endereço verificado.
 
 ## Alterações principais
 
@@ -68,6 +87,8 @@ são transitórios enquanto o cron continua processando a fila.
 - `20260916154000_calibrate_geocoding_quality.sql`
 - `20260916162000_harden_geofence_runtime.sql`
 - `20260916162500_consolidate_geofence_rls.sql`
+- `20260916165000_stage_canonical_fleet_geofence_commands.sql`
+- `20260916170000_enforce_canonical_fleet_geofence_writes.sql` (contração pós-promoção)
 - `supabase/functions/geocode-address/index.ts`
 - `supabase/functions/_shared/geocoding-quality.ts`
 - `src/components/geofences/GeofenceFormDialog.tsx`
@@ -76,12 +97,13 @@ são transitórios enquanto o cron continua processando a fila.
 
 ## Validação
 
-- pipeline `npm run check`: aprovado no estado final (`895` arquivos de teste,
-  `6.040` testes aprovados e `1` arquivo/teste ignorado);
-- contrato Supabase: 455 migrações ordenadas e 47 Edge Functions;
+- pipeline `npm run check` do candidato mínimo: aprovado em checkout LF limpo
+  (`637` arquivos de teste e `5.034` testes aprovados);
+- cobertura do candidato mínimo: 93,52% statements/lines, 71,6% branches e 83,33%
+  functions;
+- lockfile, TypeScript, lint, baseline estrutural, 74 arquivos TypeScript de Edge
+  Functions, build e inspeção de artefatos públicos: aprovados;
 - testes focados de automação e qualidade de geocodificação: aprovados;
-- TypeScript, lint, sintaxe das Edge Functions, cobertura e build: aprovados
-  (88,2% statements; 75% branches; 93,93% functions; 91,3% lines);
 - advisors do Supabase após o endurecimento: nenhum aviso de segurança ou performance
   acionável novo para a implementação de geofence.
 
