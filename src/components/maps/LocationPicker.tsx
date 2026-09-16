@@ -20,9 +20,11 @@ interface Props {
 
 const BRAZIL_CENTER: [number, number] = [-14.235, -51.9253];
 
-function MapClickHandler({ address, onChange }: Pick<Props, 'address' | 'onChange'>) {
+function MapClickHandler({ address, onChange, disabled }: Pick<Props, 'address' | 'onChange' | 'disabled'>) {
   useMapEvents({
-    click: (event) => onChange(locationFromMap(event.latlng.lat, event.latlng.lng, address)),
+    click: (event) => {
+      if (!disabled) onChange(locationFromMap(event.latlng.lat, event.latlng.lng, address));
+    },
   });
   return null;
 }
@@ -84,7 +86,7 @@ export function LocationPicker({ tenantId, idPrefix = 'location', address, value
       <MapContainer center={value ? [value.latitude, value.longitude] : BRAZIL_CENTER}
         zoom={value ? 16 : 4} className="h-full w-full z-0">
         <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        <MapClickHandler address={address} onChange={onChange} />
+        <MapClickHandler address={address} onChange={onChange} disabled={disabled} />
         <MapFocus value={value} />
         {value ? <Marker position={[value.latitude, value.longitude]} draggable={!disabled}
           eventHandlers={{ dragend: (event) => {
