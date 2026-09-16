@@ -3,8 +3,12 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 
-const migration = readFileSync(
-  'supabase/migrations/20260916123000_canonical_fleet_geofence_commands.sql',
+const stage = readFileSync(
+  'supabase/migrations/20260916165000_stage_canonical_fleet_geofence_commands.sql',
+  'utf8',
+);
+const enforcement = readFileSync(
+  'supabase/migrations/20260916170000_enforce_canonical_fleet_geofence_writes.sql',
   'utf8',
 );
 
@@ -51,7 +55,11 @@ beforeAll(async () => {
       primary key(tenant_id,request_id)
     );
   `);
-  await db.exec(migration);
+  await db.exec(stage);
+  expect((await db.query<{ allowed: boolean }>(
+    `select has_table_privilege('authenticated','public.geofences','update') allowed`,
+  )).rows[0]).toEqual({ allowed: true });
+  await db.exec(enforcement);
 });
 
 beforeEach(async () => {
