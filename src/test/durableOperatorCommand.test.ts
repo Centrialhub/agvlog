@@ -67,6 +67,7 @@ describe('durable operator command identity', () => {
       { ...scope, actorId: 'actor-b' },
       { ...scope, entityId: 'queue-b' },
       { ...scope, action: 'upsert_geofence' as const },
+      { ...scope, action: 'mutate_fleet_geofence' as const },
     ];
     const commands = [];
     for (const variant of variants) {
