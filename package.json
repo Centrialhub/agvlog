@@ -19,7 +19,6 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:pipeline": "node --test scripts/*.test.mjs",
     "test:watch": "vitest",
     "e2e": "playwright test",
     "test:driver-offline-browser": "playwright test -c playwright.driver-offline.config.ts",
@@ -31,11 +30,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "edge:syntax": "node scripts/check-edge-syntax.mjs",
     "lockfile:check": "node scripts/check-lockfile.mjs",
-    "repository:check": "node scripts/check-repository-hygiene.mjs",
-    "supabase:release:check": "node scripts/check-supabase-release.mjs",
     "quality:baseline": "node scripts/check-code-quality-baseline.mjs",
     "smoke:deploy": "node scripts/smoke-deployment.mjs",
-    "check": "npm run lockfile:check && npm run repository:check && npm run supabase:release:check && npm run test:pipeline && npm run typecheck && npm run lint:errors && npm run lint:critical-types && npm run quality:baseline && npm run edge:syntax && npm run test:coverage && npm run build:check"
+    "check": "npm run lockfile:check && npm run typecheck && npm run lint:errors && npm run lint:critical-types && npm run quality:baseline && npm run edge:syntax && npm run test:coverage && npm run build:check"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

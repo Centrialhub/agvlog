@@ -5,9 +5,9 @@ import {DraftConflictError,type useSavePlanSnapshot} from '@/hooks/useRoutePlann
 import type {PendingDispatch} from '@/lib/route-planning/dispatchOutbox';
 
 const route={id:'route',name:'Route',loads:[{id:'load'}],driver_id:'driver',vehicle_id:'vehicle',notes:'Nota operacional'};
-let mutate:ReturnType<typeof vi.fn>;let forget:ReturnType<typeof vi.fn>;let conflict:ReturnType<typeof vi.fn>;
+let mutate:ReturnType<typeof vi.fn>;let forget:ReturnType<typeof vi.fn>;let conflict:ReturnType<typeof vi.fn<() => void>>;
 let saver:ReturnType<typeof useSavePlanSnapshot>;
-beforeEach(()=>{vi.useFakeTimers();mutate=vi.fn();forget=vi.fn();conflict=vi.fn();
+beforeEach(()=>{vi.useFakeTimers();mutate=vi.fn();forget=vi.fn();conflict=vi.fn<() => void>();
   saver={mutate,forgetVersion:forget} as unknown as ReturnType<typeof useSavePlanSnapshot>;});
 afterEach(()=>{cleanup();vi.useRealTimers();});
 describe('route autosave lifecycle',()=>{

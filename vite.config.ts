@@ -2,10 +2,21 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { componentTagger } from "lovable-tagger";
 
 const normalizedId = (id: string) => id.replace(/\\/g, "/");
+
+const deterministicBuildTime = () => {
+  const epoch = Number(process.env.SOURCE_DATE_EPOCH);
+  if (Number.isFinite(epoch) && epoch >= 0) return new Date(epoch * 1000).toISOString();
+  try {
+    return execFileSync("git", ["show", "-s", "--format=%cI", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    return new Date(0).toISOString();
+  }
+};
 
 const manualChunks = (id: string) => {
   const moduleId = normalizedId(id);
@@ -67,12 +78,15 @@ const pwaDriverAssetManifest = (): Plugin => ({
     for(const publicFile of ['manifest.webmanifest','icons/agvlog-192.png','icons/agvlog-512.png']){
       digest.update(publicFile);digest.update(readFileSync(path.resolve(__dirname,'public',publicFile)));
     }
-    digest.update(driverAssets);digest.update(workerTemplate);
+    const release=process.env.VITE_APP_RELEASE??process.env.VERCEL_GIT_COMMIT_SHA??process.env.GITHUB_SHA??'development';
+    digest.update(driverAssets);digest.update(workerTemplate);digest.update(release);
     const buildHash=digest.digest('hex').slice(0,16);
+    const builtAt=deterministicBuildTime();
     this.emitFile({type:'asset',fileName:'driver-shell-assets.json',source:driverAssets});
     this.emitFile({type:'asset',fileName:'driver-build.json',source:JSON.stringify({
-      version:process.env.npm_package_version??'development',buildHash,builtAt:new Date().toISOString(),
+      version:process.env.npm_package_version??'development',release,buildHash,builtAt,
     })});
+    this.emitFile({type:'asset',fileName:'release.json',source:JSON.stringify({release,buildHash,builtAt})});
     this.emitFile({type:'asset',fileName:'sw.js',source:workerTemplate.replace(/__AGVLOG_BUILD_HASH__/g,buildHash)});
   },
 });
