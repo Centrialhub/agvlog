@@ -6,12 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { LocationPicker } from '@/components/maps/LocationPicker';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useAuth } from '@/hooks/useAuth';
+import { useClients, type Client } from '@/hooks/useClients';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
-import type { ResolvedLocation } from '@/lib/geocoding';
+import { buildDeliveryAddress, type ResolvedLocation } from '@/lib/geocoding';
 import { acknowledgeDurableOperatorCommand, prepareDurableOperatorCommand } from '@/lib/operator/durableOperatorCommand';
 
 const CATEGORIES = [
@@ -30,6 +33,7 @@ export interface EditableFleetGeofence {
   scope_kind: string;
   dispatch_stop_id: string | null;
   client_id?: string | null;
+  auto_sync_address?: boolean;
   source_kind: string;
   source_address: string | null;
   center_lat: number | null;
@@ -75,13 +79,51 @@ function auditPayload(location: ResolvedLocation, geofence?: EditableFleetGeofen
   };
 }
 
+function clientAddress(client: Client) {
+  return buildDeliveryAddress([
+    client.address_street,
+    client.address_number,
+    client.address_complement,
+    client.address_neighborhood,
+    client.address_city,
+    client.address_state,
+    client.address_zip,
+  ]);
+}
+
+function verifiedClientLocation(client: Client): ResolvedLocation | null {
+  if (client.address_lat == null || client.address_lng == null) return null;
+  const latitude = Number(client.address_lat);
+  const longitude = Number(client.address_lng);
+  const address = clientAddress(client);
+  if (client.address_geocode_status !== 'verified' || !address
+    || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
+    || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return null;
+  return {
+    latitude,
+    longitude,
+    source: 'address_geocoded',
+    address,
+    provider: client.address_geocode_provider ?? null,
+    accuracy_m: client.address_geocode_accuracy_m ?? null,
+    confidence: client.address_geocode_confidence ?? null,
+    audit: {
+      automatic_client_address_sync: true,
+      canonical_address_id: client.canonical_address_id ?? null,
+    },
+  };
+}
+
 export function GeofenceFormDialog({ open, onOpenChange, tenantId, geofence }: Props) {
   const toast = useSonnerToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { data: clients = [], isPending: clientsLoading } = useClients();
   const editing = Boolean(geofence);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('base');
+  const [clientId, setClientId] = useState('');
+  const [autoSyncAddress, setAutoSyncAddress] = useState(false);
   const [address, setAddress] = useState('');
   const [location, setLocation] = useState<ResolvedLocation | null>(null);
   const [radius, setRadius] = useState('250');
@@ -94,6 +136,8 @@ export function GeofenceFormDialog({ open, onOpenChange, tenantId, geofence }: P
     if (!open) return;
     setName(geofence?.name ?? '');
     setCategory(geofence?.category ?? 'base');
+    setClientId(geofence?.client_id ?? '');
+    setAutoSyncAddress(Boolean(geofence?.auto_sync_address));
     setAddress(geofence?.source_address ?? '');
     setLocation(initialLocation(geofence));
     setRadius(String(geofence?.radius_m ?? 250));
@@ -102,6 +146,30 @@ export function GeofenceFormDialog({ open, onOpenChange, tenantId, geofence }: P
     setConfirmations(String(geofence?.transition_confirmations ?? 2));
     setLoading(false);
   }, [geofence, open]);
+
+  const selectedClient = clients.find((client) => client.id === clientId) ?? null;
+  const selectedClientLocation = selectedClient ? verifiedClientLocation(selectedClient) : null;
+
+  function handleClientChange(nextClientId: string) {
+    setClientId(nextClientId);
+    const client = clients.find((item) => item.id === nextClientId);
+    const resolved = client ? verifiedClientLocation(client) : null;
+    setAutoSyncAddress(Boolean(resolved));
+    setAddress(client ? clientAddress(client) : '');
+    setLocation(resolved);
+  }
+
+  function handleAutoSyncChange(checked: boolean) {
+    setAutoSyncAddress(checked);
+    if (!checked) return;
+    if (!selectedClientLocation) {
+      setAutoSyncAddress(false);
+      toast.error('O endereço desse cliente ainda não foi validado. Aguarde o processamento ou marque o ponto manualmente.');
+      return;
+    }
+    setAddress(selectedClientLocation.address ?? '');
+    setLocation(selectedClientLocation);
+  }
 
   function handleAddressChange(nextAddress: string) {
     setAddress(nextAddress);
@@ -118,6 +186,10 @@ export function GeofenceFormDialog({ open, onOpenChange, tenantId, geofence }: P
     const parsedEnterMargin = Number(enterMargin);
     const parsedExitMargin = Number(exitMargin);
     const parsedConfirmations = Number(confirmations);
+    if (category === 'client' && autoSyncAddress && (!clientId || !selectedClientLocation)) {
+      toast.error('Selecione um cliente com endereço validado para ativar a sincronização automática.');
+      return;
+    }
     if (!location) {
       toast.error('Pesquise o endereço ou marque o ponto no mapa.');
       return;
@@ -139,7 +211,8 @@ export function GeofenceFormDialog({ open, onOpenChange, tenantId, geofence }: P
       tenant_id: tenantId,
       name: name.trim(),
       category,
-      ...(category === 'client' && geofence?.client_id ? { client_id: geofence.client_id } : {}),
+      ...(category === 'client' && clientId ? { client_id: clientId } : {}),
+      auto_sync_address: category === 'client' && autoSyncAddress,
       enabled: geofence?.enabled ?? true,
       shape_kind: 'circle',
       scope_kind: 'fleet',
@@ -214,6 +287,10 @@ export function GeofenceFormDialog({ open, onOpenChange, tenantId, geofence }: P
               const selected = category === item.value;
               return <button type="button" key={item.value} onClick={() => {
                 setCategory(item.value);
+                if (item.value !== 'client') {
+                  setClientId('');
+                  setAutoSyncAddress(false);
+                }
                 if (!editing) setRadius(String(item.defaultRadius));
               }} className={`flex items-center gap-2 rounded-lg border p-2.5 text-left transition-all ${selected
                 ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:bg-muted/50'}`}>
@@ -225,9 +302,43 @@ export function GeofenceFormDialog({ open, onOpenChange, tenantId, geofence }: P
           </div>
         </div>
 
+        {category === 'client' ? <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="geofence-client">Cliente vinculado</Label>
+            <Select value={clientId} onValueChange={handleClientChange} disabled={loading || clientsLoading}>
+              <SelectTrigger id="geofence-client">
+                <SelectValue placeholder={clientsLoading ? 'Carregando clientes…' : 'Selecione o cliente'} />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.filter((client) => client.active && client.is_client !== false).map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.company_name}{client.address_geocode_status === 'verified' ? '' : ' · endereço pendente'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <Label htmlFor="geofence-auto-sync">Sincronizar endereço automaticamente</Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Mantém a cerca alinhada à fonte canônica do cliente sempre que o cadastro mudar.
+              </p>
+            </div>
+            <Switch id="geofence-auto-sync" checked={autoSyncAddress} onCheckedChange={handleAutoSyncChange}
+              disabled={loading || !clientId} aria-label="Sincronizar endereço do cliente automaticamente" />
+          </div>
+          {clientId && !selectedClientLocation ? <p role="status" className="text-xs text-amber-600">
+            O endereço cadastrado ainda está em validação. Você pode aguardar a automação ou desativar a sincronização e marcar o acesso no mapa.
+          </p> : null}
+        </div> : null}
+
         <Separator />
         <LocationPicker tenantId={tenantId} idPrefix={geofence ? `geofence-${geofence.id}` : 'new-geofence'}
-          address={address} value={location} onAddressChange={handleAddressChange} onChange={setLocation} disabled={loading} />
+          address={address} value={location} onAddressChange={handleAddressChange} onChange={(nextLocation) => {
+            setLocation(nextLocation);
+            if (nextLocation.source === 'map_selected') setAutoSyncAddress(false);
+          }} disabled={loading || autoSyncAddress} />
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">

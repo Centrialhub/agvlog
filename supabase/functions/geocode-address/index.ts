@@ -2,14 +2,12 @@ import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '../_shared/cors.ts';
 import { requireActiveTenant } from '../_shared/active-tenant.ts';
 import { isCronRequest } from '../_shared/cron-auth.ts';
+import { assessNominatimCandidate, type NominatimResult } from '../_shared/geocoding-quality.ts';
 
-type ProviderResult = {
+type ProviderResult = NominatimResult & {
   lat?: string;
   lon?: string;
-  display_name?: string;
-  importance?: number;
   boundingbox?: string[];
-  type?: string;
 };
 
 type RequestBody = {
@@ -20,6 +18,14 @@ type RequestBody = {
   entity_id?: unknown;
   queue_id?: unknown;
   lease_token?: unknown;
+};
+
+type StructuredAddress = {
+  street: string;
+  city: string;
+  state: string;
+  postalcode: string;
+  country: string;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -62,6 +68,7 @@ Deno.serve(async (req) => {
     }
     let tenantId = String(body.tenant_id || '');
     let address = typeof body.address === 'string' ? body.address.trim().replace(/\s+/g, ' ') : '';
+    let structuredAddress: StructuredAddress | null = null;
     const limit = Math.min(5, Math.max(1, Number(body.limit) || 5));
     const provider = Deno.env.get('GEOCODING_PROVIDER') || 'nominatim';
     const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -96,6 +103,27 @@ Deno.serve(async (req) => {
       const role = typeof membership?.role === 'string' ? membership.role : '';
       if (!['owner', 'admin', 'operator'].includes(role)) return json({ error: 'forbidden' }, 403);
       if (hasEntityTarget && !['owner', 'admin'].includes(role)) return json({ error: 'forbidden' }, 403);
+    }
+    if (body.entity_type === 'client' && typeof body.entity_id === 'string' && UUID.test(body.entity_id)) {
+      const { data: client, error: clientError } = await admin.from('clients')
+        .select('address_street,address_number,address_city,address_state,address_zip,address_country_name')
+        .eq('tenant_id', tenantId).eq('id', body.entity_id).maybeSingle();
+      if (clientError) return json({ error: 'client_address_lookup_failed' }, 503);
+      const streetName = typeof client?.address_street === 'string' ? client.address_street.trim() : '';
+      const number = typeof client?.address_number === 'string' ? client.address_number.trim() : '';
+      const city = typeof client?.address_city === 'string' ? client.address_city.trim() : '';
+      const state = typeof client?.address_state === 'string' ? client.address_state.trim() : '';
+      const postalcode = typeof client?.address_zip === 'string' ? client.address_zip.trim() : '';
+      if (streetName && city && state) {
+        structuredAddress = {
+          street: [number, streetName].filter(Boolean).join(' '),
+          city,
+          state,
+          postalcode,
+          country: typeof client?.address_country_name === 'string' && client.address_country_name.trim()
+            ? client.address_country_name.trim() : 'Brasil',
+        };
+      }
     }
     if (address.length < 8 || address.length > 500 || !UUID.test(tenantId)) return json({ error: 'invalid_address' }, 400);
     const addressHash = await sha256(address.toLocaleLowerCase('pt-BR'));
@@ -152,7 +180,15 @@ Deno.serve(async (req) => {
     }
 
     const endpoint = new URL(Deno.env.get('GEOCODING_BASE_URL') || 'https://nominatim.openstreetmap.org/search');
-    endpoint.searchParams.set('q', address);
+    if (structuredAddress) {
+      endpoint.searchParams.set('street', structuredAddress.street);
+      endpoint.searchParams.set('city', structuredAddress.city);
+      endpoint.searchParams.set('state', structuredAddress.state);
+      if (structuredAddress.postalcode) endpoint.searchParams.set('postalcode', structuredAddress.postalcode);
+      endpoint.searchParams.set('country', structuredAddress.country);
+    } else {
+      endpoint.searchParams.set('q', address);
+    }
     endpoint.searchParams.set('format', 'jsonv2');
     endpoint.searchParams.set('addressdetails', '1');
     endpoint.searchParams.set('countrycodes', 'br');
@@ -183,12 +219,12 @@ Deno.serve(async (req) => {
         || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return [];
       const bounds = Array.isArray(item.boundingbox) && item.boundingbox.length === 4
         ? item.boundingbox.map(Number) : null;
-      const confidence = Math.max(0, Math.min(1, Number(item.importance) || 0));
+      const quality = assessNominatimCandidate(item, address);
       return [{
-        label: String(item.display_name || address).slice(0, 500), latitude, longitude, confidence,
-        accuracy_m: confidence >= 0.7 ? 50 : confidence >= 0.4 ? 150 : 500,
+        label: String(item.display_name || address).slice(0, 500), latitude, longitude,
+        confidence: quality.confidence, accuracy_m: quality.accuracy_m,
         bounds: bounds?.every(Number.isFinite) ? bounds : null,
-        provider, provider_type: item.type || null,
+        provider, provider_type: item.addresstype || item.type || null, quality: quality.quality,
       }];
     });
     await admin.from('address_geocoding_cache').upsert({

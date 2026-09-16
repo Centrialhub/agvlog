@@ -1,4 +1,5 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
+import { useAuth } from '@/hooks/useAuth';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,6 +22,10 @@ import {
 } from 'lucide-react';
 import { MapContainer, TileLayer, Circle, CircleMarker, Popup } from 'react-leaflet';
 import { GeofenceFormDialog, type EditableFleetGeofence } from '@/components/geofences/GeofenceFormDialog';
+import {
+  acknowledgeDurableOperatorCommand,
+  prepareDurableOperatorCommand,
+} from '@/lib/operator/durableOperatorCommand';
 import 'leaflet/dist/leaflet.css';
 
 const CATEGORIES = [
@@ -37,6 +42,7 @@ const errorMessage = (error: unknown, fallback: string) =>
 export default function Geofences() {
   const { confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
+  const { user } = useAuth();
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
   const qc = useQueryClient();
@@ -50,7 +56,7 @@ export default function Geofences() {
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data, error } = await supabase.from('geofences')
-        .select('id, tenant_id, name, category, enabled, created_at, shape_kind, scope_kind, dispatch_stop_id, source_kind, source_address, center_lat, center_lng, radius_m, location_provider, location_accuracy_m, location_confidence, location_audit, enter_margin_m, exit_margin_m, transition_confirmations')
+        .select('id, tenant_id, name, category, enabled, created_at, shape_kind, scope_kind, dispatch_stop_id, client_id, auto_sync_address, source_kind, source_address, center_lat, center_lng, radius_m, location_provider, location_accuracy_m, location_confidence, location_audit, enter_margin_m, exit_margin_m, transition_confirmations')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -100,41 +106,68 @@ export default function Geofences() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
-      if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { data, error } = await supabase.from('geofences').update({ enabled })
-        .eq('id', id)
-        .eq('tenant_id', currentTenant.id)
-        .eq('scope_kind', 'fleet')
-        .is('dispatch_stop_id', null)
-        .select('id')
-        .maybeSingle();
+      if (!currentTenant || !user?.id) throw new Error('Empresa ou usuário não selecionado.');
+      const command = { geofence_id: id, action: 'set_enabled' as const, enabled };
+      const pending = await prepareDurableOperatorCommand({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        action: 'mutate_fleet_geofence',
+        entityId: id,
+        payload: command,
+      });
+      const { data, error } = await supabase.rpc('mutate_fleet_geofence_v1' as never, { _payload: {
+        tenant_id: currentTenant.id,
+        request_id: pending.requestId,
+        ...command,
+      } } as never);
       if (error) throw error;
-      if (!data) throw new Error('Somente cercas de frota podem ser alteradas nesta tela.');
+      if (!data || typeof data !== 'object' || (data as Record<string, unknown>).ok !== true
+        || (data as Record<string, unknown>).request_id !== pending.requestId) {
+        throw new Error('A confirmação da alteração não pôde ser validada. A solicitação foi preservada para reenvio.');
+      }
+      return pending;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['geofences'] }); },
+    onSuccess: (pending) => {
+      acknowledgeDurableOperatorCommand(pending);
+      qc.invalidateQueries({ queryKey: ['geofences'] });
+    },
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao atualizar geofence')),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { data, error } = await supabase.from('geofences').delete()
-        .eq('id', id)
-        .eq('tenant_id', currentTenant.id)
-        .eq('scope_kind', 'fleet')
-        .is('dispatch_stop_id', null)
-        .select('id')
-        .maybeSingle();
+    mutationFn: async ({ id }: { id: string }) => {
+      if (!currentTenant || !user?.id) throw new Error('Empresa ou usuário não selecionado.');
+      const command = { geofence_id: id, action: 'delete' as const };
+      const pending = await prepareDurableOperatorCommand({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        action: 'mutate_fleet_geofence',
+        entityId: id,
+        payload: command,
+      });
+      const { data, error } = await supabase.rpc('mutate_fleet_geofence_v1' as never, { _payload: {
+        tenant_id: currentTenant.id,
+        request_id: pending.requestId,
+        ...command,
+      } } as never);
       if (error) throw error;
-      if (!data) throw new Error('Somente cercas de frota podem ser removidas nesta tela.');
+      if (!data || typeof data !== 'object' || (data as Record<string, unknown>).ok !== true
+        || (data as Record<string, unknown>).request_id !== pending.requestId) {
+        throw new Error('A confirmação da remoção não pôde ser validada. A solicitação foi preservada para reenvio.');
+      }
+      return pending;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['geofences'] }); toast.success('Geofence removida'); },
+    onSuccess: (pending) => {
+      acknowledgeDurableOperatorCommand(pending);
+      qc.invalidateQueries({ queryKey: ['geofences'] });
+      toast.success('Geofence removida');
+    },
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao remover geofence')),
   });
 
   const filtered = geofences.filter(row => matchesSearch(filters.search, row.name, getCategoryConfig(row.category || 'general').label) && (filters.category === 'all' || row.category === filters.category) && (filters.status === 'all' || row.enabled === (filters.status === 'active')));
 
-  const activeCount = geofences.filter((g) => g.enabled).length;
+  const activeCount = geofences.filter((g) => g.enabled && g.center_lat != null && g.center_lng != null).length;
   const freshVehicleIds = new Set(positions.map((position) => position.vehicle_id));
   const currentStates = states.filter((state) => freshVehicleIds.has(state.vehicle_id));
   const vehiclesInside = currentStates.length;
@@ -338,8 +371,11 @@ export default function Geofences() {
                           </span>
                         )}
                         <span className="text-xs text-muted-foreground">
-                          {g.enabled ? '● Monitorando' : '○ Pausada'}
+                          {g.enabled && g.center_lat != null && g.center_lng != null
+                            ? '● Monitorando'
+                            : g.enabled && g.auto_sync_address ? '◌ Aguardando endereço' : '○ Pausada'}
                         </span>
+                        {g.auto_sync_address ? <span className="text-xs text-primary">↻ Endereço sincronizado</span> : null}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -361,7 +397,7 @@ export default function Geofences() {
                             {g.enabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
                           </Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7"
-                            onClick={async () => { if (await confirmAction(`Remover a cerca "${g.name}"?`, { title: 'Remover cerca', confirmLabel: 'Remover' })) deleteMutation.mutate(g.id); }}>
+                            onClick={async () => { if (await confirmAction(`Remover a cerca "${g.name}"?`, { title: 'Remover cerca', confirmLabel: 'Remover' })) deleteMutation.mutate({ id: g.id }); }}>
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </Button>
                         </>

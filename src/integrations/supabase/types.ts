@@ -7146,9 +7146,12 @@ export type Database = {
       }
       geofences: {
         Row: {
+          auto_sync_address: boolean
+          canonical_address_id: string | null
           category: string | null
           center_lat: number | null
           center_lng: number | null
+          client_id: string | null
           created_at: string
           dispatch_stop_id: string | null
           enabled: boolean
@@ -7173,9 +7176,12 @@ export type Database = {
           transition_confirmations: number
         }
         Insert: {
+          auto_sync_address?: boolean
+          canonical_address_id?: string | null
           category?: string | null
           center_lat?: number | null
           center_lng?: number | null
+          client_id?: string | null
           created_at?: string
           dispatch_stop_id?: string | null
           enabled?: boolean
@@ -7200,9 +7206,12 @@ export type Database = {
           transition_confirmations?: number
         }
         Update: {
+          auto_sync_address?: boolean
+          canonical_address_id?: string | null
           category?: string | null
           center_lat?: number | null
           center_lng?: number | null
+          client_id?: string | null
           created_at?: string
           dispatch_stop_id?: string | null
           enabled?: boolean
@@ -8733,6 +8742,27 @@ export type Database = {
           xml_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "geofences_canonical_address_tenant_fk"
+            columns: ["tenant_id", "canonical_address_id"]
+            isOneToOne: false
+            referencedRelation: "canonical_addresses"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "geofences_client_tenant_fk"
+            columns: ["tenant_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["tenant_id", "id"]
+          },
+          {
+            foreignKeyName: "geofences_dispatch_stop_tenant_fk"
+            columns: ["tenant_id", "dispatch_stop_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_stops"
+            referencedColumns: ["tenant_id", "id"]
+          },
           {
             foreignKeyName: "load_manifests_emitter_id_fkey"
             columns: ["emitter_id"]
@@ -15969,6 +15999,7 @@ export type Database = {
       }
     }
     Functions: {
+      create_or_reactivate_cost_center_v1: { Args: { _tenant_id: string; _name: string }; Returns: Json }
       driver_get_load_fiscal_file: { Args: { _tenant_id: string; _load_id: string; _document_kind: string; _document_id: string; _format: string }; Returns: Json }
       driver_list_load_fiscal_catalog: { Args: { _tenant_id: string; _load_id: string }; Returns: Json }
       list_driver_loads_page_v1: { Args: { _tenant_id: string; _search?: string; _status?: string; _limit?: number; _cursor?: Json }; Returns: Json }
@@ -17629,6 +17660,34 @@ export type Database = {
           p_vehicle_id: string
         }
         Returns: string
+      }
+      portal_get_financial_title_file: {
+        Args: { _tenant_id: string; _title_id: string }
+        Returns: Json
+      }
+      portal_get_fiscal_file: {
+        Args: {
+          _document_id: string
+          _document_kind: string
+          _fiscal_document_id: string
+          _format: string
+          _tenant_id: string
+        }
+        Returns: Json
+      }
+      portal_list_financial_titles: {
+        Args: {
+          _client_id?: string
+          _limit?: number
+          _offset?: number
+          _status?: string[]
+          _tenant_id: string
+        }
+        Returns: Json
+      }
+      portal_list_fiscal_bundle: {
+        Args: { _fiscal_document_id: string; _tenant_id: string }
+        Returns: Json
       }
       portal_user_can_access_fiscal_document: {
         Args: { _fiscal_document_id: string; _tenant_id: string }

@@ -64,6 +64,14 @@ export interface Client {
   is_client?: boolean | null;
   is_supplier?: boolean | null;
   address_city_ibge_code?: string | null;
+  canonical_address_id?: string | null;
+  address_geocode_status?: string | null;
+  address_lat?: number | null;
+  address_lng?: number | null;
+  address_geocode_provider?: string | null;
+  address_geocode_accuracy_m?: number | null;
+  address_geocode_confidence?: number | null;
+  address_geocode_audit?: Json | null;
 }
 
 export type CreateClientInput = Omit<
