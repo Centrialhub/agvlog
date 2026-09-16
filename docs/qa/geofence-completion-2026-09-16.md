@@ -7,10 +7,15 @@ O backend de geofence de entrega e de frota está ativo no projeto Supabase de p
 como fonte de verdade e falha de forma segura quando a origem não representa um único
 destinatário.
 
-O frontend correspondente está implementado e validado localmente, mas ainda não foi
-publicado: esta estação não possui vínculo `.vercel/project.json` nem sessão autenticada
-no Vercel. A migração que remove totalmente a escrita direta legada de geofences permanece
-deliberadamente não aplicada até que o frontend novo possa ser publicado na mesma janela.
+O frontend correspondente está implementado e validado localmente e foi publicado em uma
+prévia protegida do Vercel a partir do commit `1e2e6721`. O artefato hospedado foi inspecionado
+com a sessão autenticada do navegador e contém a sincronização automática, o estado
+`Aguardando endereço` e a mutação canônica de frota; não contém exclusão direta de geofence.
+
+A produção ainda serve o frontend antigo. Por isso, a migração que remove totalmente a escrita
+direta legada de geofences permanece deliberadamente não aplicada até a promoção coordenada
+do frontend novo. Aplicá-la antes dessa promoção interromperia as operações de ativação e
+exclusão da tela atual.
 
 ## Comportamento entregue
 
@@ -34,7 +39,7 @@ deliberadamente não aplicada até que o frontend novo possa ser publicado na me
 
 ## Evidência de produção
 
-Verificação feita em 2026-09-16 às 13:04 BRT:
+Verificação final feita em 2026-09-16 às 13:35 BRT:
 
 - cron `address-resolution-queue-every-minute`: ativo, agenda `* * * * *`;
 - últimas cinco execuções observadas: `succeeded`;
@@ -56,9 +61,28 @@ as duas entradas foram marcadas como `ignored` com a fonte ausente, em vez de fa
 posição a partir do nome da rota. Elas precisam ser replanejadas em paradas por destinatário
 ou receber um endereço de entrega explícito.
 
-No mesmo instante, o backlog de clientes continha 916 itens pendentes, 66 ambíguos e 22 com
-erro; nenhum resultado abaixo do limiar foi promovido a endereço verificado. Esses números
-são transitórios enquanto o cron continua processando a fila.
+No mesmo instante, o backlog de clientes continha 798 itens pendentes, 154 ambíguos e 52 com
+erro. A queda de 916 para 798 pendências confirma que o worker está drenando a fila; o aumento
+de itens ambíguos/erro é a classificação segura dos registros processados, sem promover
+resultados abaixo do limiar a endereço verificado.
+
+## Prévia publicada e gate de produção
+
+- prévia protegida: `https://agvlogistica-quyrnn7jd-centrialhubs-projects.vercel.app`;
+- commit implantado: `1e2e6721d3888772e6411cf1ff52b8d0b1de8e93`;
+- bundle hospedado de geofence: HTTP 200, JavaScript, 28.025 bytes;
+- evidências no bundle: `Sincronizar endereço automaticamente`, `Aguardando endereço` e
+  `mutate_fleet_geofence_v1` presentes; `.delete()` ausente;
+- página de autenticação carregada sem erros ou avisos no console;
+- produção `https://agvlogistica.vercel.app`: bundle antigo, sem os estados acima, sem a RPC
+  canônica e ainda com exclusão direta.
+
+A promoção de produção continua bloqueada por dois gates objetivos do repositório: o candidato
+limpo não inclui correções TypeScript/Vitest não relacionadas que permanecem apenas no enorme
+worktree sujo, e a configuração de metadados `release.json` também está nesse conjunto não
+consolidado. O build de produção e os 17 testes focados de geofence do candidato passam, mas
+promover sem fechar esses gates violaria o runbook de release e removeria a compatibilidade com
+a tela atualmente publicada.
 
 ## Alterações principais
 
@@ -82,6 +106,9 @@ são transitórios enquanto o cron continua processando a fila.
 - testes focados de automação e qualidade de geocodificação: aprovados;
 - TypeScript, lint, sintaxe das Edge Functions, cobertura e build: aprovados
   (88,2% statements; 75% branches; 93,93% functions; 91,3% lines);
+- candidato de prévia em checkout limpo: `npm ci`, build de produção e 17 testes focados
+  aprovados; o typecheck completo expôs somente incompatibilidades Vitest 4 em testes alheios
+  ao geofence que já estão corrigidas, porém ainda não consolidadas no histórico publicável;
 - advisors do Supabase após o endurecimento: nenhum aviso de segurança ou performance
   acionável novo para a implementação de geofence.
 
