@@ -1,4 +1,8 @@
-export type DurableOperatorAction = 'resolve_address' | 'upsert_geofence' | 'review_trip_cargo_divergence';
+export type DurableOperatorAction =
+  | 'resolve_address'
+  | 'upsert_geofence'
+  | 'mutate_fleet_geofence'
+  | 'review_trip_cargo_divergence';
 
 export interface DurableOperatorCommand {
   version: 1;
@@ -48,7 +52,8 @@ function parse(raw: string | null): DurableOperatorCommand | null {
   try {
     const value = JSON.parse(raw) as Partial<DurableOperatorCommand>;
     if (value.version !== 1 || typeof value.tenantId !== 'string' || typeof value.actorId !== 'string'
-      || !['resolve_address', 'upsert_geofence', 'review_trip_cargo_divergence'].includes(String(value.action))
+      || !['resolve_address', 'upsert_geofence', 'mutate_fleet_geofence', 'review_trip_cargo_divergence']
+        .includes(String(value.action))
       || typeof value.entityId !== 'string' || typeof value.requestId !== 'string'
       || !/^[0-9a-f]{64}$/.test(String(value.payloadHash)) || typeof value.createdAt !== 'string'
       || !Number.isFinite(Date.parse(value.createdAt))) return null;
