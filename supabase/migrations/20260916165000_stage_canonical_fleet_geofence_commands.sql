@@ -108,39 +108,17 @@ $function$;
 revoke all on function public.mutate_fleet_geofence_v1(jsonb) from public,anon,authenticated,service_role;
 grant execute on function public.mutate_fleet_geofence_v1(jsonb) to authenticated;
 
--- Authenticated callers retain read access, but every fleet write now crosses an
--- audited, tenant-bound RPC. Service automation keeps its existing privileges.
-drop policy if exists "Admins can manage geofences" on public.geofences;
-drop policy if exists "Members can view geofences" on public.geofences;
-drop policy if exists agvlog_active_tenant_context on public.geofences;
-drop policy if exists agvlog_delete_authenticated on public.geofences;
-drop policy if exists agvlog_insert_authenticated on public.geofences;
-drop policy if exists agvlog_select_authenticated on public.geofences;
-drop policy if exists agvlog_update_authenticated on public.geofences;
-create policy geofences_active_tenant_read on public.geofences
-  for select to authenticated
-  using (
-    private.request_tenant_id()=tenant_id
-    and private.is_request_tenant_member(tenant_id)
-  );
-revoke insert,update,delete on table public.geofences from authenticated;
-grant select on table public.geofences to authenticated;
-
+-- Expand phase: the canonical command is available while the currently published
+-- frontend keeps its temporary direct-write compatibility. The contract phase is
+-- applied only after the new frontend is promoted.
 do $postcondition$
 begin
   if not has_function_privilege('authenticated','public.mutate_fleet_geofence_v1(jsonb)','execute')
     or has_function_privilege('anon','public.mutate_fleet_geofence_v1(jsonb)','execute')
-    or has_table_privilege('authenticated','public.geofences','insert')
-    or has_table_privilege('authenticated','public.geofences','update')
-    or has_table_privilege('authenticated','public.geofences','delete')
-    or (select count(*) from pg_policy where polrelid='public.geofences'::regclass)<>1
-    or not exists(
-      select 1 from pg_policy
-      where polrelid='public.geofences'::regclass
-        and polname='geofences_active_tenant_read'
-        and polcmd='r'
-    ) then
-    raise exception 'canonical_fleet_geofence_commands_postcondition_failed';
+    or not has_table_privilege('authenticated','public.geofences','insert')
+    or not has_table_privilege('authenticated','public.geofences','update')
+    or not has_table_privilege('authenticated','public.geofences','delete') then
+    raise exception 'staged_fleet_geofence_commands_postcondition_failed';
   end if;
 end;
 $postcondition$;

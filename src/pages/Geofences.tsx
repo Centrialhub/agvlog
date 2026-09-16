@@ -115,11 +115,11 @@ export default function Geofences() {
         entityId: id,
         payload: command,
       });
-      const { data, error } = await supabase.rpc('mutate_fleet_geofence_v1' as never, { _payload: {
+      const { data, error } = await supabase.rpc('mutate_fleet_geofence_v1', { _payload: {
         tenant_id: currentTenant.id,
         request_id: pending.requestId,
         ...command,
-      } } as never);
+      } });
       if (error) throw error;
       if (!data || typeof data !== 'object' || (data as Record<string, unknown>).ok !== true
         || (data as Record<string, unknown>).request_id !== pending.requestId) {
@@ -145,11 +145,11 @@ export default function Geofences() {
         entityId: id,
         payload: command,
       });
-      const { data, error } = await supabase.rpc('mutate_fleet_geofence_v1' as never, { _payload: {
+      const { data, error } = await supabase.rpc('mutate_fleet_geofence_v1', { _payload: {
         tenant_id: currentTenant.id,
         request_id: pending.requestId,
         ...command,
-      } } as never);
+      } });
       if (error) throw error;
       if (!data || typeof data !== 'object' || (data as Record<string, unknown>).ok !== true
         || (data as Record<string, unknown>).request_id !== pending.requestId) {
