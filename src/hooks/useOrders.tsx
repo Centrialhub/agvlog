@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export const ORDER_STATUSES = [
   'received', 'waiting_stock', 'picking', 'ready_for_loading',
@@ -84,13 +85,14 @@ export function useOrders() {
     queryKey: ['orders', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
+      const data = await fetchAllPostgrestPages((from, to) => supabase
         .from('orders')
         .select('*, clients(company_name)')
         .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as Order[];
+        .order('created_at', { ascending: false })
+        .order('id')
+        .range(from, to));
+      return data as unknown as Order[];
     },
     enabled: !!currentTenant,
   });
@@ -120,19 +122,22 @@ export function useUpdateOrder() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<Order> & { id: string }) => {
+    mutationFn: async ({ id, expected_updated_at, ...values }: Partial<Order> & { id: string; expected_updated_at: string }) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { clients: _clients, created_at: _createdAt, updated_at: _updatedAt, tenant_id: _tenantId, ...editableValues } = values;
       const payload = {
-        ...values,
+        ...editableValues,
         updated_by: user?.id,
         updated_at: new Date().toISOString(),
       } as unknown as TablesUpdate<'orders'>;
       const { data, error } = await supabase.from('orders').update(payload)
         .eq('id', id)
         .eq('tenant_id', currentTenant.id)
+        .eq('updated_at', expected_updated_at)
         .select()
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('O pedido foi alterado por outra pessoa. Atualize a lista e tente novamente.');
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['orders'] }),

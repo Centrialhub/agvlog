@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +18,7 @@ import {
   PICKUP_STATUSES,
   PICKUP_STATUS_LABELS,
 } from '@/hooks/usePickupOrders';
+import { localDateTimeInputValue } from '@/lib/utils/formatDate';
 
 interface Props {
   open: boolean;
@@ -45,7 +46,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
   const [recipientName, setRecipientName] = useState('');
   const [driverId, setDriverId] = useState<string>(NONE);
   const [vehicleId, setVehicleId] = useState<string>(NONE);
-  const [pickupAt, setPickupAt] = useState(() => new Date().toISOString().slice(0, 16));
+  const [pickupAt, setPickupAt] = useState(() => localDateTimeInputValue());
   const [status, setStatus] = useState<typeof PICKUP_STATUSES[number]>('pendente');
   const [notes, setNotes] = useState('');
 
@@ -56,7 +57,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
         setRecipientName(pickup.recipient_name || '');
         setDriverId(pickup.driver_id || NONE);
         setVehicleId(pickup.vehicle_id || NONE);
-        setPickupAt(pickup.pickup_at ? new Date(pickup.pickup_at).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16));
+        setPickupAt(localDateTimeInputValue(pickup.pickup_at || new Date()));
         setStatus(pickup.status);
         setNotes(pickup.notes || '');
       } else {
@@ -64,7 +65,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
         setRecipientName('');
         setDriverId(NONE);
         setVehicleId(NONE);
-        setPickupAt(new Date().toISOString().slice(0, 16));
+        setPickupAt(localDateTimeInputValue());
         setStatus('pendente');
         setNotes('');
       }
@@ -106,7 +107,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
 
     try {
       if (pickup) {
-        await updateMut.mutateAsync({ id: pickup.id, ...payload });
+        await updateMut.mutateAsync({ id: pickup.id, expected_updated_at: pickup.updated_at, ...payload });
         toast({ title: 'Coleta atualizada' });
         onOpenChange(false);
       } else {
@@ -125,13 +126,14 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{pickup ? `Editar Coleta nº ${pickup.pickup_number}` : 'Nova Coleta'}</DialogTitle>
+          <DialogDescription>Informe as partes, o responsável, o veículo e o horário local da coleta.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 space-y-2">
-              <Label>Remetente (Fornecedor)</Label>
+              <Label htmlFor="pickup-remitter">Remetente (Fornecedor)</Label>
               <Select value={remitterClientId} onValueChange={setRemitterClientId}>
-                <SelectTrigger><SelectValue placeholder="Selecione o fornecedor" /></SelectTrigger>
+                <SelectTrigger id="pickup-remitter"><SelectValue placeholder="Selecione o fornecedor" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— sem remetente cadastrado —</SelectItem>
                   {clients.map(c => (
@@ -141,13 +143,13 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
               </Select>
             </div>
             <div className="col-span-2 space-y-2">
-              <Label>Destinatário (Unidade nossa que recebe)</Label>
-              <Input value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="Ex: Filial Montes Claros" required />
+              <Label htmlFor="pickup-recipient">Destinatário (Unidade nossa que recebe)</Label>
+              <Input id="pickup-recipient" value={recipientName} onChange={e => setRecipientName(e.target.value)} placeholder="Ex: Filial Montes Claros" required />
             </div>
             <div className="space-y-2">
-              <Label>Motorista *</Label>
+              <Label htmlFor="pickup-driver">Motorista *</Label>
               <Select value={driverId} onValueChange={setDriverId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger id="pickup-driver"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>—</SelectItem>
                   {drivers.map((driver) => (
@@ -159,9 +161,9 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Veículo *</Label>
+              <Label htmlFor="pickup-vehicle">Veículo *</Label>
               <Select value={vehicleId} onValueChange={setVehicleId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectTrigger id="pickup-vehicle"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>—</SelectItem>
                   {vehicles.map(v => (
@@ -173,13 +175,13 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Data/Hora da Coleta *</Label>
-              <Input type="datetime-local" value={pickupAt} onChange={e => setPickupAt(e.target.value)} required />
+              <Label htmlFor="pickup-at">Data/Hora da Coleta *</Label>
+              <Input id="pickup-at" type="datetime-local" value={pickupAt} onChange={e => setPickupAt(e.target.value)} required />
             </div>
             <div className="space-y-2">
-              <Label>Status</Label>
+              <Label htmlFor="pickup-status">Status</Label>
               <Select value={status} onValueChange={(value) => setStatus(value as PickupStatus)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="pickup-status"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {PICKUP_STATUSES.map(s => (
                     <SelectItem key={s} value={s}>{PICKUP_STATUS_LABELS[s]}</SelectItem>
@@ -188,8 +190,8 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
               </Select>
             </div>
             <div className="col-span-2 space-y-2">
-              <Label>Observações</Label>
-              <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} />
+              <Label htmlFor="pickup-notes">Observações</Label>
+              <Textarea id="pickup-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={3} />
             </div>
           </div>
           <DialogFooter>

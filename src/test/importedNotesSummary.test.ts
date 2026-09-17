@@ -86,11 +86,12 @@ describe('groupNotesBy + totals', () => {
 
 describe('exportImportedNotesCsv', () => {
   it('gera CSV com BOM, ; separador e mesmas linhas', () => {
-    const csv = exportImportedNotesCsv([mk()]);
+    const csv = exportImportedNotesCsv([mk()], { company: 'Empresa Exemplo', branch: 'Filial Centro' });
     expect(csv.startsWith('\ufeff')).toBe(true);
     const lines = csv.split('\r\n');
     expect(lines[0]).toContain('Nº Nota');
     expect(lines).toHaveLength(2);
     expect(lines[1].split(';')).toHaveLength(lines[0].split(';').length);
+    expect(lines[1]).toContain('"Empresa Exemplo";"Filial Centro"');
   });
 });

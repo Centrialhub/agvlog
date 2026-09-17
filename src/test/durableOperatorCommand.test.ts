@@ -31,7 +31,7 @@ describe('durable operator command identity', () => {
     { action: 'resolve_address' as const, entityId: 'queue-a', payload: { longitude: -43, latitude: -16 } },
     { action: 'upsert_geofence' as const, entityId: 'new', payload: { radius_m: 150, address: 'Rua Reservada 42' } },
     { action: 'review_trip_cargo_divergence' as const, entityId: 'divergence-a', payload: { status: 'approved', reason: 'Motivo sigiloso' } },
-  ])('rehydrates the same $action request after a hard reload without storing its payload', async variant => {
+  ])('rehydrates the same $action request after a hard reload with its recoverable payload', async variant => {
     const commandScope = { tenantId: scope.tenantId, actorId: scope.actorId, action: variant.action,
       entityId: variant.entityId };
     const first = await prepareDurableOperatorCommand({ ...commandScope, payload: variant.payload },
@@ -40,22 +40,18 @@ describe('durable operator command identity', () => {
       payload: Object.fromEntries(Object.entries(variant.payload).reverse()) }, { storage, digest, uuid });
     expect(rehydrated).toEqual(first);
     expect(readDurableOperatorCommand(commandScope, { storage })).toEqual(first);
-    expect(storage.dump()).not.toContain('Rua Reservada');
-    expect(storage.dump()).not.toContain('Motivo sigiloso');
-    expect(storage.dump()).not.toContain('"payload"');
+    expect(rehydrated.payload).toEqual(variant.payload);
+    expect(storage.dump()).toContain('"payload"');
     expect(storage.length).toBe(1);
   });
 
-  it('rotates request_id when the material payload changes and never lets a stale ACK delete it', async () => {
+  it('refuses to overwrite an uncertain request with a materially different payload', async () => {
     const first = await prepareDurableOperatorCommand({ ...scope, payload: { latitude: -16, longitude: -43 } },
       { storage, digest, uuid });
-    const changed = await prepareDurableOperatorCommand({ ...scope, payload: { latitude: -16, longitude: -44 } },
-      { storage, digest, uuid });
-    expect(changed.requestId).not.toBe(first.requestId);
-    expect(changed.payloadHash).not.toBe(first.payloadHash);
+    await expect(prepareDurableOperatorCommand({ ...scope, payload: { latitude: -16, longitude: -44 } },
+      { storage, digest, uuid })).rejects.toThrow('operator_command_pending_conflict');
+    expect(readDurableOperatorCommand(scope, { storage })).toEqual(first);
     acknowledgeDurableOperatorCommand(first, { storage });
-    expect(readDurableOperatorCommand(scope, { storage })).toEqual(changed);
-    acknowledgeDurableOperatorCommand(changed, { storage });
     expect(readDurableOperatorCommand(scope, { storage })).toBeNull();
     expect(storage.length).toBe(0);
   });

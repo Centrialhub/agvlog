@@ -35,6 +35,12 @@ describe('durable NFS-e batch preparation',()=>{
    has_function_privilege('authenticated','public.prepare_nfse_issue_batch_v1(uuid,uuid,text,text,text,uuid,jsonb)','execute') authenticated_prepare,
    has_function_privilege('service_role','public.prepare_nfse_issue_batch_v1(uuid,uuid,text,text,text,uuid,jsonb)','execute') service_prepare`)).rows[0])
    .toEqual({authenticated_schema_usage:true,authenticated_batch_read:false,authenticated_prepare:false,service_prepare:true});
+  expect((await context.db.query(`select
+   has_column_privilege('service_role','public.fiscal_poll_dead_letters','status','update') status_update,
+   has_column_privilege('service_role','public.fiscal_poll_dead_letters','resolved_at','update') resolved_at_update,
+   has_column_privilege('service_role','public.fiscal_poll_dead_letters','reason_code','update') reason_code_update,
+   has_column_privilege('service_role','public.fiscal_poll_dead_letters','document_id','select') document_id_select`)).rows[0])
+   .toEqual({status_update:true,resolved_at_update:true,reason_code_update:false,document_id_select:true});
  });
 
  it('reserves every individual source atomically before transport',async()=>{
@@ -58,5 +64,27 @@ describe('durable NFS-e batch preparation',()=>{
   await expect(prepare('batch-conflict')).rejects.toThrow('fiscal_sources_reserved');
   expect((await context.db.query('select count(*)::int n from private.nfse_issue_batches')).rows[0]).toEqual({n:0});
   expect((await context.db.query('select count(*)::int n from fiscal_source_reservations')).rows[0]).toEqual({n:1});
+ });
+
+ it('retries a locally terminalized document only when no provider dispatch exists',async()=>{
+  await context.db.query("update nfse_documents set status='error' where id=$1",[nfse1]);
+  await context.db.query(`insert into fiscal_poll_dead_letters(
+   tenant_id,document_kind,document_id,reason_code,attempt_count,first_seen_at
+  ) values($1,'nfse',$2,'missing_provider_reference',5,now())`,[ids.tenant,nfse1]);
+
+  expect((await prepare('batch-local-error',snapshot([nfse1]))).rows[0].result)
+   .toMatchObject({recovered:false});
+  expect((await context.db.query('select status,resolved_by from fiscal_poll_dead_letters where document_id=$1',[nfse1])).rows[0])
+   .toEqual({status:'resolved',resolved_by:ids.operator});
+ });
+
+ it('keeps an error document blocked when a durable provider dispatch exists',async()=>{
+  await serviceFiscal(context.db,
+   'select claim_hub_fiscal_emission($1,$2,$3,$4,$5,$6::jsonb,null,null,$7) result',
+   [ids.tenant,ids.operator,context.emitter,'nfse','homologation',JSON.stringify({emitterCnpj:'11222333000181'}),nfse1]);
+  await context.db.query("update nfse_documents set status='error' where id=$1",[nfse1]);
+
+  await expect(prepare('batch-dispatched-error',snapshot([nfse1])))
+   .rejects.toThrow('nfse_batch_document_invalid');
  });
 });

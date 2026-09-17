@@ -1,6 +1,7 @@
 import {receivableCreditNumberFields,creditCompositionValid} from './receivableCreditAmounts';
 import {movementUseError} from './movementUseErrors';
 import {z} from 'zod';
+import {receivableAgreementAllocationSchema} from './receivableAgreementContract';
 const id=z.string().uuid();const revision=z.string().regex(/^[a-f0-9]{32}$/);const cents=z.number().int().nonnegative().max(99999999999999);
 export const financialAction=z.enum(['receive','reverse','reconcile']);
 export type FinancialAction=z.infer<typeof financialAction>;
@@ -9,10 +10,10 @@ const base={version:z.literal(1),tenant_id:id,actor_id:id,request_id:id,receivab
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const financialCommandSchema=z.discriminatedUnion('action',[
  z.object({...base,action:z.literal('receive'),amount_cents:cents.positive(),effective_date:date,bank_account_id:id,movement_id:id.optional(),
-  method:z.enum(['pix','boleto','ted','doc','dinheiro','cartao','debito_automatico','other']),notes:z.string().max(2000).nullable().optional(),attachment_path:z.string().max(1000).nullable().optional()}).strict(),
+  method:z.enum(['pix','boleto','ted','doc','dinheiro','cartao','debito_automatico','other']),notes:z.string().max(2000).nullable().optional(),attachment_path:z.string().max(1000).nullable().optional(),installment_allocations:z.array(receivableAgreementAllocationSchema).min(1).max(100).optional(),expected_agreement_revision:revision.optional()}).strict(),
  z.object({...base,action:z.literal('reverse'),effective_date:date,payment_id:id,refund_kind:z.literal('money_returned').optional()}).strict(),
  z.object({...base,action:z.literal('reconcile')}).strict(),
-]);
+]).superRefine((v,ctx)=>{if(v.action==='receive'&&(v.installment_allocations===undefined)!==(v.expected_agreement_revision===undefined))ctx.addIssue({code:'custom',message:'Distribuição de parcelas incompleta.'});});
 export type FinancialCommand=z.infer<typeof financialCommandSchema>;
 type Input<T>=T extends FinancialCommand?Omit<T,'version'|'tenant_id'|'actor_id'|'request_id'>:never;
 export type FinancialCommandInput=Input<FinancialCommand>;
@@ -59,6 +60,9 @@ export function financialError(cause:unknown){
  if(/financial_refund_confirmation_required/.test(raw))return 'Confirme que o dinheiro já foi devolvido. Para corrigir apenas a baixa, use a correção de vínculo.';
  if(/finance_receipt_movement_capacity_exceeded/.test(raw))return 'A entrada não tem saldo disponível suficiente. Atualize a seleção antes de confirmar.';
  if(/finance_receipt_movement_incompatible/.test(raw))return 'A entrada selecionada não corresponde à empresa, conta, data ou natureza deste recebimento.';
+ if(/finance_agreement_changed/.test(raw))return 'As parcelas mudaram. Atualize a posição e distribua o recebimento novamente.';
+ if(/finance_agreement_distribution_(required|sum|invalid)|finance_agreement_installment_capacity/.test(raw))return 'Distribua exatamente o valor recebido entre parcelas com saldo disponível.';
+ if(/finance_agreement_requires_reallocation/.test(raw))return 'Há saldo restaurado sem parcela. Revise o acordo antes de registrar outra baixa.';
  if(/financial_fiscal_source_not_collectible/.test(raw))return 'O documento fiscal não permite receber neste momento. Confira a autorização, o cancelamento e as pendências financeiras da origem.';
  if(/context_changed|concurrent_change/.test(raw))return 'O título mudou ou está em uso. Atualize o estado; recupere primeiro qualquer pedido sem confirmação.';
  if(/not_authorized|permission denied/.test(raw))return 'Sua sessão não tem permissão para esta operação financeira.';

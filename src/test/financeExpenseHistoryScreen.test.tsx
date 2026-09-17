@@ -28,6 +28,8 @@ describe('recorded expense history screen',()=>{
     expect(screen.getByRole('dialog',{name:'Corrigir custo e obrigação da descarga'})).toBeInTheDocument();
     void client.invalidateQueries({queryKey:['finance-expenses',tenant,actor]});
     await waitFor(()=>expect(screen.getByText(/Atualizando o detalhe/)).toBeInTheDocument());
+    expect(screen.getByText('Atualizando gastos…')).toBeInTheDocument();
+    expect(screen.getAllByText('Almoço da viagem').length).toBeGreaterThan(0);
     expect(screen.getByRole('dialog',{name:'Corrigir custo e obrigação da descarga'})).toBeInTheDocument();
     expect(screen.queryByText('Custo vigente registrado: R$ 50,00')).not.toBeInTheDocument();
   });
@@ -89,6 +91,7 @@ describe('recorded expense history screen',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Filtrar'}));
     await waitFor(()=>expect(mocks.history).toHaveBeenLastCalledWith(tenant,expect.objectContaining({search:'almoço',page:1})));
   });
+  it('rejects an inverted date range locally without hiding the current results',async()=>{mount();await screen.findByText('Almoço da viagem');const calls=mocks.history.mock.calls.length;fireEvent.change(screen.getByLabelText('De'),{target:{value:'2026-02-01'}});fireEvent.change(screen.getByLabelText('Até'),{target:{value:'2026-01-01'}});fireEvent.click(screen.getByRole('button',{name:'Filtrar'}));expect(screen.getByRole('alert')).toHaveTextContent('data inicial não pode ser posterior');expect(mocks.history).toHaveBeenCalledTimes(calls);expect(screen.getByText('Almoço da viagem')).toBeInTheDocument();expect(screen.getByLabelText('De')).toHaveAttribute('max','2026-01-01');expect(screen.getByLabelText('Até')).toHaveAttribute('min','2026-02-01');});
   it('never fetches expense history for a driver or a user denied by the server',()=>{
     mocks.role='driver';const first=mount();expect(mocks.history).not.toHaveBeenCalled();first.unmount();
     mocks.role='admin';mocks.access=false;mount();expect(mocks.history).not.toHaveBeenCalled();

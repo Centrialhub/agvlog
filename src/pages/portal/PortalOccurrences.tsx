@@ -3,7 +3,7 @@ import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { usePortalOccurrences, useCreatePortalOccurrence } from '@/hooks/portal/usePortalOccurrences';
 import { usePortalOccurrenceMessages, useReplyPortalOccurrence } from '@/hooks/portal/usePortalOccurrenceMessages';
-import { useClientPortalAccess, hasAnyPermission } from '@/hooks/portal/useClientPortalAccess';
+import { useClientPortalAccess } from '@/hooks/portal/useClientPortalAccess';
 import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Loader2, Plus, AlertTriangle, CheckCircle2, MessageSquare, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -29,20 +29,30 @@ const SEVERITY_TONE: Record<string, string> = {
 export default function PortalOccurrences() {
   const { data: access = [] } = useClientPortalAccess();
   const { selectedClientId } = usePortalClientScope();
-  const canOpen = hasAnyPermission(access, 'can_open_occurrences');
   const openableClients = access.filter(a => a.can_open_occurrences);
+  const selectedClientCanOpen = selectedClientId
+    ? openableClients.some((client) => client.client_id === selectedClientId)
+    : openableClients.length > 0;
+  const canInteractWithVisibleOccurrences = selectedClientId
+    ? selectedClientCanOpen
+    : access.length > 0 && openableClients.length === access.length;
   const [severity, setSeverity] = useState<string>('all');
   const [resolved, setResolved] = useState<string>('all');
-  const { data: occurrences = [], isLoading, error, refetch } = usePortalOccurrences({
+  const {
+    data: occurrences = [], isLoading, error, refetch,
+    fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError, restart,
+  } = usePortalOccurrences({
     severity: severity === 'all' ? undefined : severity,
     resolved: resolved === 'all' ? undefined : resolved === 'yes',
   });
+  const restartOccurrences = restart;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ client_id: '', event_type: '', severity: 'medium', description: '' });
   useEffect(() => {
     if (open && !form.client_id) {
-      const preselect = selectedClientId
-        || (openableClients.length === 1 ? openableClients[0].client_id : '');
+      const preselect = selectedClientId && openableClients.some((client) => client.client_id === selectedClientId)
+        ? selectedClientId
+        : (openableClients.length === 1 ? openableClients[0].client_id : '');
       if (preselect) setForm(f => ({ ...f, client_id: preselect }));
     }
   }, [open, selectedClientId, openableClients, form.client_id]);
@@ -53,6 +63,10 @@ export default function PortalOccurrences() {
   const submit = async () => {
     if (!form.client_id || !form.event_type || !form.description) {
       toast({ title: 'Preencha cliente, tipo e descrição', variant: 'destructive' });
+      return;
+    }
+    if (!openableClients.some((client) => client.client_id === form.client_id)) {
+      toast({ title: 'Sem permissão para abrir ocorrência para este cliente', variant: 'destructive' });
       return;
     }
     try {
@@ -86,7 +100,7 @@ export default function PortalOccurrences() {
             <SelectItem value="yes">Resolvidas</SelectItem>
           </SelectContent>
         </Select>
-        {canOpen && (
+        {selectedClientCanOpen && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="ml-auto"><Plus className="h-4 w-4 mr-2" />Abrir ocorrência</Button>
@@ -173,7 +187,7 @@ export default function PortalOccurrences() {
                     {format(new Date(o.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
                   </div>
                 </div>
-                {canOpen && (
+                {canInteractWithVisibleOccurrences && (
                 <div className="mt-3 flex justify-end">
                   <Button size="sm" variant="outline" onClick={() => setThreadId(o.id)}>
                     <MessageSquare className="h-4 w-4 mr-2" /> Conversar
@@ -183,6 +197,25 @@ export default function PortalOccurrences() {
               </CardContent>
             </Card>
           ))}
+          {(hasNextPage || isFetchNextPageError) && (
+            <div className="pt-2 text-center">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (isFetchNextPageError) {
+                    void restartOccurrences();
+                    return;
+                  }
+                  void fetchNextPage();
+                }}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isFetchNextPageError ? 'A lista mudou — atualizar' : 'Carregar mais ocorrências'}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -194,14 +227,23 @@ export default function PortalOccurrences() {
   );
 }
 
-function OccurrenceThreadDialog({
+export function OccurrenceThreadDialog({
   occurrenceId,
   onClose,
 }: {
   occurrenceId: string | null;
   onClose: () => void;
 }) {
-  const { data: messages = [], isLoading } = usePortalOccurrenceMessages(occurrenceId);
+  const {
+    data: messages = [],
+    isLoading,
+    error: messagesError,
+    refetch: refetchMessages,
+    hasOlder,
+    loadOlder,
+    isLoadingOlder,
+    olderError,
+  } = usePortalOccurrenceMessages(occurrenceId);
   const replyMut = useReplyPortalOccurrence();
   const [text, setText] = useState('');
   const { toast } = useToast();
@@ -221,10 +263,31 @@ function OccurrenceThreadDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Conversa da ocorrência</DialogTitle>
+          <DialogDescription>
+            Histórico de mensagens entre o cliente e a operação.
+          </DialogDescription>
         </DialogHeader>
         <div className="max-h-80 overflow-auto space-y-2 py-2">
+          {!isLoading && !messagesError && hasOlder && (
+            <div className="pb-2 text-center">
+              <Button size="sm" variant="outline" onClick={() => { void loadOlder(); }} disabled={isLoadingOlder}>
+                {isLoadingOlder ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Carregar mensagens anteriores
+              </Button>
+              {olderError ? <p className="mt-2 text-xs text-destructive">Não foi possível carregar as mensagens anteriores.</p> : null}
+            </div>
+          )}
           {isLoading ? (
             <div className="text-center py-6"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
+          ) : messagesError ? (
+            <div className="space-y-3 py-6 text-center" role="alert">
+              <p className="text-sm text-destructive">
+                Não foi possível carregar a conversa. As mensagens permaneceram ocultas.
+              </p>
+              <Button size="sm" variant="outline" onClick={() => { void refetchMessages(); }}>
+                Tentar novamente
+              </Button>
+            </div>
           ) : messages.length === 0 ? (
             <p className="text-sm text-center text-muted-foreground py-6">
               Nenhuma mensagem ainda. Envie a primeira abaixo.
@@ -258,7 +321,7 @@ function OccurrenceThreadDialog({
             placeholder="Escreva uma mensagem..."
             rows={2}
           />
-          <Button onClick={send} disabled={!text.trim() || replyMut.isPending}>
+          <Button onClick={send} disabled={!!messagesError || !text.trim() || replyMut.isPending}>
             {replyMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>

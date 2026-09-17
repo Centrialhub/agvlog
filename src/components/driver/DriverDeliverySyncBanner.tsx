@@ -22,11 +22,6 @@ export function DriverDeliverySyncBanner(){
     return()=>window.removeEventListener(DRIVER_OFFLINE_OUTBOX_CHANGED,replayAfterPredecessor);
   },[isOnline,refetch]);
   useEffect(()=>{
-    const replayAfterPredecessor=()=>{if(isOnline)setTimeout(()=>void refetch(),0);};
-    window.addEventListener(DRIVER_OFFLINE_OUTBOX_CHANGED,replayAfterPredecessor);
-    return()=>window.removeEventListener(DRIVER_OFFLINE_OUTBOX_CHANGED,replayAfterPredecessor);
-  },[isOnline,refetch]);
-  useEffect(()=>{
     const {data:{subscription}}=supabase.auth.onAuthStateChange(event=>{
       if(event==='TOKEN_REFRESHED'&&isOnline)setTimeout(()=>void refetch(),0);
     });

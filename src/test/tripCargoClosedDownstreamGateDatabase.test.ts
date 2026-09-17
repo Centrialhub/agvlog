@@ -112,3 +112,12 @@ describe('canonical cargo-closed downstream gate executed by PostgreSQL',()=>{
     expect((await db.query("select count(*)::int count from audit_log where action='downstream_released'")).rows).toEqual([{count:1}]);
   });
 });
+
+it('allows manual settlements without a trip while keeping the finance boundary and closed-trip requirement',async()=>{
+  const row=(await db.query<{id:string}>('insert into driver_settlements(tenant_id,dispatch_trip_id) values($1,null) returning id',[tenant])).rows[0];
+  expect((await db.query('select dispatch_trip_id from driver_settlements where id=$1',[row.id])).rows).toEqual([{dispatch_trip_id:null}]);
+  await db.query('update driver_settlements set dispatch_trip_id=null where id=$1',[row.id]);
+  await db.query("select set_config('test.finance_access','false',false)");
+  await expect(db.query('select generate_driver_settlement($1,$2)',[tenant,trip])).rejects.toThrow('finance_access_denied');
+  await db.query("select set_config('test.finance_access','true',false)");
+});

@@ -38,6 +38,10 @@ describe('reconciliation audit and reversal',()=>{
   mount();await review();vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('quota');});
   fireEvent.click(screen.getByRole('button',{name:'Confirmar reversão da conciliação'}));expect(await screen.findByText(/Nenhum envio foi iniciado/)).toBeInTheDocument();expect(mock.reverse).not.toHaveBeenCalled();
  });
+ it('lets the user discard a corrupt scoped reconciliation reversal',()=>{
+  sessionStorage.setItem(key,'broken');mount();fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));
+  expect(sessionStorage.getItem(key)).toBeNull();expect(screen.getByRole('button',{name:'Desfazer esta conciliação'})).toBeInTheDocument();expect(mock.reverse).not.toHaveBeenCalled();
+ });
  it('keeps an automatic decision identifiable when another import contests its reference',async()=>{
   const data=await mock.history();mock.history.mockResolvedValue({...data,active_count:1,rows:[{...data.rows[0],method:'automatic_reference',reversal:null,evidence_issue:'automatic_bank_reference_contested'}]});
   render(<QueryClientProvider client={new QueryClient()}><ReconciliationHistory tenant={tenant} actor={actor} statement={statement}/></QueryClientProvider>);

@@ -8,6 +8,7 @@ import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { AlertTriangle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { IntegraLabsCredit } from '@/components/branding/IntegraLabsCredit';
+import { authErrorMessage } from '@/lib/auth/authErrorMessage';
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
@@ -67,13 +68,39 @@ function LoginForm({ loading, setLoading }: { loading: boolean; setLoading: (v: 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) toast.error(error.message);
-    setLoading(false);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) toast.error(authErrorMessage(error));
+    } catch (error) {
+      toast.error(authErrorMessage(error, 'Não foi possível conectar ao serviço de autenticação.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      toast.error('Informe seu e-mail para receber o link de redefinição.');
+      return;
+    }
+    setResetting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: new URL('/set-password', window.location.origin).toString(),
+      });
+      if (error) throw error;
+      toast.success('Se a conta existir, enviaremos um link de redefinição para esse e-mail.');
+    } catch (error) {
+      toast.error(authErrorMessage(error, 'Não foi possível solicitar a redefinição de senha.'));
+    } finally {
+      setResetting(false);
+    }
   };
 
   return (
@@ -94,6 +121,9 @@ function LoginForm({ loading, setLoading }: { loading: boolean; setLoading: (v: 
       <Button type="submit" className="h-11 w-full" disabled={loading}>
         {loading && <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />}
         {loading ? 'Entrando...' : 'Entrar'}
+      </Button>
+      <Button type="button" variant="link" className="w-full" disabled={loading || resetting} onClick={handlePasswordReset}>
+        {resetting ? 'Enviando link...' : 'Esqueci minha senha'}
       </Button>
     </form>
   );

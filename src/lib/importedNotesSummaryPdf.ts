@@ -4,6 +4,7 @@ import type { RowInput } from 'jspdf-autotable';
 import type { ImportedNoteRow } from '@/hooks/useImportedNotesSummary';
 import { getImportedNoteSummaryTotals, groupNotesBy } from '@/hooks/useImportedNotesSummary';
 import { getAutoTableFinalY } from '@/lib/pdf/autoTable';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 
 export interface CarrierInfo {
   name: string;
@@ -225,6 +226,6 @@ export function generateImportedNotesSummaryPdf(opts: ReportOptions) {
 
 export function downloadImportedNotesSummaryPdf(opts: ReportOptions, fileName?: string) {
   const doc = generateImportedNotesSummaryPdf(opts);
-  const name = fileName || `manifesto_${opts.reportType}_${new Date().toISOString().slice(0, 10)}.pdf`;
+  const name = fileName || `manifesto_${opts.reportType}_${localDateInputValue()}.pdf`;
   doc.save(name);
 }

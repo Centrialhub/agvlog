@@ -1,5 +1,6 @@
 import {receivableAdjustmentTextFields,creditCompositionValid} from './receivableCreditAmounts';
 import {z} from 'zod';
+import {receivableAgreementAllocationSchema} from './receivableAgreementContract';
 const id=z.string().uuid(),revision=z.string().regex(/^[a-f0-9]{32}$/),cents=z.string().regex(/^(0|[1-9]\d{0,13})$/),positive=z.string().regex(/^[1-9]\d{0,13}$/);
 const safe=(v:unknown):v is string=>typeof v==='string'&&/^(0|[1-9]\d{0,13})$/.test(v);
 const issue=(ctx:z.RefinementCtx)=>ctx.addIssue({code:'custom',message:'Valores ou identidades do crédito inconsistentes.'});
@@ -15,7 +16,7 @@ export const customerCreditPreviewSchema=z.object({version:z.literal(1),tenant_i
  if(!safe(capacity)||BigInt(v.amount_cents)>BigInt(capacity)||v.action==='apply'&&BigInt(v.amount_cents)>BigInt(t.open_cents!))issue(ctx);}
 });
 export type CustomerCreditPreview=z.infer<typeof customerCreditPreviewSchema>;
-export const customerCreditCommandSchema=z.object({version:z.literal(1),tenant_id:id,request_id:id,credit_id:id,receivable_id:id,application_id:id.nullable(),action:z.enum(['apply','release']),amount_cents:positive,expected_revision:revision,reason:z.string().refine(v=>v.trim().length>=5&&v.trim().length<=2000)}).strict().refine(v=>(v.action==='apply')===(v.application_id===null));
+export const customerCreditCommandSchema=z.object({version:z.literal(1),tenant_id:id,request_id:id,credit_id:id,receivable_id:id,application_id:id.nullable(),action:z.enum(['apply','release']),amount_cents:positive,expected_revision:revision,reason:z.string().refine(v=>v.trim().length>=5&&v.trim().length<=2000),installment_allocations:z.array(receivableAgreementAllocationSchema).min(1).max(100).optional(),expected_agreement_revision:revision.optional()}).strict().refine(v=>(v.action==='apply')===(v.application_id===null)&&((v.installment_allocations===undefined)===(v.expected_agreement_revision===undefined))&&(v.action==='apply'||v.installment_allocations===undefined));
 export type CustomerCreditCommand=z.infer<typeof customerCreditCommandSchema>;
 export const customerCreditResultSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,request_id:id,event_id:id,application_id:id,action:z.enum(['apply','release']),credit_id:id,receivable_id:id,amount_cents:positive,cash_movement_created:z.literal(false)}).strict();
 export type CustomerCreditResult=z.infer<typeof customerCreditResultSchema>;

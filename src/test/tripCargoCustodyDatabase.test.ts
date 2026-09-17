@@ -6,6 +6,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 const migration = readFileSync('supabase/migrations/20260910142606_driver_trip_cargo_custody_cycle.sql', 'utf8');
 const integrityMigration = readFileSync('supabase/migrations/20260910191008_harden_trip_cargo_custody_integrity.sql', 'utf8');
 const sealLifecycleMigration = readFileSync('supabase/migrations/20260910194438_complete_trip_cargo_seal_lifecycle.sql', 'utf8');
+const pagingMigration = readFileSync('supabase/migrations/20260917133500_page_trip_cargo_custody.sql', 'utf8');
+const stableListMigration = readFileSync('supabase/migrations/20260917083638_stabilize_trip_cargo_list_paging.sql', 'utf8');
+const closeHardeningMigration = readFileSync('supabase/migrations/20260917134000_harden_cargo_close_and_pod_history.sql', 'utf8');
+const waivedReceiptMigration = readFileSync('supabase/migrations/20260917145100_accept_waived_receipts_on_cargo_close.sql', 'utf8');
 const id = {
   tenant: '20000000-0000-4000-8000-000000000001', driverUser: '10000000-0000-4000-8000-000000000001',
   operator: '10000000-0000-4000-8000-000000000002', owner: '10000000-0000-4000-8000-000000000003',
@@ -62,6 +66,12 @@ beforeAll(async () => {
   await db.exec(migration);
   await db.exec(integrityMigration);
   await db.exec(sealLifecycleMigration);
+  await db.exec(pagingMigration);
+  await db.exec(stableListMigration);
+  const closeStart = closeHardeningMigration.indexOf('create or replace function private.close_trip_cargo');
+  const closeEnd = closeHardeningMigration.indexOf('$function$;', closeStart) + '$function$;'.length;
+  await db.exec(closeHardeningMigration.slice(closeStart, closeEnd));
+  await db.exec(waivedReceiptMigration);
 }, 30_000);
 
 beforeEach(async () => {
@@ -88,6 +98,53 @@ beforeEach(async () => {
 afterAll(async () => { await db?.close(); });
 
 describe('trip cargo custody executed by PostgreSQL', () => {
+  it('pages custody history and every large dossier collection', async () => {
+    await command('90000000-0000-4000-8000-000000000050', 'accept', { vehicle_id: id.vehicle });
+    const control = (await db.query<{ id: string }>('select id from trip_cargo_controls')).rows[0].id;
+    await db.query(`insert into trip_cargo_divergences(tenant_id,control_id,divergence_kind,description,reported_by)
+      select $1::uuid,$2::uuid,'other','Divergência paginada '||series,$3::uuid
+      from generate_series(1,501) series`, [id.tenant, control, id.driverUser]);
+    const first = await rpc<{ result: { total_count: number; items: unknown[] } }>(
+      'select public.get_trip_cargo_collection_page_v1($1,$2,$3,1,500) result',
+      [id.tenant, id.trip, 'divergences'],
+    );
+    const second = await rpc<{ result: { total_count: number; items: unknown[] } }>(
+      'select public.get_trip_cargo_collection_page_v1($1,$2,$3,2,500) result',
+      [id.tenant, id.trip, 'divergences'],
+    );
+    expect(first.result).toMatchObject({ total_count: 501 });
+    expect(first.result.items).toHaveLength(500);
+    expect(second.result.items).toHaveLength(1);
+
+    await actor(id.operator);
+    const list = await rpc<{ result: { total_count: number; items: unknown[]; revision:string } }>(
+      'select public.list_trip_cargo_controls_v2($1,null,1,50) result', [id.tenant],
+    );
+    expect(list.result).toMatchObject({ total_count: 1 });
+    expect(list.result.items).toHaveLength(1);
+    await db.query("update trip_cargo_controls set status='loading',updated_at=clock_timestamp() where id=$1",[control]);
+    await expect(rpc('select public.list_trip_cargo_controls_v2($1,null,2,50,$2)',[id.tenant,list.result.revision])).rejects.toMatchObject({code:'40001'});
+  });
+
+  it('allows only the first pending divergence review and blocks terminal custody', async () => {
+    await command('90000000-0000-4000-8000-000000000051', 'accept', { vehicle_id: id.vehicle });
+    const control = (await db.query<{ id: string }>('select id from trip_cargo_controls')).rows[0].id;
+    const first = (await db.query<{ id: string }>(`insert into trip_cargo_divergences(
+      tenant_id,control_id,divergence_kind,description,reported_by
+    ) values($1,$2,'other','Primeira divergência operacional',$3) returning id`, [id.tenant, control, id.driverUser])).rows[0].id;
+    await actor(id.operator);
+    await rpc("select public.review_trip_cargo_divergence_v1($1,$2,'approved','Aprovação operacional definitiva')", [id.tenant, first]);
+    await expect(rpc("select public.review_trip_cargo_divergence_v1($1,$2,'rejected','Tentativa de revisar novamente')", [id.tenant, first]))
+      .rejects.toThrow('trip_cargo_divergence_already_reviewed');
+
+    const second = (await db.query<{ id: string }>(`insert into trip_cargo_divergences(
+      tenant_id,control_id,divergence_kind,description,reported_by
+    ) values($1,$2,'other','Divergência após a saída',$3) returning id`, [id.tenant, control, id.driverUser])).rows[0].id;
+    await db.query("update trip_cargo_controls set status='departed' where id=$1", [control]);
+    await expect(rpc("select public.review_trip_cargo_divergence_v1($1,$2,'resolved','Tentativa após encerramento operacional')", [id.tenant, second]))
+      .rejects.toThrow('trip_cargo_review_control_closed');
+  });
+
   it('accepts the assigned vehicle and snapshots NF-e, NFS-e and operational references as peers', async () => {
     await expect(db.query("update dispatch_trips set status='in_transit'")).rejects.toThrow('trip_cargo_departure_confirmation_required');
     await command('90000000-0000-4000-8000-000000000001', 'accept', { vehicle_id: id.vehicle });
@@ -160,6 +217,29 @@ describe('trip cargo custody executed by PostgreSQL', () => {
     const result = await rpc<{ result: { override: boolean } }>('select public.close_trip_cargo_v1($1,$2,null) result', [id.tenant, id.trip]);
     expect(result.result.override).toBe(false);
     expect((await db.query("select action from audit_log where action='close_after_physical_reconciliation'")).rows).toHaveLength(1);
+  });
+
+  it('treats an administratively waived physical receipt as already reconciled', async () => {
+    await command('90000000-0000-4000-8000-000000000015', 'accept', { vehicle_id: id.vehicle });
+    await db.query("update trip_cargo_controls set status='returned' where dispatch_trip_id=$1", [id.trip]);
+    await db.query("insert into delivery_receipts values($1,$2,$3,$4,true,'waived')", [id.receipt, id.tenant, id.trip, id.stop]);
+    await actor(id.operator);
+    const result = await rpc<{ result: { override: boolean; pending_receipts: number } }>(
+      'select public.close_trip_cargo_v1($1,$2,null) result', [id.tenant, id.trip],
+    );
+    expect(result.result).toMatchObject({ override: false, pending_receipts: 0 });
+    expect((await db.query("select action from audit_log where action='close_after_physical_reconciliation'")).rows).toHaveLength(1);
+  });
+
+  it('rejects direct custody close while any seal lacks a complete terminal record', async () => {
+    await command('90000000-0000-4000-8000-000000000060', 'accept', { vehicle_id: id.vehicle });
+    const control = (await db.query<{ id: string }>('select id from trip_cargo_controls')).rows[0].id;
+    await db.query("update trip_cargo_controls set status='returned' where id=$1", [control]);
+    await db.query(`insert into trip_cargo_seals(tenant_id,control_id,seal_number,status,installed_by,installed_evidence_id,installation_reason)
+      values($1,$2,'LACRE-PENDENTE','installed',$3,null,'Instalação legada em conferência')`, [id.tenant, control, id.driverUser]);
+    await actor(id.operator);
+    await expect(rpc('select public.close_trip_cargo_v1($1,$2,null)', [id.tenant, id.trip]))
+      .rejects.toThrow('trip_cargo_seals_unresolved');
   });
 
   it('deduplicates command retries and keeps mutation helpers unavailable to anon', async () => {
@@ -269,7 +349,7 @@ describe('trip cargo custody executed by PostgreSQL', () => {
     await command('90000000-0000-4000-8000-000000000036', 'mark_returned');
   });
 
-  it('opens an operational divergence for a broken seal and blocks close until review', async () => {
+  it('opens an operational divergence for a broken seal and freezes review after departure', async () => {
     await command('90000000-0000-4000-8000-000000000040', 'accept', { vehicle_id: id.vehicle });
     const docs = (await db.query<{ id: string }>('select id from trip_cargo_document_checks')).rows.map(row => row.id);
     await command('90000000-0000-4000-8000-000000000041', 'confirm_cargo', { vehicle_checked: true, tie_down_confirmed: true,
@@ -284,13 +364,9 @@ describe('trip cargo custody executed by PostgreSQL', () => {
     const sealId = (await db.query<{ id: string }>('select id from trip_cargo_seals')).rows[0].id;
     await command('90000000-0000-4000-8000-000000000043', 'resolve_seals', { seals: [{ seal_id: sealId, status: 'broken',
       reason: 'Lacre encontrado rompido durante o retorno físico', evidence_path: `${id.tenant}/trip-cargo/${id.trip}/seal-broken.jpg` }] });
-    await command('90000000-0000-4000-8000-000000000044', 'mark_returned');
-    await db.query("insert into delivery_receipts values($1,$2,$3,$4,true,'received')", [id.receipt, id.tenant, id.trip, id.stop]);
     await actor(id.operator);
-    await expect(rpc('select public.close_trip_cargo_v1($1,$2,null)', [id.tenant, id.trip])).rejects.toThrow('trip_cargo_divergences_pending');
     const divergence = (await db.query<{ id: string }>("select id from trip_cargo_divergences where divergence_kind='seal'")).rows[0].id;
-    await rpc("select public.review_trip_cargo_divergence_v1($1,$2,'resolved','Ocorrência do lacre conferida pela operação')", [id.tenant, divergence]);
-    const closed = await rpc<{ result: { status: string } }>('select public.close_trip_cargo_v1($1,$2,null) result', [id.tenant, id.trip]);
-    expect(closed.result.status).toBe('closed');
+    await expect(rpc("select public.review_trip_cargo_divergence_v1($1,$2,'resolved','Ocorrência do lacre conferida pela operação')", [id.tenant, divergence]))
+      .rejects.toThrow('trip_cargo_review_control_closed');
   });
 });

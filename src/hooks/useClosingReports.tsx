@@ -7,8 +7,9 @@ import {closingDraftError} from '@/lib/closingReports/closingDraft';
 import {closingTripFieldsSchema} from '@/lib/closingReports/closingTrip';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import type { Tables } from '@/integrations/supabase/types';
+import type { Json, Tables } from '@/integrations/supabase/types';
 import type {FreightAllocation,ReportType,ReportModel} from '@/lib/closingReports/closingReportBuilder';
+import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
 
 export interface ClosingReportRow {
   id: string;
@@ -47,6 +48,8 @@ export interface ClosingReportRow {
   cancelled_at: string | null;
   cancellation_reason: string | null;
   created_at: string;
+  client_snapshot: Json;
+  company_snapshot: Json;
   client?: { id: string; name: string } | null;
 }
 
@@ -91,10 +94,8 @@ export function useClosingReportsList(filters: ClosingFilters = {}) {
     queryFn: async () => {
       const tenantId = currentTenant?.id;
       if (!tenantId) return [];
-      let q = supabase.from('closing_reports')
-        .select('*, client:clients!closing_reports_client_id_fkey(id, name:company_name)')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false });
+      const makeQuery=()=>{let q = supabase.from('closing_reports')
+        .select('*, client:clients!closing_reports_client_id_fkey(id, name:company_name)').eq('tenant_id', tenantId);
       if (filters.clientId) q = q.eq('client_id', filters.clientId);
       if (filters.payerId) q = q.eq('payer_client_id', filters.payerId);
       if (filters.reportType) q = q.eq('report_type', filters.reportType);
@@ -105,9 +106,8 @@ export function useClosingReportsList(filters: ClosingFilters = {}) {
       if (filters.periodTo) q = q.lte('period_start', filters.periodTo);
       if (filters.plate) q = q.contains('vehicle_plates_snapshot', [filters.plate.toUpperCase()]);
       if (filters.driverName) q = q.contains('driver_names_snapshot', [filters.driverName.toUpperCase()]);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as ClosingReportRow[];
+      return q.order('created_at', { ascending: false }).order('id');};
+      return await fetchAllPostgrestPages((from,to)=>makeQuery().range(from,to)) as unknown as ClosingReportRow[];
     },
   });
 }
@@ -121,14 +121,14 @@ export function useClosingReport(id: string | null) {
     queryFn: async (): Promise<ClosingReportDetail> => {
       const tenantId = currentTenant?.id;
       if (!id || !tenantId) return { header: null, items: [], summary: [], payments: [] };
-      const [{ data: header, error: e1 }, { data: items, error: e2 }, { data: summary, error: e3 }, { data: payments, error: e4 }] = await Promise.all([
+      const [{ data: header, error: e1 }, items, summary, payments] = await Promise.all([
         supabase.from('closing_reports').select('*, client:clients!closing_reports_client_id_fkey(id, name:company_name), payer:clients!closing_reports_payer_client_id_fkey(id, name:company_name)').eq('id', id).eq('tenant_id', tenantId).maybeSingle(),
-        supabase.from('closing_report_items').select('*').eq('closing_report_id', id).eq('tenant_id', tenantId).order('sort_order'),
-        supabase.from('closing_report_summary_lines').select('*').eq('closing_report_id', id).eq('tenant_id', tenantId).order('sort_order'),
-        supabase.from('closing_report_payments').select('*').eq('closing_report_id', id).eq('tenant_id', tenantId).order('payment_date', { ascending: false }),
+        fetchAllPostgrestPages((from,to)=>supabase.from('closing_report_items').select('*').eq('closing_report_id', id).eq('tenant_id', tenantId).order('sort_order').order('id').range(from,to)),
+        fetchAllPostgrestPages((from,to)=>supabase.from('closing_report_summary_lines').select('*').eq('closing_report_id', id).eq('tenant_id', tenantId).order('sort_order').order('id').range(from,to)),
+        fetchAllPostgrestPages((from,to)=>supabase.from('closing_report_payments').select('*').eq('closing_report_id', id).eq('tenant_id', tenantId).order('payment_date', { ascending: false }).order('id').range(from,to)),
       ]);
-      if (e1 || e2 || e3 || e4) throw (e1 || e2 || e3 || e4);
-      return { header: header as ClosingReportRow | null, items: items ?? [], summary: summary ?? [], payments: payments ?? [] };
+      if (e1) throw e1;
+      return { header: header as ClosingReportRow | null, items, summary, payments };
     },
   });
 }

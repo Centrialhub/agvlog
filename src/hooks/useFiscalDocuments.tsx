@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
@@ -10,6 +11,7 @@ import {
   normalizeFiscalNumber,
 } from '@/lib/fiscalDocuments/fiscalIdentity';
 import type { Database, Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { assertFiscalDocumentIdentity } from '@/lib/fiscalDocuments/fiscalDocumentIdentity';
 
 const FREIGHT_TRIGGER_FIELDS = [
   'recipient',
@@ -115,6 +117,20 @@ export interface FiscalDocumentPage {
   totalCount: number;
 }
 
+type FiscalCursor = { createdAt: string; id: string };
+type FiscalPaging = {
+  key: string;
+  revision: string | null;
+  cursors: Record<number, FiscalCursor | null>;
+};
+
+export class FiscalDocumentListChangedError extends Error {
+  constructor() {
+    super('A lista de documentos mudou. A consulta foi reiniciada na primeira página.');
+    this.name = 'FiscalDocumentListChangedError';
+  }
+}
+
 export interface FiscalDocumentSummary {
   totalCount: number;
   inboundCount: number;
@@ -123,10 +139,6 @@ export interface FiscalDocumentSummary {
   totalValue: number;
   totalWeight: number;
   totalPallets: number;
-}
-
-function safePostgrestSearch(input: string): string {
-  return input.trim().replace(/[,%()"\\]/g, ' ').replace(/\s+/g, ' ');
 }
 
 export function useFiscalDocumentsPage({
@@ -138,7 +150,9 @@ export function useFiscalDocumentsPage({
   loadFilter = 'all',
 }: FiscalDocumentPageInput) {
   const { currentTenant } = useTenant();
-  const normalizedSearch = safePostgrestSearch(search);
+  const normalizedSearch = search.trim();
+  const pagingKey = [currentTenant?.id, normalizedSearch, typeFilter, statusFilter, loadFilter, pageSize].join(':');
+  const pagingRef = useRef<FiscalPaging>({ key: pagingKey, revision: null, cursors: { 1: null } });
 
   return useQuery({
     queryKey: [
@@ -148,51 +162,50 @@ export function useFiscalDocumentsPage({
     queryFn: async (): Promise<FiscalDocumentPage> => {
       if (!currentTenant) return { rows: [], totalCount: 0 };
 
-      let matchingClientIds: string[] = [];
-      if (normalizedSearch) {
-        const { data: matchingClients, error: clientsError } = await supabase
-          .from('clients')
-          .select('id')
-          .eq('tenant_id', currentTenant.id)
-          .ilike('company_name', `%${normalizedSearch}%`)
-          .limit(100);
-        if (clientsError) throw clientsError;
-        matchingClientIds = (matchingClients || []).map(client => client.id);
+      if (page === 1 || pagingRef.current.key !== pagingKey) {
+        pagingRef.current = { key: pagingKey, revision: null, cursors: { 1: null } };
       }
-
-      let query = supabase
-        .from('fiscal_documents')
-        .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)', { count: 'exact' })
-        .eq('tenant_id', currentTenant.id)
-        .is('deleted_at', null);
-
-      if (normalizedSearch) {
-        const pattern = `*${normalizedSearch}*`;
-        const filters = [
-          `invoice_number.ilike.${pattern}`,
-          `remitter.ilike.${pattern}`,
-          `recipient.ilike.${pattern}`,
-          `access_key.ilike.${pattern}`,
-        ];
-        if (matchingClientIds.length > 0) {
-          filters.push(`client_id.in.(${matchingClientIds.join(',')})`);
+      const paging = pagingRef.current;
+      const cursor = paging.cursors[page];
+      if (page > 1 && !cursor) throw new FiscalDocumentListChangedError();
+      const { data, error } = await supabase.rpc('get_fiscal_documents_page_v1', {
+        _tenant_id: currentTenant.id,
+        _cursor_created_at: cursor?.createdAt,
+        _cursor_id: cursor?.id,
+        _page_limit: pageSize,
+        _expected_revision: page === 1 ? undefined : paging.revision,
+        _search: normalizedSearch || null,
+        _document_type: typeFilter === 'all' ? null : typeFilter,
+        _status: statusFilter === 'all' ? null : statusFilter,
+        _load_filter: loadFilter === 'all' ? null : loadFilter,
+      });
+      if (error) {
+        if (error.code === '40001' || error.message.includes('fiscal_document_list_changed')) {
+          throw new FiscalDocumentListChangedError();
         }
-        query = query.or(filters.join(','));
+        throw error;
       }
-      if (typeFilter !== 'all') query = query.eq('document_type', typeFilter);
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-      if (loadFilter === 'no_load') query = query.is('load_id', null);
-      if (loadFilter === 'with_load') query = query.not('load_id', 'is', null);
-
-      const from = (page - 1) * pageSize;
-      const { data, count, error } = await query
-        .order('created_at', { ascending: false })
-        .range(from, from + pageSize - 1);
-      if (error) throw error;
-      return { rows: (data || []) as FiscalDocument[], totalCount: count || 0 };
+      const row = data?.[0];
+      if (!row || !/^[1-9]\d*$/.test(row.revision)) {
+        throw new Error('A página fiscal não retornou uma revisão válida.');
+      }
+      if (page === 1) paging.revision = row.revision;
+      else if (row.revision !== paging.revision) throw new FiscalDocumentListChangedError();
+      if (row.has_more && row.next_cursor_created_at && row.next_cursor_id) {
+        paging.cursors[page + 1] = {
+          createdAt: row.next_cursor_created_at,
+          id: row.next_cursor_id,
+        };
+      } else {
+        delete paging.cursors[page + 1];
+      }
+      return {
+        rows: (Array.isArray(row.items) ? row.items : []) as unknown as FiscalDocument[],
+        totalCount: Number(row.total_count) || 0,
+      };
     },
     enabled: !!currentTenant,
-    placeholderData: previous => previous,
+    retry: (failureCount, error) => !(error instanceof FiscalDocumentListChangedError) && failureCount < 3,
   });
 }
 
@@ -237,7 +250,8 @@ export function useFiscalDocuments() {
         .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)')
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
       if (error) throw error;
       return (data || []) as FiscalDocument[];
     },
@@ -249,9 +263,14 @@ export function useCreateFiscalDocument() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const submissionLock = useRef(false);
   return useMutation({
     mutationFn: async (values: CreateFiscalDocumentInput) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
+      if (submissionLock.current) throw new Error('A criação deste documento já está em andamento.');
+      assertFiscalDocumentIdentity(values);
+      submissionLock.current = true;
+      try {
       const payload: TablesInsert<'fiscal_documents'> = {
         ...values,
         tenant_id: currentTenant.id,
@@ -276,6 +295,9 @@ export function useCreateFiscalDocument() {
         throw error;
       }
       return data;
+      } finally {
+        submissionLock.current = false;
+      }
     },
     onSuccess: () => {
       for (const key of ['fiscal_documents', 'billing_documents', 'pending_invoices_summary'])
@@ -346,6 +368,9 @@ export function useUpdateFiscalDocument() {
   return useMutation({
     mutationFn: async ({ id, ...values }: UpdateFiscalDocumentInput) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
+      if (Object.prototype.hasOwnProperty.call(values, 'status')) {
+        throw new Error('O status fiscal é controlado pelos fluxos operacionais e fiscais; use o comando correspondente.');
+      }
       const updatePayload: TablesUpdate<'fiscal_documents'> = {
         ...values,
         updated_at: new Date().toISOString(),

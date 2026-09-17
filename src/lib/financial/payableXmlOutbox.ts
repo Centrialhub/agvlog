@@ -9,6 +9,7 @@ const pendingSchema=z.object({version:z.literal(1),tenantId:uuid,actorId:uuid,pa
 export type PendingPayableXml=z.infer<typeof pendingSchema>;
 type Store=Pick<Storage,'getItem'|'setItem'|'removeItem'>;
 export const payableXmlKey=(tenant:string,actor:string)=>`agvlog:payable-xml:v1:${tenant}:${actor}`;
+export function discardPendingPayableXml(storage:Pick<Storage,'removeItem'>,tenant:string,actor:string){storage.removeItem(payableXmlKey(tenant,actor));}
 const unavailable=()=>new Error('O pedido de conta com XML salvo está indisponível ou incompatível. Preserve os dados antes de iniciar outra operação.');
 export function pendingPayableXml(storage:Store,tenant:string,actor:string):PendingPayableXml|null{
  try{uuid.parse(tenant);uuid.parse(actor);const raw=storage.getItem(payableXmlKey(tenant,actor));if(raw===null)return null;if(raw.length>2_000_000)throw unavailable();const original=JSON.parse(raw),row=pendingSchema.parse(original);if(row.tenantId!==tenant||row.actorId!==actor||row.payload.tenant_id!==tenant)throw unavailable();return original as PendingPayableXml;}catch{throw unavailable();}

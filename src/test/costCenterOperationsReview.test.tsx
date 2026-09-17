@@ -1,0 +1,17 @@
+import {act,renderHook,waitFor} from '@testing-library/react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import type {ReactNode} from 'react';
+import {beforeEach,expect,it,vi} from 'vitest';
+import {useCostCenters} from '@/hooks/useCostCenters';
+const m=vi.hoisted(()=>({tenant:'11111111-1111-4111-8111-111111111111',actor:'22222222-2222-4222-8222-222222222222',rows:[] as {id:string;name:string;active:boolean}[],from:vi.fn(),rpc:vi.fn(),update:vi.fn(),remove:vi.fn(),insert:vi.fn(),eq:vi.fn(),single:vi.fn(),success:vi.fn(),error:vi.fn()}));
+vi.mock('@/integrations/supabase/client',()=>({supabase:{from:m.from,rpc:m.rpc}}));
+vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:m.tenant}})}));
+vi.mock('@/hooks/useSonnerToast',()=>({useSonnerToast:()=>({success:m.success,error:m.error})}));
+beforeEach(()=>{vi.clearAllMocks();m.rows=[];m.single.mockResolvedValue({data:{id:'center'},error:null});m.rpc.mockResolvedValue({data:{version:1,tenant_id:m.tenant,actor_id:m.actor,status:'reactivated',confirmed:true,cost_center:{id:'33333333-3333-4333-8333-333333333333',tenant_id:m.tenant,name:'Operacional',active:true,created_at:'2026-09-15T00:00:00Z',updated_at:'2026-09-15T00:00:01Z'}},error:null});m.from.mockImplementation(()=>{
+ const write={eq:m.eq,select:vi.fn(()=>({single:m.single}))};m.eq.mockReturnValue(write);const read={eq:vi.fn(),order:vi.fn(async()=>({data:m.rows,error:null}))};read.eq.mockReturnValue(read);
+ return {select:vi.fn(()=>read),update:(value:unknown)=>{m.update(value);return write;},delete:()=>{m.remove();return write;},insert:(value:unknown)=>{m.insert(value);return write;}};
+});});
+async function hook(){const client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});const result=renderHook(()=>useCostCenters(),{wrapper:({children}:{children:ReactNode})=><QueryClientProvider client={client}>{children}</QueryClientProvider>});await waitFor(()=>expect(result.result.current.isFullLoading).toBe(false));return result;}
+it('reactivates an inactive matching name atomically through the active-company RPC',async()=>{m.rows=[{id:'center',name:'Operacional',active:false}];const h=await hook();await act(async()=>{await h.result.current.addCostCenter(' operacional ');});expect(m.rpc).toHaveBeenCalledWith('create_or_reactivate_cost_center_v1',{_tenant_id:m.tenant,_name:'operacional'});expect(m.update).not.toHaveBeenCalled();expect(m.insert).not.toHaveBeenCalled();expect(m.success).toHaveBeenCalledWith('Centro de custo reativado com sucesso');});
+it('never claims a status update succeeded when RLS or stale identity returned no row',async()=>{m.single.mockResolvedValue({data:null,error:null});const h=await hook();await act(async()=>{await expect(h.result.current.toggleCostCenter({id:'center',active:false})).rejects.toThrow('status não foi alterado');});expect(m.success).not.toHaveBeenCalled();expect(m.error).toHaveBeenCalledWith(expect.stringContaining('Erro ao atualizar'));expect(m.eq).toHaveBeenCalledWith('tenant_id',m.tenant);});
+it('preserves a dependency rejection and explains deactivation without claiming deletion',async()=>{m.single.mockResolvedValue({data:null,error:{code:'23503',message:'foreign key'}});const h=await hook();await act(async()=>{await expect(h.result.current.deleteCostCenter('center')).rejects.toMatchObject({code:'23503'});});expect(m.eq).toHaveBeenCalledWith('tenant_id',m.tenant);expect(m.success).not.toHaveBeenCalled();expect(m.error).toHaveBeenCalledWith(expect.stringContaining('Desative-o'));});

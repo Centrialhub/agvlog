@@ -11,6 +11,8 @@ export const statementSummarySchema=z.object({id:uuid,tenant_id:uuid,bank_accoun
   counts:statementIntakeResultSchema.shape.counts,identity_review_count:z.number().int().nonnegative(),manual_review_count:z.number().int().nonnegative().default(0)});
 export type StatementSummary=z.infer<typeof statementSummarySchema>;
 export const statementListSchema=z.object({version:z.literal(1),tenant_id:uuid,page:z.number().int().positive(),page_size:z.number().int().positive(),total:z.number().int().nonnegative(),rows:z.array(statementSummarySchema)});
+export const statementHistoryEventSchema=z.object({id:uuid,actor_id:uuid,actor_name:z.string(),action:z.string(),reason:z.string(),created_at:z.string()});
+export const statementHistoryPageSchema=z.object({version:z.literal(1),tenant_id:uuid,import_id:uuid,page:z.number().int().positive(),page_size:z.number().int().positive(),snapshot_at:z.string().min(1),total:z.number().int().nonnegative(),rows:z.array(statementHistoryEventSchema)});
 export const statementLinesSchema=z.object({version:z.literal(1),tenant_id:uuid,import_id:uuid,page:z.number().int().positive(),page_size:z.number().int().positive(),total:z.number().int().nonnegative(),
   row_amount_total_cents:z.string().regex(/^-?\d+$/),
   source_verification_id:uuid.nullable().optional(),
@@ -20,4 +22,4 @@ export const statementLinesSchema=z.object({version:z.literal(1),tenant_id:uuid,
     candidate_preview:z.array(z.object({id:uuid,posted_on:z.string(),amount_cents:money,description:z.string(),bank_id:z.string().nullable(),counterparty_name:z.string().nullable(),first_import_id:uuid})),
     manual_review:z.object({id:uuid,decision:z.enum(['same_transaction','distinct_transaction']),bank_entry_id:uuid,actor_id:uuid,actor_name:z.string(),reason:z.string(),created_at:z.string(),
       reversal:z.object({id:uuid,actor_id:uuid,actor_name:z.string(),reason:z.string(),created_at:z.string()}).nullable().optional()}).nullable().optional(),
-  })),history:z.array(z.object({id:uuid,actor_id:uuid,actor_name:z.string(),action:z.string(),reason:z.string(),created_at:z.string()}))});
+  })),history:z.array(statementHistoryEventSchema)});

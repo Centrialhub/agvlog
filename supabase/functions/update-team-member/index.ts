@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { tenant_id, user_id, full_name, email, password } = body;
+    const { tenant_id, user_id, full_name, email, password, action } = body;
 
     if (!tenant_id || !user_id) {
       return new Response(
@@ -43,6 +43,13 @@ Deno.serve(async (req) => {
     if (password !== undefined) {
       return new Response(
         JSON.stringify({ error: "Administrators cannot set another user's password" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (email !== undefined) {
+      return new Response(
+        JSON.stringify({ error: "Tenant administrators cannot change a user's global login email" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -81,30 +88,42 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build update payload for auth user
-    const authUpdate: Record<string, any> = {};
-    if (email && email.trim()) authUpdate.email = email.trim();
-
-    // Update auth user if needed
-    if (Object.keys(authUpdate).length > 0) {
-      if (full_name) {
-        authUpdate.user_metadata = { full_name };
+    if (action === "send_password_reset") {
+      const { data: target, error: targetError } = await adminClient.auth.admin.getUserById(user_id);
+      if (targetError || !target.user?.email) {
+        return new Response(JSON.stringify({ error: targetError?.message || "User email not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      const { error: authError } = await adminClient.auth.admin.updateUserById(user_id, authUpdate);
-      if (authError) {
-        return new Response(
-          JSON.stringify({ error: authError.message }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      const appOrigin = Deno.env.get("AGVLOG_APP_ORIGIN")?.replace(/\/$/, "") || "https://agvlog.lovable.app";
+      const publicClient = createClient(supabaseUrl, anonKey);
+      const { error: resetError } = await publicClient.auth.resetPasswordForEmail(target.user.email, {
+        redirectTo: `${appOrigin}/set-password`,
+      });
+      if (resetError) {
+        return new Response(JSON.stringify({ error: resetError.message }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Update profile name if provided
     if (full_name && full_name.trim()) {
-      await adminClient
+      const { data: updatedProfile, error: profileError } = await adminClient
         .from("profiles")
         .update({ full_name: full_name.trim(), updated_at: new Date().toISOString() })
-        .eq("id", user_id);
+        .eq("id", user_id)
+        .select("id")
+        .maybeSingle();
+      if (profileError || !updatedProfile) {
+        return new Response(
+          JSON.stringify({ error: profileError?.message || "Profile was not updated" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     return new Response(

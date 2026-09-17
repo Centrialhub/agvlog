@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Search } from 'lucide-react';
 import { useAvailableLoadsForSettlement } from '@/hooks/useDriverSettlements';
 
@@ -25,11 +26,19 @@ interface Props {
 
 export default function LoadPicker({ driverId, includeSettlementId, selectedIds, onChange, onLoadsChange, lockedDriverId }: Props) {
   const [search, setSearch] = useState('');
-  const { data: loads = [], isLoading } = useAvailableLoadsForSettlement({
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [driverId, includeSettlementId, search]);
+  const { data, isLoading } = useAvailableLoadsForSettlement({
     driver_id: driverId ?? null,
     search,
     include_settlement_id: includeSettlementId ?? null,
+    page,
+    page_size: 100,
   });
+  const loads = data?.rows ?? [];
+  const total = data?.total ?? 0;
+  const pageSize = data?.page_size ?? 100;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   // Notify parent when list changes
   useEffect(() => {
@@ -54,7 +63,7 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
         <Input className="pl-8" placeholder="Buscar por número, origem, destino…" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
       <div className="text-xs text-muted-foreground">
-        {isLoading ? 'Carregando romaneios…' : `${loads.length} romaneio(s) disponível(is) · ${selectedIds.length} selecionado(s)`}
+        {isLoading ? 'Carregando romaneios…' : `${total} romaneio(s) disponível(is) · ${selectedIds.length} selecionado(s)`}
       </div>
       <div className="rounded-md border overflow-hidden">
         <div className="overflow-x-auto overflow-y-auto max-h-[45vh] min-h-[200px]">
@@ -111,6 +120,13 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
             ))}
           </TableBody>
         </Table>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>Página {page} de {totalPages}</span>
+        <div className="flex gap-2">
+          <Button type="button" size="sm" variant="outline" disabled={page <= 1 || isLoading} onClick={() => setPage(value => Math.max(1, value - 1))}>Anterior</Button>
+          <Button type="button" size="sm" variant="outline" disabled={page >= totalPages || isLoading} onClick={() => setPage(value => Math.min(totalPages, value + 1))}>Próxima</Button>
         </div>
       </div>
     </div>

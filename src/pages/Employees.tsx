@@ -27,6 +27,7 @@ import { Plus, Users, Edit, AlertTriangle, Eye } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { getErrorMessage } from '@/lib/errors';
+import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
 
 export default function Employees() {
   const toast = useSonnerToast();
@@ -56,8 +57,10 @@ export default function Employees() {
   const expiringDocs = useMemo(() => {
     const now = new Date();
     return employees.filter(e => {
-      if (e.cnh_expiry && differenceInDays(parseISO(e.cnh_expiry), now) < 30) return true;
-      if (e.medical_exam_expiry && differenceInDays(parseISO(e.medical_exam_expiry), now) < 30) return true;
+      const cnhDays = e.cnh_expiry ? differenceInDays(parseISO(e.cnh_expiry), now) : null;
+      const examDays = e.medical_exam_expiry ? differenceInDays(parseISO(e.medical_exam_expiry), now) : null;
+      if (cnhDays != null && cnhDays >= 0 && cnhDays <= 30) return true;
+      if (examDays != null && examDays >= 0 && examDays <= 30) return true;
       return false;
     });
   }, [employees]);
@@ -262,21 +265,20 @@ function EmployeeDetailSheet({ employee, onClose }: { employee: Employee | null;
 }
 
 function EmployeeDetail({ employee }: { employee: Employee }) {
-  const { data: contracts = [] } = useEmployeeContracts(employee.id);
-  const { data: advances = [] } = useEmployeeAdvances({ employeeId: employee.id });
-  const { data: incidentActions = [] } = useEmployeeIncidentActions(employee.id);
-  const { data: payrollEntries = [] } = useQuery({
+  const contractsQuery=useEmployeeContracts(employee.id);const contracts=contractsQuery.data??[];
+  const advancesQuery=useEmployeeAdvances({ employeeId: employee.id });const advances=advancesQuery.data??[];
+  const incidentsQuery=useEmployeeIncidentActions(employee.id);const incidentActions=incidentsQuery.data??[];
+  const payrollQuery = useQuery({
     queryKey: ['employee_payroll_entries', employee.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('payroll_entries')
+      return fetchAllPostgrestPages((from,to)=>supabase.from('payroll_entries')
         .select('*, payroll_periods(period_name, period_start, period_end, status)')
         .eq('employee_id', employee.id)
-        .order('created_at', { ascending: false }).limit(20);
-      if (error) throw error;
-      return data || [];
+        .order('created_at', { ascending: false }).order('id').range(from,to));
     },
   });
-  const { data: driverInfo } = useQuery({
+  const payrollEntries=payrollQuery.data??[];
+  const driverQuery = useQuery({
     queryKey: ['employee_driver_info', employee.driver_id],
     queryFn: async () => {
       if (!employee.driver_id) return null;
@@ -288,19 +290,20 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
     },
     enabled: !!employee.driver_id,
   });
-  const { data: driverSettlements = [] } = useQuery({
+  const driverInfo=driverQuery.data;
+  const settlementsQuery = useQuery({
     queryKey: ['employee_driver_settlements', employee.driver_id],
     queryFn: async () => {
       if (!employee.driver_id) return [];
-      const { data, error } = await supabase.from('driver_settlements')
+      return fetchAllPostgrestPages((from,to)=>supabase.from('driver_settlements')
         .select('id, trip_started_at, trip_completed_at, created_at, status, driver_payable_amount, total_paid_amount')
-        .eq('driver_id', employee.driver_id)
-        .order('trip_completed_at', { ascending: false, nullsFirst: false }).limit(10);
-      if (error) throw error;
-      return data || [];
+        .eq('driver_id', employee.driver_id!)
+        .order('trip_completed_at', { ascending: false, nullsFirst: false }).order('id').range(from,to));
     },
     enabled: !!employee.driver_id,
   });
+  const driverSettlements=settlementsQuery.data??[];
+  const detailQueries=[contractsQuery,advancesQuery,incidentsQuery,payrollQuery,driverQuery,settlementsQuery];
 
   const fmtBRL = (n: number) => (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -310,6 +313,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
         <SheetTitle>{employee.name}</SheetTitle>
         <p className="text-xs text-muted-foreground">{employee.role_title || 'Sem cargo'} · {employee.branch || 'Sem filial'}</p>
       </SheetHeader>
+      {detailQueries.some(query=>query.isError)&&<Card className="mt-3"><CardContent className="py-3" role="alert">Não foi possível carregar todo o histórico do funcionário. Dados indisponíveis não serão exibidos como ausentes. <Button variant="outline" onClick={()=>void Promise.all(detailQueries.filter(query=>query.isError).map(query=>query.refetch()))}>Tentar novamente</Button></CardContent></Card>}
       <Tabs defaultValue="dados" className="mt-4">
         <TabsList className="w-full flex-wrap h-auto">
           <TabsTrigger value="dados">Dados</TabsTrigger>
@@ -335,7 +339,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
         </TabsContent>
 
         <TabsContent value="ocorrencias" className="space-y-2">
-          {incidentActions.length === 0 ? (
+          {!incidentsQuery.isError&&incidentActions.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">Sem ocorrências registradas.</p>
           ) : (
             <Table>
@@ -358,7 +362,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
         </TabsContent>
 
         <TabsContent value="folha" className="space-y-2">
-          {payrollEntries.length === 0 ? (
+          {!payrollQuery.isError&&payrollEntries.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">Sem entradas de folha.</p>
           ) : (
             <Table>
@@ -386,7 +390,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
           )}
           <div className="mt-3">
             <p className="text-xs font-semibold mb-1">Adiantamentos</p>
-            {advances.length === 0 ? (
+            {!advancesQuery.isError&&advances.length === 0 ? (
               <p className="text-xs text-muted-foreground">Sem adiantamentos.</p>
             ) : (
               <Table>
@@ -422,7 +426,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
                 <div><p className="text-[10px] uppercase text-muted-foreground">Ativo</p><p>{driverInfo?.active ? 'Sim' : 'Não'}</p></div>
               </div>
               <p className="text-xs font-semibold mt-4 mb-1">Acertos recentes</p>
-              {driverSettlements.length === 0 ? (
+              {!settlementsQuery.isError&&driverSettlements.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Sem acertos.</p>
               ) : (
                 <Table>
@@ -469,6 +473,7 @@ function ContractTab({ employeeId, contracts }: { employeeId: string; contracts:
   });
   const handleCreate = async () => {
     if (!form.start_date) { toast.error('Data de início obrigatória'); return; }
+    if (!Number.isFinite(Number(form.base_salary)) || Number(form.base_salary) < 0) { toast.error('Salário base não pode ser negativo'); return; }
     try {
       await create.mutateAsync({
         employee_id: employeeId,
@@ -513,7 +518,7 @@ function ContractTab({ employeeId, contracts }: { employeeId: string; contracts:
             </div>
             <div><Label className="text-xs">Início</Label><Input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
             <div><Label className="text-xs">Cargo</Label><Input value={form.position_title} onChange={e => setForm(f => ({ ...f, position_title: e.target.value }))} /></div>
-            <div><Label className="text-xs">Salário base</Label><Input type="number" step="0.01" value={form.base_salary} onChange={e => setForm(f => ({ ...f, base_salary: e.target.value }))} /></div>
+            <div><Label className="text-xs">Salário base</Label><Input type="number" min="0" step="0.01" value={form.base_salary} onChange={e => setForm(f => ({ ...f, base_salary: e.target.value }))} /></div>
           </div>
           <div className="flex justify-end"><Button size="sm" onClick={handleCreate} disabled={create.isPending}>Salvar</Button></div>
         </CardContent></Card>
@@ -539,7 +544,7 @@ function ContractTab({ employeeId, contracts }: { employeeId: string; contracts:
                 <TableCell className="text-right text-xs">{Number(c.base_salary || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                 <TableCell>
                   {c.active && (
-                    <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: c.id, active: false, end_date: format(new Date(), 'yyyy-MM-dd') })}>
+                    <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: c.id, active: false, end_date: new Date() < new Date(`${c.start_date}T12:00:00`) ? c.start_date : format(new Date(), 'yyyy-MM-dd') })}>
                       Desativar
                     </Button>
                   )}

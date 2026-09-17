@@ -329,6 +329,65 @@ describe('fiscal Edge handler environment isolation (no external requests)', () 
     expect(fetcher.mock.calls[0][1]?.method).toBe('POST');
   });
 
+  it('downloads a cached PDF with the pinned Hub API version', async () => {
+    state.tables.hub_fiscal_emissions = [{
+      id: 'emission', tenant_id: tenantId, emitter_id: 'emitter', environment: 'production',
+      doc_type: 'cte', hub_document_id: 'hub-document',
+    }];
+    fetcher.mockResolvedValueOnce(new Response(
+      new TextEncoder().encode('%PDF-1.4\nmock'),
+      { status: 200, headers: { 'Content-Type': 'application/pdf' } },
+    ));
+
+    const response = await request({
+      action: 'file', id: 'hub-document', emissionId: 'emission', type: 'cte', format: 'pdf',
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toContain('application/pdf');
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher.mock.calls[0][1]?.headers).toMatchObject({
+      Authorization: 'Bearer production-scoped',
+      'X-HubFiscal-Api-Version': expect.any(String),
+    });
+  });
+
+  it('regenerates a pending file once when forceRefresh was not specified', async () => {
+    state.tables.hub_fiscal_emissions = [{
+      id: 'emission', tenant_id: tenantId, emitter_id: 'emitter', environment: 'production',
+      doc_type: 'cte', hub_document_id: 'hub-document',
+    }];
+    const pending = JSON.stringify({ files: { pdf: { pending: true } } });
+    const pdfBase64 = Buffer.from('%PDF-1.4\nrefreshed').toString('base64');
+    fetcher
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'FILE_UNAVAILABLE' } }), {
+        status: 502, headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(pending, {
+        status: 202, headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(pending, {
+        status: 202, headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ files: { pdf: { base64: pdfBase64 } } }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }));
+
+    const response = await request({
+      action: 'file', id: 'hub-document', emissionId: 'emission', type: 'cte', format: 'pdf',
+    });
+
+    expect(response.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    const deliverBodies = fetcher.mock.calls
+      .filter(call => String(call[0]).includes('/hub_documents_deliver'))
+      .map(call => JSON.parse(String(call[1]?.body)));
+    expect(deliverBodies).toEqual([
+      expect.objectContaining({ forceRefresh: false }),
+      expect.objectContaining({ forceRefresh: true }),
+    ]);
+  });
+
 });
 
 

@@ -3,11 +3,11 @@ import {useDriverExpenseSubmission} from '@/hooks/useDriverExpensesOperational';
 import {useOnlineStatus} from '@/hooks/useOnlineStatus';
 
 export function DriverExpenseSyncAgent(){
- const online=useOnlineStatus(),queue=useDriverExpenseSubmission(),attempted=useRef(false);
- const pendingCount=queue.pending.data?.length??0,isReplaying=queue.replay.isPending;
+ const online=useOnlineStatus(),queue=useDriverExpenseSubmission(),attemptedKey=useRef('');
+ const pendingKey=(queue.pending.data??[]).map(item=>item.requestId).sort().join('|'),isReplaying=queue.replay.isPending;
  useEffect(()=>{
-  if(!online){attempted.current=false;return;}
-  if(!attempted.current&&pendingCount&&!isReplaying){attempted.current=true;queue.replay.mutate();}
- },[isReplaying,online,pendingCount,queue.replay]);
+  if(!online||!pendingKey){attemptedKey.current='';return;}
+  if(attemptedKey.current!==pendingKey&&!isReplaying){attemptedKey.current=pendingKey;queue.replay.mutate();}
+ },[isReplaying,online,pendingKey,queue.replay]);
  return null;
 }

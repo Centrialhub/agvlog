@@ -22,14 +22,42 @@ export interface TomadorData {
   cliente_id: string | null;
 }
 
+const TOMADOR_TEXT_FIELDS = [
+  'nome', 'cnpj', 'ie', 'im', 'endereco', 'numero', 'complemento', 'bairro',
+  'email', 'telefone', 'municipio', 'municipio_cod', 'uf', 'cep',
+] as const satisfies readonly (keyof TomadorData)[];
+
+/** Reuses a reviewed/autofilled party only for the exact same taxpayer. */
+export function mergeNFSeTomadorForSameTaxpayer(
+  derived: TomadorData,
+  resolved: TomadorData | null | undefined,
+): TomadorData {
+  if (!resolved) return derived;
+  const derivedCnpj = normalizeCpfCnpj(derived.cnpj);
+  const resolvedCnpj = normalizeCpfCnpj(resolved.cnpj);
+  if (!derivedCnpj || derivedCnpj !== resolvedCnpj) return derived;
+
+  const merged = { ...derived };
+  for (const field of TOMADOR_TEXT_FIELDS) {
+    const value = String(resolved[field] ?? '').trim();
+    if (value) merged[field] = value;
+  }
+  merged.cliente_id = resolved.cliente_id || derived.cliente_id;
+  return merged;
+}
+
 
 type Client = RegistryClient & {municipal_registration?: string | null; email?: string | null; phone?: string | null};
 /** Never combine the payer CNPJ with the other party's address or registration. */
 export function resolveNFSeTomador(document: FiscalDocument, mode: 'remetente' | 'destinatario', clients: Client[]): TomadorData {
  const prefix=mode==='remetente'?'remitter':'recipient';
  const field=(...names:string[])=>fiscalDocumentText(document,...names.map(name=>prefix+'_'+name));
- const cnpj=onlyDigits(field('cnpj'));
- const match=normalizeCpfCnpj(cnpj)?clients.find(client=>onlyDigits(client.tax_id)===cnpj):undefined;
+ const documentCnpj=onlyDigits(field('cnpj'));
+ const linkedClientId=mode==='destinatario'?document.client_id:null;
+ const match=normalizeCpfCnpj(documentCnpj)
+  ? clients.find(client=>onlyDigits(client.tax_id)===documentCnpj)
+  : clients.find(client=>linkedClientId && client.id===linkedClientId);
+ const cnpj=normalizeCpfCnpj(documentCnpj)||normalizeCpfCnpj(match?.tax_id)||'';
  const municipio=match?.address_city||field('city');
  return {
   nome:match?.company_name||(mode==='remetente'?document.remitter:document.recipient)||'',cnpj,

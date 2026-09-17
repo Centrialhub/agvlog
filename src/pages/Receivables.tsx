@@ -8,10 +8,11 @@ import {financialError} from '@/lib/financial/receivableCommands';
 import {useReceivableUnloadingOrigin} from '@/hooks/useReceivableUnloadingOrigin';
 import {formatFinanceCents} from '@/lib/financial/ledgerContract';
 import {ReceivableHistoryDialog} from '@/components/financial/ReceivableHistoryDialog';
+import {ReceivableAgreementDialog} from '@/components/financial/ReceivableAgreementDialog';
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { useListFilters } from '@/hooks/useListFilters';
 import {useDebouncedValue} from '@/hooks/useDebouncedValue';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCreateReceivable, useUpdateReceivable, RECEIVABLE_STATUS_LABELS, RECEIVABLE_STATUSES } from '@/hooks/useReceivables';
 import { useClients } from '@/hooks/useClients';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,10 +21,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, DollarSign, TrendingUp, CheckCircle } from 'lucide-react';
+import { Plus, DollarSign, TrendingUp, CheckCircle, CalendarClock } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
 import ReceivablePaymentDialog from '@/components/financial/ReceivablePaymentDialog';
@@ -44,6 +45,7 @@ function ReceivablesScreen() {
   const toast = useSonnerToast();
   const [creditOpen,setCreditOpen]=useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
+  const [agreementReceivable,setAgreementReceivable]=useState<Receivable|null>(null);
   const [repairCharge,setRepairCharge]=useState<string|null>(null);
   const [correctionCharge,setCorrectionCharge]=useState<string|null>(null);
   const [cancellationCharge,setCancellationCharge]=useState<string|null>(null);
@@ -56,10 +58,13 @@ function ReceivablesScreen() {
   const { search, status: statusFilter } = filters;
   const settledSearch=useDebouncedValue(search);
   const searchPending=settledSearch!==search;
-  const filterKey=JSON.stringify(filters);
+  const invalidDateRange=!!filters.from&&!!filters.to&&filters.from>filters.to;
+  const [appliedFilters,setAppliedFilters]=useState(filters);
+  useEffect(()=>{if(!invalidDateRange)setAppliedFilters(filters);},[invalidDateRange,search,statusFilter,filters.client,filters.origin,filters.from,filters.to]);
+  const filterKey=JSON.stringify(appliedFilters);
   const [pagination,setPagination]=useState({key:'',page:1});
   const page=pagination.key===filterKey?pagination.page:1;
-  const list=useQuery({queryKey:['receivables',currentTenant?.id,user?.id,'page',filters,page],queryFn:()=>readReceivablesPage(currentTenant!.id,filters,page),enabled:!!currentTenant&&!!user&&!searchPending,retry:false});
+  const list=useQuery({queryKey:['receivables',currentTenant?.id,user?.id,'page',appliedFilters,page],queryFn:()=>readReceivablesPage(currentTenant!.id,appliedFilters,page),enabled:!!currentTenant&&!!user&&!searchPending,retry:false});
   const isLoading=searchPending||list.isPending||list.isFetching;
   const receivables=isLoading||list.isError?[]:list.data?.rows||[];
   const filtered=receivables;
@@ -122,11 +127,13 @@ function ReceivablesScreen() {
 
   const handleSave = async () => {
     if(editingId&&originPending){toast.error('Confira a origem do título antes de salvar.');return;}
+    const amount = Number(form.amount);
+    if (!Number.isFinite(amount) || amount <= 0) { toast.error('O valor do título deve ser maior que zero.'); return; }
     try {
       const values = {
         description: form.description || null,
         client_id: form.client_id || null,
-        amount: form.amount ? Number(form.amount) : 0,
+        amount,
         due_date: form.due_date || null,
         invoice_number: form.invoice_number || null,
         notes: form.notes || null,
@@ -240,6 +247,7 @@ function ReceivablesScreen() {
                           <DollarSign className="h-3.5 w-3.5 mr-1" /> Receber
                         </Button>
                       )}
+                      {['owner','admin'].includes(currentRole||'')&&r.status!=='received'&&r.status!=='cancelled'&&<Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={()=>setAgreementReceivable(r)} aria-label={`Renegociar ${r.description||'título'}`}><CalendarClock className="h-3.5 w-3.5 mr-1"/> Parcelas</Button>}
                       {r.status === 'received' && (
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setPaymentReceivable(r)}>
                           <CheckCircle className="h-3.5 w-3.5 mr-1" /> Baixas
@@ -257,7 +265,10 @@ function ReceivablesScreen() {
       {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={o => { if (!o) resetForm(); setDialogOpen(o); }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editingId ? 'Editar Título' : 'Novo Título'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editingId ? 'Editar Título' : 'Novo Título'}</DialogTitle>
+            <DialogDescription>Informe os dados do título a receber, cliente, vencimento e valor.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
             {!editingId||(!originPending&&!unloadingOrigin)?<div className="rounded-md border bg-muted/30 p-3">
               <FiscalXmlUpload perspective="receiver" onExtracted={(d) => applyXmlToForm(d)} />
@@ -276,7 +287,7 @@ function ReceivablesScreen() {
               <div><Label>Nº Fatura</Label><Input value={form.invoice_number} onChange={e => setForm({ ...form, invoice_number: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Valor (R$)</Label><Input disabled={originPending||!!unloadingOrigin} type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></div>
+              <div><Label>Valor (R$)</Label><Input disabled={originPending||!!unloadingOrigin} type="number" min="0.01" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} /></div>
               <div><Label>Vencimento</Label><Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} /></div>
             </div>
             <div>
@@ -299,6 +310,7 @@ function ReceivablesScreen() {
         open={!!paymentReceivable}
         onOpenChange={(o) => { if (!o) setPaymentReceivable(null); }}
       />
+      {agreementReceivable&&currentTenant&&user&&<ReceivableAgreementDialog key={`${currentTenant.id}:${user.id}:${agreementReceivable.id}`} tenant={currentTenant.id} actor={user.id} receivable={agreementReceivable.id} onClose={()=>setAgreementReceivable(null)}/>}
     </div>
   );
 }

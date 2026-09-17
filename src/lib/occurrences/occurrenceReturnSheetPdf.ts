@@ -230,6 +230,6 @@ export function openReturnSheetPdfPrint(sheet: ReturnSheet, companyName?: string
   const doc = buildReturnSheetPdf({ sheet, companyName, company });
   const blob = doc.output('blob');
   const url = URL.createObjectURL(blob);
-  const w = window.open(url, '_blank');
+  const w = window.open(url, '_blank', 'noopener,noreferrer');
   if (w) setTimeout(() => w.print(), 800);
 }

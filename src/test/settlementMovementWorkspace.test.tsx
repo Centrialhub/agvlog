@@ -3,11 +3,12 @@ import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {afterEach,beforeEach,it,expect,vi} from 'vitest';
 import {SettlementMovementWorkspace} from '@/components/financial/SettlementMovementLink';
 import {SettlementMovementRejectedError} from '@/lib/financial/settlementMovementClient';
-const mock=vi.hoisted(()=>({read:vi.fn(),link:vi.fn(),reverse:vi.fn()}));
-vi.mock('@/lib/financial/settlementMovementClient',()=>({readSettlementMovements:mock.read,linkSettlementMovement:mock.link,reverseSettlementMovement:mock.reverse,SettlementMovementRejectedError:class extends Error{}}));
+const mock=vi.hoisted(()=>({read:vi.fn(),history:vi.fn(),link:vi.fn(),reverse:vi.fn()}));
+vi.mock('@/lib/financial/settlementMovementClient',()=>({readSettlementMovements:mock.read,readSettlementMovementHistory:mock.history,linkSettlementMovement:mock.link,reverseSettlementMovement:mock.reverse,SettlementMovementRejectedError:class extends Error{}}));
 const tenant=crypto.randomUUID(),actor=crypto.randomUUID(),payment=crypto.randomUUID(),settlement=crypto.randomUUID(),movement=crypto.randomUUID();
-const options={version:1,tenant_id:tenant,payment_id:payment,settlement_id:settlement,amount_cents:10000,page:1,page_size:20,total:1,link:null,history:[],rows:[{id:movement,description:'Acerto de janeiro',occurred_on:'2026-01-01',amount_cents:50000,remaining_cents:20000,beneficiary_name:'Motorista QA',account_name:'Conta principal'}]};
-beforeEach(()=>{sessionStorage.clear();vi.clearAllMocks();mock.read.mockResolvedValue(options);mock.link.mockResolvedValue({settlement_id:settlement});});afterEach(()=>{cleanup();vi.restoreAllMocks();});
+const options={version:1,tenant_id:tenant,payment_id:payment,settlement_id:settlement,amount_cents:10000,page:1,page_size:20,total:1,link:null,history:[],history_page:1,history_page_size:20,history_has_more:false,rows:[{id:movement,description:'Acerto de janeiro',occurred_on:'2026-01-01',amount_cents:50000,remaining_cents:20000,beneficiary_name:'Motorista QA',account_name:'Conta principal'}]};
+const history={version:1,tenant_id:tenant,payment_id:payment,settlement_id:settlement,page:1,page_size:20,has_more:false,rows:[]};
+beforeEach(()=>{sessionStorage.clear();vi.clearAllMocks();mock.read.mockResolvedValue(options);mock.history.mockResolvedValue(history);mock.link.mockResolvedValue({settlement_id:settlement});});afterEach(()=>{cleanup();vi.restoreAllMocks();});
 function open(currentActor=actor){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><SettlementMovementWorkspace tenant={tenant} actor={currentActor} payment={payment} settlement={settlement} onClose={()=>{}}/></QueryClientProvider>);}
 async function fill(){fireEvent.click(await screen.findByRole('radio'));fireEvent.change(screen.getByLabelText('Justificativa'),{target:{value:'Conferido com pagamento existente'}});}
 it('retains identical command after lost reply even when the linked movement disappears from candidates',async()=>{
@@ -37,6 +38,13 @@ it('hides cached capacity after a failed refresh',async()=>{
  expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível consultar o vínculo');expect(screen.queryByRole('radio')).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Confirmar vínculo existente'})).not.toBeInTheDocument();
 });
 it('keeps the manual link and correction authors visible after reversal',async()=>{
- mock.read.mockResolvedValue({...options,history:[{id:crypto.randomUUID(),movement_id:movement,amount_cents:10000,created_by:actor,actor_name:'Ana Financeiro',created_at:'2026-01-01T20:00:00Z',reason:'Conferência original',reversal:{id:crypto.randomUUID(),actor_id:crypto.randomUUID(),actor_name:'Gestor Paulo',created_at:'2026-01-02T20:00:00Z',reason:'Saída errada identificada'}}]});
+ mock.history.mockResolvedValue({...history,rows:[{id:crypto.randomUUID(),movement_id:movement,amount_cents:10000,created_by:actor,actor_name:'Ana Financeiro',created_at:'2026-01-01T20:00:00Z',reason:'Conferência original',reversal:{id:crypto.randomUUID(),actor_id:crypto.randomUUID(),actor_name:'Gestor Paulo',created_at:'2026-01-02T20:00:00Z',reason:'Saída errada identificada'}}]});
  open();expect(await screen.findByText(/Vínculo manual · Desfeito/)).toBeInTheDocument();expect(screen.getByText(/Vinculado por Ana Financeiro/)).toBeInTheDocument();expect(screen.getByText(/Desfeito por Gestor Paulo/)).toBeInTheDocument();expect(screen.getByText('Motivo da correção: Saída errada identificada')).toBeInTheDocument();
 });
+it('pages history without changing the candidate page',async()=>{
+ mock.history.mockResolvedValueOnce({...history,has_more:true}).mockResolvedValueOnce({...history,page:2});open();
+ fireEvent.click(await screen.findByRole('button',{name:'Próximo histórico'}));
+ await waitFor(()=>expect(mock.history).toHaveBeenLastCalledWith(tenant,payment,2));expect(mock.read).toHaveBeenCalledTimes(1);
+ expect(screen.getByText('Página 2 do histórico')).toBeInTheDocument();
+});
+it('discards an incompatible saved movement link before enabling a new one',async()=>{const key=`finance-settlement-link:${tenant}:${actor}:${payment}`;sessionStorage.setItem(key,'invalid');open();const radio=await screen.findByRole('radio');expect(radio).toBeDisabled();expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível recuperar');fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));expect(sessionStorage.getItem(key)).toBeNull();expect(radio).toBeEnabled();expect(mock.link).not.toHaveBeenCalled();});

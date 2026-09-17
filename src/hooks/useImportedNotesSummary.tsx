@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
-import { buildImportedAtFilter, normalizeImportedNoteFilters } from '@/lib/importedNotesFilters';
+import { buildImportedAtFilter, normalizeImportedNoteFilters, validateImportedNoteFilters } from '@/lib/importedNotesFilters';
 
 export type NoteOperationalStatus =
   | 'not_processed' | 'not_processed_redispatch' | 'processed'
@@ -119,7 +119,7 @@ export function cteNumberFromAccessKey(key?: string | null): string | null {
 }
 
 export function resolveNoteStatus(row: Partial<ImportedNoteRow>): NoteOperationalStatus {
-  if (row.imported_note_status) return row.imported_note_status;
+  if (row.imported_note_status && row.imported_note_status !== 'processed') return row.imported_note_status;
   const deliveryMeta = jsonObject(row.delivery_meta ?? {});
   if (deliveryMeta.delivered === true || row.status === 'delivered') return 'delivered';
   if (deliveryMeta.ne === true || row.status === 'not_delivered') return 'not_delivered';
@@ -128,6 +128,7 @@ export function resolveNoteStatus(row: Partial<ImportedNoteRow>): NoteOperationa
   if (loadStatus === 'delivered') return 'delivered';
   if (loadStatus && ['planned', 'assembling', 'ready', 'loading', 'loaded'].includes(loadStatus)) return 'processed';
   if (row.cte_id || row.load_id) return 'processed';
+  if (row.imported_note_status === 'processed') return 'processed';
   return 'not_processed';
 }
 
@@ -139,6 +140,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
     enabled: !!currentTenant,
     queryFn: async () => {
       if (!currentTenant) return [];
+      validateImportedNoteFilters(filters);
       let q = supabase
         .from('fiscal_documents')
         .select(`
@@ -191,6 +193,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
           .limit(2000);
         if (ctesError) throw ctesError;
         for (const c of allCtes || []) {
+          if (c.cancelled_at || String(c.status || '').toLowerCase() === 'cancelled') continue;
           const fids = Array.isArray(c.fiscal_document_ids) ? c.fiscal_document_ids : [];
           for (const fid of fids) {
             if (!cteMap.has(fid)) cteMap.set(fid, c); // primeiro é o mais recente
@@ -210,7 +213,12 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
           .select('id, access_key, invoice_number, freight_value, status, sefaz_status')
           .in('id', outboundIds);
         if (outboundError) throw outboundError;
-        for (const o of outbound || []) outboundMap.set(o.id, o);
+        for (const o of outbound || []) {
+          const status = String(o.status || '').toLowerCase();
+          const sefazStatus = String(o.sefaz_status || '').toLowerCase();
+          if (status === 'cancelled' || sefazStatus === 'cancelled' || sefazStatus === 'cancelado') continue;
+          outboundMap.set(o.id, o);
+        }
       }
 
       // NFS-e (Montes Claros) — número real vem de `nfse_documents`
@@ -245,7 +253,10 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
           .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
           .in('id', missingNfseIds);
         if (extraNfseError) throw extraNfseError;
-        for (const n of extra || []) nfseById.set(n.id, n);
+        for (const n of extra || []) {
+          if (n.status === 'cancelled') continue;
+          nfseById.set(n.id, n);
+        }
       }
 
       const enriched: ImportedNoteRow[] = rows.map(r => {
@@ -319,7 +330,10 @@ export function groupNotesBy(rows: ImportedNoteRow[], mode: 'destination' | 'ori
     .map(([key, items]) => ({ key, items, totals: getImportedNoteSummaryTotals(items) }));
 }
 
-export function exportImportedNotesCsv(rows: ImportedNoteRow[]): string {
+export function exportImportedNotesCsv(
+  rows: ImportedNoteRow[],
+  identity: { company?: string | null; branch?: string | null } = {},
+): string {
   const header = [
     'Empresa','Filial','Nº Nota','Lote Importação','Remetente','Destinatário','Nº CT-e','Nº NFS-e','Chave CT-e','Tipo Documento',
     'Valor Frete CIF','Valor Frete FOB','Data Emissão','Município Origem','UF Origem',
@@ -332,7 +346,7 @@ export function exportImportedNotesCsv(rows: ImportedNoteRow[]): string {
   const lines = [header.join(';')];
   for (const r of rows) {
     lines.push([
-      '', '',
+      fmt(identity.company), fmt(identity.branch),
       fmt(r.invoice_number),
       fmt(r.import_batch_id || r.control_lot),
       fmt(r.remitter),

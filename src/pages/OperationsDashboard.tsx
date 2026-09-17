@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useOrders, ORDER_STATUS_LABELS, OrderStatus } from '@/hooks/useOrders';
 import { useLoads } from '@/hooks/useLoads';
-import { useInventoryBalances } from '@/hooks/useInventory';
+import { useInventorySummary } from '@/hooks/useInventory';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useIncidents, SEVERITY_LABELS, INCIDENT_STATUS_LABELS } from '@/hooks/useIncidents';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -26,7 +26,7 @@ const PIE_COLORS = ['hsl(var(--primary))', 'hsl(var(--destructive))', '#f59e0b',
 export default function OperationsDashboard() {
   const { data: orders = [] } = useOrders();
   const { data: loads = [] } = useLoads();
-  const { data: balances = [] } = useInventoryBalances();
+  const { data: inventorySummary } = useInventorySummary();
   const { data: vehicles = [] } = useVehicles();
   const { data: incidents = [] } = useIncidents();
   const { data: employees = [] } = useEmployees();
@@ -79,7 +79,7 @@ export default function OperationsDashboard() {
     (i.current_quantity ?? 0) <= (i.min_quantity ?? 0) && (i.min_quantity ?? 0) > 0,
   );
 
-  const totalPalletsInStock = balances.reduce((s, b) => s + Math.max(0, b.pallet_count), 0);
+  const totalPalletsInStock = inventorySummary?.totalPallets ?? 0;
 
   // Vehicle occupancy
   const vehicleOccupancy = useMemo(() => {
@@ -93,17 +93,7 @@ export default function OperationsDashboard() {
   }, [vehicles, loads]);
 
   // Stock by client
-  const stockByClient = useMemo(() => {
-    const map: Record<string, { name: string; pallets: number }> = {};
-    balances.forEach(b => {
-      if (b.quantity <= 0) return;
-      const key = b.client_id || 'sem_cliente';
-      const name = b.clients?.company_name || 'Sem cliente';
-      if (!map[key]) map[key] = { name, pallets: 0 };
-      map[key].pallets += b.pallet_count;
-    });
-    return Object.values(map).sort((a, b) => b.pallets - a.pallets);
-  }, [balances]);
+  const stockByClient = inventorySummary?.stockByClient ?? [];
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -283,7 +273,7 @@ export default function OperationsDashboard() {
                     <TableCell className="text-muted-foreground">{v.maxPallets} pal</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Progress value={v.occupancy} className={`w-16 h-2 ${v.occupancy > 90 ? '[&>div]:bg-destructive' : v.occupancy > 60 ? '[&>div]:bg-warning' : ''}`} />
+                        <Progress aria-label={`Ocupação do veículo ${v.plate}`} aria-valuetext={`${v.occupancy}%`} value={v.occupancy} className={`w-16 h-2 ${v.occupancy > 90 ? '[&>div]:bg-destructive' : v.occupancy > 60 ? '[&>div]:bg-warning' : ''}`} />
                         <span className="text-xs font-medium">{v.occupancy}%</span>
                       </div>
                     </TableCell>

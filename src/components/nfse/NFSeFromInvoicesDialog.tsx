@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,8 +12,13 @@ import { Loader2, Send, ArrowRight, ArrowLeft, FileText } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { normalizeCep, normalizeIbgeCity } from '@/lib/fiscal/fiscalAddress';
-import { resolveNFSeTomador, type TomadorData } from '@/lib/fiscal/nfseTomador';
+import {
+  mergeNFSeTomadorForSameTaxpayer,
+  resolveNFSeTomador,
+  type TomadorData,
+} from '@/lib/fiscal/nfseTomador';
 import { useClients } from '@/hooks/useClients';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import { useEmitters } from '@/hooks/useEmitters';
 import { useCreateNFSe, useIssueNFSeBatch, type NFSeDoc } from '@/hooks/useNFSe';
 import type { FiscalDocument } from '@/hooks/useFiscalDocuments';
@@ -29,6 +34,21 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { allocateCurrency } from '@/lib/fiscal/nfseBatchAllocation';
+import { consultOfficialTaxRegistry } from '@/lib/fiscal/taxRegistryClient';
+import { stateFromNfeAccessKey } from '@/lib/fiscal/cteAddressAutocomplete';
+import {
+  canonicalizeNFSeTomadorPostalAddress,
+  findActiveNFSeTaxProfile,
+  mergeOfficialProfileIntoNFSeTomador,
+  missingNFSeTomadorFields,
+  needsNFSeTomadorRegistryEnrichment,
+} from '@/lib/fiscal/nfseAddressAutocomplete';
+import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
+import { buildIndividualNFSeDescription } from '@/lib/fiscal/nfseDescription';
+import {
+  DEFAULT_TRANSPORT_NFSE_NATIONAL_SERVICE_CODE,
+  resolveNFSeNationalServiceCode,
+} from '@/lib/fiscal/nfseServiceCode';
 
 interface Props {
   open: boolean;
@@ -38,6 +58,7 @@ interface Props {
 const SENTINEL_NONE = '__none__';
 type EmissionMode = 'individual' | 'unified';
 interface BatchAttempt {
+  schemaVersion: 2;
   mode: EmissionMode;
   requestId: string;
   environment: HubEnvironment;
@@ -70,7 +91,8 @@ function normalizedPartyIdentity(party: TomadorData): string {
 function isStoredBatchAttempt(value: unknown): value is BatchAttempt {
   if (!value || typeof value !== 'object') return false;
   const attempt = value as Partial<BatchAttempt>;
-  if (!['individual', 'unified'].includes(String(attempt.mode)) ||
+  if (attempt.schemaVersion !== 2 ||
+    !['individual', 'unified'].includes(String(attempt.mode)) ||
     !['sandbox', 'homologation', 'production'].includes(String(attempt.environment)) ||
     typeof attempt.requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(attempt.requestId) ||
     !Number.isInteger(attempt.sourceCount) || Number(attempt.sourceCount) < 1 ||
@@ -111,11 +133,11 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [regimeTributario, setRegimeTributario] = useState<string>('3'); // 3 = Normal, 1 = Simples Nacional
   const [aliquotaIss, setAliquotaIss] = useState<number>(5);
   const [issRetido, setIssRetido] = useState(false);
-  const [codServico, setCodServico] = useState('');
+  const [codServico, setCodServico] = useState(DEFAULT_TRANSPORT_NFSE_NATIONAL_SERVICE_CODE);
   const [cnae, setCnae] = useState('');
   const [natOperacao, setNatOperacao] = useState('1'); // 1 = Tributação no município (Normal)
   const [descricao, setDescricao] = useState('');
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
+  const [issueDate, setIssueDate] = useState(() => localDateInputValue());
   const [tomadorMode, setTomadorMode] = useState<'remetente' | 'destinatario'>('remetente');
   const [issuing, setIssuing] = useState(false);
   // Retenções e deduções (opcionais)
@@ -139,6 +161,9 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [emissionMode, setEmissionMode] = useState<EmissionMode | null>(null);
   const [batchAttempt, setBatchAttempt] = useState<BatchAttempt | null>(null);
   const [batchResult, setBatchResult] = useState<NFSeBatchResponse | null>(null);
+  const [tomadorRegistryStatus, setTomadorRegistryStatus] = useState<'idle' | 'loading' | 'filled' | 'error'>('idle');
+  const [tomadorRegistryMessage, setTomadorRegistryMessage] = useState('');
+  const initializedScopeRef = useRef<string | null>(null);
   const batchStorageKey = useMemo(
     () => currentTenant?.id && user?.id ? `agvlog:nfse-batch:${currentTenant.id}:${user.id}` : null,
     [currentTenant?.id, user?.id],
@@ -148,7 +173,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const clientList = useMemo(() => clients.filter((client) => client.is_client !== false), [clients]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) { initializedScopeRef.current = null; return; }
+    const scope = batchStorageKey ?? 'pending-session';
+    if (initializedScopeRef.current === scope) return;
+    initializedScopeRef.current = scope;
     setStep(1);
     setSelected({});
     setDescricao('');
@@ -159,6 +187,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     setEmissionMode(null);
     setBatchAttempt(null);
     setBatchResult(null);
+    setTomadorRegistryStatus('idle');
+    setTomadorRegistryMessage('');
     if (batchStorageKey) {
       try {
         const stored = JSON.parse(sessionStorage.getItem(batchStorageKey) || 'null') as BatchAttempt | null;
@@ -172,17 +202,31 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         sessionStorage.removeItem(batchStorageKey);
       }
     }
-    const defEm = emitters.find(e => e.active && e.is_default) || emitters.find(e => e.active);
-    if (defEm) {
-      setEmitterId(defEm.id);
-      setRegimeTributario(defEm.regime_tributario || '3');
-    }
-  }, [open, emitters, batchStorageKey]);
+  }, [open, batchStorageKey, setEnvironment]);
+
+  useEffect(() => {
+    if (!open || emitterId) return;
+    const defaultEmitter = emitters.find(emitter => emitter.active && emitter.is_default) || emitters.find(emitter => emitter.active);
+    if (!defaultEmitter) return;
+    setEmitterId(defaultEmitter.id);
+    setRegimeTributario(defaultEmitter.regime_tributario || '3');
+  }, [open, emitters, emitterId]);
 
   useEffect(() => {
     if (!batchStorageKey || !batchAttempt) return;
     sessionStorage.setItem(batchStorageKey, JSON.stringify(batchAttempt));
   }, [batchAttempt, batchStorageKey]);
+
+  const discardRecoveredBatch = () => {
+    if (batchStorageKey) sessionStorage.removeItem(batchStorageKey);
+    setBatchAttempt(null);
+    setBatchResult(null);
+    setEmissionMode(null);
+    setSelected({});
+    setStep(1);
+    void refetch();
+    toast.info('Tentativa anterior preservada no histórico. Prepare uma nova emissão para aplicar os dados corrigidos.');
+  };
 
   const filters = useMemo(() => ({
     supplierId: supplierId !== SENTINEL_NONE ? supplierId : null,
@@ -302,6 +346,65 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     }
   }, [tomador, isEditingTomador]);
 
+  useEffect(() => {
+    if (!open || environment !== 'production' || !emitterId || !tomador || isEditingTomador) return;
+    const cnpj = onlyDigits(tomador.cnpj);
+    const inferredUf = tomador.uf || (
+      tomadorMode === 'remetente' ? stateFromNfeAccessKey(selectedDocs[0]?.access_key) : ''
+    );
+    if (cnpj.length !== 14 || inferredUf.length !== 2) {
+      setTomadorRegistryStatus('error');
+      setTomadorRegistryMessage('Não foi possível identificar CNPJ e UF para consultar o endereço cadastral.');
+      return;
+    }
+
+    let cancelled = false;
+    setTomadorRegistryStatus('loading');
+    setTomadorRegistryMessage('Conferindo cadastro fiscal e validade postal do endereço do tomador…');
+    void (async () => {
+      let completed = tomador;
+      if (needsNFSeTomadorRegistryEnrichment(tomador)) {
+        const result = await consultOfficialTaxRegistry({
+          emitterId,
+          uf: inferredUf,
+          lookupValue: cnpj,
+          lookupType: 'CNPJ',
+          environment: 'production',
+        });
+        const profile = findActiveNFSeTaxProfile(cnpj, result.profiles);
+        if (!profile) throw new Error('CNPJ não localizado como ativo no cadastro fiscal.');
+        completed = mergeOfficialProfileIntoNFSeTomador(tomador, profile, inferredUf);
+      }
+      completed = await canonicalizeNFSeTomadorPostalAddress(completed);
+      return completed;
+    })().then((completed) => {
+      if (cancelled) return;
+      setManualTomador(completed);
+      const remaining = missingNFSeTomadorFields(completed);
+      if (remaining.length) throw new Error(`Cadastro fiscal não retornou: ${remaining.join(', ')}.`);
+      if (!sanitizeIe(completed.ie)) {
+        throw new Error('Cadastro fiscal não retornou a IE. Informe a IE ou marque como ISENTO antes de emitir.');
+      }
+      setTomadorRegistryStatus('filled');
+      setTomadorRegistryMessage('IE, CEP e município do tomador conferidos antes da emissão.');
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      setTomadorRegistryStatus('error');
+      setTomadorRegistryMessage(errorMessage(error));
+    });
+    return () => { cancelled = true; };
+  }, [open, environment, emitterId, tomador, tomadorMode, selectedDocs, isEditingTomador]);
+
+  const effectiveTomador = manualTomador || tomador;
+  const missingTomadorFields = useMemo(
+    () => missingNFSeTomadorFields(effectiveTomador),
+    [effectiveTomador],
+  );
+  const needsTomadorRegistryEnrichment = useMemo(
+    () => needsNFSeTomadorRegistryEnrichment(effectiveTomador),
+    [effectiveTomador],
+  );
+
   const setManualField = <K extends keyof TomadorData>(key: K, value: TomadorData[K]) => {
     setIsEditingTomador(true);
     setManualTomador((current) => current ? { ...current, [key]: value } : current);
@@ -345,7 +448,59 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     
     setIssuing(true);
     try {
+      // Resolve todos os tomadores antes de criar o primeiro rascunho. Assim,
+      // uma IE ausente em uma nota posterior nao interrompe o lote pela metade.
+      const registryCache = new Map<string, Awaited<ReturnType<typeof consultOfficialTaxRegistry>>>();
+      const prepareTomador = async (candidate: TomadorData, sourceDocument?: FiscalDocument): Promise<TomadorData> => {
+        if (environment !== 'production') return candidate;
+        const cnpj = onlyDigits(candidate.cnpj);
+        const uf = String(candidate.uf || (
+          tomadorMode === 'remetente' ? stateFromNfeAccessKey(sourceDocument?.access_key) : ''
+        )).toUpperCase();
+        if (cnpj.length !== 14 || uf.length !== 2) {
+          throw new Error(`Tomador ${candidate.nome || cnpj}: CNPJ e UF válidos são necessários para completar IE/endereço.`);
+        }
+        let completed = candidate;
+        if (needsNFSeTomadorRegistryEnrichment(candidate)) {
+          const key = `${emitterId}:${uf}:${cnpj}`;
+          let result = registryCache.get(key);
+          if (!result) {
+            result = await consultOfficialTaxRegistry({
+              emitterId, uf, lookupValue: cnpj, lookupType: 'CNPJ', environment: 'production',
+            });
+            registryCache.set(key, result);
+          }
+          const profile = findActiveNFSeTaxProfile(cnpj, result.profiles);
+          if (!profile) throw new Error(`Tomador ${candidate.nome || cnpj}: CNPJ não localizado como ativo no cadastro fiscal.`);
+          completed = mergeOfficialProfileIntoNFSeTomador(candidate, profile, uf);
+        }
+        completed = await canonicalizeNFSeTomadorPostalAddress(completed);
+        const missing = missingNFSeTomadorFields(completed);
+        if (missing.length > 0) {
+          throw new Error(`Tomador ${candidate.nome || cnpj}: cadastro fiscal não retornou ${missing.join(', ')}.`);
+        }
+        if (!sanitizeIe(completed.ie)) {
+          throw new Error(`Tomador ${candidate.nome || cnpj}: IE não localizada. Informe a IE ou marque como ISENTO antes de emitir.`);
+        }
+        return completed;
+      };
+
+      let preparedUnifiedTomador: TomadorData | null = null;
+      const preparedIndividualTomadores = new Map<string, TomadorData>();
+      if (effectiveEmissionMode === 'unified') {
+        const candidate = manualTomador || tomador;
+        if (!candidate) throw new Error('Tomador não identificado para a emissão unificada.');
+        preparedUnifiedTomador = await prepareTomador(candidate, selectedDocs[0]);
+      } else {
+        for (const document of selectedDocs) {
+          const derived = resolveNFSeTomador(document, tomadorMode, clients);
+          const candidate = mergeNFSeTomadorForSameTaxpayer(derived, manualTomador);
+          preparedIndividualTomadores.set(document.id, await prepareTomador(candidate, document));
+        }
+      }
+
       let attempt: BatchAttempt = {
+        schemaVersion: 2,
         mode: effectiveEmissionMode,
         requestId: crypto.randomUUID(),
         environment,
@@ -359,7 +514,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
       if (effectiveEmissionMode === 'unified') {
         // Lógica original de agrupamento
-        const currentTomador = manualTomador || tomador;
+        const currentTomador = preparedUnifiedTomador;
         if (!currentTomador?.cnpj) { throw new Error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); }
         
         const fdIds = selectedDocs.map((document) => document.id);
@@ -390,7 +545,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
           description,
           aliquota_iss: aliquotaIss,
           iss_retido: issRetido,
-          cod_servico: codServico || undefined,
+          cod_servico: resolveNFSeNationalServiceCode(codServico) || undefined,
           cnae: cnae || undefined,
           nat_operacao: natOperacao || undefined,
           valor_servicos: totalServicos,
@@ -440,7 +595,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         
         for (const d of selectedDocs) {
           if (attempt.drafts[d.id]) continue;
-          const docTomador = selectedDocs.length===1 && manualTomador ? manualTomador : resolveNFSeTomador(d,tomadorMode,clients);
+          const docTomador = preparedIndividualTomadores.get(d.id)
+            || mergeNFSeTomadorForSameTaxpayer(resolveNFSeTomador(d, tomadorMode, clients), manualTomador);
           if (!docTomador.cnpj) throw new Error('Tomador sem CNPJ/CPF na NF '+d.invoice_number);
 
           const docValue = valorPorDoc(d);
@@ -459,8 +615,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
           ).toFixed(2);
           const docLiq = +(docValue - docDeductions - docRet).toFixed(2);
 
-          const description = (descricao.trim() || `Prestacao de servico de transporte referente a NF ${d.invoice_number || d.access_key?.slice(-9)}`)
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          // No modo individual, a discriminacao pertence exclusivamente a NF
+          // desta iteracao. A descricao agregada so pode ser usada no modo
+          // unificado, evitando repetir X, Y e Z em cada NFS-e separada.
+          const description = buildIndividualNFSeDescription(d.invoice_number, d.access_key);
 
           const payload: Partial<NFSeDoc> = {
             emitter_id: emitterId,
@@ -484,7 +642,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             description,
             aliquota_iss: aliquotaIss,
             iss_retido: issRetido,
-            cod_servico: codServico || undefined,
+            cod_servico: resolveNFSeNationalServiceCode(codServico) || undefined,
             cnae: cnae || undefined,
             nat_operacao: natOperacao || undefined,
             valor_servicos: docValue,
@@ -867,6 +1025,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   <div className="font-semibold flex items-center gap-2">
                     Tomador do serviço
                     {isEditingTomador && <Badge variant="outline" className="text-[10px] h-4">Editado</Badge>}
+                    {tomadorRegistryStatus === 'filled' && <Badge variant="secondary" className="text-[10px] h-4">Cadastro conferido</Badge>}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Baseado em {selectedDocs.length} NF(s) — total R$ {totalServicos.toFixed(2)}
@@ -945,6 +1104,23 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   </div>
                 </div>
               )}
+              {tomadorRegistryStatus === 'loading' && (
+                <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> {tomadorRegistryMessage}
+                </div>
+              )}
+              {tomadorRegistryStatus === 'error' && needsTomadorRegistryEnrichment && (
+                <div role="alert" className="rounded border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+                  {tomadorRegistryMessage} Revise os campos antes de emitir.
+                </div>
+              )}
+              {tomadorRegistryStatus !== 'loading' && needsTomadorRegistryEnrichment && (
+                <div role="alert" className="text-xs text-destructive">
+                  Emissão bloqueada. Preencha: {missingTomadorFields.length > 0
+                    ? missingTomadorFields.join(', ')
+                    : 'Inscrição Estadual do tomador (ou ISENTO)'}.
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-6 gap-3">
@@ -973,14 +1149,20 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
               <div><Label>Alíquota ISS (%)</Label><Input type="number" step="0.0001" value={aliquotaIss} onChange={e => setAliquotaIss(+e.target.value)} /></div>
               <div className="flex items-end gap-2"><Checkbox checked={issRetido} onCheckedChange={v => setIssRetido(!!v)} /><Label>ISS Retido</Label></div>
 
-              <div className="col-span-2"><Label>Cód. Serviço</Label><Input value={codServico} onChange={e => setCodServico(e.target.value)} /></div>
+              <div className="col-span-2"><Label>Cód. nacional do serviço</Label><Input value={codServico} onChange={e => setCodServico(e.target.value)} placeholder="160201" /></div>
               <div className="col-span-2"><Label>CNAE</Label><Input value={cnae} onChange={e => setCnae(e.target.value)} /></div>
               <div className="col-span-2"><Label>Nat. Operação</Label><Input value={natOperacao} onChange={e => setNatOperacao(e.target.value)} /></div>
 
               <div className="col-span-6">
                 <Label>Discriminação dos Serviços</Label>
-                <Textarea rows={4} value={descricao} onChange={e => setDescricao(e.target.value)}
-                  placeholder={`Prestação de serviço de transporte referente a ${selectedDocs.length} NF(s)…`} />
+                {effectiveEmissionMode === 'unified' ? (
+                  <Textarea rows={4} value={descricao} onChange={e => setDescricao(e.target.value)}
+                    placeholder={`Prestação de serviço de transporte referente a ${selectedDocs.length} NF(s)…`} />
+                ) : (
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                    Gerada individualmente: cada NFS-e citará somente a NF correspondente.
+                  </div>
+                )}
               </div>
               <div className="col-span-6">
                 <Label>Observações / Notas</Label>
@@ -1137,6 +1319,11 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
               <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
             </Button>
           )}
+          {batchAttempt && !batchResult?.success && (
+            <Button variant="outline" onClick={discardRecoveredBatch} disabled={issuing}>
+              Preparar nova emissão corrigida
+            </Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={issuing}>Cancelar</Button>
           {step === 2 && (
             <Button onClick={() => setStep(3)} disabled={totalServicos <= 0}>
@@ -1147,7 +1334,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             batchResult?.success ? (
               <Button onClick={() => onOpenChange(false)}>Concluir</Button>
             ) : (
-              <Button onClick={handleEmit} disabled={issuing || create.isPending || issueBatch.isPending || isFetching || !!docsError}>
+              <Button
+                onClick={handleEmit}
+                disabled={issuing || create.isPending || issueBatch.isPending || isFetching || !!docsError || (!batchAttempt && (tomadorRegistryStatus === 'loading' || (environment === 'production' && needsTomadorRegistryEnrichment)))}
+              >
                 {issuing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
                 {batchAttempt ? 'Tentar novamente com segurança' : 'Emitir NFS-e'}
               </Button>

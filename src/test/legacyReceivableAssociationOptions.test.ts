@@ -9,7 +9,7 @@ import {createFinancialScenario,financialPayload,financialCommand} from './helpe
 import {legacyReceivableContextSchema} from '@/lib/financial/legacyReceivableAssociationContract';
 import {movementReceiptTraceSchema} from '@/lib/financial/movementReceiptTraceContract';
 let db:PGlite;
-beforeAll(async()=>{db=await createLegacyReceivableAssociationDatabase();for(const file of ['20260910145659_finance_legacy_receivable_association_options.sql','20260910150338_finance_legacy_receipt_movement_trace.sql'])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));},30000);
+beforeAll(async()=>{db=await createLegacyReceivableAssociationDatabase();for(const file of ['20260910145659_finance_legacy_receivable_association_options.sql','20260910150338_finance_legacy_receipt_movement_trace.sql'])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));await db.exec('create or replace view finance_private.active_movements as select * from finance_movements');await db.exec(readFileSync('supabase/migrations/20260917072951_stabilize_legacy_association_paging.sql','utf8'));},30000);
 beforeEach(async()=>{await db.exec('begin');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[i.operator]);});
 afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
 async function fixture(){
@@ -21,7 +21,7 @@ async function fixture(){
 async function movement(bank:string,date='2026-01-01',direction='in',nature='receipt',amount=5000){
  return (await db.query<{id:string}>("insert into finance_movements(tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,description,beneficiary_name,created_by) values($1,$2,$3,$4,$5,$6,'Entrada existente','Cliente QA',$7) returning id",[i.tenant,bank,direction,nature,amount,date,i.operator])).rows[0].id;
 }
-async function read(payment:string,page=1){return legacyReceivableContextSchema.parse((await operationRpc<{result:unknown}>(db,'select get_finance_legacy_receivable_association($1,$2,$3) result',[i.tenant,payment,page])).rows[0].result);}
+async function read(payment:string,page=1,expectedRevision:string|null=null){return legacyReceivableContextSchema.parse((await operationRpc<{result:unknown}>(db,'select get_finance_legacy_receivable_association($1,$2,$3,$4) result',[i.tenant,payment,page,expectedRevision])).rows[0].result);}
 async function associate(payment:string,movement_id:string){return (await operationRpc<{result:{link_id:string}}>(db,'select associate_finance_legacy_receivable_payment($1) result',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),payment_id:payment,movement_id,revision:(await read(payment)).revision,existing_receipt_confirmed:true,reason:'Associação do recebimento conferida'}])).rows[0].result;}
 async function trace(movement:string,page=1){return movementReceiptTraceSchema.parse((await operationRpc<{result:unknown}>(db,'select get_finance_movement_receipt_trace($1,$2,$3) result',[i.tenant,movement,page])).rows[0].result);}
 it('offers only compatible incoming entries and validates whole cents through the UI schema',async()=>{
@@ -41,6 +41,13 @@ it('preserves manual history and payment after reversing and re-associating',asy
 it('paginates candidates without dropping the total',async()=>{
  const f=await fixture();for(let n=0;n<21;n++)await movement(f.bank);
  expect(await read(f.payment)).toMatchObject({total:21});expect((await read(f.payment)).rows).toHaveLength(20);expect((await read(f.payment,2)).rows).toHaveLength(1);
+});
+it('rejects a later page when a concurrent association changes candidates or history',async()=>{
+ const current=await fixture(),other=randomUUID();for(let n=0;n<21;n++)await movement(current.bank);
+ await withLegacyReceiptSeed(db,()=>db.query("insert into receivables_payments(id,tenant_id,receivable_id,amount,received_at,bank_account_id,method,created_by) values($1,$2,$3,30,'2026-01-01T15:00:00Z',$4,'pix',$5)",[other,i.tenant,current.receivable,current.bank,i.operator]));
+ const first=await read(current.payment);await associate(other,first.rows[0].id);
+ await expect(read(current.payment,2,first.page_revision)).rejects.toThrow('finance_legacy_association_page_changed');
+ const refreshed=await read(current.payment);expect(refreshed.page_revision).not.toBe(first.page_revision);expect(refreshed.total).toBe(20);
 });
 it('uses remaining capacity shared by historical receipts',async()=>{
  const f=await fixture(),m=await movement(f.bank),other=randomUUID();

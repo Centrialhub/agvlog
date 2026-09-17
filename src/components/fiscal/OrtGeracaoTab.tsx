@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useClients } from '@/hooks/useClients';
-import { useCreatePickupOrder } from '@/hooks/usePickupOrders';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,8 @@ import { Sparkles, Search, FileSpreadsheet, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { FilePlus } from 'lucide-react';
 import NewManualOrtDialog from '@/components/pickup/NewManualOrtDialog';
+import { acknowledgeDurableOperatorCommand, prepareDurableOperatorCommand } from '@/lib/operator/durableOperatorCommand';
+import { useQueryClient } from '@tanstack/react-query';
 
 const OPERACAO_LABELS = ['Distribuição', 'Filial', 'Armazenagem', 'Frota'];
 const ROMANEIO_LABELS = ['Entrega/Coleta', 'Viagem Direta', 'Retira', 'Transferência', 'Devolução', 'Redespacho/Sub'];
@@ -25,10 +27,27 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Falha inesperada ao gerar ORT';
 }
 
+interface OrtCandidate {
+  id: string;
+  invoice_number: string | null;
+  issue_date: string | null;
+  value: number | null;
+  pallet_count: number | null;
+  weight_kg: number | null;
+  remitter: string | null;
+  recipient: string | null;
+  client_id: string | null;
+  clients: { company_name: string | null } | null;
+  load_id: string | null;
+}
+
+const EMPTY_CANDIDATES: OrtCandidate[] = [];
+
 export default function OrtGeracaoTab() {
   const { currentTenant } = useTenant();
-  const { data: clients = [] } = useClients();
-  const createPickup = useCreatePickupOrder();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { data: clients = [], isLoading: clientsLoading, isError: clientsIsError, error: clientsError, refetch: refetchClients } = useClients();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -65,29 +84,24 @@ export default function OrtGeracaoTab() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [searched, setSearched] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [searchCriteria, setSearchCriteria] = useState<Record<string, unknown> | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const invalidNfPeriod = Boolean(filters.nfFrom && filters.nfTo && filters.nfFrom > filters.nfTo);
+  const invalidLoadPeriod = Boolean(filters.cargFrom && filters.cargTo && filters.cargFrom > filters.cargTo);
 
-  const { data: candidates = [], isLoading, refetch } = useQuery({
-    queryKey: ['ort_candidates', currentTenant?.id, filters],
-    enabled: false,
+  const { data: candidates = EMPTY_CANDIDATES, isLoading, isFetching, isError: candidatesIsError, error: candidatesError, refetch } = useQuery({
+    queryKey: ['ort_candidates', currentTenant?.id, searchCriteria],
+    enabled: !!currentTenant && !!searchCriteria,
     queryFn: async () => {
-      let q = supabase
-        .from('fiscal_documents')
-        .select('id, invoice_number, issue_date, value, pallet_count, weight_kg, remitter, recipient, client_id, clients!fiscal_documents_client_id_fkey(company_name), load_id')
-        .eq('tenant_id', currentTenant!.id)
-        .eq('document_type', 'inbound')
-        .is('pickup_order_id', null)
-        .neq('status', 'cancelled')
-        .order('issue_date', { ascending: false })
-        .limit(500);
-      if (filters.nota) q = q.ilike('invoice_number', `%${filters.nota}%`);
-      if (filters.clientId) q = q.eq('client_id', filters.clientId);
-      if (filters.fornecedor) q = q.ilike('remitter', `%${filters.fornecedor}%`);
-      if (filters.nfFrom) q = q.gte('issue_date', filters.nfFrom);
-      if (filters.nfTo) q = q.lte('issue_date', filters.nfTo);
-      const { data, error } = await q;
+      const { data, error } = await supabase.rpc('read_ort_candidates_v1' as never, {
+        _tenant_id: currentTenant!.id,
+        _filters: searchCriteria,
+      } as never);
       if (error) throw error;
-      return data || [];
+      if (!Array.isArray(data)) throw new Error('O servidor retornou candidatas de ORT inválidas.');
+      return data as unknown as OrtCandidate[];
     },
+    retry: false,
   });
 
   const selectedIds = useMemo(() => Object.entries(selected).filter(([, v]) => v).map(([k]) => k), [selected]);
@@ -102,9 +116,20 @@ export default function OrtGeracaoTab() {
   }, [candidates, selected]);
 
   const handleSearch = async () => {
+    if (invalidNfPeriod || invalidLoadPeriod) {
+      toast({ title: 'Período inválido', description: 'A data final deve ser igual ou posterior à inicial.', variant: 'destructive' });
+      return;
+    }
+    const criteria = {
+      ...filters,
+      operacao: Object.entries(operacao).filter(([, enabled]) => enabled).map(([label]) => label),
+      romaneio: Object.entries(romaneio).filter(([, enabled]) => enabled).map(([label]) => label),
+      todosRomaneio,
+    };
     setSelected({});
     setSearched(true);
-    await refetch();
+    if (JSON.stringify(searchCriteria) === JSON.stringify(criteria)) await refetch();
+    else setSearchCriteria(criteria);
   };
 
   const clearAll = () => {
@@ -116,6 +141,7 @@ export default function OrtGeracaoTab() {
     });
     setSelected({});
     setSearched(false);
+    setSearchCriteria(null);
   };
 
   const handleGenerate = async () => {
@@ -127,19 +153,34 @@ export default function OrtGeracaoTab() {
       toast({ title: 'Selecione ao menos uma NF', variant: 'destructive' });
       return;
     }
+    if (!user) {
+      toast({ title: 'Usuário não autenticado', variant: 'destructive' });
+      return;
+    }
+    setIsGenerating(true);
     try {
-      const pickup = await createPickup.mutateAsync({
+      const commandPayload = {
+        tenant_id: currentTenant.id,
+        document_ids: [...selectedIds].sort(),
         status: 'pendente',
         pickup_at: new Date().toISOString(),
         notes: `Geração automática de ORT • ${selectedIds.length} NF(s)`,
+      };
+      const pending = await prepareDurableOperatorCommand({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        action: 'create_ort_pickup',
+        entityId: 'new',
+        payload: commandPayload,
       });
-
-      const { error } = await supabase
-        .from('fiscal_documents')
-        .update({ pickup_order_id: pickup.id })
-        .in('id', selectedIds)
-        .eq('tenant_id', currentTenant.id);
+      const { data, error } = await supabase.rpc('create_ort_pickup_v1' as never, {
+        _payload: { ...commandPayload, request_id: pending.requestId },
+      } as never);
       if (error) throw error;
+      const pickup = data as unknown as { id?: string; pickup_number?: string; linked_count?: number };
+      if (!pickup?.id || pickup.linked_count !== selectedIds.length) throw new Error('O servidor não confirmou todos os vínculos da ORT.');
+      acknowledgeDurableOperatorCommand(pending);
+      await queryClient.invalidateQueries({ queryKey: ['pickup_orders'] });
 
       toast({
         title: 'ORT gerada',
@@ -149,6 +190,8 @@ export default function OrtGeracaoTab() {
       navigate('/pickup-orders');
     } catch (error: unknown) {
       toast({ title: 'Erro ao gerar ORT', description: errorMessage(error), variant: 'destructive' });
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -170,6 +213,13 @@ export default function OrtGeracaoTab() {
             </div>
           </div>
 
+          {clientsIsError && (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
+              <span>Não foi possível carregar os clientes. {clientsError instanceof Error ? clientsError.message : 'Tente novamente.'}</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => refetchClients()}>Tentar novamente</Button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
             <div><Label className="text-xs">Lote de notas dinâmico</Label>
               <Input value={filters.loteDinamico} onChange={e => setFilters(f => ({ ...f, loteDinamico: e.target.value }))} /></div>
@@ -184,7 +234,7 @@ export default function OrtGeracaoTab() {
               <Input value={filters.referencia} onChange={e => setFilters(f => ({ ...f, referencia: e.target.value }))} /></div>
             <div>
               <Label className="text-xs">Cliente</Label>
-              <Select value={filters.clientId || 'all'} onValueChange={v => setFilters(f => ({ ...f, clientId: v === 'all' ? '' : v }))}>
+              <Select disabled={clientsLoading || clientsIsError} value={filters.clientId || 'all'} onValueChange={v => setFilters(f => ({ ...f, clientId: v === 'all' ? '' : v }))}>
                 <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
@@ -197,10 +247,10 @@ export default function OrtGeracaoTab() {
             <div><Label className="text-xs">Nota Fiscal</Label>
               <Input value={filters.nota} onChange={e => setFilters(f => ({ ...f, nota: e.target.value }))} /></div>
 
-            <div><Label className="text-xs">Emissão NF — de</Label>
-              <Input type="date" value={filters.nfFrom} onChange={e => setFilters(f => ({ ...f, nfFrom: e.target.value }))} /></div>
-            <div><Label className="text-xs">Emissão NF — até</Label>
-              <Input type="date" value={filters.nfTo} onChange={e => setFilters(f => ({ ...f, nfTo: e.target.value }))} /></div>
+            <div><Label htmlFor="ort-nf-from" className="text-xs">Emissão NF — de</Label>
+              <Input id="ort-nf-from" type="date" max={filters.nfTo || undefined} value={filters.nfFrom} onChange={e => setFilters(f => ({ ...f, nfFrom: e.target.value }))} /></div>
+            <div><Label htmlFor="ort-nf-to" className="text-xs">Emissão NF — até</Label>
+              <Input id="ort-nf-to" type="date" min={filters.nfFrom || undefined} value={filters.nfTo} onChange={e => setFilters(f => ({ ...f, nfTo: e.target.value }))} /></div>
             <div><Label className="text-xs">Romaneio do Fornecedor</Label>
               <Input value={filters.romaneioFornecedor} onChange={e => setFilters(f => ({ ...f, romaneioFornecedor: e.target.value }))} /></div>
             <div><Label className="text-xs">Romaneio de Distribuição</Label>
@@ -224,10 +274,10 @@ export default function OrtGeracaoTab() {
             <div><Label className="text-xs">Placa</Label>
               <Input value={filters.placa} onChange={e => setFilters(f => ({ ...f, placa: e.target.value }))} /></div>
 
-            <div><Label className="text-xs">Data Carregamento — de</Label>
-              <Input type="date" value={filters.cargFrom} onChange={e => setFilters(f => ({ ...f, cargFrom: e.target.value }))} /></div>
-            <div><Label className="text-xs">Data Carregamento — até</Label>
-              <Input type="date" value={filters.cargTo} onChange={e => setFilters(f => ({ ...f, cargTo: e.target.value }))} /></div>
+            <div><Label htmlFor="ort-load-from" className="text-xs">Data Carregamento — de</Label>
+              <Input id="ort-load-from" type="date" max={filters.cargTo || undefined} value={filters.cargFrom} onChange={e => setFilters(f => ({ ...f, cargFrom: e.target.value }))} /></div>
+            <div><Label htmlFor="ort-load-to" className="text-xs">Data Carregamento — até</Label>
+              <Input id="ort-load-to" type="date" min={filters.cargFrom || undefined} value={filters.cargTo} onChange={e => setFilters(f => ({ ...f, cargTo: e.target.value }))} /></div>
             <div className="md:col-span-2"><Label className="text-xs">Fornecedor (remetente)</Label>
               <Input value={filters.fornecedor} onChange={e => setFilters(f => ({ ...f, fornecedor: e.target.value }))} /></div>
           </div>
@@ -263,9 +313,11 @@ export default function OrtGeracaoTab() {
             </div>
           </div>
 
+          {(invalidNfPeriod || invalidLoadPeriod) && <p role="alert" className="text-xs text-destructive">A data final deve ser igual ou posterior à inicial.</p>}
+
           <div className="flex justify-end gap-2 pt-2 border-t">
             <Button variant="outline" size="sm" onClick={clearAll}>Limpar</Button>
-            <Button size="sm" onClick={handleSearch} disabled={isLoading}>
+            <Button size="sm" onClick={handleSearch} disabled={isFetching || invalidNfPeriod || invalidLoadPeriod}>
               <Search className="h-4 w-4 mr-1" /> Buscar candidatas
             </Button>
           </div>
@@ -279,14 +331,14 @@ export default function OrtGeracaoTab() {
               <div className="flex items-center gap-2 text-sm">
                 <FileSpreadsheet className="h-4 w-4 text-primary" />
                 <span className="font-medium">NFs candidatas</span>
-                <Badge variant="outline">{candidates.length}</Badge>
+                <Badge variant="outline">{candidatesIsError ? '—' : candidates.length}</Badge>
                 {selectedIds.length > 0 && (
                   <span className="text-xs text-muted-foreground">
                     • {totals.count} selecionada(s) • R$ {totals.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} • {totals.pallets} plt • {totals.weight.toLocaleString('pt-BR')} kg
                   </span>
                 )}
               </div>
-              <Button size="sm" onClick={handleGenerate} disabled={createPickup.isPending || selectedIds.length === 0}>
+              <Button size="sm" onClick={handleGenerate} disabled={isGenerating || candidatesIsError || selectedIds.length === 0}>
                 <Sparkles className="h-4 w-4 mr-1" /> Gerar ORT ({selectedIds.length})
               </Button>
             </div>
@@ -312,7 +364,9 @@ export default function OrtGeracaoTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {candidatesIsError ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-10 text-destructive">Não foi possível buscar as NFs candidatas. {candidatesError instanceof Error ? candidatesError.message : ''} <Button variant="link" onClick={() => refetch()}>Tentar novamente</Button></TableCell></TableRow>
+                ) : isLoading ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Buscando...</TableCell></TableRow>
                 ) : candidates.length === 0 ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Nenhuma NF candidata encontrada.</TableCell></TableRow>

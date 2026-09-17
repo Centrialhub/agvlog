@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import {
   useEdiProfiles, useEdiExports, useEligibleInvoicesForEdi, useRegisterEdiExport,
   useMarkEdiSent, useMarkEdiDownloaded, useCancelEdiExport, useSaveEdiProfile,
@@ -6,7 +7,7 @@ import {
 } from '@/hooks/useBillingEdi';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,9 +46,9 @@ function downloadText(fileName: string, content: string) {
 }
 
 export default function BillingEdi() {
-  const { data: clients = [] } = useClients();
-  const { data: profiles = [] } = useEdiProfiles();
-  const { data: exports_ = [], isLoading: loadingExports } = useEdiExports();
+  const clientsQuery = useClients();const clients=clientsQuery.data??[];
+  const profilesQuery = useEdiProfiles();const profiles=useMemo(()=>profilesQuery.data??[],[profilesQuery.data]);
+  const exportsQuery = useEdiExports();const exports_=exportsQuery.data??[],loadingExports=exportsQuery.isLoading;
 
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [ediStatusFilter, setEdiStatusFilter] = useState<'all' | 'generated' | 'not_generated'>('not_generated');
@@ -56,7 +57,7 @@ export default function BillingEdi() {
   const [dueFrom, setDueFrom] = useState('');
   const [dueTo, setDueTo] = useState('');
 
-  const { data: eligible = [], isLoading, refetch } = useEligibleInvoicesForEdi({
+  const eligibleQuery = useEligibleInvoicesForEdi({
     clientId: clientFilter === 'all' ? null : clientFilter,
     ediStatus: ediStatusFilter,
     issueFrom: issueFrom || null,
@@ -64,6 +65,8 @@ export default function BillingEdi() {
     dueFrom: dueFrom || null,
     dueTo: dueTo || null,
   });
+  const eligible=useMemo(()=>eligibleQuery.data??[],[eligibleQuery.data]),isLoading=eligibleQuery.isLoading,refetch=eligibleQuery.refetch;
+  const readError=clientsQuery.isError||profilesQuery.isError||eligibleQuery.isError||exportsQuery.isError;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [genOpen, setGenOpen] = useState(false);
@@ -78,19 +81,22 @@ export default function BillingEdi() {
   const toggleAll = () => setSelected(s => s.size === eligible.length ? new Set() : new Set(eligible.map(e => e.id)));
 
   const selectedInvoices = useMemo(() => eligible.filter(i => selected.has(i.id)), [eligible, selected]);
+  useEffect(()=>{const available=new Set(eligible.map(row=>row.id));setSelected(current=>{
+    const next=new Set([...current].filter(id=>available.has(id)));return next.size===current.size?[...next].every(id=>current.has(id))?current:next:next;
+  });},[eligible]);
   const singleClientId = useMemo(() => {
     const ids = new Set(selectedInvoices.map(i => i.client_id));
     return ids.size === 1 ? Array.from(ids)[0] : null;
   }, [selectedInvoices]);
 
   const clientProfile = useMemo(
-    () => profiles.find(p => p.client_id === singleClientId) ?? profiles.find(p => !p.client_id) ?? null,
+    () => profiles.find(p => p.enabled && p.client_id === singleClientId) ?? profiles.find(p => p.enabled && !p.client_id) ?? null,
     [profiles, singleClientId],
   );
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-start justify-between">
+    <div className="space-y-6 p-4 md:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">CTMS — Arquivo de Cobrança (DOCCOB)</h1>
           <p className="text-sm text-muted-foreground">
@@ -105,19 +111,22 @@ export default function BillingEdi() {
       </div>
 
       <Tabs defaultValue="generate">
-        <TabsList>
-          <TabsTrigger value="generate">Gerar arquivo</TabsTrigger>
-          <TabsTrigger value="history">Histórico</TabsTrigger>
-        </TabsList>
+        {readError&&<Card><CardContent className="py-4" role="alert">Não foi possível carregar todos os dados do DOCCOB. Resultados indisponíveis não serão exibidos como vazios. <Button variant="outline" onClick={()=>void Promise.all([clientsQuery,profilesQuery,eligibleQuery,exportsQuery].filter(query=>query.isError).map(query=>query.refetch()))}>Tentar novamente</Button></CardContent></Card>}
+        <div className="-m-1 overflow-x-auto p-1">
+          <TabsList className="h-auto min-w-max justify-start">
+            <TabsTrigger value="generate">Gerar arquivo</TabsTrigger>
+            <TabsTrigger value="history">Histórico</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="generate" className="space-y-4">
           <Card>
-            <CardHeader><CardTitle className="text-base">Filtros</CardTitle></CardHeader>
+            <CardHeader><h2 className="text-base font-semibold leading-none tracking-tight">Filtros</h2></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div>
-                <Label>Cliente</Label>
+                <Label htmlFor="billing-edi-client">Cliente</Label>
                 <Select value={clientFilter} onValueChange={setClientFilter}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="billing-edi-client"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
                     {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
@@ -125,9 +134,9 @@ export default function BillingEdi() {
                 </Select>
               </div>
               <div>
-                <Label>Filtro Arq EDI</Label>
+                <Label htmlFor="billing-edi-status">Filtro Arq EDI</Label>
                 <Select value={ediStatusFilter} onValueChange={(v) => setEdiStatusFilter(v as typeof ediStatusFilter)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="billing-edi-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="not_generated">Não Gerado</SelectItem>
                     <SelectItem value="generated">Gerado</SelectItem>
@@ -135,29 +144,29 @@ export default function BillingEdi() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Emissão de</Label><Input type="date" value={issueFrom} onChange={e => setIssueFrom(e.target.value)} /></div>
-              <div><Label>Emissão até</Label><Input type="date" value={issueTo} onChange={e => setIssueTo(e.target.value)} /></div>
-              <div><Label>Vencto de</Label><Input type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)} /></div>
-              <div><Label>Vencto até</Label><Input type="date" value={dueTo} onChange={e => setDueTo(e.target.value)} /></div>
-              <div className="flex items-end gap-2 md:col-span-2">
+              <div><Label htmlFor="billing-edi-issue-from">Emissão de</Label><Input id="billing-edi-issue-from" type="date" value={issueFrom} onChange={e => setIssueFrom(e.target.value)} /></div>
+              <div><Label htmlFor="billing-edi-issue-to">Emissão até</Label><Input id="billing-edi-issue-to" type="date" value={issueTo} onChange={e => setIssueTo(e.target.value)} /></div>
+              <div><Label htmlFor="billing-edi-due-from">Vencimento de</Label><Input id="billing-edi-due-from" type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)} /></div>
+              <div><Label htmlFor="billing-edi-due-to">Vencimento até</Label><Input id="billing-edi-due-to" type="date" value={dueTo} onChange={e => setDueTo(e.target.value)} /></div>
+              <div className="flex flex-wrap items-end gap-2 md:col-span-2">
                 <Button variant="outline" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-2" /> Buscar</Button>
                 <Button
-                  disabled={selected.size === 0}
+                  disabled={selectedInvoices.length === 0}
                   onClick={() => setGenOpen(true)}
                 >
-                  <FileText className="h-4 w-4 mr-2" /> Gerar DOCCOB ({selected.size})
+                  <FileText className="h-4 w-4 mr-2" /> Gerar DOCCOB ({selectedInvoices.length})
                 </Button>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">Faturas elegíveis</CardTitle></CardHeader>
+            <CardHeader><h2 className="text-base font-semibold leading-none tracking-tight">Faturas elegíveis</h2></CardHeader>
             <CardContent>
-              <Table>
+              <Table scrollLabel="Faturas elegíveis para DOCCOB; deslize horizontalmente para ver todas as colunas" className="min-w-[52rem]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8"><Checkbox checked={eligible.length > 0 && selected.size === eligible.length} onCheckedChange={toggleAll} /></TableHead>
+                    <TableHead className="w-8"><Checkbox aria-label="Selecionar todas as faturas elegíveis" checked={eligible.length > 0 && eligible.every(row=>selected.has(row.id))} onCheckedChange={toggleAll} /></TableHead>
                     <TableHead>EDI</TableHead>
                     <TableHead>TP</TableHead>
                     <TableHead>Nº Fatura</TableHead>
@@ -169,12 +178,12 @@ export default function BillingEdi() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isLoading && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground">Carregando...</TableCell></TableRow>}
-                  {!isLoading && eligible.length === 0 && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground">Nenhuma fatura elegível.</TableCell></TableRow>}
+                  {isLoading && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground"><span role="status">Carregando...</span></TableCell></TableRow>}
+                  {!isLoading && !eligibleQuery.isError && eligible.length === 0 && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground"><span role="status">Nenhuma fatura elegível.</span></TableCell></TableRow>}
                   {eligible.map(inv => (
                     <TableRow key={inv.id}>
-                      <TableCell><Checkbox checked={selected.has(inv.id)} onCheckedChange={() => toggle(inv.id)} /></TableCell>
-                      <TableCell><Badge variant={inv.edi_status === 'not_generated' ? 'outline' : 'secondary'}>{inv.edi_status}</Badge></TableCell>
+                      <TableCell><Checkbox aria-label={`Selecionar fatura ${inv.invoice_number} de ${inv.clients?.company_name || 'cliente não informado'}`} checked={selected.has(inv.id)} onCheckedChange={() => toggle(inv.id)} /></TableCell>
+                      <TableCell><Badge variant={inv.edi_status === 'not_generated' ? 'outline' : 'secondary'}>{inv.edi_status === 'not_generated' ? 'Não gerado' : 'Gerado'}</Badge></TableCell>
                       <TableCell>FAT</TableCell>
                       <TableCell className="font-mono text-xs">{inv.invoice_number}</TableCell>
                       <TableCell>{inv.clients?.company_name || '—'}</TableCell>
@@ -191,7 +200,7 @@ export default function BillingEdi() {
         </TabsContent>
 
         <TabsContent value="history">
-          <HistoryTab exports_={exports_} loading={loadingExports} />
+          <HistoryTab exports_={exports_} loading={loadingExports} failed={exportsQuery.isError} retry={()=>void exportsQuery.refetch()} />
         </TabsContent>
       </Tabs>
 
@@ -213,12 +222,13 @@ export default function BillingEdi() {
   );
 }
 
-function HistoryTab({ exports_, loading }: { exports_: EdiExport[]; loading: boolean }) {
+function HistoryTab({ exports_, loading,failed,retry }: { exports_: EdiExport[]; loading: boolean;failed:boolean;retry:()=>void }) {
   const toast = useSonnerToast();
   const markSent = useMarkEdiSent();
   const markDl = useMarkEdiDownloaded();
   const cancel = useCancelEdiExport();
   const [cancelId, setCancelId] = useState<string | null>(null);
+  const [sendId,setSendId]=useState<string|null>(null);const [sendTo,setSendTo]=useState('');const [channel,setChannel]=useState('email');
   const [reason, setReason] = useState('');
 
   const redownload = async (ex: EdiExport) => {
@@ -227,15 +237,15 @@ function HistoryTab({ exports_, loading }: { exports_: EdiExport[]; loading: boo
     try {
       await markDl.mutateAsync(ex.id);
     } catch (error) {
-      console.warn('[BillingEdi] Falha ao registrar download', error);
+      toast.error(error instanceof Error?`Arquivo baixado, mas a auditoria falhou: ${error.message}`:'Arquivo baixado, mas a auditoria falhou. Tente registrar novamente.');
     }
   };
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">Histórico de arquivos</CardTitle></CardHeader>
+      <CardHeader><h2 className="text-base font-semibold leading-none tracking-tight">Histórico de arquivos</h2></CardHeader>
       <CardContent>
-        <Table>
+        <Table scrollLabel="Histórico de arquivos EDI; deslize horizontalmente para ver todas as colunas" className="min-w-[44rem]">
           <TableHeader>
             <TableRow>
               <TableHead>Data</TableHead>
@@ -248,8 +258,9 @@ function HistoryTab({ exports_, loading }: { exports_: EdiExport[]; loading: boo
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Carregando...</TableCell></TableRow>}
-            {!loading && exports_.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Nenhuma exportação.</TableCell></TableRow>}
+            {loading && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground"><span role="status">Carregando...</span></TableCell></TableRow>}
+            {failed&&<TableRow><TableCell colSpan={7} className="text-center" role="alert">Histórico indisponível. <Button variant="outline" onClick={retry}>Tentar novamente</Button></TableCell></TableRow>}
+            {!loading && !failed && exports_.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground"><span role="status">Nenhuma exportação.</span></TableCell></TableRow>}
             {exports_.map(ex => (
               <TableRow key={ex.id}>
                 <TableCell>{dt(ex.generated_at)}</TableCell>
@@ -259,9 +270,9 @@ function HistoryTab({ exports_, loading }: { exports_: EdiExport[]; loading: boo
                 <TableCell><Badge variant={ex.status === 'cancelled' ? 'destructive' : ex.status === 'sent' ? 'default' : 'secondary'}>{ex.status}</Badge></TableCell>
                 <TableCell className="font-mono text-xs">{ex.content_hash?.slice(0, 8) || '—'}</TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Button size="icon" variant="ghost" title="Baixar" disabled={!ex.generated_content} onClick={() => redownload(ex)}><Download className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" title="Marcar enviado" disabled={ex.status === 'cancelled' || ex.status === 'sent'} onClick={() => markSent.mutate({ exportId: ex.id })}><Send className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" title="Cancelar" disabled={ex.status === 'cancelled'} onClick={() => { setCancelId(ex.id); setReason(''); }}><XCircle className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" title="Baixar" aria-label={`Baixar arquivo ${ex.file_name}`} disabled={!ex.generated_content} onClick={() => redownload(ex)}><Download aria-hidden="true" className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" title="Marcar enviado" aria-label={`Marcar arquivo ${ex.file_name} como enviado`} disabled={ex.status === 'cancelled' || ex.status === 'sent'} onClick={() => {setSendId(ex.id);setSendTo('');setChannel('email');}}><Send aria-hidden="true" className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" title="Cancelar" aria-label={`Cancelar arquivo ${ex.file_name}`} disabled={ex.status === 'cancelled'} onClick={() => { setCancelId(ex.id); setReason(''); }}><XCircle aria-hidden="true" className="h-4 w-4" /></Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -272,8 +283,8 @@ function HistoryTab({ exports_, loading }: { exports_: EdiExport[]; loading: boo
           <DialogContent>
             <DialogHeader><DialogTitle>Cancelar exportação</DialogTitle></DialogHeader>
             <div className="space-y-2">
-              <Label>Motivo</Label>
-              <Textarea value={reason} onChange={e => setReason(e.target.value)} placeholder="Explique o motivo do cancelamento" />
+              <Label htmlFor="billing-edi-cancel-reason">Motivo</Label>
+              <Textarea id="billing-edi-cancel-reason" value={reason} onChange={e => setReason(e.target.value)} placeholder="Explique o motivo do cancelamento" />
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setCancelId(null)}>Voltar</Button>
@@ -284,6 +295,11 @@ function HistoryTab({ exports_, loading }: { exports_: EdiExport[]; loading: boo
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <Dialog open={!!sendId} onOpenChange={open=>!open&&setSendId(null)}><DialogContent><DialogHeader><DialogTitle>Registrar envio do DOCCOB</DialogTitle></DialogHeader>
+          <div className="space-y-3"><div><Label htmlFor="edi-send-channel">Canal utilizado</Label><Input id="edi-send-channel" value={channel} onChange={e=>setChannel(e.target.value)} placeholder="E-mail, portal, SFTP…"/></div>
+          <div><Label htmlFor="edi-send-to">Destinatário</Label><Input id="edi-send-to" value={sendTo} onChange={e=>setSendTo(e.target.value)} placeholder="E-mail, empresa ou identificação do destino"/></div></div>
+          <DialogFooter><Button variant="outline" onClick={()=>setSendId(null)}>Voltar</Button><Button disabled={!channel.trim()||!sendTo.trim()||markSent.isPending} onClick={async()=>{try{await markSent.mutateAsync({exportId:sendId!,channel,sentTo:sendTo});toast.success('Envio registrado com destinatário e canal.');setSendId(null);}catch(error){toast.error(error instanceof Error?error.message:'Falha ao registrar envio.');}}}>Confirmar envio</Button></DialogFooter>
+        </DialogContent></Dialog>
       </CardContent>
     </Card>
   );
@@ -303,7 +319,7 @@ function GenerateDialog({
   const register = useRegisterEdiExport();
   const markDl = useMarkEdiDownloaded();
   const defaultPattern = profile?.file_name_pattern || 'SIAT_CTMS_DOCCOB_{dd}_{mm}_{yyyy}_{hh}_{MM}.txt';
-  const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fileDate, setFileDate] = useState(() => localDateInputValue());
   const [carrierCnpj, setCarrierCnpj] = useState<string>(jsonString(profile?.metadata, 'carrier_cnpj'));
   const [carrierName, setCarrierName] = useState<string>(jsonString(profile?.metadata, 'carrier_name') || currentTenant?.name || '');
   const [pattern, setPattern] = useState(defaultPattern);
@@ -312,6 +328,7 @@ function GenerateDialog({
   const [reprocessReason, setReprocessReason] = useState('');
   const [result, setResult] = useState<{ content: string; fileName: string; totalAmount: number; recordCount: number } | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
+  const [reading,setReading]=useState(false);
 
   const needsReprocess = selectedInvoices.some(i => i.edi_status === 'generated' || i.edi_status === 'sent' || i.edi_status === 'downloaded');
   const resolvedName = resolveFileName(pattern, new Date(fileDate + 'T00:00:00'));
@@ -327,6 +344,8 @@ function GenerateDialog({
     if (nameIssue?.level === 'error') { setErrors([nameIssue.message]); return; }
     if (!carrierCnpj.replace(/\D/g, '')) { setErrors(['CNPJ da transportadora obrigatório.']); return; }
 
+    setReading(true);
+    try {
     const bundle = await fetchInvoicesBundle(currentTenant.id, selectedInvoices.map(i => i.id));
     const chargesByInv = new Map<string, Array<(typeof bundle.charges)[number]>>();
     for (const c of bundle.charges) {
@@ -345,8 +364,8 @@ function GenerateDialog({
       issueDate: inv.issue_date,
       dueDate: inv.due_date || inv.issue_date,
       totalAmount: Number(inv.total_amount) || 0,
-      clientName: inv.clients?.company_name || jsonString(inv.payer_snapshot, 'name'),
-      clientTaxId: inv.clients?.tax_id || null,
+      clientName: jsonString(inv.payer_snapshot, 'company_name') || jsonString(inv.payer_snapshot, 'name') || inv.clients?.company_name || '',
+      clientTaxId: jsonString(inv.payer_snapshot, 'tax_id') || inv.clients?.tax_id || null,
       paymentMethod: null,
       charges: (chargesByInv.get(inv.id) ?? []).map((c): DoccobChargeInput => ({
         id: c.id,
@@ -390,7 +409,6 @@ function GenerateDialog({
     const errs = issues.filter(i => i.level === 'error');
     if (errs.length > 0) { setErrors(errs.map(e => e.message)); return; }
 
-    try {
       const built = generateDoccob(buildInput);
       const payload = await register.mutateAsync({
         profileId: profile?.id || null,
@@ -415,12 +433,14 @@ function GenerateDialog({
         try {
           await markDl.mutateAsync(exportId);
         } catch (error) {
-          console.warn('[BillingEdi] Falha ao registrar download em lote', error);
+          toast.error(error instanceof Error?`Arquivo baixado, mas a auditoria falhou: ${error.message}`:'Arquivo baixado, mas a auditoria falhou.');
         }
       }
       onSuccess();
     } catch (error: unknown) {
       setErrors([error instanceof Error ? error.message : 'Falha ao gerar DOCCOB']);
+    } finally {
+      setReading(false);
     }
   };
 
@@ -472,7 +492,7 @@ function GenerateDialog({
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Fechar</Button>
           {result && <Button variant="outline" onClick={() => downloadText(result.fileName, result.content)}><Download className="h-4 w-4 mr-2" />Baixar novamente</Button>}
-          <Button onClick={handleGenerate} disabled={register.isPending}>
+          <Button onClick={handleGenerate} disabled={reading||register.isPending}>
             <FileText className="h-4 w-4 mr-2" /> Gerar TXT
           </Button>
         </DialogFooter>
@@ -513,7 +533,7 @@ function ProfileDialog({ open, onClose, clients, profiles }: {
               {profiles.map(p => (
                 <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-muted text-sm border-b" onClick={() => load(p)}>
                   <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-muted-foreground">{clients.find(c => c.id === p.client_id)?.company_name || 'Global'}</div>
+                  <div className="text-xs text-muted-foreground">{clients.find(c => c.id === p.client_id)?.company_name || 'Global'} · {p.enabled?'Ativo':'Inativo'}</div>
                 </button>
               ))}
             </div>
@@ -541,6 +561,7 @@ function ProfileDialog({ open, onClose, clients, profiles }: {
               <div><Label>Conta</Label><Input value={editing.bank_account || ''} onChange={e => setEditing({ ...editing, bank_account: e.target.value })} /></div>
             </div>
             <div><Label>Padrão do arquivo</Label><Input value={editing.file_name_pattern || ''} onChange={e => setEditing({ ...editing, file_name_pattern: e.target.value })} /></div>
+            <label className="flex items-center gap-2"><Checkbox checked={editing.enabled!==false} onCheckedChange={checked=>setEditing({...editing,enabled:checked===true})}/>Perfil ativo para novas gerações</label>
             <div><Label>API integração</Label><Input value={editing.api_integration_id || ''} onChange={e => setEditing({ ...editing, api_integration_id: e.target.value })} /></div>
           </div>
         </div>

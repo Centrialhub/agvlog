@@ -38,9 +38,9 @@ export const DRIVER_DELIVERY_EVENTS: EventDef[] = [
   { key: 'solicitar_desconto', label: 'SOLICITAR DESCONTO', icon: Percent, category: 'informativo', showsDiscount: true, showsContact: true, needsOperatorReply: true },
   { key: 'atualizar_boleto', label: 'ATUALIZAR BOLETO', icon: FileText, category: 'informativo', showsContact: true, needsOperatorReply: true },
   { key: 'avaria', label: 'AVARIA', icon: AlertCircle, category: 'informativo', requiresPhoto: true, showsItems: true },
-  { key: 'cliente_recusou', label: 'CLIENTE RECUSOU', icon: PackageX, category: 'informativo', requiresPhoto: true, showsItems: true },
+  { key: 'cliente_recusou', label: 'CLIENTE RECUSOU', icon: PackageX, category: 'finalizador', finalAction: 'refused', requiresPhoto: true, showsItems: true },
   { key: 'coleta_realizada', label: 'COLETA REALIZADA', icon: Package, category: 'informativo', requiresPhoto: true },
-  { key: 'cliente_estava_fora', label: 'CLIENTE ESTAVA FORA', icon: UserX, category: 'informativo' },
+  { key: 'cliente_estava_fora', label: 'CLIENTE ESTAVA FORA', icon: UserX, category: 'finalizador', finalAction: 'refused' },
   { key: 'outros', label: 'OUTROS', icon: AlertTriangle, category: 'informativo' },
 ];
 

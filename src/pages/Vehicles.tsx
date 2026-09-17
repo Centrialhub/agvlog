@@ -69,7 +69,7 @@ export default function Vehicles() {
     retry: false,
   });
 
-  const { data: drivers = [] } = useQuery({
+  const driversQuery = useQuery({
     queryKey: ['drivers_for_assign', currentTenant?.id, user?.id],
     queryFn: async () => {
       if (!currentTenant || !user) return [];
@@ -84,6 +84,7 @@ export default function Vehicles() {
     enabled: !!currentTenant && !!user,
     retry: false,
   });
+  const drivers = driversQuery.data ?? [];
 
   const assignMutation = useMutation({
     mutationFn: async ({ vehicleId, driverId }: { vehicleId: string; driverId: string | null }) => {
@@ -152,6 +153,20 @@ export default function Vehicles() {
         )}
       </div>
 
+      {driversQuery.isError && (
+        <Card className="border-destructive/40">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4" role="alert">
+            <div>
+              <p className="text-sm font-medium text-destructive">Não foi possível carregar os motoristas disponíveis</p>
+              <p className="text-xs text-muted-foreground">{driversQuery.error instanceof Error ? driversQuery.error.message : 'Falha de consulta.'}</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => void driversQuery.refetch()}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filteredVehicles.length} totalCount={vehicles.length} loading={isLoading} fields={[
         { key: 'search', label: 'Buscar veículo', type: 'search', placeholder: 'Placa, apelido, motorista ou carroceria', value: filters.search, onChange: value => setFilter('search', value) },
         { key: 'status', label: 'Situação', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, { value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Inativos' }] },
@@ -211,6 +226,7 @@ export default function Vehicles() {
                             vehicleId: v.id,
                             driverId: val === '__none__' ? null : val,
                           })}
+                          disabled={driversQuery.isError || driversQuery.isLoading}
                         >
                           <SelectTrigger className="h-7 w-40 text-xs">
                             <SelectValue placeholder="Sem motorista" />
@@ -315,7 +331,7 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
   const num = (k: string, label: string, placeholder?: string) => (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
-      <Input type="number" step="any" value={String(form[k] ?? '')} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
+      <Input type="number" min="0" step="any" value={String(form[k] ?? '')} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
     </div>
   );
   const bool = (k: string, label: string) => (
@@ -331,6 +347,8 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
     setLoading(true);
 
     const numKeys = ['odometer_km','year_of_manufacture','capacity_ton','avg_km_per_liter','max_pallets','max_weight_kg','max_volume_m3','tank_capacity_liters','speed_limit_kmh'];
+    const invalidNumeric = numKeys.find(key => form[key] !== '' && form[key] != null && (!Number.isFinite(Number(form[key])) || Number(form[key]) < 0));
+    if (invalidNumeric) { toast.error('Os valores numéricos do veículo não podem ser negativos.'); setLoading(false); return; }
     const payload: Record<string, unknown> = { tenant_id: tenantId, updated_by: userId };
     Object.keys(form).forEach(k => {
       if (['id','tenant_id','created_at','updated_at','created_by','updated_by','current_driver','current_driver_id','tags'].includes(k)) return;
@@ -344,12 +362,25 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
       if (!payload.plate) { toast.error('Placa inválida'); setLoading(false); return; }
     }
 
-    const { error } = vehicle
-      ? await supabase.from('vehicles').update(payload as TablesUpdate<'vehicles'>)
-          .eq('id', vehicle.id)
-          .eq('tenant_id', tenantId)
-      : await supabase.from('vehicles').insert({ ...payload, created_by: userId } as TablesInsert<'vehicles'>);
-    if (error) { toast.error(error.message); setLoading(false); return; }
+    if (vehicle) {
+      const { data: updated, error } = await supabase.from('vehicles')
+        .update(payload as TablesUpdate<'vehicles'>)
+        .eq('id', vehicle.id)
+        .eq('tenant_id', tenantId)
+        .eq('updated_at', vehicle.updated_at)
+        .select('id')
+        .maybeSingle();
+      if (error) { toast.error(error.message); setLoading(false); return; }
+      if (!updated) {
+        toast.error('Este veículo foi alterado por outro usuário. Reabra o formulário para revisar os dados atuais.');
+        queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+        setLoading(false);
+        return;
+      }
+    } else {
+      const { error } = await supabase.from('vehicles').insert({ ...payload, created_by: userId } as TablesInsert<'vehicles'>);
+      if (error) { toast.error(error.message); setLoading(false); return; }
+    }
     toast.success(vehicle ? 'Veículo atualizado' : 'Veículo criado');
     queryClient.invalidateQueries({ queryKey: ['vehicles'] });
     onOpenChange(false);

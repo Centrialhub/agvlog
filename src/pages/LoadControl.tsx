@@ -1,4 +1,5 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,13 +16,14 @@ import { useSonnerToast } from '@/hooks/useSonnerToast';
 import {
   useLoadControlList, useLoadDocuments, useUnloadingCharges, useImportBatches,
   useRegisterPayment,
+  validateLoadControlDateFilters,
   PAYMENT_STATUS_LABELS, OPERATIONAL_STATUS_LABELS,
   type LoadControlRow, type LoadControlFilters,
 } from '@/hooks/useLoadControl';
 import { useTenant } from '@/hooks/useTenant';
 import { parseLoadSpreadsheet } from '@/lib/loadImports/spreadsheetLoadImport';
 import { parseFiscalXml, type ParsedNfe, type ParsedCte } from '@/lib/loadImports/xmlLoadImport';
-import { downloadLoadControlPdf, type LoadReportKind } from '@/lib/loadReports/loadControlPdf';
+import { downloadLoadControlPdf, selectLoadReportRows, type LoadReportKind } from '@/lib/loadReports/loadControlPdf';
 import { exportLoadControlCsv } from '@/lib/loadReports/loadControlCsv';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
@@ -50,6 +52,7 @@ export default function LoadControl() {
   const { data: companyProfile } = useCompanyProfile();
   const [filters, setFilters] = useState<LoadControlFilters>({});
   const [applied, setApplied] = useState<LoadControlFilters>({});
+  const [filterError, setFilterError] = useState('');
   const loadControl = useLoadControlList(applied);
   const {
     data: rows = [], isPending: isLoading, isError, error, refetch,
@@ -89,8 +92,12 @@ export default function LoadControl() {
 
   const set = (key: keyof LoadControlFilters, value: string | null) => setFilters(filters => ({ ...filters, [key]: value === '' ? null : value }));
 
-  const doSearch = () => setApplied(filters);
-  const doClear = () => { setFilters({}); setApplied({}); };
+  const doSearch = () => {
+    const validationError = validateLoadControlDateFilters(filters);
+    setFilterError(validationError || '');
+    if (!validationError) setApplied(filters);
+  };
+  const doClear = () => { setFilters({}); setApplied({}); setFilterError(''); };
 
   const openPay = (r: LoadControlRow) => {
     if (!r.receivable_id) {
@@ -133,8 +140,9 @@ export default function LoadControl() {
       toast.error('Carregue todas as cargas do filtro antes de gerar o relatório.');
       return;
     }
-    if (!rows.length) { toast.error('Sem dados no filtro atual.'); return; }
-    if (rows.length > 5000 && !await confirmAction(`${rows.length} linhas serão incluídas. Continuar?`, {
+    const reportRows = selectLoadReportRows(reportKind, rows);
+    if (!reportRows.length) { toast.error('Sem dados compatíveis com este relatório no filtro atual.'); return; }
+    if (reportRows.length > 5000 && !await confirmAction(`${reportRows.length} linhas serão incluídas. Continuar?`, {
       title: 'Gerar relatório extenso',
     })) return;
     downloadLoadControlPdf({
@@ -204,10 +212,10 @@ export default function LoadControl() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label className="text-xs">Data carga (de)</Label><Input type="date" value={filters.loadDateFrom || ''} onChange={e => set('loadDateFrom', e.target.value)} /></div>
-              <div><Label className="text-xs">Data carga (até)</Label><Input type="date" value={filters.loadDateTo || ''} onChange={e => set('loadDateTo', e.target.value)} /></div>
-              <div><Label className="text-xs">Prev. pagto (de)</Label><Input type="date" value={filters.expectedPayFrom || ''} onChange={e => set('expectedPayFrom', e.target.value)} /></div>
-              <div><Label className="text-xs">Prev. pagto (até)</Label><Input type="date" value={filters.expectedPayTo || ''} onChange={e => set('expectedPayTo', e.target.value)} /></div>
+              <div><Label className="text-xs">Data carga (de)</Label><Input type="date" max={filters.loadDateTo || undefined} value={filters.loadDateFrom || ''} onChange={e => set('loadDateFrom', e.target.value)} /></div>
+              <div><Label className="text-xs">Data carga (até)</Label><Input type="date" min={filters.loadDateFrom || undefined} value={filters.loadDateTo || ''} onChange={e => set('loadDateTo', e.target.value)} /></div>
+              <div><Label className="text-xs">Prev. pagto (de)</Label><Input type="date" max={filters.expectedPayTo || undefined} value={filters.expectedPayFrom || ''} onChange={e => set('expectedPayFrom', e.target.value)} /></div>
+              <div><Label className="text-xs">Prev. pagto (até)</Label><Input type="date" min={filters.expectedPayFrom || undefined} value={filters.expectedPayTo || ''} onChange={e => set('expectedPayTo', e.target.value)} /></div>
               <div className="md:col-span-6 flex gap-2 justify-end">
                 <Button variant="ghost" onClick={doClear}>Limpar</Button>
                 <Button onClick={doSearch}><Search className="h-4 w-4 mr-1" />Buscar</Button>
@@ -225,6 +233,7 @@ export default function LoadControl() {
                   <span className="text-xs text-muted-foreground">Exportações e relatórios são liberados após carregar todas as páginas.</span>
                 ) : null}
               </div>
+              {filterError ? <div role="alert" className="md:col-span-6 text-sm text-destructive">{filterError}</div> : null}
               {isError && rows.length > 0 ? (
                 <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded border border-destructive/40 bg-destructive/10 p-2 text-sm text-destructive">
                   <span>A próxima página não foi carregada: {readError}</span>
@@ -443,12 +452,13 @@ function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => vo
   const command = useLoadImportCommand();
   const [parsing, setParsing] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [showAllErrors, setShowAllErrors] = useState(false);
   const [importError, setImportError] = useState('');
   const busy = parsing || command.isPending;
 
   const onXlsx = async (file: File) => {
     if (!tenantId) return;
-    setParsing(true); setImportError(''); setPreview(null);
+    setParsing(true); setImportError(''); setPreview(null); setShowAllErrors(false);
     try {
       const buf = await file.arrayBuffer();
       const parsed = parseLoadSpreadsheet(buf);
@@ -462,7 +472,7 @@ function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => vo
 
   const onXml = async (files: FileList) => {
     if (!tenantId) return;
-    setParsing(true); setImportError(''); setPreview(null);
+    setParsing(true); setImportError(''); setPreview(null); setShowAllErrors(false);
     try {
       const docs: Array<ParsedNfe | ParsedCte> = [];
       for (const f of Array.from(files)) {
@@ -519,7 +529,14 @@ function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => vo
       {preview && (
         <div className="text-xs bg-muted p-2 rounded">
           <div>Cargas novas: <b>{preview.newLoads}</b> • Atualizadas: <b>{preview.updatedLoads}</b> • Documentos: <b>{preview.newDocuments}</b> • Duplicados: <b>{preview.duplicated}</b> • Pendências: <b>{preview.pending}</b> • Erros: <b>{preview.errors.length}</b></div>
-          {preview.errors.slice(0, 5).map((error, index) => <div key={index} className="text-destructive">• {error.message}</div>)}
+          <div className={showAllErrors ? 'mt-1 max-h-64 overflow-auto' : 'mt-1'}>
+            {preview.errors.slice(0, showAllErrors ? preview.errors.length : 5).map((error, index) => <div key={index} className="text-destructive">• {error.message}</div>)}
+          </div>
+          {preview.errors.length > 5 ? (
+            <Button type="button" size="sm" variant="link" className="h-auto p-0 mt-1 text-xs" onClick={() => setShowAllErrors(value => !value)}>
+              {showAllErrors ? 'Mostrar somente os cinco primeiros' : `Ver todos os ${preview.errors.length} erros`}
+            </Button>
+          ) : null}
         </div>
       )}
     </CardContent></Card>
@@ -527,9 +544,16 @@ function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => vo
 }
 
 function UnloadingTab() {
-  const { data: charges = [], isLoading } = useUnloadingCharges();
+  const {
+    data: charges = [], isLoading, isError, error, refetch,
+    hasNextPage, fetchNextPage, isFetchingNextPage, totalCount,
+  } = useUnloadingCharges();
+  const errorMessage = error instanceof Error ? error.message : 'Não foi possível consultar as descargas.';
   return (
     <Card><CardContent className="p-0 overflow-auto">
+      {!isLoading && !isError ? <div role="status" className="border-b p-3 text-sm text-muted-foreground">
+        Exibindo {charges.length.toLocaleString('pt-BR')} de {totalCount.toLocaleString('pt-BR')} descargas.
+      </div> : null}
       <Table>
         <TableHeader><TableRow>
           <TableHead>NF</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead>
@@ -539,6 +563,10 @@ function UnloadingTab() {
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? <TableRow><TableCell colSpan={8}>Carregando…</TableCell></TableRow> :
+            isError ? <TableRow><TableCell colSpan={8}><div role="alert" className="flex items-center justify-between gap-2 p-2">
+              <span>Não foi possível consultar as descargas: {errorMessage}</span>
+              <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>Tentar novamente</Button>
+            </div></TableCell></TableRow> :
             charges.length === 0 ? <TableRow><TableCell colSpan={8}>Nenhuma descarga registrada.</TableCell></TableRow> :
             charges.map(c => (
               <TableRow key={c.id}>
@@ -554,16 +582,24 @@ function UnloadingTab() {
             ))}
         </TableBody>
       </Table>
+      {!isLoading && !isError && hasNextPage ? <div className="flex justify-center border-t p-3">
+        <Button type="button" variant="outline" disabled={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+          {isFetchingNextPage ? 'Carregando…' : 'Carregar mais descargas'}
+        </Button>
+      </div> : null}
     </CardContent></Card>
   );
 }
 
 function PendingPanel({ rows, complete, totalCount }: { rows: LoadControlRow[]; complete: boolean; totalCount: number }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const pending = rows.filter(r =>
-    (r.expected_payment_date && r.expected_payment_date < today && r.payment_status !== 'paid') ||
-    !r.expected_payment_date || r.invoice_count === 0
-  ).slice(0, 200);
+  const today = localDateInputValue();
+  const [visibleCount, setVisibleCount] = useState(200);
+  const allPending = rows.filter(r => {
+    if (r.payment_status === 'paid' || r.payment_status === 'cancelled') return false;
+    return Boolean((r.expected_payment_date && r.expected_payment_date < today)
+      || !r.expected_payment_date || r.invoice_count === 0);
+  });
+  const pending = allPending.slice(0, visibleCount);
   return (
     <Card><CardContent className="p-0 overflow-auto">
       {!complete ? (
@@ -571,6 +607,9 @@ function PendingPanel({ rows, complete, totalCount }: { rows: LoadControlRow[]; 
           Pendências ainda incompletas: foram avaliadas {rows.length.toLocaleString('pt-BR')} de {totalCount.toLocaleString('pt-BR')} cargas. Carregue todas as páginas na aba Cargas.
         </div>
       ) : null}
+      {complete ? <div role="status" className="border-b p-3 text-sm text-muted-foreground">
+        Exibindo {pending.length.toLocaleString('pt-BR')} de {allPending.length.toLocaleString('pt-BR')} pendências.
+      </div> : null}
       <Table>
         <TableHeader><TableRow>
           <TableHead>Tipo</TableHead><TableHead>Carga</TableHead><TableHead>Mensagem</TableHead>
@@ -586,13 +625,18 @@ function PendingPanel({ rows, complete, totalCount }: { rows: LoadControlRow[]; 
             ))}
         </TableBody>
       </Table>
+      {pending.length < allPending.length ? <div className="flex justify-center border-t p-3">
+        <Button type="button" variant="outline" onClick={() => setVisibleCount(value => value + 200)}>Carregar mais pendências</Button>
+      </div> : null}
     </CardContent></Card>
   );
 }
 
 function LoadDetailPanel({ row }: { row: LoadControlRow }) {
-  const { data: docs = [] } = useLoadDocuments(row.id);
-  const { data: charges = [] } = useUnloadingCharges({ loadId: row.id });
+  const docsQuery = useLoadDocuments(row.id);
+  const chargesQuery = useUnloadingCharges({ loadId: row.id });
+  const docs = docsQuery.data || [];
+  const charges = chargesQuery.data || [];
   return (
     <div className="space-y-3">
       <SheetHeader><SheetTitle>Carga {row.external_load_number || row.load_number}</SheetTitle></SheetHeader>
@@ -608,7 +652,11 @@ function LoadDetailPanel({ row }: { row: LoadControlRow }) {
         <div className="col-span-2 text-xs text-muted-foreground"><b>Legado:</b> {row.legacy_status_text || '—'}</div>
       </div>
       <div>
-        <div className="font-medium text-sm mt-2 mb-1">Documentos ({docs.length})</div>
+        <div className="font-medium text-sm mt-2 mb-1">Documentos ({docsQuery.isError ? 'indisponível' : docsQuery.totalCount})</div>
+        {docsQuery.isLoading ? <p role="status" className="text-sm">Consultando documentos…</p> : null}
+        {docsQuery.isError ? <div role="alert" className="flex items-center justify-between gap-2 rounded border border-destructive/40 p-2 text-sm text-destructive">
+          <span>Não foi possível consultar os documentos.</span><Button size="sm" variant="outline" onClick={() => void docsQuery.refetch()}>Tentar novamente</Button>
+        </div> : null}
         <div className="max-h-52 overflow-auto border rounded">
           <Table>
             <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Número</TableHead><TableHead>Emitente</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
@@ -624,9 +672,16 @@ function LoadDetailPanel({ row }: { row: LoadControlRow }) {
             </TableBody>
           </Table>
         </div>
+        {!docsQuery.isError && docsQuery.hasNextPage ? <Button type="button" size="sm" variant="outline" className="mt-2" disabled={docsQuery.isFetchingNextPage} onClick={() => void docsQuery.fetchNextPage()}>
+          {docsQuery.isFetchingNextPage ? 'Carregando…' : `Carregar mais documentos (${docs.length} de ${docsQuery.totalCount})`}
+        </Button> : null}
       </div>
       <div>
-        <div className="font-medium text-sm mt-2 mb-1">Descargas ({charges.length})</div>
+        <div className="font-medium text-sm mt-2 mb-1">Descargas ({chargesQuery.isError ? 'indisponível' : chargesQuery.totalCount})</div>
+        {chargesQuery.isLoading ? <p role="status" className="text-sm">Consultando descargas…</p> : null}
+        {chargesQuery.isError ? <div role="alert" className="flex items-center justify-between gap-2 rounded border border-destructive/40 p-2 text-sm text-destructive">
+          <span>Não foi possível consultar as descargas.</span><Button size="sm" variant="outline" onClick={() => void chargesQuery.refetch()}>Tentar novamente</Button>
+        </div> : null}
         <div className="max-h-52 overflow-auto border rounded">
           <Table>
             <TableHeader><TableRow><TableHead>NF</TableHead><TableHead>Cliente</TableHead><TableHead>Cidade</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
@@ -642,6 +697,9 @@ function LoadDetailPanel({ row }: { row: LoadControlRow }) {
             </TableBody>
           </Table>
         </div>
+        {!chargesQuery.isError && chargesQuery.hasNextPage ? <Button type="button" size="sm" variant="outline" className="mt-2" disabled={chargesQuery.isFetchingNextPage} onClick={() => void chargesQuery.fetchNextPage()}>
+          {chargesQuery.isFetchingNextPage ? 'Carregando…' : `Carregar mais descargas (${charges.length} de ${chargesQuery.totalCount})`}
+        </Button> : null}
       </div>
     </div>
   );

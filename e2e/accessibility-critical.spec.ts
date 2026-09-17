@@ -22,6 +22,12 @@ test("operator critical workspaces have no serious axe violations", async ({ pag
   await loginThroughUi(page, accounts.operator);
   await expectNoSeriousAxeViolations(page, "/loads");
   await expectNoSeriousAxeViolations(page, "/route-planning");
+  await expectNoSeriousAxeViolations(page, "/financial");
+  await expectNoSeriousAxeViolations(page, "/payables");
+  await expectNoSeriousAxeViolations(page, "/closing-reports");
+  await expectNoSeriousAxeViolations(page, "/billing-edi");
+  await expectNoSeriousAxeViolations(page, "/driver-settlements");
+  await expectNoSeriousAxeViolations(page, "/cost-centers");
 });
 
 test("driver critical workspaces have no serious axe violations", async ({ page }) => {

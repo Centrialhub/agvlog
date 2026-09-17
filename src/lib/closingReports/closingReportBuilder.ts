@@ -1,3 +1,5 @@
+import { localDateInputValue } from '@/lib/utils/formatDate';
+
 /**
  * Closing Report Builder — pure business logic for previews and totals.
  * Consumes existing load/fiscal/CT-e data and produces snapshot items.
@@ -330,7 +332,7 @@ export function computeClosingPaymentStatus(params: {
   if (params.cancelled) return 'cancelled';
   const total = num(params.totalAmount);
   const rec = num(params.receivedAmount);
-  const today = params.today ?? new Date().toISOString().slice(0, 10);
+  const today = params.today ?? localDateInputValue();
   if (rec <= 0) {
     if (params.expectedPaymentDate && params.expectedPaymentDate < today) return 'overdue';
     return 'unpaid';

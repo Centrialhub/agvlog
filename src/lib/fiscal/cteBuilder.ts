@@ -16,6 +16,13 @@
 import { validateInsurance } from './insuranceValidation';
 import { normalizeStateRegistration } from '../fiscalNormalization';
 import { restoreStateRegistrationLeadingZeros } from '../stateRegistrationZeros';
+import {
+  fiscalText,
+  normalizeCep,
+  normalizeCityName,
+  normalizeIbgeCity,
+  normalizeUf,
+} from './fiscalAddress';
 
 export type CteTakerRole =
   | 'remetente'
@@ -222,9 +229,9 @@ function buildLocation(
   address?: CteParty['address'] | null,
 ): Record<string, unknown> | undefined {
   if (!address) return undefined;
-  const city = address.city || undefined;
-  const uf = address.state || undefined;
-  const cMun = digits(address.city_ibge) || undefined;
+  const city = normalizeCityName(address.city) || undefined;
+  const uf = normalizeUf(address.state) || undefined;
+  const cMun = normalizeIbgeCity(address.city_ibge) || undefined;
   if (!city && !uf && !cMun) return undefined;
   return {
     codigoCidade: cMun,
@@ -277,27 +284,45 @@ function serializeParty(p: CteParty | null | undefined) {
   if (!p) return null;
   const cnpj = digits(p.cnpj);
   const cpf = digits(p.cpf);
+  const street = fiscalText(p.address?.street, 60) || undefined;
+  const number = fiscalText(p.address?.number, 60) || undefined;
+  const complement = fiscalText(p.address?.complement, 60) || undefined;
+  const neighborhood = fiscalText(p.address?.neighborhood, 60) || undefined;
+  const city = normalizeCityName(p.address?.city) || undefined;
+  const cityCode = normalizeIbgeCity(p.address?.city_ibge) || undefined;
+  const state = normalizeUf(p.address?.state) || undefined;
+  const zip = normalizeCep(p.address?.zip) || undefined;
   return {
-    nome: p.name,
+    nome: fiscalText(p.name, 150) || p.name,
     cnpj: cnpj || undefined,
     cpf: cpf && !cnpj ? cpf : undefined,
-    ie: (restoreStateRegistrationLeadingZeros(p.ie, p.address?.state) ?? p.ie) || undefined,
+    ie: (restoreStateRegistrationLeadingZeros(p.ie, state) ?? p.ie) || undefined,
     endereco: p.address
       ? {
-          logradouro: p.address.street || undefined,
-          numero: p.address.number || undefined,
-          complemento: p.address.complement || undefined,
-          bairro: p.address.neighborhood || undefined,
-          municipio: p.address.city || undefined,
-          cMun: digits(p.address.city_ibge) || undefined,
-          codigoMunicipio: digits(p.address.city_ibge) || undefined,
-          uf: p.address.state || undefined,
-          cep: digits(p.address.zip) ? digits(p.address.zip).slice(0, 8).padStart(8, '0') : undefined,
-          // Campos canônicos para provedores Hub Fiscal que exigem CEP maiúsculo no endereço
-          CEP: digits(p.address.zip) ? digits(p.address.zip).slice(0, 8).padStart(8, '0') : undefined,
+          logradouro: street,
+          numero: number,
+          complemento: complement,
+          bairro: neighborhood,
+          municipio: city,
+          codigoMunicipio: cityCode,
+          uf: state,
+          cep: zip,
+          // Aliases canônicos do leiaute CT-e usados por adaptadores distintos.
+          xLgr: street,
+          nro: number,
+          xCpl: complement,
+          xBairro: neighborhood,
+          cMun: cityCode,
+          xMun: city,
+          UF: state,
+          CEP: zip,
         }
       : undefined,
   };
+}
+
+function present<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined && (typeof value !== 'string' || value.trim() !== '');
 }
 
 function mergePartyOverride(
@@ -305,18 +330,44 @@ function mergePartyOverride(
   override: Partial<CteParty> | null | undefined,
 ): CteParty | null | undefined {
   if (!override) return party;
-  const name = override.name ?? party?.name;
+  const name = present(override.name) ? override.name : party?.name;
   if (!name) return party;
+  const addressOverride = override.address
+    ? Object.fromEntries(Object.entries(override.address).filter(([, value]) => present(value)))
+    : null;
+  const identityOverride = Object.fromEntries(
+    Object.entries(override).filter(([key, value]) => key !== 'address' && present(value)),
+  );
   return {
     ...party,
-    ...override,
+    ...identityOverride,
     name,
-    address: override.address || party?.address
-      ? { ...party?.address, ...override.address }
+    address: addressOverride || party?.address
+      ? { ...party?.address, ...addressOverride }
       : null,
   };
 }
 
+function validatePartyAddress(
+  label: string,
+  party: CteParty | null | undefined,
+  missing: string[],
+): void {
+  if (!party) return;
+  const address = party.address;
+  const fields = [
+    [fiscalText(address?.street, 60), 'logradouro'],
+    [fiscalText(address?.number, 60), 'número'],
+    [fiscalText(address?.neighborhood, 60), 'bairro'],
+    [normalizeCityName(address?.city), 'município'],
+    [normalizeIbgeCity(address?.city_ibge), 'código IBGE do município'],
+    [normalizeUf(address?.state), 'UF'],
+    [normalizeCep(address?.zip), 'CEP'],
+  ] as const;
+  for (const [value, field] of fields) {
+    if (!value) missing.push(`${field} ${label}`);
+  }
+}
 
 const TAKER_INDEX: Record<CteTakerRole, number> = {
   remetente: 0,
@@ -523,7 +574,39 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
   else if (!digits(input.recipient.cnpj) && !digits(input.recipient.cpf)) {
     missing.push('CNPJ/CPF do destinatário');
   }
+  const remitter = mergePartyOverride(input.remitter, input.overrides?.remitter);
   const recipient = mergePartyOverride(input.recipient, input.overrides?.recipient);
+  if (recipient) {
+    const address = recipient.address;
+    if (!fiscalText(address?.street, 60)) missing.push('Logradouro do destinatário');
+    if (!fiscalText(address?.number, 60)) missing.push('Número do endereço do destinatário');
+    if (!fiscalText(address?.neighborhood, 60)) missing.push('Bairro do destinatário');
+    if (!normalizeCityName(address?.city)) missing.push('Município do destinatário');
+    if (!normalizeUf(address?.state)) missing.push('UF do destinatário');
+    if (!normalizeCep(address?.zip)) missing.push('CEP do destinatário (8 dígitos)');
+    if (!normalizeIbgeCity(address?.city_ibge)) missing.push('Código IBGE do município do destinatário');
+  }
+  if (input.emitter?.environment === 'production') {
+    validatePartyAddress(
+      'do emitente',
+      input.emitter
+        ? {
+            name: input.emitter.name,
+            cnpj: input.emitter.cnpj,
+            ie: input.emitter.ie,
+            address: input.emitter.address,
+          }
+        : null,
+      missing,
+    );
+    validatePartyAddress('do remetente', remitter, missing);
+    if (input.expedidor) validatePartyAddress('do expedidor', input.expedidor, missing);
+    if (input.recebedor) validatePartyAddress('do recebedor', input.recebedor, missing);
+    if (input.takerRole === 'terceiro') {
+      validatePartyAddress('do tomador', input.takerParty, missing);
+    }
+  }
+
   const recipientIndicator = String(recipient?.ieIndicator || '').trim().toUpperCase();
   if (['1', 'C', 'CONTRIBUINTE', 'CONTRIBUINTE ICMS'].includes(recipientIndicator)) {
     const ie = normalizeStateRegistration(recipient?.ie, recipient?.address?.state);
@@ -744,8 +827,8 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
             }
           : null,
       ),
-      remetente: serializeParty(mergePartyOverride(input.remitter, input.overrides?.remitter)),
-      destinatario: serializeParty(mergePartyOverride(input.recipient, input.overrides?.recipient)),
+      remetente: serializeParty(remitter),
+      destinatario: serializeParty(recipient),
 
       expedidor: serializeParty(input.expedidor),
       recebedor: serializeParty(input.recebedor),

@@ -23,9 +23,9 @@ import { getErrorMessage } from '@/lib/errors';
 
 export default function Stock() {
   const toast = useSonnerToast();
-  const { data: items = [], isLoading: itemsLoading } = useStockItems();
-  const { data: movements = [], isLoading: movementsLoading } = useStockMovements();
-  const { data: employees = [] } = useEmployees();
+  const itemsQuery=useStockItems();const items=itemsQuery.data??[],itemsLoading=itemsQuery.isLoading;
+  const movementsQuery=useStockMovements();const movements=movementsQuery.data??[],movementsLoading=movementsQuery.isLoading;
+  const employeesQuery=useEmployees();const employees=employeesQuery.data??[];
   const createItem = useCreateStockItem();
   const updateItem = useUpdateStockItem();
   const createMovement = useCreateStockMovement();
@@ -38,7 +38,7 @@ export default function Stock() {
   const [editingItem, setEditingItem] = useState<StockItem | undefined>();
 
   const [itemForm, setItemForm] = useState({ code: '', name: '', category: 'general' as string, unit: 'un', min_quantity: '', location: '', supplier: '', notes: '' });
-  const [movForm, setMovForm] = useState({ stock_item_id: '', movement_type: 'inbound' as string, quantity: '', unit_cost: '', reason: 'purchase', justification: '', responsible_employee_id: '' });
+  const [movForm, setMovForm] = useState({ stock_item_id: '', movement_type: 'inbound' as string, adjustment_direction:'decrease' as 'increase'|'decrease', quantity: '', unit_cost: '', reason: 'purchase', justification: '', responsible_employee_id: '' });
 
   const filteredItems = useMemo(() => items.filter(item =>
     matchesSearch(search, item.name, item.code, item.supplier, item.location) &&
@@ -66,6 +66,7 @@ export default function Stock() {
 
   const handleSaveItem = async () => {
     if (!itemForm.name.trim()) { toast.error('Nome obrigatório'); return; }
+    if (!Number.isFinite(Number(itemForm.min_quantity)) || Number(itemForm.min_quantity) < 0) { toast.error('A quantidade mínima não pode ser negativa'); return; }
     const payload = {
       code: itemForm.code || null,
       name: itemForm.name,
@@ -88,9 +89,12 @@ export default function Stock() {
     if (movForm.movement_type === 'adjustment' && !movForm.justification.trim()) { toast.error('Ajustes precisam de justificativa'); return; }
     const qty = Number(movForm.quantity);
     const unitCost = Number(movForm.unit_cost) || 0;
+    if (!Number.isFinite(qty) || qty <= 0) { toast.error('A quantidade deve ser positiva'); return; }
+    if (!Number.isFinite(unitCost) || unitCost < 0) { toast.error('O custo unitário não pode ser negativo'); return; }
     try {
       await createMovement.mutateAsync({
         stock_item_id: movForm.stock_item_id, movement_type: movForm.movement_type,
+        adjustment_direction:movForm.movement_type==='adjustment'?movForm.adjustment_direction:null,
         quantity: qty, unit_cost: unitCost, total_cost: qty * unitCost,
         reason: movForm.reason, justification: movForm.justification || null,
         responsible_employee_id: movForm.responsible_employee_id || null,
@@ -107,7 +111,7 @@ export default function Stock() {
           <p className="text-sm text-muted-foreground">{items.length} itens cadastrados</p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => { setMovForm({ stock_item_id: '', movement_type: 'inbound', quantity: '', unit_cost: '', reason: 'purchase', justification: '', responsible_employee_id: '' }); setMovDialog(true); }}>
+          <Button size="sm" variant="outline" onClick={() => { setMovForm({ stock_item_id: '', movement_type: 'inbound', adjustment_direction:'decrease', quantity: '', unit_cost: '', reason: 'purchase', justification: '', responsible_employee_id: '' }); setMovDialog(true); }}>
             <ArrowDown className="h-4 w-4 mr-1" /> Movimentar
           </Button>
           <Button size="sm" onClick={openCreateItem}><Plus className="h-4 w-4 mr-1" /> Novo Item</Button>
@@ -121,6 +125,7 @@ export default function Stock() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
+        {(itemsQuery.isError||movementsQuery.isError||employeesQuery.isError)&&<Card><CardContent className="py-4" role="alert">Não foi possível carregar itens, movimentos ou responsáveis. Dados indisponíveis não serão tratados como vazios. <Button variant="outline" onClick={()=>void Promise.all([itemsQuery,movementsQuery,employeesQuery].filter(query=>query.isError).map(query=>query.refetch()))}>Tentar novamente</Button></CardContent></Card>}
         <TabsList><TabsTrigger value="items">Itens</TabsTrigger><TabsTrigger value="movements">Movimentações</TabsTrigger></TabsList>
 
         <TabsContent value="items" className="space-y-3 mt-3">
@@ -136,7 +141,7 @@ export default function Stock() {
               <TableHead>Unid</TableHead><TableHead className="w-10"></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {itemsLoading ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow> : filteredItems.length === 0 ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Nenhum item encontrado</TableCell></TableRow> : null}
+              {itemsLoading ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow> : !itemsQuery.isError&&filteredItems.length === 0 ? <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Nenhum item encontrado</TableCell></TableRow> : null}
               {itemPagination.items.map(i => (
                 <TableRow key={i.id} className={(i.current_quantity ?? 0) <= (i.min_quantity ?? 0) && (i.min_quantity ?? 0) > 0 ? 'bg-warning/5' : ''}>
                   <TableCell className="font-mono text-xs">{i.code || '—'}</TableCell>
@@ -153,7 +158,7 @@ export default function Stock() {
         </TabsContent>
 
         <TabsContent value="movements" className="mt-3 space-y-3">
-          <ListFilterBar activeCount={movementFilters.activeCount} onReset={movementFilters.resetFilters} resultCount={filteredMovements.length} totalCount={movements.length} loading={movementsLoading} description="Busca nas 500 movimentações mais recentes carregadas." fields={[
+          <ListFilterBar activeCount={movementFilters.activeCount} onReset={movementFilters.resetFilters} resultCount={filteredMovements.length} totalCount={movements.length} loading={movementsLoading} description="Busca em todo o histórico carregado." fields={[
             { key: 'search', label: 'Buscar movimento', type: 'search', placeholder: 'Item, motivo ou responsável', value: movementFilters.filters.search, onChange: value => movementFilters.setFilter('search', value) },
             { key: 'type', label: 'Tipo de movimento', value: movementFilters.filters.type, onChange: value => movementFilters.setFilter('type', value), options: [{ value: 'all', label: 'Todos os tipos' }, ...MOVEMENT_TYPES.map(value => ({ value, label: MOVEMENT_TYPE_LABELS[value] }))] },
             { key: 'from', label: 'Movimentação de', type: 'date', value: movementFilters.filters.from, onChange: value => movementFilters.setFilter('from', value), max: movementFilters.filters.to || undefined },
@@ -165,7 +170,7 @@ export default function Stock() {
               <TableHead className="text-right">Qtd</TableHead><TableHead>Motivo</TableHead><TableHead>Responsável</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {movementsLoading ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow> : filteredMovements.length === 0 ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Nenhum movimento encontrado</TableCell></TableRow> : null}
+              {movementsLoading ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow> : !movementsQuery.isError&&filteredMovements.length === 0 ? <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Nenhum movimento encontrado</TableCell></TableRow> : null}
               {movementPagination.items.map(m => (
                 <TableRow key={m.id}>
                   <TableCell className="text-xs">{format(parseISO(m.moved_at), 'dd/MM/yy HH:mm')}</TableCell>
@@ -195,7 +200,7 @@ export default function Stock() {
               <SelectContent>{STOCK_CATEGORIES.map(c => <SelectItem key={c} value={c}>{STOCK_CATEGORY_LABELS[c]}</SelectItem>)}</SelectContent></Select>
             </div>
             <div><Label className="text-xs">Unidade</Label><Input value={itemForm.unit} onChange={e => setItemForm(f => ({ ...f, unit: e.target.value }))} placeholder="un, lt, kg" /></div>
-            <div><Label className="text-xs">Qtd Mínima</Label><Input type="number" value={itemForm.min_quantity} onChange={e => setItemForm(f => ({ ...f, min_quantity: e.target.value }))} /></div>
+            <div><Label className="text-xs">Qtd Mínima</Label><Input type="number" min="0" value={itemForm.min_quantity} onChange={e => setItemForm(f => ({ ...f, min_quantity: e.target.value }))} /></div>
             <div><Label className="text-xs">Local</Label><Input value={itemForm.location} onChange={e => setItemForm(f => ({ ...f, location: e.target.value }))} /></div>
           </div>
           <div className="flex justify-end gap-2 mt-3"><Button variant="outline" onClick={() => setItemDialog(false)}>Cancelar</Button><Button onClick={handleSaveItem}>Salvar</Button></div>
@@ -214,8 +219,8 @@ export default function Stock() {
               <Select value={movForm.movement_type} onValueChange={v => setMovForm(f => ({ ...f, movement_type: v }))}><SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{MOVEMENT_TYPES.map(t => <SelectItem key={t} value={t}>{MOVEMENT_TYPE_LABELS[t]}</SelectItem>)}</SelectContent></Select>
             </div>
-            <div><Label className="text-xs">Quantidade *</Label><Input type="number" value={movForm.quantity} onChange={e => setMovForm(f => ({ ...f, quantity: e.target.value }))} /></div>
-            <div><Label className="text-xs">Custo Unitário (R$)</Label><Input type="number" step="0.01" value={movForm.unit_cost} onChange={e => setMovForm(f => ({ ...f, unit_cost: e.target.value }))} /></div>
+            <div><Label className="text-xs">Quantidade *</Label><Input type="number" min="0.0001" step="any" value={movForm.quantity} onChange={e => setMovForm(f => ({ ...f, quantity: e.target.value }))} /></div>
+            <div><Label className="text-xs">Custo Unitário (R$)</Label><Input type="number" min="0" step="0.01" value={movForm.unit_cost} onChange={e => setMovForm(f => ({ ...f, unit_cost: e.target.value }))} /></div>
             <div><Label className="text-xs">Motivo</Label>
               <Select value={movForm.reason} onValueChange={v => setMovForm(f => ({ ...f, reason: v }))}><SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="purchase">Compra</SelectItem><SelectItem value="maintenance">Manutenção</SelectItem><SelectItem value="incident">Ocorrência</SelectItem><SelectItem value="vehicle_use">Uso Veículo</SelectItem><SelectItem value="adjustment">Ajuste</SelectItem><SelectItem value="return">Devolução</SelectItem><SelectItem value="transfer">Transferência</SelectItem><SelectItem value="other">Outro</SelectItem></SelectContent></Select>
@@ -225,7 +230,7 @@ export default function Stock() {
               <SelectContent>{employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent></Select>
             </div>
             {movForm.movement_type === 'adjustment' && (
-              <div className="col-span-2"><Label className="text-xs">Justificativa *</Label><Textarea rows={2} value={movForm.justification} onChange={e => setMovForm(f => ({ ...f, justification: e.target.value }))} /></div>
+              <><div className="col-span-2"><Label className="text-xs">Direção do ajuste *</Label><Select value={movForm.adjustment_direction} onValueChange={v=>setMovForm(f=>({...f,adjustment_direction:v as 'increase'|'decrease'}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="increase">Aumentar saldo</SelectItem><SelectItem value="decrease">Diminuir saldo</SelectItem></SelectContent></Select></div><div className="col-span-2"><Label className="text-xs">Justificativa *</Label><Textarea rows={2} value={movForm.justification} onChange={e => setMovForm(f => ({ ...f, justification: e.target.value }))} /></div></>
             )}
           </div>
           <div className="flex justify-end gap-2 mt-3"><Button variant="outline" onClick={() => setMovDialog(false)}>Cancelar</Button><Button onClick={handleSaveMovement}>Registrar</Button></div>

@@ -307,6 +307,7 @@ Deno.serve(async (req) => {
       return String(data);
     };
 
+    const writeFailures: string[] = [];
     for (const unit of normalized) {
       const raw = unit.raw_item;
 
@@ -341,6 +342,7 @@ Deno.serve(async (req) => {
       if (upsertErr) {
         console.error(`[SSX:sync-units] Upsert failed for ${unit.external_code}: ${upsertErr.message}`);
         skippedCount++;
+        writeFailures.push(`provider_unit:${unit.external_code}:${upsertErr.message}`);
         continue;
       }
       upsertedCount++;
@@ -348,10 +350,11 @@ Deno.serve(async (req) => {
       if (plate && upsertedUnit) {
         // === DETERMINISTIC MATCHING: Find vehicle by exact normalized plate ===
         const normalizedPlate = plate.replace(/[\s.-]/g, "").toUpperCase();
-        const { data: vehicleCandidates } = await supabase
+        const { data: vehicleCandidates, error: vehicleCandidatesError } = await supabase
           .from("vehicles").select("id, plate")
           .eq("tenant_id", account.tenant_id)
           .eq("active", true);
+        if (vehicleCandidatesError) throw vehicleCandidatesError;
 
         const matchingVehicles = (vehicleCandidates || []).filter((v: any) =>
           v.plate.replace(/[\s.-]/g, "").toUpperCase() === normalizedPlate
@@ -388,6 +391,7 @@ Deno.serve(async (req) => {
             }).select("id").single();
           if (vErr || !newVehicle) {
             console.error(`[SSX:sync-units] Vehicle create failed for plate ${plate}: ${vErr?.message}`);
+            writeFailures.push(`vehicle:${plate}:${vErr?.message || "missing row"}`);
             continue;
           }
           vehicleId = newVehicle.id;
@@ -395,12 +399,13 @@ Deno.serve(async (req) => {
         }
 
         // === CHECK FOR EXISTING LINKS ===
-        const { data: existingLink } = await supabase
+        const { data: existingLink, error: existingLinkError } = await supabase
           .from("vehicle_tracker_links").select("id, vehicle_id")
           .eq("tenant_id", account.tenant_id)
           .eq("provider_unit_id", upsertedUnit.id)
           .eq("active", true)
           .limit(1).maybeSingle();
+        if (existingLinkError) throw existingLinkError;
 
         if (existingLink) {
           if (existingLink.vehicle_id !== vehicleId) {
@@ -461,6 +466,8 @@ Deno.serve(async (req) => {
                 ssx_plate: plate,
                 conflict_id: conflictId,
               });
+            } else {
+              writeFailures.push(`tracker_link:${unit.external_code}:${linkErr.message}`);
             }
           } else {
             linksCreated++;
@@ -497,10 +504,24 @@ Deno.serve(async (req) => {
       updatedSettings.last_successful_format = vehicleResult.successfulFormat || null;
     }
 
-    await supabase.from("integration_accounts").update({
+    const discoverySaturated = usedMethod === "tracking_discovery" && (vehicleResult as any).discoveryComplete === false;
+    if (writeFailures.length > 0 || discoverySaturated) {
+      const reason = discoverySaturated
+        ? "SSX discovery returned the maximum 500 positions; catalog is incomplete"
+        : `SSX unit persistence failed for ${writeFailures.length} item(s)`;
+      const { error: degradedError } = await supabase.from("integration_accounts").update({
+        settings: { ...updatedSettings, discovery_saturated: discoverySaturated }, status: "degraded", last_error: reason,
+        updated_at: new Date().toISOString(),
+      }).eq("id", integration_account_id);
+      if (degradedError) throw degradedError;
+      return jsonResponse({ error: reason, partial: upsertedCount > 0, discovery_saturated: discoverySaturated, failures: writeFailures.slice(0, 20) }, 409);
+    }
+
+    const { error: accountWriteError } = await supabase.from("integration_accounts").update({
       settings: updatedSettings, status: "ok", last_error: null,
       updated_at: new Date().toISOString(),
     }).eq("id", integration_account_id);
+    if (accountWriteError) throw accountWriteError;
 
     await logIntegration(supabase, {
       tenant_id: account.tenant_id, integration_account_id,
@@ -525,7 +546,7 @@ Deno.serve(async (req) => {
         administration_enabled: administrationEnabled,
         administration_attempted: administrationAttempted,
         catalog_complete: usedMethod === "administration",
-        discovery_saturated: usedMethod === "tracking_discovery" && vehicleResult.items.length >= 500,
+        discovery_saturated: discoverySaturated,
         conflict_details: conflictDetails.length > 0 ? conflictDetails : undefined,
       },
     });
@@ -548,7 +569,7 @@ Deno.serve(async (req) => {
       administration_enabled: administrationEnabled,
       administration_attempted: administrationAttempted,
       catalog_complete: usedMethod === "administration",
-      discovery_saturated: usedMethod === "tracking_discovery" && vehicleResult.items.length >= 500,
+      discovery_saturated: discoverySaturated,
       conflict_details: conflictDetails.length > 0 ? conflictDetails : undefined,
     });
 
@@ -775,22 +796,36 @@ async function fetchUnitsTrackingDiscovery(config: ReturnType<typeof readAccount
   const lookbackMinutes = Number.isFinite(configuredLookback)
     ? Math.min(1_440, Math.max(5, Math.trunc(configuredLookback)))
     : 60;
-  const since = new Date(Date.now() - lookbackMinutes * 60_000).toISOString();
+  const sinceMs = Date.now() - lookbackMinutes * 60_000;
+  const untilMs = Date.now();
   const timeFilterProp = config.settings.time_filter_property || "EventDate";
-  const filters = [{
-    PropertyName: timeFilterProp,
-    Condition: "GreaterThanOrEqualTo",
-    Value: since,
-  }];
-
-  const posResult = await tryEndpointWithFallback({
-    urlCandidates: posHistUrls,
-    token: config.token,
-    bodyCandidates: [{ label: "v3_query_condition_array", body: filters }],
-    timeoutMs: config.requestTimeoutMs,
-    abortOnAuthError: true,
-  });
-  return posResult;
+  const fetchWindow = async (startMs: number, endMs: number, depth = 0): Promise<EndpointAttemptResult> => {
+    const filters = [
+      { PropertyName: timeFilterProp, Condition: "GreaterThanOrEqualTo", Value: new Date(startMs).toISOString() },
+      { PropertyName: timeFilterProp, Condition: "LessThan", Value: new Date(endMs).toISOString() },
+    ];
+    const result = await tryEndpointWithFallback({
+      urlCandidates: posHistUrls, token: config.token,
+      bodyCandidates: [{ label: "v3_query_condition_array", body: filters }],
+      timeoutMs: config.requestTimeoutMs, abortOnAuthError: true,
+    });
+    if (!result.success) return result;
+    if (result.items.length < 500) return { ...result, discoveryComplete: true } as EndpointAttemptResult;
+    if (depth >= 12 || endMs - startMs <= 60_000) return { ...result, discoveryComplete: false } as EndpointAttemptResult;
+    const middle = startMs + Math.floor((endMs - startMs) / 2);
+    const [left, right] = await Promise.all([fetchWindow(startMs, middle, depth + 1), fetchWindow(middle, endMs, depth + 1)]);
+    if (!left.success) return left;
+    if (!right.success) return right;
+    return {
+      ...right,
+      success: true,
+      items: [...left.items, ...right.items],
+      attempts: [...left.attempts, ...right.attempts],
+      endpoint: right.endpoint || left.endpoint,
+      discoveryComplete: (left as any).discoveryComplete !== false && (right as any).discoveryComplete !== false,
+    };
+  };
+  return fetchWindow(sinceMs, untilMs);
 }
 
 function isVehicleTrackedUnit(raw: unknown): boolean {

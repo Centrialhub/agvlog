@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, ClipboardCheck, Play, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format, parseISO } from 'date-fns';
+import { useIsAdmin } from '@/hooks/useTenant';
 
 const DEFAULT_ITEMS: Record<string, { key: string; label: string; required: boolean }[]> = {
   pre_trip: [
@@ -48,10 +49,11 @@ const DEFAULT_ITEMS: Record<string, { key: string; label: string; required: bool
 
 export default function Checklists() {
   const toast = useSonnerToast();
-  const { data: checklists = [], isLoading: loadingTemplates } = useOperationalChecklists();
-  const { data: executions = [], isLoading: loadingExecutions } = useChecklistExecutions();
-  const { data: vehicles = [] } = useVehicles();
-  const { data: employees = [] } = useEmployees();
+  const isAdmin = useIsAdmin();
+  const { data: checklists = [], isLoading: loadingTemplates, isError: templatesError, error: templatesErrorDetail, refetch: refetchTemplates } = useOperationalChecklists();
+  const { data: executions = [], isLoading: loadingExecutions, isError: executionsError, error: executionsErrorDetail, refetch: refetchExecutions } = useChecklistExecutions();
+  const { data: vehicles = [], isLoading: loadingVehicles, isError: vehiclesError, error: vehiclesErrorDetail, refetch: refetchVehicles } = useVehicles();
+  const { data: employees = [], isLoading: loadingEmployees, isError: employeesError, error: employeesErrorDetail, refetch: refetchEmployees } = useEmployees();
   const createChecklist = useCreateChecklist();
   const createExecution = useCreateChecklistExecution();
 
@@ -64,7 +66,7 @@ export default function Checklists() {
   const [templateDialog, setTemplateDialog] = useState(false);
   const [execDialog, setExecDialog] = useState(false);
   const [selectedChecklist, setSelectedChecklist] = useState<OperationalChecklist | null>(null);
-  const [execItems, setExecItems] = useState<{ key: string; label: string; status: 'ok' | 'nok' | 'na'; notes?: string }[]>([]);
+  const [execItems, setExecItems] = useState<{ key: string; label: string; required: boolean; status: 'pending' | 'ok' | 'nok' | 'na'; notes?: string }[]>([]);
   const [execForm, setExecForm] = useState({ vehicle_id: '', employee_id: '', notes: '', blocked_operation: false });
 
   const [templateForm, setTemplateForm] = useState({ name: '', checklist_type: 'pre_trip' as string });
@@ -77,6 +79,7 @@ export default function Checklists() {
   }), [checklists, executions]);
 
   const handleCreateTemplate = async () => {
+    if (!isAdmin) { toast.error('Apenas administradores podem criar templates.'); return; }
     if (!templateForm.name.trim()) { toast.error('Nome obrigatório'); return; }
     const items = DEFAULT_ITEMS[templateForm.checklist_type] || DEFAULT_ITEMS.pre_trip;
     try {
@@ -92,11 +95,14 @@ export default function Checklists() {
   };
 
   const startExecution = (cl: OperationalChecklist) => {
+    if (!isAdmin) { toast.error('Apenas administradores podem executar checklists.'); return; }
+    if (!cl.active) { toast.error('Este template está inativo e não pode ser executado.'); return; }
     setSelectedChecklist(cl);
     const items = (cl.items || []).map((item) => ({
       key: item.key,
       label: item.label,
-      status: 'ok' as const,
+      required: item.required,
+      status: 'pending' as const,
     }));
     setExecItems(items);
     setExecForm({ vehicle_id: '', employee_id: '', notes: '', blocked_operation: false });
@@ -106,14 +112,26 @@ export default function Checklists() {
   const toggleItem = (idx: number) => {
     setExecItems(prev => prev.map((item, i) => {
       if (i !== idx) return item;
-      const next = item.status === 'ok' ? 'nok' : item.status === 'nok' ? 'na' : 'ok';
+      const next = item.status === 'pending' ? 'ok' : item.status === 'ok' ? 'nok' : item.status === 'nok' ? 'na' : 'ok';
       return { ...item, status: next };
     }));
   };
 
   const handleExecute = async () => {
-    if (!selectedChecklist) return;
+    if (!selectedChecklist || !isAdmin) return;
+    if (execItems.some((item) => item.status === 'pending')) {
+      toast.error('Confirme todos os itens antes de concluir o checklist.');
+      return;
+    }
+    if (execItems.some((item) => item.required && item.status === 'na')) {
+      toast.error('Itens obrigatórios não podem ser marcados como N/A.');
+      return;
+    }
     const failed = execItems.filter(i => i.status === 'nok').length;
+    if (failed > 0 && selectedChecklist.can_generate_maintenance && !execForm.vehicle_id) {
+      toast.error('Selecione um veículo para gerar a manutenção dos itens reprovados.');
+      return;
+    }
     try {
       await createExecution.mutateAsync({
         checklist_id: selectedChecklist.id,
@@ -121,13 +139,29 @@ export default function Checklists() {
         employee_id: execForm.employee_id || null,
         checked_items: execItems,
         notes: execForm.notes || null,
-        blocked_operation: failed > 0,
+        blocked_operation: selectedChecklist.can_block_operation && failed > 0,
         execution_type: selectedChecklist.checklist_type,
       });
       setExecDialog(false);
       toast.success(failed > 0 ? `Checklist executado com ${failed} item(ns) reprovado(s)` : 'Checklist aprovado');
     } catch (error: unknown) { toast.error(error instanceof Error ? error.message : String(error)); }
   };
+
+  const sourceError = templatesErrorDetail || executionsErrorDetail || vehiclesErrorDetail || employeesErrorDetail;
+  const hasSourceError = templatesError || executionsError || vehiclesError || employeesError;
+  const referenceDataLoading = loadingVehicles || loadingEmployees;
+
+  if (hasSourceError) {
+    return (
+      <Card>
+        <CardHeader><CardTitle className="text-base text-destructive">Não foi possível carregar os checklists</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">{sourceError instanceof Error ? sourceError.message : 'Falha na consulta dos dados necessários.'}</p>
+          <Button variant="outline" size="sm" onClick={() => void Promise.all([refetchTemplates(), refetchExecutions(), refetchVehicles(), refetchEmployees()])}>Tentar novamente</Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -136,9 +170,9 @@ export default function Checklists() {
           <h1 className="text-xl font-bold flex items-center gap-2"><ClipboardCheck className="h-5 w-5" /> Checklists Operacionais</h1>
           <p className="text-sm text-muted-foreground">{checklists.length} templates | {executions.length} execuções</p>
         </div>
-        <Button size="sm" onClick={() => { setTemplateForm({ name: '', checklist_type: 'pre_trip' }); setTemplateDialog(true); }}>
+        {isAdmin && <Button size="sm" onClick={() => { setTemplateForm({ name: '', checklist_type: 'pre_trip' }); setTemplateDialog(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Novo Template
-        </Button>
+        </Button>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -167,9 +201,9 @@ export default function Checklists() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-xs text-muted-foreground mb-3">{cl.items.length} itens de verificação</p>
-                  <Button size="sm" className="w-full" onClick={() => startExecution(cl)}>
+                  {isAdmin && <Button size="sm" className="w-full" onClick={() => startExecution(cl)} disabled={referenceDataLoading}>
                     <Play className="h-3.5 w-3.5 mr-1" /> Executar
-                  </Button>
+                  </Button>}
                 </CardContent>
               </Card>
             ))}
@@ -263,12 +297,12 @@ export default function Checklists() {
 
           <div className="space-y-2">
             {execItems.map((item, idx) => (
-              <div key={item.key} className={`flex items-center gap-3 p-2 rounded border ${item.status === 'nok' ? 'border-destructive/50 bg-destructive/5' : item.status === 'na' ? 'border-muted bg-muted/30' : 'border-success/30 bg-success/5'}`}>
+              <div key={item.key} className={`flex items-center gap-3 p-2 rounded border ${item.status === 'nok' ? 'border-destructive/50 bg-destructive/5' : item.status === 'na' || item.status === 'pending' ? 'border-muted bg-muted/30' : 'border-success/30 bg-success/5'}`}>
                 <button onClick={() => toggleItem(idx)} className="shrink-0">
-                  {item.status === 'ok' ? <CheckCircle className="h-5 w-5 text-success" /> : item.status === 'nok' ? <XCircle className="h-5 w-5 text-destructive" /> : <span className="h-5 w-5 rounded-full border-2 border-muted-foreground inline-block text-center text-[10px] leading-[18px]">NA</span>}
+                  {item.status === 'ok' ? <CheckCircle className="h-5 w-5 text-success" /> : item.status === 'nok' ? <XCircle className="h-5 w-5 text-destructive" /> : item.status === 'na' ? <span className="h-5 w-5 rounded-full border-2 border-muted-foreground inline-block text-center text-[10px] leading-[18px]">NA</span> : <span className="h-5 w-5 rounded-full border-2 border-warning inline-block" />}
                 </button>
-                <span className="text-sm flex-1">{item.label}</span>
-                <span className="text-[10px] text-muted-foreground uppercase">{item.status === 'ok' ? 'OK' : item.status === 'nok' ? 'NOK' : 'N/A'}</span>
+                <span className="text-sm flex-1">{item.label}{item.required ? ' *' : ''}</span>
+                <span className="text-[10px] text-muted-foreground uppercase">{item.status === 'ok' ? 'OK' : item.status === 'nok' ? 'NOK' : item.status === 'na' ? 'N/A' : 'Pendente'}</span>
               </div>
             ))}
           </div>
@@ -278,7 +312,7 @@ export default function Checklists() {
             <Textarea rows={2} value={execForm.notes} onChange={e => setExecForm(f => ({ ...f, notes: e.target.value }))} />
           </div>
 
-          {execItems.some(i => i.status === 'nok') && (
+          {selectedChecklist?.can_block_operation && execItems.some(i => i.status === 'nok') && (
             <div className="flex items-center gap-2 p-2 rounded bg-warning/10 border border-warning/30 mt-2">
               <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
               <span className="text-xs text-warning">Itens reprovados detectados — operação será bloqueada</span>
@@ -287,8 +321,8 @@ export default function Checklists() {
 
           <div className="flex justify-end gap-2 mt-3">
             <Button variant="outline" onClick={() => setExecDialog(false)}>Cancelar</Button>
-            <Button onClick={handleExecute} disabled={createExecution.isPending}>
-              {execItems.some(i => i.status === 'nok') ? 'Registrar (com bloqueio)' : 'Aprovar'}
+            <Button onClick={handleExecute} disabled={createExecution.isPending || execItems.some((item) => item.status === 'pending')}>
+              {selectedChecklist?.can_block_operation && execItems.some(i => i.status === 'nok') ? 'Registrar (com bloqueio)' : 'Concluir checklist'}
             </Button>
           </div>
         </DialogContent>

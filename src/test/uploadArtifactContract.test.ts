@@ -15,4 +15,16 @@ describe('upload artifact',()=>{
   expect(uploadArtifactSchema.safeParse({...dto,derivative:{...dto.derivative,financial_mapping_required:false}}).success).toBe(false);
   expect(uploadArtifactSchema.safeParse({...dto,derivative:{...dto.derivative,path:'other/validated.json'}}).success).toBe(false);
  });
+ it('accepts only a strict inert XLSX derivative',()=>{
+  const format='xlsx';
+  const dto={...base,state:'validated_data',usable:true,original:{...base.original,format},derivative:{bucket:'upload-validated',path:`${id}/${id}/validated.json`,sha256:'b'.repeat(64),size_bytes:30,mime:'application/json',method:'strict-workbook-matrix-v1',financial_mapping_required:true}};
+  expect(uploadArtifactStatus(uploadArtifactSchema.parse(dto))).toContain('Planilha validada');
+  expect(uploadArtifactSchema.safeParse({...dto,derivative:{...dto.derivative,method:'strict-csv-matrix-v1'}}).success).toBe(false);
+  expect(uploadArtifactSchema.safeParse({...dto,derivative:{...dto.derivative,financial_mapping_required:false}}).success).toBe(false);
+ });
+ it('keeps a legacy XLS response fail-closed even if it claims a workbook derivative',()=>{
+  const dto={...base,state:'validated_data',usable:true,original:{...base.original,format:'xls'},derivative:{bucket:'upload-validated',path:`${id}/${id}/validated.json`,sha256:'b'.repeat(64),size_bytes:30,mime:'application/json',method:'strict-workbook-matrix-v1',financial_mapping_required:true}};
+  expect(uploadArtifactSchema.safeParse(dto).success).toBe(false);
+  expect(uploadArtifactStatus(uploadArtifactSchema.parse({...base,original:{...base.original,format:'xls'},issues:['legacy_workbook_requires_review']}))).toContain('conversão para XLSX');
+ });
 });

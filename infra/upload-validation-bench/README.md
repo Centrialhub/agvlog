@@ -1,0 +1,17 @@
+# Validação local e ensaio hosted de imagens
+
+Dependência isolada e exata `@imagemagick/magick-wasm@0.0.43` com lockfile. Preparação: `npm ci --ignore-scripts` neste diretório. `node bench.mjs` mede PNG/JPEG sintéticos; `node generate-fixtures.mjs` gera 14 arquivos e manifesto para ensaio remoto autorizado. Nenhum arquivo de cliente é usado.
+
+Resultado local final em `docs/qa/upload-wasm-preflight-2026-09-11.log`: Node24.19.0; PNG1600x1200 passou~715ms/750msCPU/RSS127MB, JPEG~123ms/RSS128MB. Em2000x1000 houve CacheResourcesExhausted com os limites mantidos;2.4MP foi recusado antescodec. Exit0 significa coleta de todos os resultados, não aceitação de todos os tamanhos. Primeira tentativa do benchmark ampliado interrompeu antes de registrar o erro de geração dafixtureJPEG; o coletor foi corrigido, sem afrouxar o decoder. Não é certificação DenoEdge.
+
+Limites: entrada e saída5MiB,2MP,4096px/lado, JPEG8bits baseline/progressive ePNG<=8bits, semAPNG. ImageMagick:64MiB cache/maxallocation,disk0,profile256KiB,listLength4,time1s. Orçamento adicional pós-processamento1200ms. Essa medição não preempta WASM síncrono; interrupção pelo runtime deixa o original em quarentena. Imagem inválida/recurso indisponível nunca vira resultado utilizável.
+
+## Runtime privado e publicação exclusiva pelo root
+
+Binário local `node_modules/@imagemagick/magick-wasm/dist/x86/magick.wasm`,14.828.458bytes, SHA256 `5a4ed1017eda113144c86ae839c22c610afebcfebfa22b1da18e00e98d78b0f7`. CódigoJS409.198bytes. Bucket privado `upload-validation-runtime`, path fixo `magick-wasm/0.0.43/x86/<sha>.wasm`. O loader confere tamanho e hash antes de executar, sem URL/env de origem arbitrária, sem fallback. Browser não lê esse bucket. Root informou upload porCLI concluído; este agente não publicou nada.
+
+A documentação oficial exige Docker para static_files e não permite --use-api nesse modo: https://supabase.com/docs/guides/functions/wasm . O loader privado evita incluir o WASM estático no bundle; permanece Supabase-only. Não inclui os dois binários x86/x64 nem o pacote completo no frontend.
+
+`node infra/upload-validation-bench/build-edge-manifest.mjs finance-image-runtime-benchmark` (a partir da raiz) produz pacote name/content+deno para root. O endpoint temporário exige Authorization Bearer exatamente igual ao token dedicado FINANCE_IMAGE_BENCH_TOKEN (obrigatório, mínimo32caracteres). Root gera32bytes aleatórios, configura viaCLI, invoca em memória sem imprimir e remove o segredo/função depois. verify_jwt=false porque a autenticação dedicada é feita dentro do handler. Não há fallback para service_role, JWT de usuário ou anon; todos os tokens diferentes devem receber401. SUPABASE_SERVICE_ROLE_KEY do runtime serve apenas para baixar o binário privado após autenticação. O primeiro ensaio com comparação da chave de plataforma devolveu401para14fixtures; não demonstrou execução do codec e não será repetido. POST multipart campofile, somente fixtures sintéticas do manifesto. Não acessa tabelas financeiras, não escreve Storage, não cria artefato, recibo ou dinheiro. Retorna probe_onlytrue/usablefalse, hash/tamanho/MIME e tempo; logs da plataforma determinam CPU real.
+
+Ensaio: uma imagem pequena em coldstart,640x480,1.92MP PNG/JPEG,2MP(possível rejeição recursos),2.4MP(rejeição obrigatória), APNG/trailing/CRC/headerinválido(rejeição obrigatória). Registrar códigos e tempos, sem credenciais. Remover a função temporária depois. Sanitização pública continua bloqueada noDB até aprovação do ensaio; o handlersecure-upload atual mantém JPEG/PNG emquarentena.

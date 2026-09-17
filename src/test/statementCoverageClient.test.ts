@@ -1,5 +1,5 @@
 import {beforeEach,it,expect,vi} from 'vitest';
-import {readStatementCoverage,submitStatementCoverage,CoverageRejectedError} from '@/lib/financial/statementCoverageClient';
+import {readStatementCoverage,readStatementCoverageHistory,submitStatementCoverage,CoverageRejectedError} from '@/lib/financial/statementCoverageClient';
 import {statementCoverageSchema,coveragePendingSchema} from '@/lib/financial/statementCoverageContract';
 import {tenant,account,context,approval,approvalId} from './statementCoverageFixture';
 const rpc=vi.hoisted(()=>vi.fn());vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc}}));beforeEach(()=>rpc.mockReset());
@@ -18,3 +18,4 @@ it('sends only approval or reversal RPC and validates matching confirmation',asy
 it('distinguishes transactional rejection from uncertainty and refuses missing declarations',async()=>{
  expect(coveragePendingSchema.safeParse({...pending,command:{...pending.command,complete_period_confirmed:false}}).success).toBe(false);rpc.mockResolvedValue({data:null,error:{code:'40001',message:'finance_coverage_evidence_changed'}});await expect(submitStatementCoverage(pending)).rejects.toBeInstanceOf(CoverageRejectedError);rpc.mockResolvedValue({data:null,error:{code:'08006',message:'connection lost'}});try{await submitStatementCoverage(pending);}catch(e){expect(e).not.toBeInstanceOf(CoverageRejectedError);}
 });
+it('reads a bounded history page and rejects a page from another account',async()=>{const page={version:1,tenant_id:tenant,account_id:account,from:context.from,to:context.to,page:2,page_size:20,has_more:false,rows:[]};rpc.mockResolvedValueOnce({data:page,error:null});await expect(readStatementCoverageHistory(tenant,account,context.from,context.to,2)).resolves.toMatchObject({page:2});rpc.mockResolvedValueOnce({data:{...page,account_id:crypto.randomUUID()},error:null});await expect(readStatementCoverageHistory(tenant,account,context.from,context.to,2)).rejects.toThrow('fora da cobertura');});

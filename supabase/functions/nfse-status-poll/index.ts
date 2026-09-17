@@ -30,7 +30,7 @@ const ENC_KEY = Deno.env.get('AGVLOG_ENCRYPTION_KEY') || '';
 // `issued`, `cancelled`, `error` e `rejected` são terminais até que o usuário
 // solicite uma nova tentativa; repeti-los aqui sobrecarregava o provedor.
 const PENDING = [
-  'draft', 'processing', 'provider_unknown', 'cancel_processing',
+  'processing', 'provider_unknown', 'cancel_processing',
   'queued', 'submitted', 'pending', 'transmitting', 'cancelling',
 ];
 const MAX_DOCS = 50;
@@ -93,16 +93,16 @@ Deno.serve(withFiscalCors(async (req) => {
     }
 
     let q = admin.from('nfse_documents')
-      .select('id, tenant_id, emitter_id, status, rps_number, status_check_attempts, created_at')
+      .select('id, tenant_id, emitter_id, status, rps_number, status_check_attempts, created_at', { count: 'exact' })
       .in('status', PENDING)
       .order('last_status_check_at', { ascending: true, nullsFirst: true })
       .limit(MAX_DOCS);
     if (body.nfse_id) q = admin.from('nfse_documents')
-      .select('id, tenant_id, emitter_id, status, rps_number, status_check_attempts, created_at')
+      .select('id, tenant_id, emitter_id, status, rps_number, status_check_attempts, created_at', { count: 'exact' })
       .eq('id', body.nfse_id);
     else if (effectiveTenantId) q = q.eq('tenant_id', effectiveTenantId);
 
-    const { data: docs, error } = await q;
+    const { data: docs, error, count } = await q;
     if (error) return json(400, { success: false, error: { code: 'QUERY_FAILED', message: error.message } });
 
     const results: Array<Record<string, unknown>> = [];
@@ -117,12 +117,13 @@ Deno.serve(withFiscalCors(async (req) => {
         }
       }
 
-      const { data: emission } = await admin.from('hub_fiscal_emissions')
+      const { data: emission, error: emissionReadError } = await admin.from('hub_fiscal_emissions')
         .select('id, hub_document_id, environment, emitter_id, dispatch_key')
         .eq('nfse_document_id', doc.id)
         .eq('tenant_id', doc.tenant_id)
         .order('created_at', { ascending: false })
         .limit(1).maybeSingle();
+      if (emissionReadError) throw emissionReadError;
 
       if (!emission?.hub_document_id) {
         const snapshot = safeProviderSnapshot(424, {
@@ -142,11 +143,12 @@ Deno.serve(withFiscalCors(async (req) => {
             context: snapshot,
           });
         } else {
-          await admin.from('nfse_documents').update({
+          const updateResult = await admin.from('nfse_documents').update({
             last_status_check_at: new Date().toISOString(),
             status_check_attempts: attemptCount,
             last_status_response: snapshot,
           }).eq('id', doc.id);
+          if (updateResult.error) throw updateResult.error;
         }
         results.push({ id: doc.id, outcome: terminal ? 'dead_letter' : 'no_hub_document' });
         continue;
@@ -188,11 +190,12 @@ Deno.serve(withFiscalCors(async (req) => {
             context: safeSnapshot,
           });
         } else {
-          await admin.from('nfse_documents').update({
+          const updateResult = await admin.from('nfse_documents').update({
             last_status_check_at: new Date().toISOString(),
             status_check_attempts: attemptCount,
             last_status_response: safeSnapshot,
           }).eq('id', doc.id);
+          if (updateResult.error) throw updateResult.error;
         }
         results.push({ id: doc.id, outcome: stoppedReason, message: safeMessage });
         break;
@@ -210,8 +213,7 @@ Deno.serve(withFiscalCors(async (req) => {
         results.push({id:doc.id,outcome:committedOutcome||'pending'});continue;
       }
 
-      // Histórico: guarda a resposta bruta para conferência posterior.
-      await admin.from('hub_fiscal_emissions').update({
+      const emissionPatch = {
         status: rawStatus || undefined,
         plugnotas_status: d.plugnotasStatus || undefined,
         access_key: d.accessKey || undefined,
@@ -222,13 +224,14 @@ Deno.serve(withFiscalCors(async (req) => {
         message: safeMessage || undefined,
         last_response: safeSnapshot,
         last_synced_at: new Date().toISOString(),
-      }).eq('id', emission.id);
+      };
 
       const patch: Record<string, unknown> = {
         last_status_check_at: new Date().toISOString(),
         status_check_attempts: (doc.status_check_attempts || 0) + 1,
         last_status_response: safeSnapshot,
       };
+      let releaseSources = false;
       if (outcome === 'issued') {
         patch.status = 'issued';
         patch.nfse_number = d.number || null;
@@ -246,10 +249,7 @@ Deno.serve(withFiscalCors(async (req) => {
         patch.cancelled = true;
         patch.cancellation_date = new Date().toISOString();
         // Libera as NFs vinculadas — voltam a aparecer para novo faturamento
-        await admin
-          .from('fiscal_documents')
-          .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
-          .eq('nfse_emitted_document_id', doc.id);
+        releaseSources = true;
       } else if (shouldDeadLetter(doc, true)) {
         await terminalizeFiscalPoll(admin, {
           tenantId: doc.tenant_id,
@@ -265,10 +265,7 @@ Deno.serve(withFiscalCors(async (req) => {
         continue;
       }
 
-      await admin.from('nfse_documents').update(patch).eq('id', doc.id);
-
-      if (outcome) {
-        await admin.from('nfse_events').insert({
+      const event = outcome ? {
           tenant_id: doc.tenant_id,
           nfse_id: doc.id,
           event_type: outcome === 'issued' ? 'issued' : outcome,
@@ -276,16 +273,26 @@ Deno.serve(withFiscalCors(async (req) => {
             ? `Autorizada na consulta automática — nº ${d.number || '(sem número)'}`
             : `Consulta automática: ${rawStatus || outcome}${safeMessage ? ` — ${safeMessage}` : ''}`,
           payload: { source: 'nfse-status-poll', provider: safeSnapshot },
-        });
-      }
+        } : null;
+      const committed = await admin.rpc('commit_legacy_fiscal_poll_v1', { _payload: {
+        tenant_id: doc.tenant_id, document_kind: 'nfse', document_id: doc.id,
+        emission_id: emission.id, emission_patch: emissionPatch, document_patch: patch,
+        release_sources: releaseSources, event,
+      } });
+      if (committed.error) throw committed.error;
 
       results.push({ id: doc.id, rps: doc.rps_number, hub_status: rawStatus, outcome: outcome || 'pending' });
     }
 
+    const totalPending = count ?? (docs || []).length;
+    const remaining = Math.max(0, totalPending - results.length);
     return json(200, {
       success: true,
       checked: results.length,
-      partial: stoppedReason !== null,
+      total_pending: totalPending,
+      remaining,
+      truncated: totalPending > (docs || []).length,
+      partial: stoppedReason !== null || remaining > 0,
       stopped_reason: stoppedReason,
       results,
     });

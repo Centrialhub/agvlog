@@ -80,7 +80,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 <span>Empresa ativa</span>
                 <select
                   aria-label="Empresa ativa"
-                  className="h-9 w-full rounded-md border border-sidebar-border bg-sidebar px-2 text-sm text-sidebar-foreground"
+                  className="h-10 w-full rounded-md border border-sidebar-border bg-sidebar px-2 text-sm text-sidebar-foreground"
                   value={currentTenant?.id ?? ""}
                   disabled={switchingTenant}
                   onChange={(event) => {
@@ -104,7 +104,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
               <SidebarNavigation query={pageQuery} capabilityAvailable={capabilityAvailable} financeAvailable={financeAvailable} onNavigate={() => setMobileOpen(false)} />
           <IntegraLabsCredit tone="sidebar" className="mx-3 border-t border-sidebar-border/60 py-2" />
-          <Button variant="ghost" onClick={() => { setMobileOpen(false); void signOut(); }} className="m-2 shrink-0 justify-start"><LogOut className="mr-2 h-4 w-4" />Sair</Button>
+          <Button variant="ghost" onClick={() => { setMobileOpen(false); void signOut(); }} className="m-2 min-h-10 shrink-0 justify-start"><LogOut aria-hidden="true" className="mr-2 h-4 w-4" />Sair</Button>
         </SheetContent>
       </Sheet>
 
@@ -118,10 +118,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         <div className="px-2 pt-3">
-          {collapsed ? <Button variant="ghost" size="icon" aria-label="Buscar páginas" onClick={() => { setCollapsed(false); requestAnimationFrame(() => searchRef.current?.focus()); }}><Search className="h-4 w-4" /></Button>
+          {collapsed ? <Button variant="ghost" size="icon" aria-label="Buscar páginas" onClick={() => { setCollapsed(false); requestAnimationFrame(() => searchRef.current?.focus()); }}><Search aria-hidden="true" className="h-4 w-4" /></Button>
             : <div className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-3 h-4 w-4 text-sidebar-foreground/60" />
               <Input ref={searchRef} aria-label="Buscar páginas" placeholder="Buscar páginas..." value={pageQuery} onChange={event => setPageQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setPageQuery(''); }} className="h-10 border-sidebar-border bg-sidebar-accent/40 pl-9 pr-12 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
-              {pageQuery ? <button type="button" aria-label="Limpar busca de páginas" onClick={() => { setPageQuery(''); searchRef.current?.focus(); }} className="absolute right-1 top-1 rounded p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"><X className="h-4 w-4" /></button> : <kbd className="pointer-events-none absolute right-2 top-3 text-[10px] text-sidebar-foreground/50">Ctrl K</kbd>}
+              {pageQuery ? <button type="button" aria-label="Limpar busca de páginas" onClick={() => { setPageQuery(''); searchRef.current?.focus(); }} className="absolute right-1 top-1 rounded p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"><X aria-hidden="true" className="h-4 w-4" /></button> : <kbd className="pointer-events-none absolute right-2 top-3 text-xs text-sidebar-foreground/80">Ctrl K</kbd>}
             </div>}
         </div>
         <SidebarNavigation collapsed={collapsed} query={pageQuery} capabilityAvailable={capabilityAvailable} financeAvailable={financeAvailable} />
@@ -132,11 +132,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <IntegraLabsCredit tone="sidebar" className="px-1 pb-2 pt-1" />
           ) : null}
           {!collapsed && memberships.length > 1 ? (
-            <label className="block space-y-1 px-1 pb-1 text-[10px] text-sidebar-foreground/60">
+            <label className="block space-y-1 px-1 pb-1 text-xs text-sidebar-foreground/80">
               <span>Empresa ativa</span>
               <select
                 aria-label="Empresa ativa"
-                className="h-8 w-full rounded-md border border-sidebar-border bg-sidebar px-2 text-xs text-sidebar-foreground"
+                className="h-10 w-full rounded-md border border-sidebar-border bg-sidebar px-2 text-sm text-sidebar-foreground"
                 value={currentTenant?.id ?? ""}
                 disabled={switchingTenant}
                 onChange={(event) => setCurrentTenantId(event.target.value)}
@@ -153,17 +153,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             aria-label={collapsed ? "Expandir barra lateral" : "Recolher barra lateral"}
             aria-expanded={!collapsed}
             onClick={() => { setCollapsed(v => !v); setPageQuery(''); }}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-sidebar-foreground/60 hover:bg-sidebar-accent/50 transition-colors"
+            className="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/50"
           >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            {collapsed ? <ChevronRight aria-hidden="true" className="h-4 w-4" /> : <ChevronLeft aria-hidden="true" className="h-4 w-4" />}
             {!collapsed && <span>Recolher</span>}
           </button>
           <button
             aria-label="Sair da conta"
             onClick={signOut}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-sidebar-foreground/60 hover:bg-sidebar-accent/50 transition-colors"
+            className="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/50"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut aria-hidden="true" className="h-4 w-4" />
             {!collapsed && <span>Sair</span>}
           </button>
         </div>

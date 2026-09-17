@@ -9,6 +9,7 @@ const pendingSchema=z.object({version:z.literal(1),tenantId:uuid,actorId:uuid,pa
 export type PendingCashForecast=z.infer<typeof pendingSchema>;
 type Store=Pick<Storage,'getItem'|'setItem'|'removeItem'>;
 export const cashForecastKey=(tenant:string,actor:string)=>`agvlog:cash-forecast:v1:${tenant}:${actor}`;
+export function discardCashForecast(storage:Store,tenant:string,actor:string){uuid.parse(tenant);uuid.parse(actor);storage.removeItem(cashForecastKey(tenant,actor));}
 const unavailable=()=>new Error('O pedido de preservação da previsão salvo está indisponível ou incompatível. Preserve os dados antes de iniciar outra operação.');
 export function pendingCashForecast(storage:Store,tenant:string,actor:string):PendingCashForecast|null{
  try{uuid.parse(tenant);uuid.parse(actor);const raw=storage.getItem(cashForecastKey(tenant,actor));if(raw===null)return null;if(raw.length>20000)throw unavailable();const original=JSON.parse(raw),row=pendingSchema.parse(original);if(row.tenantId!==tenant||row.actorId!==actor||row.payload.tenant_id!==tenant)throw unavailable();return original as PendingCashForecast;}catch{throw unavailable();}

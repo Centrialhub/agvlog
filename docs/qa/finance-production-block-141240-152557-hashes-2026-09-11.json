@@ -1,0 +1,62 @@
+[
+  {
+    "file": "20260910141240_finance_cash_opening_counts.sql",
+    "bytes": 10517,
+    "sha256": "53cd98728a42edb363418b4aba292bf6d1ed9ed754739e3056f1eef644444b0a"
+  },
+  {
+    "file": "20260910142143_finance_statement_coverage_approvals.sql",
+    "bytes": 17982,
+    "sha256": "cc8bea0528ceef3155cb1447a4cfeff9adf4cc09441aaa38e56beb896e0e1166"
+  },
+  {
+    "file": "20260910142740_finance_legacy_adoption_inventory.sql",
+    "bytes": 11663,
+    "sha256": "6375a8758e6a1299aa66d6d71c990bfb5ace2795ae62e45d26d48871e4132a14"
+  },
+  {
+    "file": "20260910142923_finance_statement_verification_reauthorization.sql",
+    "bytes": 1222,
+    "sha256": "9ce386f8a93b46865569099495f6a47935b207f51f6fdee8c932bc1f8763273f"
+  },
+  {
+    "file": "20260910143833_finance_legacy_payable_associations.sql",
+    "bytes": 19494,
+    "sha256": "2948e859d766cbff838a170ab288b543bf0d133412e9ba526d1f7fdb3125e529"
+  },
+  {
+    "file": "20260910143920_finance_legacy_payable_association_options.sql",
+    "bytes": 4756,
+    "sha256": "9589b6cbb91b7c42b18f08c503f656f0ff0fa7cf43920b4eed5b1556cc4284bd"
+  },
+  {
+    "file": "20260910145616_finance_legacy_receipt_associations.sql",
+    "bytes": 23252,
+    "sha256": "c0f2ba253350a39f0c8ec117df2f4883ad655fff1e0c65eeddac486fe6fa8848"
+  },
+  {
+    "file": "20260910145659_finance_legacy_receivable_association_options.sql",
+    "bytes": 4945,
+    "sha256": "ded521ff1bd9b0e9c166dc416a7bafa68a9e65362367cc4473f5965f50d83903"
+  },
+  {
+    "file": "20260910150338_finance_legacy_receipt_movement_trace.sql",
+    "bytes": 3854,
+    "sha256": "fd831c1d7197cd3736d1c4121d1ecbb594da42fe8510d01bc047103cdf1a4d10"
+  },
+  {
+    "file": "20260910151011_finance_legacy_integrity_inventory.sql",
+    "bytes": 14879,
+    "sha256": "263a8970e0e64426c49c7f83335c6abc8d6554131e02acf037a03aa4dbf012cc"
+  },
+  {
+    "file": "20260910151617_finance_receivable_portfolio_summary.sql",
+    "bytes": 4847,
+    "sha256": "2bc01e008c1bd54414c40b02dff2dd8e2df64c63d88d078c9031b47929c8bbab"
+  },
+  {
+    "file": "20260910152557_finance_recorded_cost_summary.sql",
+    "bytes": 7994,
+    "sha256": "8ed4b1b076cfc49e8d0657c8d64190da0078edbb25580e4968d81935e1191a7f"
+  }
+]

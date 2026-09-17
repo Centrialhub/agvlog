@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "local_only": true,
+  "order": [
+    {
+      "path": "supabase/rollouts/20260911032601_canonical_destination_geocoding_policy_compat.sql",
+      "sha256": "582e7d61c72814e0bbfbc2c0be25aea092855fd47e4d3b31ae18d80e4daaf918"
+    },
+    {
+      "path": "supabase/migrations/20260910211200_driver_delivery_fiscal_snapshot_gate.sql",
+      "sha256": "c66ac6bc9eb42963bf7bf38ef723b5d4b4bb818146156f95d013f861ad436ddd"
+    },
+    {
+      "path": "supabase/migrations/20260910213021_reconcile_legacy_cargo_gate_and_service_delivery_adapters.sql",
+      "sha256": "a7f723b4169fb7f5f85b3e21011bb789b6053904ccedc1e67ae745f99d1bda36"
+    }
+  ]
+}

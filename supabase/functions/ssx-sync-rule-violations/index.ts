@@ -137,6 +137,28 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "Token expired or missing. Run ssx-login first." }, 409);
     }
 
+    const { data: violationCursor } = await admin
+      .from("ssx_rule_violation_cursors")
+      .select("last_error_code,updated_at")
+      .eq("integration_account_id", accountId)
+      .maybeSingle();
+    const cursorUpdatedAt = violationCursor?.updated_at
+      ? new Date(violationCursor.updated_at).getTime()
+      : 0;
+    if (
+      violationCursor?.last_error_code === "rate_limited"
+      && cursorUpdatedAt > Date.now() - 15 * 60_000
+    ) {
+      return jsonResp({
+        success: true,
+        status: "deferred",
+        reason: "rate_limited_backoff",
+        retry_at: new Date(cursorUpdatedAt + 15 * 60_000).toISOString(),
+        upserted: 0,
+        requests: 0,
+      });
+    }
+
     const { data: windowData, error: windowError } = await admin.rpc(
       "get_ssx_rule_violation_window_v1",
       { _integration_account_id: accountId, _overlap: 1000, _window_size: 50000000 },
@@ -160,20 +182,43 @@ Deno.serve(async (req) => {
         requestBudgetExhausted = true;
         return [];
       }
-      const response = await ssxPost(endpoint, config.token!, [
-        { PropertyName: "IdPosition", Condition: ">=", Value: start.toString() },
-        { PropertyName: "IdPosition", Condition: "<=", Value: end.toString() },
-      ], config.requestTimeoutMs);
-      requests++;
-      const items = response.status === 204 ? [] : strictObjectArray(response.parsed);
-      logSsxCall({
-        routine: "sync-rule-violations", endpoint, method: "POST", apiVersion: "v2",
-        attemptType: "bounded_position_window", statusCode: response.status,
-        durationMs: response.durationMs,
-        responsePreview: redactedSsxResponsePreview(response.text, response.networkError),
-        result: response.ok && items ? (items.length ? "success" : "empty") : "error",
-        errorClass: response.ok ? undefined : response.errorClass,
-      });
+      const filterCandidates = [
+        {
+          label: "bounded_position_window",
+          filters: [
+            { PropertyName: "IdPosition", Condition: ">=", Value: start.toString() },
+            { PropertyName: "IdPosition", Condition: "<=", Value: end.toString() },
+          ],
+        },
+        {
+          // This is the exact filter shape published in the SSX Tracking docs.
+          label: "documented_lower_bound",
+          filters: [
+            { PropertyName: "IdPosition", Condition: ">=", Value: start.toString() },
+          ],
+        },
+      ];
+      let response: Awaited<ReturnType<typeof ssxPost>> | null = null;
+      let items: JsonObject[] | null = null;
+      for (const candidate of filterCandidates) {
+        if (requests >= MAX_REQUESTS) {
+          requestBudgetExhausted = true;
+          break;
+        }
+        response = await ssxPost(endpoint, config.token!, candidate.filters, config.requestTimeoutMs);
+        requests++;
+        items = response.status === 204 ? [] : strictObjectArray(response.parsed);
+        logSsxCall({
+          routine: "sync-rule-violations", endpoint, method: "POST", apiVersion: "v2",
+          attemptType: candidate.label, statusCode: response.status,
+          durationMs: response.durationMs,
+          responsePreview: redactedSsxResponsePreview(response.text, response.networkError),
+          result: response.ok && items ? (items.length ? "success" : "empty") : "error",
+          errorClass: response.ok ? undefined : response.errorClass,
+        });
+        if (response.ok || response.errorClass !== "body_incompatible") break;
+      }
+      if (!response) throw new Error("request_budget_exhausted");
       if (!response.ok) throw new Error(response.errorClass || "upstream_failed");
       if (!items) throw new Error("invalid_schema");
       if (items.length < RESULT_LIMIT) {

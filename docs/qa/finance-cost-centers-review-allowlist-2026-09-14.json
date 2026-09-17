@@ -1,0 +1,47 @@
+[
+  {
+    "path": "src/components/cost-centers/CostCenterManager.tsx",
+    "sha256": "c942b208d8bb5aaa2865df92476380405197b50eab45e746a602267efcb8d2dc",
+    "scope": "existing_other_task_reviewed_not_claimed_new"
+  },
+  {
+    "path": "src/hooks/useCostCenters.tsx",
+    "sha256": "cf047c389383dee9f58d59cea00fec13409a03436050799e35ea7b4aa4600fa8",
+    "scope": "existing_other_task_reviewed_not_claimed_new"
+  },
+  {
+    "path": "src/components/financial/RecordedCosts.tsx",
+    "sha256": "24ad803f9f1a64c7a0cff5d9a84a4d611ddf6952992573137c700464ee117b70",
+    "scope": "existing_other_task_reviewed_not_claimed_new"
+  },
+  {
+    "path": "src/pages/CostCenters.tsx",
+    "sha256": "cacbf4d30308d3b0741a993bceada3db7b817b6cb581b994714ba28cee75134d",
+    "scope": "existing_other_task_reviewed_not_claimed_new"
+  },
+  {
+    "path": "src/test/useCostCenters.test.tsx",
+    "sha256": "cd259deb6400d9561fce74bb2ee431a0998c3509b1977a74b838600fe80e0c5f",
+    "scope": "existing_other_task_reviewed_not_claimed_new"
+  },
+  {
+    "path": "src/test/costCenterManager.test.tsx",
+    "sha256": "9bc3ac06f1c76bdb67696c8c85518c05cbfbb5696f6ce6be42978a20b6f1c0b7",
+    "scope": "existing_other_task_reviewed_not_claimed_new"
+  },
+  {
+    "path": "src/test/recordedCosts.test.tsx",
+    "sha256": "082ec1041396f5440652baf925d88843c301e0290babf83b75324ab8b9928eab",
+    "scope": "existing_other_task_reviewed_not_claimed_new"
+  },
+  {
+    "path": "src/test/costCenterOperationsReview.test.tsx",
+    "sha256": "65cb6c761c66dc0c509cfc25f76cc490fb699ab2701dc47b578806eab4539237",
+    "scope": "independent_test_or_qa"
+  },
+  {
+    "path": "docs/qa/finance-cost-centers-independent-review-2026-09-14.md",
+    "sha256": "34d90d82997a32d82536102153ca5570c4c51a3e25cd167842c567d2588c7053",
+    "scope": "independent_test_or_qa"
+  }
+]

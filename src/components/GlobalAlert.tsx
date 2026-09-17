@@ -72,11 +72,9 @@ export function GlobalAlert() {
             {icons[type]}
             <AlertDialogTitle className="text-lg leading-tight">{title}</AlertDialogTitle>
           </div>
-          {description && (
-            <AlertDialogDescription className="text-sm text-foreground/80 whitespace-pre-wrap">
-              {description}
-            </AlertDialogDescription>
-          )}
+          <AlertDialogDescription className={description ? "text-sm text-foreground/80 whitespace-pre-wrap" : "sr-only"}>
+            {description || `Alerta do sistema: ${title}`}
+          </AlertDialogDescription>
           {input && (
             <div className="space-y-2 pt-2 text-left">
               <Label htmlFor="global-alert-input">{input.label}</Label>

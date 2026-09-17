@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DataPagination } from '@/components/ui/data-pagination';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,11 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertTriangle, CheckCircle2, Clock, Download, FileSpreadsheet, MapPin, Truck, Upload, Users } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import {
   useDriverMonitorsList, useDriverMonitorCommand, useAddProgressUpdate, useAddForecast,
   useMonitorUpdates, useMonitorForecasts,
   useImportDriverMonitoringWorkbook, type DriverMonitorRow,
-  type DriverMonitoringFilters,
+  type DriverMonitoringFilters, DRIVER_MONITOR_PAGE_SIZE,
 } from '@/hooks/useDriverMonitoring';
 import { STATUS_LABELS, type DriverMonitorStatus } from '@/lib/driverMonitoring/driverMonitoringCalculator';
 import { parseDriverMonitoringWorkbook, type ParsedDriverMonitoringWorkbook } from '@/lib/driverMonitoring/driverMonitoringSpreadsheetImport';
@@ -39,26 +41,41 @@ const errorMessage = (error: unknown) => error instanceof Error ? error.message 
 const emptyMonitorForm = {
   driver_name: '', plate: '', total: 0, deadline: 0, planned_route: '', notes: '',
 };
+const ACTIVE_MONITOR_STATUSES = new Set(['active', 'on_time', 'delayed', 'no_update', 'returning', 'waiting_load', 'issue']);
+const TERMINAL_MONITOR_STATUSES = new Set(['arrived', 'completed', 'cancelled']);
 
-function expectedReturnDate(startedAt: string, deadline: number): string | null {
+// eslint-disable-next-line react-refresh/only-export-components
+export function isTerminalMonitorStatus(status: string): boolean {
+  return TERMINAL_MONITOR_STATUSES.has(status);
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function expectedReturnDate(startedAt: string, deadline: number): string | null {
   if (deadline <= 0) return null;
   const started = new Date(startedAt);
-  started.setUTCDate(started.getUTCDate() + deadline);
-  return started.toISOString().slice(0, 10);
+  if (!Number.isFinite(started.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(started);
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  const localDate = new Date(Date.UTC(value('year'), value('month') - 1, value('day') + deadline));
+  return localDate.toISOString().slice(0, 10);
 }
 
 export default function DriverMonitoring() {
   const toast = useSonnerToast();
   const [filters, setFilters] = useState<DriverMonitoringFilters>({});
   const [applied, setApplied] = useState<DriverMonitoringFilters>({});
-  const { data: rows = [], isLoading } = useDriverMonitorsList(applied);
-  const { data: forecasts = [] } = useMonitorForecasts();
+  const [page,setPage]=useState(1);
+  const monitors=useDriverMonitorsList(applied,page);const rows=useMemo(()=>monitors.data?.rows??[],[monitors.data?.rows]);
+  const {isLoading,isError:monitorsIsError,error:monitorsError,refetch:refetchMonitors}=monitors;
+  const { data: forecasts = [], isLoading: forecastsLoading, isError: forecastsIsError, error: forecastsError, refetch: refetchForecasts } = useMonitorForecasts(rows.map(row=>row.id));
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
   const companyInfo = toCompanyPdfInfo(companyProfile, currentTenant?.name);
 
   const [openRow, setOpenRow] = useState<DriverMonitorRow | null>(null);
-  const { data: openUpdates = [] } = useMonitorUpdates(openRow?.id);
+  const { data: openUpdates = [], isLoading: updatesLoading, isError: updatesIsError, error: updatesError, refetch: refetchUpdates } = useMonitorUpdates(openRow?.id);
 
   const [createDlg, setCreateDlg] = useState(false);
   const [editRow, setEditRow] = useState<DriverMonitorRow | null>(null);
@@ -69,23 +86,34 @@ export default function DriverMonitoring() {
   const [progDlg, setProgDlg] = useState<DriverMonitorRow | null>(null);
   const progMut = useAddProgressUpdate();
   const [progForm, setProgForm] = useState({
-    date: new Date().toISOString().slice(0, 10), city: '', qty: 0,
+    date: localDateInputValue(), city: '', qty: 0,
     next_city: '', next_qty: '', finished_at: '', observation: '',
   });
 
   const [forecastDlg, setForecastDlg] = useState<DriverMonitorRow | null>(null);
   const forecastMut = useAddForecast();
   const [forecastForm, setForecastForm] = useState({
-    forecast_date: new Date().toISOString().slice(0, 10), forecast_time: '',
+    forecast_date: localDateInputValue(), forecast_time: '',
     current_city: '', forecast_text: '', remaining_cities_text: '', observation: '',
   });
 
   const importMut = useImportDriverMonitoringWorkbook();
   const [parsed, setParsed] = useState<ParsedDriverMonitoringWorkbook | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const activeRows = useMemo(() => rows.filter((row) => ACTIVE_MONITOR_STATUSES.has(row.status)), [rows]);
+  const filteredForecasts = useMemo(() => {
+    const monitorIds = new Set(rows.map((row) => row.id));
+    return forecasts.filter((forecast) => monitorIds.has(forecast.monitor_id));
+  }, [forecasts, rows]);
+
+  useEffect(() => {
+    if (!openRow) return;
+    const fresh = rows.find((row) => row.id === openRow.id);
+    if (fresh && (fresh.revision !== openRow.revision || fresh.updated_at !== openRow.updated_at)) setOpenRow(fresh);
+  }, [rows, openRow]);
 
   const kpis = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateInputValue();
     const acc = {
       inRoute: 0, onTime: 0, delayed: 0, noUpdate: 0,
       predicted: 0, done: 0, remaining: 0,
@@ -105,8 +133,13 @@ export default function DriverMonitoring() {
     return acc;
   }, [rows]);
 
-  const applyFilters = () => setApplied({ ...filters });
-  const clearFilters = () => { setFilters({}); setApplied({}); };
+  const applyFilters = () => {setPage(1);setApplied({ ...filters });};
+  const clearFilters = () => { setPage(1);setFilters({}); setApplied({}); };
+  const monitorTotal=monitors.data?.total??0;
+  const monitorPageCount=Math.max(1,Math.ceil(monitorTotal/DRIVER_MONITOR_PAGE_SIZE));
+  const monitorPagination={page,pageCount:monitorPageCount,totalCount:monitorTotal,
+    start:monitorTotal?(page-1)*DRIVER_MONITOR_PAGE_SIZE+1:0,end:Math.min(page*DRIVER_MONITOR_PAGE_SIZE,monitorTotal),onPageChange:setPage};
+  useEffect(()=>{if(page>monitorPageCount)setPage(monitorPageCount);},[page,monitorPageCount]);
   const openNewMonitor = () => {
     setEditRow(null);
     setCreateForm(emptyMonitorForm);
@@ -153,8 +186,8 @@ export default function DriverMonitoring() {
     }
   };
   const saveMonitor = async () => {
-    if (!createForm.driver_name.trim() || monitorCommand.pending) {
-      setMonitorError('Informe o motorista e recupere qualquer alteração pendente.');
+    if (!createForm.driver_name.trim() || !Number.isInteger(createForm.total) || createForm.total <= 0 || monitorCommand.pending) {
+      setMonitorError('Informe o motorista, ao menos uma entrega e recupere qualquer alteração pendente.');
       return;
     }
     setMonitorError('');
@@ -230,6 +263,43 @@ export default function DriverMonitoring() {
     }
   }
 
+  const saveProgress = async () => {
+    if (!progDlg || progMut.isPending) return;
+    const current = rows.find((row) => row.id === progDlg.id) || progDlg;
+    if (progForm.qty < 0 || progForm.qty > current.remaining_deliveries) {
+      toast.error(`Informe entre 0 e ${current.remaining_deliveries} entregas restantes.`);
+      return;
+    }
+    try {
+      await progMut.mutateAsync({
+        monitor_id: current.id,
+        update_date: progForm.date,
+        city: progForm.city,
+        deliveries_completed_in_city: progForm.qty,
+        next_city: progForm.next_city,
+        next_city_deliveries: progForm.next_qty ? Number(progForm.next_qty) : null,
+        city_finished_at: progForm.finished_at || null,
+        observation: progForm.observation,
+      });
+      toast.success('Atualização registrada');
+      setProgDlg(null);
+      setProgForm({ date: localDateInputValue(), city: '', qty: 0, next_city: '', next_qty: '', finished_at: '', observation: '' });
+    } catch (error: unknown) {
+      toast.error(errorMessage(error));
+    }
+  };
+
+  const saveForecast = async () => {
+    if (!forecastDlg || forecastMut.isPending) return;
+    try {
+      await forecastMut.mutateAsync({ monitor_id: forecastDlg.id, ...forecastForm });
+      toast.success('Previsão registrada');
+      setForecastDlg(null);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error));
+    }
+  };
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -254,6 +324,8 @@ export default function DriverMonitoring() {
       ) : null}
       {monitorCommand.recoveryError ? <p role="alert">{monitorCommand.recoveryError}</p> : null}
       {monitorError && !createDlg ? <p role="alert">{monitorError}</p> : null}
+      {monitorsIsError && <Card role="alert"><CardContent className="flex flex-wrap items-center justify-between gap-2 p-3 text-destructive"><span>Não foi possível carregar os monitoramentos. {errorMessage(monitorsError)}</span><Button variant="outline" size="sm" onClick={() => refetchMonitors()}>Tentar novamente</Button></CardContent></Card>}
+      {forecastsIsError && <Card role="alert"><CardContent className="flex flex-wrap items-center justify-between gap-2 p-3 text-destructive"><span>Não foi possível carregar as previsões. {errorMessage(forecastsError)}</span><Button variant="outline" size="sm" onClick={() => refetchForecasts()}>Tentar novamente</Button></CardContent></Card>}
 
       <Tabs defaultValue="panel">
         <TabsList>
@@ -268,16 +340,17 @@ export default function DriverMonitoring() {
 
         <TabsContent value="panel" className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <KpiCard icon={<Users className="h-4 w-4" />} label="Em rota" value={kpis.inRoute} />
-            <KpiCard icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} label="No prazo" value={kpis.onTime} />
-            <KpiCard icon={<AlertTriangle className="h-4 w-4 text-destructive" />} label="Atrasados" value={kpis.delayed} />
-            <KpiCard icon={<Clock className="h-4 w-4" />} label="Sem atualização" value={kpis.noUpdate} />
-            <KpiCard icon={<MapPin className="h-4 w-4" />} label="Entregas restantes" value={kpis.remaining} />
-            <KpiCard icon={<Truck className="h-4 w-4" />} label="Retornos atrasados" value={kpis.lateReturn} />
+            <KpiCard icon={<Users className="h-4 w-4" />} label="Em rota" value={monitorsIsError ? '—' : kpis.inRoute} />
+            <KpiCard icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} label="No prazo" value={monitorsIsError ? '—' : kpis.onTime} />
+            <KpiCard icon={<AlertTriangle className="h-4 w-4 text-destructive" />} label="Atrasados" value={monitorsIsError ? '—' : kpis.delayed} />
+            <KpiCard icon={<Clock className="h-4 w-4" />} label="Sem atualização" value={monitorsIsError ? '—' : kpis.noUpdate} />
+            <KpiCard icon={<MapPin className="h-4 w-4" />} label="Entregas restantes" value={monitorsIsError ? '—' : kpis.remaining} />
+            <KpiCard icon={<Truck className="h-4 w-4" />} label="Retornos atrasados" value={monitorsIsError ? '—' : kpis.lateReturn} />
           </div>
-          <MonitorsTable rows={rows} isLoading={isLoading} onOpen={setOpenRow} onProgress={setProgDlg}
+          <MonitorsTable rows={rows} isLoading={isLoading} isError={monitorsIsError} error={monitorsError} onRetry={refetchMonitors} onOpen={setOpenRow} onProgress={setProgDlg}
             onForecast={setForecastDlg} onEdit={openEditMonitor} onArrive={arriveMonitor}
             commandBlocked={monitorCommand.isPending || !!monitorCommand.pending} />
+          <DataPagination {...monitorPagination}/>
         </TabsContent>
 
         <TabsContent value="routes" className="space-y-3">
@@ -308,16 +381,18 @@ export default function DriverMonitoring() {
               </div>
             </CardContent>
           </Card>
-          <MonitorsTable rows={rows} isLoading={isLoading} onOpen={setOpenRow} onProgress={setProgDlg}
+          <MonitorsTable rows={activeRows} isLoading={isLoading} isError={monitorsIsError} error={monitorsError} onRetry={refetchMonitors} onOpen={setOpenRow} onProgress={setProgDlg}
             onForecast={setForecastDlg} onEdit={openEditMonitor} onArrive={arriveMonitor}
             commandBlocked={monitorCommand.isPending || !!monitorCommand.pending} />
+          <DataPagination {...monitorPagination}/>
         </TabsContent>
 
         <TabsContent value="daily" className="space-y-3">
           <div className="text-sm text-muted-foreground">Selecione uma rota para registrar entregas do dia por cidade.</div>
-          <MonitorsTable rows={rows} isLoading={isLoading} onOpen={setOpenRow} onProgress={setProgDlg}
+          <MonitorsTable rows={rows} isLoading={isLoading} isError={monitorsIsError} error={monitorsError} onRetry={refetchMonitors} onOpen={setOpenRow} onProgress={setProgDlg}
             onForecast={setForecastDlg} onEdit={openEditMonitor} onArrive={arriveMonitor}
             commandBlocked={monitorCommand.isPending || !!monitorCommand.pending} compact />
+          <DataPagination {...monitorPagination}/>
         </TabsContent>
 
         <TabsContent value="arrival" className="space-y-3">
@@ -325,8 +400,8 @@ export default function DriverMonitoring() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Previsões de Chegada em Montes Claros</CardTitle>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => downloadCsv('previsoes.csv', arrivalForecastsCsv(forecasts))}><Download className="h-4 w-4 mr-1" />CSV</Button>
-                <Button size="sm" variant="outline" onClick={() => downloadPdf(arrivalForecastsPdf(forecasts, undefined, companyInfo), 'previsoes.pdf')}><Download className="h-4 w-4 mr-1" />PDF</Button>
+                <Button size="sm" variant="outline" disabled={forecastsIsError || forecastsLoading} onClick={() => downloadCsv('previsoes.csv', arrivalForecastsCsv(filteredForecasts))}><Download className="h-4 w-4 mr-1" />CSV</Button>
+                <Button size="sm" variant="outline" disabled={forecastsIsError || forecastsLoading} onClick={() => downloadPdf(arrivalForecastsPdf(filteredForecasts, filterSummary, companyInfo), 'previsoes.pdf')}><Download className="h-4 w-4 mr-1" />PDF</Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -337,8 +412,8 @@ export default function DriverMonitoring() {
                   <TableHead>Cidades restantes</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {forecasts.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Nenhuma previsão registrada</TableCell></TableRow>}
-                  {forecasts.map((f) => (
+                  {forecastsIsError ? <TableRow><TableCell colSpan={7} className="text-center text-destructive">Previsões indisponíveis. <Button variant="link" onClick={() => refetchForecasts()}>Tentar novamente</Button></TableCell></TableRow> : forecastsLoading ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Carregando previsões…</TableCell></TableRow> : filteredForecasts.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Nenhuma previsão registrada</TableCell></TableRow>}
+                  {!forecastsIsError && filteredForecasts.map((f) => (
                     <TableRow key={f.id}>
                       <TableCell>{dt(f.forecast_date)}</TableCell>
                       <TableCell>{f.forecast_time?.slice(0, 5) || '—'}</TableCell>
@@ -357,11 +432,11 @@ export default function DriverMonitoring() {
 
         <TabsContent value="reports" className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <ReportCard title="Motoristas em Rota" onCsv={() => downloadCsv('motoristas-em-rota.csv', driversInRouteCsv(rows))} onPdf={() => downloadPdf(driversInRoutePdf(rows, filterSummary, companyInfo), 'motoristas-em-rota.pdf')} />
-            <ReportCard title="Entregas por Motorista" onCsv={() => downloadCsv('entregas-por-motorista.csv', deliveriesByDriverCsv(openUpdates))} onPdf={() => downloadPdf(deliveriesByDriverPdf(openUpdates, filterSummary, companyInfo), 'entregas-por-motorista.pdf')} disabled={!openRow} disabledHint="Abra uma rota para exportar suas entregas." />
-            <ReportCard title="Chegada de Veículos" onCsv={() => downloadCsv('chegadas.csv', arrivalForecastsCsv(forecasts))} onPdf={() => downloadPdf(arrivalForecastsPdf(forecasts, filterSummary, companyInfo), 'chegadas.pdf')} />
-            <ReportCard title="Atrasos" onCsv={() => downloadCsv('atrasos.csv', driversInRouteCsv(rows.filter((r) => r.status === 'delayed')))} onPdf={() => downloadPdf(delaysPdf(rows.filter((r) => r.status === 'delayed'), filterSummary, companyInfo), 'atrasos.pdf')} />
-            <ReportCard title="Produtividade" onCsv={() => downloadCsv('produtividade.csv', driversInRouteCsv(rows))} onPdf={() => downloadPdf(productivityPdf(rows, filterSummary, companyInfo), 'produtividade.pdf')} />
+            <ReportCard title="Motoristas em Rota" onCsv={() => downloadCsv('motoristas-em-rota.csv', driversInRouteCsv(activeRows))} onPdf={() => downloadPdf(driversInRoutePdf(activeRows, filterSummary, companyInfo), 'motoristas-em-rota.pdf')} disabled={monitorsIsError} disabledHint="Os monitoramentos precisam estar disponíveis." />
+            <ReportCard title="Entregas por Motorista" onCsv={() => downloadCsv('entregas-por-motorista.csv', deliveriesByDriverCsv(openUpdates))} onPdf={() => downloadPdf(deliveriesByDriverPdf(openUpdates, filterSummary, companyInfo), 'entregas-por-motorista.pdf')} disabled={!openRow || updatesIsError} disabledHint={updatesIsError ? 'As atualizações da rota estão indisponíveis.' : 'Abra uma rota para exportar suas entregas.'} />
+            <ReportCard title="Chegada de Veículos" onCsv={() => downloadCsv('chegadas.csv', arrivalForecastsCsv(filteredForecasts))} onPdf={() => downloadPdf(arrivalForecastsPdf(filteredForecasts, filterSummary, companyInfo), 'chegadas.pdf')} disabled={forecastsIsError} disabledHint="As previsões precisam estar disponíveis." />
+            <ReportCard title="Atrasos" onCsv={() => downloadCsv('atrasos.csv', driversInRouteCsv(rows.filter((r) => r.status === 'delayed')))} onPdf={() => downloadPdf(delaysPdf(rows.filter((r) => r.status === 'delayed'), filterSummary, companyInfo), 'atrasos.pdf')} disabled={monitorsIsError} disabledHint="Os monitoramentos precisam estar disponíveis." />
+            <ReportCard title="Produtividade" onCsv={() => downloadCsv('produtividade.csv', driversInRouteCsv(rows))} onPdf={() => downloadPdf(productivityPdf(rows, filterSummary, companyInfo), 'produtividade.pdf')} disabled={monitorsIsError} disabledHint="Os monitoramentos precisam estar disponíveis." />
           </div>
         </TabsContent>
 
@@ -409,7 +484,7 @@ export default function DriverMonitoring() {
             <div><Label htmlFor="monitor-driver-name">Motorista</Label><Input id="monitor-driver-name" value={createForm.driver_name} onChange={(e) => setCreateForm({ ...createForm, driver_name: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label htmlFor="monitor-plate">Placa</Label><Input id="monitor-plate" value={createForm.plate} onChange={(e) => setCreateForm({ ...createForm, plate: e.target.value })} /></div>
-              <div><Label htmlFor="monitor-total">Total entregas</Label><Input id="monitor-total" type="number" min={0} value={createForm.total} onChange={(e) => setCreateForm({ ...createForm, total: Number(e.target.value) })} /></div>
+              <div><Label htmlFor="monitor-total">Total entregas</Label><Input id="monitor-total" type="number" min={1} value={createForm.total} onChange={(e) => setCreateForm({ ...createForm, total: Number(e.target.value) })} /></div>
               <div><Label htmlFor="monitor-deadline">Prazo retorno (dias)</Label><Input id="monitor-deadline" type="number" min={0} max={3650} value={createForm.deadline} onChange={(e) => setCreateForm({ ...createForm, deadline: Number(e.target.value) })} /></div>
             </div>
             <div><Label htmlFor="monitor-route">Rota planejada</Label><Textarea id="monitor-route" maxLength={8000} value={createForm.planned_route} onChange={(e) => setCreateForm({ ...createForm, planned_route: e.target.value })} /></div>
@@ -439,7 +514,7 @@ export default function DriverMonitoring() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Data</Label><Input type="date" value={progForm.date} onChange={(e) => setProgForm({ ...progForm, date: e.target.value })} /></div>
               <div><Label>Cidade</Label><Input value={progForm.city} onChange={(e) => setProgForm({ ...progForm, city: e.target.value })} /></div>
-              <div><Label>Entregas na cidade</Label><Input type="number" value={progForm.qty} onChange={(e) => setProgForm({ ...progForm, qty: Number(e.target.value) })} /></div>
+              <div><Label>Entregas na cidade</Label><Input type="number" min={0} max={progDlg?.remaining_deliveries ?? 0} value={progForm.qty} onChange={(e) => setProgForm({ ...progForm, qty: Number(e.target.value) })} /></div>
               <div><Label>Horário término</Label><Input type="time" value={progForm.finished_at} onChange={(e) => setProgForm({ ...progForm, finished_at: e.target.value })} /></div>
               <div><Label>Próxima cidade</Label><Input value={progForm.next_city} onChange={(e) => setProgForm({ ...progForm, next_city: e.target.value })} /></div>
               <div><Label>Entregas próxima</Label><Input type="number" value={progForm.next_qty} onChange={(e) => setProgForm({ ...progForm, next_qty: e.target.value })} /></div>
@@ -447,23 +522,8 @@ export default function DriverMonitoring() {
             <div><Label>Observação</Label><Textarea value={progForm.observation} onChange={(e) => setProgForm({ ...progForm, observation: e.target.value })} /></div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setProgDlg(null)}>Cancelar</Button>
-            <Button onClick={async () => {
-              if (!progDlg) return;
-              await progMut.mutateAsync({
-                monitor_id: progDlg.id,
-                update_date: progForm.date,
-                city: progForm.city,
-                deliveries_completed_in_city: progForm.qty,
-                next_city: progForm.next_city,
-                next_city_deliveries: progForm.next_qty ? Number(progForm.next_qty) : null,
-                city_finished_at: progForm.finished_at || null,
-                observation: progForm.observation,
-              });
-              toast.success('Atualização registrada');
-              setProgDlg(null);
-              setProgForm({ date: new Date().toISOString().slice(0, 10), city: '', qty: 0, next_city: '', next_qty: '', finished_at: '', observation: '' });
-            }}>Salvar</Button>
+            <Button variant="ghost" onClick={() => setProgDlg(null)} disabled={progMut.isPending}>Cancelar</Button>
+            <Button onClick={() => void saveProgress()} disabled={progMut.isPending}>{progMut.isPending ? 'Salvando…' : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -483,15 +543,8 @@ export default function DriverMonitoring() {
             <div><Label>Observação</Label><Textarea value={forecastForm.observation} onChange={(e) => setForecastForm({ ...forecastForm, observation: e.target.value })} /></div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setForecastDlg(null)}>Cancelar</Button>
-            <Button onClick={async () => {
-              if (!forecastDlg) return;
-              await forecastMut.mutateAsync({
-                monitor_id: forecastDlg.id, ...forecastForm,
-              });
-              toast.success('Previsão registrada');
-              setForecastDlg(null);
-            }}>Salvar</Button>
+            <Button variant="ghost" onClick={() => setForecastDlg(null)} disabled={forecastMut.isPending}>Cancelar</Button>
+            <Button onClick={() => void saveForecast()} disabled={forecastMut.isPending}>{forecastMut.isPending ? 'Salvando…' : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -519,8 +572,8 @@ export default function DriverMonitoring() {
                 <Table>
                   <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Cidade</TableHead><TableHead>Entregas</TableHead><TableHead>Próxima</TableHead><TableHead>Obs.</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {openUpdates.length === 0 && <TableRow><TableCell colSpan={5} className="text-muted-foreground">Sem atualizações</TableCell></TableRow>}
-                    {openUpdates.map((u) => (
+                    {updatesIsError ? <TableRow><TableCell colSpan={5} className="text-destructive">Atualizações indisponíveis. {errorMessage(updatesError)} <Button variant="link" onClick={() => refetchUpdates()}>Tentar novamente</Button></TableCell></TableRow> : updatesLoading ? <TableRow><TableCell colSpan={5} className="text-muted-foreground">Carregando atualizações…</TableCell></TableRow> : openUpdates.length === 0 && <TableRow><TableCell colSpan={5} className="text-muted-foreground">Sem atualizações</TableCell></TableRow>}
+                    {!updatesIsError && openUpdates.map((u) => (
                       <TableRow key={u.id}>
                         <TableCell>{dt(u.update_date)}</TableCell>
                         <TableCell>{u.city || '—'}</TableCell>
@@ -540,7 +593,7 @@ export default function DriverMonitoring() {
   );
 }
 
-function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number | string }) {
   return (
     <Card>
       <CardContent className="p-4">
@@ -567,10 +620,13 @@ function ReportCard({ title, onCsv, onPdf, disabled, disabledHint }: { title: st
 }
 
 function MonitorsTable({
-  rows, isLoading, onOpen, onProgress, onForecast, onEdit, onArrive, commandBlocked, compact,
+  rows, isLoading, isError, error, onRetry, onOpen, onProgress, onForecast, onEdit, onArrive, commandBlocked, compact,
 }: {
   rows: DriverMonitorRow[];
   isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+  onRetry: () => unknown;
   onOpen: (r: DriverMonitorRow) => void;
   onProgress: (r: DriverMonitorRow) => void;
   onForecast: (r: DriverMonitorRow) => void;
@@ -600,9 +656,8 @@ function MonitorsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading && <TableRow><TableCell colSpan={12} className="text-center">Carregando…</TableCell></TableRow>}
-            {!isLoading && rows.length === 0 && <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground">Nenhum monitoramento encontrado</TableCell></TableRow>}
-            {rows.map((r) => (
+            {isError ? <TableRow><TableCell colSpan={12} className="text-center text-destructive">Monitoramentos indisponíveis. {errorMessage(error)} <Button variant="link" onClick={() => onRetry()}>Tentar novamente</Button></TableCell></TableRow> : isLoading ? <TableRow><TableCell colSpan={12} className="text-center">Carregando…</TableCell></TableRow> : rows.length === 0 && <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground">Nenhum monitoramento encontrado</TableCell></TableRow>}
+            {!isError && rows.map((r) => (
               <TableRow key={r.id} className="cursor-pointer" onClick={() => onOpen(r)}>
                 <TableCell>{r.driver_name_snapshot || '—'}</TableCell>
                 <TableCell>{r.vehicle_plate_snapshot || '—'}</TableCell>
@@ -617,13 +672,20 @@ function MonitorsTable({
                 <TableCell><Badge variant={STATUS_VARIANT[r.status] || 'outline'}>{STATUS_LABELS[r.status as DriverMonitorStatus] || r.status}</Badge></TableCell>
                 {!compact && (
                   <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const terminal = isTerminalMonitorStatus(r.status);
+                      const actionUnavailable = commandBlocked || terminal;
+                      const closedHint = terminal ? 'Monitoramento encerrado' : undefined;
+                      return <>
                     <Button size="sm" variant="outline" onClick={() => onEdit(r)} disabled={commandBlocked}>Editar</Button>
-                    <Button size="sm" variant="outline" onClick={() => onProgress(r)} disabled={commandBlocked}>Registrar</Button>
-                    <Button size="sm" variant="outline" onClick={() => onForecast(r)} disabled={commandBlocked}>Previsão</Button>
-                    {r.status !== 'completed' && r.status !== 'cancelled' && (
+                    <Button size="sm" variant="outline" title={closedHint} onClick={() => onProgress(r)} disabled={actionUnavailable}>Registrar</Button>
+                    <Button size="sm" variant="outline" title={closedHint} onClick={() => onForecast(r)} disabled={actionUnavailable}>Previsão</Button>
+                    {!terminal && (
                       <Button size="sm" variant="ghost" disabled={commandBlocked}
                         onClick={() => void onArrive(r)}>Chegou</Button>
                     )}
+                      </>;
+                    })()}
                   </TableCell>
                 )}
               </TableRow>

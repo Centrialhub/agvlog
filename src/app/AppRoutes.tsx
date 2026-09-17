@@ -57,6 +57,7 @@ const PortalShipments = lazy(() => import("@/pages/portal/PortalShipments"));
 const PortalShipmentDetail = lazy(() => import("@/pages/portal/PortalShipmentDetail"));
 const PortalPickups = lazy(() => import("@/pages/portal/PortalPickups"));
 const PortalDocuments = lazy(() => import("@/pages/portal/PortalDocuments"));
+const PortalTitles = lazy(() => import("@/pages/portal/PortalTitles"));
 const PortalPods = lazy(() => import("@/pages/portal/PortalPods"));
 const PortalOccurrences = lazy(() => import("@/pages/portal/PortalOccurrences"));
 const PortalTracking = lazy(() => import("@/pages/portal/PortalTracking"));
@@ -237,6 +238,7 @@ export function AppRoutes() {
         <Route path="shipments/:documentId" element={<PortalShipmentDetail />} />
         <Route path="pickups" element={<PortalPickups />} />
         <Route path="documents" element={<PortalDocuments />} />
+        <Route path="titles" element={<PortalTitles />} />
         <Route path="pods" element={<PortalPods />} />
         <Route path="occurrences" element={<PortalOccurrences />} />
         <Route path="tracking" element={<PortalTracking />} />

@@ -1,5 +1,6 @@
 import { PDFDocument } from 'pdf-lib';
 import JSZip from 'jszip';
+import { validateFiscalBlob } from '@/lib/fiscal/fiscalFileValidation';
 
 export interface FetchedFile {
   /** Rótulo do documento (nº do CT-e/NFS-e) usado no nome do arquivo e nos erros. */
@@ -126,8 +127,8 @@ export interface BulkDownloadOptions<T> {
  */
 export async function runBulkDownload<T>(opts: BulkDownloadOptions<T>): Promise<BulkResult> {
   const { rows, format, fetchOne, labelOf, filenameOf, outputBase } = opts;
-  const concurrency = Math.max(1, opts.concurrency ?? 3);
-  const delayMs = opts.delayMs ?? 150;
+  const concurrency = Math.max(1, opts.concurrency ?? 2);
+  const delayMs = opts.delayMs ?? 250;
   const failures: BulkItemFailure[] = [];
   const fetched: FetchedFile[] = new Array(rows.length);
   let done = 0;
@@ -140,7 +141,7 @@ export async function runBulkDownload<T>(opts: BulkDownloadOptions<T>): Promise<
       const label = labelOf(row);
       try {
         const blob = await fetchOne(row);
-        if (!blob || blob.size === 0) throw new Error('Arquivo vazio retornado pelo Hub Fiscal');
+        await validateFiscalBlob(blob, format);
         fetched[index] = { label, filename: filenameOf(row), blob };
       } catch (error: unknown) {
         failures.push({ label, message: errorMessage(error, 'Falha desconhecida') });

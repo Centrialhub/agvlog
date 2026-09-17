@@ -13,7 +13,7 @@ revoke all on function private.trip_cargo_is_closed_v1(uuid,uuid)
 create or replace function private.guard_driver_settlement_cargo_closed_v1()
 returns trigger language plpgsql security definer set search_path='' as $function$
 begin
-  if not private.trip_cargo_is_closed_v1(new.tenant_id,new.dispatch_trip_id) then
+  if new.dispatch_trip_id is not null and not private.trip_cargo_is_closed_v1(new.tenant_id,new.dispatch_trip_id) then
     raise exception 'trip_cargo_not_closed' using errcode='23514';end if;
   return new;
 end;$function$;

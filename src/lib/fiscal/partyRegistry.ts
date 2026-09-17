@@ -1,4 +1,5 @@
 import { restoreStateRegistrationLeadingZeros } from '../stateRegistrationZeros';
+import { normalizeCep, normalizeCityName, normalizeIbgeCity, normalizeUf } from './fiscalAddress';
 
 /**
  * Resolução de partes do CT-e (remetente, destinatário, consignatário, etc.)
@@ -134,6 +135,35 @@ function addressFromClient(c: RegistryClient | null): PartyAddress | null {
   return Object.values(addr).some(Boolean) ? addr : null;
 }
 
+function nonBlank(value?: string | null): string | null {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
+}
+
+/**
+ * Mescla as fontes campo a campo. Dados explícitos da NF/formulário têm
+ * prioridade, mas valores vazios jamais apagam o endereço cadastral.
+ */
+function mergePartyAddress(
+  registryAddress: PartyAddress | null,
+  documentAddress: PartyAddress | null,
+): PartyAddress | null {
+  if (!registryAddress && !documentAddress) return null;
+  const pick = (documentValue?: string | null, registryValue?: string | null) =>
+    nonBlank(documentValue) || nonBlank(registryValue);
+  const merged: PartyAddress = {
+    street: pick(documentAddress?.street, registryAddress?.street),
+    number: pick(documentAddress?.number, registryAddress?.number),
+    complement: pick(documentAddress?.complement, registryAddress?.complement),
+    neighborhood: pick(documentAddress?.neighborhood, registryAddress?.neighborhood),
+    city: normalizeCityName(pick(documentAddress?.city, registryAddress?.city)),
+    city_ibge: normalizeIbgeCity(pick(documentAddress?.city_ibge, registryAddress?.city_ibge)),
+    state: normalizeUf(pick(documentAddress?.state, registryAddress?.state)),
+    zip: normalizeCep(pick(documentAddress?.zip, registryAddress?.zip)),
+  };
+  return Object.values(merged).some(Boolean) ? merged : null;
+}
+
 /**
  * Monta a parte para o payload completando lacunas com o cadastro local.
  * Só devolve `null` quando não há nome nem cadastro correspondente.
@@ -175,16 +205,8 @@ export function resolveParty(
         zip: fallbackAddress.zip || null,
       }
     : null;
-  // Mescla: cadastro preenche o que o fallback (dados da NF) não tem e vice-versa.
-  const address =
-    fromClient && fallback
-      ? {
-          ...fromClient,
-          city: fromClient.city || fallback.city,
-          city_ibge: fromClient.city_ibge || fallback.city_ibge,
-          state: fromClient.state || fallback.state,
-        }
-      : fromClient || fallback;
+  // O cadastro preenche lacunas sem ser apagado por campos vazios da prévia.
+  const address = mergePartyAddress(fromClient, fallback);
   const rawIe = sanitizeIe(party.ie) ? party.ie : c?.state_registration;
   ie = restoreStateRegistrationLeadingZeros(rawIe, address?.state) ?? ie;
   return { name, cnpj, ie, address, ieIndicator: c?.ie_indicator || null };
@@ -241,7 +263,10 @@ export function fillPartyFieldsFromRegistry<T extends PartyFields>(
     set('remitterStreet', rem.address_street);
     set('remitterNumber', rem.address_number);
     set('remitterNeighborhood', rem.address_neighborhood);
+    set('remitterCity', rem.address_city);
+    set('remitterState', rem.address_state);
     set('remitterZip', rem.address_zip);
+    set('remitterCityIbge', rem.address_city_ibge_code);
   }
   if (rec) {
     set('recipientName', rec.company_name || rec.legal_name);

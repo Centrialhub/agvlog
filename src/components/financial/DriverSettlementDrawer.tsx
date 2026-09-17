@@ -141,6 +141,12 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const payableZero = Number(s?.driver_payable_amount ?? 0) === 0;
   const balanceZero = Number(s?.payment_balance ?? remaining) === 0;
   const canSettleZero = s?.status === 'approved' && (payableZero || balanceZero);
+  const parsedKmStart = kmStart === '' ? null : Number(kmStart);
+  const parsedKmEnd = kmEnd === '' ? null : Number(kmEnd);
+  const parsedAuditedKm = auditedKm === '' ? null : Number(auditedKm);
+  const kmValuesInvalid = [parsedKmStart, parsedKmEnd, parsedAuditedKm].some(value => value !== null && (!Number.isFinite(value) || value < 0))
+    || (parsedKmStart !== null && parsedKmEnd !== null && parsedKmEnd < parsedKmStart)
+    || (kmStatus !== 'pending' && parsedAuditedKm === null);
 
   // Delete dialog
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -409,6 +415,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     <Label>KM Inicial</Label>
                     <Input 
                       type="number" 
+                      min="0"
                       value={kmStart} 
                       onChange={(e) => {
                         const val = e.target.value;
@@ -424,6 +431,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     <Label>KM Final</Label>
                     <Input 
                       type="number" 
+                      min="0"
                       value={kmEnd} 
                       onChange={(e) => {
                         const val = e.target.value;
@@ -437,7 +445,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   </div>
                   <div>
                     <Label>KM Percorrido (Auditoria)</Label>
-                    <Input type="number" step="0.1" value={auditedKm} onChange={(e) => setAuditedKm(e.target.value)} disabled={locked} />
+                    <Input type="number" min="0" step="0.1" value={auditedKm} onChange={(e) => setAuditedKm(e.target.value)} disabled={locked} />
                   </div>
                   <div>
                     <Label>Destino Inicial (Auditoria)</Label>
@@ -463,9 +471,10 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   <Label>Observações</Label>
                   <Textarea value={kmNotes} onChange={(e) => setKmNotes(e.target.value)} disabled={locked} />
                 </div>
+                {kmValuesInvalid && <p role="alert" className="text-sm text-destructive">Informe quilômetros não negativos, com KM final maior ou igual ao inicial; um status concluído exige KM auditado.</p>}
                 <Button
                   size="sm"
-                  disabled={locked || updateKm.isPending}
+                  disabled={locked || updateKm.isPending || kmValuesInvalid}
                   onClick={() => updateKm.mutate({
                     id: s.id,
                     audited_km: auditedKm === '' ? null : Number(auditedKm),
@@ -561,9 +570,9 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 <Textarea id="settlement-approval-reason" value={exceptionReason} onChange={(e) => setExceptionReason(e.target.value)} placeholder="Motivo da aprovação com exceção" />
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setApproveOpen(false)}>Cancelar</Button>
-                  <Button disabled={needsRecalc || !exceptionReason || updateStatus.isPending}
+                  <Button disabled={needsRecalc || !exceptionReason.trim() || updateStatus.isPending}
                     onClick={async () => {
-                      await updateStatus.mutateAsync({ id: s.id, status: 'approved', reason: exceptionReason, allow_exceptions: true });
+                      await updateStatus.mutateAsync({ id: s.id, status: 'approved', reason: exceptionReason.trim(), allow_exceptions: true });
                       setApproveOpen(false); setExceptionReason('');
                     }}>Aprovar</Button>
                 </DialogFooter>

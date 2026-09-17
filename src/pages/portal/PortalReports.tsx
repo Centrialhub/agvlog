@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Loader2, Download, TruckIcon, AlertTriangle, ClipboardCheck, Clock } from 'lucide-react';
 import { PortalKpiCard } from '@/components/portal/PortalKpiCard';
 import { escapePortalCsvCell } from '@/lib/portalCsv';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 
 function downloadCsv(name: string, rows: Array<Record<string, unknown>>) {
   if (!rows.length) return;
@@ -25,11 +26,12 @@ function downloadCsv(name: string, rows: Array<Record<string, unknown>>) {
 }
 
 export default function PortalReports() {
-  const today = new Date().toISOString().slice(0, 10);
-  const ninetyAgo = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const today = localDateInputValue();
+  const ninetyAgo = localDateInputValue(new Date(Date.now() - 90 * 24 * 3600 * 1000));
   const [start, setStart] = useState(ninetyAgo);
   const [end, setEnd] = useState(today);
   const { data, isLoading, error, refetch } = usePortalReports({ start, end });
+  const invalidRange = !!start && !!end && start > end;
 
   return (
     <PortalSection
@@ -39,11 +41,11 @@ export default function PortalReports() {
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div>
           <Label className="text-xs">Data inicial</Label>
-          <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="w-[160px]" />
+          <Input type="date" value={start} max={end || undefined} onChange={(e) => setStart(e.target.value)} className="w-[160px]" />
         </div>
         <div>
           <Label className="text-xs">Data final</Label>
-          <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="w-[160px]" />
+          <Input type="date" value={end} min={start || undefined} onChange={(e) => setEnd(e.target.value)} className="w-[160px]" />
         </div>
         <Button
           variant="outline"
@@ -54,7 +56,9 @@ export default function PortalReports() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {invalidRange ? (
+        <div role="alert" className="rounded-md border border-destructive/30 p-6 text-center text-sm text-destructive">A data inicial não pode ser posterior à data final.</div>
+      ) : isLoading ? (
         <div className="p-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
       ) : error ? (
         <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/30 p-8 text-center text-sm text-destructive">

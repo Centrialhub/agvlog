@@ -4,7 +4,7 @@ import { movementListSchema, movementResultSchema, type MovementCommand, type Mo
 import { expenseOptionsSchema, expenseBatchResultSchema, type ExpenseBatchCommand, type ExpenseOptionKind } from './expenseBatchContract';
 import {expenseHistorySchema,type ExpenseFilters} from './expenseHistoryContract';
 import type {StatementImportCommand} from './statementImportContract';
-import {statementListSchema,statementLinesSchema,type StatementListFilters,type StatementLineFilters} from './statementHistoryContract';
+import {statementListSchema,statementLinesSchema,statementHistoryPageSchema,type StatementListFilters,type StatementLineFilters} from './statementHistoryContract';
 import {identityCandidatesSchema,statementReviewResultSchema,reviewReversalResultSchema,type ReviewReversalCommand,type StatementReviewCommand} from './statementReviewContract';
 import {financeAuditSchema,type FinanceAuditFilters} from './financeAuditContract';
 import {fiscalQueueSchema,type FiscalQueueStatus} from './fiscalQueueContract';
@@ -216,4 +216,22 @@ export async function readFinanceStatementLines(tenant:string,importId:string,fi
   const result=statementLinesSchema.parse(await rpc('list_finance_statement_lines',{_tenant_id:tenant,_import_id:importId,_filters:filters}));
   if(result.tenant_id!==tenant||result.import_id!==importId||result.page!==filters.page||result.page_size!==filters.page_size
     ||result.rows.some(row=>row.tenant_id!==tenant||row.import_id!==importId))throw new Error('Resposta de linhas fora do contexto.');return result;
+}
+export async function readFinanceStatementHistory(tenant:string,importId:string,page:number,pageSize=30,snapshotAt:string|null=null){
+  const result=statementHistoryPageSchema.parse(await rpc('list_finance_statement_history_v1',{_tenant_id:tenant,_import_id:importId,_page:page,_page_size:pageSize,_snapshot_at:snapshotAt}));
+  if(result.tenant_id!==tenant||result.import_id!==importId||result.page!==page||result.page_size!==pageSize||(snapshotAt!==null&&result.snapshot_at!==snapshotAt))throw new Error('Histórico do extrato fora do contexto.');
+  return result;
+}
+export async function readPayrollPeriodPage(tenant:string,page:number,pageSize=30,filters:{search:string;status:string;payment:string;snapshot_at?:string;collection_revision?:string}={search:'',status:'all',payment:'all'}){
+ const result=payrollPeriodsProjectionSchema.parse(await rpc('get_finance_payroll_period_page_v2',{_tenant_id:tenant,_page:page,_page_size:pageSize,_filters:filters}));
+ if(result.tenant_id!==tenant||result.page!==page||result.page_size!==pageSize||result.total===undefined||!result.snapshot_at||!result.collection_revision
+   ||(filters.snapshot_at&&result.snapshot_at!==filters.snapshot_at)||(filters.collection_revision&&result.collection_revision!==filters.collection_revision)
+   ||result.rows.some(row=>row.tenant_id!==tenant))throw new Error('Página de períodos fora do contexto.');
+ return {rows:result.rows,total:result.total,snapshot_at:result.snapshot_at,collection_revision:result.collection_revision};
+}
+const statementOriginalLocatorSchema=z.object({bucket:z.string().min(1),path:z.string().min(1)}).strict();
+export async function getFinanceStatementOriginalLocator(tenant:string,importId:string){return statementOriginalLocatorSchema.parse(await rpc('get_finance_statement_original_locator_v1',{_tenant_id:tenant,_import_id:importId}));}
+export async function reassignFinanceStatementAccount(tenant:string,importId:string,accountId:string,reason:string){
+ const result=z.object({confirmed:z.literal(true),import_id:z.string().uuid(),bank_account_id:z.string().uuid()}).parse(await rpc('reassign_finance_statement_account_v1',{_tenant_id:tenant,_import_id:importId,_account_id:accountId,_reason:reason.trim()}));
+ if(result.import_id!==importId||result.bank_account_id!==accountId)throw new Error('Resposta de correção fora do pedido.');return result;
 }

@@ -4,7 +4,7 @@ import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach,expect,it,vi} from 'vitest';
 import DeliveryReceipts from '@/pages/DeliveryReceipts';
 
-const mocks=vi.hoisted(()=>({list:vi.fn(),all:vi.fn(),catalog:vi.fn(),operations:vi.fn(),history:vi.fn(),ocrHealth:vi.fn(),ocrSearch:vi.fn()}));
+const mocks=vi.hoisted(()=>({list:vi.fn(),all:vi.fn(),summary:vi.fn(),options:vi.fn(),operations:vi.fn(),history:vi.fn(),ocrHealth:vi.fn(),ocrSearch:vi.fn()}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'20000000-0000-4000-8000-000000000001'},currentRole:'operator'})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'10000000-0000-4000-8000-000000000001'}})}));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:vi.fn()})}));
@@ -12,7 +12,8 @@ vi.mock('@/components/delivery-receipts/DeliveryReceiptSupplierChannels',()=>({D
 vi.mock('@/components/delivery-receipts/DeliveryReceiptQualityPolicyPanel',()=>({DeliveryReceiptQualityPolicyPanel:()=>null}));
 vi.mock('@/lib/deliveryReceipts/deliveryReceiptOperations',async importOriginal=>{
   const original=await importOriginal<typeof import('@/lib/deliveryReceipts/deliveryReceiptOperations')>();
-  return {...original,listDeliveryReceipts:mocks.list,listAllDeliveryReceipts:mocks.all,getDeliveryReceiptFilterCatalog:mocks.catalog};
+  return {...original,listDeliveryReceipts:mocks.list,listAllDeliveryReceipts:mocks.all,
+    getDeliveryReceiptFilterSummary:mocks.summary,listDeliveryReceiptFilterOptions:mocks.options};
 });
 vi.mock('@/lib/deliveryReceipts/deliveryReceiptOperationsDashboard',async importOriginal=>{
   const original=await importOriginal<typeof import('@/lib/deliveryReceipts/deliveryReceiptOperationsDashboard')>();
@@ -26,8 +27,10 @@ beforeEach(()=>{
     version:1,tenant_id:'20000000-0000-4000-8000-000000000001',actor_id:'10000000-0000-4000-8000-000000000001',rows:[],
     total:82,limit:pagination.limit,offset:pagination.offset,
   }));
-  mocks.catalog.mockResolvedValue({total:82,queues:{awaiting_sync:2,awaiting_validation:3,rejected:4,validated:20,physical_pending:5,
-    ready_to_send:6,sent:30,send_failures:7},drivers:[{value:'driver-zulu',label:'Motorista fora da página'}],vehicles:[],suppliers:[],trips:[],loads:[],clients:[],cities:[],states:[]});
+  mocks.summary.mockResolvedValue({total:82,queues:{awaiting_sync:2,awaiting_validation:3,rejected:4,validated:20,physical_pending:5,
+    ready_to_send:6,sent:30,send_failures:7}});
+  mocks.options.mockImplementation((_tenant:string,_actor:string,kind:string)=>Promise.resolve({items:kind==='driver'?
+    [{value:'driver-zulu',label:'Motorista fora da página'}]:[],hasMore:false,nextCursor:null}));
   mocks.operations.mockResolvedValue({receipts:{},emails:{},expenses:{},templates:[],batches:[]});
   mocks.all.mockResolvedValue([]);
   mocks.history.mockResolvedValue({rows:[],total:0,limit:25,offset:0});
@@ -35,13 +38,14 @@ beforeEach(()=>{
   mocks.ocrSearch.mockResolvedValue([]);
 });
 
-it('shows the eight operational queues, complete filter catalog and server pagination',async()=>{
+it('shows the eight operational queues, bounded searchable filters and server pagination',async()=>{
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});render(<QueryClientProvider client={client}><DeliveryReceipts/></QueryClientProvider>);
   const queues=(await screen.findByRole('heading',{name:'Filas operacionais'})).closest('section')!;
   for(const label of ['Aguardando sincronização','Aguardando validação','Rejeitados','Validados','Papel físico pendente','Prontos para envio','Enviados','Falhas de envio']){
     expect(within(queues).getByText(label)).toBeInTheDocument();
   }
   expect(await screen.findByRole('option',{name:'Motorista fora da página'})).toBeInTheDocument();
+  expect(mocks.options).toHaveBeenCalledWith(expect.any(String),expect.any(String),'driver','',null,expect.any(AbortSignal));
   expect(screen.getByText('Exibindo 0–0 de 82 canhotos')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button',{name:'Próxima'}));
   await waitFor(()=>expect(mocks.list).toHaveBeenCalledWith(expect.any(String),expect.any(String),{},
@@ -67,11 +71,13 @@ it('selects every eligible supplier receipt across all filtered pages',async()=>
   }));
   mocks.all.mockResolvedValue(rows);
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});render(<QueryClientProvider client={client}><DeliveryReceipts/></QueryClientProvider>);
-  const selector=await screen.findByRole('checkbox',{name:'Selecionar todos os 30 PDFs validados deste fornecedor no filtro atual'});
+  const selector=await screen.findByRole('checkbox',{name:'Selecionar todos os PDFs validados deste fornecedor no filtro atual'});
   expect(selector).toBeEnabled();
   expect(selector).not.toBeChecked();
+  expect(mocks.all).not.toHaveBeenCalled();
   fireEvent.click(selector);
-  expect(selector).toBeChecked();
+  await waitFor(()=>expect(mocks.all).toHaveBeenCalledTimes(1));
+  await waitFor(()=>expect(selector).toBeChecked());
   await waitFor(()=>expect(screen.getByText(/Preparar e-mail/)).toHaveTextContent('Preparar e-mail (30)'));
   expect(screen.getAllByLabelText(/Selecionar canhoto da entrega/)).toHaveLength(25);
 });
@@ -96,4 +102,12 @@ it('pages and searches email history and prepares a bounced resend from its immu
   await userEvent.click(within(historyNav).getByRole('button',{name:'Próxima'}));
   await waitFor(()=>expect(mocks.history).toHaveBeenLastCalledWith(expect.any(String),expect.any(String),
     expect.objectContaining({search:'NF-999',offset:25}),expect.any(AbortSignal)));
+});
+
+it('shows unavailable expenses while retaining operational receipt queues',async()=>{
+  mocks.operations.mockResolvedValue({receipts:{},emails:{},expenses:null,templates:[],batches:[]});
+  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  render(<QueryClientProvider client={client}><DeliveryReceipts/></QueryClientProvider>);
+  expect(await screen.findByText('Indicadores de despesas indisponíveis para este acesso. Os canhotos e envios continuam disponíveis.')).toHaveAttribute('role','status');
+  expect(screen.getByRole('heading',{name:'Filas operacionais'})).toBeInTheDocument();
 });

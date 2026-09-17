@@ -1,0 +1,60 @@
+{
+  "head": "3d10a448",
+  "groups": {
+    "financial_boundaries": [
+      "src/test/employeeAdvanceCompanyBoundary.test.ts",
+      "src/test/financeInvoiceCompanyBoundary.test.ts",
+      "supabase/migrations/20260911025149_finance_receivable_invoice_active_read_boundary.sql",
+      "supabase/migrations/20260911025214_finance_client_invoice_active_command_boundary.sql",
+      "supabase/migrations/20260911025737_finance_closing_active_company_boundary.sql",
+      "supabase/migrations/20260911030051_finance_billable_sources_active_company_boundary.sql",
+      "supabase/migrations/20260911035125_finance_employee_advance_active_company_boundary.sql"
+    ],
+    "applied_rollout_record_and_checks": [
+      "src/test/financeExistingFiscalCapture.test.ts",
+      "src/test/financeLoadPaymentInternalRelease.test.ts",
+      "src/test/financeTemporalProductionAtomic.test.ts",
+      "src/test/financeWorkerResumeGuards.test.ts",
+      "supabase/rollouts/20260911032127_finance_load_payment_internal_release.sql",
+      "supabase/rollouts/20260911034831_finance_receivable_temporal_production_atomic.sql",
+      "supabase/rollouts/20260911040114_finance_existing_fiscal_observation_capture.sql",
+      "supabase/rollouts/20260911041050_finance_core_active_company_release.sql",
+      "supabase/rollouts/20260911043147_finance_known_workers_resume_via_api.sql"
+    ],
+    "fresh_chain_and_readiness_tests": [
+      "scripts/build-finance-rpc-unresolved-check.mjs",
+      "scripts/review-finance-rpc-dynamic-adapters.mjs",
+      "src/test/financeForwardFinalBlockIntegration.test.ts",
+      "src/test/financeForwardFourthBlockIntegration.test.ts",
+      "src/test/financeForwardReadinessDiagnostic.test.ts",
+      "src/test/financeForwardSecondBlockIntegration.test.ts",
+      "src/test/financeForwardThirdBlockIntegration.test.ts",
+      "src/test/financeFreshForwardIntegration.test.ts",
+      "src/test/financeFreshReceivableDelegation.test.ts",
+      "src/test/financePayrollLifecyclePredecessorMetadata.test.ts",
+      "src/test/financePayrollLifecycleWrapperCompatibility.test.ts",
+      "src/test/helpers/freshFinanceFiscalInvoiceLifecycleFixture.ts"
+    ],
+    "review_shared_operational_dependencies": [
+      "src/test/canonicalCompanyPolicyCompatibility.test.ts",
+      "src/test/financeFinalCargoOrderingIntegration.test.ts",
+      "src/test/helpers/canonicalCompanyCompatibilityDatabase.ts",
+      "supabase/migrations/20260911035306_delivery_operations_active_company_finance_metrics_boundary.sql",
+      "supabase/rollouts/20260911032601_canonical_destination_geocoding_policy_compat.sql"
+    ],
+    "non_applied_or_duplicate_archives": [
+      "src/test/financeFinalActivation.test.ts",
+      "supabase/rollouts/20260911030716_finance_active_company_final_activation.sql",
+      "supabase/rollouts/20260911032127_finance_load_payment_internal_release.sql",
+      "supabase/rollouts/20260911042530_finance_known_workers_resume.sql",
+      "supabase/rollouts/finance_load_payment_internal_release.sql",
+      "supabase/rollouts/finance_payroll_lifecycle_existing_access_wrapper.sql"
+    ],
+    "exclude_current_wip": [
+      "src/test/unloadingCancelledClaimCostResolution.test.ts",
+      "supabase/migrations/20260911054915_finance_unloading_cancelled_claim_cost_resolution.sql"
+    ]
+  },
+  "application_evidence": "docs/qa/finance-production-applied-history-2026-09-11.json:151 entries through20260911050640. Names/aliases support historical identity, not byte equality. Parent reports subsequent activation/workers; no remote query performed in this review.",
+  "not_a_stage_allowlist": true
+}

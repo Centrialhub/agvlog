@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
 import { HandCoins, Plus, Wallet } from 'lucide-react';
 import {
   PAYROLL_PAYMENT_STATUS_LABELS,
@@ -18,18 +17,19 @@ import { PayrollStatusBadge } from '@/components/financial/PayrollStatusBadge';
 import { AdvancesTable, RegisterAdvanceDialog } from '@/components/financial/payroll/PayrollAdvances';
 import { EntryDrawer } from '@/components/financial/payroll/PayrollEntryDrawer';
 import { GeneratePeriodDialog } from '@/components/financial/payroll/PayrollGeneratePeriodDialog';
+import { fmtDateSafe } from '@/lib/utils/formatDate';
 import { PeriodEntries } from '@/components/financial/payroll/PayrollPeriodEntries';
-import { matchesSearch } from '@/lib/listFilters';
 
 export { PeriodEntries };
 
 export default function Payroll() {
-  const { data: periods = [], isLoading, error: periodError } = usePayrollPeriods();
+  const [periodPage,setPeriodPage]=useState(1);
+  const [periodPaging,setPeriodPaging]=useState({snapshotAt:'',collectionRevision:''});
   const [tab, setTab] = useState('periods');
   const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', payment: 'all' }, 'period_');
-  const filteredPeriods = periods.filter(row => matchesSearch(filters.search, row.period_name)
-    && (filters.status === 'all' || row.status === filters.status)
-    && (filters.payment === 'all' || row.payment_status === filters.payment));
+  const resetPeriodPaging=()=>{setPeriodPage(1);setPeriodPaging({snapshotAt:'',collectionRevision:''});};
+  const { data: periodResult, isLoading, error: periodError } = usePayrollPeriods(periodPage,filters,periodPaging);const periods=periodResult?.rows??[];
+  const filteredPeriods = periods;
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const [genOpen, setGenOpen] = useState(false);
   const [advanceOpen, setAdvanceOpen] = useState(false);
@@ -38,7 +38,7 @@ export default function Payroll() {
   const activePeriod = periods.find(period => period.id === selectedPeriodId) ?? periods[0] ?? null;
   const currentPeriodId = activePeriod?.id;
 
-  if (periodError) return <p role="alert" className="text-destructive">Não foi possível conferir os períodos da folha.</p>;
+  if (periodError) return <div role="alert" className="space-y-2 text-destructive"><p>{periodError instanceof Error&&periodError.message.includes('payroll_period_collection_changed')?'A lista mudou durante a navegação. Atualize para consultar os períodos atuais.':'Não foi possível conferir os períodos da folha.'}</p><Button variant="outline" onClick={resetPeriodPaging}>Atualizar períodos</Button></div>;
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -61,10 +61,10 @@ export default function Payroll() {
 
         <TabsContent value="periods" className="space-y-3">
           <ListFilterBar fields={[
-            { key: 'search', label: 'Buscar período da folha', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Nome ou competência do período' },
-            { key: 'status', label: 'Situação da folha', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, ...Object.entries(PAYROLL_PERIOD_STATUS_LABELS).map(([value, label]) => ({ value, label }))] },
-            { key: 'payment', label: 'Pagamento', value: filters.payment, onChange: value => setFilter('payment', value), options: [{ value: 'all', label: 'Todos' }, ...Object.entries(PAYROLL_PAYMENT_STATUS_LABELS).map(([value, label]) => ({ value, label }))] },
-          ]} onReset={resetFilters} activeCount={activeCount} resultCount={filteredPeriods.length} totalCount={periods.length} loading={isLoading} />
+            { key: 'search', label: 'Buscar período da folha', type: 'search', value: filters.search, onChange: value => {resetPeriodPaging();setFilter('search', value);}, placeholder: 'Nome ou competência do período' },
+            { key: 'status', label: 'Situação da folha', value: filters.status, onChange: value => {resetPeriodPaging();setFilter('status', value);}, options: [{ value: 'all', label: 'Todas as situações' }, ...Object.entries(PAYROLL_PERIOD_STATUS_LABELS).map(([value, label]) => ({ value, label }))] },
+            { key: 'payment', label: 'Pagamento', value: filters.payment, onChange: value => {resetPeriodPaging();setFilter('payment', value);}, options: [{ value: 'all', label: 'Todos' }, ...Object.entries(PAYROLL_PAYMENT_STATUS_LABELS).map(([value, label]) => ({ value, label }))] },
+          ]} onReset={()=>{resetPeriodPaging();resetFilters();}} activeCount={activeCount} resultCount={filteredPeriods.length} totalCount={periodResult?.total??0} loading={isLoading} />
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow><TableHead>Período</TableHead><TableHead>Início</TableHead><TableHead>Fim</TableHead><TableHead>Status</TableHead><TableHead>Pagamento</TableHead><TableHead className="w-10"></TableHead></TableRow></TableHeader>
@@ -74,8 +74,8 @@ export default function Payroll() {
                     : filteredPeriods.map(period => (
                       <TableRow key={period.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setSelectedPeriodId(period.id); setTab('entries'); }}>
                         <TableCell className="font-medium text-sm">{period.period_name}</TableCell>
-                        <TableCell className="text-sm">{format(new Date(period.period_start), 'dd/MM/yyyy')}</TableCell>
-                        <TableCell className="text-sm">{format(new Date(period.period_end), 'dd/MM/yyyy')}</TableCell>
+                        <TableCell className="text-sm">{fmtDateSafe(period.period_start)}</TableCell>
+                        <TableCell className="text-sm">{fmtDateSafe(period.period_end)}</TableCell>
                         <TableCell><PayrollStatusBadge status={period.status} /></TableCell>
                         <TableCell><Badge variant="outline" className="text-[10px]">{PAYROLL_PAYMENT_STATUS_LABELS[period.payment_status] ?? period.payment_status}</Badge></TableCell>
                         <TableCell><Button variant="ghost" size="sm" onClick={event => { event.stopPropagation(); setSelectedPeriodId(period.id); setTab('entries'); }}>Abrir</Button></TableCell>
@@ -84,13 +84,14 @@ export default function Payroll() {
               </TableBody>
             </Table>
           </CardContent></Card>
+          <div className="flex items-center justify-between"><Button variant="outline" disabled={periodPage===1||isLoading} onClick={()=>setPeriodPage(p=>p-1)}>Anterior</Button><span className="text-sm">Página {periodPage} de {Math.max(1,Math.ceil((periodResult?.total??0)/30))}</span><Button variant="outline" disabled={periodPage*30>=(periodResult?.total??0)||isLoading} onClick={()=>{if(periodResult)setPeriodPaging({snapshotAt:periodResult.snapshot_at,collectionRevision:periodResult.collection_revision});setPeriodPage(p=>p+1);}}>Próxima</Button></div>
         </TabsContent>
 
         <TabsContent value="entries">{activePeriod && <PeriodEntries period={activePeriod} onOpenEntry={setEntryDrawer} />}</TabsContent>
         <TabsContent value="advances"><AdvancesTable /></TabsContent>
       </Tabs>
 
-      <GeneratePeriodDialog open={genOpen} onOpenChange={setGenOpen} onGenerated={setSelectedPeriodId} />
+      <GeneratePeriodDialog open={genOpen} onOpenChange={setGenOpen} onGenerated={periodId=>{setSelectedPeriodId(periodId);resetPeriodPaging();}} />
       <RegisterAdvanceDialog open={advanceOpen} onOpenChange={setAdvanceOpen} />
       <EntryDrawer entry={entryDrawer} period={activePeriod} onClose={() => setEntryDrawer(null)} />
     </div>

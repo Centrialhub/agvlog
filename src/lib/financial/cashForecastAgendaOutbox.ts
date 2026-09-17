@@ -9,6 +9,7 @@ const pendingSchema=z.object({version:z.literal(1),tenantId:uuid,actorId:uuid,pa
 export type PendingCashForecastAgenda=z.infer<typeof pendingSchema>;
 type Store=Pick<Storage,'getItem'|'setItem'|'removeItem'>;
 export const cashForecastAgendaKey=(tenant:string,actor:string)=>`agvlog:cash-forecast-agenda:v1:${tenant}:${actor}`;
+export function discardCashForecastAgenda(storage:Store,tenant:string,actor:string){uuid.parse(tenant);uuid.parse(actor);storage.removeItem(cashForecastAgendaKey(tenant,actor));}
 const unavailable=()=>new Error('O pedido de revisão de data esperada salvo está indisponível ou incompatível. Preserve os dados antes de iniciar outra operação.');
 export function pendingCashForecastAgenda(storage:Store,tenant:string,actor:string):PendingCashForecastAgenda|null{
  try{uuid.parse(tenant);uuid.parse(actor);const raw=storage.getItem(cashForecastAgendaKey(tenant,actor));if(raw===null)return null;if(raw.length>20000)throw unavailable();const original=JSON.parse(raw),row=pendingSchema.parse(original);if(row.tenantId!==tenant||row.actorId!==actor||row.payload.tenant_id!==tenant)throw unavailable();return original as PendingCashForecastAgenda;}catch{throw unavailable();}

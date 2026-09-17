@@ -1,5 +1,5 @@
 import {supabase} from '@/integrations/supabase/client';
-import {settlementMovementCommandSchema,settlementMovementResultSchema,settlementMovementOptionsSchema,settlementReversalCommandSchema,settlementReversalResultSchema,type SettlementReversalCommand,type SettlementMovementCommand} from './settlementMovementContract';
+import {settlementMovementCommandSchema,settlementMovementResultSchema,settlementMovementOptionsSchema,settlementMovementHistorySchema,settlementReversalCommandSchema,settlementReversalResultSchema,type SettlementReversalCommand,type SettlementMovementCommand} from './settlementMovementContract';
 type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{message:string;code?:string}|null}>;
 export class SettlementMovementRejectedError extends Error {}
 async function rpc(name:string,args:Record<string,unknown>){
@@ -14,6 +14,10 @@ export async function linkSettlementMovement(command:SettlementMovementCommand){
 export async function readSettlementMovements(tenant:string,payment:string,page:number){
  const result=settlementMovementOptionsSchema.parse(await rpc('get_finance_settlement_payment_movements',{_tenant_id:tenant,_payment_id:payment,_page:page}));
  if(result.tenant_id!==tenant||result.payment_id!==payment||result.page!==page)throw new Error('Pagamentos fora do contexto.');return result;
+}
+export async function readSettlementMovementHistory(tenant:string,payment:string,page:number){
+ const result=settlementMovementHistorySchema.parse(await rpc('get_finance_settlement_payment_movement_history',{_tenant_id:tenant,_payment_id:payment,_page:page}));
+ if(result.tenant_id!==tenant||result.payment_id!==payment||result.page!==page)throw new Error('Histórico de vínculos fora do contexto.');return result;
 }
 export async function reverseSettlementMovement(command:SettlementReversalCommand){
  settlementReversalCommandSchema.parse(command);

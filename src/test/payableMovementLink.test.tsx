@@ -43,5 +43,8 @@ describe('link payable to an existing movement',()=>{
   spy.mockRestore();view.unmount();sessionStorage.setItem(key,'{invalid');mount();
   expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível recuperar');
   expect(screen.getByRole('button',{name:'Revisar vínculo'})).toBeDisabled();
+  fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));
+  expect(sessionStorage.getItem(key)).toBeNull();await screen.findByText('Saldo do título: R$ 300,00');
+  expect(screen.getByRole('button',{name:'Revisar vínculo'})).toBeEnabled();expect(api.apply).not.toHaveBeenCalled();
  });
 });

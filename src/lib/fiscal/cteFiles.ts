@@ -1,4 +1,5 @@
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
+import { fetchCachedFiscalBlob } from '@/lib/fiscal/fiscalFileValidation';
 
 /** Referências mínimas necessárias para obter o arquivo de um CT-e. */
 export interface CteFileRef {
@@ -24,18 +25,16 @@ export function canDownloadCte(row: CteFileRef) {
   return Boolean(row.hub_document_id || row.pdf_url || row.xml_url);
 }
 
-/** Obtém o arquivo sob demanda no Hub Fiscal; link em cache é último recurso. */
+/** Usa primeiro o link já armazenado; o Hub Fiscal é a contingência. */
 export async function fetchCteBlob(row: CteFileRef, format: 'pdf' | 'xml'): Promise<Blob> {
-  if (row.hub_document_id) {
-    return hubFiscal.file(row.hub_document_id, format, { type: 'cte', emissionId: row.emission_id ?? undefined });
-  }
   const cachedUrl = format === 'pdf' ? row.pdf_url : row.xml_url;
   if (cachedUrl) {
-    const res = await fetch(cachedUrl);
-    if (res.ok) {
-      const blob = await res.blob();
-      if (blob.size > 0) return blob;
-    }
+    try {
+      return await fetchCachedFiscalBlob(cachedUrl, format);
+    } catch { /* link expirado/CORS: tenta o proxy autenticado */ }
+  }
+  if (row.hub_document_id) {
+    return hubFiscal.file(row.hub_document_id, format, { type: 'cte', emissionId: row.emission_id ?? undefined });
   }
   throw new Error(
     row.source === 'hub'
@@ -57,7 +56,7 @@ export function saveBlob(blob: Blob, filename: string) {
 
 export function openBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
-  const win = window.open(objectUrl, '_blank');
+  const win = window.open(objectUrl, '_blank', 'noopener,noreferrer');
   if (!win) saveBlob(blob, filename);
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }

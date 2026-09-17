@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Send, FileText } from 'lucide-react';
+import { Plus, Send, FileText, Loader2, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useNFSeList, useIssueNFSe } from '@/hooks/useNFSe';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
 import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
@@ -18,10 +18,18 @@ interface Props {
 }
 
 export default function NFSePanel({ loadId, loadNumber, destination, defaultClientName, defaultClientCnpj, freightTotal }: Props) {
-  const { data: notes = [] } = useNFSeList({ loadId });
+  const notesQuery = useNFSeList({ loadId });
+  const notes = notesQuery.data ?? [];
   const [environment, setEnvironment] = useState<HubEnvironment>('production');
   const issue = useIssueNFSe(environment);
   const [open, setOpen] = useState(false);
+  const initialDocument = useMemo(() => ({
+    cliente_nome: defaultClientName || '',
+    cliente_cnpj: defaultClientCnpj || '',
+    description: `Prestação de serviço de transporte — Carga ${loadNumber}${destination ? ` para ${destination}` : ''}`,
+    valor_servicos: freightTotal || 0,
+    load_id: loadId,
+  }), [defaultClientCnpj, defaultClientName, destination, freightTotal, loadId, loadNumber]);
 
   return (
     <Card>
@@ -29,13 +37,26 @@ export default function NFSePanel({ loadId, loadNumber, destination, defaultClie
         <CardTitle className="text-base flex items-center gap-2">
           <FileText className="h-4 w-4" /> NFS-e — Carga {loadNumber}
         </CardTitle>
-        <Button size="sm" onClick={() => setOpen(true)}>
+        <Button size="sm" onClick={() => setOpen(true)} disabled={notesQuery.isLoading || notesQuery.isError}>
           <Plus className="h-3 w-3 mr-1" /> Nova NFS-e
         </Button>
       </CardHeader>
       <CardContent>
         <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issue.isPending} />
-        {notes.length === 0 ? (
+        {notesQuery.isLoading ? (
+          <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground" role="status">
+            <Loader2 className="h-4 w-4 animate-spin" /> Consultando NFS-e da carga…
+          </div>
+        ) : notesQuery.isError ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 p-3 text-sm" role="alert">
+            <TriangleAlert className="h-4 w-4 text-destructive" />
+            <span>Não foi possível consultar as NFS-e desta carga. Nenhuma nova nota será criada até a consulta ser refeita.</span>
+            <Button size="sm" variant="outline" onClick={() => void notesQuery.refetch()} disabled={notesQuery.isFetching}>
+              {notesQuery.isFetching ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+              Tentar novamente
+            </Button>
+          </div>
+        ) : notes.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhuma NFS-e gerada para esta carga.</p>
         ) : (
           <div className="space-y-2">
@@ -49,7 +70,7 @@ export default function NFSePanel({ loadId, loadNumber, destination, defaultClie
                   <span className="text-muted-foreground truncate max-w-[260px]">{n.cliente_nome}</span>
                   <span className="tabular-nums">R$ {Number(n.valor_servicos).toFixed(2)}</span>
                 </div>
-                {(n.status === 'draft' || n.status === 'rejected') && (
+                {n.status === 'draft' && (
                   <Button size="sm" variant="outline" onClick={() => issue.mutate(n.id)} disabled={issue.isPending}>
                     <Send className="h-3 w-3 mr-1" /> Emitir
                   </Button>
@@ -66,13 +87,7 @@ export default function NFSePanel({ loadId, loadNumber, destination, defaultClie
           issuing={issue.isPending}
           onOpenChange={setOpen}
           loadId={loadId}
-          initial={{
-            cliente_nome: defaultClientName || '',
-            cliente_cnpj: defaultClientCnpj || '',
-            description: `Prestação de serviço de transporte — Carga ${loadNumber}${destination ? ` para ${destination}` : ''}`,
-            valor_servicos: freightTotal || 0,
-            load_id: loadId,
-          }}
+          initial={initialDocument}
         />
       </CardContent>
     </Card>

@@ -20,6 +20,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { normalizeCity } from '@/lib/utils/normalizeCity';
 import { getErrorMessage } from '@/lib/errors';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { assertReallocationCapacity } from '@/lib/loads/reallocationCapacity';
+
+const REALLOCATION_FILTER_CHUNK = 100;
 
 type FilterField = 'all' | 'remitter' | 'recipient' | 'city' | 'invoice';
 
@@ -223,7 +227,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="text-[10px] w-12">Paletes</span>
-              <Progress value={Math.min(palletPct, 100)} className={`h-1.5 flex-1 ${isOverPallet ? '[&>div]:bg-destructive' : ''}`} />
+              <Progress aria-label="Ocupação de paletes" aria-valuetext={`${palletPct}%`} value={Math.min(palletPct, 100)} className={`h-1.5 flex-1 ${isOverPallet ? '[&>div]:bg-destructive' : ''}`} />
               <span className={`text-[10px] font-medium w-10 text-right ${isOverPallet ? 'text-destructive' : ''}`}>
                 {currentPallets}/{maxPallets}
               </span>
@@ -231,7 +235,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
             {maxWeight > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-[10px] w-12">Peso</span>
-                <Progress value={Math.min(weightPct, 100)} className={`h-1.5 flex-1 ${isOverWeight ? '[&>div]:bg-destructive' : ''}`} />
+                <Progress aria-label="Ocupação de peso" aria-valuetext={`${weightPct}%`} value={Math.min(weightPct, 100)} className={`h-1.5 flex-1 ${isOverWeight ? '[&>div]:bg-destructive' : ''}`} />
                 <span className={`text-[10px] font-medium w-10 text-right ${isOverWeight ? 'text-destructive' : ''}`}>
                   {currentWeight.toLocaleString('pt-BR')}
                 </span>
@@ -409,8 +413,10 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
 
 export default function LoadReallocation() {
   const toast = useSonnerToast();
-  const { data: loads = [] } = useLoads();
-  const { data: vehicles = [] } = useVehicles();
+  const loadsQuery = useLoads();
+  const loads = loadsQuery.data ?? [];
+  const vehiclesQuery = useVehicles();
+  const vehicles = vehiclesQuery.data ?? [];
   const { moveItems, isPending: moving } = useMoveLoadItems();
   const replanning = useLoadReplanning();
   const compositionBusy = moving || replanning.isPending;
@@ -441,24 +447,42 @@ export default function LoadReallocation() {
     [loads]
   );
 
-  const { data: sourceItems = [], isLoading: loadingSource } = useLoadItems(sourceLoadId || undefined);
-  const { data: targetItems = [], isLoading: loadingTarget } = useLoadItems(targetLoadId || undefined);
+  const sourceItemsQuery = useLoadItems(sourceLoadId || undefined);
+  const sourceItems = sourceItemsQuery.data ?? [];
+  const loadingSource = sourceItemsQuery.isLoading;
+  const targetItemsQuery = useLoadItems(targetLoadId || undefined);
+  const targetItems = targetItemsQuery.data ?? [];
+  const loadingTarget = targetItemsQuery.isLoading;
 
   // Fetch aggregate metadata (client/city) for all active loads to allow
   // hierarchical grouping in the selectors: Client → City → Route → Load.
   const activeLoadIds = useMemo(() => activeLoads.map(l => l.id), [activeLoads]);
-  const { data: allActiveItems = [] } = useQuery({
+  const loadMetaQuery = useQuery({
     queryKey: ['reallocation_load_meta', activeLoadIds.join(',')],
     enabled: activeLoadIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('load_items')
-        .select('load_id, order_id, orders(order_number), fiscal_documents(remitter, recipient, recipient_city, recipient_state, invoice_number)')
-        .in('load_id', activeLoadIds);
-      if (error) throw error;
-      return data || [];
+      const rows = [];
+      for (let index = 0; index < activeLoadIds.length; index += REALLOCATION_FILTER_CHUNK) {
+        const ids = activeLoadIds.slice(index, index + REALLOCATION_FILTER_CHUNK);
+        rows.push(...await fetchAllPostgrestPages((from, to) => supabase
+          .from('load_items')
+          .select('load_id, order_id, orders(order_number), fiscal_documents(remitter, recipient, recipient_city, recipient_state, invoice_number)')
+          .in('load_id', ids)
+          .order('load_id', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to)));
+      }
+      return rows;
     },
   });
+  const allActiveItems = loadMetaQuery.data ?? [];
+  const hasReadError = loadsQuery.isError || vehiclesQuery.isError || sourceItemsQuery.isError
+    || targetItemsQuery.isError || loadMetaQuery.isError;
+  const retryReads = () => void Promise.allSettled([
+    loadsQuery.refetch(), vehiclesQuery.refetch(), loadMetaQuery.refetch(),
+    ...(sourceLoadId ? [sourceItemsQuery.refetch()] : []),
+    ...(targetLoadId ? [targetItemsQuery.refetch()] : []),
+  ]);
 
   const norm = (v?: string | null) => normalizeCity(v);
 
@@ -565,6 +589,15 @@ export default function LoadReallocation() {
     try {
       const items = itemIds.map(id => sourceItems.find(item => item.id === id));
       if (items.some(item => !item)) throw new Error('A composição mudou. Confira os itens atuais da origem.');
+      const targetVehicle = vehicles.find(vehicle => vehicle.id === targetLoad.vehicle_id);
+      assertReallocationCapacity({
+        currentPallets: targetItems.reduce((sum, item) => sum + (item.pallet_count || 0), 0),
+        currentWeightKg: targetItems.reduce((sum, item) => sum + (item.weight_kg || 0), 0),
+        addedPallets: items.reduce((sum, item) => sum + (item?.pallet_count || 0), 0),
+        addedWeightKg: items.reduce((sum, item) => sum + (item?.weight_kg || 0), 0),
+        maxPallets: targetVehicle?.max_pallets || 0,
+        maxWeightKg: targetVehicle?.max_weight_kg || 0,
+      });
       const result = await moveItems({ sourceLoadId, targetLoadId, items: items.map(item => ({
         id: item!.id, fiscalDocumentId: item!.fiscal_document_id,
       })) });
@@ -610,11 +643,19 @@ export default function LoadReallocation() {
         </Link>
       </div>
 
+      {hasReadError && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/40 p-3 text-sm" role="alert">
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+          <span>Não foi possível carregar todos os dados da realocação. Os seletores e as composições estão bloqueados para evitar uma movimentação com dados parciais.</span>
+          <Button size="sm" variant="outline" onClick={retryReads}>Tentar novamente</Button>
+        </div>
+      )}
+
       {/* Load selectors */}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-end gap-2 md:gap-4 max-w-full">
         <div className="min-w-0">
           <label htmlFor="reallocation-source" className="text-xs font-medium text-muted-foreground mb-1 block">Carga Origem</label>
-          <Select disabled={compositionBusy} value={sourceLoadId} onValueChange={v => { setSourceLoadId(v); setSelectedItems(new Set()); }}>
+          <Select disabled={compositionBusy || hasReadError} value={sourceLoadId} onValueChange={v => { setSourceLoadId(v); setSelectedItems(new Set()); }}>
             <SelectTrigger id="reallocation-source" className="w-full">
               <SelectValue placeholder="Selecione a carga de origem..." />
             </SelectTrigger>
@@ -655,7 +696,7 @@ export default function LoadReallocation() {
 
         <div className="min-w-0">
           <label htmlFor="reallocation-target" className="text-xs font-medium text-muted-foreground mb-1 block">Carga Destino</label>
-          <Select disabled={compositionBusy} value={targetLoadId} onValueChange={setTargetLoadId}>
+          <Select disabled={compositionBusy || hasReadError} value={targetLoadId} onValueChange={setTargetLoadId}>
             <SelectTrigger id="reallocation-target" className="w-full">
               <SelectValue placeholder="Selecione a carga de destino..." />
             </SelectTrigger>
@@ -741,7 +782,7 @@ export default function LoadReallocation() {
               {selectedPallets} pal · {selectedWeight.toLocaleString('pt-BR')} kg
             </span>
             <div className="flex-1" />
-            <Button size="sm" onClick={handleMoveItems} disabled={compositionBusy || confirmationPending}>
+            <Button size="sm" onClick={handleMoveItems} disabled={compositionBusy || confirmationPending || hasReadError}>
               {moving ? 'Movendo...' : `Mover para ${targetLoad?.load_number}`}
               <ArrowRightLeft className="h-3.5 w-3.5 ml-2" />
             </Button>
@@ -759,7 +800,9 @@ export default function LoadReallocation() {
         }} />
 
       {/* Side by side loads */}
-      {sourceLoadId && targetLoadId ? (
+      {hasReadError ? (
+        <Card><CardContent className="py-12 text-center text-sm text-destructive">As composições não serão exibidas até todas as consultas serem concluídas com sucesso.</CardContent></Card>
+      ) : sourceLoadId && targetLoadId ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[calc(100vh-280px)] min-h-[600px]">
           {sourceLoad && (
             loadingSource ? (

@@ -22,6 +22,8 @@ import { Plus, FileText, Download, Settings2, DollarSign, Search } from 'lucide-
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { generateClientInvoicePdf, type InvoiceCharge } from '@/lib/clientInvoicePdf';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
+import type {CompanyProfile} from '@/hooks/useCompanyProfile';
 
 const brl = (n: number) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = (s?: string | null) => s ? new Date(s.length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '-';
@@ -37,6 +39,7 @@ const errorMessage = (error: unknown) => error instanceof Error ? error.message 
 const EMPTY_INVOICES:ClientInvoice[]=[];
 const isInvoiceSourceType = (value: string): value is InvoiceCharge['source_type'] =>
   value === 'cte_document' || value === 'nfse_document' || value === 'manual_service';
+const object=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
 
 export default function ClientInvoices(){
  const {currentTenant}=useTenant();const {user}=useAuth();return <ClientInvoicesScreen key={currentTenant?.id+':'+user?.id}/>;
@@ -77,13 +80,11 @@ function ClientInvoicesScreen() {
       const tenantId = currentTenant?.id;
       if (!tenantId) throw new Error('Tenant ativo não encontrado.');
       const { supabase } = await import('@/integrations/supabase/client');
-      const [chargesRes, detailsRes] = await Promise.all([
-        supabase.from('client_invoice_charges').select('*').eq('invoice_id', inv.id).eq('tenant_id', tenantId).order('sort_order'),
-        supabase.from('client_invoice_details').select('*').eq('invoice_id', inv.id).eq('tenant_id', tenantId).order('sort_order'),
+      const [chargeRows, detailRows] = await Promise.all([
+        fetchAllPostgrestPages((from,to)=>supabase.from('client_invoice_charges').select('*').eq('invoice_id', inv.id).eq('tenant_id', tenantId).order('sort_order').order('id').range(from,to)),
+        fetchAllPostgrestPages((from,to)=>supabase.from('client_invoice_details').select('*').eq('invoice_id', inv.id).eq('tenant_id', tenantId).order('sort_order').order('id').range(from,to)),
       ]);
-      if (chargesRes.error) throw chargesRes.error;
-      if (detailsRes.error) throw detailsRes.error;
-      const charges: InvoiceCharge[] = (chargesRes.data || []).map(c => {
+      const charges: InvoiceCharge[] = chargeRows.map(c => {
         if (!isInvoiceSourceType(c.source_type)) {
           throw new Error(`Tipo de cobrança inválido: ${c.source_type}`);
         }
@@ -91,9 +92,11 @@ function ClientInvoicesScreen() {
           ...c,
           source_type: c.source_type,
           gross_amount: Number(c.gross_amount),
-          details: (detailsRes.data || []).filter(d => d.charge_id === c.id),
+          details: detailRows.filter(d => d.charge_id === c.id),
         };
       });
+      const payer=object(inv.payer_snapshot),companyRoot=object(inv.company_snapshot),preservedCompany={...companyRoot,...object(companyRoot.company)} as CompanyProfile;
+      const company=Object.keys(companyRoot).length?preservedCompany:companyProfile;
       const doc = generateClientInvoicePdf({
         invoice_number: inv.invoice_number,
         issue_date: inv.issue_date,
@@ -104,19 +107,11 @@ function ClientInvoicesScreen() {
         total_amount: Number(inv.total_amount),
         notes: inv.notes,
         company: {
-          name: companyProfile?.legal_name || companyProfile?.trade_name || currentTenant?.name || 'Transportadora',
-          tax_id: companyProfile?.tax_id,
-          state_registration: companyProfile?.state_registration,
-          address: companyProfile?.address,
-          city: companyProfile?.city,
-          state: companyProfile?.state,
-          zip: companyProfile?.zip,
-          phone: companyProfile?.phone,
-          email: companyProfile?.email,
-          website: companyProfile?.website,
-          logo_data_url: companyProfile?.logo_data_url,
+          name: company?.legal_name || company?.trade_name || String(companyRoot.name||currentTenant?.name||'Transportadora'),
+          tax_id: company?.tax_id,state_registration: company?.state_registration,address: company?.address,city: company?.city,state: company?.state,
+          zip: company?.zip,phone: company?.phone,email: company?.email,website: company?.website,logo_data_url: company?.logo_data_url,
         },
-        payer: { name: inv.clients?.company_name, tax_id: inv.clients?.tax_id || undefined },
+        payer: { name: String(payer.company_name||payer.name||inv.clients?.company_name||''), tax_id: String(payer.tax_id||inv.clients?.tax_id||'')||undefined },
         charges,
       });
       if(!alive.current)return;

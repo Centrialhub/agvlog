@@ -9,6 +9,7 @@ const routes=[
  ['/financial/statements','Extratos importados'],
  ['/financial/audit','Auditoria financeira'],
  ['/financial/fiscal-queue','Recebíveis fiscais'],
+ ['/financial/cash-forecast','Previsão de caixa'],
 ] as const;
 
 test('financial pages load their actual backend queries for an internal operator',async({page},testInfo)=>{

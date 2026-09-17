@@ -77,6 +77,8 @@ export default function DriverSyncPending(){
   const [build,setBuild]=useState<DriverBuildInfo|null>(null);
   const [sharing,setSharing]=useState(false);
   const [sharingReady,setSharingReady]=useState(false);
+  const [sharingBusy,setSharingBusy]=useState(false);
+  const [sharingError,setSharingError]=useState('');
   const [lastSuccessfulSync,setLastSuccessfulSync]=useState<string|null>(null);
   const [heartbeatError,setHeartbeatError]=useState(false);
   const tenantId=currentTenant?.id,actorId=user?.id;
@@ -143,15 +145,21 @@ export default function DriverSyncPending(){
       catch{setHeartbeatError(true);}
     })();
   },[actorId,build,installationId,isOnline,lastSuccessfulSync,sharing,sharingReady,summary,tenantId]);
-  useEffect(()=>{
-    if(!sharingReady||sharing||!isOnline||!tenantId||!actorId)return;
-    void (async()=>{try{await supabase.rpc('disable_driver_app_observability_v1' as never,
-      {_tenant_id:tenantId,_installation_id:installationId} as never);}catch{/* retry on the next page load or reconnect */}})();
-  },[actorId,installationId,isOnline,sharing,sharingReady,tenantId]);
-
-  const changeSharing=(enabled:boolean)=>{
+  const changeSharing=async(enabled:boolean)=>{
     if(!tenantId||!actorId)return;
-    setDriverDiagnosticsSharing(tenantId,actorId,enabled);setSharing(enabled);setHeartbeatError(false);
+    setSharingError('');
+    if(enabled){setDriverDiagnosticsSharing(tenantId,actorId,true);setSharing(true);setHeartbeatError(false);return;}
+    if(!isOnline){setSharingError('Conecte-se para confirmar a desativação do diagnóstico no servidor.');return;}
+    setSharingBusy(true);
+    try{
+      const {error}=await supabase.rpc('disable_driver_app_observability_v1' as never,
+        {_tenant_id:tenantId,_installation_id:installationId} as never);
+      if(error)throw error;
+      setDriverDiagnosticsSharing(tenantId,actorId,false);setSharing(false);setHeartbeatError(false);
+    }catch{
+      setSharingError('Não foi possível desativar o diagnóstico no servidor. O compartilhamento continua indicado como ativo.');
+      toast({title:'Diagnóstico ainda ativo',description:'Tente desativar novamente quando a conexão estiver estável.',variant:'destructive'});
+    }finally{setSharingBusy(false);}
   };
 
   useEffect(()=>{
@@ -195,9 +203,10 @@ export default function DriverSyncPending(){
           {!summary.total?<span className="text-muted-foreground">Nenhum tipo pendente.</span>:null}</div>
         <div><p className="text-muted-foreground">Falhas locais de chegada por geofence</p><p>{DRIVER_GEOFENCE_ERROR_CATEGORIES
           .filter(category=>summary.geofenceErrors[category]>0).map(category=>`${geofenceErrorLabels[category]}: ${summary.geofenceErrors[category]}`).join(' · ')||'Nenhuma categorizada.'}</p></div>
-        <label className="flex items-start gap-2 rounded-md border p-3"><input type="checkbox" className="mt-0.5" checked={sharing}
-          onChange={event=>changeSharing(event.target.checked)}/><span><strong>Compartilhar diagnóstico resumido com o operacional</strong><br/>
+        <label className="flex items-start gap-2 rounded-md border p-3"><input type="checkbox" className="mt-0.5" checked={sharing} disabled={sharingBusy}
+          onChange={event=>void changeSharing(event.target.checked)}/><span><strong>Compartilhar diagnóstico resumido com o operacional</strong><br/>
           Envia somente versão, horários e contadores, incluindo falhas de upload. Não envia fotos, documentos, coordenadas nem mensagens de erro.</span></label>
+        {sharingError?<p role="alert" className="text-destructive">{sharingError}</p>:null}
         {sharing?<p role="status" className={heartbeatError?'text-destructive':'text-muted-foreground'}>{heartbeatError
           ?'O diagnóstico não pôde ser atualizado; isso não interfere na sincronização das entregas.'
           :'Diagnóstico autorizado neste aparelho.'}</p>:null}

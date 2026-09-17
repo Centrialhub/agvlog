@@ -32,6 +32,6 @@ export function usePortalReports(range: { start?: string; end?: string }) {
       if (error) throw error;
       return (data as unknown as PortalReportsSummary) || null;
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && (!range.start || !range.end || range.start <= range.end),
   });
 }

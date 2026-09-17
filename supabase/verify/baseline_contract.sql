@@ -275,18 +275,8 @@ BEGIN
     RAISE EXCEPTION 'Baseline verification failed: membership discovery RPC is inaccessible';
   END IF;
 
-  IF to_regprocedure('public.session_has_privileged_mfa_v1(uuid)') IS NULL
-     OR has_function_privilege(
-       'authenticated',
-       'public.session_has_privileged_mfa_v1(uuid)',
-       'EXECUTE'
-     )
-     OR NOT has_function_privilege(
-       'service_role',
-       'public.session_has_privileged_mfa_v1(uuid)',
-       'EXECUTE'
-     ) THEN
-    RAISE EXCEPTION 'Baseline verification failed: privileged MFA helper contract is invalid';
+  IF to_regprocedure('public.session_has_privileged_mfa_v1(uuid)') IS NOT NULL THEN
+    RAISE EXCEPTION 'Baseline verification failed: retired privileged MFA helper is still installed';
   END IF;
 
   SELECT count(*) INTO violation_count
@@ -302,19 +292,22 @@ BEGIN
     )
     AND pg_get_functiondef(procedure.oid) ~* 'auth\.jwt'
     AND pg_get_functiondef(procedure.oid) ~* 'aal2';
-  IF violation_count <> 5 THEN
-    RAISE EXCEPTION 'Baseline verification failed: only % of 5 tenant helpers enforce AAL2', violation_count;
+  IF violation_count <> 0 THEN
+    RAISE EXCEPTION 'Baseline verification failed: % tenant helpers still enforce retired AAL2 policy', violation_count;
   END IF;
 
-  IF NOT EXISTS (
+  IF EXISTS (
     SELECT 1
     FROM pg_proc AS procedure
     JOIN pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
     WHERE namespace.nspname = 'public'
       AND procedure.proname = 'get_user_portal_tenants'
-      AND pg_get_functiondef(procedure.oid) ~* 'session_has_privileged_mfa_v1'
+      AND (
+        pg_get_functiondef(procedure.oid) ~* 'session_has_privileged_mfa_v1'
+        OR pg_get_functiondef(procedure.oid) ~* 'aal2'
+      )
   ) THEN
-    RAISE EXCEPTION 'Baseline verification failed: portal tenant discovery bypasses the MFA predicate';
+    RAISE EXCEPTION 'Baseline verification failed: portal tenant discovery still requires retired MFA policy';
   END IF;
 
   SELECT count(*) INTO violation_count

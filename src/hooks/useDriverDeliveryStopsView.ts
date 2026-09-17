@@ -7,23 +7,25 @@ export function useDriverDeliveryStopsView(stops: DriverStop[], pendingStopIds: 
   const [tab, setTab] = useState<DeliveryStopTab>('em_rota');
   const [search, setSearch] = useState('');
 
-  const filteredStops = useMemo(() => {
+  const { enRouteStops, completedStops } = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const visible = tab === 'em_rota'
-      ? stops.filter((stop) => !pendingStopIds.has(stop.id) && !isStopTerminal(stop.status) && stop.status !== 'completed')
-      : stops.filter((stop) => pendingStopIds.has(stop.id) || isStopTerminal(stop.status) || stop.status === 'completed');
-    if (!query) return visible;
-    return visible.filter((stop) => {
+    const matchesSearch = (stop: DriverStop) => {
+      if (!query) return true;
       const name = (stop.clients?.company_name || stop.destination || '').toLowerCase();
       const order = (getStopOrderNumber(stop) || '').toLowerCase();
       const notes = (stop.notes || '').toLowerCase();
       return name.includes(query) || order.includes(query) || notes.includes(query);
-    });
-  }, [pendingStopIds, search, stops, tab]);
+    };
+    const completed = (stop: DriverStop) => pendingStopIds.has(stop.id)
+      || isStopTerminal(stop.status)
+      || stop.status === 'completed'
+      || stop.status === 'delivered';
+    return {
+      enRouteStops: stops.filter((stop) => !completed(stop) && matchesSearch(stop)),
+      completedStops: stops.filter((stop) => completed(stop) && matchesSearch(stop)),
+    };
+  }, [pendingStopIds, search, stops]);
+  const filteredStops = tab === 'em_rota' ? enRouteStops : completedStops;
 
-  const completedStops = useMemo(() => stops.filter(
-    (stop) => pendingStopIds.has(stop.id) || isStopTerminal(stop.status) || stop.status === 'completed' || stop.status === 'delivered',
-  ), [pendingStopIds, stops]);
-
-  return { tab, setTab, search, setSearch, filteredStops, completedStops };
+  return { tab, setTab, search, setSearch, filteredStops, completedStops, enRouteCount: enRouteStops.length };
 }

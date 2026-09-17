@@ -37,8 +37,6 @@
     "src/pages/ClosingReports.tsx",
     "src/pages/CteMonitor.tsx",
     "src/pages/CteSearch.tsx",
-    "src/pages/driver/DriverDeliveries.tsx",
-    "src/pages/driver/DriverHome.tsx",
     "src/pages/DriverMonitoring.tsx",
     "src/pages/Drivers.tsx",
     "src/pages/Employees.tsx",
@@ -65,15 +63,22 @@
     "src/test/supabaseBaselineContract.test.ts"
   ],
   "criticalMaximumLines": {
+    "src/components/billing/CteEmissionPreviewDialog.tsx": 2185,
+    "src/components/nfse/NFSeFromInvoicesDialog.tsx": 1350,
+    "src/lib/fiscal/cteBuilder.ts": 948,
+    "supabase/functions/hub-fiscal-proxy/index.ts": 1415,
     "src/pages/OperationalEvents.tsx": 2187,
     "src/pages/Ingestion.tsx": 1768,
-    "src/pages/driver/DriverDeliveries.tsx": 1229,
+    "src/pages/driver/DriverDeliveries.tsx": 499,
+    "src/pages/driver/DriverIssues.tsx": 481,
+    "src/pages/driver/DriverStops.tsx": 434,
+    "src/pages/driver/DriverCargoCustody.tsx": 481,
     "src/pages/RoutePlanning.tsx": 1114,
-    "src/pages/TeamManagement.tsx": 1045,
+    "src/pages/TeamManagement.tsx": 1083,
     "src/pages/OperationsCenter.tsx": 1197,
-    "src/components/loads/ManifestPanel.tsx": 520,
+    "src/components/loads/ManifestPanel.tsx": 527,
     "src/lib/fiscal/mdfeBuilder.ts": 568,
-    "src/pages/driver/DriverHome.tsx": 544,
-    "src/pages/LoadControl.tsx": 648
+    "src/pages/driver/DriverHome.tsx": 500,
+    "src/pages/LoadControl.tsx": 706
   }
 }

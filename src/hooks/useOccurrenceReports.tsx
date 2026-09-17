@@ -4,6 +4,8 @@ import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { ReportType, ResolutionType } from '@/lib/occurrenceReports/occurrenceReportBuilder';
 import { validateFinalize } from '@/lib/occurrenceReports/occurrenceReportBuilder';
+import type { Json } from '@/integrations/supabase/types';
+import {acknowledgeDurableOperatorCommand,prepareDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
 
 export interface OccurrenceRow {
   id: string;
@@ -284,7 +286,7 @@ export function useMarkExportSent() {
 
 export function useImportLegacyBatch() {
   const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
-  const { user } = useAuth();
+  const {user}=useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (params: {
@@ -299,9 +301,11 @@ export function useImportLegacyBatch() {
       occurrences?: Array<Partial<OccurrenceRow>>;
     }) => {
       if (!activeTenantId) throw new Error('Tenant não selecionado');
-      const { data: batch, error } = await supabase
-        .from('occurrence_report_import_batches')
-        .insert({
+      if(!user)throw new Error('Usuário não autenticado');
+      const command={batch:{file_name:params.file_name,detected_model:params.detected_model,row_count:params.row_count,imported_count:params.imported_count,unmatched_count:params.unmatched_count,error_count:params.error_count,errors:params.errors,metadata:params.metadata??{}},occurrences:params.occurrences??[]};
+      const pending=await prepareDurableOperatorCommand({tenantId:activeTenantId,actorId:user.id,action:'import_occurrence_report',entityId:'new',payload:command});
+      const { data: batch, error } = await supabase.rpc('import_occurrence_report_batch_v1', {
+        _batch: {
           tenant_id: activeTenantId,
           file_name: params.file_name,
           detected_model: params.detected_model,
@@ -312,24 +316,12 @@ export function useImportLegacyBatch() {
           errors: params.errors,
           metadata: params.metadata ?? {},
           status: params.error_count ? 'completed_with_errors' : 'completed',
-          created_by: user?.id ?? null,
-        } as never)
-        .select('*')
-        .single();
+          request_id: pending.requestId,
+        } as unknown as Json,
+        _occurrences: (params.occurrences ?? []) as unknown as Json,
+      });
       if (error) throw error;
-      if (params.occurrences?.length) {
-        const insertPayload = params.occurrences.map((o) => ({
-          tenant_id: activeTenantId,
-          created_by: user?.id ?? null,
-          updated_by: user?.id ?? null,
-          occurrence_type: o.occurrence_type ?? 'legacy',
-          status: o.status ?? 'resolved',
-          resolved_at: o.resolved_at ?? new Date().toISOString(),
-          metadata: { ...(o.metadata ?? {}), import_batch_id: (batch as { id: string }).id },
-          ...o,
-        }));
-        await supabase.from('delivery_occurrences').insert(insertPayload as never);
-      }
+      acknowledgeDurableOperatorCommand(pending);
       return batch;
     },
     onSuccess: () => {

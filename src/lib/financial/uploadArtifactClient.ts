@@ -4,7 +4,7 @@ import {uploadArtifactSchema,type UploadArtifact} from './uploadArtifactContract
 import {uploadArtifactError} from './uploadArtifactError';
 export interface UploadArtifactRequest{
  tenantId:string;actorId:string;requestId:string;sourceType:UploadArtifact['source_type'];sourceId:string;
- file:File;format:UploadArtifact['original']['format'];delimiter?:';'|','|'\t';
+ file:File;format:UploadArtifact['original']['format'];delimiter?:';'|','|'\t';sheetIndex?:number;
 }
 export async function uploadFinanceArtifact(p:UploadArtifactRequest):Promise<UploadArtifact>{
  const bytes=await readBlobBytes(p.file);
@@ -12,6 +12,7 @@ export async function uploadFinanceArtifact(p:UploadArtifactRequest):Promise<Upl
  const body=new FormData();body.set('action','finance_upload_v2');body.set('tenant_id',p.tenantId);body.set('request_id',p.requestId);
  body.set('source_type',p.sourceType);body.set('source_id',p.sourceId);body.set('format',p.format);body.set('file',p.file);
  if(p.delimiter)body.set('delimiter',p.delimiter);
+ if(p.sheetIndex!==undefined)body.set('sheet_index',String(p.sheetIndex));
  const {data,error}=await supabase.functions.invoke('secure-upload',{body});
  if(error)throw await uploadArtifactError(error);
  const a=uploadArtifactSchema.parse(data);

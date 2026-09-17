@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert } from '@/integrations/supabase/types';
 import { useTenant } from '@/hooks/useTenant';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Plus, Search, Pencil, Trash2, DollarSign } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 const UF_OPTIONS = [
   'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
@@ -32,7 +34,7 @@ const emptyForm = {
   client_id: '',
   payer_group: '',
   payer: '',
-  valid_from: new Date().toISOString().slice(0, 10),
+  valid_from: localDateInputValue(),
   valid_until: '',
   origin_state: '',
   origin_municipality: '',
@@ -79,51 +81,47 @@ export default function FreightTables() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data: rows = [], isLoading } = useQuery({
+  const rowsQuery = useQuery({
     queryKey: ['freight_tables', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('freight_tables')
+      return fetchAllPostgrestPages((from, to) => supabase.from('freight_tables')
         .select('*, clients(company_name)')
         .eq('tenant_id', currentTenant.id)
-        .order('table_code', { ascending: false });
-      if (error) throw error;
-      return data || [];
+        .order('table_code', { ascending: false }).order('id').range(from, to));
     },
     enabled: !!currentTenant,
   });
+  const rows = rowsQuery.data ?? [];
+  const isLoading = rowsQuery.isLoading;
 
-  const { data: clientsList = [] } = useQuery({
+  const clientsQuery = useQuery({
     queryKey: ['suppliers_for_freight', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('clients')
+      return fetchAllPostgrestPages((from, to) => supabase.from('clients')
         .select('id, company_name')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
         .eq('is_supplier', true)
-        .order('company_name');
-      if (error) throw error;
-      return data || [];
+        .order('company_name').order('id').range(from, to));
     },
     enabled: !!currentTenant,
   });
+  const clientsList = clientsQuery.data ?? [];
 
-  const { data: regionsCatalog = [] } = useQuery({
+  const regionsQuery = useQuery({
     queryKey: ['client_regions_catalog', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('client_regions')
+      return fetchAllPostgrestPages((from, to) => supabase.from('client_regions')
         .select('region_name, payer_group, state_code')
-        .eq('tenant_id', currentTenant.id);
-      if (error) throw error;
-      return data || [];
+        .eq('tenant_id', currentTenant.id).order('id').range(from, to));
     },
     enabled: !!currentTenant,
   });
+  const regionsCatalog = regionsQuery.data ?? [];
+  const queryError = rowsQuery.error ?? clientsQuery.error ?? regionsQuery.error;
 
   const uniqueRegions = Array.from(new Set(
     regionsCatalog.map((region) => region.region_name).filter((value): value is string => Boolean(value)),
@@ -141,11 +139,16 @@ export default function FreightTables() {
         values.destination_state ||
         values.origin_municipality ||
         values.destination_municipality ||
-        values.vehicle_type
+        values.vehicle_type || values.payer_group || values.payer || values.origin_region ||
+        values.destination_region || values.route || values.distribution_type || values.cargo_type ||
+        values.body_type || values.ctrc_type
       );
       if (!values.blocked && !hasContext) {
         throw new Error('Informe pelo menos um contexto: cliente, origem, destino ou tipo de veículo (ou marque como bloqueada).');
       }
+      if (values.valid_until && values.valid_until < values.valid_from) throw new Error('A vigência final não pode ser anterior à inicial.');
+      const numericKeys = ['rate_percent','fixed_value','min_value','per_kg_value','per_pallet_value','dispatch_value','tracking_value','toll_value','loading_value','gris_value','insurance_percent'] as const;
+      if (numericKeys.some(key => values[key] !== '' && (!Number.isFinite(Number(values[key])) || Number(values[key]) < 0))) throw new Error('Tarifas, percentuais e componentes não podem ser negativos.');
       const record: TablesInsert<'freight_tables'> = {
         tenant_id: currentTenant.id,
         table_name: values.table_name,
@@ -280,7 +283,7 @@ export default function FreightTables() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetForm(); setDialogOpen(o); }}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" />Nova Tabela</Button>
+            <Button disabled={!!queryError}><Plus className="h-4 w-4 mr-2" />Nova Tabela</Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -625,10 +628,12 @@ export default function FreightTables() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {isLoading || clientsQuery.isLoading || regionsQuery.isLoading ? (
                   <TableRow>
                     <TableCell colSpan={18} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
                   </TableRow>
+                ) : queryError ? (
+                  <TableRow><TableCell colSpan={18} className="text-center py-8 text-destructive">Não foi possível carregar tabelas, clientes ou regiões: {queryError instanceof Error ? queryError.message : 'erro desconhecido'}</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={18} className="text-center py-8 text-muted-foreground">Nenhuma tabela encontrada</TableCell>

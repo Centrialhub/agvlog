@@ -1,0 +1,430 @@
+[
+  {
+    "file": "src/lib/financial/accountOpeningClient.ts",
+    "line": 5,
+    "column": 86,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/accountPeriodCloseClient.ts",
+    "line": 5,
+    "column": 85,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/accountPeriodCloseClient.ts",
+    "line": 6,
+    "column": 139,
+    "name": null,
+    "argument_names": [
+      "_payload"
+    ],
+    "arguments_complete": true,
+    "resolution": "dynamic_name",
+    "via": "local_adapter",
+    "resolved_names": [
+      "close_finance_account_period",
+      "reopen_finance_account_period"
+    ],
+    "classification": "finite_literal_dispatch",
+    "argument_expression": "{_payload:pending.command}"
+  },
+  {
+    "file": "src/lib/financial/cashPeriodClient.ts",
+    "line": 7,
+    "column": 85,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/cashPeriodClient.ts",
+    "line": 10,
+    "column": 366,
+    "name": null,
+    "argument_names": [
+      "_payload"
+    ],
+    "arguments_complete": true,
+    "resolution": "dynamic_name",
+    "via": "local_adapter",
+    "resolved_names": [
+      "record_finance_cash_period_count",
+      "reverse_finance_cash_period_count",
+      "close_finance_cash_period"
+    ],
+    "classification": "finite_literal_dispatch",
+    "argument_expression": "{_payload:pending.command}"
+  },
+  {
+    "file": "src/lib/financial/expenseCancellationClient.ts",
+    "line": 5,
+    "column": 85,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/ledgerClient.ts",
+    "line": 82,
+    "column": 33,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/legacyCostAssociationClient.ts",
+    "line": 5,
+    "column": 86,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/legacyCostAssociationClient.ts",
+    "line": 6,
+    "column": 133,
+    "name": null,
+    "argument_names": [
+      "_payload"
+    ],
+    "arguments_complete": true,
+    "resolution": "dynamic_name",
+    "via": "local_adapter",
+    "resolved_names": [
+      "associate_finance_legacy_expense_cost",
+      "reverse_finance_legacy_expense_cost_association"
+    ],
+    "classification": "finite_literal_dispatch",
+    "argument_expression": "{_payload:pending.command}"
+  },
+  {
+    "file": "src/lib/financial/legacyCutReviewClient.ts",
+    "line": 5,
+    "column": 85,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/legacyPayableAssociationClient.ts",
+    "line": 5,
+    "column": 86,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/legacyPayableAssociationClient.ts",
+    "line": 7,
+    "column": 142,
+    "name": null,
+    "argument_names": [
+      "_payload"
+    ],
+    "arguments_complete": true,
+    "resolution": "dynamic_name",
+    "via": "local_adapter",
+    "resolved_names": [
+      "associate_finance_legacy_payable_payment",
+      "reverse_finance_legacy_payable_association"
+    ],
+    "classification": "finite_literal_dispatch",
+    "argument_expression": "{_payload:pending.command}"
+  },
+  {
+    "file": "src/lib/financial/legacyReceivableAssociationClient.ts",
+    "line": 5,
+    "column": 86,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/legacyReceivableAssociationClient.ts",
+    "line": 7,
+    "column": 151,
+    "name": null,
+    "argument_names": [
+      "_payload"
+    ],
+    "arguments_complete": true,
+    "resolution": "dynamic_name",
+    "via": "local_adapter",
+    "resolved_names": [
+      "associate_finance_legacy_receivable_payment",
+      "reverse_finance_legacy_receivable_association"
+    ],
+    "classification": "finite_literal_dispatch",
+    "argument_expression": "{_payload:pending.command}"
+  },
+  {
+    "file": "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+    "line": 5,
+    "column": 85,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+    "line": 7,
+    "column": 166,
+    "name": null,
+    "argument_names": [
+      "_payload"
+    ],
+    "arguments_complete": true,
+    "resolution": "dynamic_name",
+    "via": "local_adapter",
+    "resolved_names": [
+      "associate_finance_maintenance_direct_part",
+      "reverse_finance_maintenance_direct_part_association"
+    ],
+    "classification": "finite_literal_dispatch",
+    "argument_expression": "{_payload:pending.command}"
+  },
+  {
+    "file": "src/lib/financial/maintenanceLaborAssociationClient.ts",
+    "line": 5,
+    "column": 85,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/maintenanceLaborAssociationClient.ts",
+    "line": 7,
+    "column": 151,
+    "name": null,
+    "argument_names": [
+      "_payload"
+    ],
+    "arguments_complete": true,
+    "resolution": "dynamic_name",
+    "via": "local_adapter",
+    "resolved_names": [
+      "associate_finance_maintenance_labor",
+      "reverse_finance_maintenance_labor_association"
+    ],
+    "classification": "finite_literal_dispatch",
+    "argument_expression": "{_payload:pending.command}"
+  },
+  {
+    "file": "src/lib/financial/manualExpenseCancellationClient.ts",
+    "line": 5,
+    "column": 85,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/periodEvidenceClient.ts",
+    "line": 14,
+    "column": 27,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/settlementMovementClient.ts",
+    "line": 6,
+    "column": 27,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/settlementPaymentClient.ts",
+    "line": 9,
+    "column": 86,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/statementCoverageClient.ts",
+    "line": 5,
+    "column": 86,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/statementCoverageClient.ts",
+    "line": 8,
+    "column": 18,
+    "name": null,
+    "argument_names": [
+      "_payload"
+    ],
+    "arguments_complete": true,
+    "resolution": "dynamic_name",
+    "via": "local_adapter",
+    "resolved_names": [
+      "record_finance_statement_coverage_approval",
+      "reverse_finance_statement_coverage_approval"
+    ],
+    "classification": "finite_literal_dispatch",
+    "argument_expression": "{_payload:command}"
+  },
+  {
+    "file": "src/lib/financial/stockAcquisitionClient.ts",
+    "line": 5,
+    "column": 85,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/stockAcquisitionClient.ts",
+    "line": 7,
+    "column": 151,
+    "name": null,
+    "argument_names": [
+      "_payload"
+    ],
+    "arguments_complete": true,
+    "resolution": "dynamic_name",
+    "via": "local_adapter",
+    "resolved_names": [
+      "associate_finance_stock_acquisition",
+      "reverse_finance_stock_acquisition_association"
+    ],
+    "classification": "finite_literal_dispatch",
+    "argument_expression": "{_payload:pending.command}"
+  },
+  {
+    "file": "src/lib/financial/stockConsumptionClient.ts",
+    "line": 5,
+    "column": 85,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  },
+  {
+    "file": "src/lib/financial/stockConsumptionClient.ts",
+    "line": 6,
+    "column": 140,
+    "name": null,
+    "argument_names": [
+      "_payload"
+    ],
+    "arguments_complete": true,
+    "resolution": "dynamic_name",
+    "via": "local_adapter",
+    "resolved_names": [
+      "attribute_finance_stock_consumption",
+      "reverse_finance_stock_consumption_attribution"
+    ],
+    "classification": "finite_literal_dispatch",
+    "argument_expression": "{_payload:pending.command}"
+  },
+  {
+    "file": "src/lib/financial/unbilledFreightClient.ts",
+    "line": 4,
+    "column": 86,
+    "name": null,
+    "argument_names": [],
+    "arguments_complete": false,
+    "resolution": "dynamic_name",
+    "via": "supabase.rpc",
+    "resolved_names": [],
+    "classification": "local_forwarding_adapter",
+    "argument_expression": "args"
+  }
+]

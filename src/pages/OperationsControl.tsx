@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Maximize2, Radio, RefreshCw, Route } from 'lucide-react';
-import { useActiveTripsLive, useOpenTripAlerts } from '@/hooks/useActiveTripsLive';
+import { useControlTowerSnapshot } from '@/hooks/useActiveTripsLive';
 import ControlTowerMap from '@/components/control-tower/ControlTowerMap';
 import KpiCards from '@/components/control-tower/KpiCards';
 import AlertsPanel from '@/components/control-tower/AlertsPanel';
@@ -17,6 +17,7 @@ import { useTenantCapabilities } from '@/hooks/useTenantCapabilities';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { calculateTripRoute } from '@/lib/controlTower/routeCalculation';
+import { settleInBatches } from '@/lib/controlTower/batchRouteCalculation';
 
 
 export default function OperationsControl() {
@@ -25,11 +26,11 @@ export default function OperationsControl() {
   const {user}=useAuth();
   const capability=useTenantCapabilities();
   const [evaluating,setEvaluating]=useState(false);
-  const tripQuery = useActiveTripsLive();
-  const alertQuery = useOpenTripAlerts();
+  const tripQuery = useControlTowerSnapshot();
+  const alertQuery = tripQuery;
   const { isLoading, dataUpdatedAt, refetch, isFetching } = tripQuery;
-  const trips = tripQuery.isError ? [] : tripQuery.data ?? [];
-  const alerts = alertQuery.isError ? [] : alertQuery.data ?? [];
+  const trips = tripQuery.isError ? [] : tripQuery.data?.trips ?? [];
+  const alerts = alertQuery.isError ? [] : alertQuery.data?.alerts ?? [];
   const tripCount = tripQuery.isPending || tripQuery.isError ? '—' : trips.length;
   const alertCount = alertQuery.isPending || alertQuery.isError ? '—' : alerts.length;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export default function OperationsControl() {
     setEvaluating(true);
     try {
       requireRouteResult(await supabase.functions.invoke('update-trip-live-status',{body:{tenant_id:currentTenant.id}}));
-      await Promise.all([refetch(),alertQuery.refetch()]);
+      await refetch();
       toast({title:'Rastreamento reavaliado',description:'Avaliação das posições já recebidas. Nenhuma consulta ao provedor SSX.'});
     }catch{toast({title:'Falha ao reavaliar rastreamento',description:'A atualização não foi confirmada.',variant:'destructive'});}
     finally{setEvaluating(false);}
@@ -66,9 +67,9 @@ export default function OperationsControl() {
     if (trips.length === 0 || !user || !currentTenant || calculatingAll) return;
     setCalculatingAll(true);
     try {
-      const results = await Promise.allSettled(trips.map(async t => {
-        await calculateTripRoute(currentTenant.id,user.id,t.trip_id);
-      }));
+      const results = await settleInBatches(trips, 2, 400, t => (
+        calculateTripRoute(currentTenant.id, user.id, t.trip_id)
+      ));
       const ok = results.filter((r) => r.status === 'fulfilled').length;
       const fail = results.length - ok;
       toast({
@@ -101,7 +102,7 @@ export default function OperationsControl() {
           <Metric label="Viagens ativas" value={tripCount} />
           <Metric label="Alertas críticos" value={alertQuery.isPending || alertQuery.isError ? '—' : criticalCount} tone={criticalCount > 0 ? 'text-red-600' : ''} />
           <Metric label="Última consulta válida" value={!tripQuery.isError && lastUpdateAge != null ? `${lastUpdateAge}s atrás` : '—'} />
-          <Button size="sm" variant="ghost" aria-label="Atualizar torre" onClick={() => { void refetch(); void alertQuery.refetch(); }} disabled={isFetching || alertQuery.isFetching}>
+          <Button size="sm" variant="ghost" aria-label="Atualizar torre" onClick={() => { void refetch(); }} disabled={isFetching}>
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching || alertQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
           <Button size="sm" variant="ghost" aria-label="Alternar tela cheia" onClick={goFullscreen}>

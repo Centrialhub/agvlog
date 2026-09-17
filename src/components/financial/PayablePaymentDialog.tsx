@@ -1,7 +1,7 @@
 import {useQueryClient} from '@tanstack/react-query';
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
-import {Dialog,DialogContent,DialogHeader,DialogTitle} from '@/components/ui/dialog';
+import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {Badge} from '@/components/ui/badge';
 import {usePayablePayments,PAYMENT_METHOD_LABELS,type PaymentMethod} from '@/hooks/useFinancialPayments';
 import {useTenant} from '@/hooks/useTenant';
@@ -18,20 +18,20 @@ export default function PayablePaymentDialog({payable,open,onOpenChange}:Props){
  const {currentTenant}=useTenant(),{user}=useAuth(),qc=useQueryClient();
  const [pagination,setPagination]=useState({payable:'',page:1});
  const page=pagination.payable===payable?.id?pagination.page:1;
- const {data:historyData,error:historyError,isFetching}=usePayablePayments(open?payable?.id??null:null,page);
+ const {data:historyData,error:historyError,isFetching,refetch:refetchHistory}=usePayablePayments(open?payable?.id??null:null,page);
  const history=isFetching?[]:historyData?.rows??[];
  if(!payable)return null;
  function recorded(){
   if(currentTenant)void invalidateAccountReview(qc,currentTenant.id);
-  for(const key of ['payables','payables_payments','payroll_entries','payroll_periods','payroll_period','finance-options','finance-payable-options','finance-expenses','finance-audit','finance-legacy-inventory','finance-settlement-expense-context'])void qc.invalidateQueries({queryKey:[key]});
+  for(const key of ['payables','payables_payments','finance-payable-portfolio','payroll_entries','payroll_periods','payroll_period','finance-options','finance-payable-options','finance-expenses','finance-audit','finance-legacy-inventory','finance-settlement-expense-context'])void qc.invalidateQueries({queryKey:[key]});
  }
  return <Dialog open={open} onOpenChange={onOpenChange}>
   <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-   <DialogHeader><DialogTitle>Baixas — {payable.supplier_name}</DialogTitle></DialogHeader>
+   <DialogHeader><DialogTitle>Baixas — {payable.supplier_name}</DialogTitle><DialogDescription>Registre ou revise pagamentos vinculados a esta conta a pagar.</DialogDescription></DialogHeader>
    <p>Valor do título: <strong>{fmt(Number(payable.amount))}</strong></p>
    <p className="text-sm text-muted-foreground">Use uma saída já registrada para dar baixa sem contar o dinheiro duas vezes. Se o envio ainda não estiver no sistema, <a href="/financial/movements" className="underline">registre a saída em Movimentações</a>.</p>
    {open&&currentTenant&&user&&<PayableMovementLink key={`${currentTenant.id}:${user.id}:${payable.id}`} tenant={currentTenant.id} actor={user.id} payable={payable.id} onRecorded={recorded}/>}
-   {historyError?<p role="alert">Não foi possível carregar o histórico de baixas.</p>:history.length>0&&<section aria-label="Histórico de baixas" className="border rounded p-3 space-y-2">
+   {historyError?<p role="alert">Não foi possível carregar o histórico de baixas. <Button variant="link" disabled={isFetching} onClick={()=>void refetchHistory()}>Tentar histórico novamente</Button></p>:history.length>0&&<section aria-label="Histórico de baixas" className="border rounded p-3 space-y-2">
     <p className="font-medium">Histórico de baixas</p>
     {history.map(payment=><div key={payment.id} className="border-b last:border-b-0 pb-2 text-sm">
      <div className="font-medium">{fmt(Number(payment.amount))} <Badge variant="secondary">{PAYMENT_METHOD_LABELS[payment.method as PaymentMethod]||payment.method}</Badge></div>

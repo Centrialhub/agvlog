@@ -2,7 +2,15 @@ export type DurableOperatorAction =
   | 'resolve_address'
   | 'upsert_geofence'
   | 'mutate_fleet_geofence'
-  | 'review_trip_cargo_divergence';
+  | 'review_trip_cargo_divergence'
+  | 'create_pickup_order'
+  | 'create_ort_pickup'
+  | 'create_vehicle_fueling'
+  | 'import_occurrence_report'
+  | 'create_stock_movement'
+  | 'create_employee_contract'
+  | 'save_route_template'
+  | 'change_payroll_period_state';
 
 export interface DurableOperatorCommand {
   version: 1;
@@ -12,6 +20,7 @@ export interface DurableOperatorCommand {
   entityId: string;
   requestId: string;
   payloadHash: string;
+  payload: unknown;
   createdAt: string;
 }
 
@@ -52,11 +61,13 @@ function parse(raw: string | null): DurableOperatorCommand | null {
   try {
     const value = JSON.parse(raw) as Partial<DurableOperatorCommand>;
     if (value.version !== 1 || typeof value.tenantId !== 'string' || typeof value.actorId !== 'string'
-      || !['resolve_address', 'upsert_geofence', 'mutate_fleet_geofence', 'review_trip_cargo_divergence']
+      || !['resolve_address', 'upsert_geofence', 'mutate_fleet_geofence', 'review_trip_cargo_divergence',
+        'create_pickup_order', 'create_vehicle_fueling', 'import_occurrence_report', 'create_stock_movement',
+        'create_employee_contract', 'save_route_template', 'change_payroll_period_state']
         .includes(String(value.action))
       || typeof value.entityId !== 'string' || typeof value.requestId !== 'string'
       || !/^[0-9a-f]{64}$/.test(String(value.payloadHash)) || typeof value.createdAt !== 'string'
-      || !Number.isFinite(Date.parse(value.createdAt))) return null;
+      || !Number.isFinite(Date.parse(value.createdAt)) || !Object.prototype.hasOwnProperty.call(value,'payload')) return null;
     const valid = value as DurableOperatorCommand;
     return {
       version: 1,
@@ -66,6 +77,7 @@ function parse(raw: string | null): DurableOperatorCommand | null {
       entityId: valid.entityId,
       requestId: valid.requestId,
       payloadHash: valid.payloadHash,
+      payload: canonicalize(valid.payload),
       createdAt: valid.createdAt,
     };
   } catch {
@@ -98,11 +110,11 @@ export async function prepareDurableOperatorCommand(input: {
   if (existing && existing.tenantId === input.tenantId && existing.actorId === input.actorId
     && existing.action === input.action && existing.entityId === input.entityId
     && existing.payloadHash === payloadHash) {
-    // Normalize the current slot so legacy/foreign fields (especially raw payloads)
-    // cannot survive a successful rehydration.
+    // Normalize the current slot and preserve the exact command for recovery.
     storage.setItem(key, JSON.stringify(existing));
     return existing;
   }
+  if (existing) throw new Error('operator_command_pending_conflict');
   const command: DurableOperatorCommand = {
     version: 1,
     tenantId: input.tenantId,
@@ -111,6 +123,7 @@ export async function prepareDurableOperatorCommand(input: {
     entityId: input.entityId,
     requestId: (dependencies.uuid ?? (() => crypto.randomUUID()))(),
     payloadHash,
+    payload: canonicalize(input.payload),
     createdAt: now.toISOString(),
   };
   storage.setItem(key, JSON.stringify(command));

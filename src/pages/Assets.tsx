@@ -19,7 +19,7 @@ import { getErrorMessage } from '@/lib/errors';
 
 export default function Assets() {
   const toast = useSonnerToast();
-  const { data: assets = [], isLoading } = useAssets();
+  const { data: assets = [], isLoading, isError, error } = useAssets();
   const { data: employees = [] } = useEmployees();
   const createAsset = useCreateAsset();
   const updateAsset = useUpdateAsset();
@@ -62,6 +62,8 @@ export default function Assets() {
 
   const handleSave = async () => {
     if (!form.asset_code.trim() || !form.name.trim()) { toast.error('Código e nome obrigatórios'); return; }
+    const acquisitionCost = form.acquisition_cost ? Number(form.acquisition_cost) : 0;
+    if (!Number.isFinite(acquisitionCost) || acquisitionCost < 0) { toast.error('O custo de aquisição não pode ser negativo'); return; }
     const payload = {
       asset_code: form.asset_code,
       name: form.name,
@@ -77,7 +79,7 @@ export default function Assets() {
       cost_center: form.cost_center || null,
       supplier: form.supplier || null,
       acquisition_date: form.acquisition_date || null,
-      acquisition_cost: form.acquisition_cost ? Number(form.acquisition_cost) : 0,
+      acquisition_cost: acquisitionCost,
       notes: form.notes || null,
     };
     try {
@@ -96,19 +98,19 @@ export default function Assets() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Package className="h-5 w-5" /> Ativos e Patrimônio</h1>
-          <p className="text-sm text-muted-foreground">{assets.length} ativos | Valor total: {fmt(totalValue)}</p>
+          <p className="text-sm text-muted-foreground">{isLoading ? 'Carregando patrimônio…' : isError ? 'Indicadores indisponíveis' : `${assets.length} ativos | Valor total: ${fmt(totalValue)}`}</p>
         </div>
         <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Novo Ativo</Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      {!isLoading && !isError ? <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {ASSET_STATUSES.map(s => (
           <Card key={s}><CardContent className="py-3 px-4">
             <p className="text-[10px] text-muted-foreground uppercase">{ASSET_STATUS_LABELS[s]}</p>
             <p className="text-lg font-bold">{assets.filter(a => a.status === s).length}</p>
           </CardContent></Card>
         ))}
-      </div>
+      </div> : null}
 
       <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={assets.length} loading={isLoading} description="Os indicadores acima mostram o cadastro completo." fields={[
         { key: 'search', label: 'Busca', type: 'search', placeholder: 'Código, nome, série, placa ou localização', value: search, onChange: value => setFilter('search', value) },
@@ -125,6 +127,7 @@ export default function Assets() {
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+          : isError ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-destructive">Não foi possível carregar os patrimônios: {error instanceof Error ? error.message : 'erro desconhecido'}</TableCell></TableRow>
           : filtered.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum ativo</TableCell></TableRow>
           : filtered.map(a => (
             <TableRow key={a.id}>
@@ -168,7 +171,7 @@ export default function Assets() {
             <div><Label className="text-xs">Centro de Custo</Label><Input value={form.cost_center} onChange={e => setForm(f => ({ ...f, cost_center: e.target.value }))} /></div>
             <div><Label className="text-xs">Fornecedor</Label><Input value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} /></div>
             <div><Label className="text-xs">Data Aquisição</Label><Input type="date" value={form.acquisition_date} onChange={e => setForm(f => ({ ...f, acquisition_date: e.target.value }))} /></div>
-            <div><Label className="text-xs">Custo Aquisição (R$)</Label><Input type="number" step="0.01" value={form.acquisition_cost} onChange={e => setForm(f => ({ ...f, acquisition_cost: e.target.value }))} /></div>
+            <div><Label className="text-xs">Custo Aquisição (R$)</Label><Input type="number" min="0" step="0.01" value={form.acquisition_cost} onChange={e => setForm(f => ({ ...f, acquisition_cost: e.target.value }))} /></div>
           </div>
           <div><Label className="text-xs">Observações</Label><Textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
           <div className="flex justify-end gap-2 mt-3">

@@ -54,6 +54,10 @@ export function matchClientForFiscalDoc<T extends FiscalClientMatchCandidate>(
       if (byCity) return byCity;
       return byCnpj[0]; // Fallback para a primeira
     }
+
+    // Um CNPJ completo identifica o estabelecimento. Se ele não existe no
+    // cadastro, nunca reutilize outra filial por IE, nome ou cidade.
+    return null;
   }
 
   // 2. Busca por Nome + Cidade (Congruência de endereço solicitada pelo usuário)

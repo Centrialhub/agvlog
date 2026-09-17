@@ -5,9 +5,10 @@ import {DraftConflictError,type useSavePlanSnapshot} from '@/hooks/useRoutePlann
 import type {PendingDispatch} from '@/lib/route-planning/dispatchOutbox';
 
 const route={id:'route',name:'Route',loads:[{id:'load'}],driver_id:'driver',vehicle_id:'vehicle',notes:'Nota operacional'};
-let mutate:ReturnType<typeof vi.fn>;let forget:ReturnType<typeof vi.fn>;let conflict:ReturnType<typeof vi.fn>;
+let mutate:ReturnType<typeof vi.fn>;let forget:ReturnType<typeof vi.fn>;let conflict:ReturnType<typeof vi.fn<() => void>>;
+let saveError:ReturnType<typeof vi.fn<(error:Error) => void>>;
 let saver:ReturnType<typeof useSavePlanSnapshot>;
-beforeEach(()=>{vi.useFakeTimers();mutate=vi.fn();forget=vi.fn();conflict=vi.fn();
+beforeEach(()=>{vi.useFakeTimers();mutate=vi.fn();forget=vi.fn();conflict=vi.fn<() => void>();saveError=vi.fn<(error:Error) => void>();
   saver={mutate,forgetVersion:forget} as unknown as ReturnType<typeof useSavePlanSnapshot>;});
 afterEach(()=>{cleanup();vi.useRealTimers();});
 describe('route autosave lifecycle',()=>{
@@ -39,5 +40,15 @@ describe('route autosave lifecycle',()=>{
     renderHook(()=>useRoutePlanAutosave([route],[],{current:true},saver,conflict));act(()=>vi.advanceTimersByTime(1500));
     act(()=>mutate.mock.calls[0][1].onError(new DraftConflictError('route','old','new')));
     expect(forget).toHaveBeenCalledWith('route');expect(conflict).toHaveBeenCalledTimes(1);
+  });
+  it('flushes the latest eligible route when the planner unmounts',()=>{
+    const {unmount}=renderHook(()=>useRoutePlanAutosave([route],[],{current:true},saver,conflict,saveError));
+    unmount();
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({routeId:'route'}),expect.any(Object));
+  });
+  it('reports ordinary persistence failures instead of hiding them',()=>{
+    renderHook(()=>useRoutePlanAutosave([route],[],{current:true},saver,conflict,saveError));act(()=>vi.advanceTimersByTime(1500));
+    const error=new Error('offline');act(()=>mutate.mock.calls[0][1].onError(error));
+    expect(saveError).toHaveBeenCalledWith(error);expect(conflict).not.toHaveBeenCalled();
   });
 });

@@ -120,24 +120,35 @@ export function delaysPdf(rows: DriverMonitorRow[], filters?: string, company?: 
   return doc;
 }
 
-export function productivityPdf(rows: DriverMonitorRow[], filters?: string, company?: CompanyPdfInfo) {
-  const { doc, tableStartY } = baseDoc({ title: 'Relatório de Produtividade', filters, company });
-  const byDriver = new Map<string, { total: number; completed: number; routes: number; delays: number }>();
+export function buildProductivityRows(rows: DriverMonitorRow[]) {
+  const byDriver = new Map<string, { total: number; completed: number; routes: number; concluded: number; onTime: number; delays: number }>();
   for (const r of rows) {
     const key = r.driver_name_snapshot || 'Sem motorista';
-    const cur = byDriver.get(key) || { total: 0, completed: 0, routes: 0, delays: 0 };
+    const cur = byDriver.get(key) || { total: 0, completed: 0, routes: 0, concluded: 0, onTime: 0, delays: 0 };
     cur.total += r.total_deliveries;
     cur.completed += r.completed_deliveries;
     cur.routes += 1;
-    if (r.status === 'delayed') cur.delays += 1;
+    if (r.actual_returned_at && r.expected_return_date) {
+      cur.concluded += 1;
+      const returnedOn = r.actual_returned_at.slice(0, 10);
+      if (returnedOn <= r.expected_return_date) cur.onTime += 1;
+      else cur.delays += 1;
+    }
     byDriver.set(key, cur);
   }
+  return [...byDriver.entries()].map(([driver, value]) => ({ driver, ...value,
+    onTimePercent: value.concluded ? Math.round((value.onTime / value.concluded) * 100) : null }));
+}
+
+export function productivityPdf(rows: DriverMonitorRow[], filters?: string, company?: CompanyPdfInfo) {
+  const { doc, tableStartY } = baseDoc({ title: 'Relatório de Produtividade', filters, company });
+  const productivity = buildProductivityRows(rows);
   autoTable(doc, {
     startY: tableStartY,
-    head: [['Motorista', 'Previstas', 'Realizadas', 'Rotas', 'Atrasos', '% No prazo']],
-    body: [...byDriver.entries()].map(([driver, v]) => [
-      driver, v.total, v.completed, v.routes, v.delays,
-      v.routes ? Math.round(((v.routes - v.delays) / v.routes) * 100) + '%' : '—',
+    head: [['Motorista', 'Previstas', 'Realizadas', 'Rotas', 'Concluídas', 'Atrasos', '% No prazo']],
+    body: productivity.map((value) => [
+      value.driver, value.total, value.completed, value.routes, value.concluded, value.delays,
+      value.onTimePercent == null ? '—' : value.onTimePercent + '%',
     ]),
     styles: { fontSize: 9 },
     headStyles: { fillColor: [40, 60, 90] },

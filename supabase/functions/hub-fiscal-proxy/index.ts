@@ -7,12 +7,15 @@ import { requireActiveTenant } from '../_shared/active-tenant.ts';
 import { createClient } from '@supabase/supabase-js';
 import { requireIntegrationCapability } from '../_shared/capabilities.ts';
 import { FiscalCredentialError, requireHubEnvironment, selectScopedHubCredential, type HubEnvironment } from '../_shared/fiscal-environment.ts';
+import { isFiscalFileHeaderValid } from '../_shared/fiscal-file-validation.ts';
 
 const HUB_BASE = fiscalHubBaseUrl(Deno.env.get('HUB_FISCAL_BASE_URL'));
 const HUB_API_VERSION = Deno.env.get('HUB_FISCAL_API_VERSION') || '2026-08-27';
 const MANAGERSAAS_BASE = (Deno.env.get('MANAGERSAAS_BASE_URL') || '').trim().replace(/\/$/, '');
 const MANAGERSAAS_GROUP = Deno.env.get('MANAGERSAAS_GROUP') || '';
 const MANAGERSAAS_AUTH = Deno.env.get('MANAGERSAAS_AUTH') || '';
+const HUB_REQUEST_TIMEOUT_MS = 120_000;
+const FILE_REQUEST_TIMEOUT_MS = 15_000;
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -70,14 +73,31 @@ function buildUrl(path: string, qs?: Record<string, string>) {
   return u.toString();
 }
 
-async function callHub(method: string, path: string, qs?: Record<string, string>, body?: unknown, token?: string) {
+async function fetchWithTimeout(url: string | URL, init: RequestInit = {}, timeoutMs = HUB_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function callHub(
+  method: string,
+  path: string,
+  qs?: Record<string, string>,
+  body?: unknown,
+  token?: string,
+  timeoutMs = HUB_REQUEST_TIMEOUT_MS,
+) {
   const key = token;
   if (!key) throw new Error('Nenhum token do Hub Fiscal configurado');
   const requestBody = body ? JSON.stringify(body) : undefined;
   const maxAttempts = 1; // A durable intent must never blindly repeat a POST.
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const res = await fetch(buildUrl(path, qs), {
+    const res = await fetchWithTimeout(buildUrl(path, qs), {
       method,
       headers: {
         'Authorization': `Bearer ${key}`,
@@ -85,7 +105,7 @@ async function callHub(method: string, path: string, qs?: Record<string, string>
         'X-HubFiscal-Api-Version': HUB_API_VERSION,
       },
       body: requestBody,
-    });
+    }, timeoutMs);
     const text = await res.text();
     let data: any;
     try { data = text ? JSON.parse(text) : {}; } catch { data = { parse_error: true }; }
@@ -903,25 +923,96 @@ Deno.serve(withFiscalCors(async (req) => {
           });
         const b64ToBytes = (b64: string) =>
           Uint8Array.from(atob(b64.replace(/^data:[^,]+,/, '').replace(/\s/g, '')), (c) => c.charCodeAt(0));
+        type FiscalFileBody = string | ArrayBuffer | Uint8Array;
+        const checkedFileResponse = (body: FiscalFileBody, contentType?: string | null): Response | null => {
+          const bytes = typeof body === 'string'
+            ? new TextEncoder().encode(body)
+            : body instanceof Uint8Array ? body : new Uint8Array(body);
+          return isFiscalFileHeaderValid(bytes, format) ? fileResponse(body, contentType) : null;
+        };
 
         let upstreamRouteMissing = false;
         const attemptLog: string[] = [];
+        const kind = format === 'cancel_xml' ? 'xml' : format;
+        const fileDocumento = payload.documento || (format === 'cancel_xml' ? 'Cancelamento' : undefined);
 
-        // 0) Download SOB DEMANDA (API v1 atualizada): o Hub gera/baixa o arquivo do
-        //    provedor no momento do pedido, sem depender de cache.
-        //    POST /hub_documents_deliver (mode=url, forceRefresh) e, se pendente,
+        // 0) Tenta primeiro a rota GET, que reaproveita o arquivo armazenado no Hub.
+        const tryDirectHubFile = async (): Promise<Response | null> => {
+          const path = '/hub_documents_file';
+          const query = { id: payload.id!, kind, ...(fileDocumento ? { documento: fileDocumento } : {}) };
+          try {
+            const upstream = await fetchWithTimeout(buildUrl(path, query), {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'X-HubFiscal-Api-Version': HUB_API_VERSION,
+              },
+            }, FILE_REQUEST_TIMEOUT_MS);
+            const contentType = upstream.headers.get('Content-Type') || '';
+            const buffer = await upstream.arrayBuffer();
+
+            if (contentType.includes('application/json')) {
+              let parsed: any = {};
+              try { parsed = JSON.parse(new TextDecoder().decode(buffer)); } catch { /* ignore */ }
+              const b64 = parsed?.base64 || parsed?.content || parsed?.document?.base64;
+              const fileUrl = parsed?.url || parsed?.fileUrl || parsed?.document?.url;
+              if (upstream.ok && typeof b64 === 'string' && b64.length > 0) {
+                const response = checkedFileResponse(b64ToBytes(b64));
+                if (response) return response;
+              }
+              if (upstream.ok && typeof fileUrl === 'string' && fileUrl.length > 0) {
+                const follow = await fetchWithTimeout(fileUrl, {}, FILE_REQUEST_TIMEOUT_MS);
+                if (follow.ok) {
+                  const response = checkedFileResponse(
+                    await follow.arrayBuffer(),
+                    follow.headers.get('Content-Type'),
+                  );
+                  if (response) return response;
+                }
+              }
+              const message = String(parsed?.error?.message || parsed?.message || parsed?.error?.code || '');
+              upstreamRouteMissing ||= /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(message);
+            } else if (upstream.ok) {
+              const response = checkedFileResponse(buffer, contentType);
+              if (response) return response;
+            }
+            attemptLog.push(`${path}: ${upstream.status}`);
+          } catch (error: unknown) {
+            attemptLog.push(`${path}: ${error instanceof DOMException && error.name === 'AbortError' ? 'timeout' : 'network_error'}`);
+          }
+          return null;
+        };
+
+        const directHubFile = await tryDirectHubFile();
+        if (directHubFile) {
+          console.log('[hub-fiscal-proxy] file via Hub cache', { id: payload.id, format });
+          return directHubFile;
+        }
+
+        // 1) Se o cache não existe, solicita a entrega sob demanda. Quando o
+        //    chamador não escolhe uma política, repete com forceRefresh=true.
+        //    POST /hub_documents_deliver (mode=url) e, se pendente,
         //    GET /hub_documents_links?base64=1.
         const fetchSigned = async (url: string, withToken: boolean) => {
-          const res = await fetch(url, withToken ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+          const res = await fetchWithTimeout(
+            url,
+            withToken
+              ? {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    'X-HubFiscal-Api-Version': HUB_API_VERSION,
+                  },
+                }
+              : {},
+            FILE_REQUEST_TIMEOUT_MS,
+          );
           if (!res.ok) return null;
           const buf = await res.arrayBuffer();
-          if (buf.byteLength === 0) return null;
-          return fileResponse(buf, res.headers.get('Content-Type'));
+          return checkedFileResponse(buf, res.headers.get('Content-Type'));
         };
-        const tryOnDemand = async (): Promise<Response | null> => {
+        const tryOnDemand = async (forceRefresh: boolean): Promise<Response | null> => {
           // cancel_xml = XML do evento de cancelamento (kind=xml + documento=Cancelamento).
-          const kindOnDemand = format === 'cancel_xml' ? 'xml' : format;
-          const documento = payload.documento || (format === 'cancel_xml' ? 'Cancelamento' : undefined);
+          const kindOnDemand = kind;
+          const documento = fileDocumento;
           const readFiles = (data: any) => (data?.files || data?.hub?.files || {}) as Record<string, any>;
           const consume = async (data: any): Promise<Response | null> => {
             const entry = readFiles(data)[kindOnDemand];
@@ -929,8 +1020,14 @@ Deno.serve(withFiscalCors(async (req) => {
             if (entry.pending) return null;
             const inlineB64 = entry.base64 || entry.content;
             if (typeof inlineB64 === 'string' && inlineB64.length > 0) {
-              if (kindOnDemand === 'xml' && inlineB64.trimStart().startsWith('<')) return fileResponse(inlineB64, 'application/xml');
-              try { return fileResponse(b64ToBytes(inlineB64), entry.contentType); } catch { /* segue */ }
+              if (kindOnDemand === 'xml' && inlineB64.trimStart().startsWith('<')) {
+                const response = checkedFileResponse(inlineB64, 'application/xml');
+                if (response) return response;
+              }
+              try {
+                const response = checkedFileResponse(b64ToBytes(inlineB64), entry.contentType);
+                if (response) return response;
+              } catch { /* segue */ }
             }
             if (typeof entry.signedUrl === 'string' && entry.signedUrl) {
               const r = await fetchSigned(entry.signedUrl, false);
@@ -949,9 +1046,9 @@ Deno.serve(withFiscalCors(async (req) => {
               kinds: [kindOnDemand],
               ...(documento ? { documento } : {}),
               mode: 'url',
-              forceRefresh: true,
+              forceRefresh,
               expiresIn: 604800,
-            }, token);
+            }, token, FILE_REQUEST_TIMEOUT_MS);
             const got = await consume(data);
             if (got) {
               console.log('[hub-fiscal-proxy] file via deliver', { id: payload.id, format });
@@ -967,7 +1064,7 @@ Deno.serve(withFiscalCors(async (req) => {
             const { status, data } = await callHub('GET', '/hub_documents_links', {
               id: payload.id, base64: '1', expiresIn: '604800',
               ...(documento ? { documento } : {}),
-            }, undefined, token);
+            }, undefined, token, FILE_REQUEST_TIMEOUT_MS);
             const got = await consume(data);
             if (got) {
               console.log('[hub-fiscal-proxy] file via links', { id: payload.id, format });
@@ -981,13 +1078,15 @@ Deno.serve(withFiscalCors(async (req) => {
           }
           return null;
         };
-        const onDemand = await tryOnDemand();
+        const onDemand = await tryOnDemand(payload.forceRefresh === true);
         if (onDemand) return onDemand;
+        if (payload.forceRefresh === undefined) {
+          const refreshed = await tryOnDemand(true);
+          if (refreshed) return refreshed;
+        }
 
-        // Contingência direta TecnoSpeed/ManagerSaaS. Tentada ANTES do Hub quando já
-        // conhecemos chave + CNPJ localmente: a rota de arquivos do Hub está
-        // indisponível nesta instância e as 5 tentativas gastam segundos por arquivo
-        // (inviável em download em lote). Credenciais ficam só nos secrets.
+        // Contingência direta TecnoSpeed/ManagerSaaS para CT-e quando o Hub não
+        // entrega o arquivo. Credenciais ficam somente nos secrets.
         const managerTried = new Set<string>();
         const tryManagerSaas = async (rawKey: string, rawCnpj: string): Promise<Response | null> => {
           const key = String(rawKey || '').replace(/\D/g, '');
@@ -1010,24 +1109,33 @@ Deno.serve(withFiscalCors(async (req) => {
             ? MANAGERSAAS_AUTH
             : `Basic ${btoa(MANAGERSAAS_AUTH)}`;
           try {
-            const direct = await fetch(directUrl, {
+            const direct = await fetchWithTimeout(directUrl, {
               method: 'GET',
               headers: { Authorization: authorization, Accept: format === 'pdf' ? 'application/pdf' : 'application/xml' },
-            });
+            }, FILE_REQUEST_TIMEOUT_MS);
             const directContentType = direct.headers.get('Content-Type') || '';
             const directBuffer = await direct.arrayBuffer();
             const directText = new TextDecoder().decode(directBuffer).trim();
             const directFailed = !direct.ok || directBuffer.byteLength === 0 || /^(EXCEPTION|ERRO\b)/i.test(directText);
             if (!directFailed) {
               if (/^https?:\/\//i.test(directText)) {
-                const follow = await fetch(directText);
+                const follow = await fetchWithTimeout(directText, {}, FILE_REQUEST_TIMEOUT_MS);
                 if (follow.ok) {
-                  console.log('[hub-fiscal-proxy] file via ManagerSaaS URL', { id: payload.id, format });
-                  return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
+                  const response = checkedFileResponse(
+                    await follow.arrayBuffer(),
+                    follow.headers.get('Content-Type'),
+                  );
+                  if (response) {
+                    console.log('[hub-fiscal-proxy] file via ManagerSaaS URL', { id: payload.id, format });
+                    return response;
+                  }
                 }
               } else {
-                console.log('[hub-fiscal-proxy] file via ManagerSaaS', { id: payload.id, format });
-                return fileResponse(directBuffer, directContentType);
+                const response = checkedFileResponse(directBuffer, directContentType);
+                if (response) {
+                  console.log('[hub-fiscal-proxy] file via ManagerSaaS', { id: payload.id, format });
+                  return response;
+                }
               }
             }
             upstreamRouteMissing ||= /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(directText);
@@ -1063,53 +1171,7 @@ Deno.serve(withFiscalCors(async (req) => {
         const early = await tryManagerSaas(localKey, localCnpj);
         if (early) return early;
 
-        // 1) Rota documentada de download direto: GET /hub_documents_file?id=...&kind=pdf|xml.
-        //    Serve do Storage quando disponível; senão o Hub baixa do provedor.
-        // EP-012: kind aceita pdf|xml; a variante do evento vai em documento=Cancelamento|CCe.
-        const kind = format === 'cancel_xml' ? 'xml' : format;
-        const fileDocumento = payload.documento || (format === 'cancel_xml' ? 'Cancelamento' : undefined);
-        const attempts: { path: string; query: Record<string, string> }[] = [
-          {
-            path: '/hub_documents_file',
-            query: { id: payload.id, kind, ...(fileDocumento ? { documento: fileDocumento } : {}) },
-          },
-        ];
-
-        for (const attempt of attempts) {
-          let upstream: Response;
-          try {
-            upstream = await fetch(buildUrl(attempt.path, attempt.query), {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          } catch {
-            attemptLog.push(`${attempt.path}: network_error`);
-            continue;
-          }
-          const ct = upstream.headers.get('Content-Type') || '';
-          const buf = await upstream.arrayBuffer();
-
-          if (ct.includes('application/json')) {
-            let parsed: any = {};
-            try { parsed = JSON.parse(new TextDecoder().decode(buf)); } catch { /* ignore */ }
-            const b64 = parsed?.base64 || parsed?.content || parsed?.document?.base64;
-            const fileUrl = parsed?.url || parsed?.fileUrl || parsed?.document?.url;
-            if (upstream.ok && typeof b64 === 'string' && b64.length > 0) return fileResponse(b64ToBytes(b64));
-            if (upstream.ok && typeof fileUrl === 'string' && fileUrl.length > 0) {
-              const follow = await fetch(fileUrl);
-              if (follow.ok) return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
-            }
-            const msg = String(parsed?.error?.message || parsed?.message || parsed?.error?.code || '');
-            upstreamRouteMissing ||= /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(msg);
-            attemptLog.push(`${attempt.path}(${Object.keys(attempt.query).join(',')}): ${upstream.status}`);
-          } else if (upstream.ok && buf.byteLength > 0) {
-            return fileResponse(buf, ct);
-          } else {
-            const msg = new TextDecoder().decode(buf).slice(0, 200);
-            upstreamRouteMissing ||= /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(msg);
-            attemptLog.push(`${attempt.path}: ${upstream.status}`);
-          }
-        }
-        console.log('[hub-fiscal-proxy] file attempts exhausted', {
+        console.log('[hub-fiscal-proxy] primary file attempts exhausted', {
           id: payload.id,
           format,
           attemptCount: attemptLog.length,
@@ -1119,7 +1181,7 @@ Deno.serve(withFiscalCors(async (req) => {
         //    Necessário porque o ManagerSaaS pode não expor a rota de arquivo ("Rota
         //    solicitada não foi encontrada").
         const { status: docStatus, data: docData } = await callHub(
-          'GET', '/hub_documents_get', { id: payload.id }, undefined, token,
+          'GET', '/hub_documents_get', { id: payload.id }, undefined, token, FILE_REQUEST_TIMEOUT_MS,
         );
         const doc = (docData as any)?.document || (docData as any) || {};
         const accessKey = String(doc?.access_key || doc?.accessKey || '').replace(/\D/g, '');
@@ -1138,15 +1200,24 @@ Deno.serve(withFiscalCors(async (req) => {
           ? pick('pdfUrl', 'pdf_url', 'dacteUrl', 'urlPdf', 'linkPdf')
           : pick('xmlUrl', 'xml_url', 'urlXml', 'linkXml', 'cancelXmlUrl');
         if (link) {
-          const follow = await fetch(link);
-          if (follow.ok) return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
+          const follow = await fetchWithTimeout(link, {}, FILE_REQUEST_TIMEOUT_MS);
+          if (follow.ok) {
+            const response = checkedFileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
+            if (response) return response;
+          }
         }
         const inline = format === 'pdf'
           ? pick('pdfBase64', 'pdf', 'dacteBase64')
           : pick('xmlBase64', 'xml', 'xmlContent');
         if (inline) {
-          if (format === 'xml' && inline.trimStart().startsWith('<')) return fileResponse(inline, 'application/xml');
-          try { return fileResponse(b64ToBytes(inline)); } catch { /* not base64 */ }
+          if (format !== 'pdf' && inline.trimStart().startsWith('<')) {
+            const response = checkedFileResponse(inline, 'application/xml');
+            if (response) return response;
+          }
+          try {
+            const response = checkedFileResponse(b64ToBytes(inline));
+            if (response) return response;
+          } catch { /* not base64 */ }
         }
 
         // 3) Último fallback: varredura profunda do JSON do documento em busca de
@@ -1172,15 +1243,22 @@ Deno.serve(withFiscalCors(async (req) => {
         walk(docData, 'doc');
         for (const candidate of found.links) {
           try {
-            const follow = await fetch(candidate);
-            if (follow.ok) return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
+            const follow = await fetchWithTimeout(candidate, {}, FILE_REQUEST_TIMEOUT_MS);
+            if (follow.ok) {
+              const response = checkedFileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
+              if (response) return response;
+            }
           } catch { /* tenta o próximo */ }
         }
         for (const candidate of found.blobs) {
-          if (format === 'xml' && candidate.trimStart().startsWith('<')) return fileResponse(candidate, 'application/xml');
+          if (format !== 'pdf' && candidate.trimStart().startsWith('<')) {
+            const response = checkedFileResponse(candidate, 'application/xml');
+            if (response) return response;
+          }
           try {
             const bytes = b64ToBytes(candidate);
-            if (bytes.byteLength > 0) return fileResponse(bytes);
+            const response = checkedFileResponse(bytes);
+            if (response) return response;
           } catch { /* tenta o próximo */ }
         }
 

@@ -48,7 +48,7 @@ it('does not hide dated unknown-account records at a page boundary or expose the
  const seeded=[];for(let n=0;n<31;n++){
   const id=randomUUID();seeded.push(id);await db.query(`insert into driver_settlement_payments(id,tenant_id,settlement_id,amount,paid_at) values($1,$2,$3,10,'2026-09-10T12:00:00Z')`,[id,i.tenant,randomUUID()]);
  }
- const first=await read(),second=await read(2);expect(first.total).toBe(31);expect(first.unknown_account.total).toBe(31);expect([...first.unknown_account.rows,...second.unknown_account.rows].map(row=>row.source_id).sort()).toEqual(seeded.sort());
+ const first=await read(),cachedAt=(await db.query<{v:string}>("select refreshed_at::text v from finance_private.legacy_integrity_cache_state where tenant_id=$1",[i.tenant])).rows[0].v,second=await read(2),cachedAfter=(await db.query<{v:string}>("select refreshed_at::text v from finance_private.legacy_integrity_cache_state where tenant_id=$1",[i.tenant])).rows[0].v;expect(first.total).toBe(31);expect(first.unknown_account.total).toBe(31);expect(cachedAfter).toBe(cachedAt);expect((await db.query<{n:number}>('select count(*)::int n from finance_private.legacy_integrity_cache_rows where tenant_id=$1',[i.tenant])).rows[0].n).toBe(31);expect([...first.unknown_account.rows,...second.unknown_account.rows].map(row=>row.source_id).sort()).toEqual(seeded.sort());
  await expect(read(1,i.driverUser)).rejects.toThrow('finance_access_denied');await db.query("insert into tenant_memberships values($1,$2,'operator',true)",[i.tenant,i.driverUser]);await expect(read(1,i.driverUser)).rejects.toThrow('finance_access_denied');
 });
 it('classifies nonfinite dates and invalid money without fabricating cents',async()=>{

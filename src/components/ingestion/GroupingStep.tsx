@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowLeft, CheckCircle, Loader2, MapPin, Truck, AlertTriangle, FileSearch, Printer, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { normalizeCityKey } from '@/lib/utils/normalizeCity';
+import { printRomaneioOverview, printRomaneioRoutes, type RomaneioDoc } from '@/lib/romaneioPrint';
 
 interface Vehicle {
   id: string;
@@ -192,104 +192,7 @@ export default function GroupingStep({ suggestions, vehicles, drivers, executing
 
   const noVehiclesWithCapacity = vehiclesWithCapacity.length === 0;
 
-  const printStyles = `
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; padding: 8mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    @page { size: landscape; margin: 6mm; }
-    h1 { font-size: 15px; font-weight: 900; margin-bottom: 2px; border-bottom: 3px solid #000; padding-bottom: 4px; text-transform: uppercase; }
-    .subtitle { font-size: 10px; color: #333; margin-bottom: 10px; font-weight: 600; }
-    .city-section { margin-bottom: 12px; page-break-inside: avoid; }
-    .city-header { background: #d9d9d9; padding: 5px 8px; font-size: 12px; font-weight: 900; color: #000; border: 2px solid #000; display: flex; justify-content: space-between; align-items: center; }
-    .city-meta { display: flex; gap: 20px; padding: 3px 8px; background: #eee; border: 1px solid #000; border-top: none; font-size: 10px; font-weight: 700; }
-    table { width: 100%; border-collapse: collapse; font-size: 9px; }
-    th { text-align: left; background: #e0e0e0; padding: 4px 5px; border: 1.5px solid #000; font-weight: 900; font-size: 9px; white-space: nowrap; color: #000; text-transform: uppercase; }
-    td { padding: 3px 5px; border: 1px solid #000; color: #000; font-weight: 600; }
-    tr:nth-child(even) td { background: #f5f5f5; }
-    .right { text-align: right; }
-    .center { text-align: center; }
-    .total-row td { background: #d9d9d9 !important; font-weight: 900; font-size: 10px; border-top: 2.5px solid #000; }
-    .grand-totals { margin-top: 14px; padding: 8px 10px; background: #000; color: #fff; font-size: 12px; font-weight: 900; border: 3px solid #000; display: flex; gap: 20px; flex-wrap: wrap; }
-    .grand-totals span { white-space: nowrap; }
-    .footer { margin-top: 10px; text-align: center; font-size: 8px; color: #666; border-top: 1px solid #999; padding-top: 4px; }
-    .route-break { page-break-before: always; }
-    .assign-info { font-size: 11px; color: #000; background: #e8f5e9; padding: 4px 8px; border: 1px solid #000; margin-bottom: 8px; font-weight: 700; }
-    @media print { body { padding: 5mm; } .city-section { page-break-inside: avoid; } }
-  `;
-
-  const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-  const fmtN = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-
-  const buildCityBlocks = (docs: { city: string; state: string; remetente: string; destinatario: string; bairro: string; nfNumber: string; emissao: string; valor: number; peso: number; volumes: number }[]) => {
-    const cityMap = new Map<string, typeof docs>();
-    const cityDisplay = new Map<string, string>();
-    docs.forEach(d => {
-      const key = normalizeCityKey(d.city);
-      if (!cityMap.has(key)) {
-        cityMap.set(key, []);
-        cityDisplay.set(key, (d.city || 'SEM CIDADE').trim().toUpperCase());
-      }
-      cityMap.get(key)!.push(d);
-    });
-
-    let totalNotas = 0, totalEntregas = 0, totalValor = 0, totalPeso = 0, totalVolumes = 0;
-    let html = '';
-
-    cityMap.forEach((cityDocs, key) => {
-      const cityName = cityDisplay.get(key) || key;
-      const entregas = new Set(cityDocs.map(d => d.destinatario)).size;
-      const notas = cityDocs.length;
-      const valor = cityDocs.reduce((s, d) => s + d.valor, 0);
-      const peso = cityDocs.reduce((s, d) => s + d.peso, 0);
-      const volumes = cityDocs.reduce((s, d) => s + d.volumes, 0);
-      totalNotas += notas; totalEntregas += entregas; totalValor += valor; totalPeso += peso; totalVolumes += volumes;
-
-      const state = cityDocs[0]?.state || '';
-      const rows = cityDocs.map(d => `
-        <tr>
-          <td>${d.remetente}</td>
-          <td>${d.destinatario}</td>
-          <td>${d.city}</td>
-          <td class="center">${d.bairro}</td>
-          <td class="center">${d.nfNumber}</td>
-          <td class="center">${d.emissao}</td>
-          <td class="right">${fmt(d.valor)}</td>
-          <td class="right">${fmtN(d.peso)}</td>
-          <td class="center">${d.volumes}</td>
-        </tr>`).join('');
-
-      html += `
-        <div class="city-section">
-          <div class="city-header">
-            <span>Cidade: ${cityName}${state ? ' - ' + state : ''}</span>
-          </div>
-          <div class="city-meta">
-            <span>Qtd Entregas: ${entregas}</span>
-            <span>Qtd Notas: ${notas}</span>
-          </div>
-          <table>
-            <thead><tr>
-              <th>Remetente</th><th>Destinatário</th><th>Cidade</th><th class="center">Bairro</th>
-              <th class="center">Nº Nota</th><th class="center">Emissão</th>
-              <th class="right">Vlr. Nota</th><th class="right">Peso</th><th class="center">Volumes</th>
-            </tr></thead>
-            <tbody>
-              ${rows}
-              <tr class="total-row">
-                <td colspan="5">Total Cidade:</td>
-                <td></td>
-                <td class="right">${fmt(valor)}</td>
-                <td class="right">${fmtN(peso)}</td>
-                <td class="center">${volumes}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>`;
-    });
-
-    return { html, totalNotas, totalEntregas, totalValor, totalPeso, totalVolumes };
-  };
-
-  const collectDocs = (s: LoadSuggestion) =>
+  const collectDocs = (s: LoadSuggestion): RomaneioDoc[] =>
     s.documents.map(doc => ({
       city: doc.source.recipientCity || 'SEM CIDADE',
       state: doc.source.recipientState || '',
@@ -305,66 +208,24 @@ export default function GroupingStep({ suggestions, vehicles, drivers, executing
 
   const handlePrint = () => {
     const allDocs = suggestions.flatMap(s => collectDocs(s));
-    const { html: cityBlocks, totalNotas, totalEntregas, totalValor, totalPeso, totalVolumes } = buildCityBlocks(allDocs);
-
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(`<html><head><title>Análise de Cargas</title><style>${printStyles}</style></head><body>
-      <h1>ANÁLISE DE CARGAS — CONFERÊNCIA GALPÃO</h1>
-      <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} | ${suggestions.length} cargas | ${totalNotas} notas</div>
-      ${cityBlocks}
-      <div class="grand-totals">
-        <span>TOTAL GERAL</span>
-        <span>Qtd Total Entregas: ${totalEntregas}</span>
-        <span>Qtd Total Notas: ${totalNotas}</span>
-        <span>Valor: ${fmt(totalValor)}</span>
-        <span>Peso: ${fmtN(totalPeso)}</span>
-        <span>Volumes: ${totalVolumes}</span>
-      </div>
-      <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Ingestão Logística</div>
-    </body></html>`);
-    win.document.close();
-    win.print();
+    printRomaneioOverview(allDocs, {
+      subtitle: `${new Date().toLocaleDateString('pt-BR')} | ${suggestions.length} cargas | ${allDocs.length} notas`,
+    });
   };
 
   const handlePrintPerRoute = () => {
-    const pages: string[] = [];
-
-    suggestions.forEach((s, i) => {
-      const docs = collectDocs(s);
-      if (docs.length === 0) return;
-      const { html: cityBlocks, totalNotas, totalEntregas, totalValor, totalPeso, totalVolumes } = buildCityBlocks(docs);
-      const assignment = assignments.get(i);
+    const printableRoutes = suggestions.map((suggestion, index) => {
+      const assignment = assignments.get(index);
       const vehicle = assignment?.vehicleId ? vehicles.find(v => v.id === assignment.vehicleId) : null;
       const driver = assignment?.driverId ? drivers.find(d => d.id === assignment.driverId) : null;
-
-      const vehicleInfo = vehicle ? `Veículo: ${vehicle.plate} (${vehicle.max_pallets || '?'}p)` : '';
-      const driverInfo = driver ? `Motorista: ${driver.name}` : '';
-      const assignLine = (vehicleInfo || driverInfo) ? `<div class="assign-info">${vehicleInfo}${driverInfo ? (vehicleInfo ? ' | ' : '') + driverInfo : ''}</div>` : '';
-
-      pages.push(`
-        <div class="${i > 0 ? 'route-break' : ''}">
-          <h1>ROTA: ${(s.routeName || s.region).toUpperCase()}</h1>
-          <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} | Carga ${i + 1} de ${suggestions.length}</div>
-          ${assignLine}
-          ${cityBlocks}
-          <div class="grand-totals">
-            <span>TOTAL ROTA</span>
-            <span>Qtd Total Entregas: ${totalEntregas}</span>
-            <span>Qtd Total Notas: ${totalNotas}</span>
-            <span>Valor: ${fmt(totalValor)}</span>
-            <span>Peso: ${fmtN(totalPeso)}</span>
-            <span>Volumes: ${totalVolumes}</span>
-          </div>
-          <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Ingestão Logística</div>
-        </div>`);
+      return {
+        routeName: suggestion.routeName || suggestion.region,
+        vehicleInfo: vehicle ? `Veículo: ${vehicle.plate} (${vehicle.max_pallets || '?'}p)` : undefined,
+        driverInfo: driver ? `Motorista: ${driver.name}` : undefined,
+        docs: collectDocs(suggestion),
+      };
     });
-
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(`<html><head><title>Análise por Rota</title><style>${printStyles}</style></head><body>${pages.join('')}</body></html>`);
-    win.document.close();
-    win.print();
+    printRomaneioRoutes(printableRoutes, 'Análise por Rota');
   };
 
   const handleManualSave = () => {
@@ -510,14 +371,14 @@ export default function GroupingStep({ suggestions, vehicles, drivers, executing
                       {occ ? (
                         <div className="w-24 text-center space-y-0.5">
                           <div>
-                            <Progress value={Math.min(occ.palletPct, 100)} className={`h-1.5 ${occ.palletPct > 100 ? '[&>div]:bg-destructive' : occ.palletPct < 50 ? '[&>div]:bg-warning' : ''}`} />
+                            <Progress aria-label="Ocupação de paletes" aria-valuetext={`${occ.palletPct}%`} value={Math.min(occ.palletPct, 100)} className={`h-1.5 ${occ.palletPct > 100 ? '[&>div]:bg-destructive' : occ.palletPct < 50 ? '[&>div]:bg-warning' : ''}`} />
                             <span className={`text-[9px] ${occ.palletPct > 100 ? 'text-destructive' : 'text-muted-foreground'}`}>
                               {occ.palletPct}% paletes
                             </span>
                           </div>
                           {occ.weightPct !== null && (
                             <div>
-                              <Progress value={Math.min(occ.weightPct, 100)} className={`h-1.5 ${occ.weightPct > 100 ? '[&>div]:bg-destructive' : occ.weightPct < 50 ? '[&>div]:bg-warning' : ''}`} />
+                              <Progress aria-label="Ocupação de peso" aria-valuetext={`${occ.weightPct}%`} value={Math.min(occ.weightPct, 100)} className={`h-1.5 ${occ.weightPct > 100 ? '[&>div]:bg-destructive' : occ.weightPct < 50 ? '[&>div]:bg-warning' : ''}`} />
                               <span className={`text-[9px] ${occ.weightPct > 100 ? 'text-destructive' : 'text-muted-foreground'}`}>
                                 {occ.weightPct}% peso
                               </span>

@@ -12,14 +12,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useNFSeList, useIssueNFSe, useCancelNFSe, useDeleteNFSe, useSyncNFSeStatus, useResendNFSe, fetchNfseHubRefs, type NFSeDoc } from '@/hooks/useNFSe';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
+import { fetchCachedFiscalBlob } from '@/lib/fiscal/fiscalFileValidation';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
 import NFSeFromInvoicesDialog from '@/components/nfse/NFSeFromInvoicesDialog';
 import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
 import type { HubEnvironment } from '@/lib/fiscal/hubFiscalClient';
+import { FiscalListPagination } from '@/components/fiscal/FiscalListPagination';
+import { canCancelNFSeStatus, canRecoverNFSeStatus, isExactNFSeSelection, reconcileNFSeSelection, validateNFSeDateRange } from '@/lib/fiscal/nfseList';
 
 type BadgeVariant = NonNullable<BadgeProps['variant']>;
-
+type NfseHubRefs = Awaited<ReturnType<typeof fetchNfseHubRefs>>;
 const STATUS_LABEL: Record<string, { label: string; variant: BadgeVariant }> = {
   draft: { label: 'Rascunho', variant: 'secondary' },
   queued: { label: 'Em fila', variant: 'outline' },
@@ -33,6 +36,12 @@ const STATUS_LABEL: Record<string, { label: string; variant: BadgeVariant }> = {
 
 const PENDING_STATUSES = ['processing', 'queued', 'submitted', 'pending'];
 const ISSUED_STATUSES = ['issued', 'authorized'];
+const DELETABLE_STATUSES = ['draft', 'rejected'];
+const TABLE_PAGE_SIZE = 50;
+const EMPTY_NFSE_DOCS: NFSeDoc[] = [];
+
+const queryErrorMessage = (error: unknown) =>
+  error instanceof Error && error.message ? error.message : 'Não foi possível carregar as NFS-e.';
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -48,7 +57,11 @@ function saveBlob(blob: Blob, filename: string) {
 export default function NFSePage() {
   const { promptAction, confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
-  const { data: docs = [], isLoading } = useNFSeList();
+  const { data: queriedDocs, isLoading, isError, error, refetch, isFetching } = useNFSeList();
+  const docs = useMemo(
+    () => isError ? EMPTY_NFSE_DOCS : queriedDocs ?? EMPTY_NFSE_DOCS,
+    [isError, queriedDocs],
+  );
   const [environment, setEnvironment] = useState<HubEnvironment>('production');
   const issue = useIssueNFSe(environment);
   const cancel = useCancelNFSe();
@@ -61,12 +74,15 @@ export default function NFSePage() {
   const [seriesFilter, setSeriesFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const dateError = validateNFSeDateRange(dateFrom, dateTo);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState<string | null>(null);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [fromInvoicesOpen, setFromInvoicesOpen] = useState(false);
   const [editing, setEditing] = useState<NFSeDoc | null>(null);
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -89,6 +105,22 @@ export default function NFSePage() {
   // Só notas emitidas/autorizadas têm arquivo no provedor.
   const downloadable = useMemo(() => filtered.filter(d => ISSUED_STATUSES.includes(d.status)), [filtered]);
   const checkedDocs = useMemo(() => downloadable.filter(d => checked.has(d.id)), [downloadable, checked]);
+  const downloadableIds = useMemo(() => downloadable.map(doc => doc.id).sort(), [downloadable]);
+  const downloadableIdsKey = downloadableIds.join('|');
+  const allDownloadableSelected = isExactNFSeSelection(checked, downloadableIds);
+  useEffect(() => {
+    setChecked(previous => {
+      const reconciled = reconcileNFSeSelection(previous, downloadableIdsKey ? downloadableIdsKey.split('|') : []);
+      if (reconciled.size === previous.size && [...reconciled].every(id => previous.has(id))) return previous;
+      return reconciled;
+    });
+  }, [downloadableIdsKey]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / TABLE_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleDocs = useMemo(
+    () => filtered.slice((currentPage - 1) * TABLE_PAGE_SIZE, currentPage * TABLE_PAGE_SIZE),
+    [filtered, currentPage],
+  );
 
   function toggleRow(id: string) {
     setChecked(prev => {
@@ -96,6 +128,46 @@ export default function NFSePage() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  }
+
+  async function fetchNfseBlob(
+    doc: NFSeDoc,
+    format: 'pdf' | 'xml',
+    knownRefs?: NfseHubRefs,
+  ): Promise<Blob> {
+    const cached = format === 'pdf' ? doc.pdf_url : doc.xml_url;
+    if (cached) {
+      try {
+        return await fetchCachedFiscalBlob(cached, format);
+      } catch { /* link expirado/CORS: tenta o proxy autenticado */ }
+    }
+
+    const refs = knownRefs ?? await fetchNfseHubRefs([doc.id]);
+    const ref = refs.get(doc.id);
+    if (ref) {
+      return hubFiscal.file(ref.hubDocumentId, format, {
+        type: 'nfse',
+        emissionId: ref.emissionId,
+      });
+    }
+    throw new Error('Sem arquivo no Hub Fiscal — sincronize o status da nota.');
+  }
+
+  async function downloadOne(doc: NFSeDoc, format: 'pdf' | 'xml') {
+    const busyKey = `${doc.id}:${format}`;
+    setDownloadBusy(busyKey);
+    const label = doc.nfse_number || `RPS ${doc.rps_number}`;
+    const toastId = toast.loading(`Baixando NFS-e ${label} (${format.toUpperCase()})...`);
+    try {
+      const blob = await fetchNfseBlob(doc, format);
+      saveBlob(blob, `nfse-${doc.nfse_number || doc.rps_number || doc.id}.${format}`);
+      toast.success(`NFS-e ${label} baixada`, { id: toastId });
+    } catch (error: unknown) {
+      const description = error instanceof Error ? error.message : 'Não foi possível baixar o arquivo.';
+      toast.error('Falha ao baixar NFS-e', { id: toastId, description, duration: 12_000 });
+    } finally {
+      setDownloadBusy(null);
+    }
   }
 
   async function bulkDownload(format: 'pdf' | 'xml') {
@@ -112,21 +184,7 @@ export default function NFSePage() {
         outputBase: `nfse-${format}-${stamp}`,
         labelOf: d => `NFS-e ${d.nfse_number || `RPS ${d.rps_number}`}`,
         filenameOf: d => `nfse-${d.nfse_number || d.rps_number || d.id}.${format}`,
-        fetchOne: async d => {
-          const ref = refs.get(d.id);
-          if (ref) {
-            return hubFiscal.file(ref.hubDocumentId, format, { type: 'nfse', emissionId: ref.emissionId });
-          }
-          const cached = format === 'pdf' ? d.pdf_url : d.xml_url;
-          if (cached) {
-            const res = await fetch(cached);
-            if (res.ok) {
-              const blob = await res.blob();
-              if (blob.size > 0) return blob;
-            }
-          }
-          throw new Error('Sem arquivo no Hub Fiscal — sincronize o status da nota.');
-        },
+        fetchOne: d => fetchNfseBlob(d, format, refs),
         onProgress: (done, all, label) => {
           setBulkProgress({ done, total: all });
           toast.loading(`Baixando ${done}/${all} — ${label}`, { id: toastId });
@@ -216,14 +274,14 @@ export default function NFSePage() {
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" /> Consulta — NFS-e</CardTitle>
-            <Input className="max-w-xs" placeholder="Buscar nº, cliente, CNPJ…" value={search} onChange={e => setSearch(e.target.value)} />
+            <Input className="max-w-xs" placeholder="Buscar nº, cliente, CNPJ…" value={search} onChange={e => { setSearch(e.target.value); setChecked(new Set()); setPage(1); }} />
           </CardHeader>
           <CardContent>
             {/* Filtros de seleção para download em massa */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Status</label>
-                <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setChecked(new Set()); }}>
+                <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setChecked(new Set()); setPage(1); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
@@ -237,7 +295,7 @@ export default function NFSePage() {
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Série</label>
-                <Select value={seriesFilter} onValueChange={v => { setSeriesFilter(v); setChecked(new Set()); }}>
+                <Select value={seriesFilter} onValueChange={v => { setSeriesFilter(v); setChecked(new Set()); setPage(1); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
@@ -247,20 +305,21 @@ export default function NFSePage() {
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Emissão — de</label>
-                <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setChecked(new Set()); }} />
+                <Input type="date" max={dateTo || undefined} value={dateFrom} onChange={e => { setDateFrom(e.target.value); setChecked(new Set()); setPage(1); }} />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Emissão — até</label>
-                <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setChecked(new Set()); }} />
+                <Input type="date" min={dateFrom || undefined} value={dateTo} onChange={e => { setDateTo(e.target.value); setChecked(new Set()); setPage(1); }} />
               </div>
               <div className="flex items-end">
                 <Button variant="outline" className="w-full" onClick={() => {
-                  setStatusFilter('issued'); setSeriesFilter('all'); setDateFrom(''); setDateTo(''); setSearch(''); setChecked(new Set());
+                  setStatusFilter('all'); setSeriesFilter('all'); setDateFrom(''); setDateTo(''); setSearch(''); setChecked(new Set()); setPage(1);
                 }}>
                   <X className="h-4 w-4 mr-1" /> Limpar filtros
                 </Button>
               </div>
             </div>
+            {dateError ? <p role="alert" className="mb-3 text-sm text-destructive">{dateError}</p> : null}
 
             {/* Barra de download em arquivo único */}
             <div className="flex items-center justify-between gap-3 flex-wrap rounded-md border bg-muted/30 px-3 py-2 mb-3">
@@ -290,9 +349,8 @@ export default function NFSePage() {
                 <TableRow>
                   <TableHead className="w-8">
                     <Checkbox
-                      checked={downloadable.length > 0 && checkedDocs.length === downloadable.length}
-                      onCheckedChange={() => setChecked(prev =>
-                        prev.size >= downloadable.length ? new Set() : new Set(downloadable.map(d => d.id)))}
+                      checked={allDownloadableSelected}
+                      onCheckedChange={() => setChecked(allDownloadableSelected ? new Set() : new Set(downloadableIds))}
                       aria-label="Selecionar todas"
                     />
                   </TableHead>
@@ -303,15 +361,16 @@ export default function NFSePage() {
                   <TableHead className="text-right">Vl. Serviços</TableHead>
                   <TableHead className="text-right">ISS</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-44 text-right">Ações</TableHead>
+                  <TableHead className="min-w-[260px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Carregando…</TableCell></TableRow>}
-                {!isLoading && filtered.length === 0 && (
+                {isError && <TableRow><TableCell colSpan={9} className="py-6"><div role="alert" className="mx-auto max-w-xl rounded-md border border-destructive/30 bg-destructive/10 p-4 text-center text-sm"><p>{queryErrorMessage(error)}</p><Button className="mt-3" size="sm" variant="outline" onClick={() => void refetch()} disabled={isFetching}>Tentar novamente</Button></div></TableCell></TableRow>}
+                {!isError && isLoading && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Carregando…</TableCell></TableRow>}
+                {!isError && !isLoading && filtered.length === 0 && (
                   <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Nenhuma NFS-e para os filtros selecionados</TableCell></TableRow>
                 )}
-                {filtered.map(d => {
+                {!isError && visibleDocs.map(d => {
                   const st = STATUS_LABEL[d.status] || { label: d.status, variant: 'secondary' };
                   return (
                     <TableRow key={d.id}>
@@ -371,12 +430,34 @@ export default function NFSePage() {
                             <Send className="h-3 w-3 mr-1" /> Emitir
                           </Button>
                         )}
-                        {(d.status === 'rejected' || d.status === 'error' || d.status === 'submitted' || d.status === 'processing') && (
+                        {canRecoverNFSeStatus(d.status) && (
                           <Button size="sm" variant="outline" onClick={() => resend.mutate(d.id)} disabled={resend.isPending}>
                             <RefreshCw className="h-3 w-3 mr-1" /> Recuperar
                           </Button>
                         )}
-                        {d.status !== 'cancelled' && (
+                        {ISSUED_STATUSES.includes(d.status) && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[11px]"
+                              onClick={() => downloadOne(d, 'pdf')}
+                              disabled={downloadBusy !== null || bulkBusy}
+                            >
+                              <FileText className="h-3 w-3 mr-1" /> PDF
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[11px]"
+                              onClick={() => downloadOne(d, 'xml')}
+                              disabled={downloadBusy !== null || bulkBusy}
+                            >
+                              <FileDown className="h-3 w-3 mr-1" /> XML
+                            </Button>
+                          </>
+                        )}
+                        {canCancelNFSeStatus(d.status) && (
                           <Button 
                             size="sm" 
                             variant="ghost" 
@@ -386,7 +467,7 @@ export default function NFSePage() {
                             <Ban className="h-3 w-3 mr-1" /> Cancelar
                           </Button>
                         )}
-                        {(!['issued', 'authorized'].includes(d.status) || d.status === 'rejected' || d.status === 'error') && (
+                        {DELETABLE_STATUSES.includes(d.status) && (
                           <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(d)} disabled={del.isPending}>
                             <Trash2 className="h-3 w-3 mr-1" /> Excluir
                           </Button>
@@ -397,6 +478,7 @@ export default function NFSePage() {
                 })}
               </TableBody>
             </Table>
+            {!isError && <FiscalListPagination page={currentPage} pageSize={TABLE_PAGE_SIZE} totalItems={filtered.length} onPageChange={setPage} />}
           </CardContent>
         </Card>
 

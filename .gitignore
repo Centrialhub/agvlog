@@ -16,6 +16,9 @@ dist-ssr
 *.local
 coverage
 .codex-build-audit/
+.sites-*/
+.deploy-*/
+.codex-publish/
 .pnpm-store/
 *.tsbuildinfo
 .env

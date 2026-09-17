@@ -3,6 +3,7 @@ import type { DriverSettlementListItem } from '@/hooks/useDriverSettlements';
 
 const amount = z.number().finite().nullable();
 const count = z.number().int().nonnegative();
+const timestamp = z.string().datetime({ offset: true });
 const itemSchema = z.object({
   id: z.string().uuid(), tenant_id: z.string().uuid(),
   status: z.enum(['pending_review', 'in_review', 'approved', 'paid', 'closed', 'reopened']),
@@ -18,7 +19,12 @@ const itemSchema = z.object({
   needs_recalculation: z.boolean(), approved_with_exception: z.boolean(),
 }).passthrough();
 const responseSchema = z.object({
-  items: z.array(itemSchema), total_count: count, page: count.min(1), page_size: count.min(1).max(100),
+  version: z.literal(2), tenant_id: z.string().uuid(), snapshot_at: timestamp, revision: z.string().regex(/^[0-9a-f]{32}$/),
+  items: z.array(itemSchema).max(100), total_count: count, page_size: count.min(1).max(100),
+  next_cursor: z.object({
+    scope: z.string().regex(/^[0-9a-f]{32}$/), revision: z.string().regex(/^[0-9a-f]{32}$/), trip_completed_at: timestamp.nullable(),
+    created_at: timestamp, id: z.string().uuid(),
+  }).strict().nullable(),
   summary: z.object({
     total_count: count, pending_count: count, in_review_count: count, approved_count: count,
     paid_closed_count: count, needs_recalculation_count: count, km_pending_count: count,
@@ -28,13 +34,11 @@ const responseSchema = z.object({
 });
 export function parseSettlementList(value: unknown, tenant: string) {
   const parsed = responseSchema.parse(value);
-  if (parsed.items.some(item => item.tenant_id !== tenant) || parsed.summary.total_count !== parsed.total_count) {
+  if (parsed.tenant_id !== tenant || parsed.items.some(item => item.tenant_id !== tenant) || parsed.summary.total_count !== parsed.total_count) {
     throw new Error('A listagem não corresponde ao contexto solicitado.');
   }
   return { ...parsed, items: parsed.items as DriverSettlementListItem[] };
 }
-const filtersSchema = z.object({
-  drivers: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
-  vehicles: z.array(z.object({ id: z.string().uuid(), plate: z.string() })),
-});
-export const parseSettlementFilterOptions = (value: unknown) => filtersSchema.parse(value);
+export type DriverSettlementCursor = z.infer<typeof responseSchema>['next_cursor'];
+const filtersSchema = z.object({version:z.literal(1),tenant_id:z.string().uuid(),kind:z.enum(['drivers','vehicles']),search:z.string().max(200),page:z.number().int().positive(),page_size:z.literal(50),total:count,revision:z.string().regex(/^[a-f0-9]{32}$/),rows:z.array(z.object({id:z.string().uuid(),label:z.string()})).max(50)});
+export const parseSettlementFilterOptions = (value: unknown,tenant:string,kind:'drivers'|'vehicles') => {const parsed=filtersSchema.parse(value);if(parsed.tenant_id!==tenant||parsed.kind!==kind)throw new Error('Opções fora da empresa ou tipo solicitado.');return parsed;};

@@ -12,6 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Search, Filter, ChevronDown, CheckCircle2, AlertTriangle, Clock, FileSearch } from 'lucide-react';
 import { format } from 'date-fns';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { usePagination } from '@/hooks/usePagination';
+import { DataPagination } from '@/components/ui/data-pagination';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 
 interface OrtAudit {
   id: string;
@@ -25,6 +30,9 @@ interface OrtAudit {
   reviewed_at: string | null;
   fiscal_document_id: string | null;
   extracted_payload: any;
+  reviewed_payload: any;
+  changed_fields: string[];
+  updated_at: string;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -42,6 +50,7 @@ function statusColor(s: string) {
 
 export default function OrtConsultaTab() {
   const { currentTenant } = useTenant();
+  const toast = useSonnerToast();
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [ortNumber, setOrtNumber] = useState('');
   const [status, setStatus] = useState<string>('all');
@@ -49,20 +58,22 @@ export default function OrtConsultaTab() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [fileQ, setFileQ] = useState('');
+  const [detail, setDetail] = useState<OrtAudit | null>(null);
+  const [reviewing, setReviewing] = useState(false);
 
-  const { data = [], isLoading, refetch } = useQuery({
+  const { data = [], isLoading, isFetching, isError, error: queryError, refetch } = useQuery({
     queryKey: ['ort_audits', currentTenant?.id],
     enabled: !!currentTenant,
     queryFn: async () => {
-      const { data, error } = await supabase
+      return await fetchAllPostgrestPages((pageFrom, pageTo) => supabase
         .from('ort_extraction_audits' as any)
-        .select('id, ort_number, source_file_name, status, overall_confidence, needs_review, reviewed, created_at, reviewed_at, fiscal_document_id, extracted_payload')
+        .select('id, ort_number, source_file_name, status, overall_confidence, needs_review, reviewed, created_at, reviewed_at, fiscal_document_id, extracted_payload, reviewed_payload, changed_fields, updated_at')
         .eq('tenant_id', currentTenant!.id)
         .order('created_at', { ascending: false })
-        .limit(1000);
-      if (error) throw error;
-      return (data || []) as unknown as OrtAudit[];
+        .order('id', { ascending: false })
+        .range(pageFrom, pageTo)) as unknown as OrtAudit[];
     },
+    retry: false,
   });
 
   const filtered = useMemo(() => {
@@ -87,6 +98,32 @@ export default function OrtConsultaTab() {
       ? Math.round((filtered.reduce((s, d) => s + (d.overall_confidence || 0), 0) / filtered.length) * 100)
       : 0,
   }), [filtered]);
+  const pagination = usePagination(filtered, {
+    pageSize: 50,
+    resetKey: `${ortNumber}|${status}|${reviewFilter}|${fileQ}|${from}|${to}`,
+  });
+
+  const review = async (decision: 'approve' | 'reject') => {
+    if (!currentTenant || !detail) return;
+    setReviewing(true);
+    try {
+      const { error } = await supabase.rpc('review_ort_extraction_v1' as never, {
+        _tenant_id: currentTenant.id,
+        _audit_id: detail.id,
+        _decision: decision,
+        _reviewed_payload: detail.reviewed_payload || detail.extracted_payload || {},
+        _expected_updated_at: detail.updated_at,
+      } as never);
+      if (error) throw error;
+      toast.success(decision === 'approve' ? 'Revisão aprovada e concluída.' : 'Extração rejeitada.');
+      setDetail(null);
+      await refetch();
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível concluir a revisão.');
+    } finally {
+      setReviewing(false);
+    }
+  };
 
   function clearAll() {
     setOrtNumber(''); setStatus('all'); setReviewFilter('all'); setFrom(''); setTo(''); setFileQ('');
@@ -151,7 +188,7 @@ export default function OrtConsultaTab() {
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={clearAll}>Limpar</Button>
-                <Button size="sm" onClick={() => refetch()}><Search className="h-4 w-4 mr-1" /> Buscar</Button>
+                <Button size="sm" onClick={() => refetch()} disabled={isFetching}><Search className="h-4 w-4 mr-1" /> Buscar</Button>
               </div>
             </CardContent>
           </CollapsibleContent>
@@ -170,7 +207,7 @@ export default function OrtConsultaTab() {
               <c.icon className={`h-5 w-5 ${c.color}`} />
               <div>
                 <p className="text-xs text-muted-foreground">{c.label}</p>
-                <p className="text-lg font-semibold">{c.value}</p>
+                <p className="text-lg font-semibold">{isError ? '—' : c.value}</p>
               </div>
             </CardContent>
           </Card>
@@ -189,15 +226,18 @@ export default function OrtConsultaTab() {
                 <TableHead className="text-right">Confiança</TableHead>
                 <TableHead>Revisão</TableHead>
                 <TableHead>NF vinculada</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Carregando...</TableCell></TableRow>
+              {isError ? (
+                <TableRow><TableCell colSpan={8} className="text-center py-10 text-destructive">Não foi possível consultar as ORTs. {queryError instanceof Error ? queryError.message : ''} <Button variant="link" onClick={() => refetch()}>Tentar novamente</Button></TableCell></TableRow>
+              ) : isLoading ? (
+                <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">Nenhuma ORT encontrada.</TableCell></TableRow>
-              ) : filtered.map(o => (
-                <TableRow key={o.id}>
+                <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">Nenhuma ORT encontrada.</TableCell></TableRow>
+              ) : pagination.items.map(o => (
+                <TableRow key={o.id} className="cursor-pointer" onClick={() => setDetail(o)}>
                   <TableCell className="font-mono">{o.ort_number || '—'}</TableCell>
                   <TableCell className="text-sm max-w-[280px] truncate" title={o.source_file_name}>{o.source_file_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{format(new Date(o.created_at), 'dd/MM/yyyy HH:mm')}</TableCell>
@@ -217,12 +257,35 @@ export default function OrtConsultaTab() {
                   <TableCell className="text-xs text-muted-foreground">
                     {o.fiscal_document_id ? <span className="font-mono">{o.fiscal_document_id.slice(0, 8)}…</span> : '—'}
                   </TableCell>
+                  <TableCell className="text-right"><Button variant="ghost" size="sm" onClick={(event) => { event.stopPropagation(); setDetail(o); }}>Detalhes</Button></TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          {!isError && <DataPagination {...pagination} onPageChange={pagination.setPage} />}
         </CardContent>
       </Card>
+
+      <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Revisão da ORT {detail?.ort_number || 'sem número'}</DialogTitle>
+            <DialogDescription>Compare a extração original com os dados revisados antes de concluir.</DialogDescription>
+          </DialogHeader>
+          {detail && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <section className="space-y-2"><h3 className="text-sm font-medium">Extração original</h3><pre className="max-h-80 overflow-auto rounded border bg-muted p-3 text-xs whitespace-pre-wrap">{JSON.stringify(detail.extracted_payload, null, 2)}</pre></section>
+              <section className="space-y-2"><h3 className="text-sm font-medium">Dados revisados</h3><pre className="max-h-80 overflow-auto rounded border bg-muted p-3 text-xs whitespace-pre-wrap">{JSON.stringify(detail.reviewed_payload, null, 2)}</pre></section>
+              <div className="md:col-span-2 text-xs text-muted-foreground">Campos alterados: {detail.changed_fields?.length ? detail.changed_fields.join(', ') : 'nenhum registrado'} · Última revisão: {detail.reviewed_at ? format(new Date(detail.reviewed_at), 'dd/MM/yyyy HH:mm') : 'não concluída'}</div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetail(null)} disabled={reviewing}>Fechar</Button>
+            <Button variant="destructive" onClick={() => review('reject')} disabled={reviewing || detail?.status === 'rejected'}>Rejeitar</Button>
+            <Button onClick={() => review('approve')} disabled={reviewing || detail?.status === 'applied' || detail?.status === 'reviewed'}>Aprovar e concluir</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

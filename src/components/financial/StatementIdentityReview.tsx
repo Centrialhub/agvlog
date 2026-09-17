@@ -16,7 +16,7 @@ export function StatementIdentityReview({tenant,actor,row,verification,onRecorde
   const [pending,setPending]=useState<StatementReviewCommand|null>(restored.command),[preview,setPreview]=useState<StatementReviewCommand|null>(null);
   const [open,setOpen]=useState(!!restored.command||!!restored.error),[page,setPage]=useState(1);
   const [decision,setDecision]=useState<'same_transaction'|'distinct_transaction'>('same_transaction'),[target,setTarget]=useState(''),[reason,setReason]=useState('');
-  const [busy,setBusy]=useState(false),[error,setError]=useState(restored.error),active=useRef(true),sending=useRef(false);
+  const [busy,setBusy]=useState(false),[recoveryError,setRecoveryError]=useState(restored.error),[error,setError]=useState(restored.error),active=useRef(true),sending=useRef(false);
   const candidates=useQuery({queryKey:['finance-identity-candidates',tenant,actor,row.id,page],enabled:open&&!pending&&!preview&&decision==='same_transaction',retry:false,
     queryFn:()=>readFinanceIdentityCandidates(tenant,row.id,page)});
   useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
@@ -27,7 +27,7 @@ export function StatementIdentityReview({tenant,actor,row,verification,onRecorde
     setError('');setPreview(parsed.data);
   }
   async function submit(){
-    if(sending.current||restored.error)return;const command=pending||preview;if(!command)return;
+    if(sending.current||recoveryError)return;const command=pending||preview;if(!command)return;
     const wasUncertain=!!pending;
     try{sessionStorage.setItem(key,JSON.stringify(command));}catch{setError('Não foi possível preservar o pedido no navegador. Nenhum envio foi iniciado.');return;}
     sending.current=true;setPending(command);setPreview(null);setBusy(true);setError('');
@@ -42,7 +42,7 @@ export function StatementIdentityReview({tenant,actor,row,verification,onRecorde
     <p className="font-medium">Revisão manual da identificação</p><p className="text-sm">A decisão e seu responsável permanecerão no histórico. Esta revisão não dá baixa em títulos nem confirma a conciliação bancária.</p>
     {frozen?<div className="space-y-2 text-sm"><p>{frozen.decision==='same_transaction'?'Mesma transação já importada':'Outra transação, distinta das importadas'}</p><p>Justificativa: {frozen.reason}</p>
       {pending&&<p role="status">Pedido preservado. Retome a confirmação com os mesmos dados.</p>}
-      <Button disabled={busy||!!restored.error} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesmo pedido':'Confirmar decisão manual'}</Button>
+      <Button disabled={busy||!!recoveryError} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesmo pedido':'Confirmar decisão manual'}</Button>
       {!pending&&<Button variant="outline" onClick={()=>setPreview(null)}>Voltar à edição</Button>}
     </div>:<div className="space-y-3">
       <label className="block text-sm">Decisão<select className="ml-2 rounded border bg-background p-2" value={decision} onChange={e=>setDecision(e.target.value as typeof decision)}>
@@ -53,7 +53,7 @@ export function StatementIdentityReview({tenant,actor,row,verification,onRecorde
         {candidates.data&&<div className="flex items-center gap-3 text-sm"><Button variant="outline" disabled={page===1||candidates.isFetching} onClick={()=>{setTarget('');setPage(page-1);}}>Anteriores</Button>
           <span>{candidates.data.total} transações compatíveis · Página {page}</span><Button variant="outline" disabled={page*30>=candidates.data.total||candidates.isFetching} onClick={()=>{setTarget('');setPage(page+1);}}>Próximas</Button></div>}</>}
       <label className="block text-sm">Justificativa<Input value={reason} maxLength={2000} onChange={e=>setReason(e.target.value)} placeholder="Quais evidências sustentam esta decisão?"/></label>
-      <Button disabled={!!restored.error} onClick={prepare}>Revisar decisão antes de registrar</Button>
-    </div>}{error&&<p role="alert">{error}</p>}
+      <Button disabled={!!recoveryError} onClick={prepare}>Revisar decisão antes de registrar</Button>
+    </div>}{error&&<p role="alert">{error}</p>}{recoveryError&&<Button type="button" variant="outline" onClick={()=>{sessionStorage.removeItem(key);setRecoveryError('');setError('');setPending(null);setPreview(null);setOpen(false);}}>Descartar recuperação incompatível</Button>}
   </section>;
 }

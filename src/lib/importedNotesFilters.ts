@@ -6,6 +6,16 @@ export function normalizeImportedNoteFilters(filters: ImportedNoteFilters): Impo
   ]));
 }
 
+export function validateImportedNoteFilters(filters: ImportedNoteFilters): void {
+  const normalized = normalizeImportedNoteFilters(filters);
+  if (normalized.issueFrom && normalized.issueTo && normalized.issueFrom > normalized.issueTo) {
+    throw new Error('A data inicial de emissão deve ser anterior ou igual à data final.');
+  }
+  if (normalized.importFrom && normalized.importTo && normalized.importFrom > normalized.importTo) {
+    throw new Error('A data inicial de importação deve ser anterior ou igual à data final.');
+  }
+}
+
 function localDayBoundary(day: string, nextDay = false): string {
   const date = new Date(`${day}T00:00:00`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(date.getTime())) {

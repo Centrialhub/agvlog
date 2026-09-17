@@ -11,7 +11,8 @@ import {
 } from '@/lib/deliveryReceipts/deliveryReceiptOperationsDashboard';
 import {
   deliveryReceiptFilterCatalog,
-  getDeliveryReceiptFilterCatalog,
+  getDeliveryReceiptFilterSummary,
+  listDeliveryReceiptFilterOptions,
   listAllDeliveryReceipts,
   listDeliveryReceipts,
   type DeliveryReceiptRow,
@@ -117,7 +118,7 @@ describe('delivery receipt operational completion',()=>{
       emails:{queued:0,sending:0,sent:1,delivered:1,bounced:0,failed:0,retryable:0},
       expenses:{pending:2,approved:1,rejected:0,without_receipt:0},templates:[],batches:[]},error:null})});
     const result=await getDeliveryReceiptOperations(tenant,actor,new AbortController().signal);
-    expect(result.expenses.pending).toBe(2);expect(result.receipts.physical_pending).toBe(2);
+    expect(result.expenses?.pending).toBe(2);expect(result.receipts.physical_pending).toBe(2);
   });
 
   it('loads a searchable paginated email history with immutable attachment snapshots',async()=>{
@@ -153,17 +154,20 @@ describe('delivery receipt operational completion',()=>{
     });
   });
 
-  it('loads every server page before building complete filter options',async()=>{
-    const allRows=Array.from({length:101},(_,index)=>receiptRow({
-      driver:{id:crypto.randomUUID(),name:index===100?'Motorista Zulu':`Motorista ${String(index).padStart(3,'0')}`},
-      vehicle:{id:crypto.randomUUID(),plate:`QA-${String(index).padStart(4,'0')}`},
-    }));
-    mocks.rpc.mockImplementation((_name:string,args:Record<string,unknown>)=>{const offset=Number(args._offset),limit=Number(args._limit);
-      return Promise.resolve({data:{version:1,tenant_id:tenant,actor_id:actor,rows:allRows.slice(offset,offset+limit),total:allRows.length,limit,offset},error:null});});
-    const result=await getDeliveryReceiptFilterCatalog(tenant,actor);
-    expect(mocks.rpc.mock.calls.map(call=>call[1]._offset)).toEqual([0,100]);
-    expect(result.drivers.at(-1)?.label).toBe('Motorista Zulu');
-    expect(result.total).toBe(101);
+  it('loads queue counters separately from bounded filter options',async()=>{
+    const driverId=crypto.randomUUID();
+    mocks.rpc.mockResolvedValueOnce({data:{version:1,tenant_id:tenant,actor_id:actor,total:101,
+      queues:{awaiting_sync:1,awaiting_validation:2,rejected:3,validated:4,physical_pending:5,ready_to_send:6,sent:7,send_failures:8}},error:null})
+      .mockResolvedValueOnce({data:{version:1,tenant_id:tenant,actor_id:actor,kind:'driver',search:'Zulu',
+        items:[{value:driverId,label:'Motorista Zulu'}],has_more:true,next_cursor_label:'Motorista Zulu',next_cursor_value:driverId},error:null});
+    expect((await getDeliveryReceiptFilterSummary(tenant,actor)).total).toBe(101);
+    const page=await listDeliveryReceiptFilterOptions(tenant,actor,'driver',' Zulu ');
+    expect(page.items.at(-1)?.label).toBe('Motorista Zulu');
+    expect(page.nextCursor).toEqual({label:'Motorista Zulu',value:driverId});
+    expect(mocks.rpc).toHaveBeenNthCalledWith(1,'get_delivery_receipt_filter_summary_v1',{_tenant_id:tenant});
+    expect(mocks.rpc).toHaveBeenNthCalledWith(2,'list_delivery_receipt_filter_options_v1',{
+      _tenant_id:tenant,_kind:'driver',_search:'Zulu',_limit:25,_cursor_label:null,_cursor_value:null,
+    });
   });
 
   it('loads every server page for the active filter without dropping duplicate rows',async()=>{
@@ -189,4 +193,13 @@ describe('delivery receipt operational completion',()=>{
     expect(catalog.queues).toEqual({awaiting_sync:1,awaiting_validation:1,rejected:1,validated:4,physical_pending:1,
       ready_to_send:1,sent:1,send_failures:1});
   });
+});
+
+
+it('preserves unavailable expense metrics without inventing zero or discarding receipt operations',async()=>{
+  mocks.rpc.mockResolvedValue({data:{version:1,tenant_id:tenant,actor_id:actor,generated_at:now,
+    receipts:{total:4,pending_validation:1,rejected:0,without_pdf:0,physical_pending:2,replaced:0},
+    emails:{queued:0,sending:0,sent:0,delivered:0,bounced:0,failed:0,retryable:0},expenses:null,templates:[],batches:[]},error:null});
+  const result=await getDeliveryReceiptOperations(tenant,actor);
+  expect(result.expenses).toBeNull();expect(result.receipts.total).toBe(4);
 });

@@ -1,0 +1,515 @@
+[
+  {
+    "name": "associate_finance_legacy_expense_cost",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "associate_finance_legacy_expense_cost(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "associate_finance_legacy_payable_payment",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "associate_finance_legacy_payable_payment(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "associate_finance_legacy_receivable_payment",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "associate_finance_legacy_receivable_payment(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "associate_finance_maintenance_direct_part",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "associate_finance_maintenance_direct_part(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "associate_finance_maintenance_labor",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "associate_finance_maintenance_labor(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "associate_finance_stock_acquisition",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "associate_finance_stock_acquisition(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "attribute_finance_stock_consumption",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "attribute_finance_stock_consumption(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "close_finance_account_period",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "close_finance_account_period(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "close_finance_cash_period",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "close_finance_cash_period(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "create_manual_driver_settlement",
+    "keys": [
+      "_tenant_id",
+      "_driver_id",
+      "_vehicle_id",
+      "_reference_date",
+      "_load_ids"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_tenant_id",
+          "_driver_id",
+          "_vehicle_id",
+          "_reference_date",
+          "_load_ids"
+        ],
+        "arguments": "_tenant_id uuid, _driver_id uuid, _vehicle_id uuid, _reference_date date, _load_ids uuid[]",
+        "signature": "create_manual_driver_settlement(uuid,uuid,uuid,date,uuid[])",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "get_finance_unbilled_freight_summary",
+    "keys": [
+      "_tenant_id",
+      "_from",
+      "_to",
+      "_client_id"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_tenant_id",
+          "_from",
+          "_to",
+          "_client_id"
+        ],
+        "arguments": "_tenant_id uuid, _from date DEFAULT NULL::date, _to date DEFAULT NULL::date, _client_id uuid DEFAULT NULL::uuid",
+        "signature": "get_finance_unbilled_freight_summary(uuid,date,date,uuid)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "list_finance_unbilled_freight_origins",
+    "keys": [
+      "_tenant_id",
+      "_from",
+      "_to",
+      "_client_id",
+      "_state",
+      "_page"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_tenant_id",
+          "_from",
+          "_to",
+          "_client_id",
+          "_state",
+          "_page"
+        ],
+        "arguments": "_tenant_id uuid, _from date DEFAULT NULL::date, _to date DEFAULT NULL::date, _client_id uuid DEFAULT NULL::uuid, _state text DEFAULT NULL::text, _page integer DEFAULT 1",
+        "signature": "list_finance_unbilled_freight_origins(uuid,date,date,uuid,text,integer)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "record_finance_cash_period_count",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "record_finance_cash_period_count(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "record_finance_statement_coverage_approval",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "record_finance_statement_coverage_approval(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "reopen_finance_account_period",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "reopen_finance_account_period(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "reverse_finance_cash_period_count",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "reverse_finance_cash_period_count(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "reverse_finance_legacy_expense_cost_association",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "reverse_finance_legacy_expense_cost_association(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "reverse_finance_legacy_payable_association",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "reverse_finance_legacy_payable_association(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "reverse_finance_legacy_receivable_association",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "reverse_finance_legacy_receivable_association(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "reverse_finance_maintenance_direct_part_association",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "reverse_finance_maintenance_direct_part_association(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "reverse_finance_maintenance_labor_association",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "reverse_finance_maintenance_labor_association(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "reverse_finance_statement_coverage_approval",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "reverse_finance_statement_coverage_approval(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "reverse_finance_stock_acquisition_association",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "reverse_finance_stock_acquisition_association(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "reverse_finance_stock_consumption_attribution",
+    "keys": [
+      "_payload"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_payload"
+        ],
+        "arguments": "_payload jsonb",
+        "signature": "reverse_finance_stock_consumption_attribution(jsonb)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  },
+  {
+    "name": "update_driver_settlement_km_review",
+    "keys": [
+      "_settlement_id",
+      "_audited_km",
+      "_km_status",
+      "_notes",
+      "_km_start",
+      "_km_end",
+      "_audited_start_location",
+      "_audited_end_location"
+    ],
+    "overloads": 1,
+    "candidates": [
+      {
+        "anon": false,
+        "names": [
+          "_settlement_id",
+          "_audited_km",
+          "_km_status",
+          "_notes",
+          "_km_start",
+          "_km_end",
+          "_audited_start_location",
+          "_audited_end_location"
+        ],
+        "arguments": "_settlement_id uuid, _audited_km numeric, _km_status text, _notes text, _km_start numeric DEFAULT NULL::numeric, _km_end numeric DEFAULT NULL::numeric, _audited_start_location text DEFAULT NULL::text, _audited_end_location text DEFAULT NULL::text",
+        "signature": "update_driver_settlement_km_review(uuid,numeric,text,text,numeric,numeric,text,text)",
+        "authenticated": true,
+        "named_compatible": true
+      }
+    ]
+  }
+]

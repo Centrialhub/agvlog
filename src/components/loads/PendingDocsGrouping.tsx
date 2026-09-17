@@ -1,11 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useDrivers } from '@/hooks/useDrivers';
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
-import { useCreateLoad } from '@/hooks/useLoads';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,10 +14,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Checkbox } from '@/components/ui/checkbox';
 import { FileStack, MapPin, Truck, CheckCircle, Loader2, User, UserX } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
-import type { Json } from '@/integrations/supabase/types';
-import type { JsonObject } from '@/lib/jsonTypes';
 import { getErrorMessage } from '@/lib/errors';
 import { matchOperationalRoute } from '@/lib/routes/matchOperationalRoute';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 interface PendingDoc {
   id: string;
@@ -50,23 +48,18 @@ interface Props {
   onCreated: () => void;
 }
 
-function jsonRecord(value: Json): JsonObject | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : null;
-}
-
 export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: Props) {
   const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const { data: vehicles = [] } = useVehicles();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
-  const createLoad = useCreateLoad();
-  
   const queryClient = useQueryClient();
 
   const [executing, setExecuting] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [vehicleAssignments, setVehicleAssignments] = useState<Map<string, string>>(new Map());
   const [driverAssignments, setDriverAssignments] = useState<Map<string, string>>(new Map());
+  const initialSelectionApplied = useRef(false);
 
   const { data: drivers = [] } = useDrivers({ enabled: open });
 
@@ -74,17 +67,15 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     queryKey: ['pending_fiscal_docs', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('fiscal_documents')
+      return fetchAllPostgrestPages((from, to) => supabase.from('fiscal_documents')
         .select('id, invoice_number, recipient, recipient_city, recipient_state, pallet_count, weight_kg, value, created_at, clients!fiscal_documents_client_id_fkey(company_name)')
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'confirmed')
         .eq('document_type', 'inbound')
         .is('load_id', null)
         .is('deleted_at', null)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return (data || []) as PendingDoc[];
+        .order('created_at', { ascending: true }).order('id')
+        .range(from, to)) as Promise<PendingDoc[]>;
     },
     enabled: !!currentTenant && open,
   });
@@ -136,12 +127,16 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     return Array.from(groupMap.values()).sort((a, b) => b.totalPallets - a.totalPallets);
   }, [pendingDocs, operationalRoutes]);
 
-  // Auto-select all groups on load
+  // Auto-select only once per dialog opening; an explicit empty selection is preserved.
   useEffect(() => {
-    if (groups.length > 0 && selectedGroups.size === 0) {
+    if (!open) {
+      initialSelectionApplied.current = false;
+      setSelectedGroups(new Set());
+    } else if (!initialSelectionApplied.current && groups.length > 0) {
       setSelectedGroups(new Set(groups.map(g => g.routeName)));
+      initialSelectionApplied.current = true;
     }
-  }, [groups, selectedGroups.size]);
+  }, [groups, open]);
 
   // Auto-suggest vehicles
   const vehiclesWithCapacity = useMemo(() => vehicles.filter(vehicle => (vehicle.max_pallets || 0) > 0), [vehicles]);
@@ -192,6 +187,14 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   const handleExecute = async () => {
     const selected = groups.filter(g => selectedGroups.has(g.routeName));
     if (selected.length === 0) return;
+    const overCapacity = selected.find(group => {
+      const vehicle = vehicles.find(candidate => candidate.id === vehicleAssignments.get(group.routeName));
+      return vehicle?.max_pallets != null && group.totalPallets > vehicle.max_pallets;
+    });
+    if (overCapacity) {
+      toast.error(`${overCapacity.routeName} excede a capacidade de paletes do veículo selecionado.`);
+      return;
+    }
 
     setExecuting(true);
     let created = 0;
@@ -201,41 +204,29 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
       const errorMessages: string[] = [];
 
       for (const group of selected) {
-        let createdLoadId: string | null = null;
         try {
           const vehicleId = vehicleAssignments.get(group.routeName) || null;
           const driverId = driverAssignments.get(group.routeName) || null;
-
-          const createdLoad = await createLoad.mutateAsync({
-            destination: group.routeName,
-            vehicle_id: vehicleId,
-            driver_id: driverId,
-            status: 'planned',
-          });
-          createdLoadId = createdLoad.id;
-
-          // Vincula documentos à carga via RPC oficial (cria load_items + atualiza fiscal_documents + audita)
           const docIds = group.docs.map(d => d.id);
-          if (docIds.length > 0) {
-            const { data: assignResult, error: assignError } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
-              _tenant_id: currentTenant!.id,
-              _load_id: createdLoad.id,
-              _document_ids: docIds,
-            });
-            if (assignError) throw assignError;
-            const updatedCount = Number(jsonRecord(assignResult)?.updated ?? docIds.length);
-            if (updatedCount !== docIds.length) {
-              throw new Error(`Vínculo incompleto: ${updatedCount} de ${docIds.length} NF(s).`);
-            }
-          }
+          const { error } = await supabase.rpc('create_grouped_load_v1' as never, {
+            _payload: {
+              tenant_id: currentTenant!.id,
+              request_id: crypto.randomUUID(),
+              changes: {
+                destination: group.routeName,
+                vehicle_id: vehicleId,
+                driver_id: driverId,
+                status: 'planned',
+              },
+              document_ids: docIds,
+            },
+          } as never);
+          if (error) throw error;
 
           created++;
         } catch (error: unknown) {
           errors++;
-          errorMessages.push(
-            `${group.routeName}: ${getErrorMessage(error, 'falha ao criar carga')}`
-            + (createdLoadId ? ` A carga ${createdLoadId} foi preservada para recuperação segura.` : ''),
-          );
+          errorMessages.push(`${group.routeName}: ${getErrorMessage(error, 'falha ao criar carga')}`);
         }
       }
 
@@ -386,7 +377,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
 
                         {occ ? (
                           <div className="w-20 text-center">
-                            <Progress value={Math.min(occ.pct, 100)} className={`h-1.5 ${occ.pct > 100 ? '[&>div]:bg-destructive' : occ.pct < 50 ? '[&>div]:bg-warning' : ''}`} />
+                            <Progress aria-label="Ocupação do agrupamento" aria-valuetext={`${occ.pct}%`} value={Math.min(occ.pct, 100)} className={`h-1.5 ${occ.pct > 100 ? '[&>div]:bg-destructive' : occ.pct < 50 ? '[&>div]:bg-warning' : ''}`} />
                             <span className={`text-[9px] ${occ.pct > 100 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
                               {occ.pct}%
                             </span>
@@ -403,7 +394,11 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button onClick={handleExecute} disabled={executing || selectedGroups.size === 0}>
+              <Button onClick={handleExecute} disabled={executing || selectedGroups.size === 0 || groups.some(group => {
+                if (!selectedGroups.has(group.routeName)) return false;
+                const vehicle = vehicles.find(candidate => candidate.id === vehicleAssignments.get(group.routeName));
+                return vehicle?.max_pallets != null && group.totalPallets > vehicle.max_pallets;
+              })}>
                 {executing ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Criando...</>
                 ) : (

@@ -31,8 +31,14 @@ for (const file of await sourceFiles("src")) {
   const text = await readFile(file, "utf8");
   const lines = text.trimEnd().split(/\r?\n/).length;
   if (lines > 500 && !existingLarge.has(relative)) newLarge.push(`${relative} (${lines})`);
-  const maximum = baseline.criticalMaximumLines[relative];
-  if (maximum && lines > maximum) criticalGrowth.push(`${relative}: ${lines} > ${maximum}`);
+}
+
+// Critical caps are path-driven rather than limited to `src`, so large Edge
+// Functions and scripts cannot silently escape the structural quality gate.
+for (const [relative, maximum] of Object.entries(baseline.criticalMaximumLines)) {
+  const text = await readFile(relative, "utf8");
+  const lines = text.trimEnd().split(/\r?\n/).length;
+  if (lines > maximum) criticalGrowth.push(`${relative}: ${lines} > ${maximum}`);
 }
 
 if (newLarge.length) throw new Error(`New files above 500 lines:\n${newLarge.join("\n")}`);

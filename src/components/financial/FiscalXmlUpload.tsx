@@ -10,6 +10,8 @@ type Props = {
   onExtracted: (data: ParsedFiscalXml, file: File) => void;
   /** Which side of the document is the counterparty for autofill */
   perspective: 'payer' | 'receiver';
+  /** Restrict callers whose persistence contract supports only one document kind. */
+  acceptedKind?: 'nfe' | 'nfse';
   className?: string;
 };
 
@@ -17,7 +19,7 @@ type Props = {
  * Client-side XML parser for NFe / NFSe. Fills form fields from the XML.
  * File is passed back so the parent can optionally upload it as receipt.
  */
-export default function FiscalXmlUpload({ onExtracted, perspective, className }: Props) {
+export default function FiscalXmlUpload({ onExtracted, perspective, acceptedKind, className }: Props) {
   const toast = useSonnerToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [lastFile, setLastFile] = useState<File | null>(null);
@@ -34,6 +36,11 @@ export default function FiscalXmlUpload({ onExtracted, perspective, className }:
       const parsed = await parseFiscalXml(file);
       if (parsed.kind === 'unknown') {
         toast.warning('XML não reconhecido como NFe ou NFSe. Preencha manualmente.');
+      } else if (acceptedKind && parsed.kind !== acceptedKind) {
+        toast.error(`Este cadastro aceita somente XML de ${acceptedKind === 'nfe' ? 'NF-e' : 'NFS-e'}.`);
+        setLastFile(null);
+        setLastKind(null);
+        return;
       } else {
         toast.success(`${parsed.kind === 'nfe' ? 'NFe' : 'NFSe'} lida — campos preenchidos.`);
       }
@@ -70,7 +77,7 @@ export default function FiscalXmlUpload({ onExtracted, perspective, className }:
           disabled={busy}
         >
           <FileUp className="h-3.5 w-3.5 mr-1" />
-          {busy ? 'Lendo...' : 'Importar XML NFe/NFSe'}
+          {busy ? 'Lendo...' : acceptedKind === 'nfe' ? 'Importar XML NF-e' : acceptedKind === 'nfse' ? 'Importar XML NFS-e' : 'Importar XML NFe/NFSe'}
         </Button>
         {lastFile && lastKind && lastKind !== 'unknown' && (
           <Badge variant="secondary" className="text-[10px] gap-1">

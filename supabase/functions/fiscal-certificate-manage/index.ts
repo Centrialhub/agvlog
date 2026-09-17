@@ -57,7 +57,7 @@ Deno.serve(withFiscalCors(async (req) => {
         .select('id,label,thumbprint_sha256,serial_number,subject_name,certificate_cnpj,valid_from,valid_to,status,last_tested_at,last_test_error,created_at,updated_at')
         .eq('tenant_id', context.emitter.tenant_id).eq('emitter_id', emitterId)
         .order('created_at', { ascending: false });
-      if (error) throw error;
+      if (error) throw databaseError(error, 'Não foi possível listar os certificados');
       return json(200, { certificates: data || [] });
     }
 
@@ -67,7 +67,7 @@ Deno.serve(withFiscalCors(async (req) => {
       const certificateId = String(body?.certificate_id || '');
       const { error } = await context.admin.from('fiscal_certificates').update({ status: 'inactive' })
         .eq('id', certificateId).eq('tenant_id', context.emitter.tenant_id).eq('emitter_id', emitterId);
-      if (error) throw error;
+      if (error) throw databaseError(error, 'Não foi possível desativar o certificado');
       return json(200, { success: true });
     }
 
@@ -84,7 +84,13 @@ Deno.serve(withFiscalCors(async (req) => {
     try { parsed = await parseFiscalPkcs12(new Uint8Array(await file.arrayBuffer()), password); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : 'Certificado inválido'); }
     const emitterCnpj = digits(context.emitter.cnpj);
-    if (!parsed.certificateCnpj || parsed.certificateCnpj.slice(0, 8) !== emitterCnpj.slice(0, 8)) {
+    if (!parsed.certificateCnpj) {
+      throw new HttpError(400, 'Não foi possível identificar o CNPJ titular no certificado. Envie um e-CNPJ A1 ICP-Brasil válido.');
+    }
+    if (emitterCnpj.length !== 14) {
+      throw new HttpError(400, 'O CNPJ cadastrado para o emitente é inválido');
+    }
+    if (parsed.certificateCnpj.slice(0, 8) !== emitterCnpj.slice(0, 8)) {
       throw new HttpError(400, 'O CNPJ do certificado não pertence à raiz do emitente');
     }
     const now = new Date();
@@ -110,13 +116,13 @@ Deno.serve(withFiscalCors(async (req) => {
       uploaded_by: context.user.id,
       last_tested_at: now.toISOString(),
     }).select('id').single();
-    if (insertError) throw insertError;
+    if (insertError) throw databaseError(insertError, 'Não foi possível salvar o certificado');
     const { error: activationError } = await context.admin.rpc('activate_fiscal_certificate', {
       _tenant: context.emitter.tenant_id,
       _emitter: emitterId,
       _certificate: inserted.id,
     });
-    if (activationError) throw activationError;
+    if (activationError) throw databaseError(activationError, 'O certificado foi salvo, mas não pôde ser ativado');
     return json(200, {
       certificate: {
         id: inserted.id,
@@ -138,9 +144,28 @@ Deno.serve(withFiscalCors(async (req) => {
 }));
 
 function safeError(error: unknown) {
-  return error instanceof Error ? { name: error.name, message: error.message } : { message: 'unknown' };
+  if (error instanceof Error) return { name: error.name, message: error.message, cause: error.cause };
+  if (error && typeof error === 'object') {
+    const candidate = error as Record<string, unknown>;
+    return {
+      name: typeof candidate.name === 'string' ? candidate.name : 'DatabaseError',
+      message: typeof candidate.message === 'string' ? candidate.message : 'unknown',
+      code: typeof candidate.code === 'string' ? candidate.code : undefined,
+      details: typeof candidate.details === 'string' ? candidate.details : undefined,
+      hint: typeof candidate.hint === 'string' ? candidate.hint : undefined,
+    };
+  }
+  return { message: String(error || 'unknown') };
+}
+
+function databaseError(error: unknown, publicMessage: string): HttpError {
+  const details = safeError(error);
+  console.error('[fiscal-certificate-manage:database]', details);
+  return new HttpError(500, publicMessage, details);
 }
 
 class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string, options?: ErrorOptions) {
+    super(message, options);
+  }
 }

@@ -12,15 +12,6 @@ export interface OperationalRouteMatch {
   exact: boolean;
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function containsWholePhrase(needle: string, haystack: string): boolean {
-  if (!needle || !haystack) return false;
-  return new RegExp(`(^|\\s)${escapeRegExp(needle)}(\\s|$)`).test(haystack);
-}
-
 export function matchOperationalRoute(
   city: string,
   routes: OperationalRouteRef[],
@@ -32,18 +23,8 @@ export function matchOperationalRoute(
     route.destinations.some(destination => normalizeCity(destination.name) === normalizedCity),
   );
 
-  const fuzzyMatches = exactMatches.length > 0
-    ? []
-    : routes.filter(route => route.destinations.some(destination => {
-        const normalizedDestination = normalizeCity(destination.name);
-        return containsWholePhrase(normalizedDestination, normalizedCity)
-          || containsWholePhrase(normalizedCity, normalizedDestination);
-      }));
-
-  const candidates = exactMatches.length > 0 ? exactMatches : fuzzyMatches;
-  const matched = candidates.length > 0
-    ? [...candidates].sort((a, b) => a.name.localeCompare(b.name))[0]
-    : null;
+  const candidates = exactMatches;
+  const matched = candidates.length === 1 ? candidates[0] : null;
 
   return {
     matched,

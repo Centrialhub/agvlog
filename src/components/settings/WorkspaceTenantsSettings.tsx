@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -143,7 +143,10 @@ function TenantDialog({ tenant, onClose }: { tenant: WorkspaceTenant | null; onC
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !pending) onClose(); }}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>{tenant ? 'Editar empresa tenant' : 'Cadastrar empresa tenant'}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{tenant ? 'Editar empresa tenant' : 'Cadastrar empresa tenant'}</DialogTitle>
+          <DialogDescription>Configure a identificação, o CNPJ e o status da empresa no workspace.</DialogDescription>
+        </DialogHeader>
         <div className="grid gap-3 md:grid-cols-2">
           <div><Label htmlFor="tenant-name">Nome no seletor *</Label><Input id="tenant-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: AGV Logística MG" /></div>
           <div><Label htmlFor="tenant-legal-name">Razão social *</Label><Input id="tenant-legal-name" value={company.legal_name || ''} onChange={(event) => setCompanyField('legal_name', event.target.value)} /></div>

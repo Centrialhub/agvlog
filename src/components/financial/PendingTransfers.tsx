@@ -20,6 +20,6 @@ export function PendingTransfers({tenant,actor}:{tenant:string;actor:string}){
    {!data.rows.length&&<p>Nenhuma transferência pendente nesta página.</p>}
    <div className="flex justify-between"><Button variant="outline" disabled={page===1||query.isFetching} onClick={()=>setPage(page-1)}>Anteriores</Button><span>Página {page} de {Math.max(1,Math.ceil(data.total/20))}</span><Button variant="outline" disabled={page*20>=data.total||query.isFetching} onClick={()=>setPage(page+1)}>Próximas</Button></div>
   </>}
-  {dialog&&<TransferStageDialog tenant={tenant} actor={actor} mode={dialog.mode} departure={dialog.departure} onClose={()=>setDialog(null)} onRecorded={()=>{setDialog(null);void invalidateAccountReview(qc,tenant);for(const prefix of ['finance-pending-transfers','finance-movements','finance-audit','finance-reconciliation-options','finance-automatic-reconciliation'])void qc.invalidateQueries({queryKey:[prefix]});}}/>}
+  {dialog&&<TransferStageDialog tenant={tenant} actor={actor} mode={dialog.mode} departure={dialog.departure} onClose={()=>setDialog(null)} onRecorded={()=>{setDialog(null);setPage(1);void invalidateAccountReview(qc,tenant);for(const prefix of ['finance-pending-transfers','finance-movements','finance-audit','finance-reconciliation-options','finance-automatic-reconciliation'])void qc.invalidateQueries({queryKey:[prefix]});}}/>}
  </section>;
 }

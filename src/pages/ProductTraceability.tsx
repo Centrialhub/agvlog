@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -15,6 +16,8 @@ import { useTenant } from '@/hooks/useTenant';
 import { useDrivers } from '@/hooks/useDrivers';
 import { usePagination } from '@/hooks/usePagination';
 import { DataPagination } from '@/components/ui/data-pagination';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { csvSafeCell } from '@/lib/csvSafety';
 
 interface TraceRow {
   id: string;
@@ -36,6 +39,7 @@ interface TraceRow {
     recipient_state: string | null;
     value: number | null;
     pickup_order_id: string | null;
+    deleted_at: string | null;
   } | null;
   loads?: {
     load_number: string;
@@ -52,11 +56,21 @@ export default function ProductTraceability() {
   const { currentTenant } = useTenant();
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS);
+  useEffect(() => {
+    setFilters(DEFAULT_FILTERS);
+    setAppliedFilters(DEFAULT_FILTERS);
+  }, [currentTenant?.id]);
   const activeCount = Object.keys(DEFAULT_FILTERS).filter(key => filters[key as keyof typeof filters] !== DEFAULT_FILTERS[key as keyof typeof DEFAULT_FILTERS]).length;
   const pendingFilters = JSON.stringify(filters) !== JSON.stringify(appliedFilters);
   const invalidPeriod = Boolean(filters.issueFrom && filters.issueTo && filters.issueFrom > filters.issueTo);
 
-  const { data: drivers = [] } = useDrivers({ includeInactive: true });
+  const {
+    data: drivers = [],
+    isLoading: driversLoading,
+    isError: driversIsError,
+    error: driversError,
+    refetch: refetchDrivers,
+  } = useDrivers({ includeInactive: true });
 
   const { data: rows = [], isLoading, refetch, isFetching, isError } = useQuery({
     queryKey: ['product-traceability', currentTenant?.id, appliedFilters],
@@ -64,24 +78,27 @@ export default function ProductTraceability() {
       if (!currentTenant) return [];
       const f = appliedFilters;
       const filterDocument = Boolean(f.supplier.trim() || f.invoiceNumber.trim() || f.issueFrom || f.issueTo);
-      let q = supabase.from('load_items').select(`
-        id, item_description, quantity, pallet_count, weight_kg, volume_m3, status,
-        fiscal_document_id, load_id,
-        fiscal_documents${filterDocument ? '!inner' : ''}(invoice_number, issue_date, remitter, remitter_cnpj, recipient, recipient_city, recipient_state, value, pickup_order_id),
-        loads!inner(load_number, status, destination, driver_id, vehicle_id,
-          drivers(id, name), vehicles${f.plate.trim() ? '!inner' : ''}(plate, nickname))
-      `).eq('tenant_id', currentTenant.id).order('created_at', { ascending: false }).limit(1000);
-      if (f.product.trim()) q = q.ilike('item_description', `%${f.product.trim()}%`);
-      if (f.driverId !== 'all') q = q.eq('loads.driver_id', f.driverId);
-      if (f.loadStatus !== 'all') q = q.eq('loads.status', f.loadStatus);
-      if (f.supplier.trim()) q = q.ilike('fiscal_documents.remitter', `%${f.supplier.trim()}%`);
-      if (f.invoiceNumber.trim()) q = q.ilike('fiscal_documents.invoice_number', `%${f.invoiceNumber.trim()}%`);
-      if (f.plate.trim()) q = q.ilike('loads.vehicles.plate', `%${f.plate.replace(/[^a-z0-9]/gi, '').split('').join('%')}%`);
-      if (f.issueFrom) q = q.gte('fiscal_documents.issue_date', f.issueFrom);
-      if (f.issueTo) q = q.lte('fiscal_documents.issue_date', f.issueTo);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []) as unknown as TraceRow[];
+      const result = await fetchAllPostgrestPages((pageFrom, pageTo) => {
+        let q = supabase.from('load_items').select(`
+          id, item_description, quantity, pallet_count, weight_kg, volume_m3, status,
+          fiscal_document_id, load_id,
+          fiscal_documents${filterDocument ? '!inner' : ''}(invoice_number, issue_date, remitter, remitter_cnpj, recipient, recipient_city, recipient_state, value, pickup_order_id, deleted_at),
+          loads!inner(load_number, status, destination, driver_id, vehicle_id,
+            drivers(id, name), vehicles${f.plate.trim() ? '!inner' : ''}(plate, nickname))
+        `).eq('tenant_id', currentTenant.id);
+        if (f.product.trim()) q = q.ilike('item_description', `%${f.product.trim()}%`);
+        if (f.driverId !== 'all') q = q.eq('loads.driver_id', f.driverId);
+        if (f.loadStatus !== 'all') q = q.eq('loads.status', f.loadStatus);
+        if (f.supplier.trim()) q = q.ilike('fiscal_documents.remitter', `%${f.supplier.trim()}%`);
+        if (f.invoiceNumber.trim()) q = q.ilike('fiscal_documents.invoice_number', `%${f.invoiceNumber.trim()}%`);
+        if (f.plate.trim()) q = q.ilike('loads.vehicles.plate', `%${f.plate.replace(/[^a-z0-9]/gi, '').split('').join('%')}%`);
+        if (f.issueFrom) q = q.gte('fiscal_documents.issue_date', f.issueFrom);
+        if (f.issueTo) q = q.lte('fiscal_documents.issue_date', f.issueTo);
+        return q.order('created_at', { ascending: false }).order('id', { ascending: false }).range(pageFrom, pageTo);
+      }) as unknown as TraceRow[];
+      return result.map(row => row.fiscal_documents?.deleted_at
+        ? { ...row, fiscal_document_id: null, fiscal_documents: null }
+        : row);
     },
     enabled: !!currentTenant,
   });
@@ -116,13 +133,13 @@ export default function ProductTraceability() {
       r.fiscal_documents?.recipient || '',
       `${r.fiscal_documents?.recipient_city || ''}${r.fiscal_documents?.recipient_state ? '/' + r.fiscal_documents.recipient_state : ''}`,
       r.status,
-    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-    const csv = [headers.join(','), ...lines].join('\n');
+    ].map(csvSafeCell).join(';'));
+    const csv = '\uFEFF' + [headers.map(csvSafeCell).join(';'), ...lines].join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rastreabilidade-produto-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `rastreabilidade-produto-${localDateInputValue()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -164,7 +181,14 @@ export default function ProductTraceability() {
           description="Os indicadores e a exportação acompanham os filtros aplicados."
         >
           <div className="flex flex-wrap items-center gap-3">
+            {driversIsError && (
+              <div role="alert" className="flex w-full flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
+                <span>Não foi possível carregar os motoristas. {driversError instanceof Error ? driversError.message : 'Tente novamente.'}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => refetchDrivers()}>Tentar novamente</Button>
+              </div>
+            )}
             <Button onClick={() => pendingFilters ? setAppliedFilters({ ...filters }) : refetch()} disabled={isFetching || invalidPeriod}><Search className="mr-2 h-4 w-4" />Aplicar filtros</Button>
+            {driversLoading && <span className="text-xs text-muted-foreground">Carregando motoristas…</span>}
             {pendingFilters && <span className="text-xs text-muted-foreground">Há alterações ainda não aplicadas.</span>}
             {invalidPeriod && <span role="alert" className="text-xs text-destructive">A data final deve ser igual ou posterior à inicial.</span>}
           </div>
@@ -189,7 +213,7 @@ export default function ProductTraceability() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Resultados ({rows.length} itens; limite de 1.000 por consulta)</CardTitle>
+            <CardTitle className="text-base">Resultados ({rows.length} itens)</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <Table>

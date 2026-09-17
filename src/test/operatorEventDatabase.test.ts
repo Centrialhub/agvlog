@@ -37,9 +37,37 @@ describe('operator POD history and recoverable occurrence commands',()=>{
 
  it('uses the current attempt rather than an old result after audited redelivery',async()=>{
   await seedUndelivered(db,stop);await requestRedelivery(db,await redeliveryPayload(db));
-  const history=await podHistory(db) as {canonical_state:string;delivered:boolean;current_outcome:unknown;attempts:unknown[];outcomes:unknown[]};
-  expect(history).toMatchObject({canonical_state:'pending_redelivery',delivered:false,current_outcome:null});
+  const history=await podHistory(db) as {canonical_state:string;delivered:boolean;arrival_without_outcome:boolean;current_outcome:unknown;attempts:unknown[];outcomes:unknown[]};
+  expect(history).toMatchObject({canonical_state:'pending_redelivery',delivered:false,arrival_without_outcome:false,current_outcome:null});
   expect(history.attempts).toEqual([expect.objectContaining({is_current:true})]);expect(history.outcomes).toHaveLength(1);
+ });
+
+ it('marks exactly one deterministic current allocation in the legacy flow',async()=>{
+  const newerStop=randomUUID(),newerAllocation=randomUUID();
+  await db.query('update fiscal_documents set current_delivery_attempt_id=null where id=$1',[i.doc]);
+  await db.query(`insert into dispatch_stops(id,tenant_id,dispatch_trip_id,stop_order,destination,status,created_at,updated_at)
+    values($1,$2,$3,99,'Destino legado mais recente','pending',clock_timestamp(),clock_timestamp())`,[newerStop,i.tenant,trip]);
+  await db.query(`insert into dispatch_stop_documents(id,tenant_id,dispatch_stop_id,fiscal_document_id,load_id,created_at,delivery_attempt_id)
+    values($1,$2,$3,$4,$5,'2099-01-01T00:00:00Z',null)`,[newerAllocation,i.tenant,newerStop,i.doc,i.load]);
+  const candidates=await db.query<{id:string}>(`select id from dispatch_stop_documents where tenant_id=$1 and fiscal_document_id=$2
+    and delivery_attempt_id is not distinct from null order by created_at desc nulls last,id desc`,[i.tenant,i.doc]);
+  expect(candidates.rows[0]?.id).toBe(newerAllocation);
+  const history=await podHistory(db) as {arrival_without_outcome:boolean;allocations:Array<{id:string;is_current:boolean}>};
+  expect(history.allocations.filter(row=>row.is_current)).toEqual([expect.objectContaining({id:newerAllocation})]);
+  expect(history.arrival_without_outcome).toBe(false);
+ });
+
+ it('does not attach a generic stop occurrence to every document at that stop',async()=>{
+  const generic=randomUUID(),linked=randomUUID();
+  await db.query(`insert into operational_events(id,tenant_id,dispatch_stop_id,event_type,severity,description,
+    visible_to_client,client_action_required,client_opened,public_status,created_at,updated_at)
+    values($1,$2,$3,'other','medium','Ocorrência genérica da parada',false,false,false,'reported_by_operator',now(),now()),
+      ($4,$2,$3,'other','medium','Ocorrência diretamente vinculada à NF',false,false,false,'reported_by_operator',now(),now())`,
+    [generic,i.tenant,stop,linked]);
+  await db.query('update operational_events set fiscal_document_id=$1 where id=$2',[i.doc,linked]);
+  const history=await podHistory(db) as {occurrences:Array<{id:string}>};
+  expect(history.occurrences.map(row=>row.id)).toContain(linked);
+  expect(history.occurrences.map(row=>row.id)).not.toContain(generic);
  });
 
  it('exposes correction lineage while using only the corrected current outcome',async()=>{

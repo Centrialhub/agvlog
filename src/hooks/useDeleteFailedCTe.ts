@@ -20,36 +20,28 @@ export function useDeleteFailedCTe() {
       // 1. Tenta buscar em fiscal_documents (emissões reais/tentativas no Hub)
       const { data: realDoc, error: realErr } = await supabase
         .from('fiscal_documents')
-        .select('id, sefaz_status, hub_document_id')
+        .select('id, document_type, status, sefaz_status, hub_document_id, emission_id')
         .eq('id', fiscalDocumentId)
         .eq('tenant_id', currentTenant.id)
         .maybeSingle();
       if (realErr) throw realErr;
 
       if (realDoc) {
-        // Só permitimos excluir se for erro de SEFAZ e não tiver ID no Hub (ou seja, não foi autorizado)
-        const isFailed = ['error', 'rejected', 'processed_error', 'sent_error', 'sefaz_error'].includes(realDoc.sefaz_status || '');
-        if (!isFailed && realDoc.hub_document_id) {
+        const failedStatuses = ['error', 'rejected', 'processed_error', 'sent_error', 'sefaz_error', 'status_timeout'];
+        const isFailed = failedStatuses.includes(realDoc.status || '') || failedStatuses.includes(realDoc.sefaz_status || '');
+        // A RPC confirma que a rejeição é terminal e que não existe chave,
+        // protocolo, número ou outro efeito fiscal antes de liberar as notas.
+        if (realDoc.document_type !== 'outbound' || !isFailed) {
           throw new Error('Apenas notas com erro de transmissão ou rejeitadas podem ser excluídas. Notas autorizadas devem ser canceladas.');
         }
 
-        // Libera as NFs vinculadas a este outbound_id
-        const { error: releaseErr } = await supabase
-          .from('fiscal_documents')
-          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
-          .eq('cte_emitted_outbound_id', fiscalDocumentId)
-          .eq('tenant_id', currentTenant.id)
-          .is('deleted_at', null);
-
-        if (releaseErr) throw releaseErr;
-
-        const { error: delErr } = await supabase
-          .from('fiscal_documents')
-          .delete()
-          .eq('id', fiscalDocumentId)
-          .eq('tenant_id', currentTenant.id);
+        const { data: deleted, error: delErr } = await supabase.rpc(
+          'delete_failed_cte_attempt_v1' as never,
+          { _fiscal_document_id: fiscalDocumentId } as never,
+        );
 
         if (delErr) throw delErr;
+        if (!deleted) throw new Error('A tentativa não pôde ser removida porque seu estado mudou. Atualize a página e tente novamente.');
         return true;
       }
 
@@ -63,35 +55,18 @@ export function useDeleteFailedCTe() {
       if (draftErr) throw draftErr;
 
       if (draftDoc) {
-        // Libera as NFs cujos IDs estão no array do rascunho
-        if (draftDoc.fiscal_document_ids && Array.isArray(draftDoc.fiscal_document_ids)) {
-          const ids = draftDoc.fiscal_document_ids.filter(Boolean);
-          if (ids.length > 0) {
-            const { error: releaseErr } = await supabase
-              .from('fiscal_documents')
-            .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
-            .eq('tenant_id', currentTenant.id)
-            .in('id', ids)
-            .is('deleted_at', null);
-            
-            if (releaseErr) throw releaseErr;
-          }
-        }
-
-        const { error: delErr } = await supabase
-          .from('cte_documents')
-          .delete()
-          .eq('id', fiscalDocumentId)
-          .eq('tenant_id', currentTenant.id);
-
+        const { data: deleted, error: delErr } = await supabase.rpc('delete_failed_cte_draft_v1', {
+          _cte_document_id: fiscalDocumentId,
+        });
         if (delErr) throw delErr;
+        if (!deleted) throw new Error('O rascunho não pôde ser removido porque seu estado mudou. Atualize a página e tente novamente.');
         return true;
       }
 
       throw new Error('Documento não encontrado para exclusão.');
     },
     onSuccess: () => {
-      toast.success('Registro de erro removido com sucesso');
+      toast.success('Tentativa local removida e nota liberada para nova emissão');
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['cte_search'] });
       qc.invalidateQueries({ queryKey: ['cte_monitor'] });

@@ -1,8 +1,9 @@
 import { localDayBoundary, localDayEnd } from '@/lib/listFilters';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
+import { assertPortalListPage, nextPortalListPage, PORTAL_LIST_PAGE_SIZE, type PortalListPageParam } from './portalListPaging';
 
 export interface PortalPickup {
   id: string;
@@ -19,24 +20,35 @@ export interface PortalPickup {
 export function usePortalPickups(filters?: { status?: string; start?: string; end?: string }) {
   const { currentTenant } = useTenant();
   const { selectedClientId } = usePortalClientScope();
-  return useQuery({
-    queryKey: ['portal_pickups', currentTenant?.id, selectedClientId, filters],
-    queryFn: async (): Promise<PortalPickup[]> => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.rpc('list_client_pickups_v2', {
+  const qc = useQueryClient();
+  const queryKey = ['portal_pickups', currentTenant?.id, selectedClientId, filters] as const;
+  const query = useInfiniteQuery({
+    queryKey,
+    initialPageParam: null as PortalListPageParam | null,
+    queryFn: async ({ pageParam, signal }) => {
+      if (!currentTenant) return assertPortalListPage<PortalPickup>({ rows: [], next_cursor: null, snapshot_at: new Date().toISOString(), revision: '' });
+      const { data, error } = await supabase.rpc('list_client_pickups_page_v1' as never, {
         _tenant_id: currentTenant.id,
         _client_id: selectedClientId ?? undefined,
         _status: filters?.status || undefined,
         _start_date: filters?.start ? localDayBoundary(filters.start) : undefined,
         _end_date: filters?.end ? localDayEnd(filters.end) : undefined,
-        _limit: 200,
-        _offset: 0,
-      });
+        _page_size: PORTAL_LIST_PAGE_SIZE,
+        _snapshot_at: pageParam?.snapshotAt,
+        _cursor: pageParam?.cursor,
+        _expected_revision: pageParam?.revision,
+      } as never).abortSignal(signal);
       if (error) throw error;
-      return data as PortalPickup[];
+      return assertPortalListPage<PortalPickup>(data);
     },
+    getNextPageParam: nextPortalListPage,
     enabled: !!currentTenant,
   });
+  return {
+    ...query,
+    data: query.data?.pages.flatMap((page) => page.rows) ?? [],
+    restart: () => qc.resetQueries({ queryKey, exact: true }),
+  };
 }
 
 export function useRequestPortalPickup() {
@@ -55,7 +67,7 @@ export function useRequestPortalPickup() {
       if (error) throw error;
       return data as string;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['portal_pickups'] }),
+    onSuccess: () => qc.resetQueries({ queryKey: ['portal_pickups'] }),
   });
 }
 
@@ -71,6 +83,6 @@ export function useCancelPortalPickup() {
       });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['portal_pickups'] }),
+    onSuccess: () => qc.resetQueries({ queryKey: ['portal_pickups'] }),
   });
 }

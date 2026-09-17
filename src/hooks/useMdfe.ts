@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { useTenant } from '@/hooks/useTenant';
 import { hubFiscal, type EmitParams, type HubEnvironment } from '@/lib/fiscal/hubFiscalClient';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export interface MdfeManifest {
   id: string;
@@ -89,7 +90,7 @@ export function useMdfeHistory() {
     queryKey: ['mdfe', 'history', currentTenant?.id],
     enabled: !!currentTenant?.id,
     queryFn: async (): Promise<MdfeManifest[]> => {
-      const { data, error } = await supabase
+      const data = await fetchAllPostgrestPages((from, to) => supabase
         .from('load_manifests')
         .select(`
           *,
@@ -102,9 +103,9 @@ export function useMdfeHistory() {
         .eq('tenant_id', currentTenant!.id)
         .not('external_id', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return (data || []) as unknown as MdfeManifest[];
+        .order('id', { ascending: false })
+        .range(from, to));
+      return data as unknown as MdfeManifest[];
     },
   });
 }

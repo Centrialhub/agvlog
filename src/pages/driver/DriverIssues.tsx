@@ -1,4 +1,4 @@
-import { useState, useEffect, useId } from 'react';
+import { useState, useEffect, useId, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -10,13 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Plus, Clock, MessageSquare } from 'lucide-react';
 
-import { EventConversation } from '@/components/driver/DriverConversation';
+import { DriverChatSheet } from '@/components/driver/DriverChatSheet';
 import { OCCURRENCE_TEMPLATES, getTemplateFields, formatOccurrenceReport } from '@/lib/occurrenceTemplate';
 import { EVENT_TYPE_LABELS, OperationalEventType } from '@/hooks/useOperationalEvents';
 import { buildDriverOccurrenceRpcArgs } from '@/lib/driver/driverOccurrence';
@@ -73,8 +72,10 @@ export default function DriverIssues() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const offlineCommands = useDriverOperationalOffline();
-  const { data: driver } = useCurrentDriver();
-  const { data: trip } = useActiveTrip(driver?.id);
+  const driverQuery = useCurrentDriver();
+  const { data: driver } = driverQuery;
+  const tripQuery = useActiveTrip(driver?.id);
+  const { data: trip } = tripQuery;
   const [operationalSnapshot, setOperationalSnapshot] = useState<DriverOperationalSnapshot | null>(null);
   useEffect(() => {
     let active = true;
@@ -112,7 +113,7 @@ export default function DriverIssues() {
     tripId: effectiveTripId,
     enabled: !!currentTenant && !!user,
   });
-  const events = eventHistory?.items ?? [];
+  const events = useMemo(() => eventHistory?.items ?? [], [eventHistory?.items]);
 
   const stopsQuery = useQuery({
     queryKey: ['driver_trip_stops_for_issues', currentTenant?.id, user?.id, effectiveTripId],
@@ -247,10 +248,13 @@ export default function DriverIssues() {
         <h1 className="text-lg font-bold">Ocorrências</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><Plus className="h-3.5 w-3.5 mr-1" /> Nova</Button>
+            <Button size="sm" disabled={(driverQuery.isError || tripQuery.isError) && !effectiveTripId}><Plus className="h-3.5 w-3.5 mr-1" /> Nova</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Nova Ocorrência</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Nova Ocorrência</DialogTitle>
+              <DialogDescription>Registre o ocorrido e associe a parada quando houver.</DialogDescription>
+            </DialogHeader>
             <div className="space-y-3">
               {effectiveTripId && (
                 <div>
@@ -367,6 +371,29 @@ export default function DriverIssues() {
         </Dialog>
       </div>
 
+      {(driverQuery.isError || tripQuery.isError || stopsQuery.isError) && (
+        <Card className="border-destructive/40" role="alert">
+          <CardContent className="space-y-2 p-3 text-sm">
+            <div className="flex items-start gap-2 text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Não foi possível consultar {[
+                  driverQuery.isError ? 'o vínculo do motorista' : null,
+                  tripQuery.isError ? 'a viagem ativa' : null,
+                  stopsQuery.isError ? 'as paradas' : null,
+                ].filter(Boolean).join(', ')}.
+                {effectiveTripId ? ' Os dados salvos no aparelho estão sendo usados quando disponíveis.' : ''}
+              </span>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => void Promise.all([
+              driverQuery.refetch(),
+              tripQuery.refetch(),
+              stopsQuery.refetch(),
+            ])}>Tentar novamente</Button>
+          </CardContent>
+        </Card>
+      )}
+
       {offlineCommands.commands.some(command => command.kind === 'occurrence' && command.aggregateId === effectiveTripId) && (
         <Card className="border-amber-300"><CardContent className="p-3 text-xs" role="status">
           Há ocorrências salvas neste aparelho aguardando sincronização com a operação.
@@ -449,30 +476,3 @@ export default function DriverIssues() {
   );
 }
 
-function DriverChatSheet({ event, onClose }: {
-  event: DriverOperationalEventItem | null;
-  onClose: () => void;
-}) {
-  const isOpen = !!event;
-  return (
-    <Sheet open={isOpen} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <SheetContent side="bottom" className="h-[85vh] flex flex-col p-0">
-        {event && (
-          <>
-            <SheetHeader className="p-4 border-b">
-              <SheetTitle className="text-base flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-primary" /> Comunicação com a operação
-              </SheetTitle>
-              <SheetDescription>{event.description || event.event_type}</SheetDescription>
-            </SheetHeader>
-            <DriverChat eventId={event.id} />
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function DriverChat({ eventId }: { eventId: string }) {
-  return <EventConversation eventId={eventId}/>;
-}

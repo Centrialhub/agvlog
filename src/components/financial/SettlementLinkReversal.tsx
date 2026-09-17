@@ -11,13 +11,13 @@ export function SettlementLinkReversal({tenant,actor,payment,activeLink,disabled
   if(saved.actor!==actor||saved.payment!==payment||command.tenant_id!==tenant)throw new Error();return {command};
  }catch{return {error:'Não foi possível recuperar a correção pendente. Verifique o histórico antes de enviar outro pedido.'};}});
  const [command,setCommand]=useState<SettlementReversalCommand|undefined>(restored.command),[reason,setReason]=useState(''),[editing,setEditing]=useState(false);
- const [busy,setBusy]=useState(false),[error,setError]=useState(restored.error||''),[success,setSuccess]=useState(false);
+ const [busy,setBusy]=useState(false),[recoveryError,setRecoveryError]=useState(restored.error||''),[error,setError]=useState(restored.error||''),[success,setSuccess]=useState(false);
  const [completedLink,setCompletedLink]=useState<string>();
  const mounted=useRef(true),sending=useRef(false),cache=useQueryClient();
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
- useEffect(()=>{onPendingChange(!!command||!!restored.error||busy);},[command,restored.error,busy,onPendingChange]);
+ useEffect(()=>{onPendingChange(!!command||!!recoveryError||busy);},[command,recoveryError,busy,onPendingChange]);
  async function submit(){
-  if(sending.current||disabled||restored.error)return;
+  if(sending.current||disabled||recoveryError)return;
   let original=command;
   if(!original){
    const parsed=settlementReversalCommandSchema.safeParse({version:1,tenant_id:tenant,request_id:crypto.randomUUID(),link_id:activeLink,reason});
@@ -29,19 +29,19 @@ export function SettlementLinkReversal({tenant,actor,payment,activeLink,disabled
   sending.current=true;setBusy(true);setError('');
   try{
    await reverseSettlementMovement(original);sessionStorage.removeItem(key);
-   for(const prefix of ['finance-settlement-movements','finance-movements','finance-audit','finance-legacy-inventory','finance-payable-options','finance-options','finance-manual-expense-options','finance-payroll'])void cache.invalidateQueries({queryKey:[prefix]});
+   for(const prefix of ['finance-settlement-movements','finance-settlement-movement-history','finance-movements','finance-audit','finance-legacy-inventory','finance-payable-options','finance-options','finance-manual-expense-options','finance-payroll'])void cache.invalidateQueries({queryKey:[prefix]});
    if(mounted.current){setCommand(undefined);setEditing(false);setSuccess(true);setCompletedLink(original.link_id);onConfirmed();}
   }catch(e){
    if(e instanceof SettlementMovementRejectedError&&!command){
-    try{sessionStorage.removeItem(key);if(mounted.current){setCommand(undefined);setError(`Correção recusada: ${e.message}. Revise o vínculo antes de tentar novamente.`);}void cache.invalidateQueries({queryKey:['finance-settlement-movements',tenant,actor,payment]});}
+    try{sessionStorage.removeItem(key);if(mounted.current){setCommand(undefined);setError(`Correção recusada: ${e.message}. Revise o vínculo antes de tentar novamente.`);}void cache.invalidateQueries({queryKey:['finance-settlement-movements',tenant,actor,payment]});void cache.invalidateQueries({queryKey:['finance-settlement-movement-history',tenant,actor,payment]});}
     catch{if(mounted.current)setError('Correção recusada, mas a recuperação local não pôde ser atualizada. Verifique o histórico.');}
    }else if(mounted.current)setError(`${e instanceof Error?e.message:'Resposta não confirmada.'} A correção original foi preservada para retomada.`);
   }finally{sending.current=false;if(mounted.current)setBusy(false);}
  }
  return <section aria-label="Correção do vínculo" className="space-y-2">
- {error&&<p role="alert">{error}</p>}{success&&<p role="status">Vínculo desfeito com histórico preservado. O pagamento e o dinheiro permanecem registrados.</p>}
- {command?<><p>Correção pendente do vínculo: {command.link_id}</p><p>Motivo preservado: {command.reason}</p><Button disabled={busy||disabled||!!restored.error} onClick={()=>void submit()}>{busy?'Confirmando correção…':'Retomar correção original'}</Button></>:activeLink&&activeLink!==completedLink&&<>
- {!editing?<Button variant="outline" disabled={disabled||!!restored.error} onClick={()=>setEditing(true)}>Corrigir vínculo incorreto</Button>:<><p>Esta ação desfaz somente a associação. Não é devolução de dinheiro e não exclui o pagamento. Seu nome, motivo e horário permanecerão no histórico.</p><label>Motivo da correção<Textarea maxLength={2000} value={reason} onChange={event=>setReason(event.target.value)}/></label><Button disabled={busy||disabled||reason.trim().length<10||!!restored.error} onClick={()=>void submit()}>Confirmar correção do vínculo</Button><Button variant="outline" disabled={busy} onClick={()=>setEditing(false)}>Cancelar correção</Button></>}
+ {recoveryError?<div role="alert" className="space-y-2"><p>{recoveryError}</p><Button variant="outline" disabled={busy} onClick={()=>{try{sessionStorage.removeItem(key);setCommand(undefined);setEditing(false);setRecoveryError('');setError('');}catch{setError('Não foi possível descartar a recuperação incompatível.');}}}>Descartar recuperação incompatível</Button></div>:error&&<p role="alert">{error}</p>}{success&&<p role="status">Vínculo desfeito com histórico preservado. O pagamento e o dinheiro permanecem registrados.</p>}
+ {command?<><p>Correção pendente do vínculo: {command.link_id}</p><p>Motivo preservado: {command.reason}</p><Button disabled={busy||disabled||!!recoveryError} onClick={()=>void submit()}>{busy?'Confirmando correção…':'Retomar correção original'}</Button></>:activeLink&&activeLink!==completedLink&&<>
+ {!editing?<Button variant="outline" disabled={disabled||!!recoveryError} onClick={()=>setEditing(true)}>Corrigir vínculo incorreto</Button>:<><p>Esta ação desfaz somente a associação. Não é devolução de dinheiro e não exclui o pagamento. Seu nome, motivo e horário permanecerão no histórico.</p><label>Motivo da correção<Textarea disabled={!!recoveryError} maxLength={2000} value={reason} onChange={event=>setReason(event.target.value)}/></label><Button disabled={busy||disabled||reason.trim().length<10||!!recoveryError} onClick={()=>void submit()}>Confirmar correção do vínculo</Button><Button variant="outline" disabled={busy} onClick={()=>setEditing(false)}>Cancelar correção</Button></>}
  </>}
  </section>;
 }

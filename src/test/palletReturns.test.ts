@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parsePalletReturnSheet,
+  parsePalletReturnWorkbook,
   detectSupplierFromTitle,
   detectCompanyOrigin,
   protocolDedupeKey,
@@ -69,10 +70,27 @@ describe('palletReturns importer', () => {
     expect(p.hasTotalDivergence).toBe(true);
   });
 
+  it('parses every worksheet in a multi-sheet workbook', () => {
+    const wb = XLSX.utils.book_new();
+    for (const [name, supplier] of [['Primeira', 'FORNECEDOR A'], ['Segunda', 'FORNECEDOR B']]) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        [`DEVOLUÇÃO PALETES P/ ${supplier}`], ['DATA: 01/07/2026'], ['TIPO / COR', 'QTD'], ['PBR', 2], ['TOTAL', 2],
+      ]), name);
+    }
+    const parsed = parsePalletReturnWorkbook(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer);
+    expect(parsed.map(item => item.supplier)).toEqual(['FORNECEDOR A', 'FORNECEDOR B']);
+  });
+
   it('produces stable dedupe key regardless of item order', () => {
     const a = protocolDedupeKey('ALIANÇA', '2026-07-06', [{ code: 'PBR', name: 'PBR', quantity: 16 }, { code: 'CHEP', name: 'CHEP', quantity: 2 }]);
     const b = protocolDedupeKey('ALIANÇA', '2026-07-06', [{ code: 'CHEP', name: 'CHEP', quantity: 2 }, { code: 'PBR', name: 'PBR', quantity: 16 }]);
     expect(a).toBe(b);
+  });
+
+  it('normalizes supplier accents, case, and repeated spaces in dedupe keys', () => {
+    const items = [{ code: 'PBR', name: 'PBR', quantity: 2 }];
+    expect(protocolDedupeKey('  Aliança  Logística ', '2026-07-06', items))
+      .toBe(protocolDedupeKey('alianca logistica', '2026-07-06', items));
   });
 });
 

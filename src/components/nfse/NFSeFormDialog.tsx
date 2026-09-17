@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -18,18 +18,29 @@ import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
 import { useClients } from '@/hooks/useClients';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
 import type { HubEnvironment } from '../../../supabase/functions/_shared/fiscal-environment';
-import { fiscalDocumentText } from '@/lib/fiscal/fiscalDocumentContact';
+import { resolveNFSeTomador } from '@/lib/fiscal/nfseTomador';
+import type { TomadorData } from '@/lib/fiscal/nfseTomador';
+import { consultOfficialTaxRegistry } from '@/lib/fiscal/taxRegistryClient';
+import {
+  findActiveNFSeTaxProfile,
+  mergeOfficialProfileIntoNFSeTomador,
+  missingNFSeTomadorFields,
+  needsNFSeTomadorRegistryEnrichment,
+} from '@/lib/fiscal/nfseAddressAutocomplete';
 
 interface NFSeItem {
   description: string;
   quantity: number;
   unit_value: number;
+  fiscal_document_id?: string;
+  access_key?: string | null;
   total: number;
 }
 
@@ -97,6 +108,47 @@ interface Props {
 
 function num(value: unknown) { return Number(value ?? 0) || 0; }
 
+function tomadorFromForm(form: NFSeFormState): TomadorData {
+  return {
+    nome: form.cliente_nome,
+    cnpj: form.cliente_cnpj,
+    ie: form.cliente_ie,
+    im: form.cliente_im,
+    endereco: form.cliente_endereco,
+    numero: form.cliente_numero,
+    complemento: form.cliente_complemento,
+    bairro: form.cliente_bairro,
+    email: form.cliente_email,
+    telefone: form.cliente_telefone,
+    municipio: form.cliente_municipio,
+    municipio_cod: form.cliente_cod_municipio,
+    uf: form.cliente_uf,
+    cep: form.cliente_cep,
+    cliente_id: form.cliente_id,
+  };
+}
+
+function applyTomadorToForm(form: NFSeFormState, tomador: TomadorData): NFSeFormState {
+  return {
+    ...form,
+    cliente_id: tomador.cliente_id,
+    cliente_nome: tomador.nome,
+    cliente_cnpj: tomador.cnpj,
+    cliente_ie: tomador.ie,
+    cliente_im: tomador.im,
+    cliente_endereco: tomador.endereco,
+    cliente_numero: tomador.numero,
+    cliente_complemento: tomador.complemento,
+    cliente_bairro: tomador.bairro,
+    cliente_email: tomador.email,
+    cliente_telefone: tomador.telefone,
+    cliente_municipio: tomador.municipio,
+    cliente_cod_municipio: tomador.municipio_cod,
+    cliente_uf: tomador.uf,
+    cliente_cep: tomador.cep,
+  };
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message ? error.message : 'Falha ao salvar';
 }
@@ -105,7 +157,7 @@ const EMPTY_FORM: NFSeFormState = {
   cliente_id: null,
   branch_code: 'MATRIZ', emitter_id: null, regime_tributario: '3', series: '1',
   doc_type: 'NFS', situacao_doc: '00', is_preview: false,
-  issue_date: new Date().toISOString().slice(0, 10), cond_pagamento: '', tipo_ctrc: '',
+  issue_date: localDateInputValue(), cond_pagamento: '', tipo_ctrc: '',
   reference_number: '', pedido: '', cnae: '', cod_servico: '', nat_operacao: '',
   cod_trib_municipal: '', cod_municipio_prestacao: '', cliente_nome: '', cliente_cnpj: '',
   cliente_ie: '', cliente_endereco: '', cliente_bairro: '', cliente_municipio: '',
@@ -134,25 +186,43 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState({ invoice: '', recipient: '' });
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
+  const [registryStatus, setRegistryStatus] = useState<'idle' | 'loading' | 'filled' | 'error'>('idle');
+  const [registryMessage, setRegistryMessage] = useState('');
+  const registryAttemptRef = useRef('');
+  const registryRequestRef = useRef(0);
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedFilters(filters), 300);
     return () => clearTimeout(timeout);
   }, [filters]);
 
-  const { data: loadDocuments = [] } = useQuery({
-    queryKey: ['nfse_load_docs', loadId],
+  const loadDocumentsQuery = useQuery({
+    queryKey: ['nfse_load_docs', loadId, environment],
     queryFn: async () => {
       if (!loadId) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('fiscal_documents')
         .select('*')
         .eq('load_id', loadId)
-        .eq('document_type', 'inbound');
-      return data || [];
+        .eq('document_type', 'inbound')
+        .is('deleted_at', null)
+        .is('cte_emitted_at', null)
+        .is('nfse_emitted_document_id', null);
+      if (error) throw error;
+      const documents = data || [];
+      if (documents.length === 0) return documents;
+      const { data: reservations, error: reservationError } = await supabase
+        .from('fiscal_source_reservations')
+        .select('source_id')
+        .eq('environment', environment)
+        .in('source_id', documents.map(document => document.id));
+      if (reservationError) throw reservationError;
+      const reservedIds = new Set((reservations || []).map(reservation => reservation.source_id));
+      return documents.filter(document => !reservedIds.has(document.id));
     },
     enabled: !!loadId && open,
   });
+  const loadDocuments = useMemo(() => loadDocumentsQuery.data ?? [], [loadDocumentsQuery.data]);
 
   const normalize = (v: string) => v.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -168,40 +238,73 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
     });
   }, [loadDocuments, debouncedFilters]);
 
-  const selectAll = () => {
-    if (selectedIds.size === filteredDocs.length && filteredDocs.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredDocs.map(d => d.id)));
+  const applyDocumentSelection = (nextIds: Set<string>) => {
+    const selected = loadDocuments.filter(document => nextIds.has(document.id));
+    if (selected.length !== nextIds.size) {
+      toast.error('Uma das NF-es selecionadas não está mais disponível. Atualize a lista.');
+      return;
     }
+    const tomadores = selected.map(document => resolveNFSeTomador(
+      document as Parameters<typeof resolveNFSeTomador>[0], 'destinatario', clients,
+    ));
+    const identities = new Set(tomadores.map(tomador => tomador.cliente_id || onlyDigits(tomador.cnpj) || normalize(tomador.nome)).filter(Boolean));
+    if (identities.size > 1) {
+      toast.error('Selecione somente NF-es do mesmo tomador.');
+      return;
+    }
+
+    const manualItems = items.filter(item => !item.fiscal_document_id);
+    const existingByDocument = new Map(items.filter(item => item.fiscal_document_id).map(item => [item.fiscal_document_id!, item]));
+    const linkedItems = selected.map(document => existingByDocument.get(document.id) ?? {
+      description: `Serviço de transporte ref. NF ${document.invoice_number || ''}`,
+      quantity: 1,
+      unit_value: num(document.freight_value || document.value || 0),
+      total: num(document.freight_value || document.value || 0),
+      fiscal_document_id: document.id,
+      access_key: document.access_key,
+    });
+    const nextItems = [...manualItems, ...linkedItems];
+    setSelectedIds(new Set(nextIds));
+    setItems(nextItems);
+    const total = nextItems.reduce((sum, item) => sum + num(item.total), 0);
+    if (selected.length === 0) {
+      setForm(current => ({
+        ...current,
+        valor_servicos: total,
+        description: current.description.startsWith('Prestação de serviço de transporte ref. NFs:') ? '' : current.description,
+      }));
+      return;
+    }
+    const first = selected[0];
+    const tomador = tomadores[0];
+    const automaticDescription = `Prestação de serviço de transporte ref. NFs: ${selected.map(document => document.invoice_number).join(', ')}`;
+    setForm(current => ({
+      ...current,
+      valor_servicos: total,
+      description: !current.description || current.description.startsWith('Prestação de serviço de transporte ref. NFs:')
+        ? automaticDescription : current.description,
+      cliente_id: tomador.cliente_id || first.client_id || null,
+      cliente_nome: tomador.nome,
+      cliente_cnpj: tomador.cnpj,
+      cliente_ie: tomador.ie,
+      cliente_im: tomador.im,
+      cliente_municipio: tomador.municipio,
+      cliente_uf: tomador.uf,
+      cliente_bairro: tomador.bairro,
+      cliente_endereco: tomador.endereco,
+      cliente_numero: tomador.numero,
+      cliente_complemento: tomador.complemento,
+      cliente_cep: tomador.cep,
+      cliente_cod_municipio: tomador.municipio_cod,
+      cliente_email: tomador.email,
+      cliente_telefone: tomador.telefone,
+    }));
   };
 
-  useEffect(() => {
-    if (selectedIds.size > 0) {
-      const selected = loadDocuments.filter(d => selectedIds.has(d.id));
-      const total = selected.reduce((sum, d) => sum + (Number(d.freight_value) || 0), 0);
-      const desc = `Prestação de serviço de transporte ref. NFs: ${selected.map(d => d.invoice_number).join(', ')}`;
-      const first = selected[0];
-      
-      setForm(f => ({
-        ...f,
-        valor_servicos: total,
-        description: desc,
-        cliente_nome: first.recipient || f.cliente_nome,
-        cliente_cnpj: first.recipient_cnpj || f.cliente_cnpj,
-        cliente_municipio: first.recipient_city || f.cliente_municipio,
-        cliente_uf: first.recipient_state || f.cliente_uf,
-        cliente_bairro: first.recipient_neighborhood || f.cliente_bairro,
-        cliente_endereco: fiscalDocumentText(first, 'recipient_address', 'address') || f.cliente_endereco,
-        cliente_numero: fiscalDocumentText(first, 'recipient_number', 'number') || f.cliente_numero,
-        cliente_complemento: fiscalDocumentText(first, 'recipient_complement', 'complement') || f.cliente_complemento,
-        cliente_cep: normalizeCep(fiscalDocumentText(first, 'recipient_zip', 'zip')) || f.cliente_cep,
-        cliente_cod_municipio: normalizeIbgeCity(fiscalDocumentText(first, 'recipient_cod_municipio', 'city_ibge_code')) || f.cliente_cod_municipio,
-        cliente_email: fiscalDocumentText(first, 'recipient_email', 'email') || f.cliente_email,
-        cliente_telefone: normalizePhone(fiscalDocumentText(first, 'recipient_phone', 'phone')) || f.cliente_telefone,
-      }));
-    }
-  }, [selectedIds, loadDocuments]);
+  const selectAll = () => applyDocumentSelection(
+    selectedIds.size === filteredDocs.length && filteredDocs.length > 0
+      ? new Set<string>() : new Set(filteredDocs.map(document => document.id)),
+  );
 
   const { data: allDocs = [] } = useFiscalDocuments();
 
@@ -227,8 +330,12 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
 
   useEffect(() => {
     if (!open) return;
+    setSelectedIds(new Set(initial?.fiscal_document_ids ?? []));
     setClientSearchOpen(false);
     setClientSearchTerm('');
+    setRegistryStatus('idle');
+    setRegistryMessage('');
+    registryAttemptRef.current = '';
     setForm({
       branch_code: initial?.branch_code || 'MATRIZ',
       emitter_id: initial?.emitter_id ?? null,
@@ -237,7 +344,7 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
       doc_type: initial?.doc_type || 'NFS',
       situacao_doc: initial?.situacao_doc || '00',
       is_preview: initial?.is_preview ?? false,
-      issue_date: initial?.issue_date || new Date().toISOString().slice(0, 10),
+      issue_date: initial?.issue_date || localDateInputValue(),
       cliente_id: initial?.cliente_id || null,
       cond_pagamento: initial?.cond_pagamento || '',
       tipo_ctrc: initial?.tipo_ctrc || '',
@@ -285,9 +392,91 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
         quantity: num(item.quantity),
         unit_value: num(item.unit_value),
         total: num(item.total),
+        fiscal_document_id: item.fiscal_document_id,
+        access_key: item.access_key,
       })) ?? [],
     );
   }, [open, initial, loadId]);
+
+  useEffect(() => {
+    if (!open || form.emitter_id) return;
+    const defaultEmitter = emitters.find(emitter => emitter.active && emitter.is_default) || emitters.find(emitter => emitter.active);
+    if (!defaultEmitter) return;
+    setForm(current => ({
+      ...current,
+      emitter_id: defaultEmitter.id,
+      branch_code: defaultEmitter.branch_code || current.branch_code,
+      regime_tributario: defaultEmitter.regime_tributario || current.regime_tributario,
+    }));
+  }, [open, emitters, form.emitter_id]);
+
+  const formTomador = useMemo(() => tomadorFromForm(form), [form]);
+  const missingTomadorFields = useMemo(
+    () => missingNFSeTomadorFields(formTomador),
+    [formTomador],
+  );
+  const needsTomadorRegistryEnrichment = useMemo(
+    () => needsNFSeTomadorRegistryEnrichment(formTomador),
+    [formTomador],
+  );
+
+  const completeTomadorAddress = useCallback(async (forceRefresh = false) => {
+    const emitterId = form.emitter_id;
+    const cnpj = onlyDigits(form.cliente_cnpj);
+    const uf = normalizeUf(form.cliente_uf) || '';
+    if (!emitterId || cnpj.length !== 14 || !uf) {
+      setRegistryStatus('error');
+      setRegistryMessage('Informe emitente, CNPJ e UF para consultar o endereço fiscal.');
+      return;
+    }
+
+    const requestId = ++registryRequestRef.current;
+    setRegistryStatus('loading');
+    setRegistryMessage('Consultando o cadastro fiscal do tomador…');
+    try {
+      const result = await consultOfficialTaxRegistry({
+        emitterId,
+        uf,
+        lookupValue: cnpj,
+        lookupType: 'CNPJ',
+        environment: 'production',
+        forceRefresh,
+      });
+      if (registryRequestRef.current !== requestId) return;
+      const profile = findActiveNFSeTaxProfile(cnpj, result.profiles);
+      if (!profile) throw new Error('CNPJ não localizado como ativo no cadastro fiscal.');
+      const remaining = missingNFSeTomadorFields(
+        mergeOfficialProfileIntoNFSeTomador(formTomador, profile, uf),
+      );
+      setForm(current => {
+        const completed = mergeOfficialProfileIntoNFSeTomador(tomadorFromForm(current), profile, uf);
+        return applyTomadorToForm(current, completed);
+      });
+      if (remaining.length) throw new Error(`Cadastro fiscal não retornou: ${remaining.join(', ')}.`);
+      const completedForValidation = mergeOfficialProfileIntoNFSeTomador(formTomador, profile, uf);
+      if (!sanitizeIe(completedForValidation.ie)) {
+        throw new Error('Cadastro fiscal não retornou a IE. Informe a IE ou marque como ISENTO antes de continuar.');
+      }
+      setRegistryStatus('filled');
+      setRegistryMessage('IE e endereço do tomador conferidos no cadastro fiscal.');
+    } catch (error: unknown) {
+      if (registryRequestRef.current !== requestId) return;
+      setRegistryStatus('error');
+      setRegistryMessage(errorMessage(error));
+    }
+  }, [form.emitter_id, form.cliente_cnpj, form.cliente_uf, formTomador]);
+
+  useEffect(() => {
+    if (!open || environment !== 'production' || !needsTomadorRegistryEnrichment) return;
+    const emitterId = form.emitter_id || '';
+    const cnpj = onlyDigits(form.cliente_cnpj);
+    const uf = normalizeUf(form.cliente_uf) || '';
+    if (!emitterId || cnpj.length !== 14 || !uf) return;
+    const attemptKey = `${emitterId}|${cnpj}|${uf}`;
+    if (registryAttemptRef.current === attemptKey) return;
+    registryAttemptRef.current = attemptKey;
+    void completeTomadorAddress(false);
+  }, [open, environment, form.emitter_id, form.cliente_cnpj, form.cliente_uf, needsTomadorRegistryEnrichment, completeTomadorAddress]);
 
   const totalServicos = items.length > 0
     ? items.reduce((a, it) => a + num(it.total), 0)
@@ -311,7 +500,16 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
       return merged;
     }));
   };
-  const removeItem = (i: number) => setItems(arr => arr.filter((_, idx) => idx !== i));
+  const removeItem = (i: number) => {
+    const documentId = items[i]?.fiscal_document_id;
+    if (documentId) {
+      const next = new Set(selectedIds);
+      next.delete(documentId);
+      applyDocumentSelection(next);
+      return;
+    }
+    setItems(current => current.filter((_, index) => index !== i));
+  };
 
   const handleFetchFromInvoice = async () => {
     if (!invoiceSearch) {
@@ -322,9 +520,9 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
     setLoadingInvoice(true);
     try {
       const search = invoiceSearch.trim();
-      const doc = allDocs.find(d => 
-        d.invoice_number === search || 
-        d.access_key === search || 
+      const doc = allDocs.find(d =>
+        d.invoice_number === search ||
+        d.access_key === search ||
         (d.access_key && d.access_key.endsWith(search))
       );
 
@@ -333,36 +531,42 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
         return;
       }
 
+      const tomador = resolveNFSeTomador(doc, 'destinatario', clients);
+
       // Preenche os dados do tomador
       setForm(prev => ({
         ...prev,
-        cliente_id: doc.client_id || prev.cliente_id,
-        cliente_nome: doc.remitter || doc.clients?.company_name || prev.cliente_nome,
-        cliente_cnpj: doc.remitter_cnpj || prev.cliente_cnpj,
-        cliente_municipio: doc.recipient_city || prev.cliente_municipio,
-        cliente_uf: doc.recipient_state || prev.cliente_uf,
-        cliente_bairro: doc.recipient_neighborhood || prev.cliente_bairro,
-        cliente_endereco: fiscalDocumentText(doc, 'recipient_address', 'address') || prev.cliente_endereco,
-        cliente_numero: fiscalDocumentText(doc, 'recipient_number', 'number') || prev.cliente_numero,
-        cliente_complemento: fiscalDocumentText(doc, 'recipient_complement', 'complement') || prev.cliente_complemento,
-        cliente_cep: normalizeCep(fiscalDocumentText(doc, 'recipient_zip', 'zip')) || prev.cliente_cep,
-        cliente_cod_municipio: normalizeIbgeCity(fiscalDocumentText(doc, 'recipient_cod_municipio', 'city_ibge_code')) || prev.cliente_cod_municipio,
-        cliente_email: fiscalDocumentText(doc, 'recipient_email', 'email') || prev.cliente_email,
-        cliente_telefone: normalizePhone(fiscalDocumentText(doc, 'recipient_phone', 'phone')) || prev.cliente_telefone,
+      cliente_id: tomador.cliente_id || doc.client_id || null,
+      cliente_nome: tomador.nome,
+      cliente_cnpj: tomador.cnpj,
+      cliente_ie: tomador.ie,
+      cliente_im: tomador.im,
+      cliente_municipio: tomador.municipio,
+      cliente_uf: tomador.uf,
+      cliente_bairro: tomador.bairro,
+      cliente_endereco: tomador.endereco,
+      cliente_numero: tomador.numero,
+      cliente_complemento: tomador.complemento,
+      cliente_cep: tomador.cep,
+      cliente_cod_municipio: tomador.municipio_cod,
+      cliente_email: tomador.email,
+      cliente_telefone: tomador.telefone,
         reference_number: doc.invoice_number || prev.reference_number,
         valor_servicos: num(doc.freight_value || doc.value || 0),
         description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
         notes: `NFS-e referente a(s) NF ${doc.invoice_number || ''}`
       }));
 
-      if (num(doc.freight_value || doc.value || 0) > 0) {
-        setItems([{
-          description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
-          quantity: 1,
-          unit_value: num(doc.freight_value || doc.value || 0),
-          total: num(doc.freight_value || doc.value || 0)
-        }]);
-      }
+      const serviceValue = num(doc.freight_value || doc.value || 0);
+      setItems([{
+        description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
+        quantity: 1,
+        unit_value: serviceValue,
+        total: serviceValue,
+        fiscal_document_id: doc.id,
+        access_key: doc.access_key,
+      }]);
+      setSelectedIds(new Set([doc.id]));
 
       toast.success('Dados importados da NF');
     } catch {
@@ -400,24 +604,54 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
   };
 
   const handleSave = async () => {
-    if (!form.cliente_nome) { toast.warning('Tomador (cliente) não informado.'); }
-    if (!form.cliente_municipio) { toast.warning('Município do tomador não informado.'); }
-    const normalizedCityCode = normalizeIbgeCity(form.cliente_cod_municipio) || normalizeIbgeCity(form.cliente_municipio);
+    let preparedForm = form;
+    if (environment === 'production' && needsNFSeTomadorRegistryEnrichment(formTomador)) {
+      try {
+        const emitterId = form.emitter_id || '';
+        const cnpj = onlyDigits(form.cliente_cnpj);
+        const uf = normalizeUf(form.cliente_uf) || '';
+        if (!emitterId || cnpj.length !== 14 || !uf) {
+          throw new Error('Informe emitente, CNPJ e UF para completar IE/endereço do tomador.');
+        }
+        const result = await consultOfficialTaxRegistry({
+          emitterId, uf, lookupValue: cnpj, lookupType: 'CNPJ', environment: 'production',
+        });
+        const profile = findActiveNFSeTaxProfile(cnpj, result.profiles);
+        if (!profile) throw new Error('CNPJ do tomador não localizado como ativo no cadastro fiscal.');
+        const completed = mergeOfficialProfileIntoNFSeTomador(formTomador, profile, uf);
+        const missing = missingNFSeTomadorFields(completed);
+        if (missing.length > 0) throw new Error(`Cadastro fiscal não retornou: ${missing.join(', ')}.`);
+        if (!sanitizeIe(completed.ie)) {
+          throw new Error('IE do tomador não localizada. Informe a IE ou marque como ISENTO antes de continuar.');
+        }
+        preparedForm = applyTomadorToForm(form, completed);
+        setForm(preparedForm);
+      } catch (error: unknown) {
+        toast.error(errorMessage(error));
+        return;
+      }
+    }
+
+    if (!preparedForm.cliente_nome) { toast.warning('Tomador (cliente) não informado.'); }
+    if (!preparedForm.cliente_municipio) { toast.warning('Município do tomador não informado.'); }
+    const normalizedCityCode = normalizeIbgeCity(preparedForm.cliente_cod_municipio) || normalizeIbgeCity(preparedForm.cliente_municipio);
     if (!normalizedCityCode) {
       toast.warning('Código IBGE do município não informado.');
     }
-    if (!normalizeCep(form.cliente_cep)) { toast.warning('CEP do tomador inválido ou ausente.'); }
-    if (!normalizeUf(form.cliente_uf)) { toast.warning('UF do tomador inválida ou ausente.'); }
+    if (!normalizeCep(preparedForm.cliente_cep)) { toast.warning('CEP do tomador inválido ou ausente.'); }
+    if (!normalizeUf(preparedForm.cliente_uf)) { toast.warning('UF do tomador inválida ou ausente.'); }
     if (totalServicos <= 0) { toast.warning('Valor de serviços é zero.'); }
+    const fiscalDocumentIds = [...selectedIds];
     const payload: Partial<NFSeDoc> = {
-      ...form,
-      cliente_cep: normalizeCep(form.cliente_cep),
+      ...preparedForm,
+      cliente_cep: normalizeCep(preparedForm.cliente_cep),
       cliente_cod_municipio: normalizedCityCode,
       items,
       valor_servicos: totalServicos,
       base_calculo: baseCalculo,
       valor_iss: valorIss,
       valor_liquido: valorLiquido,
+      fiscal_document_ids: fiscalDocumentIds,
       valor_total: totalServicos,
     };
     try {
@@ -462,9 +696,9 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
               <div className="flex-1">
                 <Label className="text-xs">Importar dados de uma NF-e</Label>
                 <div className="flex gap-2">
-                  <Input 
-                    placeholder="Nº da NF ou Chave de Acesso" 
-                    value={invoiceSearch} 
+                  <Input
+                    placeholder="Nº da NF ou Chave de Acesso"
+                    value={invoiceSearch}
                     onChange={e => setInvoiceSearch(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleFetchFromInvoice()}
                   />
@@ -484,37 +718,49 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
                     {selectedIds.size === filteredDocs.length && filteredDocs.length > 0 ? 'Desmarcar' : 'Selecionar'} Todas
                   </Button>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-2">
                   <div className="relative">
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                    <Input 
-                      placeholder="Filtrar Nota..." 
-                      className="h-8 pl-7 text-xs" 
+                    <Input
+                      placeholder="Filtrar Nota..."
+                      className="h-8 pl-7 text-xs"
                       value={filters.invoice}
                       onChange={e => setFilters(f => ({ ...f, invoice: e.target.value }))}
                     />
                   </div>
-                  <Input 
-                    placeholder="Filtrar Destinatário..." 
-                    className="h-8 text-xs" 
+                  <Input
+                    placeholder="Filtrar Destinatário..."
+                    className="h-8 text-xs"
                     value={filters.recipient}
                     onChange={e => setFilters(f => ({ ...f, recipient: e.target.value }))}
                   />
                 </div>
 
                 <div className="max-h-[150px] overflow-y-auto border rounded divide-y bg-background">
-                  {filteredDocs.length === 0 ? (
+                  {loadDocumentsQuery.isLoading ? (
+                    <div className="flex items-center justify-center gap-2 p-4 text-xs text-muted-foreground" role="status">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Consultando NF-es da carga…
+                    </div>
+                  ) : loadDocumentsQuery.isError ? (
+                    <div className="space-y-2 p-4 text-center text-xs" role="alert">
+                      <p>Não foi possível consultar as NF-es da carga.</p>
+                      <Button type="button" variant="outline" size="sm" onClick={() => void loadDocumentsQuery.refetch()} disabled={loadDocumentsQuery.isFetching}>
+                        {loadDocumentsQuery.isFetching ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                        Tentar novamente
+                      </Button>
+                    </div>
+                  ) : filteredDocs.length === 0 ? (
                     <div className="p-4 text-center text-xs text-muted-foreground">Nenhuma NF encontrada.</div>
                   ) : filteredDocs.map(d => (
-                    <div 
-                      key={d.id} 
+                    <div
+                      key={d.id}
                       className="flex items-center gap-2 p-2 hover:bg-muted/50 cursor-pointer"
                       onClick={() => {
                         const next = new Set(selectedIds);
                         if (next.has(d.id)) next.delete(d.id);
                         else next.add(d.id);
-                        setSelectedIds(next);
+                        applyDocumentSelection(next);
                       }}
                     >
                       <Checkbox checked={selectedIds.has(d.id)} onCheckedChange={() => {}} />
@@ -561,7 +807,7 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
               <div className="col-span-2"><Label>Pedido</Label><Input value={form.pedido || ''} onChange={e => setField('pedido', e.target.value)} /></div>
               <div className="col-span-2"><Label>Cond. Pagto</Label><Input value={form.cond_pagamento || ''} onChange={e => setField('cond_pagamento', e.target.value)} /></div>
 
-              <div className="col-span-2"><Label>Cód. Serviço</Label><Input value={form.cod_servico || ''} onChange={e => setField('cod_servico', e.target.value)} /></div>
+              <div className="col-span-2"><Label>Cód. Serviço Nacional (6 dígitos)</Label><Input inputMode="numeric" maxLength={6} placeholder="Ex.: 160201" value={form.cod_servico || ''} onChange={e => setField('cod_servico', e.target.value)} /></div>
               <div className="col-span-2"><Label>CNAE</Label><Input value={form.cnae || ''} onChange={e => setField('cnae', e.target.value)} /></div>
               <div className="col-span-2"><Label>Nat. Operação</Label><Input value={form.nat_operacao || ''} onChange={e => setField('nat_operacao', e.target.value)} /></div>
 
@@ -582,8 +828,32 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
 
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between pt-2">
-                <h4 className="font-semibold text-sm text-primary">Tomador (Cliente)</h4>
-                <Popover
+                <div>
+                  <h4 className="font-semibold text-sm text-primary">Tomador (Cliente)</h4>
+                  {registryStatus !== 'idle' && (
+                    <p role={registryStatus === 'error' ? 'alert' : 'status'} className={`mt-1 text-xs ${registryStatus === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      {registryMessage}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {missingTomadorFields.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => {
+                        registryAttemptRef.current = '';
+                        void completeTomadorAddress(true);
+                      }}
+                      disabled={registryStatus === 'loading' || !form.emitter_id || onlyDigits(form.cliente_cnpj).length !== 14 || !normalizeUf(form.cliente_uf)}
+                    >
+                      {registryStatus === 'loading' && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                      Completar endereço
+                    </Button>
+                  )}
+                  <Popover
                   modal
                   open={clientSearchOpen}
                   onOpenChange={(v) => {
@@ -638,7 +908,8 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
                       </CommandList>
                     </Command>
                   </PopoverContent>
-                </Popover>
+                  </Popover>
+                </div>
               </div>
               <div className="grid grid-cols-6 gap-3">
                 <div className="col-span-3"><Label>Nome</Label><Input value={form.cliente_nome || ''} onChange={e => setField('cliente_nome', e.target.value)} /></div>

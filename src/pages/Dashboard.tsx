@@ -13,6 +13,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { classifyTelemetryFreshness, summarizeTelemetryFreshness } from '@/lib/telemetryFreshness';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 
 export default function Dashboard() {
   const { currentTenant } = useTenant();
@@ -48,7 +49,7 @@ export default function Dashboard() {
     queryKey: ['dashboard_metrics', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return null;
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateInputValue();
       const { data, error } = await supabase.from('metrics_daily').select('km_estimated, trips_count, overspeed_events, stops_count, moving_time_seconds, stopped_time_seconds')
         .eq('tenant_id', currentTenant.id).eq('day', today);
       if (error) throw error;

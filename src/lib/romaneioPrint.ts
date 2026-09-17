@@ -53,13 +53,23 @@ const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigi
 const fmtN = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
 
+export function escapePrintHtml(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character] as string);
+}
+
 const sortByRecipient = (docs: RomaneioDoc[]) => [...docs].sort((a, b) =>
   collator.compare(a.destinatario || '—', b.destinatario || '—') ||
   collator.compare(a.bairro || '—', b.bairro || '—') ||
   collator.compare(a.nfNumber || '—', b.nfNumber || '—')
 );
 
-function buildCityBlocks(docs: RomaneioDoc[]) {
+export function buildRomaneioCityBlocks(docs: RomaneioDoc[]) {
   // Group by normalized city key (accent-insensitive) so "Janaúba" and "Janauba"
   // merge; preserve the first-seen display spelling for the header.
   const cityMap = new Map<string, RomaneioDoc[]>();
@@ -88,12 +98,12 @@ function buildCityBlocks(docs: RomaneioDoc[]) {
     const state = cityDocs[0]?.state || '';
     const rows = cityDocs.map(d => `
       <tr>
-        <td>${d.remetente}</td>
-        <td>${d.destinatario}</td>
-        <td>${d.city}</td>
-        <td class="center">${d.bairro}</td>
-        <td class="center">${d.nfNumber}</td>
-        <td class="center">${d.emissao}</td>
+        <td>${escapePrintHtml(d.remetente)}</td>
+        <td>${escapePrintHtml(d.destinatario)}</td>
+        <td>${escapePrintHtml(d.city)}</td>
+        <td class="center">${escapePrintHtml(d.bairro)}</td>
+        <td class="center">${escapePrintHtml(d.nfNumber)}</td>
+        <td class="center">${escapePrintHtml(d.emissao)}</td>
         <td class="right">${fmt(d.valor)}</td>
         <td class="right">${fmtN(d.peso)}</td>
         <td class="center">${d.volumes}</td>
@@ -102,7 +112,7 @@ function buildCityBlocks(docs: RomaneioDoc[]) {
     html += `
       <div class="city-section">
         <div class="city-header">
-          <span>Cidade: ${cityName}${state ? ' - ' + state : ''}</span>
+          <span>Cidade: ${escapePrintHtml(cityName)}${state ? ` - ${escapePrintHtml(state)}` : ''}</span>
         </div>
         <div class="city-meta">
           <span>Qtd Entregas: ${entregas}</span>
@@ -131,38 +141,75 @@ function buildCityBlocks(docs: RomaneioDoc[]) {
   return { html, totalNotas, totalEntregas, totalValor, totalPeso, totalVolumes };
 }
 
-/** Print one or more routes — each route becomes its own page (matches "Análise primária"). */
-export function printRomaneioRoutes(routes: RomaneioRoute[], title = 'Romaneio') {
-  const pages: string[] = [];
-  routes.forEach((r, i) => {
-    if (!r.docs.length) return;
-    const { html, totalNotas, totalEntregas, totalValor, totalPeso, totalVolumes } = buildCityBlocks(r.docs);
-    const assignLine = (r.vehicleInfo || r.driverInfo)
-      ? `<div class="assign-info">${r.vehicleInfo || ''}${r.driverInfo ? (r.vehicleInfo ? ' | ' : '') + r.driverInfo : ''}</div>`
-      : '';
+type OverviewOptions = {
+  title?: string;
+  heading?: string;
+  subtitle?: string;
+  footer?: string;
+};
 
-    pages.push(`
-      <div class="${i > 0 ? 'route-break' : ''}">
-        <h1>ROTA: ${(r.routeName || '—').toUpperCase()}</h1>
-        <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} | Carga ${i + 1} de ${routes.length}</div>
-        ${assignLine}
-        ${html}
-        <div class="grand-totals">
-          <span>TOTAL ROTA</span>
-          <span>Qtd Total Entregas: ${totalEntregas}</span>
-          <span>Qtd Total Notas: ${totalNotas}</span>
-          <span>Valor: ${fmt(totalValor)}</span>
-          <span>Peso: ${fmtN(totalPeso)}</span>
-          <span>Volumes: ${totalVolumes}</span>
-        </div>
-        <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Impressão Logística</div>
-      </div>`);
-  });
+function totalsHtml(label: string, totals: ReturnType<typeof buildRomaneioCityBlocks>) {
+  return `<div class="grand-totals">
+    <span>${escapePrintHtml(label)}</span>
+    <span>Qtd Total Entregas: ${totals.totalEntregas}</span>
+    <span>Qtd Total Notas: ${totals.totalNotas}</span>
+    <span>Valor: ${fmt(totals.totalValor)}</span>
+    <span>Peso: ${fmtN(totals.totalPeso)}</span>
+    <span>Volumes: ${totals.totalVolumes}</span>
+  </div>`;
+}
 
+function wrapDocument(title: string, body: string) {
+  return `<html><head><title>${escapePrintHtml(title)}</title><style>${printStyles}</style></head><body>${body}</body></html>`;
+}
+
+function openPrintDocument(documentHtml: string) {
   const win = window.open('', '_blank');
   if (!win) return;
-  win.document.write(`<html><head><title>${title}</title><style>${printStyles}</style></head><body>${pages.join('')}</body></html>`);
+  win.opener = null;
+  win.document.write(documentHtml);
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 300);
+}
+
+export function renderRomaneioOverview(docs: RomaneioDoc[], options: OverviewOptions = {}) {
+  const totals = buildRomaneioCityBlocks(docs);
+  const body = `
+    <h1>${escapePrintHtml(options.heading ?? 'ANÁLISE DE CARGAS — CONFERÊNCIA GALPÃO')}</h1>
+    <div class="subtitle">${escapePrintHtml(options.subtitle ?? new Date().toLocaleDateString('pt-BR'))}</div>
+    ${totals.html}
+    ${totalsHtml('TOTAL GERAL', totals)}
+    <div class="footer">${escapePrintHtml(options.footer ?? `Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Ingestão Logística`)}</div>`;
+  return wrapDocument(options.title ?? 'Análise de Cargas', body);
+}
+
+export function printRomaneioOverview(docs: RomaneioDoc[], options: OverviewOptions = {}) {
+  openPrintDocument(renderRomaneioOverview(docs, options));
+}
+
+export function renderRomaneioRoutes(routes: RomaneioRoute[], title = 'Romaneio') {
+  const pages: string[] = [];
+  routes.forEach((route, index) => {
+    if (!route.docs.length) return;
+    const totals = buildRomaneioCityBlocks(route.docs);
+    const assignment = [route.vehicleInfo, route.driverInfo].filter(Boolean).map(escapePrintHtml).join(' | ');
+    const assignLine = assignment ? `<div class="assign-info">${assignment}</div>` : '';
+
+    pages.push(`
+      <div class="${index > 0 ? 'route-break' : ''}">
+        <h1>ROTA: ${escapePrintHtml((route.routeName || '—').toUpperCase())}</h1>
+        <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} | Carga ${index + 1} de ${routes.length}</div>
+        ${assignLine}
+        ${totals.html}
+        ${totalsHtml('TOTAL ROTA', totals)}
+        <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Impressão Logística</div>
+      </div>`);
+  });
+  return wrapDocument(title, pages.join(''));
+}
+
+/** Print one or more routes — each route becomes its own page (matches "Análise primária"). */
+export function printRomaneioRoutes(routes: RomaneioRoute[], title = 'Romaneio') {
+  openPrintDocument(renderRomaneioRoutes(routes, title));
 }

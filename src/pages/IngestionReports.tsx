@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +16,7 @@ import { FileSearch, Download, AlertTriangle, ListChecks, RefreshCw, FileText } 
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { csvSafeCell } from '@/lib/csvSafety';
 
 interface FieldCoverage {
   key: string;
@@ -34,6 +35,21 @@ type IngestionReportRow = Omit<Tables<'ingestion_reports'>, 'field_coverage' | '
   field_coverage: FieldCoverage[];
   review_items: ReviewItem[];
 };
+
+type IngestionReportSummary = Omit<IngestionReportRow, 'field_coverage' | 'review_items' | 'report'>;
+
+interface IngestionReportIndex {
+  tenant_id: string;
+  snapshot_at: string;
+  page: number;
+  page_size: number;
+  total: number;
+  total_docs: number;
+  saved_docs: number;
+  needs_review_docs: number;
+  clients_auto_created: number;
+  rows: IngestionReportSummary[];
+}
 
 type PdfWithAutoTable = jsPDF & { lastAutoTable: { finalY: number } };
 
@@ -74,41 +90,67 @@ export default function IngestionReports() {
   const { currentTenant } = useTenant();
   const navigate = useNavigate();
   const { filters: { from, to, batch }, setFilter, resetFilters, activeCount } = useListFilters({ from: '', to: '', batch: '' });
-  const [selected, setSelected] = useState<IngestionReportRow | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [snapshotAt, setSnapshotAt] = useState<string | null>(null);
+  const pageSize = 25;
 
-  const { data: reports = [], isLoading, refetch, isError } = useQuery({
-    queryKey: ['ingestion_reports', currentTenant?.id, from, to, batch],
+  const resetPage = () => {
+    setPage(1);
+    setSnapshotAt(null);
+  };
+
+  const reportQuery = useQuery({
+    queryKey: ['ingestion_report_index', currentTenant?.id, from, to, batch, page, snapshotAt],
     enabled: !!currentTenant,
     queryFn: async () => {
-      let q = supabase
-        .from('ingestion_reports')
-        .select('*')
-        .eq('tenant_id', currentTenant!.id)
-        .order('created_at', { ascending: false })
-        .limit(500);
-      if (from) q = q.gte('created_at', localDayBoundary(from));
-      if (to) {
-        q = q.lt('created_at', localDayBoundary(to, true));
-      }
-      if (batch) q = q.ilike('batch_id', `%${batch}%`);
-      const { data, error } = await q;
+      const { data, error } = await (supabase.rpc as unknown as (
+        name: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: unknown }>)('get_ingestion_report_index_v1', {
+        _tenant_id: currentTenant!.id,
+        _from: from ? localDayBoundary(from) : null,
+        _to: to ? localDayBoundary(to, true) : null,
+        _batch: batch.trim() || null,
+        _page: page,
+        _page_size: pageSize,
+        _snapshot_at: snapshotAt,
+      });
       if (error) throw error;
-      return (data || []).map((row) => ({
-        ...row,
-        field_coverage: fieldCoverage(row.field_coverage),
-        review_items: reviewItems(row.review_items),
-      }));
+      const result = data as IngestionReportIndex;
+      if (result.tenant_id !== currentTenant!.id || result.page !== page || result.page_size !== pageSize) {
+        throw new Error('Índice de importações fora do contexto solicitado.');
+      }
+      return result;
     },
   });
 
-  const totals = useMemo(() => {
-    return reports.reduce((acc, r) => ({
-      docs: acc.docs + r.total_docs,
-      saved: acc.saved + r.saved_docs,
-      review: acc.review + r.needs_review_docs,
-      created: acc.created + r.clients_auto_created,
-    }), { docs: 0, saved: 0, review: 0, created: 0 });
-  }, [reports]);
+  const detailQuery = useQuery({
+    queryKey: ['ingestion_report_detail', currentTenant?.id, selectedId],
+    enabled: !!currentTenant && !!selectedId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ingestion_reports')
+        .select('*')
+        .eq('tenant_id', currentTenant!.id)
+        .eq('id', selectedId!)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Relatório não encontrado neste tenant.');
+      return {
+        ...data,
+        field_coverage: fieldCoverage(data.field_coverage),
+        review_items: reviewItems(data.review_items),
+      } as IngestionReportRow;
+    },
+  });
+
+  const report = reportQuery.data;
+  const reports = report?.rows ?? [];
+  const selectedSummary = reports.find(row => row.id === selectedId) ?? null;
+  const selected = detailQuery.data ?? null;
+  const isLoading = reportQuery.isLoading;
+  const isError = reportQuery.isError;
 
   return (
     <div className="animate-fade-in space-y-5 max-w-6xl">
@@ -120,21 +162,21 @@ export default function IngestionReports() {
       </div>
 
       <ListFilterBar fields={[
-        { key: 'batch', label: 'Lote', type: 'search', value: batch, onChange: value => setFilter('batch', value), placeholder: 'Identificador do lote' },
-        { key: 'from', label: 'Importado de', type: 'date', value: from, max: to || undefined, onChange: value => setFilter('from', value) },
-        { key: 'to', label: 'Importado até', type: 'date', value: to, min: from || undefined, onChange: value => setFilter('to', value) },
-      ]} onReset={resetFilters} activeCount={activeCount} resultCount={isError ? undefined : reports.length} loading={isLoading} description="Até 500 relatórios por consulta. Os indicadores acompanham os filtros." />
+        { key: 'batch', label: 'Lote', type: 'search', value: batch, onChange: value => { resetPage(); setFilter('batch', value); }, placeholder: 'Identificador do lote' },
+        { key: 'from', label: 'Importado de', type: 'date', value: from, max: to || undefined, onChange: value => { resetPage(); setFilter('from', value); } },
+        { key: 'to', label: 'Importado até', type: 'date', value: to, min: from || undefined, onChange: value => { resetPage(); setFilter('to', value); } },
+      ]} onReset={() => { resetPage(); resetFilters(); }} activeCount={activeCount} resultCount={isError ? undefined : report?.total} loading={isLoading} description="Indicadores agregados no servidor; detalhes são carregados somente ao abrir um lote." />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardContent className="py-3"><div className="text-xs text-muted-foreground">Lotes</div><div className="text-2xl font-bold">{reports.length}</div></CardContent></Card>
-        <Card><CardContent className="py-3"><div className="text-xs text-muted-foreground">Documentos</div><div className="text-2xl font-bold">{totals.docs}</div><div className="text-[11px] text-muted-foreground">{totals.saved} salvos</div></CardContent></Card>
-        <Card><CardContent className="py-3"><div className="text-xs text-muted-foreground">needsReview</div><div className="text-2xl font-bold text-warning">{totals.review}</div></CardContent></Card>
-        <Card><CardContent className="py-3"><div className="text-xs text-muted-foreground">Clientes criados</div><div className="text-2xl font-bold">{totals.created}</div></CardContent></Card>
+        <Card><CardContent className="py-3"><div className="text-xs text-muted-foreground">Lotes</div><div className="text-2xl font-bold">{isError ? '—' : report?.total ?? 0}</div></CardContent></Card>
+        <Card><CardContent className="py-3"><div className="text-xs text-muted-foreground">Documentos</div><div className="text-2xl font-bold">{isError ? '—' : report?.total_docs ?? 0}</div><div className="text-[11px] text-muted-foreground">{isError ? 'indisponível' : `${report?.saved_docs ?? 0} salvos`}</div></CardContent></Card>
+        <Card><CardContent className="py-3"><div className="text-xs text-muted-foreground">needsReview</div><div className="text-2xl font-bold text-warning">{isError ? '—' : report?.needs_review_docs ?? 0}</div></CardContent></Card>
+        <Card><CardContent className="py-3"><div className="text-xs text-muted-foreground">Clientes criados</div><div className="text-2xl font-bold">{isError ? '—' : report?.clients_auto_created ?? 0}</div></CardContent></Card>
       </div>
 
       <Card>
         <CardContent className="p-0">
-          {isError ? <div role="alert" className="p-6 text-sm">Não foi possível carregar os relatórios. <Button variant="link" onClick={() => refetch()}>Tentar novamente</Button></div> : isLoading ? (
+          {isError ? <div role="alert" className="p-6 text-sm">Não foi possível carregar os relatórios. <Button variant="link" onClick={() => reportQuery.refetch()}>Tentar novamente</Button></div> : isLoading ? (
             <div className="p-6 text-sm text-muted-foreground">Carregando…</div>
           ) : reports.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">Nenhum relatório encontrado.</div>
@@ -143,7 +185,7 @@ export default function IngestionReports() {
               {reports.map(r => (
                 <button
                   key={r.id}
-                  onClick={() => setSelected(r)}
+                  onClick={() => setSelectedId(r.id)}
                   className="w-full text-left px-4 py-3 hover:bg-muted/40 transition-colors flex flex-wrap items-center gap-3"
                 >
                   <div className="flex-1 min-w-[200px]">
@@ -166,16 +208,37 @@ export default function IngestionReports() {
               ))}
             </div>
           )}
+          {!isError && !isLoading && (report?.total ?? 0) > 0 && (
+            <div className="flex items-center justify-between border-t p-3">
+              <Button variant="outline" disabled={page === 1} onClick={() => setPage(value => value - 1)}>Anterior</Button>
+              <span className="text-sm">Página {page} de {Math.max(1, Math.ceil((report?.total ?? 0) / pageSize))}</span>
+              <Button
+                variant="outline"
+                disabled={page * pageSize >= (report?.total ?? 0)}
+                onClick={() => {
+                  setSnapshotAt(current => current ?? report!.snapshot_at);
+                  setPage(value => value + 1);
+                }}
+              >Próxima</Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <Dialog open={!!selected} onOpenChange={o => !o && setSelected(null)}>
+      <Dialog open={!!selectedId} onOpenChange={open => !open && setSelectedId(null)}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileSearch className="h-4 w-4" /> Lote {selected?.batch_id}
+              <FileSearch className="h-4 w-4" /> Lote {selected?.batch_id ?? selectedSummary?.batch_id ?? '—'}
             </DialogTitle>
           </DialogHeader>
+          {detailQuery.isLoading && <div className="py-8 text-sm text-muted-foreground">Carregando detalhes…</div>}
+          {detailQuery.isError && (
+            <div role="alert" className="py-8 text-sm">
+              Não foi possível carregar os detalhes deste lote.
+              <Button variant="link" onClick={() => detailQuery.refetch()}>Tentar novamente</Button>
+            </div>
+          )}
           {selected && (
             <div className="space-y-4">
               <div className="text-xs text-muted-foreground">
@@ -205,7 +268,7 @@ export default function IngestionReports() {
                             <span>{f.label}</span>
                             <span className="text-muted-foreground">{f.filled}/{f.total} ({pct}%)</span>
                           </div>
-                          <Progress value={pct} className="h-1.5" />
+                          <Progress aria-label="Progresso da importação" aria-valuetext={`${pct}%`} value={pct} className="h-1.5" />
                         </div>
                       );
                     })}
@@ -270,39 +333,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 'de
 }
 
 function downloadReportCsv(r: IngestionReportRow) {
-  const esc = (v: unknown) => {
-    const s = String(v ?? '');
-    return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const pct = (n: number, d: number) => (d > 0 ? ((n / d) * 100).toFixed(1) : '0.0');
-  const lines: string[] = [];
-  lines.push('Seção;Métrica;Valor;Total;Percentual');
-  lines.push(`Resumo;Documentos;${r.total_docs};${r.total_docs};100.0`);
-  lines.push(`Resumo;Salvos;${r.saved_docs};${r.total_docs};${pct(r.saved_docs, r.total_docs)}`);
-  lines.push(`Resumo;Erros;${r.error_docs};${r.total_docs};${pct(r.error_docs, r.total_docs)}`);
-  lines.push(`Resumo;needsReview;${r.needs_review_docs};${r.total_docs};${pct(r.needs_review_docs, r.total_docs)}`);
-  lines.push(`Clientes;Criados;${r.clients_auto_created};${r.total_docs};${pct(r.clients_auto_created, r.total_docs)}`);
-  lines.push(`Clientes;Vinculados;${r.clients_matched};${r.total_docs};${pct(r.clients_matched, r.total_docs)}`);
-  lines.push(`Clientes;Não resolvidos;${r.clients_unresolved};${r.total_docs};${pct(r.clients_unresolved, r.total_docs)}`);
-  for (const f of (r.field_coverage || [])) {
-    lines.push(`Cobertura;${esc(f.label)};${f.filled};${f.total};${pct(f.filled, f.total)}`);
-  }
-  if (Array.isArray(r.review_items) && r.review_items.length) {
-    lines.push('');
-    lines.push('Revisão;NF;Destinatário;Motivos');
-    for (const ri of r.review_items) {
-      lines.push(['Revisão', esc(ri.invoiceNumber), esc(ri.recipientName || ''), esc((ri.reasons || []).join(' | '))].join(';'));
-    }
-    const divg = aggregateDivergences(r.review_items);
-    if (divg.length) {
-      lines.push('');
-      lines.push('Divergências;Motivo;Ocorrências;% sobre revisões');
-      for (const d of divg) {
-        lines.push(['Divergências', esc(d.reason), String(d.count), pct(d.count, r.review_items.length)].join(';'));
-      }
-    }
-  }
-  const csv = '\uFEFF' + lines.join('\n');
+  const csv = buildIngestionReportCsv(r);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -312,6 +343,40 @@ function downloadReportCsv(r: IngestionReportRow) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function buildIngestionReportCsv(r: IngestionReportRow): string {
+  const pct = (n: number, d: number) => (d > 0 ? ((n / d) * 100).toFixed(1) : '0.0');
+  const rows: unknown[][] = [
+    ['Seção', 'Métrica', 'Valor', 'Total', 'Percentual'],
+    ['Resumo', 'Documentos', r.total_docs, r.total_docs, '100.0'],
+    ['Resumo', 'Salvos', r.saved_docs, r.total_docs, pct(r.saved_docs, r.total_docs)],
+    ['Resumo', 'Erros', r.error_docs, r.total_docs, pct(r.error_docs, r.total_docs)],
+    ['Resumo', 'needsReview', r.needs_review_docs, r.total_docs, pct(r.needs_review_docs, r.total_docs)],
+    ['Clientes', 'Criados', r.clients_auto_created, r.total_docs, pct(r.clients_auto_created, r.total_docs)],
+    ['Clientes', 'Vinculados', r.clients_matched, r.total_docs, pct(r.clients_matched, r.total_docs)],
+    ['Clientes', 'Não resolvidos', r.clients_unresolved, r.total_docs, pct(r.clients_unresolved, r.total_docs)],
+  ];
+  for (const f of (r.field_coverage || [])) {
+    rows.push(['Cobertura', f.label, f.filled, f.total, pct(f.filled, f.total)]);
+  }
+  if (Array.isArray(r.review_items) && r.review_items.length) {
+    rows.push([]);
+    rows.push(['Revisão', 'NF', 'Destinatário', 'Motivos']);
+    for (const ri of r.review_items) {
+      rows.push(['Revisão', ri.invoiceNumber, ri.recipientName || '', (ri.reasons || []).join(' | ')]);
+    }
+    const divg = aggregateDivergences(r.review_items);
+    if (divg.length) {
+      rows.push([]);
+      rows.push(['Divergências', 'Motivo', 'Ocorrências', '% sobre revisões']);
+      for (const d of divg) {
+        rows.push(['Divergências', d.reason, d.count, pct(d.count, r.review_items.length)]);
+      }
+    }
+  }
+  return '\uFEFF' + rows.map(row => row.map(csvSafeCell).join(';')).join('\r\n');
 }
 
 function aggregateDivergences(items: ReviewItem[]): { reason: string; count: number }[] {

@@ -1,4 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
+import { validateFiscalBlob } from '@/lib/fiscal/fiscalFileValidation';
+import { activeTenantFetch, getActiveTenantId } from '@/lib/tenant/activeTenantContext';
 import { requireHubEnvironment } from '../../../supabase/functions/_shared/fiscal-environment';
 
 export type HubDocType = 'nfe' | 'nfce' | 'nfse' | 'cte' | 'mdfe' | 'nfcom';
@@ -37,6 +39,26 @@ export interface HubResponse<T = unknown> {
   };
   emission?: { id: string } & Record<string, unknown>;
   error?: { code: string; message?: string };
+}
+
+let fileAccessTokenPromise: Promise<string> | null = null;
+
+async function getFileAccessToken(): Promise<string> {
+  if (fileAccessTokenPromise) return fileAccessTokenPromise;
+
+  const pending = (async () => {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    const token = data.session?.access_token;
+    if (!token) throw new Error('Sessão expirada. Entre novamente para baixar o arquivo fiscal.');
+    return token;
+  })();
+  fileAccessTokenPromise = pending;
+  const clear = () => {
+    if (fileAccessTokenPromise === pending) fileAccessTokenPromise = null;
+  };
+  void pending.then(clear, clear);
+  return pending;
 }
 
 export interface EmitParams {
@@ -92,26 +114,46 @@ export interface NFSeBatchResponse {
 }
 
 export function readHubFiscalError(value: unknown): string | null {
-  if (typeof value === 'string') return value.trim() || null;
-  if (Array.isArray(value)) {
-    const messages = value.map(readHubFiscalError).filter((message): message is string => Boolean(message));
-    return messages.length ? messages.join(' | ') : null;
-  }
-  if (!value || typeof value !== 'object') return null;
+  const collect = (current: unknown, fieldMap = false): string[] => {
+    if (typeof current === 'string') return current.trim() ? [current.trim()] : [];
+    if (Array.isArray(current)) return current.flatMap(item => collect(item, fieldMap));
+    if (!current || typeof current !== 'object') return [];
 
-  const record = value as Record<string, unknown>;
-  const code = typeof record.code === 'string' ? record.code.trim() : '';
-  const messageKeys = ['message', 'mensagem', 'detail', 'erro'] as const;
-  const message = messageKeys
-    .map(key => typeof record[key] === 'string' ? String(record[key]).trim() : '')
-    .find(Boolean) || '';
-  if (code || message) return [code, message].filter(Boolean).join(': ');
+    const record = current as Record<string, unknown>;
+    const code = typeof record.code === 'string' ? record.code.trim() : '';
+    const cStat = typeof record.cStat === 'string' || typeof record.cStat === 'number'
+      ? `cStat ${String(record.cStat).trim()}`
+      : '';
+    const directKeys = ['message', 'mensagem', 'detail', 'erro', 'technicalMessage', 'hint'] as const;
+    const direct = directKeys.flatMap(key =>
+      typeof record[key] === 'string' && String(record[key]).trim()
+        ? [String(record[key]).trim()]
+        : []);
+    const messages: string[] = [];
+    const lead = [code, cStat, direct[0]].filter(Boolean).join(': ');
+    if (lead) messages.push(lead);
+    messages.push(...direct.slice(1));
 
-  for (const key of ['error', 'errors', 'hub', 'details']) {
-    const nested = readHubFiscalError(record[key]);
-    if (nested) return nested;
-  }
-  return null;
+    for (const key of ['error', 'errors', 'hub', 'document', 'details', 'messages', 'hints'] as const) {
+      messages.push(...collect(record[key], key === 'details' || key === 'errors'));
+    }
+
+    if (fieldMap) {
+      const reserved = new Set<string>([
+        'code', 'cStat', ...directKeys,
+        'error', 'errors', 'hub', 'document', 'details', 'messages', 'hints',
+      ]);
+      for (const [field, entry] of Object.entries(record)) {
+        if (reserved.has(field)) continue;
+        const fieldMessages = collect(entry, true);
+        messages.push(...fieldMessages.map(message => `${field}: ${message}`));
+      }
+    }
+    return messages;
+  };
+
+  const messages = [...new Set(collect(value))];
+  return messages.length ? messages.join(' | ') : null;
 }
 
 async function invoke(payload: Record<string, unknown>, acceptPartial = false) {
@@ -302,40 +344,60 @@ export const hubFiscal = {
     opts: {
       type?: HubDocType; emitterId?: string | null; emissionId?: string | null;
       documento?: 'Cancelamento' | 'CCe';
+      forceRefresh?: boolean;
     } = {},
   ): Promise<Blob> {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session.session?.access_token;
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hub-fiscal-proxy`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
-      },
-      body: JSON.stringify({
-        action: 'file',
-        id: hubDocumentId,
-        format,
-        documento: opts.documento,
-        type: opts.type,
-        emitterId: opts.emitterId || undefined,
-        emissionId: opts.emissionId || undefined,
-      }),
-    });
-    const contentType = res.headers.get('Content-Type') || '';
-    if (!res.ok || contentType.includes('application/json')) {
-      let message = `Hub Fiscal retornou ${res.status}`;
-      try {
-        const j = await res.json();
-        message = j?.error?.message || j?.error?.code || j?.message || message;
-      } catch { /* keep default */ }
-      throw new Error(message);
+    if (!getActiveTenantId()) {
+      throw new Error(
+        'Empresa ativa não confirmada. Selecione a empresa novamente antes de baixar o arquivo fiscal.',
+      );
     }
-    const blob = await res.blob();
-    if (blob.size === 0) throw new Error('Arquivo vazio retornado pelo Hub Fiscal.');
-    return blob;
+
+    const token = await getFileAccessToken();
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hub-fiscal-proxy`;
+    const tenantFetch = activeTenantFetch(new URL(url).origin);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 100_000);
+    try {
+      const res = await tenantFetch(url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+        },
+        body: JSON.stringify({
+          action: 'file',
+          id: hubDocumentId,
+          format,
+          documento: opts.documento,
+          type: opts.type,
+          emitterId: opts.emitterId || undefined,
+          emissionId: opts.emissionId || undefined,
+          forceRefresh: opts.forceRefresh,
+        }),
+      });
+      const contentType = res.headers.get('Content-Type') || '';
+      if (!res.ok || contentType.includes('application/json')) {
+        let message = `Hub Fiscal retornou ${res.status}`;
+        try {
+          const j = await res.json();
+          message = readHubFiscalError(j) || message;
+        } catch { /* keep default */ }
+        throw new Error(message);
+      }
+      const blob = await res.blob();
+      await validateFiscalBlob(blob, format);
+      return blob;
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('O download demorou demais. Tente novamente em instantes.');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   },
 };
 

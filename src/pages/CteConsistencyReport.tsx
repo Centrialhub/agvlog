@@ -15,7 +15,7 @@ export default function CteConsistencyReport() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
 
-  const { data: violations = [], isLoading, refetch } = useQuery({
+  const { data: violations = [], isLoading, isFetching, isError, error: auditError, refetch } = useQuery({
     queryKey: ['cte_consistency_violations', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant?.id) return [];
@@ -41,7 +41,7 @@ export default function CteConsistencyReport() {
           <p className="text-sm text-muted-foreground">Monitoramento rigoroso para evitar destaque indevido de ICMS</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => refetch()} variant="outline" size="sm">
+          <Button onClick={() => refetch()} variant="outline" size="sm" disabled={isFetching}>
             Executar Auditoria Agora
           </Button>
         </div>
@@ -78,7 +78,19 @@ export default function CteConsistencyReport() {
             <CardTitle className="text-sm font-medium">Status da Auditoria</CardTitle>
           </CardHeader>
           <CardContent>
-            {violations.length > 0 ? (
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-2 text-muted-foreground">
+                <Search className="h-8 w-8 mb-2 animate-pulse" />
+                <span className="text-sm font-semibold">Auditoria em andamento</span>
+                <span className="text-xs text-center">Aguardando resultado do servidor</span>
+              </div>
+            ) : isError ? (
+              <div className="flex flex-col items-center justify-center py-2 text-destructive">
+                <AlertTriangle className="h-8 w-8 mb-2" />
+                <span className="text-sm font-semibold">Auditoria indisponível</span>
+                <span className="text-xs text-center">O resultado não pôde ser confirmado</span>
+              </div>
+            ) : violations.length > 0 ? (
               <div className="flex flex-col items-center justify-center py-2 text-destructive">
                 <AlertTriangle className="h-8 w-8 mb-2" />
                 <span className="text-2xl font-bold">{violations.length}</span>
@@ -95,7 +107,18 @@ export default function CteConsistencyReport() {
         </Card>
       </div>
 
-      {violations.length > 0 ? (
+      {isError && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Falha ao executar a auditoria</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>{auditError instanceof Error ? auditError.message : 'Não foi possível consultar as inconsistências de ICMS.'}</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>Tentar novamente</Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!isError && violations.length > 0 ? (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Inconsistências no Banco de Dados</AlertTitle>
@@ -104,7 +127,7 @@ export default function CteConsistencyReport() {
             Eles devem ser **Excluídos e Reemitidos** (ou Cancelados se forem antigos) para regularização fiscal.
           </AlertDescription>
         </Alert>
-      ) : !isLoading && (
+      ) : !isLoading && !isError && (
         <Alert className="bg-success/10 border-success/20 text-success">
           <CheckCircle2 className="h-4 w-4 text-success" />
           <AlertTitle>Auditoria Concluída: Risco Zero</AlertTitle>
@@ -144,7 +167,9 @@ export default function CteConsistencyReport() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredViolations.length === 0 ? (
+              {isError ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-destructive">Auditoria indisponível. Tente novamente.</TableCell></TableRow>
+              ) : filteredViolations.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     {isLoading ? 'Carregando auditoria...' : searchTerm ? 'Nenhum resultado para o filtro.' : 'Excelente! Nenhum documento irregular encontrado.'}
@@ -170,7 +195,10 @@ export default function CteConsistencyReport() {
                         variant="ghost" 
                         size="sm" 
                         className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => navigate(`/cte-monitor`)}
+                        onClick={() => navigate(`/cte-monitor?${new URLSearchParams({
+                          fiscalDocumentId: v.fiscal_document_id,
+                          docNumber: v.cte_number || '',
+                        }).toString()}`)}
                       >
                         Corrigir <ArrowRight className="h-4 w-4 ml-2" />
                       </Button>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check, ChevronsUpDown } from 'lucide-react';
@@ -17,6 +17,8 @@ import { Calculator, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { calculateFreight, type FreightResult } from '@/hooks/useFreightCalculator';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 
 const NONE = '__none__';
 export default function FreightSimulator() {
@@ -45,10 +47,11 @@ export default function FreightSimulator() {
   const [quickSearch, setQuickSearch] = useState<string>('');
   const [quickSearching, setQuickSearching] = useState(false);
   const [onlyValid, setOnlyValid] = useState(true);
+  const calculationGeneration = useRef(0);
 
   const { startDate, endDate } = useMemo(() => {
     const today = new Date();
-    const toISO = (d: Date) => d.toISOString().slice(0, 10);
+    const toISO = (d: Date) => localDateInputValue(d);
     if (periodFilter === 'all') return { startDate: null as string | null, endDate: null as string | null };
     if (periodFilter === 'custom') {
       return { startDate: customStart || null, endDate: customEnd || null };
@@ -89,23 +92,24 @@ export default function FreightSimulator() {
   });
 
   const { data: docs = [] } = useQuery({
-    queryKey: ['fiscal-docs-recent', tenantId, startDate, endDate, onlyValid],
+    queryKey: ['fiscal-docs-recent', tenantId, startDate, endDate, onlyValid, docTypeFilter],
     queryFn: async () => {
-      let q = supabase
-        .from('fiscal_documents')
+      const rows = await fetchAllPostgrestPages((from, to) => {
+      let q = supabase.from('fiscal_documents')
         .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date, status, created_at')
         .eq('tenant_id', tenantId!)
         .order('issue_date', { ascending: false, nullsFirst: false })
-        .limit(500);
+        .order('id').range(from, to);
       if (startDate) q = q.gte('issue_date', startDate);
       if (endDate) q = q.lte('issue_date', endDate);
+      if (docTypeFilter === 'cte') q = q.eq('document_type', 'outbound');
+      if (docTypeFilter === 'nfe') q = q.eq('document_type', 'inbound');
       if (onlyValid) {
         // Excluir status indesejados (cancelados/rejeitados/rascunhos)
         q = q.not('status', 'in', '(cancelled,canceled,rejected,denied,draft)');
       }
-      const { data, error } = await q;
-      if (error) throw error;
-      const rows = data || [];
+      return q;
+      });
       if (!onlyValid) return rows;
       // Deduplicar por chave de acesso (ou nº+emitente quando faltar) — mantém o mais recente
       const seen = new Map<string, (typeof rows)[number]>();
@@ -147,7 +151,7 @@ export default function FreightSimulator() {
     if (!id || id === NONE) return;
     const d = docs.find((x) => x.id === id);
     if (!d) return;
-    if (d.client_id) setClientId(d.client_id);
+    setClientId(d.client_id || NONE);
     setTotalValue(String(d.value || 0));
     setTotalWeight(String(d.weight_kg || 0));
     setTotalPallets(String(d.pallet_count || 0));
@@ -159,7 +163,7 @@ export default function FreightSimulator() {
         r.municipality?.toLowerCase() === (d.recipient_city || '').toLowerCase() &&
         (!d.recipient_state || r.state_code === d.recipient_state),
     );
-    if (match) setRegionId(match.id);
+    setRegionId(match?.id || NONE);
     setResult(null);
   }
 
@@ -191,10 +195,10 @@ export default function FreightSimulator() {
         toast.error('Nenhum documento encontrado com esse número/chave');
         return;
       }
-      // Inject into local docs cache by reusing loadFromDoc-like flow
+      if (data.length > 1) { toast.error(`Foram encontrados ${data.length} documentos. Informe a chave de acesso ou selecione o emitente correto na lista.`); return; }
       const d = data[0];
       setDocId(d.id);
-      if (d.client_id) setClientId(d.client_id);
+      setClientId(d.client_id || NONE);
       setTotalValue(String(d.value || 0));
       setTotalWeight(String(d.weight_kg || 0));
       setTotalPallets(String(d.pallet_count || 0));
@@ -205,7 +209,7 @@ export default function FreightSimulator() {
           r.municipality?.toLowerCase() === (d.recipient_city || '').toLowerCase() &&
           (!d.recipient_state || r.state_code === d.recipient_state),
       );
-      if (match) setRegionId(match.id);
+      setRegionId(match?.id || NONE);
       setResult(null);
       toast.success(`Documento ${d.invoice_number || term} carregado (fora do período atual)`);
     } catch (error: unknown) {
@@ -217,12 +221,14 @@ export default function FreightSimulator() {
 
   const handleSimulate = useCallback(async (silent = false) => {
     if (!tenantId) return;
+    const generation = ++calculationGeneration.current;
     setLoading(true);
     try {
       const region = regions.find((r) => r.id === regionId);
       const r = await calculateFreight({
         tenantId,
         clientId: clientId === NONE ? null : clientId,
+        payerName: clientId === NONE ? null : clients.find(client => client.id === clientId)?.company_name || null,
         payerGroup: payerGroup === NONE ? region?.payer_group || null : payerGroup,
         destination: region?.region_name || destMunicipality || null,
         destinationState: destState || region?.state_code || null,
@@ -231,15 +237,17 @@ export default function FreightSimulator() {
         totalValue: Number(totalValue) || 0,
         totalWeight: Number(totalWeight) || 0,
         totalPallets: Number(totalPallets) || 0,
+        referenceDate: docs.find(document => document.id === docId)?.issue_date || null,
       });
+      if (generation !== calculationGeneration.current) return;
       setResult(r);
       if (!silent && !r.success) toast.error(r.error || 'Falha no cálculo');
     } catch (error: unknown) {
       if (!silent) toast.error(error instanceof Error ? error.message : 'Erro inesperado');
     } finally {
-      setLoading(false);
+      if (generation === calculationGeneration.current) setLoading(false);
     }
-  }, [toast, tenantId, regions, regionId, clientId, payerGroup, destMunicipality, destState, vehicleType, totalValue, totalWeight, totalPallets]);
+  }, [toast, tenantId, regions, regionId, clientId, clients, payerGroup, destMunicipality, destState, vehicleType, totalValue, totalWeight, totalPallets, docs, docId]);
 
   // Auto-recalculate (debounced) when inputs change
   useEffect(() => {

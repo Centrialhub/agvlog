@@ -333,22 +333,25 @@ async function processVehicle(
   };
 
   // IDEMPOTENT: Delete engine-generated data in window before recreating
-  await supabase.from("trips")
+  const tripsDelete = await supabase.from("trips")
     .delete()
     .eq("tenant_id", tenantId).eq("vehicle_id", vehicleId)
     .gte("start_at", windowFrom).lte("start_at", windowTo);
+  if (tripsDelete.error) throw tripsDelete.error;
 
-  await supabase.from("trip_stops")
+  const stopsDelete = await supabase.from("trip_stops")
     .delete()
     .eq("tenant_id", tenantId).eq("vehicle_id", vehicleId)
     .gte("start_at", windowFrom).lte("start_at", windowTo);
+  if (stopsDelete.error) throw stopsDelete.error;
 
-  await supabase.from("events")
+  const eventsDelete = await supabase.from("events")
     .delete()
     .eq("tenant_id", tenantId).eq("vehicle_id", vehicleId)
     .eq("source", "engine")
     .not("event_type", "in", '("geofence_enter","geofence_exit")')
     .gte("event_at", windowFrom).lte("event_at", windowTo);
+  if (eventsDelete.error) throw eventsDelete.error;
 
   // 1) Classify movement
   const classified = classifyMovement(positions);
@@ -374,10 +377,9 @@ async function processVehicle(
       detection_mode: "basic", confidence_score: 0.6,
     }).select("id").single();
 
-    if (!tripErr) {
-      result.trips_created++;
-      trip.id = tripData?.id;
-    }
+    if (tripErr || !tripData?.id) throw tripErr || new Error("trip_insert_missing_id");
+    result.trips_created++;
+    trip.id = tripData.id;
   }
 
   // 4) Detect stops V2 (with merge + overnight classification)
@@ -398,11 +400,12 @@ async function processVehicle(
       duration_seconds: Math.round(stop.duration),
       stop_class: stop.stopClass, trip_id: tripId,
     });
-    if (!stopErr) result.stops_created++;
+    if (stopErr) throw stopErr;
+    result.stops_created++;
 
     // Overnight stop event
     if (stop.stopClass === "overnight") {
-      await supabase.from("events").insert({
+      const { error: eventError } = await supabase.from("events").insert({
         tenant_id: tenantId, vehicle_id: vehicleId,
         event_type: "overnight_stop", severity: "info", source: "engine",
         event_at: stop.start,
@@ -412,6 +415,7 @@ async function processVehicle(
           start: stop.start, end: stop.end,
         },
       });
+      if (eventError) throw eventError;
       result.events_created++;
     }
   }
@@ -429,7 +433,8 @@ async function processVehicle(
         count_points: session.count_points,
       },
     });
-    if (!evErr) result.events_created++;
+    if (evErr) throw evErr;
+    result.events_created++;
   }
 
   // 6) Harsh accel/brake detection
@@ -442,12 +447,13 @@ async function processVehicle(
     const deltaSpeed = p.speed - prev.speed;
     if (Math.abs(deltaSpeed) >= 20) {
       const evType = deltaSpeed > 0 ? "harsh_accel" : "harsh_brake";
-      await supabase.from("events").insert({
+      const { error: eventError } = await supabase.from("events").insert({
         tenant_id: tenantId, vehicle_id: vehicleId,
         event_type: evType, severity: "warning", source: "engine",
         event_at: p.captured_at,
         payload: { delta_speed: Math.round(deltaSpeed * 10) / 10, delta_t: Math.round(dt), speed: p.speed },
       });
+      if (eventError) throw eventError;
       result.events_created++;
     }
   }
@@ -455,7 +461,7 @@ async function processVehicle(
   // 7) Long stop events
   for (const stop of stops) {
     if (stop.duration / 60 > longStopThresholdMin && stop.stopClass !== "overnight") {
-      await supabase.from("events").insert({
+      const { error: eventError } = await supabase.from("events").insert({
         tenant_id: tenantId, vehicle_id: vehicleId,
         event_type: "long_stop", severity: "info", source: "engine",
         event_at: stop.start,
@@ -464,6 +470,7 @@ async function processVehicle(
           lat: stop.lat, lng: stop.lng, start: stop.start, end: stop.end,
         },
       });
+      if (eventError) throw eventError;
       result.events_created++;
     }
   }
@@ -513,25 +520,30 @@ async function processVehicle(
 
         if (ageMin != null && ageMin > threshold) {
           if (!existingOpen || existingOpen.length === 0) {
-            await supabase.from("alert_instances").insert({
+            const { error: alertError } = await supabase.from("alert_instances").insert({
               tenant_id: tenantId, vehicle_id: vehicleId,
               rule_id: rule.id, status: "open", source: "engine",
               opened_at: new Date().toISOString(),
             });
+            if (alertError) throw alertError;
             result.alerts_opened++;
           }
         } else {
           if (existingOpen && existingOpen.length > 0) {
-            await supabase.from("alert_instances")
+            const { error: alertError } = await supabase.from("alert_instances")
               .update({ status: "closed", closed_at: new Date().toISOString() })
               .eq("id", existingOpen[0].id);
+            if (alertError) throw alertError;
             result.alerts_closed++;
           }
         }
       }
 
       if (rule.rule_type === "overspeed") {
-        for (const session of overspeedSessions) {
+        const ruleLimit = Number(params.speed_limit_kmh);
+        if (!Number.isFinite(ruleLimit) || ruleLimit <= 0) throw new Error(`invalid_overspeed_rule:${rule.id}`);
+        const ruleSessions = detectOverspeedSessions(classified, ruleLimit);
+        for (const session of ruleSessions) {
           const recentThreshold = new Date(Date.now() - 30 * 60 * 1000).toISOString();
           const { data: recentAlert } = await supabase
             .from("alert_instances").select("id")
@@ -540,11 +552,12 @@ async function processVehicle(
             .gte("opened_at", recentThreshold).limit(1);
 
           if (!recentAlert || recentAlert.length === 0) {
-            await supabase.from("alert_instances").insert({
+            const { error: alertError } = await supabase.from("alert_instances").insert({
               tenant_id: tenantId, vehicle_id: vehicleId,
               rule_id: rule.id, status: "open", source: "engine",
               opened_at: session.start_at,
             });
+            if (alertError) throw alertError;
             result.alerts_opened++;
           }
         }
@@ -561,16 +574,18 @@ async function processVehicle(
               .in("status", ["open", "ack"]).limit(1);
 
             if (!existing || existing.length === 0) {
-              await supabase.from("alert_instances").insert({
+              const { error: alertError } = await supabase.from("alert_instances").insert({
                 tenant_id: tenantId, vehicle_id: vehicleId,
                 rule_id: rule.id, status: "open", source: "engine",
                 opened_at: stop.start,
               });
+              if (alertError) throw alertError;
               result.alerts_opened++;
             } else if (stop.end) {
-              await supabase.from("alert_instances")
+              const { error: alertError } = await supabase.from("alert_instances")
                 .update({ status: "closed", closed_at: stop.end })
                 .eq("id", existing[0].id);
+              if (alertError) throw alertError;
               result.alerts_closed++;
             }
           }
@@ -587,11 +602,12 @@ async function processVehicle(
               .in("status", ["open", "ack"]).limit(1);
 
             if (!existing || existing.length === 0) {
-              await supabase.from("alert_instances").insert({
+              const { error: alertError } = await supabase.from("alert_instances").insert({
                 tenant_id: tenantId, vehicle_id: vehicleId,
                 rule_id: rule.id, status: "open", source: "engine",
                 opened_at: stop.start,
               });
+              if (alertError) throw alertError;
               result.alerts_opened++;
             }
           }

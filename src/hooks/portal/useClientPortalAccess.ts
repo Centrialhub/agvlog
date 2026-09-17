@@ -30,6 +30,11 @@ export function useClientPortalAccess() {
       if (!detailed.error && detailed.data) {
         return (detailed.data as PortalAccess[]) || [];
       }
+      // Only an absent RPC is a compatible legacy deployment. Authorization,
+      // network and database failures must remain visible to the portal.
+      if (detailed.error?.code !== 'PGRST202') {
+        throw detailed.error ?? new Error('Resposta inválida ao consultar os acessos do portal.');
+      }
       if (detailed.error) {
         console.warn('[portal] detailed access RPC failed, falling back', detailed.error);
       }

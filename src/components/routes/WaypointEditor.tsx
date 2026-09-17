@@ -145,7 +145,7 @@ export function WaypointEditor({ waypoints, onChange, pois, geofences }: Waypoin
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Tempo estimado (min)</Label>
-                      <Input className="h-8 text-xs" type="number" value={wp.estimated_duration_min ?? ''} onChange={e => updateWaypoint(idx, { estimated_duration_min: e.target.value ? parseInt(e.target.value) : null })} placeholder="Ex: 30" />
+                      <Input className="h-8 text-xs" type="number" min={0} value={wp.estimated_duration_min ?? ''} onChange={e => updateWaypoint(idx, { estimated_duration_min: e.target.value ? Math.max(0, parseInt(e.target.value)) : null })} placeholder="Ex: 30" />
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Observações</Label>

@@ -28,6 +28,14 @@ export function readTowerAlerts(data: unknown, tenant: string): TripAlert[] {
   const rows=z.array(alert).parse(data);
   if(rows.some(row=>row.tenant_id!==tenant))throw new Error('Alertas incompatíveis com a empresa.');return rows;
 }
+export function readTowerSnapshot(data: unknown, tenant: string) {
+  const snapshot=z.object({version:z.literal(1),tenant_id:id,read_at:z.string(),trip_limit:z.number().int().positive(),
+    trip_total:z.number().int().nonnegative(),truncated:z.boolean(),trips:z.unknown(),alerts:z.unknown()}).parse(data);
+  if(snapshot.tenant_id!==tenant)throw new Error('Snapshot incompatível com a empresa.');
+  const trips=readTowerTrips(snapshot.trips,tenant),alerts=readTowerAlerts(snapshot.alerts,tenant);
+  if(snapshot.truncated!==(snapshot.trip_total>trips.length)||trips.length>snapshot.trip_limit)throw new Error('Limite do snapshot da torre incompatível.');
+  return {...snapshot,trips,alerts};
+}
 export function requireRouteResult(result: { data: unknown; error: unknown }) {
   if (result.error || !z.object({ok:z.literal(true)}).safeParse(result.data).success) throw new Error('O servidor não confirmou o cálculo da rota.');
 }

@@ -88,9 +88,13 @@ describe("production configuration contract", () => {
     expect(authPage).toContain("acesso é criado por convite");
     expect(createMember).toContain("inviteUserByEmail");
     expect(createMember).not.toContain("auth.admin.createUser");
-    expect(createMember).toContain('rpc("prepare_auth_invite"');
+    expect(createMember).toContain('rpc("prepare_auth_invite_v2"');
     expect(createMember).toContain("agvlog_invite_nonce: inviteNonce");
     expect(createMember).toContain('rpc("cancel_auth_invite"');
+    expect(createMember).toContain('role === "client"');
+    expect(createMember).not.toContain('.from("client_portal_access").insert');
+    expect(createMember).toContain('Invitation access was not created atomically');
+    expect(createMember).toContain('access_kind: role === "client" ? "client_portal" : "tenant_member"');
     expect(createMember).not.toMatch(/\bpassword\s*[:,]/);
     expect(updateMember).toContain("Administrators cannot set another user's password");
     expect(teamManagement).not.toContain("setPassword");
@@ -174,6 +178,7 @@ describe("production configuration contract", () => {
       "agvlog-ssx-dispatcher",
       "clients-merge-contacts-addresses", "create-team-member", "cte-sefaz-callback",
       "cte-status-poll", "emit-nfse", "fiscal-certificate-manage", "frontend-error-report", "get-client-pod-signed-url",
+      "finance-fiscal-evidence-preview", "finance-image-runtime-benchmark", "finance-payable-xml",
       "hub-fiscal-credential-save", "hub-fiscal-proxy", "hub-fiscal-webhook-in",
       "list-tenant-members", "nfse-status-poll", "search-users-by-email", "secure-upload",
       "delivery-receipt-email-webhook", "finance-statement-verify", "geocode-address", "process-delivery-receipt-ocr", "process-delivery-receipt-portals", "send-delivery-receipts",
@@ -249,6 +254,7 @@ describe("production configuration contract", () => {
       "process-delivery-receipt-portals",
       "process-address-resolution-queue",
       "geocode-address",
+      "finance-image-runtime-benchmark",
       "ssx-login",
       "ssx-poll-positions",
       "ssx-sync-governance",

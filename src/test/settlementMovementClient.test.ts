@@ -1,5 +1,5 @@
 import {beforeEach,it,expect,vi} from 'vitest';
-import {linkSettlementMovement,reverseSettlementMovement,readSettlementMovements,SettlementMovementRejectedError} from '@/lib/financial/settlementMovementClient';
+import {linkSettlementMovement,reverseSettlementMovement,readSettlementMovementHistory,readSettlementMovements,SettlementMovementRejectedError} from '@/lib/financial/settlementMovementClient';
 const mock=vi.hoisted(()=>({rpc:vi.fn()}));vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mock.rpc}}));
 const command={version:1 as const,tenant_id:crypto.randomUUID(),request_id:crypto.randomUUID(),payment_id:crypto.randomUUID(),movement_id:crypto.randomUUID(),reason:'Conferido pelo financeiro'};
 const response={...command,settlement_id:crypto.randomUUID(),link_id:crypto.randomUUID(),amount_cents:10000,cash_created:false,confirmed:true};
@@ -14,8 +14,14 @@ it('distinguishes database rejection from transport failure',async()=>{
  mock.rpc.mockResolvedValueOnce({data:null,error:{message:'gateway timeout',code:'504'}});try{await linkSettlementMovement(command);throw new Error('Expected rejection');}catch(error){expect(error).not.toBeInstanceOf(SettlementMovementRejectedError);expect((error as Error).message).toBe('gateway timeout');}
 });
 it('rejects a read response for another payment',async()=>{
- mock.rpc.mockResolvedValue({error:null,data:{version:1,tenant_id:command.tenant_id,payment_id:crypto.randomUUID(),settlement_id:response.settlement_id,amount_cents:10000,page:1,page_size:20,total:0,link:null,history:[],rows:[]}});
+ mock.rpc.mockResolvedValue({error:null,data:{version:1,tenant_id:command.tenant_id,payment_id:crypto.randomUUID(),settlement_id:response.settlement_id,amount_cents:10000,page:1,page_size:20,total:0,link:null,history:[],history_page:1,history_page_size:20,history_has_more:false,rows:[]}});
  await expect(readSettlementMovements(command.tenant_id,command.payment_id,1)).rejects.toThrow('fora do contexto');
+});
+it('reads only the requested bounded history page and validates its identity',async()=>{
+ const data={version:1,tenant_id:command.tenant_id,payment_id:command.payment_id,settlement_id:response.settlement_id,page:2,page_size:20,has_more:false,rows:[]};
+ mock.rpc.mockResolvedValueOnce({error:null,data});expect(await readSettlementMovementHistory(command.tenant_id,command.payment_id,2)).toEqual(data);
+ expect(mock.rpc).toHaveBeenLastCalledWith('get_finance_settlement_payment_movement_history',{_tenant_id:command.tenant_id,_payment_id:command.payment_id,_page:2});
+ mock.rpc.mockResolvedValueOnce({error:null,data:{...data,page:1}});await expect(readSettlementMovementHistory(command.tenant_id,command.payment_id,2)).rejects.toThrow('fora do contexto');
 });
 it('validates reversal identity and unchanged cash',async()=>{
  const reversal={version:1 as const,tenant_id:command.tenant_id,request_id:crypto.randomUUID(),link_id:response.link_id,reason:'Vínculo incorreto identificado'};

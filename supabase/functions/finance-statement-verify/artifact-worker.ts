@@ -33,6 +33,13 @@ export async function readArtifactReport(context:StatementSourceContext,download
    if(json.version!==1||json.delimiter!==source.mapping.delimiter||!Array.isArray(json.rows)||json.rows.some(row=>!Array.isArray(row)||row.length>100||row.some(cell=>typeof cell!=='string')))throw new StatementReadError('artifact_json_invalid');
    const parsed=mapStatementMatrix(json.rows,source.mapping,{start:source.period_start,end:source.period_end},false);rows=parsed.rows;
    report={inflow_cents:parsed.inflow_cents,outflow_cents:parsed.outflow_cents,net_cents:parsed.net_cents,balance_rows:parsed.balance_rows,balance_check:checkStatementBalances(rows,source.mapping),sheet_count:1,identity_trust:'mapped_unverified'};
+  }else if(original.format==='xlsx'&&d.method==='strict-workbook-matrix-v1'&&d.financial_mapping_required===true&&source.parser_version==='mapped-workbook-v1'){
+   const selected=source.mapping.sheet_index??0;
+   if(json.version!==1||json.format!==original.format||!Number.isInteger(json.sheet_index)||json.sheet_index!==selected||!Number.isInteger(json.sheet_count)||Number(json.sheet_count)<1||Number(json.sheet_count)>100
+    ||!Array.isArray(json.sheet_names)||json.sheet_names.length!==json.sheet_count||json.sheet_names.some(name=>typeof name!=='string'||!name.length||name.length>128)||selected<0||selected>=Number(json.sheet_count)
+    ||typeof json.date1904!=='boolean'||!Array.isArray(json.rows)||json.rows.length>10021||json.rows.some(row=>!Array.isArray(row)||row.length>100||row.some(cell=>cell!==null&&typeof cell!=='boolean'&&typeof cell!=='string'&&typeof cell!=='number'||typeof cell==='number'&&!Number.isFinite(cell)||typeof cell==='string'&&cell.length>16384)))throw new StatementReadError('artifact_json_invalid');
+   const parsed=mapStatementMatrix(json.rows,source.mapping,{start:source.period_start,end:source.period_end},json.date1904);rows=parsed.rows;
+   report={inflow_cents:parsed.inflow_cents,outflow_cents:parsed.outflow_cents,net_cents:parsed.net_cents,balance_rows:parsed.balance_rows,balance_check:checkStatementBalances(rows,source.mapping),sheet_count:json.sheet_count,identity_trust:'mapped_unverified'};
   }else throw new StatementReadError('parser_format_mismatch');
   const comparison=compareStatementRows(rows,context.rows);
   return {outcome:comparison.matches?'rows_match':'rows_mismatch',report:{...evidence,...report,parsed_rows:rows.length,matched_rows:comparison.matches?rows.length:0,mismatch_rows:comparison.mismatch_rows,account_coverage_verification:'pending'}};

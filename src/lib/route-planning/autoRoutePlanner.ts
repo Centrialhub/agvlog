@@ -37,10 +37,18 @@ export interface GeneratedRoutePlan {
   requires_review: boolean;
 }
 
-function applyCustomerWindows(stops: RouteStopDraft[], windows: CustomerWindow[], defaults?: { start?: string; end?: string }): RouteStopDraft[] {
+export function routeLocalWeekday(plannedStartAt: string): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(plannedStartAt);
+  if (!match) throw new Error('Data planejada inválida para selecionar a janela de entrega.');
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getDay();
+}
+
+export function applyCustomerWindowsForDate(stops: RouteStopDraft[], windows: CustomerWindow[], plannedStartAt: string, defaults?: { start?: string; end?: string }): RouteStopDraft[] {
   if (!windows.length && !defaults) return stops;
+  const weekday = routeLocalWeekday(plannedStartAt);
   const byClient = new Map<string, CustomerWindow>();
-  windows.forEach(w => { if (!byClient.has(w.client_id)) byClient.set(w.client_id, w); });
+  windows.filter(window => window.weekday === weekday)
+    .forEach(window => { if (!byClient.has(window.client_id)) byClient.set(window.client_id, window); });
   return stops.map(s => {
     if (s.delivery_window_start || s.delivery_window_end) return s;
     if (s.client_id && byClient.has(s.client_id)) {
@@ -72,7 +80,7 @@ export function generateAutomaticRoutePlans(input: AutoRoutePlannerInput): Gener
     let stops = consolidateLoadsIntoStops(g.loads);
 
     // 2) Janelas (cliente cadastrado ou fallback opcional)
-    stops = applyCustomerWindows(stops, customerWindows, {
+    stops = applyCustomerWindowsForDate(stops, customerWindows, plannedStartAt, {
       start: tenantConfig.defaultWorkingWindowStart,
       end: tenantConfig.defaultWorkingWindowEnd,
     });
@@ -107,19 +115,21 @@ export function generateAutomaticRoutePlans(input: AutoRoutePlannerInput): Gener
     let vehicleId: string | undefined;
     let driverId: string | undefined;
 
-    if (inheritedVehicleId) {
+    if (inheritedVehicleId && !usedVehicleIds.has(inheritedVehicleId)) {
       vehicleId = inheritedVehicleId;
       usedVehicleIds.add(inheritedVehicleId);
     } else {
+      if (inheritedVehicleId) warnings.push('Veículo pré-atribuído já reservado por outra rota; selecione outro recurso.');
       const vSug = suggestBestVehicleForRoute(need, vehicles, usedVehicleIds);
       if (vSug.vehicle) { vehicleId = vSug.vehicle.id; usedVehicleIds.add(vSug.vehicle.id); }
       else if (vSug.reason) warnings.push(vSug.reason);
     }
 
-    if (inheritedDriverId) {
+    if (inheritedDriverId && !usedDriverIds.has(inheritedDriverId)) {
       driverId = inheritedDriverId;
       usedDriverIds.add(inheritedDriverId);
     } else {
+      if (inheritedDriverId) warnings.push('Motorista pré-atribuído já reservado por outra rota; selecione outro recurso.');
       const dSug = suggestBestDriverForRoute(vehicleId, drivers, usedDriverIds);
       if (dSug.driver) { driverId = dSug.driver.id; usedDriverIds.add(dSug.driver.id); }
       else if (dSug.reason) warnings.push(dSug.reason);

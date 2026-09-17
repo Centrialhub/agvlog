@@ -29,6 +29,11 @@ describe('cteBuilder — uso exclusivo do emitente', () => {
   });
 });
 
+const completeRecipientAddress = {
+  street: 'RUA TESTE', number: '51', neighborhood: 'CENTRO',
+  city: 'PIRAPORA', city_ibge: '3151206', state: 'MG', zip: '39270000',
+};
+
 function baseInput(overrides: Partial<BuildCtePayloadInput> = {}): BuildCtePayloadInput {
   return {
     emitter: {
@@ -38,7 +43,7 @@ function baseInput(overrides: Partial<BuildCtePayloadInput> = {}): BuildCtePaylo
       environment: 'sandbox',
     },
     remitter: { name: 'JMacedo', cnpj: '14998371003215' },
-    recipient: { name: 'COMERCIAL GALA', cnpj: '07734610000168' },
+    recipient: { name: 'COMERCIAL GALA', cnpj: '07734610000168', address: completeRecipientAddress },
     insurer: { name: 'AKAD SEGUROS', cnpj: '18666510000168', policy: 'AP-BASE', endorsement: 'AV-BASE' },
     takerRole: 'destinatario',
     driver: null,
@@ -49,6 +54,42 @@ function baseInput(overrides: Partial<BuildCtePayloadInput> = {}): BuildCtePaylo
     ...overrides,
   };
 }
+
+describe('cteBuilder — endereço fiscal obrigatório', () => {
+  it('bloqueia antes do despacho quando o endereço do destinatário está incompleto', () => {
+    const result = buildCtePayload(baseInput({
+      recipient: { name: 'Filial sem endereço', cnpj: '42985218000516', address: { city: 'PIRAPORA', state: 'MG' } },
+    }));
+    expect(result.ok).toBe(false);
+    expect(result.missing).toEqual(expect.arrayContaining([
+      'Logradouro do destinatário',
+      'Número do endereço do destinatário',
+      'Bairro do destinatário',
+      'Código IBGE do município do destinatário',
+      'CEP do destinatário (8 dígitos)',
+    ]));
+  });
+  it('preserva o endereço cadastral quando o override contém campos vazios', () => {
+    const result = buildCtePayload(baseInput({
+      overrides: { recipient: { address: { street: null, number: '', neighborhood: null, zip: '' } } },
+    }));
+    expect(result.ok).toBe(true);
+    expect(result.payload).toMatchObject({ payload: { destinatario: { endereco: {
+      logradouro: 'RUA TESTE', numero: '51', bairro: 'CENTRO',
+      cMun: '3151206', UF: 'MG', CEP: '39270000',
+    } } } });
+  });
+  it('bloqueia em produção quando emitente ou remetente têm endereço incompleto', () => {
+    const result = buildCtePayload(baseInput({
+      emitter: { ...baseInput().emitter!, environment: 'production' },
+    }));
+    expect(result.ok).toBe(false);
+    expect(result.missing).toEqual(expect.arrayContaining([
+      'logradouro do emitente',
+      'CEP do remetente',
+    ]));
+  });
+});
 
 describe('cteBuilder — motorista/placa opcionais', () => {
   it('preenche motorista/placa com "." quando ausentes e não bloqueia', () => {
@@ -157,7 +198,7 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     const input: BuildCtePayloadInput = {
       emitter: { id: 'em1', cnpj: '18666510000168', name: 'X', environment: 'sandbox' },
       remitter: { name: 'R', cnpj: '14998371003215' },
-      recipient: { name: 'D', cnpj: '07734610000168' },
+      recipient: { name: 'D', cnpj: '07734610000168', address: completeRecipientAddress },
       takerRole: 'destinatario',
       driver: null,
       vehicle: null,
@@ -189,7 +230,7 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     const input: BuildCtePayloadInput = {
       emitter: { id: 'em1', cnpj: '18666510000168', name: 'X', environment: 'sandbox' },
       remitter: { name: 'R', cnpj: '14998371003215' },
-      recipient: { name: 'D', cnpj: '07734610000168' },
+      recipient: { name: 'D', cnpj: '07734610000168', address: completeRecipientAddress },
       takerRole: 'destinatario',
       driver: null,
       vehicle: null,
@@ -210,7 +251,7 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     const input: BuildCtePayloadInput = {
       emitter: { id: 'em1', cnpj: '18666510000168', name: 'X', environment: 'sandbox' },
       remitter: { name: 'R', cnpj: '14998371003215' },
-      recipient: { name: 'D', cnpj: '07734610000168' },
+      recipient: { name: 'D', cnpj: '07734610000168', address: completeRecipientAddress },
       takerRole: 'destinatario',
       driver: null,
       vehicle: null,
@@ -349,24 +390,24 @@ describe('cteBuilder — campos aceitos pela API v1 do Hub', () => {
 
 describe('recipient contributor IE validation', () => {
   it.each([null, '', 'UNKNOWN', '12345', 'ISENTO'])('blocks a registered contributor with IE %s before dispatch', ie => {
-    const result = buildCtePayload(baseInput({recipient: {name: 'Contribuinte QA', cnpj: '11222333000181', ie, ieIndicator: 'Contribuinte ICMS', address: {state: 'MG'}}}));
+    const result = buildCtePayload(baseInput({recipient: {name: 'Contribuinte QA', cnpj: '11222333000181', ie, ieIndicator: 'Contribuinte ICMS', address: { ...completeRecipientAddress, state: 'MG' }}}));
     expect(result.ok).toBe(false);
     expect(result.missing.join(' ')).toContain('IE válida do destinatário');
   });
   it('accepts an explicit valid-length IE correction preserving leading zeroes', () => {
-    const result = buildCtePayload(baseInput({recipient: {name: 'Contribuinte QA', cnpj: '11222333000181', ie: null, ieIndicator: 'Contribuinte ICMS', address: {state: 'MG'}}, overrides: {recipient: {ie: '0012345678901'}}}));
+    const result = buildCtePayload(baseInput({recipient: {name: 'Contribuinte QA', cnpj: '11222333000181', ie: null, ieIndicator: 'Contribuinte ICMS', address: { ...completeRecipientAddress, state: 'MG' }}, overrides: {recipient: {ie: '0012345678901'}}}));
     expect(result.ok).toBe(true);
     expect(result.payload).toMatchObject({payload: {destinatario: {ie: '0012345678901'}}});
   });
   it('does not impose a contributor IE on a registered non-contributor', () => {
-    const result = buildCtePayload(baseInput({recipient: {name: 'Nao contribuinte QA', cnpj: '11222333000181', ie: null, ieIndicator: 'Não Contribuinte'}}));
+    const result = buildCtePayload(baseInput({recipient: {name: 'Nao contribuinte QA', cnpj: '11222333000181', ie: null, ieIndicator: 'Não Contribuinte', address: completeRecipientAddress}}));
     expect(result.ok).toBe(true);
   });
 });
 
 it('restores MG leading zeros in the transmitted party fields, including a manual override', () => {
-  const input = baseInput({recipient: {name: 'Contribuinte QA', cnpj: '31459273000122', ie: '32718520035', ieIndicator: 'Contribuinte ICMS', address: {state: 'MG'}},
-    remitter: {name: 'Remetente QA', cnpj: '11222333000181', ie: '623079040081', address: {state: 'MG'}}});
+  const input = baseInput({recipient: {name: 'Contribuinte QA', cnpj: '31459273000122', ie: '32718520035', ieIndicator: 'Contribuinte ICMS', address: { ...completeRecipientAddress, state: 'MG' }},
+    remitter: {name: 'Remetente QA', cnpj: '11222333000181', ie: '623079040081', address: { ...completeRecipientAddress, state: 'MG' }}});
   const result = buildCtePayload(input);
   expect(result.ok).toBe(true);
   expect(result.payload).toMatchObject({payload: {destinatario: {ie: '0032718520035'}, remetente: {ie: '0623079040081'}}});

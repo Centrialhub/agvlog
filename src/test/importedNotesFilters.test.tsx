@@ -138,6 +138,13 @@ describe('imported notes filters', () => {
     expect(result.current.error?.message).toContain('data inicial');
     expect(state.requests).toHaveLength(0);
   });
+
+  it('rejects an inverted issue period instead of displaying zero notes', async () => {
+    const { result } = renderHook(() => useImportedNotes({ issueFrom: '2026-09-01', issueTo: '2026-08-31' }), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toContain('data inicial de emissão');
+    expect(state.requests).toHaveLength(0);
+  });
 });
 
 describe('imported notes summary page', () => {

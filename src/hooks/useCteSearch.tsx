@@ -114,7 +114,7 @@ function bool(v?: TriState) {
   return null;
 }
 /** Traduz status de `fiscal_documents` (saída) para o vocabulário SEFAZ do monitor. */
-function mapOutboundStatus(status?: string | null, sefaz?: string | null): string {
+export function mapSearchOutboundStatus(status?: string | null, sefaz?: string | null, hubId?: string | null): string {
   const s = (sefaz || '').toLowerCase();
   const st = (status || '').toLowerCase();
   if (st === 'cancelled' || s === 'cancelled') return 'cancelled';
@@ -124,6 +124,7 @@ function mapOutboundStatus(status?: string | null, sefaz?: string | null): strin
   // autorizado e deve permanecer disponível para uma nova tentativa.
   if (s === 'cancel_rejected' || s === 'cancel_error' || s.includes('cancel_rejeit')) return 'processed';
   if (s.includes('cancel')) return 'cancelled';
+  if (s === 'status_timeout') return hubId ? 'processed' : 'sefaz_error';
   if (s.includes('rejeit') || s.includes('erro')) return 'sefaz_error';
   if (st === 'authorized') return 'processed';
   if (st === 'rejected' || st === 'error') return 'sefaz_error';
@@ -136,7 +137,6 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
   return useQuery({
     queryKey: ['cte_search', currentTenant?.id, filters],
     enabled: !!currentTenant && (opts?.enabled ?? true),
-    placeholderData: (prev) => prev,
     staleTime: 30_000,
     queryFn: async (): Promise<CteSearchRow[]> => {
       if (!currentTenant) return [];
@@ -224,7 +224,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           cte_series: (match ? receiptById.get(match.id)?.series : null) ?? r.cte_series ?? null,
           cte_type: r.cte_type ?? 'normal',
           access_key: r.access_key ?? null,
-          sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status) : r.sefaz_status ?? 'pending',
+          sefaz_status: match ? mapSearchOutboundStatus(match.status, match.sefaz_status, match.hub_document_id) : r.sefaz_status ?? 'pending',
           sefaz_status_reason: r.sefaz_status_reason ?? match?.sefaz_message ?? null,
           issued_at: r.issued_at || r.created_at,
           created_at: r.created_at,
@@ -256,7 +256,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           cte_series: receiptById.get(d.id)?.series ?? null,
           cte_type: 'normal',
           access_key: d.access_key ?? null,
-          sefaz_status: mapOutboundStatus(d.status, d.sefaz_status),
+          sefaz_status: mapSearchOutboundStatus(d.status, d.sefaz_status, d.hub_document_id),
           sefaz_status_reason: d.sefaz_message ?? null,
           issued_at: d.issue_date ?? d.created_at ?? null,
           created_at: d.created_at,

@@ -44,7 +44,7 @@ vi.mock('@/hooks/useDriverMonitoring', async importOriginal => {
   const mutation = () => ({ isPending: false, mutateAsync: vi.fn() });
   return {
     ...actual,
-    useDriverMonitorsList: () => ({ data: mock.row ? [mock.row] : [], isLoading: false }),
+    useDriverMonitorsList: () => ({ data: {rows:mock.row?[mock.row]:[],total:mock.row?1:0}, isLoading: false }),
     useMonitorForecasts: () => ({ data: [] }),
     useMonitorUpdates: () => ({ data: [] }),
     useAddProgressUpdate: mutation,
@@ -245,5 +245,19 @@ describe('driver monitor screen backed by the canonical SQL command', { timeout:
     mock.release?.();
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(mock.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['arrived', 'completed', 'cancelled'])('disables progress and forecast for a %s monitor', (status) => {
+    mock.row = { ...mock.row!, status };
+    render(<Story />);
+    expect(screen.getByRole('button', { name: 'Registrar' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Previsão' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Chegou' })).not.toBeInTheDocument();
+  });
+
+  it('keeps progress and forecast available for an active monitor', () => {
+    render(<Story />);
+    expect(screen.getByRole('button', { name: 'Registrar' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Previsão' })).toBeEnabled();
   });
 });

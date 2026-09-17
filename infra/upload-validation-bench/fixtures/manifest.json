@@ -1,0 +1,90 @@
+{
+  "synthetic": true,
+  "no_client_files": true,
+  "records": [
+    {
+      "name": "1x1.png",
+      "bytes": 69,
+      "sha256": "f8b784c85c7c8173fdcfc74daee9fc36f7f209d8b145abd05e2918619420edae",
+      "expected": "reencode_within_budget"
+    },
+    {
+      "name": "1x1.jpg",
+      "bytes": 284,
+      "sha256": "c7df41689fd78ddcaba26358ac67db4c4bde3a4ffb2c55638183e163808d183f",
+      "expected": "reencode_within_budget"
+    },
+    {
+      "name": "640x480.png",
+      "bytes": 4915,
+      "sha256": "84958d96736a71938e4937575cb36239fd8df61f451dc38975b4453e96795d74",
+      "expected": "reencode_within_budget"
+    },
+    {
+      "name": "640x480.jpg",
+      "bytes": 69394,
+      "sha256": "ad51a694753a2b5c652474f89c9820bba42c746486fd7cff84ef0349d5c65144",
+      "expected": "reencode_within_budget"
+    },
+    {
+      "name": "1600x1200.png",
+      "bytes": 27494,
+      "sha256": "4110bd69b57bc31377055893f5d6d8e90fda16924c4d01c274bb1432f000fbd1",
+      "expected": "reencode_within_budget"
+    },
+    {
+      "name": "1600x1200.jpg",
+      "bytes": 433003,
+      "sha256": "96191dfddfc4a1ad07716a051e9506dfa339895580f21cfb4ac400b6209c0e7f",
+      "expected": "reencode_within_budget"
+    },
+    {
+      "name": "2000x1000.png",
+      "bytes": 25473,
+      "sha256": "5ab8b50b623e3313a7fedd66cf4518282efd4529d1a0a2efa47efd43959c4b19",
+      "expected": "allow_or_resource_rejection"
+    },
+    {
+      "name": "2000x1000.jpg",
+      "bytes": 450768,
+      "sha256": "7279ed4e4a8ed8c977d55c2aff878e9e44215c1b90a9ef964c596e7cc7ed4a28",
+      "expected": "allow_or_resource_rejection"
+    },
+    {
+      "name": "2000x1200.png",
+      "bytes": 30473,
+      "sha256": "2ff4e957342a112f8b7523a3ef8e685978fb989a3dd6aa196d044d3d31fbc3d9",
+      "expected": "reject_pixels"
+    },
+    {
+      "name": "2000x1200.jpg",
+      "bytes": 540500,
+      "sha256": "aff0c3027fe13be74ebcca9284d69bddb672389d37c266579acdfc49738f38cf",
+      "expected": "reject_pixels"
+    },
+    {
+      "name": "animation.png",
+      "bytes": 557,
+      "sha256": "941a7e1916d963a43e57ce25895237a63ea42458ec54f51cd3659e04e51b3842",
+      "expected": "reject_animation"
+    },
+    {
+      "name": "trailing.png",
+      "bytes": 542,
+      "sha256": "91aa44b53c615e5feb7ce86125ca4cd103919fc8b844c9b572abfa44319ae9c9",
+      "expected": "reject_trailing"
+    },
+    {
+      "name": "corrupt-crc.png",
+      "bytes": 537,
+      "sha256": "055273a57ec671934ea19064c0c4927c43a8878f536e13b0cbf904621f72f9e9",
+      "expected": "reject_codec"
+    },
+    {
+      "name": "invalid.jpg",
+      "bytes": 4,
+      "sha256": "32461d5bd1773012acef0ba15636752949bd7c2ce50f9172159d9f56cf0dd9af",
+      "expected": "reject_header"
+    }
+  ]
+}

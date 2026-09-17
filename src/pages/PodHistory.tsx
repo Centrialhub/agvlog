@@ -1,4 +1,4 @@
-import {useMemo} from 'react';
+import {useMemo,useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {Link,useParams} from 'react-router-dom';
 import {format,parseISO} from 'date-fns';
@@ -9,7 +9,7 @@ import {useAuth} from '@/hooks/useAuth';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {Card,CardContent,CardHeader,CardTitle} from '@/components/ui/card';
-import {callOperatorEventRpc,operationalEventError,operationalEventReadError,parseOperatorPodHistory,type OperatorPodHistory} from '@/lib/operationalEvents/operatorEventCommands';
+import {callOperatorEventRpc,operationalEventError,operationalEventReadError,parseOperatorPodCollections,parseOperatorPodHistory,type OperatorPodHistory} from '@/lib/operationalEvents/operatorEventCommands';
 
 type TimelineItem={key:string;at:string;title:string;detail?:string;badge?:string;icon:'truck'|'pin'|'check'|'clock'|'alert';status:'success'|'warning'|'info'|'muted'};
 
@@ -54,17 +54,22 @@ function buildTimeline(history:OperatorPodHistory):TimelineItem[]{
 
 export default function PodHistory(){
  const {docId}=useParams<{docId:string}>();const {currentTenant}=useTenant();const {user}=useAuth();
+ const [historyPage,setHistoryPage]=useState(1);
  const tenant=currentTenant?.id,actor=user?.id;
  const query=useQuery({queryKey:['pod-history',tenant,actor,docId],enabled:!!tenant&&!!actor&&!!docId,retry:false,
   queryFn:async({signal})=>{const {data,error}=await callOperatorEventRpc('get_operator_pod_history_v1',{_tenant_id:tenant!,_document_id:docId!},signal);
    if(error)throw new Error(operationalEventReadError(error,'Não foi possível consultar o histórico canônico. Tente novamente.'));return parseOperatorPodHistory(data,tenant!,actor!,docId!);}});
- const timeline=useMemo(()=>query.data?buildTimeline(query.data):[],[query.data]);
+ const pageQuery=useQuery({queryKey:['pod-history-collections',tenant,actor,docId,historyPage],enabled:!!query.data&&historyPage>1,retry:false,
+  queryFn:async({signal})=>{const {data,error}=await callOperatorEventRpc('get_operator_pod_history_collections_v1',{_tenant_id:tenant!,_document_id:docId!,_page:historyPage,_page_size:25},signal);
+   if(error)throw new Error(operationalEventReadError(error,'Não foi possível consultar esta página do histórico.'));return parseOperatorPodCollections(data,tenant!,docId!,historyPage);}});
+ const history=useMemo(()=>query.data?(historyPage===1?query.data:pageQuery.data?{...query.data,...pageQuery.data}:undefined):undefined,[historyPage,pageQuery.data,query.data]);
+ const timeline=useMemo(()=>history?buildTimeline(history):[],[history]);
 
  if(!tenant||!actor||!docId)return <StateCard title="Histórico indisponível" detail="Entre com uma sessão válida, selecione a empresa e abra novamente a NF."/>;
  if(query.isPending)return <StateCard title="Carregando histórico canônico…" detail="Consultando resultados, tentativas e comprovantes auditados." loading/>;
  if(query.isError)return <StateCard title="Histórico indisponível" detail={operationalEventError(query.error)} retry={()=>void query.refetch()} loading={query.isFetching}/>;
- const history=query.data;
- const current=history.current_outcome;const currentAllocation=history.allocations.find(row=>row.is_current)||history.allocations.at(-1);
+ if(!history)return <StateCard title={pageQuery.isPending?'Carregando página do histórico…':'Histórico indisponível'} detail={pageQuery.isPending?'Consultando uma página limitada das trilhas auditadas.':'A página solicitada não pôde ser montada.'} loading={pageQuery.isPending}/>;
+ const current=history.current_outcome;const currentAllocation=history.current_allocation;
 
  return <div className="space-y-4">
   <div className="flex flex-wrap items-start justify-between gap-3"><div>
@@ -86,8 +91,8 @@ export default function PodHistory(){
   <Card><CardContent className="grid gap-3 p-4 text-sm md:grid-cols-2 lg:grid-cols-4">
    <Summary label="NF" value={history.document.invoice_number||history.document.id.slice(0,8)} detail={history.document.document_type||undefined}/>
    <Summary label="Estado canônico" value={canonicalLabels[history.canonical_state]||history.canonical_state} detail={current?`Registrado em ${fmt(current.occurred_at)}`:'Sem resultado para a tentativa atual'}/>
-   <Summary label="Tentativas / resultados" value={`${history.attempts.length} / ${history.outcomes.length}`} detail={history.document.current_delivery_attempt_id?'Há tentativa atual':'Fluxo original'}/>
-   <Summary label="Comprovantes" value={String(history.proofs.length)} detail={history.proof_available?'Arquivo confirmado':'Sem arquivo disponível'}/>
+   <Summary label="Tentativas / resultados" value={`${history.totals.attempts} / ${history.totals.outcomes}`} detail={history.document.current_delivery_attempt_id?'Há tentativa atual':'Fluxo original'}/>
+   <Summary label="Comprovantes" value={String(history.totals.proofs)} detail={history.proof_available?'Arquivo confirmado':'Sem arquivo disponível'}/>
   </CardContent></Card>
 
   <Card><CardHeader className="pb-3"><CardTitle className="text-base">Linha do tempo canônica ({timeline.length})</CardTitle></CardHeader><CardContent>
@@ -113,6 +118,9 @@ export default function PodHistory(){
     </div>}
    </CardContent></Card>
   </div>
+  {pageQuery.isError&&<Card role="alert"><CardContent className="p-4 text-sm">Não foi possível consultar esta página. <Button variant="outline" onClick={()=>void pageQuery.refetch()}>Tentar novamente</Button></CardContent></Card>}
+  <div className="flex items-center justify-between"><Button variant="outline" disabled={historyPage===1||pageQuery.isFetching} onClick={()=>setHistoryPage(page=>page-1)}>Página anterior</Button>
+   <span className="text-sm">Página {historyPage}</span><Button variant="outline" disabled={pageQuery.isFetching||!Object.values(history.totals).some(total=>historyPage*history.page_size<total)} onClick={()=>setHistoryPage(page=>page+1)}>Próxima página</Button></div>
  </div>;
 }
 

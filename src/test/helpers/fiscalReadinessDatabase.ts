@@ -4,6 +4,8 @@ import {operationIds as i,operationRpc} from './operationOutcomeDatabase.ts';
 export const fiscalMigration='20260831124505_fiscal_emission_readiness.sql';
 export const fiscalInvoiceGateMigration='20260831144530_attach_fiscal_invoice_gate.sql';
 export const nfseBatchMigration='20260908195720_prepare_durable_nfse_issue_batches.sql';
+export const nfseSafeRetryMigration='20260916020005_allow_safe_nfse_error_batch_retry.sql';
+export const nfseDeadLetterGrantMigration='20260916020446_grant_nfse_batch_dead_letter_resolution.sql';
 export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof createInvoiceLifecycleDatabase>>['db'], options:{invoiceGate?:boolean}={}){
  const baseline=readFileSync('supabase/migrations/20260824224152_baseline.sql','utf8').replace(/\r\n/g,'\n');
  for(const table of ['tenant_emitters','hub_fiscal_emissions','cte_batches','cte_documents','nfse_documents','fiscal_documents']){
@@ -39,6 +41,9 @@ export async function installFiscalReadinessFixture(db:Awaited<ReturnType<typeof
  // schema for driver RLS helpers. The NFS-e batch migration must preserve it.
  await db.exec("create schema if not exists private;grant usage on schema private to authenticated;create schema if not exists extensions;create function extensions.digest(bytea,text) returns bytea language sql immutable as $$select decode(md5($1),'hex')$$");
  await db.exec(readFileSync('supabase/migrations/'+nfseBatchMigration,'utf8'));
+ await db.exec(readFileSync('supabase/migrations/'+nfseSafeRetryMigration,'utf8'));
+ await db.exec('revoke all on table public.fiscal_poll_dead_letters from service_role');
+ await db.exec(readFileSync('supabase/migrations/'+nfseDeadLetterGrantMigration,'utf8'));
  if(options.invoiceGate!==false) await db.exec(readFileSync('supabase/migrations/'+fiscalInvoiceGateMigration,'utf8'));
  const emitter='fa100000-0000-4000-8000-000000000001';
  await db.query("insert into tenant_emitters(id,tenant_id,cnpj,razao_social,active) values($1,$2,'11222333000181','Emitente QA',true)",[emitter,i.tenant]);

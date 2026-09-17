@@ -157,15 +157,22 @@ export interface RuralImportPreviewRow extends ParsedRuralRow {
   matched_client_id?: string | null;
   matched_remitter_id?: string | null;
   existing_profile_id?: string | null;
+  match_issue?: string | null;
   action: 'create' | 'update' | 'skip' | 'unmatched';
 }
 
 export interface RuralImportPreview {
+  tenantId: string;
   fileName: string;
   rows: RuralImportPreviewRow[];
   toCreate: number;
   toUpdate: number;
   unmatched: number;
+}
+
+function ruralContactPhone(...values: Array<string | null | undefined>) {
+  const match = values.filter(Boolean).join(' ').match(/(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?9?\d{4}[-\s]?\d{4}/);
+  return match ? match[0].replace(/\D/g, '') : null;
 }
 
 export async function buildRuralImportPreview(
@@ -183,10 +190,20 @@ export async function buildRuralImportPreview(
     .limit(5000);
   if (clientsError) throw clientsError;
 
-  const clientIndex = new Map<string, Pick<Tables<'clients'>, 'id' | 'company_name' | 'address_city'>>();
+  const clientIndex = new Map<string, Array<Pick<Tables<'clients'>, 'id' | 'company_name' | 'address_city'>>>();
   for (const c of clients || []) {
-    clientIndex.set(normalizeText(c.company_name), c);
+    const key = normalizeText(c.company_name);
+    clientIndex.set(key, [...(clientIndex.get(key) ?? []), c]);
   }
+  const resolveClient = (name: string | null, city: string | null) => {
+    if (!name) return { client: null, issue: null };
+    const candidates = clientIndex.get(normalizeText(name)) ?? [];
+    if (candidates.length === 1) return { client: candidates[0], issue: null };
+    const cityMatches = city ? candidates.filter(candidate => normalizeText(candidate.address_city) === normalizeText(city)) : [];
+    if (cityMatches.length === 1) return { client: cityMatches[0], issue: null };
+    if (candidates.length > 1) return { client: null, issue: `Nome ambíguo: ${candidates.length} clientes correspondem; informe cidade ou documento para desambiguar.` };
+    return { client: null, issue: 'Cliente não encontrado' };
+  };
 
   const { data: existing, error: existingError } = await supabase.from('client_rural_delivery_profiles')
     .select('id, client_id, city, neighborhood, related_remitter_id')
@@ -199,10 +216,10 @@ export async function buildRuralImportPreview(
   }
 
   const rows: RuralImportPreviewRow[] = deduped.map((r) => {
-    const matchedClient = clientIndex.get(normalizeText(r.recipient_name_snapshot));
-    const matchedRemitter = r.supplier_name_snapshot
-      ? clientIndex.get(normalizeText(r.supplier_name_snapshot))
-      : null;
+    const recipientMatch = resolveClient(r.recipient_name_snapshot, r.city);
+    const remitterMatch = resolveClient(r.supplier_name_snapshot, r.origin_city);
+    const matchedClient = recipientMatch.client;
+    const matchedRemitter = remitterMatch.client;
     let action: RuralImportPreviewRow['action'] = 'unmatched';
     let existingProfileId: string | null = null;
     if (matchedClient) {
@@ -220,11 +237,13 @@ export async function buildRuralImportPreview(
       matched_client_id: matchedClient?.id || null,
       matched_remitter_id: matchedRemitter?.id || null,
       existing_profile_id: existingProfileId,
+      match_issue: recipientMatch.issue,
       action,
     };
   });
 
   return {
+    tenantId,
     fileName,
     rows,
     toCreate: rows.filter(r => r.action === 'create').length,
@@ -241,6 +260,7 @@ export function useCommitRuralImport() {
     mutationFn: async (preview: RuralImportPreview) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       const tenantId = currentTenant.id;
+      if (preview.tenantId !== tenantId) throw new Error('A prévia pertence a outra empresa. Gere uma nova prévia antes de importar.');
 
       const { data: batchData, error: batchError } = await supabase.from('rural_delivery_import_batches')
         .insert({
@@ -258,9 +278,10 @@ export function useCommitRuralImport() {
       for (const r of preview.rows) {
         if (!r.matched_client_id) {
           unmatched++;
-          errors.push({ recipient: r.recipient_name_snapshot, reason: 'Cliente não encontrado' });
+          errors.push({ recipient: r.recipient_name_snapshot, reason: r.match_issue || 'Cliente não encontrado' });
           continue;
         }
+        const contactPhone = ruralContactPhone(r.resolution_text, r.taxi_text);
         const payload = {
           tenant_id: tenantId,
           client_id: r.matched_client_id,
@@ -279,6 +300,8 @@ export function useCommitRuralImport() {
           city_delivery_instructions: r.inferred.city_delivery_instructions,
           driver_instructions: r.resolution_text,
           internal_notes: r.taxi_text,
+          contact_phone: contactPhone,
+          taxi_contact_phone: r.inferred.taxi_required ? contactPhone : null,
           source_type: 'spreadsheet_import',
           source_reference: `${preview.fileName} | ${r.sheet}${r.invoice_number ? ' | NF ' + r.invoice_number : ''}`,
           active: true,
@@ -286,11 +309,14 @@ export function useCommitRuralImport() {
         };
         try {
           if (r.existing_profile_id) {
-            const { error } = await supabase.from('client_rural_delivery_profiles')
+            const { data: updatedRow, error } = await supabase.from('client_rural_delivery_profiles')
               .update(payload)
               .eq('id', r.existing_profile_id)
-              .eq('tenant_id', tenantId);
+              .eq('tenant_id', tenantId)
+              .select('id')
+              .maybeSingle();
             if (error) throw error;
+            if (!updatedRow) throw new Error('O perfil mudou ou foi removido depois da prévia. Gere uma nova prévia.');
             updated++;
           } else {
             const { error } = await supabase.from('client_rural_delivery_profiles')
@@ -300,7 +326,15 @@ export function useCommitRuralImport() {
           }
           // marca cliente como rural
           const { error: clientError } = await supabase.from('clients')
-            .update({ is_rural: true, rural_updated_at: new Date().toISOString() })
+            .update({
+              is_rural: true,
+              rural_driver_instructions: r.resolution_text,
+              rural_requires_contact: r.inferred.requires_contact_before_delivery,
+              rural_contact_phone: contactPhone,
+              rural_access_type: r.inferred.access_type,
+              rural_notes: r.taxi_text,
+              rural_updated_at: new Date().toISOString(),
+            })
             .eq('id', r.matched_client_id)
             .eq('tenant_id', tenantId);
           if (clientError) throw clientError;

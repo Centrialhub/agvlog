@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-09-11T08:51:43.133779+00:00",
+  "runtime": "PostgreSQL17.11 disposable loopback",
+  "execution_session": 33870,
+  "exit_code": 0,
+  "passed_cases": 6,
+  "postgres_stopped": true,
+  "migration_hashes": {
+    "supabase\\migrations\\20260911081653_finance_unloading_open_complement_corrections.sql": "98f6a882b590b0680c836e495a28cdd60521cbad5f7a470dea47b9544475310b",
+    "supabase\\migrations\\20260911083307_finance_unloading_open_complement_public_boundary.sql": "901a6f1e06a03e738bb77395c90b1b7e7f16776b60fe664fd3a111e23c63848c"
+  },
+  "test_files": {
+    "scripts/test-finance-open-complement-native.mjs": "58eddb37cc758d181fc0a3b420e7607e3570c5286e1be8c98fc87338cd76e34c",
+    "scripts/test-finance-open-complement-native-cases.mjs": "a6ffa99579ae8b901224e4d15a0874f072dd4001331adf36e0856329d4c9fe46",
+    "src/test/helpers/openComplementNativeFixture.ts": "cdcf4213e85144d7b90e90c1c8dd2bd248f7b07445ff08de8063eb41079e3374"
+  },
+  "approval_caveat": "Generic approval waiting on a correction row lock operates on the committed corrected amount20; it has no expected-revision argument. No stale50 payment is accepted.",
+  "functional_findings": 1,
+  "release_verdict": "blocked_on_stale_approval",
+  "execution_note": "Original harness exited0 after7 observations; fourth case reclassified as functional blocker. Updated runner exits1 for this finding; no runtime rerun implied."
+}

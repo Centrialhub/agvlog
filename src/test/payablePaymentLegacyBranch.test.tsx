@@ -1,4 +1,4 @@
-import {cleanup,render,screen} from '@testing-library/react';
+import {cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {afterEach,it,expect,vi} from 'vitest';
 import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
@@ -9,3 +9,4 @@ it('never offers canonical payment reversal for a legacy association and keeps i
  mock.history.mockReturnValue({data:{total:3,rows:[{id:'old',amount:500,method:'pix',paid_at:'2026-01-10',link_id:'old-link',link_origin:'legacy_adoption',reversal:{actor_name:'Ana',created_at:'2026-02-02',reason:'Correção de associação'}},{id:'unlinked',amount:100,method:'pix',paid_at:'2026-01-10',link_origin:null},{id:'canonical',amount:300,method:'pix',paid_at:'2026-01-10',link_id:'new-link',link_origin:'canonical'}]},isFetching:false});
  render(<QueryClientProvider client={new QueryClient()}><PayablePaymentDialog payable={{id:'payable',supplier_name:'Fornecedor',amount:900} as Payable} open onOpenChange={()=>{}}/></QueryClientProvider>);expect(screen.getAllByText('Reversão canônica')).toHaveLength(1);expect(screen.getAllByText('Associação de pagamento antigo')).toHaveLength(2);expect(screen.getByText(/pagamento antigo foi preservado/)).toBeInTheDocument();expect(screen.queryByText('Esta baixa não compõe o total pago atual.')).not.toBeInTheDocument();
 });
+it('retries the payment history without closing the payable dialog',()=>{const refetch=vi.fn();mock.history.mockReturnValue({data:undefined,error:new Error('offline'),isFetching:false,refetch});render(<QueryClientProvider client={new QueryClient()}><PayablePaymentDialog payable={{id:'payable',supplier_name:'Fornecedor',amount:900} as Payable} open onOpenChange={()=>{}}/></QueryClientProvider>);expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível carregar o histórico');fireEvent.click(screen.getByRole('button',{name:'Tentar histórico novamente'}));expect(refetch).toHaveBeenCalledTimes(1);});

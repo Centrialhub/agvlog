@@ -19,10 +19,13 @@ import {evaluateSsxReadiness} from '@/lib/ssxReadiness';
 import { parseTrackingObservability } from '@/lib/trackingObservability';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { SsxMappingConflictReview, type SsxMappingConflict } from '@/components/integrations/SsxMappingConflictReview';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
-function formatTime(iso: string | null | undefined): string {
+export function formatTime(iso: string | null | undefined): string {
   if (!iso) return '—';
-  return formatDistanceToNow(new Date(iso), { addSuffix: true, locale: ptBR });
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return 'Data inválida';
+  return formatDistanceToNow(date, { addSuffix: true, locale: ptBR });
 }
 
 export default function IntegrationHealth() {
@@ -34,18 +37,20 @@ export default function IntegrationHealth() {
   const queryClient = useQueryClient();
   const toast = useSonnerToast();
 
-  const { data: tenant } = useQuery({
+  const { data: tenant, isError: tenantHealthError, isLoading: tenantHealthLoading } = useQuery({
     queryKey: ['tenant_health_detail', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return null;
-      const { data } = await supabase.from('tenants').select('settings').eq('id', currentTenant.id).single();
+      const { data, error } = await supabase.from('tenants').select('settings').eq('id', currentTenant.id).single();
+      if (error) throw error;
       return (data?.settings as any)?.pipeline_health || null;
     },
     enabled: !!currentTenant && isAdmin && ssxEnabled,
     refetchInterval: 30000,
   });
 
-  const {data:accounts=[],isLoading:accountsLoading}=useWorkspaceSsxAccounts(!!currentTenant&&isAdmin&&ssxEnabled);
+  const accountsQuery=useWorkspaceSsxAccounts(!!currentTenant&&isAdmin&&ssxEnabled);
+  const accounts=accountsQuery.data??[],accountsLoading=accountsQuery.isLoading;
 
   const observabilityQuery = useQuery({
     queryKey: ['tracking-observability', currentTenant?.id],
@@ -83,15 +88,12 @@ export default function IntegrationHealth() {
     queryKey: ['active_vehicles_for_position_freshness', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('vehicles')
+      return fetchAllPostgrestPages((from,to)=>supabase.from('vehicles')
         .select('id')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
         .order('id')
-        .limit(5_000);
-      if (error) throw error;
-      return data || [];
+        .range(from,to));
     },
     enabled: !!currentTenant && isAdmin && ssxEnabled,
   });
@@ -115,21 +117,24 @@ export default function IntegrationHealth() {
   ]);
   const positionStatsError = positionsQuery.error || activeVehiclesQuery.error;
 
-  const { data: mappingConflicts = [] } = useQuery<SsxMappingConflict[]>({
+  const mappingQuery = useQuery<SsxMappingConflict[]>({
     queryKey: ['ssx_mapping_conflicts', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.rpc('list_ssx_mapping_conflicts_v1' as never, {
-        _tenant_id: currentTenant.id,
-        _status: 'open',
-        _limit: 200,
-        _offset: 0,
-      } as never);
-      if (error) throw error;
-      return (Array.isArray(data) ? data : []) as SsxMappingConflict[];
+      const rows:SsxMappingConflict[]=[];
+      for(let offset=0;;offset+=200){
+        const { data, error } = await supabase.rpc('list_ssx_mapping_conflicts_v1' as never, {
+          _tenant_id: currentTenant.id,_status: 'open',_limit: 200,_offset: offset,
+        } as never);
+        if (error) throw error;
+        const page=(Array.isArray(data)?data:[]) as SsxMappingConflict[];rows.push(...page);
+        if(page.length<200)return rows;
+      }
     },
     enabled: !!currentTenant && isAdmin && ssxEnabled,
   });
+  const mappingConflicts=mappingQuery.data??[];
+  const mappingConflictsForReadiness=mappingQuery.isError?[{unavailable:true}]:mappingConflicts;
 
   if (!isAdmin) {
     return <div className="p-6 text-muted-foreground">Acesso restrito a administradores.</div>;
@@ -147,15 +152,22 @@ export default function IntegrationHealth() {
     );
   }
 
-  const operationalStatus = accountsLoading
+  const observability = observabilityQuery.data;
+  const readiness = evaluateSsxReadiness({ accounts, health: tenant, positionStats, mappingConflicts: mappingConflictsForReadiness });
+  const operationalStatus = accountsQuery.isError || tenantHealthError || observabilityQuery.isError
+    || Boolean(positionStatsError) || mappingQuery.isError
+    ? 'unavailable'
+    : accountsLoading || tenantHealthLoading || observabilityQuery.isLoading
+      || positionsQuery.isLoading || activeVehiclesQuery.isLoading || mappingQuery.isLoading
     ? 'loading'
     : accounts.length === 0
       ? 'not_configured'
-      : accounts.every((account) => account.status === 'ok')
+      : accounts.every((account) => account.status === 'ok') && readiness.allMet && Boolean(tenant && observability)
+        && observability?.schedule.enabled === true && observability.schedule.consecutiveFailures === 0
+        && observability.integration.success !== false && observability.queue.errors === 0
+        && observability.trackerLinks.conflicts === 0
         ? 'healthy'
         : 'degraded';
-  const observability = observabilityQuery.data;
-
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
@@ -172,7 +184,9 @@ export default function IntegrationHealth() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {tenant ? (
+          {tenantHealthError ? (
+            <p role="alert" className="text-sm text-destructive">Não foi possível consultar a saúde do pipeline. Isso não significa que o cron esteja ausente.</p>
+          ) : tenant ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground">Último poll</p>
@@ -322,6 +336,7 @@ export default function IntegrationHealth() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {accountsQuery.isError ? <div role="alert" className="space-y-2 text-sm text-destructive"><p>Não foi possível consultar as contas SSX: {accountsQuery.error instanceof Error ? accountsQuery.error.message : 'erro desconhecido'}.</p><Button variant="outline" size="sm" onClick={()=>void accountsQuery.refetch()}>Tentar novamente</Button></div> : null}
           {accounts.map(acc => {
             const settings = (acc.settings || {}) as any;
             return (
@@ -354,7 +369,7 @@ export default function IntegrationHealth() {
         </CardContent>
       </Card>
 
-      <SsxMappingConflictReview conflicts={mappingConflicts} />
+      {mappingQuery.isError ? <Card><CardContent role="alert" className="space-y-2 p-4 text-sm text-destructive"><p>Não foi possível consultar os conflitos de mapeamento: {mappingQuery.error instanceof Error ? mappingQuery.error.message : 'erro desconhecido'}.</p><Button variant="outline" size="sm" onClick={()=>void mappingQuery.refetch()}>Tentar novamente</Button></CardContent></Card> : <SsxMappingConflictReview conflicts={mappingConflicts} />}
 
       {/* Readiness Gates */}
       <Card>
@@ -364,7 +379,7 @@ export default function IntegrationHealth() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ReadinessGates tenant={tenant} positionStats={positionStats} mappingConflicts={mappingConflicts} accounts={accounts} />
+          <ReadinessGates tenant={tenant} positionStats={positionStats} mappingConflicts={mappingConflictsForReadiness} accounts={accounts} />
         </CardContent>
       </Card>
     </div>

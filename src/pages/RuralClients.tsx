@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
@@ -31,6 +31,13 @@ function download(blob: Blob, name: string) {
   URL.revokeObjectURL(url);
 }
 
+function batchErrors(value: unknown): Array<{ recipient: string; reason: string }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap(item => item && typeof item === 'object'
+    ? [{ recipient: String((item as Record<string, unknown>).recipient ?? 'Sem cliente'), reason: String((item as Record<string, unknown>).reason ?? 'Falha não detalhada') }]
+    : []);
+}
+
 export default function RuralClients() {
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
@@ -43,6 +50,7 @@ export default function RuralClients() {
 
   const [preview, setPreview] = useState<RuralImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
+  useEffect(() => { setPreview(null); setImporting(false); }, [currentTenant?.id]);
 
   const pending = useMemo(() => profiles.filter(p =>
     (!p.driver_instructions || !p.driver_instructions.trim()) ||
@@ -67,7 +75,11 @@ export default function RuralClients() {
     setImporting(true);
     try {
       const res = await commitImport.mutateAsync(preview);
-      toast({ title: 'Importação concluída', description: `${res.imported} criados, ${res.updated} atualizados, ${res.unmatched} sem cliente.` });
+      toast({
+        title: res.errors.length ? 'Importação concluída com falhas' : 'Importação concluída',
+        description: `${res.imported} criados, ${res.updated} atualizados, ${res.unmatched} sem cliente, ${res.errors.length} falhas registradas.`,
+        variant: res.errors.length ? 'destructive' : 'default',
+      });
       setPreview(null);
     } catch (error: unknown) {
       toast({ title: 'Erro', description: errorMessage(error), variant: 'destructive' });
@@ -175,6 +187,7 @@ export default function RuralClients() {
                   </div>
                 </div>
                 <div className="max-h-96 overflow-auto border rounded">
+                  <p className="border-b bg-muted/30 px-3 py-2 text-xs text-muted-foreground">Todas as {preview.rows.length} linhas da prévia estão disponíveis para revisão antes da confirmação.</p>
                   <Table>
                     <TableHeader><TableRow>
                       <TableHead>Ação</TableHead><TableHead>Aba</TableHead>
@@ -184,7 +197,7 @@ export default function RuralClients() {
                       <TableHead>Instrução</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
-                      {preview.rows.slice(0, 200).map((r, i) => (
+                      {preview.rows.map((r, i) => (
                         <TableRow key={i}>
                           <TableCell>
                             <Badge variant={r.action === 'unmatched' ? 'destructive' : r.action === 'update' ? 'secondary' : 'default'}>
@@ -192,7 +205,9 @@ export default function RuralClients() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs">{r.sheet}</TableCell>
-                          <TableCell className="text-xs">{r.recipient_name_snapshot}</TableCell>
+                          <TableCell className="text-xs">{r.recipient_name_snapshot}
+                            {r.match_issue ? <p className="mt-1 text-[10px] text-destructive">{r.match_issue}</p> : null}
+                          </TableCell>
                           <TableCell className="text-xs">{r.city}</TableCell>
                           <TableCell className="text-xs">{r.neighborhood}</TableCell>
                           <TableCell className="text-xs">{r.round_trip_km ?? '—'}</TableCell>
@@ -215,22 +230,27 @@ export default function RuralClients() {
                 <TableHead>Data</TableHead><TableHead>Arquivo</TableHead>
                 <TableHead>Linhas</TableHead><TableHead>Criados</TableHead>
                 <TableHead>Atualizados</TableHead><TableHead>Sem cliente</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Falhas</TableHead><TableHead>Status</TableHead><TableHead>Diagnóstico</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {batches.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-4">Nenhuma importação ainda.</TableCell></TableRow>
-                ) : batches.map((b) => (
-                  <TableRow key={b.id}>
+                  <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-4">Nenhuma importação ainda.</TableCell></TableRow>
+                ) : batches.map((b) => {
+                  const errors = batchErrors(b.errors);
+                  return <TableRow key={b.id}>
                     <TableCell className="text-xs">{new Date(b.created_at).toLocaleString('pt-BR')}</TableCell>
                     <TableCell className="text-xs">{b.file_name}</TableCell>
                     <TableCell>{b.row_count}</TableCell>
                     <TableCell>{b.imported_count}</TableCell>
                     <TableCell>{b.updated_count}</TableCell>
                     <TableCell>{b.unmatched_count}</TableCell>
+                    <TableCell>{b.error_count}</TableCell>
                     <TableCell><Badge variant={b.status === 'completed' ? 'default' : 'secondary'}>{b.status}</Badge></TableCell>
-                  </TableRow>
-                ))}
+                    <TableCell>{errors.length ? <details className="max-w-sm text-xs"><summary className="cursor-pointer">Ver {errors.length} ocorrência(s)</summary>
+                      <ul className="mt-1 space-y-1">{errors.map((error, index) => <li key={`${error.recipient}-${index}`}><strong>{error.recipient}:</strong> {error.reason}</li>)}</ul>
+                    </details> : '—'}</TableCell>
+                  </TableRow>;
+                })}
               </TableBody>
             </Table>
           </CardContent></Card>

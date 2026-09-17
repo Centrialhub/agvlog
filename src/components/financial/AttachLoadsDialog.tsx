@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import LoadPicker from './LoadPicker';
 import { useAttachLoadsToSettlement } from '@/hooks/useDriverSettlements';
@@ -25,7 +25,10 @@ export default function AttachLoadsDialog({ open, onOpenChange, settlementId, dr
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl">
-        <DialogHeader><DialogTitle>Adicionar romaneios ao acerto</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Adicionar romaneios ao acerto</DialogTitle>
+          <DialogDescription>Selecione os romaneios que devem compor este acerto financeiro.</DialogDescription>
+        </DialogHeader>
         <LoadPicker
           driverId={driverId ?? null}
           includeSettlementId={settlementId}

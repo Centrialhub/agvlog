@@ -238,7 +238,6 @@ Deno.serve(async (req) => {
     // Calculate token TTL
     const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
     const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-    const MIN_TTL_MS = 5 * 60 * 1000;
     let ttlMs = DEFAULT_TTL_MS;
     try {
       let parsedExpires = Number(expiresInSeconds);
@@ -255,7 +254,9 @@ Deno.serve(async (req) => {
         }
         ttlMs = parsedExpires * 1000;
         if (ttlMs > MAX_TTL_MS) ttlMs = MAX_TTL_MS;
-        if (ttlMs < MIN_TTL_MS) ttlMs = DEFAULT_TTL_MS;
+        // Preserve short provider TTLs. Extending them would keep an expired
+        // token in circulation; refresh logic can handle the short lifetime.
+        ttlMs = Math.max(1_000, ttlMs);
       }
     } catch { /* keep default */ }
 
@@ -281,7 +282,7 @@ Deno.serve(async (req) => {
       updatedSettings.api_version = "v3";
     }
 
-    await supabase.from("integration_accounts").update({
+    const { error: tokenWriteError } = await supabase.from("integration_accounts").update({
       token_cache: token,
       token_expires_at: expiresAt,
       status: "ok",
@@ -290,6 +291,7 @@ Deno.serve(async (req) => {
       updated_at: nowIso,
       settings: updatedSettings,
     }).eq("id", integration_account_id);
+    if (tokenWriteError) throw new Error(`Failed to persist SSX token: ${tokenWriteError.message}`);
 
     await logIntegration(supabase, {
       tenant_id: account.tenant_id, integration_account_id,

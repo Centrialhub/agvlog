@@ -15,11 +15,12 @@ const tripLabels:Record<string,string>={planned:'Planejada',in_transit:'Em trân
 
 export default function DriverOperationalExpenses(){
  const online=useOnlineStatus(),selectId=useId(),[open,setOpen]=useState(false),[source,setSource]=useState(''),[notice,setNotice]=useState('');
- const sources=useOperationalDriverExpenseSources(0,open),history=useDriverExpenseHistory(0),queue=useDriverExpenseSubmission();
+ const [sourceOffset,setSourceOffset]=useState(0),[historyOffset,setHistoryOffset]=useState(0);
+ const sources=useOperationalDriverExpenseSources(sourceOffset,open),history=useDriverExpenseHistory(historyOffset),queue=useDriverExpenseSubmission();
  const pending=queue.pending.data??[];
  const synchronize=async()=>{try{const result=await queue.replay.mutateAsync();setNotice(result.confirmed?`${result.confirmed} despesa(s) confirmada(s) pelo servidor.`:result.pending?'Ainda há despesas pendentes de sincronização.':'Tudo sincronizado.');}catch(cause){setNotice(creationError(cause));}};
  return <div className="space-y-4">
-  <div className="flex items-start justify-between gap-3"><div><h1 className="text-lg font-bold">Gastos da viagem</h1><p className="text-xs text-muted-foreground">Envie comprovantes para conferência da equipe operacional. Nenhum pagamento é lançado por esta tela.</p></div><Button onClick={()=>{setOpen(true);setSource('');}}>Novo gasto</Button></div>
+  <div className="flex items-start justify-between gap-3"><div><h1 className="text-lg font-bold">Gastos da viagem</h1><p className="text-xs text-muted-foreground">Envie comprovantes para conferência da equipe operacional. Nenhum pagamento é lançado por esta tela.</p></div><Button onClick={()=>{setOpen(true);setSource('');setSourceOffset(0);}}>Novo gasto</Button></div>
   {notice?<p role="status">{notice}</p>:null}
   {pending.length?<Card><CardContent className="space-y-3 p-4"><div className="flex items-center gap-2"><WifiOff aria-hidden="true" className="h-4 w-4 text-warning"/><strong>{pending.length} envio(s) salvo(s) no aparelho</strong></div>
    {pending.map(item=><div key={item.requestId} className="rounded border p-2 text-xs"><p>{expenseCategoryLabels[item.category]??item.category} · {expenseAmount(item.amountCents/100)}</p><p>Viagem {item.sourceId.slice(0,8)} · {item.state==='needs_attention'?'Requer conferência':'Aguardando conexão'}</p>{item.lastError?<p className="text-destructive">{item.lastError}</p>:null}</div>)}
@@ -28,7 +29,10 @@ export default function DriverOperationalExpenses(){
   <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto"><DialogHeader><DialogTitle>Novo gasto da viagem</DialogTitle><DialogDescription>O comprovante é obrigatório. Offline, o arquivo fica guardado neste aparelho até a confirmação.</DialogDescription></DialogHeader>
    {sources.isPending?<p role="status">Carregando suas viagens...</p>:sources.error?<p role="alert">{creationError(sources.error)}</p>:<><label htmlFor={selectId}>Viagem do gasto</label><select id={selectId} className="w-full rounded border p-2" value={source} onChange={event=>setSource(event.target.value)}>
     <option value="">Selecione a viagem</option>{sources.data?.rows.map(trip=><option key={trip.id} value={trip.id}>{tripLabels[trip.status]} · {trip.id.slice(0,8)} · {trip.notes||new Date(trip.created_at).toLocaleDateString('pt-BR')}</option>)}</select>
-    {sources.data?.offline?<p role="status" className="text-xs">Viagens carregadas do armazenamento offline deste aparelho.</p>:null}</>}
+    <p className="text-xs text-muted-foreground">{sources.data?.total??0} viagens disponíveis · página {sourceOffset/50+1}</p>
+    {sources.data?.offline?<p role="status" className="text-xs">Viagens carregadas do armazenamento offline deste aparelho.</p>:null}
+    <div className="flex gap-2"><Button type="button" variant="outline" disabled={sources.isFetching||sourceOffset===0} onClick={()=>{setSource('');setSourceOffset(value=>Math.max(0,value-50));}}>Viagens anteriores</Button>
+      <Button type="button" variant="outline" disabled={sources.isFetching||!sources.data||sourceOffset+50>=sources.data.total} onClick={()=>{setSource('');setSourceOffset(value=>value+50);}}>Mais viagens</Button></div></>}
    {source?<DriverExpenseForm sourceId={source} onSaved={message=>{setNotice(message);setOpen(false);setSource('');}}/>:null}
   </DialogContent></Dialog>
   <section aria-labelledby="driver-expense-history"><h2 id="driver-expense-history" className="font-semibold">Histórico enviado</h2>
@@ -36,7 +40,10 @@ export default function DriverOperationalExpenses(){
     <div className="flex justify-between gap-2"><p className="font-medium">{expenseCategoryLabels[expense.category]??expense.category}</p><strong>{expenseAmount(expense.amount)}</strong></div>
     <p className="text-sm">{statusLabels[expense.approval_status]??expense.approval_status} · {new Date(expense.expense_at).toLocaleString('pt-BR')}</p><p className="text-xs text-muted-foreground">{expensePaymentLabels[expense.payment_source]??expense.payment_source}</p>
     {expense.review_reason?<p role="status">Motivo da decisão: {expense.review_reason}</p>:null}
-   </CardContent></Card>):<Card><CardContent className="py-8 text-center"><ReceiptText aria-hidden="true" className="mx-auto mb-2 h-7 w-7 text-muted-foreground"/><p>Nenhum gasto enviado nesta viagem.</p></CardContent></Card>}
+   </CardContent></Card>):<Card><CardContent className="py-8 text-center"><ReceiptText aria-hidden="true" className="mx-auto mb-2 h-7 w-7 text-muted-foreground"/><p>Nenhum gasto enviado ainda.</p></CardContent></Card>}
+   {!history.error&&history.data?<div className="flex items-center justify-between gap-2"><Button variant="outline" disabled={history.isFetching||historyOffset===0} onClick={()=>setHistoryOffset(value=>Math.max(0,value-50))}>Página anterior</Button>
+    <span className="text-xs text-muted-foreground">{history.data.total} despesa(s) · página {historyOffset/50+1}</span>
+    <Button variant="outline" disabled={history.isFetching||historyOffset+50>=history.data.total} onClick={()=>setHistoryOffset(value=>value+50)}>Próxima página</Button></div>:null}
   </section>
  </div>;
 }

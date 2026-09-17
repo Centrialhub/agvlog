@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, FileCheck2, ChevronRight } from 'lucide-react';
-import { format } from 'date-fns';
+import { fmtDateSafe } from '@/lib/utils/formatDate';
 
 const TYPES = [
   { id: 'all', label: 'Todos' },
@@ -32,7 +32,7 @@ export default function PortalDocuments() {
   const [page, setPage] = useState(0);
   const limit = 50;
   useEffect(() => setPage(0), [selectedClientId]);
-  const { data: docs = [], isLoading, error, refetch } = usePortalDocuments({
+  const { data: documentsPage, isLoading, error, refetch } = usePortalDocuments({
     document_type: type === 'all' ? undefined : type,
     search: search.trim() || undefined,
     start: startDate || undefined,
@@ -40,6 +40,8 @@ export default function PortalDocuments() {
     limit,
     offset: page * limit,
   });
+  const docs = documentsPage?.rows ?? [];
+  const hasMore = documentsPage?.hasMore ?? false;
 
   const activeCount = Number(Boolean(search)) + Number(Boolean(startDate)) + Number(Boolean(endDate)) + Number(type !== 'all');
   const clear = () => { setSearch(''); setStartDate(''); setEndDate(''); setType('all'); setPage(0); };
@@ -100,7 +102,7 @@ export default function PortalDocuments() {
                         {d.invoice_number || '—'}
                       </Link>
                     </TableCell>
-                    <TableCell>{d.issue_date ? format(new Date(d.issue_date), 'dd/MM/yyyy') : '—'}</TableCell>
+                    <TableCell>{fmtDateSafe(d.issue_date)}</TableCell>
                     <TableCell className="max-w-[180px] truncate">{d.remitter || '—'}</TableCell>
                     <TableCell className="max-w-[180px] truncate">{d.recipient || '—'}</TableCell>
                     <TableCell className="text-xs">{[d.recipient_city, d.recipient_state].filter(Boolean).join(' / ') || '—'}</TableCell>
@@ -122,12 +124,12 @@ export default function PortalDocuments() {
         </CardContent>
       </Card>
 
-      {(page > 0 || docs.length >= limit) && (
+      {(page > 0 || hasMore) && (
         <div className="flex items-center justify-between pt-3">
           <span className="text-xs text-muted-foreground">Página {page + 1}</span>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" disabled={page === 0 || isLoading} onClick={() => setPage(p => p - 1)}>Anterior</Button>
-            <Button size="sm" variant="outline" disabled={docs.length < limit || isLoading} onClick={() => setPage(p => p + 1)}>Próxima</Button>
+            <Button size="sm" variant="outline" disabled={!hasMore || isLoading} onClick={() => setPage(p => p + 1)}>Próxima</Button>
           </div>
         </div>
       )}

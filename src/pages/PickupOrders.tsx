@@ -34,12 +34,12 @@ export default function PickupOrders() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const { data: pickups = [], isLoading } = usePickupOrders({
+  const { data: pickups = [], isLoading, isError, error } = usePickupOrders({
     status: statusFilter,
     search: search.trim() || undefined,
   });
   const ids = useMemo(() => pickups.map(p => p.id), [pickups]);
-  const { data: counts = {} } = usePickupOrderCounts(ids);
+  const { data: counts = {}, isLoading: countsLoading, isError: countsError, error: countsQueryError } = usePickupOrderCounts(ids);
   const deleteMut = useDeletePickupOrder();
 
   const totals = useMemo(() => ({
@@ -144,8 +144,10 @@ export default function PickupOrders() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {isLoading || countsLoading ? (
                   <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                ) : isError || countsError ? (
+                  <TableRow><TableCell colSpan={9} className="text-center py-8 text-destructive">Não foi possível carregar as coletas: {String((error || countsQueryError) instanceof Error ? (error || countsQueryError as Error).message : (error || countsQueryError || 'erro desconhecido'))}</TableCell></TableRow>
                 ) : pickups.length === 0 ? (
                   <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma coleta encontrada.</TableCell></TableRow>
                 ) : pickups.map(p => (

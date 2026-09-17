@@ -71,4 +71,18 @@ describe('fila offline unificada do motorista',()=>{
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({title:'Tentativa descartada pela operação'}));
     client.clear();
   });
+
+  it('keeps diagnostics visibly enabled when the server refuses revocation',async()=>{
+    const client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
+    render(<QueryClientProvider client={client}><DriverSyncPending/></QueryClientProvider>);
+    const checkbox=await screen.findByRole('checkbox');
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+    mocks.rpc.mockResolvedValueOnce({data:null,error:new Error('revogação recusada')});
+    fireEvent.click(checkbox);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível desativar o diagnóstico no servidor');
+    expect(checkbox).toBeChecked();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({title:'Diagnóstico ainda ativo'}));
+    client.clear();
+  });
 });

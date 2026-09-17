@@ -9,18 +9,25 @@ import { useClients } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useDrivers } from '@/hooks/useDrivers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Users, AlertTriangle, Truck } from 'lucide-react';
+import { TrendingUp, Users, AlertTriangle, Truck, RefreshCw } from 'lucide-react';
+import { getErrorMessage } from '@/lib/errors';
 
 export default function ProductivityReports() {
-  const { data: allLoads = [], isLoading: loadsLoading } = useLoads();
-  const { data: allEvents = [], isLoading: eventsLoading } = useOperationalEvents();
-  const { data: clients = [] } = useClients();
-  const { data: vehicles = [] } = useVehicles();
-  const { data: drivers = [] } = useDrivers({ includeInactive: true });
+  const loadsQuery = useLoads();
+  const eventsQuery = useOperationalEvents();
+  const clientsQuery = useClients();
+  const vehiclesQuery = useVehicles();
+  const driversQuery = useDrivers({ includeInactive: true });
+  const { data: allLoads = [], isLoading: loadsLoading } = loadsQuery;
+  const { data: allEvents = [], isLoading: eventsLoading } = eventsQuery;
+  const { data: clients = [] } = clientsQuery;
+  const { data: vehicles = [] } = vehiclesQuery;
+  const { data: drivers = [] } = driversQuery;
 
   const { filters, setFilter, resetFilters, activeCount } = useListFilters({ driver: 'all', vehicle: 'all', from: '', to: '' });
   const loads = useMemo(() => allLoads.filter(row =>
@@ -46,7 +53,7 @@ export default function ProductivityReports() {
     });
     return Object.entries(map).map(([id, m]) => ({
       id, ...m,
-      successRate: m.deliveries + m.divergences > 0 ? Math.round((m.deliveries / (m.deliveries + m.divergences)) * 100) : 100,
+      successRate: m.deliveries + m.divergences > 0 ? Math.round((m.deliveries / (m.deliveries + m.divergences)) * 100) : null,
       avgPallets: m.loads > 0 ? Math.round(m.pallets / m.loads) : 0,
     })).sort((a, b) => b.loads - a.loads);
   }, [loads, drivers]);
@@ -72,7 +79,7 @@ export default function ProductivityReports() {
       .map(v => {
         const vehicleLoads = loads.filter(l => l.vehicle_id === v.id && ['delivered', 'in_transit', 'loaded'].includes(l.status));
         const totalPallets = vehicleLoads.reduce((s, l) => s + (l.total_pallet_count || 0), 0);
-        const trips = vehicleLoads.length;
+        const trips = new Set(vehicleLoads.map(load => load.trip_id || `load:${load.id}`)).size;
         const avgOccupancy = trips > 0 ? Math.round((totalPallets / (trips * (v.max_pallets || 1))) * 100) : 0;
         return { plate: v.plate, nickname: v.nickname, maxPallets: v.max_pallets, trips, avgOccupancy, totalPallets };
       })
@@ -91,11 +98,46 @@ export default function ProductivityReports() {
   // Summary KPIs
   const totalDelivered = loads.filter(l => l.status === 'delivered').length;
   const totalDivergent = loads.filter(l => l.status === 'divergent').length;
-  const overallSuccess = totalDelivered + totalDivergent > 0 ? Math.round((totalDelivered / (totalDelivered + totalDivergent)) * 100) : 100;
+  const overallSuccess = totalDelivered + totalDivergent > 0 ? Math.round((totalDelivered / (totalDelivered + totalDivergent)) * 100) : null;
   const totalFinancialImpact = events.reduce((s, e) => s + (e.financial_impact || 0), 0);
   const avgPalletsPerTrip = loads.filter(l => (l.total_pallet_count ?? 0) > 0).length > 0
     ? Math.round(loads.reduce((s, l) => s + (l.total_pallet_count ?? 0), 0) / loads.filter(l => (l.total_pallet_count ?? 0) > 0).length)
     : 0;
+
+  const failedQueries = [
+    { name: 'cargas', isError: loadsQuery.isError, error: loadsQuery.error, refetch: () => loadsQuery.refetch() },
+    { name: 'ocorrências', isError: eventsQuery.isError, error: eventsQuery.error, refetch: () => eventsQuery.refetch() },
+    { name: 'clientes', isError: clientsQuery.isError, error: clientsQuery.error, refetch: () => clientsQuery.refetch() },
+    { name: 'veículos', isError: vehiclesQuery.isError, error: vehiclesQuery.error, refetch: () => vehiclesQuery.refetch() },
+    { name: 'motoristas', isError: driversQuery.isError, error: driversQuery.error, refetch: () => driversQuery.refetch() },
+  ].filter(query => query.isError);
+
+  if (failedQueries.length > 0) {
+    return (
+      <div className="animate-fade-in space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <TrendingUp className="h-6 w-6 text-primary" /> Relatórios de Produtividade
+          </h1>
+          <p className="text-sm text-muted-foreground">Performance por motorista, divergências por cliente e eficiência de veículos</p>
+        </div>
+        <Card className="border-destructive/50">
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center" role="alert">
+            <AlertTriangle className="h-7 w-7 text-destructive" />
+            <div>
+              <p className="font-medium text-destructive">Não foi possível calcular o relatório</p>
+              <p className="text-sm text-muted-foreground">
+                Falha em {failedQueries.map(query => query.name).join(', ')}: {getErrorMessage(failedQueries[0].error)}
+              </p>
+            </div>
+            <Button variant="outline" onClick={() => void Promise.all(failedQueries.map(query => query.refetch()))}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -119,7 +161,9 @@ export default function ProductivityReports() {
         <Card>
           <CardContent className="pt-3 pb-2">
             <span className="text-[10px] text-muted-foreground">Taxa de Sucesso</span>
-            <div className={`text-xl font-bold ${overallSuccess >= 90 ? 'text-success' : 'text-warning'}`}>{overallSuccess}%</div>
+            <div className={`text-xl font-bold ${overallSuccess === null ? 'text-muted-foreground' : overallSuccess >= 90 ? 'text-success' : 'text-warning'}`}>
+              {overallSuccess === null ? '—' : `${overallSuccess}%`}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -195,8 +239,14 @@ export default function ProductivityReports() {
                     <TableCell>{d.avgPallets}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Progress value={d.successRate} className={`w-12 h-2 ${d.successRate < 80 ? '[&>div]:bg-destructive' : d.successRate < 95 ? '[&>div]:bg-warning' : ''}`} />
-                        <span className={`text-xs font-medium ${d.successRate < 80 ? 'text-destructive' : ''}`}>{d.successRate}%</span>
+                        {d.successRate === null ? (
+                          <span className="text-xs text-muted-foreground">Sem amostra</span>
+                        ) : (
+                          <>
+                            <Progress aria-label={`Taxa de sucesso de ${d.name}`} aria-valuetext={`${d.successRate}%`} value={d.successRate} className={`w-12 h-2 ${d.successRate < 80 ? '[&>div]:bg-destructive' : d.successRate < 95 ? '[&>div]:bg-warning' : ''}`} />
+                            <span className={`text-xs font-medium ${d.successRate < 80 ? 'text-destructive' : ''}`}>{d.successRate}%</span>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -267,7 +317,7 @@ export default function ProductivityReports() {
                   <TableCell className="text-muted-foreground">{v.maxPallets} pal</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Progress value={v.avgOccupancy} className={`w-16 h-2 ${v.avgOccupancy < 50 ? '[&>div]:bg-warning' : ''}`} />
+                      <Progress aria-label={`Ocupação média do veículo ${v.plate}`} aria-valuetext={`${v.avgOccupancy}%`} value={v.avgOccupancy} className={`w-16 h-2 ${v.avgOccupancy < 50 ? '[&>div]:bg-warning' : ''}`} />
                       <span className={`text-xs font-medium ${v.avgOccupancy < 50 ? 'text-warning' : ''}`}>{v.avgOccupancy}%</span>
                     </div>
                   </TableCell>

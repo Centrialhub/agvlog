@@ -32,6 +32,16 @@ it('keeps revision stable on repeated reads and detects changes anywhere in the 
  await expect(read(id,1,first.revision)).rejects.toThrow('finance_history_changed');
  await expect(read(null,2)).rejects.toThrow('finance_history_revision_required');await expect(read(null,0)).rejects.toThrow('finance_invalid_history_page');
 });
+it('uses transactionally maintained revision heads instead of hashing the full journal on every page',async()=>{
+ const definition=(await db.query<{definition:string}>("select pg_get_functiondef('finance_private.receivable_captured_history(uuid,uuid,integer,text)'::regprocedure) definition")).rows[0].definition;
+ expect(definition).toContain('receivable_history_revisions');expect(definition).not.toContain('string_agg');
+ const id=await title(),first=await read(id);const global=await read();
+ await db.query("update receivables set notes='revision head advances in the writer transaction' where id=$1",[id]);
+ await expect(read(id,1,first.revision)).rejects.toThrow('finance_history_changed');
+ await expect(read(null,1,global.revision)).rejects.toThrow('finance_history_changed');
+ const heads=await db.query<{scope_key:string,event_count:number}>('select scope_key,event_count from finance_private.receivable_history_revisions where tenant_id=$1 order by scope_key',[i.tenant]);
+ expect(heads.rows).toEqual(expect.arrayContaining([{scope_key:'*',event_count:2},{scope_key:id,event_count:2}]));
+});
 it('returns exact cents or diagnostic null, never rounds or assumes null receipts equal zero',async()=>{
  const id=randomUUID();await db.query("insert into receivables(id,tenant_id,amount,received_amount,status,due_date) values($1,$2,12.345,null,'pending','infinity')",[id,i.tenant]);
  const result=await read(id);expect(result.rows[0].after).toMatchObject({amount_cents:null,received_cents:null,due_date:null,issues:['amount_invalid','due_date_invalid','received_amount_unknown']});

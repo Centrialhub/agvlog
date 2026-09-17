@@ -1,0 +1,8 @@
+import {useQuery} from "@tanstack/react-query";
+import {formatFinanceCents} from "@/lib/financial/ledgerContract";
+import {readClosingReceivableAgreement,readReceivableAgreementPosition,receivableAgreementError} from "@/lib/financial/receivableAgreementClient";
+export function ReceivableAgreementPositionPanel({tenant,actor,receivable,report}:{tenant:string;actor:string;receivable?:string|null;report?:string}){
+ const query=useQuery({queryKey:["receivable-agreement-display",tenant,actor,receivable,report],queryFn:async()=>receivable?readReceivableAgreementPosition(tenant,actor,receivable):(await readClosingReceivableAgreement(tenant,actor,report!)).agreement,enabled:!!receivable||!!report,retry:false}),position=query.data;
+ if(query.isPending||query.isFetching)return <p role="status">Consultando parcelas vinculadas…</p>;if(query.error)return <p role="alert">{receivableAgreementError(query.error)}</p>;if(!position||position.status==="none"||position.status==="revoked")return null;
+ return <section className="space-y-2 rounded border p-3" aria-label="Parcelas da renegociação"><h3 className="font-semibold">Parcelas da renegociação</h3><p>O título original permanece único. Saldo nas parcelas: {formatFinanceCents(position.scheduled_open_cents||"0")}.</p>{position.requires_reallocation?<p role="alert">Há {formatFinanceCents(position.unallocated_open_cents||"0")} sem vencimento definido.</p>:null}<ol className="list-decimal pl-5">{position.installments.map(row=><li key={row.id}>{new Date(row.due_on+"T12:00:00").toLocaleDateString("pt-BR")} · {formatFinanceCents(row.open_cents||"0")} em aberto · {row.status}</li>)}</ol></section>;
+}

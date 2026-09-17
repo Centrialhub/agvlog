@@ -8,6 +8,13 @@ const baselinePath = join(migrationsDir, '20260824224152_baseline.sql');
 const baseline = readFileSync(baselinePath, 'utf8');
 const migrationNames = readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort();
 const activeSql = migrationNames.map((name) => readFileSync(join(migrationsDir, name), 'utf8')).join('\n');
+const intentionallyPrivateForwardTables = new Set([
+  'delivery_receipt_ocr_jobs',
+  'finance_legacy_cut_reviews',
+  'finance_movement_voids',
+  'finance_unloading_projection_repairs',
+  'ssx_tracking_reference_catalog',
+]);
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -43,15 +50,15 @@ const cronBootstrap = readFileSync(join(root, 'supabase', 'bootstrap', 'cron_job
 const cronAuthSource = readFileSync(join(root, 'supabase', 'functions', '_shared', 'cron-auth.ts'), 'utf8');
 const palletReturnsSource = readFileSync(join(root, 'src', 'hooks', 'usePalletReturns.tsx'), 'utf8');
 
-const tables = new Set(captures(activeSql, /^CREATE TABLE public\.([a-zA-Z0-9_]+)/gim));
+const tables = new Set(captures(activeSql, /^CREATE TABLE(?: IF NOT EXISTS)? public\.([a-zA-Z0-9_]+)/gim));
 const views = new Set(captures(activeSql, /^CREATE(?: OR REPLACE)? VIEW public\.([a-zA-Z0-9_]+)/gim));
 const functions = new Set(
   captures(activeSql, /^CREATE(?: OR REPLACE)? FUNCTION public\.([a-zA-Z0-9_]+)\(/gim),
 );
-const buckets = new Set(captures(
-  activeSql,
-  /INSERT INTO\s+storage\.buckets\s*\([^;]*?\)\s*VALUES\s*\(\s*'([^']+)'/gi,
-));
+const buckets = new Set(
+  [...activeSql.matchAll(/INSERT INTO\s+storage\.buckets\s*\([^;]*?\)\s*VALUES\s*([^;]+);/gi)]
+    .flatMap((match) => captures(match[1], /\(\s*'([^']+)'/g)),
+);
 
 const functionGrantStatements = [
   ...activeSql.matchAll(/^GRANT EXECUTE ON FUNCTION\s+([\s\S]*?)\s+TO\s+([^;]+);/gim),
@@ -164,6 +171,8 @@ describe('Supabase baseline contract', () => {
       'fail_delivery_receipt_email_v1',
       'inspect_finance_statement_source',
       'get_finance_access',
+      'authorize_finance_statement_artifact_verification',
+      'get_finance_expense_receipt_artifacts',
     ]);
     expect([...invoked].filter((name) => !functions.has(name))).toEqual([]);
     expect([...invoked].filter((name) => !(callerJwtFunctions.has(name)
@@ -608,6 +617,110 @@ describe('Supabase baseline contract', () => {
     expect(activeSql).toContain('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public');
   });
 
+  it('makes every forward public-table Data API decision explicit', () => {
+    const failures: string[] = [];
+
+    for (const migrationName of migrationNames.slice(1)) {
+      const sql = readFileSync(join(migrationsDir, migrationName), 'utf8');
+      const createdTables = captures(
+        sql,
+        /^CREATE TABLE(?: IF NOT EXISTS)? public\.([a-zA-Z0-9_]+)/gim,
+      );
+      if (createdTables.length === 0) continue;
+
+      const enablesRls = /ALTER TABLE(?: ONLY)? public\.[a-zA-Z0-9_]+ ENABLE ROW LEVEL SECURITY/i.test(sql)
+        || /execute\s+format\(\s*'alter table public\.%I enable row level security'/i.test(sql);
+      const revokesDefaultAccess = /REVOKE ALL(?: PRIVILEGES)? ON (?:TABLE )?public\./i.test(sql)
+        || /execute\s+format\(\s*'revoke all(?: privileges)? on (?:table )?public\.%I/i.test(sql);
+      const grantsDeliberateAccess = /GRANT (?:ALL(?: PRIVILEGES)?|SELECT|INSERT|UPDATE|DELETE)(?:\s*,\s*(?:SELECT|INSERT|UPDATE|DELETE))* ON (?:TABLE )?public\./i.test(sql)
+        || /execute\s+format\(\s*'grant (?:all(?: privileges)?|select|insert|update|delete)/i.test(sql);
+
+      for (const table of createdTables) {
+        if (!enablesRls) failures.push(`${migrationName}:${table}:missing_rls`);
+        if (!revokesDefaultAccess) failures.push(`${migrationName}:${table}:missing_revoke`);
+        if (!grantsDeliberateAccess && !intentionallyPrivateForwardTables.has(table)) {
+          failures.push(`${migrationName}:${table}:missing_grant_or_private_decision`);
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
+  });
+
+  it('keeps future tables, functions, and sequences private by default', () => {
+    const migration = readFileSync(
+      join(migrationsDir, '20260826164000_harden_future_default_privileges.sql'),
+      'utf8',
+    );
+    expect(migration).toContain("ARRAY['postgres'::name, 'supabase_admin'::name]");
+    expect(migration).toContain(
+      'REVOKE ALL PRIVILEGES ON TABLES FROM PUBLIC, anon, authenticated, service_role',
+    );
+    expect(migration).toContain(
+      'REVOKE ALL PRIVILEGES ON SEQUENCES FROM PUBLIC, anon, authenticated, service_role',
+    );
+    expect(migration).toContain(
+      'REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated, service_role',
+    );
+  });
+
+  it('repairs the active RPC catalog and tenant-index release gate forward-only', () => {
+    const migration = readFileSync(
+      join(migrationsDir, '20260916043810_harden_active_rpc_catalog_and_tenant_indexes.sql'),
+      'utf8',
+    );
+    const indexedTables = [
+      'ssx_position_quarantine',
+      'finance_fiscal_projection_events',
+      'tax_registry_applied_changes',
+      'trip_cargo_seals',
+      'finance_manual_expense_evidence',
+      'trip_cargo_document_checks',
+      'finance_account_opening_reversals',
+      'finance_automatic_reconciliation_jobs',
+      'finance_payable_link_reversals',
+      'finance_settlement_link_reversals',
+      'trip_cargo_evidence',
+      'trip_cargo_load_checks',
+      'finance_legacy_cut_reviews',
+      'trip_cargo_commands',
+    ];
+
+    expect(migration.match(/create index if not exists/gi)).toHaveLength(indexedTables.length);
+    for (const table of indexedTables) {
+      expect(migration).toMatch(new RegExp(`on public\\.${table} \\(tenant_id\\);`, 'i'));
+    }
+
+    expect(migration).not.toMatch(/\brow_to_jsonb\s*\(/i);
+    expect(migration).toContain('jsonb_agg(to_jsonb(t))');
+    expect(migration).toContain('select to_jsonb(ns)');
+    expect(migration).toContain('jsonb_agg(to_jsonb(ps) order by ps.sequence)');
+    expect(migration).toContain('jsonb_agg(to_jsonb(pe) order by pe.sequence)');
+    expect(migration).toContain('jsonb_agg(to_jsonb(ld))');
+
+    expect(migration).toContain('select e.client_id');
+    expect(migration).toContain('from public.operational_events e');
+    expect(migration).toContain('where e.id = _occurrence_id');
+    expect(migration).toContain('and e.tenant_id = _tenant_id');
+
+    expect(migration).not.toContain('loads.driver_settlement_id');
+    expect(migration).not.toMatch(/update\s+public\.loads/i);
+    expect(migration).toContain('delete from public.driver_settlement_loads');
+    expect(migration).toContain('delete from public.driver_settlement_items');
+    expect(migration).toContain('perform finance_private.require_access(v_s.tenant_id)');
+
+    for (const signature of [
+      'public.get_active_trips_live(uuid)',
+      'public.list_client_occurrence_messages(uuid, uuid)',
+      'public.delete_driver_settlement(uuid, text)',
+    ]) {
+      expect(migration).toContain(`revoke all on function ${signature}`);
+      expect(migration).toContain(`grant execute on function ${signature}`);
+    }
+    expect(migration.match(/security definer/gi)).toHaveLength(3);
+    expect(migration.match(/set search_path to 'public'/gi)).toHaveLength(3);
+  });
+
   it('does not select backend-only credential columns in browser code', () => {
     const selectArguments = captures(appSource, /\.select\(\s*['"`]([^'"`]*)['"`]/gs).join('\n');
     expect(selectArguments).not.toMatch(
@@ -697,7 +810,7 @@ describe('Supabase baseline contract', () => {
     expect(sefaz).toContain("eventError.code !== '23505'");
   });
 
-  it('restores privileged MFA forward-only after the historical rollback', () => {
+  it('records the privileged MFA history and keeps the final password-session contract', () => {
     const legacyMfaMigration = readFileSync(
       join(migrationsDir, '20260826165000_require_privileged_mfa.sql'),
       'utf8',
@@ -708,6 +821,10 @@ describe('Supabase baseline contract', () => {
     );
     const releaseMfaMigration = readFileSync(
       join(migrationsDir, '20260828210458_enforce_privileged_mfa_release.sql'),
+      'utf8',
+    );
+    const finalRemovalMigration = readFileSync(
+      join(migrationsDir, '20260831164442_remove_authenticator_requirement.sql'),
       'utf8',
     );
 
@@ -741,6 +858,11 @@ describe('Supabase baseline contract', () => {
     }
     expect(releaseMfaMigration).toContain("coalesce(auth.jwt()->>'aal', 'aal1') = 'aal2'");
     expect(releaseMfaMigration).toContain('revoke all on function public.session_has_privileged_mfa_v1(uuid) from public, anon, authenticated');
+    expect(finalRemovalMigration).toContain(
+      'drop function if exists public.session_has_privileged_mfa_v1(uuid)',
+    );
+    expect(finalRemovalMigration).toContain("p.prosrc ~* 'aal2'");
+    expect(finalRemovalMigration).toContain("p.prosrc like '%session_has_privileged_mfa_v1%'");
 
     // The historical migration also removed permissive policy overlaps. Those
     // tenant-isolation changes remain part of the active database contract.

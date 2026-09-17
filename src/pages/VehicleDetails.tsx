@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { localDateInputValue, localDateUtcRange } from '@/lib/utils/formatDate';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,6 +33,7 @@ import OdometerTab from '@/components/fleet/OdometerTab';
 import type { Json, Tables } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
 import { resolvePositionTelemetry } from '@/lib/positionTelemetry';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 type Trip = Tables<'trips'>;
 type ConsolidatedTrip = Trip & { _merged_count: number; max_speed_kmh: number };
@@ -56,27 +58,34 @@ export default function VehicleDetails() {
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
   const queryClient = useQueryClient();
+  const [activeTab,setActiveTab]=useState('overview');
+  const [alertsPage,setAlertsPage]=useState(1),[geoEventsPage,setGeoEventsPage]=useState(1);
+  const detailPageSize=30;
 
-  const { data: vehicle } = useQuery({
-    queryKey: ['vehicle', vehicleId],
+  const vehicleQuery = useQuery({
+    queryKey: ['vehicle', currentTenant?.id, vehicleId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('vehicles').select(VEHICLE_SAFE_SELECT).eq('id', vehicleId!).single();
+      const { data, error } = await supabase.from('vehicles').select(VEHICLE_SAFE_SELECT)
+        .eq('tenant_id', currentTenant!.id).eq('id', vehicleId!).single();
       if (error) throw error;
       return data;
     },
-    enabled: !!vehicleId,
+    enabled: !!vehicleId && !!currentTenant?.id,
   });
+  const vehicle = vehicleQuery.data;
 
-  const { data: capabilities } = useQuery({
-    queryKey: ['vehicle_capabilities', vehicleId],
+  const capabilitiesQuery = useQuery({
+    queryKey: ['vehicle_capabilities', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return null;
-      const { data } = await supabase.from('vehicle_capabilities').select('capabilities')
+      const { data, error } = await supabase.from('vehicle_capabilities').select('capabilities')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId).single();
+      if (error) throw error;
       return (data?.capabilities as Record<string, boolean>) || {};
     },
     enabled: !!currentTenant && !!vehicleId,
   });
+  const capabilities = capabilitiesQuery.data;
 
   const vehicleStateQuery = useVehicleState(vehicleId || null);
   const vehicleState = vehicleStateQuery.error ? undefined : vehicleStateQuery.data;
@@ -84,121 +93,122 @@ export default function VehicleDetails() {
   const positionLast = positionQuery.error ? undefined : positionQuery.data;
 
   // Today metrics for overview KPIs
-  const { data: todayMetrics } = useQuery({
+  const todayMetricsQuery = useQuery({
     queryKey: ['vehicle_today_metrics', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return null;
-      const today = new Date().toISOString().slice(0, 10);
-      const { data } = await supabase.from('metrics_daily').select('*')
+      const today = localDateInputValue();
+      const { data, error } = await supabase.from('metrics_daily').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId).eq('day', today).maybeSingle();
+      if (error) throw error;
       return data;
     },
     enabled: !!currentTenant && !!vehicleId,
   });
+  const todayMetrics = todayMetricsQuery.data;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateInputValue();
   const [historyDate, setHistoryDate] = useState(today);
-  const historyQuery = useVehicleHistory(vehicleId || null, `${historyDate}T00:00:00Z`, `${historyDate}T23:59:59Z`);
+  const historyRange = useMemo(() => localDateUtcRange(historyDate), [historyDate]);
+  const historyQuery = useVehicleHistory(vehicleId || null, historyRange.from, historyRange.toExclusive);
   const history = useMemo(
     () => (historyQuery.error ? [] : (historyQuery.data ?? [])),
     [historyQuery.error, historyQuery.data],
   );
   const { isLoading: historyLoading } = historyQuery;
 
-  const { data: trips = [] } = useQuery({
+  const tripsQuery = useQuery({
     queryKey: ['vehicle_trips', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return [];
-      const { data, error } = await supabase.from('trips').select('*')
+      return fetchAllPostgrestPages<Tables<'trips'>>((from, to) => supabase.from('trips').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
-        .gte('start_at', `${historyDate}T00:00:00Z`).lte('start_at', `${historyDate}T23:59:59Z`)
-        .order('start_at');
-      if (error) throw error;
-      return data;
+        .gte('start_at', historyRange.from).lt('start_at', historyRange.toExclusive)
+        .order('start_at').order('id').range(from, to));
     },
     enabled: !!currentTenant && !!vehicleId,
   });
+  const trips = tripsQuery.data ?? [];
 
-  const { data: stops = [] } = useQuery<TripStopWithPoi[]>({
+  const stopsQuery = useQuery<TripStopWithPoi[]>({
     queryKey: ['vehicle_stops', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return [];
-      const { data, error } = await supabase.from('trip_stops').select('*')
+      const data = await fetchAllPostgrestPages<Tables<'trip_stops'>>((from, to) => supabase.from('trip_stops').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
-        .gte('start_at', `${historyDate}T00:00:00Z`).lte('start_at', `${historyDate}T23:59:59Z`)
-        .order('start_at');
-      if (error) throw error;
-      const poiIds = Array.from(new Set((data || []).map((stop) => stop.poi_id).filter((id): id is string => Boolean(id))));
+        .gte('start_at', historyRange.from).lt('start_at', historyRange.toExclusive)
+        .order('start_at').order('id').range(from, to));
+      const poiIds = Array.from(new Set(data.map((stop) => stop.poi_id).filter((id): id is string => Boolean(id))));
       const poiNames = new Map<string, string>();
-      if (poiIds.length > 0) {
-        const { data: poiRows, error: poiError } = await supabase.from('pois').select('id, name').in('id', poiIds);
-        if (poiError) throw poiError;
-        for (const poi of poiRows || []) poiNames.set(poi.id, poi.name ?? 'Ponto sem nome');
+      for (let index = 0; index < poiIds.length; index += 200) {
+        const ids = poiIds.slice(index, index + 200);
+        const poiRows = await fetchAllPostgrestPages<Pick<Tables<'pois'>, 'id' | 'name'>>((from, to) => supabase
+          .from('pois').select('id, name').eq('tenant_id', currentTenant.id).in('id', ids).range(from, to));
+        for (const poi of poiRows) poiNames.set(poi.id, poi.name ?? 'Ponto sem nome');
       }
-      return (data || []).map((stop) => ({
+      return data.map((stop) => ({
         ...stop,
         pois: stop.poi_id && poiNames.has(stop.poi_id) ? { name: poiNames.get(stop.poi_id)! } : null,
       }));
     },
     enabled: !!currentTenant && !!vehicleId,
   });
+  const stops = stopsQuery.data ?? [];
 
-  const { data: alerts = [] } = useQuery({
-    queryKey: ['vehicle_alerts', currentTenant?.id, vehicleId],
+  const alertsQuery = useQuery({
+    queryKey: ['vehicle_alerts', currentTenant?.id, vehicleId,alertsPage],
     queryFn: async () => {
-      if (!currentTenant || !vehicleId) return [];
-      const { data, error } = await supabase.from('alert_instances').select('*, alert_rules(rule_type)')
+      if (!currentTenant || !vehicleId) return {rows:[],total:0};
+      const from=(alertsPage-1)*detailPageSize,{data,error,count}=await supabase.from('alert_instances').select('*, alert_rules(rule_type)',{count:'exact'})
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
-        .order('opened_at', { ascending: false }).limit(20);
-      if (error) throw error;
-      return data;
+        .order('opened_at', { ascending: false }).order('id', { ascending: false }).range(from,from+detailPageSize-1);
+      if(error)throw error;return {rows:data??[],total:count??0};
     },
-    enabled: !!currentTenant && !!vehicleId,
+    enabled: !!currentTenant && !!vehicleId&&activeTab==='alerts',
   });
+  const alerts = alertsQuery.data?.rows ?? [];
 
-  const { data: geoEvents = [] } = useQuery({
-    queryKey: ['vehicle_geo_events', currentTenant?.id, vehicleId],
+  const geoEventsQuery = useQuery({
+    queryKey: ['vehicle_geo_events', currentTenant?.id, vehicleId,geoEventsPage],
     queryFn: async () => {
-      if (!currentTenant || !vehicleId) return [];
-      const { data, error } = await supabase.from('geofence_events').select('*, geofences(name)')
+      if (!currentTenant || !vehicleId) return {rows:[],total:0};
+      const from=(geoEventsPage-1)*detailPageSize,{data,error,count}=await supabase.from('geofence_events').select('*, geofences(name)',{count:'exact'})
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
-        .order('event_at', { ascending: false }).limit(20);
-      if (error) throw error;
-      return data;
+        .order('event_at', { ascending: false }).order('id', { ascending: false }).range(from,from+detailPageSize-1);
+      if(error)throw error;return {rows:data??[],total:count??0};
     },
-    enabled: !!currentTenant && !!vehicleId,
+    enabled: !!currentTenant && !!vehicleId&&activeTab==='geofences',
   });
+  const geoEvents = geoEventsQuery.data?.rows ?? [];
 
-  const { data: overspeedEvents = [] } = useQuery({
+  const overspeedQuery = useQuery({
     queryKey: ['vehicle_overspeed', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return [];
-      const { data, error } = await supabase.from('events').select('*')
+      return fetchAllPostgrestPages<Tables<'events'>>((from, to) => supabase.from('events').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
         .eq('event_type', 'overspeed').eq('source', 'engine')
-        .gte('event_at', `${historyDate}T00:00:00Z`).lte('event_at', `${historyDate}T23:59:59Z`)
-        .order('event_at');
-      if (error) throw error;
-      return data;
+        .gte('event_at', historyRange.from).lt('event_at', historyRange.toExclusive)
+        .order('event_at').order('id').range(from, to));
     },
     enabled: !!currentTenant && !!vehicleId,
   });
+  const overspeedEvents = overspeedQuery.data ?? [];
 
-  const { data: fuelReadings = [] } = useQuery({
+  const fuelQuery = useQuery({
     queryKey: ['vehicle_fuel', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return [];
-      const { data, error } = await supabase.from('fuel_readings').select('*')
+      return fetchAllPostgrestPages<Tables<'fuel_readings'>>((from, to) => supabase.from('fuel_readings').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
-        .gte('captured_at', `${historyDate}T00:00:00Z`).lte('captured_at', `${historyDate}T23:59:59Z`)
-        .order('captured_at');
-      if (error) throw error;
-      return data;
+        .gte('captured_at', historyRange.from).lt('captured_at', historyRange.toExclusive)
+        .order('captured_at').order('id').range(from, to));
     },
     enabled: !!currentTenant && !!vehicleId,
   });
+  const fuelReadings = fuelQuery.data ?? [];
 
-  const { data: pois = [] } = useQuery({
+  const poisQuery = useQuery({
     queryKey: ['pois', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -209,6 +219,7 @@ export default function VehicleDetails() {
     },
     enabled: !!currentTenant,
   });
+  const pois = poisQuery.data ?? [];
 
   const currentTelemetry = resolvePositionTelemetry(positionLast, vehicleState);
   const movementState = currentTelemetry.movementState;
@@ -305,8 +316,11 @@ export default function VehicleDetails() {
 
   const linkPOIMutation = useMutation({
     mutationFn: async ({ stopId, poiId }: { stopId: string; poiId: string }) => {
-      const { error } = await supabase.from('trip_stops').update({ poi_id: poiId }).eq('id', stopId);
+      if (!currentTenant) throw new Error('Tenant ativo não encontrado.');
+      const { data, error } = await supabase.from('trip_stops').update({ poi_id: poiId })
+        .eq('id', stopId).eq('tenant_id', currentTenant.id).select('id').maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('Parada não encontrada no tenant ativo.');
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['vehicle_stops'] }); toast.success('POI vinculado'); },
     onError: (error: unknown) => toast.error(getErrorMessage(error)),
@@ -315,6 +329,34 @@ export default function VehicleDetails() {
   const [poiDialogStop, setPoiDialogStop] = useState<TripStopWithPoi | null>(null);
   const [poiName, setPoiName] = useState('');
   const [linkPoiId, setLinkPoiId] = useState('');
+
+  const detailFailures = [
+    { name: 'capacidades', query: capabilitiesQuery },
+    { name: 'métricas diárias', query: todayMetricsQuery },
+    { name: 'viagens', query: tripsQuery },
+    { name: 'paradas e POIs vinculados', query: stopsQuery },
+    { name: 'alertas', query: alertsQuery },
+    { name: 'eventos de geofence', query: geoEventsQuery },
+    { name: 'excessos de velocidade', query: overspeedQuery },
+    { name: 'combustível', query: fuelQuery },
+    { name: 'catálogo de POIs', query: poisQuery },
+  ].filter(item => item.query.isError);
+
+  if (vehicleQuery.isLoading) return <div className="p-6 text-sm text-muted-foreground">Carregando veículo...</div>;
+  if (vehicleQuery.isError || !vehicle) {
+    return (
+      <div className="p-6 space-y-4">
+        <Button variant="ghost" onClick={() => navigate(-1)}><ArrowLeft className="mr-2 h-4 w-4" /> Voltar</Button>
+        <Card className="border-destructive/40" role="alert">
+          <CardContent className="space-y-3 py-6 text-center">
+            <p className="font-medium text-destructive">Não foi possível carregar o veículo desta empresa</p>
+            <p className="text-sm text-muted-foreground">{vehicleQuery.isError ? getErrorMessage(vehicleQuery.error) : 'Veículo não encontrado no tenant ativo.'}</p>
+            <Button variant="outline" onClick={() => void vehicleQuery.refetch()}>Tentar novamente</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in space-y-4">
@@ -369,12 +411,25 @@ export default function VehicleDetails() {
         </Card>
       )}
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      {detailFailures.length > 0 && (
+        <Card className="border-destructive/40 bg-destructive/5" role="alert">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="text-sm text-destructive">
+              Dados indisponíveis: {detailFailures.map(item => item.name).join(', ')}. Valores vazios dessas áreas não representam ausência de registros.
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => void Promise.all(detailFailures.map(item => item.query.refetch()))}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="flex-wrap">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="trips">Viagens ({consolidatedTrips.length})</TabsTrigger>
-          <TabsTrigger value="stops">Paradas ({stops.length})</TabsTrigger>
+          <TabsTrigger value="trips">Viagens ({tripsQuery.isError ? '—' : consolidatedTrips.length})</TabsTrigger>
+          <TabsTrigger value="stops">Paradas ({stopsQuery.isError ? '—' : stops.length})</TabsTrigger>
           <TabsTrigger value="speed">Velocidade</TabsTrigger>
           <TabsTrigger value="fuel">Combustível</TabsTrigger>
           <TabsTrigger value="maintenance">
@@ -386,8 +441,8 @@ export default function VehicleDetails() {
           <TabsTrigger value="odometer">
             <Gauge className="h-3.5 w-3.5 mr-1" />Odômetro
           </TabsTrigger>
-          <TabsTrigger value="alerts">Alertas ({alerts.length})</TabsTrigger>
-          <TabsTrigger value="geofences">Geofences ({geoEvents.length})</TabsTrigger>
+          <TabsTrigger value="alerts">Alertas ({alertsQuery.isError ? '—' : alertsQuery.data?.total??'…'})</TabsTrigger>
+          <TabsTrigger value="geofences">Geofences ({geoEventsQuery.isError ? '—' : geoEventsQuery.data?.total??'…'})</TabsTrigger>
           <TabsTrigger value="telemetry">Telemetria</TabsTrigger>
         </TabsList>
 
@@ -765,7 +820,9 @@ export default function VehicleDetails() {
             <Table>
               <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Status</TableHead><TableHead>Aberto</TableHead><TableHead>Fechado</TableHead></TableRow></TableHeader>
               <TableBody>
-                {alerts.length === 0 ? (
+                {alertsQuery.isError ? (
+                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-destructive">Alertas indisponíveis. Use “Tentar novamente” acima.</TableCell></TableRow>
+                ) : alerts.length === 0 ? (
                   <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground"><Bell className="h-6 w-6 mx-auto mb-1 text-muted-foreground/50" />Nenhum alerta</TableCell></TableRow>
                 ) : alerts.map((a) => (
                   <TableRow key={a.id}>
@@ -778,6 +835,7 @@ export default function VehicleDetails() {
               </TableBody>
             </Table>
           </CardContent></Card>
+          <div className="flex items-center justify-between"><Button variant="outline" disabled={alertsPage===1||alertsQuery.isFetching} onClick={()=>setAlertsPage(value=>value-1)}>Anterior</Button><span className="text-sm">Página {alertsPage} de {Math.max(1,Math.ceil((alertsQuery.data?.total??0)/detailPageSize))}</span><Button variant="outline" disabled={alertsPage*detailPageSize>=(alertsQuery.data?.total??0)||alertsQuery.isFetching} onClick={()=>setAlertsPage(value=>value+1)}>Próxima</Button></div>
         </TabsContent>
 
         {/* Geofences */}
@@ -786,7 +844,9 @@ export default function VehicleDetails() {
             <Table>
               <TableHeader><TableRow><TableHead>Geofence</TableHead><TableHead>Direção</TableHead><TableHead>Quando</TableHead></TableRow></TableHeader>
               <TableBody>
-                {geoEvents.length === 0 ? (
+                {geoEventsQuery.isError ? (
+                  <TableRow><TableCell colSpan={3} className="text-center py-8 text-destructive">Eventos de geofence indisponíveis. Use “Tentar novamente” acima.</TableCell></TableRow>
+                ) : geoEvents.length === 0 ? (
                   <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground"><Hexagon className="h-6 w-6 mx-auto mb-1 text-muted-foreground/50" />Nenhum evento</TableCell></TableRow>
                 ) : geoEvents.map((ev) => (
                   <TableRow key={ev.id}>
@@ -798,6 +858,7 @@ export default function VehicleDetails() {
               </TableBody>
             </Table>
           </CardContent></Card>
+          <div className="flex items-center justify-between"><Button variant="outline" disabled={geoEventsPage===1||geoEventsQuery.isFetching} onClick={()=>setGeoEventsPage(value=>value-1)}>Anterior</Button><span className="text-sm">Página {geoEventsPage} de {Math.max(1,Math.ceil((geoEventsQuery.data?.total??0)/detailPageSize))}</span><Button variant="outline" disabled={geoEventsPage*detailPageSize>=(geoEventsQuery.data?.total??0)||geoEventsQuery.isFetching} onClick={()=>setGeoEventsPage(value=>value+1)}>Próxima</Button></div>
         </TabsContent>
 
         {/* Telemetry */}

@@ -6,20 +6,32 @@ import Billing from '@/pages/BillingPage';
 import CteMonitor from '@/pages/CteMonitor';
 import CteSearch from '@/pages/CteSearch';
 
-export default function CteHub() {
-  const initialTab = typeof window !== 'undefined'
-    ? (new URLSearchParams(window.location.search).get('tab') || 'faturamento')
-    : 'faturamento';
+const VALID_TABS = new Set(['faturamento', 'monitor', 'consulta']);
+const normalizeTab = (value: string | null) => value && VALID_TABS.has(value) ? value : 'faturamento';
 
-  const [activeTab, setActiveTab] = useState(initialTab);
-  const [searchParams] = useSearchParams();
+export default function CteHub() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => normalizeTab(searchParams.get('tab')));
 
   // Mantém a aba sincronizada quando outras telas navegam para ?tab=monitor|consulta.
   useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab && tab !== activeTab) setActiveTab(tab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+    const rawTab = searchParams.get('tab');
+    const tab = normalizeTab(rawTab);
+    setActiveTab(current => current === tab ? current : tab);
+    if (rawTab !== tab) {
+      const next = new URLSearchParams(searchParams);
+      next.set('tab', tab);
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const changeTab = (tab: string) => {
+    const validTab = normalizeTab(tab);
+    setActiveTab(validTab);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', validTab);
+    setSearchParams(next);
+  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -32,7 +44,7 @@ export default function CteHub() {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={changeTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="faturamento" className="gap-2">
             <FileSpreadsheet className="h-4 w-4" /> Faturamento

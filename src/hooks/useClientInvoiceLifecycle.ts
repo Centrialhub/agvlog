@@ -4,8 +4,11 @@ import {useTenant} from '@/hooks/useTenant';
 import {useAuth} from '@/hooks/useAuth';
 import {supabase} from '@/integrations/supabase/client';
 import type {CreateClientInvoicePayload} from '@/hooks/useClientInvoices';
-import {invoiceError,parseInvoiceContext,parseInvoiceCreationContext,type InvoiceCommandInput,type InvoiceResult} from '@/lib/financial/clientInvoiceCommands';
+import {invoiceError,parseInvoiceContext,parseInvoiceCreationContext,type InvoiceActionContext,type InvoiceCommandInput,type InvoiceResult} from '@/lib/financial/clientInvoiceCommands';
 import {INVOICE_COMMAND_CHANGED,createInvoiceOutbox,pendingInvoiceCommand} from '@/lib/financial/clientInvoiceOutbox';
+import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
+interface LooseQuery<T> extends PromiseLike<{data:T[]|null;error:unknown}>{select(columns:string):LooseQuery<T>;eq(column:string,value:string):LooseQuery<T>;order(column:string,options?:{ascending?:boolean}):LooseQuery<T>;range(from:number,to:number):LooseQuery<T>}
+const looseFrom=<T,>(table:string)=>(supabase as unknown as {from(name:string):LooseQuery<T>}).from(table);
 export function useClientInvoiceLifecycle(invoice?:string,report?:string){
  const {user}=useAuth();const {currentTenant}=useTenant();const actor=user?.id;const tenant=currentTenant?.id;
  const latest=useRef({actor,tenant});latest.current={actor,tenant};const alive=useRef(true);const busy=useRef(false);const client=useQueryClient();
@@ -19,6 +22,9 @@ export function useClientInvoiceLifecycle(invoice?:string,report?:string){
  const creation=useQuery({queryKey:['client-invoice-creation',tenant,actor,report],enabled:!!tenant&&!!actor&&!!report,retry:false,
   queryFn:async({signal})=>{const {data,error}=await supabase.rpc('get_client_invoice_creation_context',{_tenant_id:tenant!,_report_id:report!,_draft:null}).abortSignal(signal);
    if(error)throw new Error(invoiceError(error));assertContext();return parseInvoiceCreationContext(data,tenant!,actor!,report!);}});
+ const history=useQuery({queryKey:['client-invoice-history',tenant,actor,invoice],enabled:!!tenant&&!!actor&&!!invoice,retry:false,
+  queryFn:async()=>await fetchAllPostgrestPages<InvoiceActionContext['history'][number]>((from,to)=>looseFrom<InvoiceActionContext['history'][number]>('client_invoice_commands')
+   .select('id,action,reason,created_at').eq('tenant_id',tenant!).eq('client_invoice_id',invoice!).order('created_at',{ascending:false}).order('id').range(from,to)) });
  const quote=async(draft:CreateClientInvoicePayload)=>{assertContext();if(!tenant||!actor||draft.tenant_id!==tenant)throw new Error('Empresa da prévia incompatível.');
   const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),30000);
   try{const {data,error}=await supabase.rpc('get_client_invoice_creation_context',{_tenant_id:tenant,_report_id:null,_draft:JSON.parse(JSON.stringify(draft))}).abortSignal(controller.signal);
@@ -36,5 +42,5 @@ export function useClientInvoiceLifecycle(invoice?:string,report?:string){
   finally{try{await Promise.all(['client-invoice-context','client-invoice-creation','client_invoices','client_invoice_detail','receivable-financial-context','receivables','finance-receivable-portfolio','finance-fiscal-dashboard-summary','finance-unbilled-freight-summary','finance-unbilled-freight-origins','closing-reports','closing-report','closing-action-context','eligible_ctes','eligible_nfse','financial_obligations','financial_matches_suggested'].map(key=>client.invalidateQueries({queryKey:[key]})));}
    finally{busy.current=false;if(alive.current)setPending(false);}}
  };
- return {query,creation,quote,isPending,pending:recovery.pending,recoveryError:recovery.error,submit:(input:InvoiceCommandInput)=>run(()=>outbox.submit(tenant!,actor!,input)),recover:()=>run(()=>outbox.recover(tenant!,actor!))};
+ return {query,creation,history,quote,isPending,pending:recovery.pending,recoveryError:recovery.error,submit:(input:InvoiceCommandInput)=>run(()=>outbox.submit(tenant!,actor!,input)),recover:()=>run(()=>outbox.recover(tenant!,actor!))};
 }

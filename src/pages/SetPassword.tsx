@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { authErrorMessage } from '@/lib/auth/authErrorMessage';
 
 function isStrongPassword(value: string): boolean {
   return value.length >= 12 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value);
@@ -29,15 +30,16 @@ export default function SetPassword() {
     if (!valid) return;
 
     setSaving(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      toast.success('Senha definida com sucesso.');
+      navigate('/', { replace: true });
+    } catch (error) {
+      toast.error(authErrorMessage(error, 'Não foi possível definir a senha.'));
+    } finally {
+      setSaving(false);
     }
-
-    toast.success('Senha definida com sucesso.');
-    navigate('/', { replace: true });
   };
 
   if (authLoading) {
@@ -49,21 +51,21 @@ export default function SetPassword() {
       <div className="w-full max-w-md">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-            <Truck className="h-6 w-6 text-primary-foreground" />
+            <Truck aria-hidden="true" className="h-6 w-6 text-primary-foreground" />
           </div>
           <h1 className="text-xl font-bold">AGVLog</h1>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" />Definir senha</CardTitle>
+            <CardTitle className="flex items-center gap-2"><KeyRound aria-hidden="true" className="h-5 w-5" />Definir senha</CardTitle>
             <CardDescription>Conclua seu convite escolhendo uma senha pessoal.</CardDescription>
           </CardHeader>
           <CardContent>
             {!user ? (
               <div className="space-y-4">
                 <div className="flex gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                   O convite é inválido ou expirou. Solicite um novo convite ao administrador.
                 </div>
                 <Button className="w-full" onClick={() => navigate('/auth', { replace: true })}>Voltar ao login</Button>

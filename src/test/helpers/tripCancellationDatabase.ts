@@ -4,6 +4,7 @@ export const cancellationSql=readFileSync('supabase/migrations/20260914200012_au
 export async function createTripCancellationDatabase(){
  const db=await createTripLoadDatabase();
  await db.exec(`create schema private;
+ grant usage on schema private to authenticated;
  create table tenants(id uuid primary key);
  create table tenant_memberships(tenant_id uuid,user_id uuid,active boolean,role text);
  create function private.is_request_tenant_member(t uuid) returns boolean language sql stable as $$select t=nullif(current_setting('test.tenant',true),'')::uuid and exists(select 1 from public.tenant_memberships where tenant_id=t and user_id=auth.uid() and active)$$;

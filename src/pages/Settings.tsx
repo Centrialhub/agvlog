@@ -658,10 +658,10 @@ function UnitsSection() {
   const { confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const { currentTenant } = useTenant();
-  const {data:accounts=[]}=useWorkspaceSsxAccounts(!!currentTenant);
-  const { data: units = [], isLoading: unitsLoading } = useProviderUnits();
-  const { data: links = [], isLoading: linksLoading } = useTrackerLinks();
-  const { data: vehicles = [] } = useVehicles();
+  const { data: workspaceAccounts = [], isLoading: accountsLoading, isError: accountsError, error: accountsErrorDetail, refetch: refetchAccounts } = useWorkspaceSsxAccounts(!!currentTenant);
+  const { data: units = [], isLoading: unitsLoading, isError: unitsError, error: unitsErrorDetail, refetch: refetchUnits } = useProviderUnits();
+  const { data: links = [], isLoading: linksLoading, isError: linksError, error: linksErrorDetail, refetch: refetchLinks } = useTrackerLinks();
+  const { data: vehicles = [], isLoading: vehiclesLoading, isError: vehiclesError, error: vehiclesErrorDetail, refetch: refetchVehicles } = useVehicles();
   const { create: createUnit, remove: removeUnit } = useProviderUnitMutations();
   const { create: createLink, remove: removeLink } = useTrackerLinkMutations();
 
@@ -671,9 +671,14 @@ function UnitsSection() {
   const [linkVehicleId, setLinkVehicleId] = useState('');
   const [linkUnitId, setLinkUnitId] = useState('');
 
+  const accounts = workspaceAccounts.filter((account) => account.tenant_id === currentTenant?.id);
+  const sourceError = accountsErrorDetail || unitsErrorDetail || linksErrorDetail || vehiclesErrorDetail;
+  const hasSourceError = accountsError || unitsError || linksError || vehiclesError;
+  const sourcesLoading = accountsLoading || unitsLoading || linksLoading || vehiclesLoading;
+
   const handleAddUnit = () => {
     if (!currentTenant || !newAccountId || !newCode) return;
-    createUnit.mutate({ tenant_id: currentTenant.id, integration_account_id: newAccountId, external_code: newCode, label: newLabel || undefined }, {
+    createUnit.mutate({ integration_account_id: newAccountId, external_code: newCode, label: newLabel || undefined }, {
       onSuccess: () => { toast.success('Rastreador adicionado'); setNewCode(''); setNewLabel(''); },
       onError: (e: any) => toast.error(e.message),
     });
@@ -681,7 +686,7 @@ function UnitsSection() {
 
   const handleAddLink = () => {
     if (!currentTenant || !linkVehicleId || !linkUnitId) return;
-    createLink.mutate({ tenant_id: currentTenant.id, vehicle_id: linkVehicleId, provider_unit_id: linkUnitId }, {
+    createLink.mutate({ vehicle_id: linkVehicleId, provider_unit_id: linkUnitId }, {
       onSuccess: () => { toast.success('Vinculação criada'); setLinkVehicleId(''); setLinkUnitId(''); },
       onError: (e: any) => toast.error(e.message),
     });
@@ -690,6 +695,22 @@ function UnitsSection() {
   // Unlinked units (not in any active link)
   const linkedUnitIds = new Set((links as any[]).map((l: any) => l.provider_unit_id));
   const unlinkedUnits = (units as any[]).filter((u: any) => !linkedUnitIds.has(u.id));
+
+  if (hasSourceError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base text-destructive">Não foi possível carregar os dados dos rastreadores</CardTitle>
+          <CardDescription>{errorMessage(sourceError)}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" size="sm" onClick={() => void Promise.all([refetchAccounts(), refetchUnits(), refetchLinks(), refetchVehicles()])}>
+            <RefreshCw className="mr-2 h-4 w-4" />Tentar novamente
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -703,7 +724,7 @@ function UnitsSection() {
           <div className="flex flex-wrap gap-3 items-end">
             <div className="space-y-1">
               <Label className="text-xs">Conta SSX</Label>
-              <Select value={newAccountId} onValueChange={setNewAccountId}>
+              <Select value={newAccountId} onValueChange={setNewAccountId} disabled={accountsLoading}>
                 <SelectTrigger className="w-48"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {accounts.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.provider} — {a.username}</SelectItem>)}
@@ -718,7 +739,7 @@ function UnitsSection() {
               <Label className="text-xs">Apelido</Label>
               <Input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Opcional" className="w-40" />
             </div>
-            <Button onClick={handleAddUnit} disabled={createUnit.isPending || !newCode || !newAccountId} size="sm">
+            <Button onClick={handleAddUnit} disabled={sourcesLoading || createUnit.isPending || !newCode || !newAccountId} size="sm">
               <Plus className="h-4 w-4 mr-1" />Adicionar
             </Button>
           </div>
@@ -751,7 +772,7 @@ function UnitsSection() {
                     <TableCell>{u.label || '—'}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{u.integration_account_id?.slice(0, 8)}...</TableCell>
                     <TableCell>{linkedUnitIds.has(u.id) ? <Badge className="bg-success text-success-foreground text-xs"><Link2 className="mr-1 h-3 w-3" />Vinculado</Badge> : <Badge variant="secondary" className="text-xs"><Unlink className="mr-1 h-3 w-3" />Livre</Badge>}</TableCell>
-                    <TableCell><Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover esta unidade?', { title: 'Remover unidade', confirmLabel: 'Remover' })) removeUnit.mutate(u.id); }}><Trash2 className="h-3 w-3 text-destructive" /></Button></TableCell>
+                    <TableCell><Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover esta unidade?', { title: 'Remover unidade', confirmLabel: 'Remover' })) removeUnit.mutate(u.id, { onError: (error) => toast.error('Falha ao remover rastreador', { description: errorMessage(error) }) }); }}><Trash2 className="h-3 w-3 text-destructive" /></Button></TableCell>
                   </TableRow>
                 ))
               )}
@@ -770,7 +791,7 @@ function UnitsSection() {
           <div className="flex flex-wrap gap-3 items-end">
             <div className="space-y-1">
               <Label className="text-xs">Veículo</Label>
-              <Select value={linkVehicleId} onValueChange={setLinkVehicleId}>
+              <Select value={linkVehicleId} onValueChange={setLinkVehicleId} disabled={vehiclesLoading}>
                 <SelectTrigger className="w-48"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {vehicles.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.plate}{v.nickname ? ` (${v.nickname})` : ''}</SelectItem>)}
@@ -779,14 +800,14 @@ function UnitsSection() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Rastreador</Label>
-              <Select value={linkUnitId} onValueChange={setLinkUnitId}>
+              <Select value={linkUnitId} onValueChange={setLinkUnitId} disabled={unitsLoading || linksLoading}>
                 <SelectTrigger className="w-48"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {unlinkedUnits.map((u: any) => <SelectItem key={u.id} value={u.id}>{u.external_code}{u.label ? ` (${u.label})` : ''}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={handleAddLink} disabled={createLink.isPending || !linkVehicleId || !linkUnitId} size="sm">
+            <Button onClick={handleAddLink} disabled={sourcesLoading || createLink.isPending || !linkVehicleId || !linkUnitId} size="sm">
               <Link2 className="h-4 w-4 mr-1" />Vincular
             </Button>
           </div>
@@ -817,7 +838,7 @@ function UnitsSection() {
                     <TableCell className="font-medium">{l.vehicles?.plate || '—'}{l.vehicles?.nickname ? ` (${l.vehicles.nickname})` : ''}</TableCell>
                     <TableCell className="font-mono text-xs">{l.provider_units?.external_code || '—'}{l.provider_units?.label ? ` (${l.provider_units.label})` : ''}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{new Date(l.start_at).toLocaleDateString('pt-BR')}</TableCell>
-                    <TableCell><Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Desvincular veículo e unidade?', { title: 'Desvincular unidade', confirmLabel: 'Desvincular' })) removeLink.mutate(l.id); }}><Unlink className="h-3 w-3 text-destructive" /></Button></TableCell>
+                    <TableCell><Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Desvincular veículo e unidade?', { title: 'Desvincular unidade', confirmLabel: 'Desvincular' })) removeLink.mutate(l.id, { onError: (error) => toast.error('Falha ao desvincular rastreador', { description: errorMessage(error) }) }); }}><Unlink className="h-3 w-3 text-destructive" /></Button></TableCell>
                   </TableRow>
                 ))
               )}
@@ -831,7 +852,7 @@ function UnitsSection() {
 
 /* ===== Telemetry Catalog (existing) ===== */
 function TelemetryCatalogSection() {
-  const { data: catalog = [], isLoading } = useQuery({
+  const { data: catalog = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['telemetry_catalog'],
     queryFn: async () => {
       const { data, error } = await supabase.from('telemetry_catalog').select('*').order('telemetry_id');
@@ -853,6 +874,12 @@ function TelemetryCatalogSection() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow><TableCell colSpan={5} className="py-8 text-center">
+                  <p className="font-medium text-destructive">Falha ao carregar o catálogo de telemetria.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{errorMessage(error)}</p>
+                  <Button className="mt-3" variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button>
+                </TableCell></TableRow>
               ) : catalog.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma telemetria sincronizada.</TableCell></TableRow>
               ) : catalog.map((t: any) => (
@@ -890,12 +917,16 @@ function autoSuggestCanonical(name: string | null, description: string | null): 
   return null;
 }
 
+function telemetryMappingKey(provider: string, telemetryId: string): string {
+  return `${provider}\u0000${telemetryId}`;
+}
+
 function TelemetryMappingSection() {
   const toast = useSonnerToast();
   const { currentTenant } = useTenant();
   const queryClient = useQueryClient();
 
-  const { data: catalog = [] } = useQuery({
+  const { data: catalog = [], isLoading: catalogLoading, isError: catalogError, error: catalogErrorDetail, refetch: refetchCatalog } = useQuery({
     queryKey: ['telemetry_catalog'],
     queryFn: async () => {
       const { data, error } = await supabase.from('telemetry_catalog').select('*').order('telemetry_id');
@@ -904,7 +935,7 @@ function TelemetryMappingSection() {
     },
   });
 
-  const { data: mappings = [], isLoading } = useQuery({
+  const { data: mappings = [], isLoading: mappingsLoading, isError: mappingsError, error: mappingsErrorDetail, refetch: refetchMappings } = useQuery({
     queryKey: ['telemetry_mapping', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -918,13 +949,13 @@ function TelemetryMappingSection() {
 
   const mappingByTelId = new Map<string, any>();
   for (const m of mappings as any[]) {
-    mappingByTelId.set(m.telemetry_id, m);
+    mappingByTelId.set(telemetryMappingKey(m.provider, m.telemetry_id), m);
   }
 
   const upsertMapping = useMutation({
-    mutationFn: async ({ telemetryId, canonicalKey }: { telemetryId: string; canonicalKey: string }) => {
+    mutationFn: async ({ provider, telemetryId, canonicalKey }: { provider: string; telemetryId: string; canonicalKey: string }) => {
       if (!currentTenant) throw new Error('No tenant');
-      const existing = mappingByTelId.get(telemetryId);
+      const existing = mappingByTelId.get(telemetryMappingKey(provider, telemetryId));
       if (existing) {
         if (!canonicalKey) {
           const { error } = await supabase.from('telemetry_mapping').delete().eq('id', existing.id);
@@ -935,7 +966,7 @@ function TelemetryMappingSection() {
         }
       } else if (canonicalKey) {
         const { error } = await supabase.from('telemetry_mapping').insert({
-          tenant_id: currentTenant.id, telemetry_id: telemetryId, canonical_key: canonicalKey,
+          tenant_id: currentTenant.id, provider, telemetry_id: telemetryId, canonical_key: canonicalKey,
         });
         if (error) throw error;
       }
@@ -944,17 +975,27 @@ function TelemetryMappingSection() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const handleAutoSuggest = () => {
-    let count = 0;
+  const handleAutoSuggest = async () => {
+    const suggestions: Array<{ provider: string; telemetryId: string; canonicalKey: string }> = [];
     for (const item of catalog as any[]) {
-      if (mappingByTelId.has(item.telemetry_id)) continue;
+      if (mappingByTelId.has(telemetryMappingKey(item.provider, item.telemetry_id))) continue;
       const suggestion = autoSuggestCanonical(item.name, item.description);
       if (suggestion) {
-        upsertMapping.mutate({ telemetryId: item.telemetry_id, canonicalKey: suggestion });
-        count++;
+        suggestions.push({ provider: item.provider, telemetryId: item.telemetry_id, canonicalKey: suggestion });
       }
     }
-    toast.success(`Auto-sugestão aplicada a ${count} telemetrias`);
+    if (suggestions.length === 0) {
+      toast.info('Nenhuma telemetria nova recebeu sugestão.');
+      return;
+    }
+    const results = await Promise.allSettled(suggestions.map((suggestion) => upsertMapping.mutateAsync(suggestion)));
+    const applied = results.filter((result) => result.status === 'fulfilled').length;
+    const failed = results.length - applied;
+    if (failed > 0) {
+      toast.error(`Auto-sugestão incompleta: ${applied} aplicada(s) e ${failed} com falha.`);
+    } else {
+      toast.success(`Auto-sugestão aplicada a ${applied} telemetrias`);
+    }
   };
 
   return (
@@ -964,7 +1005,7 @@ function TelemetryMappingSection() {
           <h2 className="text-lg font-semibold text-foreground">Mapeamento de Telemetria</h2>
           <p className="text-sm text-muted-foreground">Vincule sinais do rastreador a chaves canônicas do sistema</p>
         </div>
-        <Button size="sm" variant="outline" onClick={handleAutoSuggest}>
+        <Button size="sm" variant="outline" onClick={() => void handleAutoSuggest()} disabled={catalogLoading || mappingsLoading || catalogError || mappingsError || upsertMapping.isPending}>
           <RefreshCw className="mr-2 h-3 w-3" />Auto-sugerir
         </Button>
       </div>
@@ -973,6 +1014,7 @@ function TelemetryMappingSection() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Provedor</TableHead>
                 <TableHead>Telemetry ID</TableHead>
                 <TableHead>Nome</TableHead>
                 <TableHead>Descrição</TableHead>
@@ -980,21 +1022,29 @@ function TelemetryMappingSection() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              {catalogLoading || mappingsLoading ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : catalogError || mappingsError ? (
+                <TableRow><TableCell colSpan={5} className="py-8 text-center">
+                  <p className="font-medium text-destructive">Falha ao carregar o mapeamento de telemetria.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{errorMessage(catalogErrorDetail || mappingsErrorDetail)}</p>
+                  <Button className="mt-3" variant="outline" size="sm" onClick={() => void Promise.all([refetchCatalog(), refetchMappings()])}>Tentar novamente</Button>
+                </TableCell></TableRow>
               ) : catalog.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Sincronize telemetria primeiro</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Sincronize telemetria primeiro</TableCell></TableRow>
               ) : (catalog as any[]).map((item: any) => {
-                const current = mappingByTelId.get(item.telemetry_id)?.canonical_key || '';
+                const current = mappingByTelId.get(telemetryMappingKey(item.provider, item.telemetry_id))?.canonical_key || '';
                 return (
                   <TableRow key={item.id}>
+                    <TableCell className="text-xs">{item.provider}</TableCell>
                     <TableCell className="font-mono text-xs">{item.telemetry_id}</TableCell>
                     <TableCell className="text-sm">{item.name || '—'}</TableCell>
                     <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{item.description || '—'}</TableCell>
                     <TableCell>
                       <Select
                         value={current || '__unmapped__'}
-                        onValueChange={(v) => upsertMapping.mutate({ telemetryId: item.telemetry_id, canonicalKey: v === '__unmapped__' ? '' : v })}
+                        onValueChange={(v) => upsertMapping.mutate({ provider: item.provider, telemetryId: item.telemetry_id, canonicalKey: v === '__unmapped__' ? '' : v })}
+                        disabled={upsertMapping.isPending}
                       >
                         <SelectTrigger className="w-48 h-8 text-xs">
                           <SelectValue placeholder="Não mapeado" />
@@ -1021,7 +1071,7 @@ function TelemetryMappingSection() {
 /* ===== Integration Logs (existing) ===== */
 function IntegrationLogsSection() {
   const { currentTenant } = useTenant();
-  const { data: logs = [], isLoading } = useQuery({
+  const { data: logs = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['integration_logs', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -1046,6 +1096,12 @@ function IntegrationLogsSection() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow><TableCell colSpan={5} className="py-8 text-center">
+                  <p className="font-medium text-destructive">Falha ao carregar os logs de integração.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{errorMessage(error)}</p>
+                  <Button className="mt-3" variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button>
+                </TableCell></TableRow>
               ) : logs.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum log registrado</TableCell></TableRow>
               ) : logs.map((l: any) => (

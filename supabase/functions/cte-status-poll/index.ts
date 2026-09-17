@@ -141,12 +141,13 @@ Deno.serve(withFiscalCors(async (req) => {
         }
       }
 
-      const { data: emission } = await admin.from('hub_fiscal_emissions')
+      const { data: emission, error: emissionReadError } = await admin.from('hub_fiscal_emissions')
         .select('id, hub_document_id, environment, emitter_id, dispatch_key')
         .eq('fiscal_document_id', doc.id)
         .eq('tenant_id', doc.tenant_id)
         .order('created_at', { ascending: false })
         .limit(1).maybeSingle();
+      if (emissionReadError) throw emissionReadError;
 
       if (!emission?.hub_document_id) {
         const snapshot = safeProviderSnapshot(424, {
@@ -166,11 +167,12 @@ Deno.serve(withFiscalCors(async (req) => {
             context: snapshot,
           });
         } else {
-          await admin.from('fiscal_documents').update({
+          const updateResult = await admin.from('fiscal_documents').update({
             last_status_check_at: new Date().toISOString(),
             status_check_attempts: attemptCount,
             last_status_response: snapshot,
           }).eq('id', doc.id);
+          if (updateResult.error) throw updateResult.error;
         }
         results.push({ id: doc.id, outcome: terminal ? 'dead_letter' : 'no_hub_document' });
         continue;
@@ -212,11 +214,12 @@ Deno.serve(withFiscalCors(async (req) => {
             context: safeSnapshot,
           });
         } else {
-          await admin.from('fiscal_documents').update({
+          const updateResult = await admin.from('fiscal_documents').update({
             last_status_check_at: new Date().toISOString(),
             status_check_attempts: attemptCount,
             last_status_response: safeSnapshot,
           }).eq('id', doc.id);
+          if (updateResult.error) throw updateResult.error;
         }
         results.push({ id: doc.id, outcome: stoppedReason, message: safeMessage });
         break;
@@ -234,8 +237,7 @@ Deno.serve(withFiscalCors(async (req) => {
         results.push({id:doc.id,outcome:committedOutcome||'pending'});continue;
       }
 
-      // Histórico: guarda a resposta bruta para conferência posterior.
-      await admin.from('hub_fiscal_emissions').update({
+      const emissionPatch = {
         status: rawStatus || undefined,
         plugnotas_status: d.plugnotasStatus || undefined,
         access_key: d.accessKey || undefined,
@@ -246,13 +248,14 @@ Deno.serve(withFiscalCors(async (req) => {
         message: safeMessage || undefined,
         last_response: safeSnapshot,
         last_synced_at: new Date().toISOString(),
-      }).eq('id', emission.id);
+      };
 
       const patch: Record<string, unknown> = {
         last_status_check_at: new Date().toISOString(),
         status_check_attempts: (doc.status_check_attempts || 0) + 1,
         last_status_response: safeSnapshot,
       };
+      let releaseSources = false;
       if (outcome === 'issued') {
         patch.status = 'authorized';
         patch.sefaz_status = 'authorized';
@@ -265,19 +268,13 @@ Deno.serve(withFiscalCors(async (req) => {
         patch.sefaz_message = safeMessage || rawStatus || 'Rejeitada pelo provedor';
         // Rejeição não gera documento fiscal válido: devolve imediatamente as
         // NFs vinculadas ao pool do CT-e Hub para permitir uma nova emissão.
-        await admin
-          .from('fiscal_documents')
-          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
-          .eq('cte_emitted_outbound_id', doc.id);
+        releaseSources = true;
       } else if (outcome === 'cancelled') {
         patch.status = 'cancelled';
         patch.sefaz_status = 'cancelled';
         patch.sefaz_message = safeMessage;
         // Libera as NFs vinculadas — voltam a aparecer para novo faturamento
-        await admin
-          .from('fiscal_documents')
-          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
-          .eq('cte_emitted_outbound_id', doc.id);
+        releaseSources = true;
       } else if (shouldDeadLetter(doc, true)) {
         await terminalizeFiscalPoll(admin, {
           tenantId: doc.tenant_id,
@@ -293,10 +290,7 @@ Deno.serve(withFiscalCors(async (req) => {
         continue;
       }
 
-      await admin.from('fiscal_documents').update(patch).eq('id', doc.id);
-
-      if (outcome) {
-        await admin.from('vehicle_events').insert({
+      const event = outcome ? {
           tenant_id: doc.tenant_id,
           document_id: doc.id,
           event_type: outcome === 'issued' ? 'authorized' : outcome,
@@ -304,8 +298,13 @@ Deno.serve(withFiscalCors(async (req) => {
             ? `Autorizada na consulta automática — nº ${d.number || '(sem número)'}`
             : `Consulta automática: ${rawStatus || outcome}${safeMessage ? ` — ${safeMessage}` : ''}`,
           payload: { source: 'cte-status-poll', provider: safeSnapshot },
-        });
-      }
+        } : null;
+      const committed = await admin.rpc('commit_legacy_fiscal_poll_v1', { _payload: {
+        tenant_id: doc.tenant_id, document_kind: 'cte', document_id: doc.id,
+        emission_id: emission.id, emission_patch: emissionPatch, document_patch: patch,
+        release_sources: releaseSources, event,
+      } });
+      if (committed.error) throw committed.error;
 
       results.push({ id: doc.id, rps: doc.invoice_number, hub_status: rawStatus, outcome: outcome || 'pending' });
     }

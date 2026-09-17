@@ -92,8 +92,21 @@ interface LoadControlPage {
 }
 
 export const LOAD_CONTROL_PAGE_SIZE = 250;
+export const LOAD_RELATION_PAGE_SIZE = 200;
+
+export function validateLoadControlDateFilters(filters: LoadControlFilters): string | null {
+  if (filters.loadDateFrom && filters.loadDateTo && filters.loadDateFrom > filters.loadDateTo) {
+    return 'A data inicial da carga não pode ser posterior à data final.';
+  }
+  if (filters.expectedPayFrom && filters.expectedPayTo && filters.expectedPayFrom > filters.expectedPayTo) {
+    return 'A previsão inicial de pagamento não pode ser posterior à previsão final.';
+  }
+  return null;
+}
 
 export function normalizeLoadControlFilters(filters: LoadControlFilters): Record<string, string> {
+  const validationError = validateLoadControlDateFilters(filters);
+  if (validationError) throw new Error(validationError);
   return Object.fromEntries(Object.entries(filters).flatMap(([key, value]) => {
     const normalized = typeof value === 'string' ? value.trim() : '';
     return normalized ? [[key, normalized]] : [];
@@ -202,40 +215,61 @@ export function useLoadControlList(filters: LoadControlFilters = {}) {
 
 export function useLoadDocuments(loadId: string | null) {
   const { currentTenant } = useTenant();
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: ['load-documents', currentTenant?.id, loadId],
     enabled: !!currentTenant?.id && !!loadId,
-    queryFn: async () => {
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }) => {
       if (!currentTenant?.id || !loadId) throw new Error('Carga ou tenant não informado');
-      const { data, error } = await supabase.from('load_documents')
-        .select('*')
+      const offset = Number(pageParam);
+      const { data, error, count } = await supabase.from('load_documents')
+        .select('*', { count: 'exact' })
         .eq('tenant_id', currentTenant.id)
         .eq('load_id', loadId)
-        .order('document_type');
+        .order('document_type')
+        .order('id')
+        .range(offset, offset + LOAD_RELATION_PAGE_SIZE - 1)
+        .abortSignal(signal);
       if (error) throw error;
-      return data || [];
+      const rows = data || [];
+      const totalCount = count ?? rows.length;
+      return { rows, totalCount, nextOffset: offset + rows.length < totalCount ? offset + rows.length : null };
     },
+    getNextPageParam: page => page.nextOffset ?? undefined,
   });
+  const pages = query.data?.pages;
+  const rows = useMemo(() => pages?.flatMap(page => page.rows) ?? [], [pages]);
+  return { ...query, data: rows, totalCount: pages?.[0]?.totalCount ?? 0 };
 }
 
 export function useUnloadingCharges(filters: { loadId?: string | null; status?: string | null } = {}) {
   const { currentTenant } = useTenant();
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: ['load-unloading', currentTenant?.id, filters],
     enabled: !!currentTenant?.id,
-    queryFn: async () => {
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }) => {
+      const offset = Number(pageParam);
       let q = supabase.from('load_unloading_charges')
-        .select('*, load:load_id(id, load_number, external_load_number)')
+        .select('*, load:load_id(id, load_number, external_load_number)', { count: 'exact' })
         .eq('tenant_id', currentTenant!.id)
         .order('service_date', { ascending: false })
-        .limit(1000);
+        .order('id', { ascending: false });
       if (filters.loadId) q = q.eq('load_id', filters.loadId);
       if (filters.status) q = q.eq('status', filters.status);
-      const { data, error } = await q;
+      const { data, error, count } = await q
+        .range(offset, offset + LOAD_RELATION_PAGE_SIZE - 1)
+        .abortSignal(signal);
       if (error) throw error;
-      return (data || []) as UnloadingChargeRow[];
+      const rows = (data || []) as UnloadingChargeRow[];
+      const totalCount = count ?? rows.length;
+      return { rows, totalCount, nextOffset: offset + rows.length < totalCount ? offset + rows.length : null };
     },
+    getNextPageParam: page => page.nextOffset ?? undefined,
   });
+  const pages = query.data?.pages;
+  const rows = useMemo(() => pages?.flatMap(page => page.rows) ?? [], [pages]);
+  return { ...query, data: rows, totalCount: pages?.[0]?.totalCount ?? 0 };
 }
 
 export function useImportBatches() {

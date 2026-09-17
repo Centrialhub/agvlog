@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Wallet, Receipt } from 'lucide-react';
@@ -133,6 +133,7 @@ function PayablesWorkspace() {
         status: form.status,
         notes: form.notes || null,
       };
+      if (values.status === 'paid') throw new Error('Registre a baixa financeira para marcar esta conta como paga.');
       if (editingId) {
         const {status,...fields}=values;
         await updateMut.mutateAsync({ id: editingId, ...fields, ...(status!==originalStatus?{status}:{}) });
@@ -162,49 +163,52 @@ function PayablesWorkspace() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Wallet className="h-6 w-6 text-primary" /> Contas a Pagar
+            <Wallet aria-hidden="true" className="h-6 w-6 text-primary" /> Contas a Pagar
           </h1>
           <p className="text-sm text-muted-foreground">Fornecedores, despesas administrativas, impostos e adiantamentos</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setManualOpen(true)}>
-            <Receipt className="h-4 w-4 mr-2" /> Despesa avulsa
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+          <Button className="h-auto min-h-11 whitespace-normal" variant="outline" onClick={() => setManualOpen(true)}>
+            <Receipt aria-hidden="true" className="h-4 w-4 mr-2" /> Despesa avulsa
           </Button>
-          <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
-            <Plus className="h-4 w-4 mr-2" /> Nova conta
+          <Button className="h-auto min-h-11 whitespace-normal" onClick={() => { resetForm(); setDialogOpen(true); }}>
+            <Plus aria-hidden="true" className="h-4 w-4 mr-2" /> Nova conta
           </Button>
         </div>
       </div>
 
       {xml.pending&&<section className="rounded border p-3"><p>Salvamento com XML sem confirmação: {xml.pending.payload.fields.supplier_name} · valor {Number(xml.pending.payload.fields.amount_cents)/100} · pedido {xml.pending.payload.request_id}.</p><p>Recupere o pedido original antes de criar outra conta.</p><Button disabled={xml.busy} onClick={()=>void xml.recover().then(()=>{resetForm();toast.success('Salvamento original confirmado');}).catch(()=>{})}>Recuperar salvamento com XML</Button></section>}
-      {xml.error&&!dialogOpen&&<p role="alert">{xml.error}</p>}{xml.confirmed&&<p role="status">Conta {xml.confirmed} salva; XML original preservado.</p>}{xml.cacheWarning&&<p role="alert">{xml.cacheWarning}</p>}
+      {xml.error&&!dialogOpen&&<div role="alert"><p>{xml.error}</p>{!xml.pending&&<Button variant="outline" disabled={xml.busy} onClick={()=>void xml.discardUpload()}>Descartar XML abandonado</Button>}</div>}{xml.confirmed&&<p role="status">Conta {xml.confirmed} salva; XML original preservado.</p>}{xml.cacheWarning&&<p role="alert">{xml.cacheWarning}</p>}
       {detailBusy&&<p role="status">Abrindo conta selecionada…</p>}
       {detailError&&<p role="alert">{detailError}</p>}
       {currentTenant&&user&&<PayablePortfolioPanel tenant={currentTenant.id} actor={user.id} onOpen={(id,action)=>void openAccount(id,action)}/>}
 
       <Dialog open={dialogOpen} onOpenChange={o => { if(saving.current)return; if (!o) resetForm(); setDialogOpen(o); }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{editingId ? 'Editar conta' : 'Nova conta a pagar'}</DialogTitle></DialogHeader>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingId ? 'Editar conta' : 'Nova conta a pagar'}</DialogTitle>
+            <DialogDescription>Informe fornecedor, documento, vencimento e valores da conta a pagar.</DialogDescription>
+          </DialogHeader>
           {xml.pending&&<div><p>Pedido original: {xml.pending.payload.fields.supplier_name} · documento {xml.pending.payload.fields.document_number||'não informado'} · valor R$ {(Number(xml.pending.payload.fields.amount_cents)/100).toFixed(2)}.</p><Button onClick={()=>void xml.recover().then(()=>{resetForm();toast.success('Salvamento original confirmado');}).catch(()=>{})} disabled={xml.busy}>Recuperar pedido original</Button></div>}
           {editingId&&<PayableXmlHistory key={editingId} tenant={currentTenant!.id} actor={user!.id} payableId={editingId}/>}
           <fieldset disabled={saveBusy||xml.busy||!!xml.pending} className="space-y-4">
             {saveError&&<p role="alert">{saveError}</p>}
             <div className="rounded-md border bg-muted/30 p-3">
-              <FiscalXmlUpload perspective="payer" onExtracted={applyXmlToForm} />
+              <FiscalXmlUpload perspective="payer" acceptedKind="nfe" onExtracted={applyXmlToForm} />
               {pendingReceipt&&<p className="text-sm">XML selecionado: {pendingReceipt.name}. Até 2 MB, NF-e. A leitura preenche os campos; o original será preservado privadamente ao salvar, sem comprovação fiscal ou antivírus.</p>}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <Label>Fornecedor *</Label>
-                <Input value={form.supplier_name} onChange={e => setForm({ ...form, supplier_name: e.target.value })} />
+                <Label htmlFor="payable-supplier">Fornecedor *</Label>
+                <Input id="payable-supplier" value={form.supplier_name} onChange={e => setForm({ ...form, supplier_name: e.target.value })} />
               </div>
               <div>
-                <Label>Categoria</Label>
+                <Label htmlFor="payable-category">Categoria</Label>
                 <Select value={form.category} onValueChange={v => setForm({ ...form, category: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="payable-category"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {PAYABLE_CATEGORIES.map(c => <SelectItem key={c} value={c}>{PAYABLE_CATEGORY_LABELS[c]}</SelectItem>)}
                   </SelectContent>
@@ -212,43 +216,43 @@ function PayablesWorkspace() {
               </div>
             </div>
             <div>
-              <Label>Descrição</Label>
-              <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+              <Label htmlFor="payable-description">Descrição</Label>
+              <Input id="payable-description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
-                <Label>Valor (R$) *</Label>
-                <Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
+                <Label htmlFor="payable-amount">Valor (R$) *</Label>
+                <Input id="payable-amount" type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
               </div>
               <div>
-                <Label>Vencimento</Label>
-                <Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
+                <Label htmlFor="payable-due-date">Vencimento</Label>
+                <Input id="payable-due-date" type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
               </div>
               <div>
-                <Label>Competência</Label>
-                <Input type="date" value={form.competence_date} onChange={e => setForm({ ...form, competence_date: e.target.value })} />
+                <Label htmlFor="payable-competence-date">Competência</Label>
+                <Input id="payable-competence-date" type="date" value={form.competence_date} onChange={e => setForm({ ...form, competence_date: e.target.value })} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <Label>Nº documento</Label>
-                <Input value={form.document_number} onChange={e => setForm({ ...form, document_number: e.target.value })} />
+                <Label htmlFor="payable-document-number">Nº documento</Label>
+                <Input id="payable-document-number" value={form.document_number} onChange={e => setForm({ ...form, document_number: e.target.value })} />
               </div>
               <div>
-                <Label>Status</Label>
+                <Label htmlFor="payable-status">Status</Label>
                 <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="payable-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {PAYABLE_STATUSES.filter(s=>s!=='approved'||originalStatus==='approved'&&!!editingId).map(s => <SelectItem key={s} value={s} disabled={s==='approved'}>{PAYABLE_STATUS_LABELS[s]}</SelectItem>)}
+                    {PAYABLE_STATUSES.filter(s=>s!=='paid'&&(s!=='approved'||originalStatus==='approved'&&!!editingId)).map(s => <SelectItem key={s} value={s} disabled={s==='approved'}>{PAYABLE_STATUS_LABELS[s]}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div>
-              <Label>Observações</Label>
-              <Textarea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+              <Label htmlFor="payable-notes">Observações</Label>
+              <Textarea id="payable-notes" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
             </div>
-            <div className="flex gap-2 justify-end">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="outline" onClick={resetForm}>Cancelar</Button>
               {editingId&&<Button variant="outline" onClick={()=>{setApprovalId(editingId);resetForm();}}>Conferir aprovação</Button>}
               <Button onClick={handleSave} disabled={saveBusy || createMut.isPending || updateMut.isPending}>

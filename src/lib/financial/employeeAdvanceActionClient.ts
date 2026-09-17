@@ -1,0 +1,5 @@
+import {supabase} from '@/integrations/supabase/client';
+import {employeeAdvanceActionCommandSchema,employeeAdvanceActionPreviewSchema,type EmployeeAdvanceActionCommand} from './employeeAdvanceActionContract';
+type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;const rpc=supabase.rpc.bind(supabase) as unknown as Rpc;
+export async function readEmployeeAdvanceAction(tenant:string,actor:string,advance:string,action:'approve'|'cancel'){const {data,error}=await rpc('preview_finance_employee_advance_action',{_tenant_id:tenant,_advance_id:advance,_action:action});if(error)throw error;const v=employeeAdvanceActionPreviewSchema.parse(data);if(v.tenant_id!==tenant||v.actor_id!==actor||v.advance_id!==advance||v.action!==action)throw Error('A conferência não corresponde à empresa, sessão ou ação solicitada.');return v;}
+export const sendEmployeeAdvanceAction=(payload:EmployeeAdvanceActionCommand)=>rpc('apply_finance_employee_advance_action',{_payload:employeeAdvanceActionCommandSchema.parse(payload)});

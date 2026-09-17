@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import type { Database, Tables, TablesInsert } from '@/integrations/supabase/types';
+import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
 
 export type EdiStatus = 'not_generated' | 'generated' | 'downloaded' | 'sent' | 'error';
 export type ExportStatus = 'draft' | 'generated' | 'downloaded' | 'sent' | 'cancelled' | 'error';
@@ -48,14 +49,8 @@ export function useEdiExports() {
     queryKey: ['edi_exports', currentTenant?.id],
     enabled: !!currentTenant,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('billing_edi_exports')
-        .select('*')
-        .eq('tenant_id', currentTenant!.id)
-        .order('generated_at', { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return (data || []) as unknown as EdiExport[];
+      return await fetchAllPostgrestPages((from,to)=>supabase.from('billing_edi_exports').select('*')
+        .eq('tenant_id', currentTenant!.id).order('generated_at', { ascending: false }).order('id').range(from,to)) as unknown as EdiExport[];
     },
   });
 }
@@ -76,13 +71,11 @@ export function useEligibleInvoicesForEdi(filters: EdiFilters) {
     queryKey: ['edi_eligible_invoices', currentTenant?.id, filters],
     enabled: !!currentTenant,
     queryFn: async () => {
-      let q = supabase
+      const makeQuery = () => {let q = supabase
         .from('client_invoices')
         .select('id, invoice_number, client_id, issue_date, due_date, total_amount, status, edi_status, clients(company_name, tax_id)')
         .eq('tenant_id', currentTenant!.id)
-        .in('status', ['generated', 'sent', 'paid'])
-        .order('issue_date', { ascending: false })
-        .limit(500);
+        .in('status', ['generated', 'sent', 'paid']);
       if (filters.clientId) q = q.eq('client_id', filters.clientId);
       if (filters.ediStatus && filters.ediStatus !== 'all') {
         q = filters.ediStatus === 'generated'
@@ -93,9 +86,8 @@ export function useEligibleInvoicesForEdi(filters: EdiFilters) {
       if (filters.issueTo) q = q.lte('issue_date', filters.issueTo);
       if (filters.dueFrom) q = q.gte('due_date', filters.dueFrom);
       if (filters.dueTo) q = q.lte('due_date', filters.dueTo);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []) as unknown as EligibleInvoice[];
+      return q.order('issue_date', { ascending: false }).order('id');};
+      return await fetchAllPostgrestPages((from,to)=>makeQuery().range(from,to)) as unknown as EligibleInvoice[];
     },
   });
 }
@@ -104,14 +96,12 @@ export function useEligibleInvoicesForEdi(filters: EdiFilters) {
 export async function fetchInvoicesBundle(tenantId: string, invoiceIds: string[]) {
   if (invoiceIds.length === 0) return { invoices: [], charges: [], details: [] };
   const [inv, charges, details] = await Promise.all([
-    supabase.from('client_invoices').select('*, clients(company_name, tax_id)').eq('tenant_id', tenantId).in('id', invoiceIds),
-    supabase.from('client_invoice_charges').select('*').eq('tenant_id', tenantId).in('invoice_id', invoiceIds).is('cancelled_at', null),
-    supabase.from('client_invoice_details').select('*').eq('tenant_id', tenantId).in('invoice_id', invoiceIds),
+    fetchAllPostgrestPages((from,to)=>supabase.from('client_invoices').select('*, clients(company_name, tax_id)').eq('tenant_id', tenantId).in('id', invoiceIds).order('id').range(from,to)),
+    fetchAllPostgrestPages((from,to)=>supabase.from('client_invoice_charges').select('*').eq('tenant_id', tenantId).in('invoice_id', invoiceIds).is('cancelled_at', null).order('id').range(from,to)),
+    fetchAllPostgrestPages((from,to)=>supabase.from('client_invoice_details').select('*').eq('tenant_id', tenantId).in('invoice_id', invoiceIds).order('id').range(from,to)),
   ]);
-  if (inv.error) throw inv.error;
-  if (charges.error) throw charges.error;
-  if (details.error) throw details.error;
-  return { invoices: inv.data || [], charges: charges.data || [], details: details.data || [] };
+  if(inv.length!==invoiceIds.length)throw new Error('O conjunto de faturas mudou ou está incompleto. Atualize a seleção.');
+  return { invoices: inv, charges, details };
 }
 
 export function useRegisterEdiExport() {
@@ -163,12 +153,13 @@ export function useMarkEdiSent() {
   const qc = useQueryClient();
   const { currentTenant } = useTenant();
   return useMutation({
-    mutationFn: async (input: { exportId: string; channel?: string; sentTo?: string }) => {
+    mutationFn: async (input: { exportId: string; channel: string; sentTo: string }) => {
+      if(!input.channel.trim()||!input.sentTo.trim())throw new Error('Canal e destinatário são obrigatórios para registrar o envio.');
       const { error } = await supabase.rpc('mark_doccob_sent', {
         _tenant_id: currentTenant!.id,
         _export_id: input.exportId,
-        _channel: input.channel ?? 'manual',
-        _sent_to: input.sentTo,
+        _channel: input.channel.trim(),
+        _sent_to: input.sentTo.trim(),
       });
       if (error) throw error;
     },

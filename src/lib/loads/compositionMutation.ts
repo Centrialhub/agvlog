@@ -62,6 +62,7 @@ export function compositionMutationError(error: unknown): Error & { code?: strin
     else if (raw.includes('replanning_requires_fiscal_review')) message = 'A nota já possui resultado final ou documento fiscal emitido. Revise o vínculo fiscal antes de replanejar; nenhuma emissão ou cancelamento foi solicitado.';
     else if (raw.includes('composition_stop_coverage_mismatch') || raw.includes('composition_stop_graph_mismatch')) message = 'A composição e as paradas estão divergentes. Revise os vínculos na operação antes de replanejar.';
     else if (raw.includes('composition_document_split_not_allowed')) message = 'Selecione todos os itens da mesma nota fiscal; uma nota não pode ser dividida entre cargas.';
+    else if (raw.includes('target_load_capacity_exceeded')) message = 'A carga de destino excederia a capacidade de paletes ou peso do veículo. Nenhum item foi movido.';
     else if (raw.includes('load_locked')) message = 'A carga ou sua viagem já iniciou o transporte ou foi encerrada. A composição não pode ser alterada.';
     else if (code === '42501') message = 'Sua sessão não tem permissão para realocar itens nesta empresa.';
     else if (['40001', '40P01', '55P03'].includes(code)) message = 'Outra operação alterou a carga ou a viagem. Esta tentativa foi desfeita; confira os dados e selecione novamente.';

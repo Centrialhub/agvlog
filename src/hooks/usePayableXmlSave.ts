@@ -1,12 +1,12 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
-import {createPayableXmlOutbox,lockPayableXml,pendingPayableXml,type PendingPayableXml} from '@/lib/financial/payableXmlOutbox';
-import {preservePayableXmlFile,readPayableXmlContext,sendPayableXml,payableXmlError,payableXmlUploadKey} from '@/lib/financial/payableXmlClient';
+import {createPayableXmlOutbox,discardPendingPayableXml,lockPayableXml,pendingPayableXml,type PendingPayableXml} from '@/lib/financial/payableXmlOutbox';
+import {discardPayableXmlUpload,preservePayableXmlFile,readPayableXmlContext,sendPayableXml,payableXmlError,payableXmlUploadKey} from '@/lib/financial/payableXmlClient';
 import {payableXmlFieldsSchema} from '@/lib/financial/payableXmlContract';
 import {invalidateAccountReview} from '@/lib/financial/invalidateAccountReview';
 import type {z} from 'zod';
 export function usePayableXmlSave(tenant:string,actor:string){const cache=useQueryClient(),mounted=useRef(true),scope=useRef({tenant,actor}),busyRef=useRef(false);scope.current={tenant,actor};const [pending,setPending]=useState<PendingPayableXml|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[confirmed,setConfirmed]=useState<string|null>(null),[cacheWarning,setCacheWarning]=useState('');
- const read=useCallback(()=>{try{setPending(pendingPayableXml(localStorage,tenant,actor));}catch(e){setError(payableXmlError(e));}},[tenant,actor]);
+ const read=useCallback(()=>{try{setPending(pendingPayableXml(localStorage,tenant,actor));}catch(e){setPending(null);setError(payableXmlError(e));}},[tenant,actor]);
  useEffect(()=>{mounted.current=true;read();window.addEventListener('storage',read);return()=>{mounted.current=false;window.removeEventListener('storage',read);};},[tenant,actor,read]);
  const assertContext=(t:string,a:string)=>{if(!mounted.current||scope.current.tenant!==t||scope.current.actor!==a)throw Error('A sessão mudou. Recupere o pedido na empresa e usuário originais.');};
  const outbox=useMemo(()=>createPayableXmlOutbox({storage:localStorage,uuid:()=>crypto.randomUUID(),lock:lockPayableXml,assertContext,changed:read,send:sendPayableXml}),[read]);
@@ -19,4 +19,4 @@ export function usePayableXmlSave(tenant:string,actor:string){const cache=useQue
   try{await invalidateAccountReview(cache,tenant);await Promise.all(['payables','finance-payable-portfolio','finance-payable-xml','finance-recorded-costs','finance-recorded-cost-summary','finance-cash-forecast-preview','finance-cash-forecast-agenda'].map(k=>cache.invalidateQueries({queryKey:[k,tenant]},{throwOnError:true})));}catch{setCacheWarning('A conta e o XML foram salvos, mas a consulta não atualizou. Atualize a página; não envie outra conta.');}
   return result;
  }catch(e){if(mounted.current)setError(payableXmlError(e));throw e;}finally{busyRef.current=false;if(mounted.current){setBusy(false);read();}}}
- return {save:run,recover:()=>run(),pending,error,busy,confirmed,cacheWarning};}
+ return {save:run,recover:()=>run(),discardUpload:async()=>{setBusy(true);setError('');try{await discardPayableXmlUpload(tenant,actor);discardPendingPayableXml(localStorage,tenant,actor);setPending(null);setError('Upload abandonado e recuperação incompatível descartados.');}catch(e){setError(payableXmlError(e));}finally{setBusy(false);}},pending,error,busy,confirmed,cacheWarning};}

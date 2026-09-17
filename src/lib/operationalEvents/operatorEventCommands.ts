@@ -86,28 +86,35 @@ const allocationSchema=z.object({id,attempt_id:id.nullable(),load_id:id.nullable
 const occurrenceSchema=z.object({id,event_type:z.string(),severity:z.string(),description:z.string().nullable(),visible_to_client:z.boolean(),
  client_action_required:z.boolean(),public_status:z.string().nullable(),resolved_at:timestamp,created_at:z.string().datetime({offset:true}),updated_at:z.string().datetime({offset:true})}).strict();
 const currentOutcomeSchema=outcomeSchema.omit({allocation_id:true,event_id:true,is_current:true,superseded_by:true});
+const podTotalsSchema=z.object({attempts:z.number().int().nonnegative(),outcomes:z.number().int().nonnegative(),proofs:z.number().int().nonnegative(),allocations:z.number().int().nonnegative(),occurrences:z.number().int().nonnegative()}).strict();
+const podCollectionsShape={page:z.number().int().positive(),page_size:z.number().int().min(1).max(50),totals:podTotalsSchema,
+ attempts:z.array(attemptSchema),outcomes:z.array(outcomeSchema),proofs:z.array(proofSchema),allocations:z.array(allocationSchema),occurrences:z.array(occurrenceSchema)};
+export const operatorPodCollectionsSchema=z.object({version:z.literal(1),tenant_id:id,document_id:id,...podCollectionsShape}).strict();
 export const operatorPodHistorySchema=z.object({
  version:z.literal(1),tenant_id:id,actor_id:id,document_id:id,revision,
  document:z.object({id,document_type:z.string().nullable(),invoice_number:z.string().nullable(),status:z.string(),load_id:id.nullable(),
   client_id:id.nullable(),current_delivery_attempt_id:id.nullable(),updated_at:timestamp}).strict(),
  canonical_state:z.string(),delivered:z.boolean(),proof_available:z.boolean(),arrival_without_outcome:z.boolean(),
- current_outcome:currentOutcomeSchema.nullable(),attempts:z.array(attemptSchema),outcomes:z.array(outcomeSchema),proofs:z.array(proofSchema),
- allocations:z.array(allocationSchema),occurrences:z.array(occurrenceSchema),
+ current_outcome:currentOutcomeSchema.nullable(),current_allocation:allocationSchema.nullable(),...podCollectionsShape,
 }).strict().superRefine((value,ctx)=>{
  const expectedState=value.current_outcome?.outcome??(value.document.current_delivery_attempt_id?'pending_redelivery':'pending');
- const currentOutcomes=value.outcomes.filter(outcome=>outcome.is_current);
- if(value.canonical_state!==expectedState||value.delivered!==(value.current_outcome?.outcome==='delivered')
-  ||(value.current_outcome?(currentOutcomes.length!==1||currentOutcomes[0].id!==value.current_outcome.id):currentOutcomes.length!==0)){
+ if(value.canonical_state!==expectedState||value.delivered!==(value.current_outcome?.outcome==='delivered')){
   ctx.addIssue({code:'custom',message:'Estado canônico do POD inconsistente.'});
  }
- const expectedArrivalWithoutOutcome=!value.current_outcome&&value.allocations.some(allocation=>!!allocation.actual_arrival_at);
+ const expectedArrivalWithoutOutcome=!value.current_outcome&&!!value.current_allocation?.actual_arrival_at;
  if(value.arrival_without_outcome!==expectedArrivalWithoutOutcome)ctx.addIssue({code:'custom',message:'Indicador de chegada do POD inconsistente.'});
 });
 export type OperatorPodHistory=z.infer<typeof operatorPodHistorySchema>;
+export type OperatorPodCollections=z.infer<typeof operatorPodCollectionsSchema>;
 export function parseOperatorPodHistory(value:unknown,tenant:string,actor:string,document:string){
  const parsed=operatorPodHistorySchema.safeParse(value);
  if(!parsed.success||parsed.data.tenant_id!==tenant||parsed.data.actor_id!==actor||parsed.data.document_id!==document
   ||parsed.data.document.id!==document)throw new Error('Histórico POD incompatível com a sessão. Atualize a consulta.');
+ return parsed.data;
+}
+export function parseOperatorPodCollections(value:unknown,tenant:string,document:string,page:number){
+ const parsed=operatorPodCollectionsSchema.safeParse(value);
+ if(!parsed.success||parsed.data.tenant_id!==tenant||parsed.data.document_id!==document||parsed.data.page!==page)throw new Error('Página do histórico POD incompatível com a sessão.');
  return parsed.data;
 }
 
@@ -115,6 +122,7 @@ type OperatorRpcArgs={
  get_operational_event_create_context:{_tenant_id:string;_bindings:OperationalEventBindings};
  get_operational_event_context:{_tenant_id:string;_event_id:string};
  get_operator_pod_history_v1:{_tenant_id:string;_document_id:string};
+ get_operator_pod_history_collections_v1:{_tenant_id:string;_document_id:string;_page:number;_page_size:number};
  create_operational_event_v1:{_payload:OperationalEventCreateCommand};
  resolve_operational_event_v1:{_payload:OperationalEventResolveCommand};
 };

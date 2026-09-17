@@ -43,7 +43,7 @@ async function uploadOriginal(row:PendingStatement,file:File){
   if(row.upload_mode==='quarantine_v2'){
     const format=statementFileType(row.file_name,bytes)?.extension;
     if(!format)throw new Error('Formato não identificado.');
-    return uploadFinanceArtifact({tenantId:row.tenant,actorId:row.actor,requestId:row.command.request_id,sourceType:'bank_account',sourceId:row.command.bank_account_id,file,format:z.enum(['ofx','csv','xls','xlsx']).parse(format),delimiter:row.command.mapping.delimiter});
+    return uploadFinanceArtifact({tenantId:row.tenant,actorId:row.actor,requestId:row.command.request_id,sourceType:'bank_account',sourceId:row.command.bank_account_id,file,format:z.enum(['ofx','csv','xls','xlsx']).parse(format),delimiter:row.command.mapping.delimiter,sheetIndex:['xls','xlsx'].includes(format)?row.command.mapping.sheet_index??0:undefined});
   }
   const form=new FormData();form.set('tenant_id',row.tenant);form.set('bucket','finance-statements');form.set('folder','imports');form.set('kind','statement');
   form.set('file',file,row.file_name);

@@ -7,14 +7,10 @@ import { parseNFeXml } from '@/lib/documentParsers';
 import { buildValidationIndexes, validateNFe } from '@/lib/ingestionValidator';
 import {
   buildFiscalDocumentIdentity,
-  DuplicateFiscalDocumentError,
-  formatDuplicateFiscalDocumentMessage,
-  isUniqueViolation,
 } from '@/lib/fiscalDocuments/fiscalIdentity';
 import { cn } from '@/lib/utils';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
-import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,9 +18,11 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import type { Json, TablesInsert } from '@/integrations/supabase/types';
+import type { Json } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
 import { getErrorMessage } from '@/lib/errors';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { csvSafeCell } from '@/lib/csvSafety';
 import {
   Dialog,
   DialogContent,
@@ -102,7 +100,6 @@ function jsonRecord(value: Json): JsonObject {
 
 export default function BatchReimportDialog() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const { data: clients = [] } = useClients();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -261,32 +258,18 @@ export default function BatchReimportDialog() {
     setDedupReport(EMPTY_DEDUP_REPORT);
 
     try {
-      const { data: existingDocs, error: existingError } = await supabase
-        .from('fiscal_documents')
-        .select('invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, issue_date, client_id, product_summary, pallet_count, weight_kg, value')
-        .is('deleted_at', null)
-        .eq('tenant_id', currentTenant.id)
-        .gte('issue_date', toDateParam(startDate))
-        .lte('issue_date', toDateParam(endDate));
-      if (existingError) throw existingError;
+      const existingDocs = await fetchAllPostgrestPages((from, to) => supabase.from('fiscal_documents')
+        .select('invoice_number, invoice_series, fiscal_model, remitter_cnpj, access_key, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, issue_date, client_id, product_summary, pallet_count, weight_kg, value')
+        .is('deleted_at', null).eq('tenant_id', currentTenant.id)
+        .gte('issue_date', toDateParam(startDate)!).lte('issue_date', toDateParam(endDate)!)
+        .order('id').range(from, to));
       const existingByAccessKey = new Map((existingDocs || []).filter(doc => doc.access_key).map(doc => [doc.access_key as string, doc as ExistingFiscalDocument]));
       const existingByInvoiceNumber = new Map((existingDocs || []).filter(doc => doc.invoice_number).map(doc => [doc.invoice_number as string, doc as ExistingFiscalDocument]));
-
-      const { data: cleaned, error: cleanError } = await supabase.rpc('clear_reimport_batch_data', {
-        _tenant_id: currentTenant.id,
-        _start_date: toDateParam(startDate),
-        _end_date: toDateParam(endDate),
-      });
-      if (cleanError) throw cleanError;
-      setClearSummary(Object.fromEntries(Object.entries(jsonRecord(cleaned)).map(([key, value]) => [key, Number(value || 0)])));
-
-      setPhase('importing');
       const indexes = buildValidationIndexes([], clients);
-      let successCount = 0;
       const importErrors: ImportError[] = [];
-      // Composite identity dedupe (tenant + cnpj + model + série + número, or access key)
       const seenIdentities = new Map<string, string>();
       const dedup = buildDedupSnapshot(EMPTY_DEDUP_REPORT);
+      const prepared: Array<{ fileName: string; document: ExistingFiscalDocument; state: 'imported' | 'updated' | 'unchanged'; reason: string; identifier: string }> = [];
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -345,48 +328,13 @@ export default function BatchReimportDialog() {
             value: validated.source.totalValue,
           };
           const existingDoc = (nextDoc.access_key && existingByAccessKey.get(nextDoc.access_key)) || (nextDoc.invoice_number && existingByInvoiceNumber.get(nextDoc.invoice_number));
-          const payload: TablesInsert<'fiscal_documents'> = {
-            tenant_id: currentTenant.id,
-            created_by: user?.id,
-            document_type: 'inbound',
-            ...nextDoc,
-            status: 'confirmed',
-          };
-          const { error } = await supabase.from('fiscal_documents').insert(payload);
-          if (error) {
-            if (isUniqueViolation(error)) {
-              throw new DuplicateFiscalDocumentError({
-                invoice_number: nextDoc.invoice_number,
-                invoice_series: nextDoc.invoice_series,
-                fiscal_model: nextDoc.fiscal_model,
-                remitter: nextDoc.remitter,
-                remitter_cnpj: nextDoc.remitter_cnpj,
-                access_key: nextDoc.access_key,
-              });
-            }
-            throw error;
-          }
-          successCount++;
-          setImported(successCount);
           if (identity) seenIdentities.set(identity, file.name);
-          const entry = { fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber || '—'}` };
-          const state: FileImportState = !existingDoc ? 'imported' : hasFiscalDocumentChanges(existingDoc, nextDoc) ? 'updated' : 'unchanged';
+          const identifier = validated.source.accessKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber || '—'}`;
+          const state: 'imported' | 'updated' | 'unchanged' = !existingDoc ? 'imported' : hasFiscalDocumentChanges(existingDoc, nextDoc) ? 'updated' : 'unchanged';
           const reason = state === 'imported' ? 'Novo registro importado; não havia fiscal_document correspondente antes da limpeza' : state === 'updated' ? 'Registro existente tinha alterações em campos fiscais relevantes' : 'Registro reimportado sem alterações nos campos fiscais relevantes';
-          dedup[state].push({ ...entry, reason });
-          setDedupReport(buildDedupSnapshot(dedup));
-          setFileStatus(file.name, {
-            state,
-            invoiceNumber: validated.source.invoiceNumber,
-            message: `NF ${validated.source.invoiceNumber || 'sem número'} importada`,
-          });
+          prepared.push({ fileName: file.name, document: nextDoc, state, reason, identifier });
         } catch (error: unknown) {
-          const message = error instanceof DuplicateFiscalDocumentError
-            ? formatDuplicateFiscalDocumentMessage(
-                typeof error.existingDocument === 'object' && error.existingDocument !== null
-                  ? error.existingDocument
-                  : undefined,
-              )
-            : getErrorMessage(error, 'Erro desconhecido ao importar');
+          const message = getErrorMessage(error, 'Erro desconhecido ao validar');
           importErrors.push({ fileName: file.name, message });
           setErrors([...importErrors]);
           setFileStatus(file.name, { state: 'error', message });
@@ -396,12 +344,34 @@ export default function BatchReimportDialog() {
         }
       }
 
+      if (importErrors.length > 0) {
+        setPhase('ready');
+        toast({ title: 'Reimportação não iniciada', description: 'Há arquivos inválidos. Nenhum dado existente foi apagado.', variant: 'destructive' });
+        return;
+      }
+
+      setPhase('importing');
+      const { data: result, error } = await supabase.rpc('replace_reimport_batch_v1' as never, {
+        _payload: { tenant_id: currentTenant.id, start_date: toDateParam(startDate), end_date: toDateParam(endDate), documents: prepared.map(item => item.document) },
+      } as never);
+      if (error) throw error;
+      const response = jsonRecord(result as unknown as Json);
+      const cleaned = jsonRecord((response.cleaned ?? {}) as Json);
+      setClearSummary(Object.fromEntries(Object.entries(cleaned).map(([key, value]) => [key, Number(value || 0)])));
+      for (const item of prepared) {
+        const invoiceNumber = item.document.invoice_number || '—';
+        dedup[item.state].push({ fileName: item.fileName, invoiceNumber, identifier: item.identifier, reason: item.reason });
+        setFileStatus(item.fileName, { state: item.state, invoiceNumber, message: `NF ${invoiceNumber} importada` });
+      }
+      setDedupReport(buildDedupSnapshot(dedup));
+      const successCount = prepared.length;
+      setImported(successCount);
+
       await refreshData();
       setPhase('done');
       toast({
         title: 'Reimportação concluída',
-        description: `${successCount} nota(s) importada(s), ${importErrors.length} erro(s).`,
-        variant: importErrors.length ? 'default' : undefined,
+        description: `${successCount} nota(s) importada(s), 0 erro(s).`,
       });
     } catch (error: unknown) {
       setPhase('ready');
@@ -441,7 +411,6 @@ export default function BatchReimportDialog() {
   ];
 
   const exportDedupCSV = () => {
-    const escapeCell = (value: string | number) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = [
       ['Status', 'Arquivo', 'Nota fiscal', 'Identificador', 'Motivo', 'Competência inicial', 'Competência final'],
       ...dedupReport.updated.map(item => ['Atualizado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
@@ -449,7 +418,7 @@ export default function BatchReimportDialog() {
       ...dedupReport.unchanged.map(item => ['Sem alteração', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
       ...dedupReport.ignored.map(item => ['Ignorado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
     ];
-    const csv = rows.map(row => row.map(escapeCell).join(';')).join('\n');
+    const csv = rows.map(row => row.map(csvSafeCell).join(';')).join('\n');
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -553,7 +522,7 @@ export default function BatchReimportDialog() {
               </div>
               <Badge variant="outline">{processed}/{total}</Badge>
             </div>
-            <Progress value={progress} className="h-2" />
+            <Progress aria-label="Progresso da reimportação" aria-valuetext={`${progress}%`} value={progress} className="h-2" />
             <div className="grid grid-cols-3 gap-2 text-center text-xs">
               <div className="rounded-md bg-muted p-2"><div className="font-semibold text-foreground">{cleanedTotal}</div><div className="text-muted-foreground">limpos</div></div>
               <div className="rounded-md bg-muted p-2"><div className="font-semibold text-success">{imported}</div><div className="text-muted-foreground">importados</div></div>

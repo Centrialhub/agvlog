@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, Download, FileCheck2, Mail, RefreshCw, Search, Truck, Upload, XCircle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,13 +16,16 @@ import {
   deliveryReceiptError,
   deliveryReceiptFileName,
   downloadDeliveryReceiptPdf,
-  getDeliveryReceiptFilterCatalog,
+  getDeliveryReceiptFilterSummary,
+  listDeliveryReceiptFilterOptions,
   listAllDeliveryReceipts,
   listDeliveryReceipts,
   recordPhysicalDeliveryReceiptStatus,
   reviewDeliveryReceipt,
   DELIVERY_RECEIPT_PAGE_SIZE,
   type DeliveryReceiptFilters,
+  type DeliveryReceiptFilterCursor,
+  type DeliveryReceiptFilterKind,
   type DeliveryReceiptRow,
 } from '@/lib/deliveryReceipts/deliveryReceiptOperations';
 import {
@@ -57,6 +60,38 @@ const queueLabels=[
   ['physical_pending','Papel físico pendente'],['ready_to_send','Prontos para envio'],['sent','Enviados'],['send_failures','Falhas de envio'],
 ] as const;
 
+function ReceiptFilterPicker({tenant,actor,kind,label,allLabel,value,onChange}:{tenant:string;actor:string;kind:DeliveryReceiptFilterKind;
+  label:string;allLabel:string;value:string;onChange:(value:string)=>void}){
+  const [search,setSearch]=useState('');
+  const options=useInfiniteQuery({
+    queryKey:['delivery-receipts',tenant,actor,'filter-options',kind,search.trim()],
+    initialPageParam:null as DeliveryReceiptFilterCursor|null,
+    queryFn:({pageParam,signal})=>listDeliveryReceiptFilterOptions(tenant,actor,kind,search,pageParam,signal),
+    getNextPageParam:last=>last.nextCursor??undefined,
+    retry:false,
+    staleTime:60_000,
+  });
+  const items=useMemo(()=>{
+    const unique=new Map<string,string>();
+    for(const page of options.data?.pages??[])for(const option of page.items)unique.set(option.value,option.label);
+    return [...unique].map(([optionValue,optionLabel])=>({value:optionValue,label:optionLabel}));
+  },[options.data]);
+  const selectedLoaded=!value||items.some(option=>option.value===value);
+  return <div className="space-y-1">
+    <Input aria-label={`Pesquisar ${label.toLocaleLowerCase('pt-BR')}`} placeholder={`Buscar ${label.toLocaleLowerCase('pt-BR')}`}
+      value={search} onChange={event=>setSearch(event.target.value)}/>
+    <select aria-label={label} className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={value}
+      onChange={event=>onChange(event.target.value)}>
+      <option value="">{allLabel}</option>
+      {!selectedLoaded?<option value={value}>{value}</option>:null}
+      {items.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+    </select>
+    {options.hasNextPage?<Button type="button" size="sm" variant="ghost" disabled={options.isFetchingNextPage}
+      onClick={()=>void options.fetchNextPage()}>{options.isFetchingNextPage?'Carregando…':`Mais opções de ${label.toLocaleLowerCase('pt-BR')}`}</Button>:null}
+    {options.isError?<p role="alert" className="text-xs text-destructive">Opções indisponíveis.</p>:null}
+  </div>;
+}
+
 export default function DeliveryReceipts(){
   const {currentTenant,currentRole}=useTenant();const {user}=useAuth();const {toast}=useToast();const client=useQueryClient();
   const [filters,setFilters]=useState<DeliveryReceiptFilters>({});
@@ -71,10 +106,10 @@ export default function DeliveryReceipts(){
   const tenant=currentTenant?.id,actor=user?.id;
   const query=useQuery({queryKey:['delivery-receipts',tenant,actor,'page',filters,page],enabled:!!tenant&&!!actor,retry:false,
     queryFn:({signal})=>listDeliveryReceipts(tenant!,actor!,filters,{limit:DELIVERY_RECEIPT_PAGE_SIZE,offset:(page-1)*DELIVERY_RECEIPT_PAGE_SIZE},signal)});
-  const allFiltered=useQuery({queryKey:['delivery-receipts',tenant,actor,'all-filtered',filters],enabled:!!tenant&&!!actor,retry:false,
+  const allFiltered=useQuery({queryKey:['delivery-receipts',tenant,actor,'all-filtered',filters],enabled:false,retry:false,
     queryFn:({signal})=>listAllDeliveryReceipts(tenant!,actor!,filters,signal)});
-  const catalog=useQuery({queryKey:['delivery-receipts',tenant,actor,'filter-catalog'],enabled:!!tenant&&!!actor,retry:false,staleTime:60_000,
-    queryFn:({signal})=>getDeliveryReceiptFilterCatalog(tenant!,actor!,signal)});
+  const summary=useQuery({queryKey:['delivery-receipts',tenant,actor,'filter-summary'],enabled:!!tenant&&!!actor,retry:false,staleTime:60_000,
+    queryFn:({signal})=>getDeliveryReceiptFilterSummary(tenant!,actor!,signal)});
   const operations=useQuery({queryKey:['delivery-receipt-operations',tenant,actor],enabled:!!tenant&&!!actor,retry:false,
     queryFn:({signal})=>getDeliveryReceiptOperations(tenant!,actor!,signal)});
   const history=useQuery({queryKey:['delivery-receipt-email-history',tenant,actor,historySearch,historyStatus,historyPage],enabled:!!tenant&&!!actor,retry:false,
@@ -135,15 +170,16 @@ export default function DeliveryReceipts(){
     <div><h1 className="flex items-center gap-2 text-2xl font-semibold"><FileCheck2 className="h-6 w-6 text-primary"/>Canhotos</h1>
       <p className="text-sm text-muted-foreground">Um comprovante por entrega, organizado por fornecedor e com custódia digital e física separadas.</p></div>
     {tenant&&actor?<DeliveryReceiptQualityPolicyPanel tenantId={tenant} actorId={actor}/>:null}
-    {catalog.data?<section aria-labelledby="receipt-workflow-queues" className="space-y-2"><h2 id="receipt-workflow-queues" className="text-sm font-semibold">Filas operacionais</h2>
+    {summary.data?<section aria-labelledby="receipt-workflow-queues" className="space-y-2"><h2 id="receipt-workflow-queues" className="text-sm font-semibold">Filas operacionais</h2>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{queueLabels.map(([key,label])=><Card key={key}><CardContent className="p-3">
-        <p className="text-xs text-muted-foreground">{label}</p><strong>{catalog.data.queues[key]}</strong>
+        <p className="text-xs text-muted-foreground">{label}</p><strong>{summary.data.queues[key]}</strong>
       </CardContent></Card>)}</div></section>:null}
     {ocrHealth.data?<Card><CardContent className="flex flex-wrap gap-4 p-3 text-xs"><span>OCR na fila: <strong>{ocrHealth.data.queued}</strong></span>
       <span>Processando: <strong>{ocrHealth.data.processing}</strong></span><span>Concluído: <strong>{ocrHealth.data.completed}</strong></span>
       <span>Indisponível: <strong>{ocrHealth.data.unavailable}</strong></span><span>Baixa confiança: <strong>{ocrHealth.data.low_confidence}</strong></span></CardContent></Card>:null}
+    {!operations.isFetching && !operations.isError && operations.data?.expenses === null ? <p role="status">Indicadores de despesas indisponíveis para este acesso. Os canhotos e envios continuam disponíveis.</p> : null}
     {operations.error?<p role="alert">A observabilidade operacional não pôde ser carregada: {deliveryReceiptError(operations.error)}</p>:null}
-    {catalog.error?<p role="alert">As filas e opções completas de filtro não puderam ser carregadas: {deliveryReceiptError(catalog.error)}</p>:null}
+    {summary.error?<p role="alert">As filas de canhotos não puderam ser carregadas: {deliveryReceiptError(summary.error)}</p>:null}
     <Card><CardContent className="grid gap-3 p-4 md:grid-cols-6">
       <div className="relative md:col-span-2"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground"/>
         <Input aria-label="Buscar canhotos" className="pl-9" placeholder="NF, NFS, CT-e, chave ou fornecedor" value={filters.search??''}
@@ -168,30 +204,24 @@ export default function DeliveryReceipts(){
       <select aria-label="Disponibilidade do PDF" className="h-10 rounded-md border bg-background px-3 text-sm" value={filters.has_pdf===undefined?'':String(filters.has_pdf)}
         onChange={event=>setFilters(current=>({...current,has_pdf:event.target.value===''?undefined:event.target.value==='true'}))}>
         <option value="">Com ou sem PDF</option><option value="true">PDF pronto</option><option value="false">PDF pendente</option></select>
-      <select aria-label="Motorista" className="h-10 rounded-md border bg-background px-3 text-sm" value={filters.driver_id??''}
-        onChange={event=>setFilters(current=>({...current,driver_id:event.target.value||undefined}))}><option value="">Todos os motoristas</option>
-        {(catalog.data?.drivers??[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
-      <select aria-label="Veículo" className="h-10 rounded-md border bg-background px-3 text-sm" value={filters.vehicle_id??''}
-        onChange={event=>setFilters(current=>({...current,vehicle_id:event.target.value||undefined}))}><option value="">Todos os veículos</option>
-        {(catalog.data?.vehicles??[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
-      <select aria-label="Fornecedor" className="h-10 rounded-md border bg-background px-3 text-sm" value={filters.supplier_id??''}
-        onChange={event=>setFilters(current=>({...current,supplier_id:event.target.value||undefined}))}><option value="">Todos os fornecedores</option>
-        {(catalog.data?.suppliers??[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
-      <select aria-label="Viagem" className="h-10 rounded-md border bg-background px-3 text-sm" value={filters.trip_id??''}
-        onChange={event=>setFilters(current=>({...current,trip_id:event.target.value||undefined}))}><option value="">Todas as viagens</option>
-        {(catalog.data?.trips??[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
-      <select aria-label="Carga" className="h-10 rounded-md border bg-background px-3 text-sm" value={filters.load_id??''}
-        onChange={event=>setFilters(current=>({...current,load_id:event.target.value||undefined}))}><option value="">Todas as cargas</option>
-        {(catalog.data?.loads??[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
-      <select aria-label="Cliente" className="h-10 rounded-md border bg-background px-3 text-sm" value={filters.client_id??''}
-        onChange={event=>setFilters(current=>({...current,client_id:event.target.value||undefined}))}><option value="">Todos os clientes</option>
-        {(catalog.data?.clients??[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
-      <select aria-label="Cidade de destino" className="h-10 rounded-md border bg-background px-3 text-sm" value={filters.destination_city??''}
-        onChange={event=>setFilters(current=>({...current,destination_city:event.target.value||undefined}))}><option value="">Todas as cidades</option>
-        {(catalog.data?.cities??[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
-      <select aria-label="UF de destino" className="h-10 rounded-md border bg-background px-3 text-sm" value={filters.destination_state??''}
-        onChange={event=>setFilters(current=>({...current,destination_state:event.target.value||undefined}))}><option value="">Todas as UFs</option>
-        {(catalog.data?.states??[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
+      {tenant&&actor?<>
+        <ReceiptFilterPicker tenant={tenant} actor={actor} kind="driver" label="Motorista" allLabel="Todos os motoristas" value={filters.driver_id??''}
+          onChange={value=>setFilters(current=>({...current,driver_id:value||undefined}))}/>
+        <ReceiptFilterPicker tenant={tenant} actor={actor} kind="vehicle" label="Veículo" allLabel="Todos os veículos" value={filters.vehicle_id??''}
+          onChange={value=>setFilters(current=>({...current,vehicle_id:value||undefined}))}/>
+        <ReceiptFilterPicker tenant={tenant} actor={actor} kind="supplier" label="Fornecedor" allLabel="Todos os fornecedores" value={filters.supplier_id??''}
+          onChange={value=>setFilters(current=>({...current,supplier_id:value||undefined}))}/>
+        <ReceiptFilterPicker tenant={tenant} actor={actor} kind="trip" label="Viagem" allLabel="Todas as viagens" value={filters.trip_id??''}
+          onChange={value=>setFilters(current=>({...current,trip_id:value||undefined}))}/>
+        <ReceiptFilterPicker tenant={tenant} actor={actor} kind="load" label="Carga" allLabel="Todas as cargas" value={filters.load_id??''}
+          onChange={value=>setFilters(current=>({...current,load_id:value||undefined}))}/>
+        <ReceiptFilterPicker tenant={tenant} actor={actor} kind="client" label="Cliente" allLabel="Todos os clientes" value={filters.client_id??''}
+          onChange={value=>setFilters(current=>({...current,client_id:value||undefined}))}/>
+        <ReceiptFilterPicker tenant={tenant} actor={actor} kind="city" label="Cidade de destino" allLabel="Todas as cidades" value={filters.destination_city??''}
+          onChange={value=>setFilters(current=>({...current,destination_city:value||undefined}))}/>
+        <ReceiptFilterPicker tenant={tenant} actor={actor} kind="state" label="UF de destino" allLabel="Todas as UFs" value={filters.destination_state??''}
+          onChange={value=>setFilters(current=>({...current,destination_state:value||undefined}))}/>
+      </>:null}
       <Input aria-label="Recebedor" placeholder="Nome do recebedor" value={filters.receiver??''}
         onChange={event=>setFilters(current=>({...current,receiver:event.target.value||undefined}))}/>
       <Button variant="outline" disabled={query.isFetching} onClick={()=>void query.refetch()}><RefreshCw className={`mr-2 h-4 w-4 ${query.isFetching?'animate-spin':''}`}/>Atualizar</Button>
@@ -209,7 +239,7 @@ export default function DeliveryReceipts(){
       <Button variant="outline" onClick={()=>void query.refetch()}>Tentar novamente</Button></CardContent></Card>:null}
     {!query.isPending&&!query.isError&&groups.length===0?<Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Nenhum canhoto encontrado.</CardContent></Card>:null}
     {allFiltered.error?<p role="alert">A seleção completa entre páginas não pôde ser carregada: {deliveryReceiptError(allFiltered.error)}</p>:null}
-    {groups.map(({key,name:supplier,rows,documentKinds})=>{const scopedRows=allGroups.find(group=>group.key===key)?.rows??[];
+    {groups.map(({key,name:supplier,rows,documentKinds})=>{const scopedRows=allGroups.find(group=>group.key===key)?.rows??rows;
       const eligible=scopedRows.filter(row=>row.digital_status==='validated'&&row.has_pdf);
       const selectedRows=eligible.filter(row=>selected.includes(row.id));const bulkSelection=eligible;
       return <section key={key} className="space-y-2">
@@ -218,9 +248,13 @@ export default function DeliveryReceipts(){
         <Button size="sm" variant="outline" disabled={!selectedRows.length||emailMutation.isPending||allFiltered.isFetching} onClick={()=>openEmail(key,supplier,selectedRows.map(rowAttachment))}>
           <Mail className="mr-1 h-4 w-4"/>Preparar e-mail ({selectedRows.length})</Button></div>
       {eligible.length>0?<label className="flex w-fit items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" disabled={allFiltered.isFetching}
-        checked={bulkSelection.every(row=>selected.includes(row.id))} onChange={event=>{const checked=event.target.checked;setSelected(current=>checked?
-          [...new Set([...current,...bulkSelection.map(row=>row.id)])]:current.filter(id=>!eligible.some(row=>row.id===id)));}}/>
-        Selecionar todos os {eligible.length} PDFs validados deste fornecedor no filtro atual</label>:null}
+        checked={!!allFiltered.data&&bulkSelection.every(row=>selected.includes(row.id))} onChange={async event=>{const checked=event.target.checked;
+          if(!checked){setSelected(current=>current.filter(id=>!eligible.some(row=>row.id===id)));return;}
+          const complete=allFiltered.data??(await allFiltered.refetch()).data;if(!complete)return;
+          const completeEligible=(groupDeliveryReceiptsBySupplier(complete).find(group=>group.key===key)?.rows??[])
+            .filter(row=>row.digital_status==='validated'&&row.has_pdf);
+          setSelected(current=>[...new Set([...current,...completeEligible.map(row=>row.id)])]);}}/>
+        {allFiltered.isFetching?'Carregando seleção completa…':`Selecionar todos os PDFs validados deste fornecedor no filtro atual${allFiltered.data?` (${eligible.length})`:''}`}</label>:null}
       {rows.map(row=><Card key={row.id}><CardHeader className="pb-2"><div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-start gap-2"><input aria-label={`Selecionar canhoto da entrega ${fmt(row.delivered_at)}`} className="mt-1" type="checkbox"
           disabled={row.digital_status!=='validated'||!row.has_pdf} checked={selected.includes(row.id)} onChange={event=>{const checked=event.target.checked;setSelected(current=>checked?

@@ -1,0 +1,64 @@
+{
+  "pins": [
+    {
+      "signature": "finance_private.apply_payable_movement(jsonb)",
+      "normalized_md5": "dbaee46db1c24aac9fcf8e604b946d22",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "signature": "finance_private.approve_payable_revision(jsonb)",
+      "normalized_md5": "178c5d334368ee2fcd4d9c7ff9910504",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "finance_private.paid_projection_chain(uuid,text,uuid)",
+      "normalized_md5": "3f8f086b42fbbda71ee22f02ee46bc58",
+      "prosecdef": true,
+      "provolatile": "s",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres}"
+    },
+    {
+      "signature": "register_employee_advance(uuid,uuid,numeric,date,text,text,text,boolean,boolean)",
+      "normalized_md5": "27dcd646b5076a6fc8f91039ca7e3084",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=public"
+      ],
+      "proacl": "{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}"
+    },
+    {
+      "signature": "sync_employee_advance_from_payable()",
+      "normalized_md5": "4aec41fe633b2f1d4b5eb36b1ceb3b59",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=public"
+      ],
+      "proacl": "{postgres=X/postgres,service_role=X/postgres}"
+    }
+  ],
+  "definitions": [
+    {
+      "signature": "finance_private.apply_payable_movement(jsonb)",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.apply_payable_movement(_payload jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare t uuid; actor uuid:=auth.uid();request uuid; cents bigint; payment uuid; link uuid;\n p public.payables%rowtype;m public.finance_movements%rowtype;old_command public.finance_commands%rowtype;\n paid numeric;result jsonb;actor_name text;\nbegin\n if jsonb_typeof(_payload) is distinct from 'object' then raise exception 'finance_invalid_payload' using errcode='22023';end if;\n t:=(_payload->>'tenant_id')::uuid; request:=(_payload->>'request_id')::uuid;\n if not finance_private.can_access(t) then raise exception 'finance_access_denied' using errcode='42501';end if;\n if request is null or _payload->>'version' is distinct from '1'\n or exists(select 1 from jsonb_object_keys(_payload) k where k not in('version','tenant_id','request_id','movement_id','payable_id','amount_cents','method','reason'))\n or coalesce(_payload->>'amount_cents','') !~ '^[0-9]{1,14}$'\n or length(btrim(coalesce(_payload->>'reason',''))) not between 5 and 2000\n or coalesce(_payload->>'method','') not in('pix','boleto','ted','doc','dinheiro','cartao','debito_automatico','other') then\n  raise exception 'finance_invalid_payload' using errcode='22023';end if;\n perform pg_advisory_xact_lock(hashtextextended(t::text||':finance',0));\n select * into old_command from public.finance_commands where tenant_id=t and request_id=request;\n if found then\n  if old_command.actor_id<>actor or old_command.action<>'apply_payable_movement' or old_command.payload<>_payload then\n   raise exception 'finance_request_conflict' using errcode='23505';end if;\n  return old_command.result;\n end if;\n cents:=(_payload->>'amount_cents')::bigint;\n select * into p from public.payables where id=(_payload->>'payable_id')::uuid and tenant_id=t for update;\n if not found or p.status not in('approved','partial') then raise exception 'finance_payable_not_payable' using errcode='22023';end if;\n select * into m from public.finance_movements where id=(_payload->>'movement_id')::uuid and tenant_id=t;\n if not found or m.direction<>'out' or m.nature='transfer' then raise exception 'finance_invalid_payment_movement' using errcode='22023';end if;\n if p.driver_id is not null and m.driver_id is distinct from p.driver_id then raise exception 'finance_payment_driver_mismatch' using errcode='22023';end if;\n select coalesce(sum(amount),0) into paid from finance_private.active_payable_payments where tenant_id=t and payable_id=p.id;\n if cents<=0 or paid<0 or paid<>trunc(paid,2) or paid+cents::numeric/100>p.amount then\n  raise exception 'finance_payable_overpaid' using errcode='23514';end if;\n if finance_private.movement_used_cents(t,m.id)+cents>m.amount_cents then raise exception 'finance_movement_overallocated' using errcode='23514';end if;\n insert into public.payables_payments(tenant_id,payable_id,amount,paid_at,bank_account_id,method,notes,attachment_url,bank_transaction_id,created_by)\n values(t,p.id,cents::numeric/100,(m.occurred_on+time '12:00') at time zone 'America/Sao_Paulo',m.bank_account_id,\n  _payload->>'method',btrim(_payload->>'reason'),m.receipt_path,null,actor) returning id into payment;\n insert into public.finance_payable_movement_links(tenant_id,movement_id,payable_id,payment_id,amount_cents,created_by)\n values(t,m.id,p.id,payment,cents,actor) returning id into link;\n result:=jsonb_build_object('version',1,'tenant_id',t,'request_id',request,'link_id',link,'payment_id',payment,'payable_id',p.id,'movement_id',m.id,'amount_cents',cents::text,'bank_confirmation','not_evaluated');\n select coalesce(nullif(raw_user_meta_data->>'full_name',''),email,actor::text) into actor_name from auth.users where id=actor;\n insert into public.finance_events(tenant_id,entity_type,entity_id,action,actor_id,actor_name,reason,after_data)\n values(t,'payable_payment',payment,'payable_movement_applied',actor,coalesce(actor_name,actor::text),btrim(_payload->>'reason'),result||jsonb_build_object('manual_intervention',true));\n insert into public.finance_commands(tenant_id,request_id,actor_id,action,payload,result) values(t,request,actor,'apply_payable_movement',_payload,result);\n return result;\nend;\n$function$\n"
+    },
+    {
+      "signature": "finance_private.approve_payable_revision(jsonb)",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.approve_payable_revision(payload jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare t uuid;payable uuid;req uuid;actor uuid:=auth.uid();existing public.finance_commands%rowtype;p public.payables%rowtype;ctx jsonb;after_row jsonb;stamp timestamptz;result jsonb;event_id uuid:=gen_random_uuid();actor_name text;\nbegin\n if jsonb_typeof(payload) is distinct from 'object' or payload->'version' is distinct from '1'::jsonb or coalesce(payload->>'revision','')!~'^[a-f0-9]{32}$' or coalesce(payload->>'amount_cents','')!~'^[1-9][0-9]{0,13}$' or length(btrim(coalesce(payload->>'reason',''))) not between 10 and 2000 or exists(select 1 from jsonb_object_keys(payload)k where k<>all(array['version','tenant_id','request_id','payable_id','revision','amount_cents','reason'])) then raise exception 'finance_invalid_payload' using errcode='22023';end if;\n t:=(payload->>'tenant_id')::uuid;payable:=(payload->>'payable_id')::uuid;req:=(payload->>'request_id')::uuid;if t is null or payable is null or req is null then raise exception 'finance_invalid_payload' using errcode='22023';end if;\n perform finance_private.require_access(t);perform pg_advisory_xact_lock(hashtextextended('fiscal:'||t::text,0));perform pg_advisory_xact_lock(hashtextextended(t::text||':finance',0));\n perform 1 from public.tenant_memberships where tenant_id=t and user_id=actor order by role::text for share nowait;perform 1 from public.drivers where tenant_id=t and user_id=actor order by id for share nowait;perform finance_private.require_access(t);\n select * into existing from public.finance_commands where tenant_id=t and request_id=req;if found then if existing.actor_id is distinct from actor or existing.action<>'approve_payable_revision' or existing.payload<>payload then raise exception 'finance_request_conflict' using errcode='23505';end if;return existing.result;end if;\n select * into p from public.payables where tenant_id=t and id=payable for update nowait;if p.id is null then raise exception 'finance_payable_not_found' using errcode='22023';end if;\n perform finance_private.require_access(t);ctx:=finance_private.payable_approval_context(t,payable);\n if ctx->>'revision' is distinct from payload->>'revision' or ctx#>>'{obligation,amount_cents}' is distinct from payload->>'amount_cents' then raise exception 'finance_payable_approval_changed' using errcode='40001';end if;\n if ctx->>'eligible' is distinct from 'true' then raise exception 'finance_payable_not_approvable' using errcode='55000';end if;\n stamp:=clock_timestamp();after_row:=to_jsonb(p)||jsonb_build_object('status','approved','approved_at',stamp,'approved_by',actor,'updated_at',stamp);\n perform finance_private.assert_closed_source_mutable(t,'payables',after_row);\n insert into finance_private.payable_approval_tickets values(txid_current(),t,payable,actor,req,to_jsonb(p),after_row);\n update public.payables set status='approved',approved_at=stamp,approved_by=actor,updated_at=stamp where tenant_id=t and id=payable;\n if exists(select 1 from finance_private.payable_approval_tickets where transaction_id=txid_current() and tenant_id=t and payable_id=payable) then raise exception 'finance_payable_approval_ticket_unconsumed' using errcode='55000';end if;\n select coalesce(raw_user_meta_data->>'full_name',email,actor::text) into actor_name from auth.users where id=actor;\n result:=jsonb_build_object('version',1,'tenant_id',t,'actor_id',actor,'request_id',req,'payable_id',payable,'approval_event_id',event_id,'confirmed',true,'amount_cents',payload->>'amount_cents','status','approved','approved_at',stamp,'cost_revision',ctx#>>'{cost_origin,revision}','cash_changed',false);\n insert into public.finance_events(id,tenant_id,entity_type,entity_id,action,actor_id,actor_name,reason,before_data,after_data) values(event_id,t,'payable',payable,'payable_approved_with_revision',actor,actor_name,btrim(payload->>'reason'),ctx-'_evidence',result);\n insert into public.finance_commands(tenant_id,request_id,actor_id,action,payload,result) values(t,req,actor,'approve_payable_revision',payload,result);return result;\nexception when lock_not_available then raise exception 'finance_payable_approval_busy' using errcode='40001';end$function$\n"
+    }
+  ]
+}

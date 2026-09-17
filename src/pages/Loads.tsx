@@ -23,6 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { Json } from '@/integrations/supabase/types';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 import NewLoadDialog from '@/components/loads/NewLoadDialog';
 import BatchReimportDialog from '@/components/loads/BatchReimportDialog';
@@ -295,19 +296,21 @@ export default function Loads() {
   const printRomaneio = useCallback(async (loadId: string) => {
     if (!currentTenant) return;
     try {
-      const { data: load } = await supabase
+      const { data: load, error: loadError } = await supabase
         .from('loads')
         .select('*, vehicles(plate, nickname, max_pallets), drivers(name)')
         .eq('id', loadId)
         .eq('tenant_id', currentTenant.id)
         .maybeSingle();
+      if (loadError) throw loadError;
       if (!load) throw new Error('Carga não encontrada');
 
-      const { data: items } = await supabase
+      const { data: items, error: itemsError } = await supabase
         .from('load_items')
         .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, value, weight_kg, issue_date, product_summary)')
         .eq('load_id', loadId)
         .order('created_at');
+      if (itemsError) throw itemsError;
 
       const veh = load.vehicles;
       const drv = load.drivers;
@@ -493,7 +496,7 @@ export default function Loads() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 onClick={() => {
-                  const ts = new Date().toISOString().slice(0, 10);
+                  const ts = localDateInputValue();
                   exportLoadsCSV(filtered, `cargas_${ts}.csv`);
                   toast({ title: `CSV exportado (${filtered.length} cargas)` });
                 }}
@@ -502,7 +505,7 @@ export default function Loads() {
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
-                  const ts = new Date().toISOString().slice(0, 10);
+                  const ts = localDateInputValue();
                   exportLoadsPDF(filtered, `cargas_${ts}.pdf`, 'Cargas / Romaneios');
                   toast({ title: `PDF exportado (${filtered.length} cargas)` });
                 }}

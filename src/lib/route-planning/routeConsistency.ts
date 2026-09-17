@@ -59,6 +59,7 @@ export function validateRouteConsistency(
   }
 
   const stops = route.stops || [];
+  if (stops.length > 30) blocking.push(`A rota possui ${stops.length} paradas; o limite é 30.`);
   if (stops.length === 0) {
     blocking.push('Sem paradas consolidadas. Clique em "Gerar paradas".');
   }
@@ -158,13 +159,13 @@ export function validateRouteConsistency(
       { pallets: 0, weight: 0, volume: 0 },
     );
     if (vehicle.max_pallets && totals.pallets > vehicle.max_pallets) {
-      warnings.push(`Paletes (${totals.pallets}) excedem capacidade (${vehicle.max_pallets}).`);
+      blocking.push(`Paletes (${totals.pallets}) excedem capacidade (${vehicle.max_pallets}).`);
     }
     if (vehicle.max_weight_kg && totals.weight > vehicle.max_weight_kg) {
-      warnings.push(`Peso (${totals.weight.toFixed(0)}kg) excede capacidade (${vehicle.max_weight_kg}kg).`);
+      blocking.push(`Peso (${totals.weight.toFixed(0)}kg) excede capacidade (${vehicle.max_weight_kg}kg).`);
     }
     if (vehicle.max_volume_m3 && totals.volume > vehicle.max_volume_m3) {
-      warnings.push(`Volume (${totals.volume.toFixed(2)}m³) excede capacidade (${vehicle.max_volume_m3}m³).`);
+      blocking.push(`Volume (${totals.volume.toFixed(2)}m³) excede capacidade (${vehicle.max_volume_m3}m³).`);
     }
   }
 

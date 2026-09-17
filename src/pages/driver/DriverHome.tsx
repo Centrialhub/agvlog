@@ -9,14 +9,19 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Truck, MapPin, Package, ArrowRight, ClipboardCheck, AlertTriangle } from 'lucide-react';
+import { Truck, MapPin, Package, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useEffect, useState } from 'react';
 import { type DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
-import { DriverHomeDeliveryMap, DriverHomeQuickActions } from '@/components/driver/DriverHomePanels';
+import {
+  DriverHomeChecklistAlert,
+  DriverHomeDeliveryMap,
+  DriverHomeLoadError,
+  DriverHomeQuickActions,
+  DriverHomeVehiclePositionError,
+} from '@/components/driver/DriverHomePanels';
 import { TRIP_ACTIVE_STATUSES, tripStatusLabel, LOAD_ACTIVE_STATUSES } from '@/lib/status';
 import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
 import { useDriverTripActions } from '@/hooks/useDriverTripActions';
@@ -25,13 +30,15 @@ import { NextDestinationCard } from '@/components/driver/NextDestinationCard';
 import { getNextDriverStop, getPendingDriverStops, readDriverRouteSnapshot, saveDriverRouteSnapshot } from '@/lib/driver/offlineRouteSnapshot';
 import { driverOperationalSnapshotStore, type DriverOperationalSnapshot } from '@/lib/driver/driverOperationalOffline';
 import {useDriverPhysicalJourney} from '@/hooks/useDriverPhysicalJourney';
-
-
-
+import { isStopTerminal } from '@/lib/status/stopStatus';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import type { DriverHomeAssignedLoad } from '@/lib/driver/driverHomeTypes';
 
 export default function DriverHome() {
-  const { data: tenantDriver, isLoading: driverLoading } = useCurrentDriver();
-  const {data:physicalJourney,isLoading:physicalJourneyLoading}=useDriverPhysicalJourney();
+  const driverQuery = useCurrentDriver();
+  const { data: tenantDriver, isLoading: driverLoading } = driverQuery;
+  const physicalJourneyQuery = useDriverPhysicalJourney();
+  const {data:physicalJourney,isLoading:physicalJourneyLoading}=physicalJourneyQuery;
   const driver=tenantDriver??physicalJourney?.driver??null;
   const multiTenantJourney=Boolean(physicalJourney?.has_active_journey&&new Set(physicalJourney.trips.map(trip=>trip.tenant_id)).size>1);
   const { user } = useAuth();
@@ -48,7 +55,6 @@ export default function DriverHome() {
     refetch: refetchAutoTrip,
   } = useActiveTrip(driver?.id);
   const checklist = useChecklistStatus(autoTrip?.id);
-
   const {
     data: activeTrips = [],
     isLoading: tripsLoading,
@@ -56,9 +62,9 @@ export default function DriverHome() {
     error: tripsError,
     refetch: refetchTrips,
   } = useQuery({
-    queryKey: ['driver_my_trips', driver?.id, autoTrip?.id, physicalJourney?.journey?.id, multiTenantJourney],
+    queryKey: ['driver_my_trips', currentTenant?.id, user?.id, driver?.id, autoTrip?.id, physicalJourney?.journey?.id, multiTenantJourney],
     queryFn: async () => {
-      if (!driver) return [];
+      if (!driver || !currentTenant || !user) return [];
       if (multiTenantJourney) return physicalJourney!.trips as unknown as DriverTrip[];
       
       // If we already have an autoTrip from the hook, use it as the primary
@@ -69,6 +75,7 @@ export default function DriverHome() {
       const { data, error } = await supabase
         .from('dispatch_trips')
         .select(DRIVER_TRIP_SELECT)
+        .eq('tenant_id', currentTenant.id)
         .eq('driver_id', driver.id)
         .order('created_at', { ascending: false })
         .limit(10);
@@ -81,7 +88,7 @@ export default function DriverHome() {
         (trip.loads?.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(trip.loads.status))
       ).slice(0, 5);
     },
-    enabled: !!driver && !physicalJourneyLoading,
+    enabled: !!driver && !!currentTenant && !!user && !physicalJourneyLoading,
   });
 
   const {
@@ -91,94 +98,98 @@ export default function DriverHome() {
     error: loadsError,
     refetch: refetchLoads,
   } = useQuery({
-    queryKey: ['driver_my_loads', driver?.id, physicalJourney?.journey?.id, multiTenantJourney],
+    queryKey: ['driver_my_loads', currentTenant?.id, user?.id, driver?.id, physicalJourney?.journey?.id, multiTenantJourney],
     queryFn: async () => {
-      if (!driver) return [];
+      if (!driver || !currentTenant || !user) return [];
       if (multiTenantJourney) return [];
-      const { data, error } = await supabase
-        .from('loads')
-        .select(`
-          id,
-          load_number,
-          origin,
-          destination,
-          status,
-          total_pallet_count,
-          total_weight_kg,
-          scheduled_load_at,
-          vehicles(plate, nickname),
-          dispatch_trip_loads!dispatch_trip_loads_load_id_fkey(
-            dispatch_trip_id,
-            dispatch_trips!dispatch_trip_loads_dispatch_trip_id_fkey(status)
-          )
-        `)
-        .eq('driver_id', driver.id)
-        .not('status', 'in', `(${TERMINAL_LOAD_STATUSES.join(',')})`)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data || [];
+      return fetchAllPostgrestPages<DriverHomeAssignedLoad>(async (from, to) => {
+        const { data, error } = await supabase
+          .from('loads')
+          .select(`
+            id,
+            load_number,
+            origin,
+            destination,
+            status,
+            total_pallet_count,
+            total_weight_kg,
+            scheduled_load_at,
+            vehicles(plate, nickname),
+            dispatch_trip_loads!dispatch_trip_loads_load_id_fkey(
+              dispatch_trip_id,
+              dispatch_trips!dispatch_trip_loads_dispatch_trip_id_fkey(status)
+            )
+          `)
+          .eq('tenant_id', currentTenant.id)
+          .eq('driver_id', driver.id)
+          .not('status', 'in', `(${TERMINAL_LOAD_STATUSES.join(',')})`)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to);
+        return { data: (data || []) as unknown as DriverHomeAssignedLoad[], error };
+      }, 100);
     },
-    enabled: !!driver && !physicalJourneyLoading,
+    enabled: !!driver && !!currentTenant && !!user && !physicalJourneyLoading,
   });
 
-  // Paradas + posição do veículo para o mapa quando houver viagem real.
   const primaryTrip = activeTrips[0];
   const homeStopsQuery = useQuery({
-    queryKey: ['driver_home_stops', primaryTrip?.id, physicalJourney?.journey?.id, multiTenantJourney],
+    queryKey: ['driver_home_stops', currentTenant?.id, user?.id, primaryTrip?.id, physicalJourney?.journey?.id, multiTenantJourney],
     queryFn: async () => {
-      if (!primaryTrip?.id) return [];
+      if (!primaryTrip?.id || !currentTenant || !user) return [];
       if(multiTenantJourney)return physicalJourney!.stops.filter(stop=>stop.dispatch_trip_id===primaryTrip.id);
       const { data, error } = await supabase
         .from('dispatch_stops')
         .select('id, stop_order, destination, status, latitude, longitude, notes, client_id, actual_arrival_at, actual_departure_at, clients(company_name)')
+        .eq('tenant_id', currentTenant.id)
         .eq('dispatch_trip_id', primaryTrip.id)
         .order('stop_order', { ascending: true });
       if (error) throw error;
       return data || [];
     },
-    enabled: !!primaryTrip?.id,
+    enabled: !!primaryTrip?.id && !!currentTenant && !!user,
   });
   const { data: realStops = [] } = homeStopsQuery;
-
+  const routeTenantId = primaryTrip?.tenant_id ?? currentTenant?.id;
   const {
     data: vehiclePos,
     isError: vehiclePositionFailed,
     isFetching: vehiclePositionFetching,
     refetch: refetchVehiclePosition,
-  } = useDriverHomeVehiclePosition(primaryTrip?.vehicle_id);
+  } = useDriverHomeVehiclePosition(primaryTrip?.vehicle_id, routeTenantId);
 
-  // Realtime: refresh assigned loads/trips whenever the driver assignment or status changes.
   useEffect(() => {
-    if (!driver?.id) return undefined;
+    if (!driver?.id || !currentTenant?.id || !user?.id) return undefined;
+    const tripsKey = ['driver_my_trips', currentTenant.id, user.id, driver.id] as const;
+    const loadsKey = ['driver_my_loads', currentTenant.id, user.id, driver.id] as const;
     const channel = supabase
-      .channel(`driver_home_${driver.id}`)
+      .channel(`driver_home_${currentTenant.id}_${driver.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'loads', filter: `driver_id=eq.${driver.id}` },
         () => {
-          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
-          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
+          queryClient.invalidateQueries({ queryKey: loadsKey });
+          queryClient.invalidateQueries({ queryKey: tripsKey });
         },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'dispatch_trips', filter: `driver_id=eq.${driver.id}` },
         () => {
-          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
-          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
+          queryClient.invalidateQueries({ queryKey: tripsKey });
+          queryClient.invalidateQueries({ queryKey: loadsKey });
         },
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
-          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
+          queryClient.invalidateQueries({ queryKey: loadsKey });
+          queryClient.invalidateQueries({ queryKey: tripsKey });
         }
       });
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [driver?.id, queryClient]);
+  }, [currentTenant?.id, driver?.id, queryClient, user?.id]);
 
   // Loads without an associated trip (driver assigned directly but no dispatch yet).
   const tripLoadIds = new Set(
@@ -191,9 +202,9 @@ export default function DriverHome() {
     !resolveCanonicalTripLink(load.dispatch_trip_loads, TRIP_ACTIVE_STATUSES) && !tripLoadIds.has(load.id)
   );
 
-  const loading = driverLoading || physicalJourneyLoading || autoTripLoading || tripsLoading || loadsLoading;
-  const dataError = autoTripError ?? tripsError ?? loadsError;
-  const hasDataError = autoTripFailed || tripsFailed || loadsFailed;
+  const loading = driverLoading || physicalJourneyLoading || autoTripLoading || tripsLoading || loadsLoading || homeStopsQuery.isLoading;
+  const dataError = driverQuery.error ?? physicalJourneyQuery.error ?? autoTripError ?? tripsError ?? loadsError ?? homeStopsQuery.error;
+  const hasDataError = driverQuery.isError || physicalJourneyQuery.isError || autoTripFailed || tripsFailed || loadsFailed || homeStopsQuery.isError;
   const dataErrorMessage = dataError instanceof Error
     ? dataError.message
     : 'Não foi possível carregar a viagem e as cargas do motorista.';
@@ -205,7 +216,6 @@ export default function DriverHome() {
   );
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
-  const TERMINAL_STOP_STATUSES = new Set(['completed', 'delivered', 'refused', 'returned', 'failed', 'partial_delivery']);
   const realMapStops: DeliveryPoint[] = realStops
     .filter((stop) => stop.latitude != null && stop.longitude != null)
     .map((stop, index) => ({
@@ -213,7 +223,7 @@ export default function DriverHome() {
       name: stop.clients?.company_name || stop.destination || `Parada ${index + 1}`,
       lat: Number(stop.latitude),
       lng: Number(stop.longitude),
-      status: TERMINAL_STOP_STATUSES.has(stop.status)
+      status: isStopTerminal(stop.status)
         ? 'done'
         : stop.status === 'arrived'
           ? 'current'
@@ -225,7 +235,6 @@ export default function DriverHome() {
       ? { lat: Number(vehiclePos.lat), lng: Number(vehiclePos.lng), plate: primaryTrip?.vehicles?.plate || '' }
       : null;
   const showRealMap = realMapStops.length > 0;
-  const routeTenantId=primaryTrip?.tenant_id??currentTenant?.id;
   const [cachedSnapshot, setCachedSnapshot] = useState(() => readDriverRouteSnapshot(routeTenantId, user?.id));
 
   useEffect(() => {
@@ -326,54 +335,21 @@ export default function DriverHome() {
       )}
 
       {!loading && hasDataError && (
-        <Card className="border-destructive/50">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-              <div>
-                <p className="text-sm font-medium">Falha ao carregar a operação</p>
-                <p className="text-xs text-muted-foreground">{dataErrorMessage}</p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                void refetchAutoTrip();
-                void refetchTrips();
-                void refetchLoads();
-              }}
-            >
-              Tentar novamente
-            </Button>
-          </CardContent>
-        </Card>
+        <DriverHomeLoadError message={dataErrorMessage} onRetry={() => {
+          void refetchAutoTrip();
+          void refetchTrips();
+          void refetchLoads();
+          void driverQuery.refetch();
+          void physicalJourneyQuery.refetch();
+          void homeStopsQuery.refetch();
+        }} />
       )}
 
       {!loading && primaryTrip?.vehicle_id && vehiclePositionFailed && (
-        <Card className="border-destructive/50">
-          <CardContent className="p-4 space-y-3" role="alert">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-              <div>
-                <p className="text-sm font-medium">Posição do veículo indisponível</p>
-                <p className="text-xs text-muted-foreground">
-                  Não foi possível atualizar a localização. As paradas e demais dados da viagem continuam disponíveis.
-                </p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={vehiclePositionFetching}
-              onClick={() => { void refetchVehiclePosition(); }}
-            >
-              {vehiclePositionFetching ? 'Atualizando posição…' : 'Tentar atualizar posição'}
-            </Button>
-          </CardContent>
-        </Card>
+        <DriverHomeVehiclePositionError
+          refreshing={vehiclePositionFetching}
+          onRetry={() => { void refetchVehiclePosition(); }}
+        />
       )}
 
 
@@ -507,31 +483,14 @@ export default function DriverHome() {
 
       {/* Checklist status banner */}
       {autoTrip && !checklist.isLoading && (!checklist.preCompleted || !checklist.postCompleted) && (
-        <Card
-          className="border-warning/50 bg-warning/5 cursor-pointer hover:bg-warning/10 transition-colors"
-          role="button"
-          tabIndex={0}
-          onClick={() => navigate('/driver/checklist')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              navigate('/driver/checklist');
-            }
-          }}
-        >
-          <CardContent className="p-3 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
-            <div className="flex-1">
-              <p className="text-xs font-medium">Checklist pendente</p>
-              <p className="text-[10px] text-muted-foreground">
-                {!checklist.preCompleted
-                  ? `Pré-viagem: ${checklist.preCheckedCount}/${checklist.preTotalCount} itens`
-                  : `Pós-viagem: ${checklist.postCheckedCount}/${checklist.postTotalCount} itens`}
-              </p>
-            </div>
-            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-          </CardContent>
-        </Card>
+        <DriverHomeChecklistAlert
+          preCompleted={checklist.preCompleted}
+          preCheckedCount={checklist.preCheckedCount}
+          preTotalCount={checklist.preTotalCount}
+          postCheckedCount={checklist.postCheckedCount}
+          postTotalCount={checklist.postTotalCount}
+          onOpen={() => navigate('/driver/checklist')}
+        />
       )}
 
       {/* Quick actions */}

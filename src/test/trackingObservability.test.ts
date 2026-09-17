@@ -21,10 +21,24 @@ describe('tracking observability parser', () => {
     expect(parsed.schedule).toMatchObject({ enabled: true, pollMinutes: 3, fullSyncHours: 6, consecutiveFailures: 2 });
   });
 
-  it('fails closed to empty metrics when the payload is missing', () => {
-    const parsed = parseTrackingObservability(null);
-    expect(parsed.positions.fresh).toBe(0);
-    expect(parsed.integration.success).toBeNull();
-    expect(parsed.schedule.enabled).toBe(false);
+  it('rejects incomplete envelopes and malformed values instead of displaying false zeroes', () => {
+    expect(() => parseTrackingObservability(null)).toThrow(/envelope válido/);
+    expect(() => parseTrackingObservability({ positions: {} })).toThrow(/tracker_links ausente/);
+    expect(() => parseTrackingObservability({
+      positions: { fresh: '4', stale: 2, last_at: null },
+      tracker_links: {}, geofences: {}, queue: {}, addresses: {}, integration: {}, schedule: {},
+    })).toThrow(/fresh inválido/);
+  });
+
+  it('rejects invalid timestamps and explicit invalid schedule intervals', () => {
+    const base = {
+      positions: { fresh: 0, stale: 0, last_at: null },
+      tracker_links: { active: 0, conflicts: 0 },
+      geofences: { fleet: 0, delivery: 0, events_24h: 0, last_evaluated_at: null },
+      queue: { pending: 0, errors: 0 }, addresses: { pending: 0, ambiguous: 0, error: 0 },
+      integration: {}, schedule: {},
+    };
+    expect(() => parseTrackingObservability({ ...base, positions: { ...base.positions, last_at: 'not-a-date' } })).toThrow(/data válida/);
+    expect(() => parseTrackingObservability({ ...base, schedule: { poll_interval_minutes: 0 } })).toThrow(/poll_interval_minutes/);
   });
 });

@@ -25,7 +25,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function PortalTracking() {
   const { data: items = [], isLoading, error, refetch } = usePortalTracking();
-  const { selectedClientId, can } = usePortalClientScope();
+  const { selectedClientId, clients, can } = usePortalClientScope();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [selected, setSelected] = useState<string | null>(null);
@@ -56,7 +56,12 @@ export default function PortalTracking() {
         </div>
       )}
 
-      {error ? (
+      {!selectedClientId && clients.length > 1 ? (
+        <PortalEmptyState
+          title="Selecione um cliente"
+          description="O acompanhamento em tempo real é exibido por cliente. Escolha um cliente no seletor acima."
+        />
+      ) : error ? (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive flex items-center justify-between gap-3">
           <span>Erro ao carregar tracking: {(error as Error).message}</span>
           <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>

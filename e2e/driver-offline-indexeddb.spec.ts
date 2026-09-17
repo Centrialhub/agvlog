@@ -7,7 +7,10 @@ let server:ViteDevServer;
 let harnessUrl:string;
 
 test.beforeAll(async()=>{
-  server=await createServer({server:{host:'127.0.0.1',port:0,strictPort:false}});
+  server=await createServer({
+    optimizeDeps:{entries:['e2e/fixtures/driver-offline-harness.html']},
+    server:{host:'127.0.0.1',port:0,strictPort:false},
+  });
   await server.listen();
   const baseUrl=server.resolvedUrls?.local[0];
   if(!baseUrl)throw new Error('Vite did not expose the offline harness URL.');

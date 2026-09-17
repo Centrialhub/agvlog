@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { Database } from '@/integrations/supabase/types';
+import type { Database, Json } from '@/integrations/supabase/types';
 import { useTenant } from './useTenant';
-import { useAuth } from './useAuth';
+import {useAuth} from './useAuth';
+import {acknowledgeDurableOperatorCommand,prepareDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export const PICKUP_STATUSES = ['pendente', 'vinculada', 'finalizada', 'cancelada'] as const;
 export type PickupStatus = typeof PICKUP_STATUSES[number];
@@ -30,8 +32,8 @@ export type CreatePickupOrderInput = Omit<
 
 export type UpdatePickupOrderInput = Omit<
   PickupOrderUpdate,
-  'id' | 'tenant_id' | 'created_by'
-> & { id: string };
+  'id' | 'tenant_id' | 'created_by' | 'updated_at'
+> & { id: string; expected_updated_at: string };
 
 function normalizePickupOrder(row: PickupOrderRow): PickupOrder {
   return { ...row, status: row.status as PickupStatus };
@@ -55,9 +57,10 @@ export function usePickupOrders(filters?: { status?: PickupStatus | 'all'; searc
           `pickup_number.ilike.%${s}%,remitter_name.ilike.%${s}%,driver_name_snapshot.ilike.%${s}%,vehicle_plate_snapshot.ilike.%${s}%`,
         );
       }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []).map(normalizePickupOrder);
+      const data = await fetchAllPostgrestPages<PickupOrderRow>((from, to) =>
+        q.order('id').range(from, to),
+      );
+      return data.map(normalizePickupOrder);
     },
     enabled: !!currentTenant,
   });
@@ -69,14 +72,19 @@ export function usePickupOrderCounts(pickupIds: string[]) {
     queryKey: ['pickup_orders_counts', currentTenant?.id, [...pickupIds].sort().join(',')],
     queryFn: async () => {
       if (!currentTenant || pickupIds.length === 0) return {} as Record<string, number>;
-      const { data, error } = await supabase
-        .from('fiscal_documents')
-        .select('pickup_order_id')
-        .eq('tenant_id', currentTenant.id)
-        .in('pickup_order_id', pickupIds);
-      if (error) throw error;
+      const pages = await Promise.all(Array.from({ length: Math.ceil(pickupIds.length / 200) }, (_, index) => {
+        const ids = pickupIds.slice(index * 200, (index + 1) * 200);
+        return fetchAllPostgrestPages<{ pickup_order_id: string | null }>((from, to) => supabase
+          .from('fiscal_documents')
+          .select('pickup_order_id')
+          .eq('tenant_id', currentTenant.id)
+          .in('pickup_order_id', ids)
+          .order('id')
+          .range(from, to));
+      }));
+      const data = pages.flat();
       const map: Record<string, number> = {};
-      (data || []).forEach((row) => {
+      data.forEach((row) => {
         const id = row.pickup_order_id;
         if (id) map[id] = (map[id] || 0) + 1;
       });
@@ -88,29 +96,23 @@ export function usePickupOrderCounts(pickupIds: string[]) {
 
 export function useCreatePickupOrder() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
+  const {user}=useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: CreatePickupOrderInput) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      // Get next number
-      const { data: nextNum, error: numErr } = await supabase.rpc('peek_next_pickup_number', {
-        _tenant_id: currentTenant.id,
-      });
-      if (numErr) throw numErr;
-      const payload: PickupOrderInsert = {
+      if(!user)throw new Error('Usuário não autenticado');
+      const payload = {
         ...values,
-        pickup_number: String(nextNum),
         tenant_id: currentTenant.id,
-        created_by: user?.id ?? null,
       };
-      const { data, error } = await supabase
-        .from('pickup_orders')
-        .insert(payload)
-        .select()
-        .single();
+      const pending=await prepareDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'create_pickup_order',entityId:'new',payload});
+      const { data, error } = await supabase.rpc('create_pickup_order_v1', {
+        _payload: {...payload,request_id:pending.requestId} as unknown as Json,
+      });
       if (error) throw error;
-      return normalizePickupOrder(data);
+      acknowledgeDurableOperatorCommand(pending);
+      return normalizePickupOrder(data as unknown as PickupOrder);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pickup_orders'] }),
   });
@@ -120,17 +122,13 @@ export function useUpdatePickupOrder() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: UpdatePickupOrderInput) => {
+    mutationFn: async ({ id, expected_updated_at, ...values }: UpdatePickupOrderInput) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { data, error } = await supabase
-        .from('pickup_orders')
-        .update(values)
-        .eq('id', id)
-        .eq('tenant_id', currentTenant.id)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('update_pickup_order_v1', {
+        _payload: { ...values, id, tenant_id: currentTenant.id, expected_updated_at } as unknown as Json,
+      });
       if (error) throw error;
-      return normalizePickupOrder(data);
+      return normalizePickupOrder(data as unknown as PickupOrderRow);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pickup_orders'] }),
   });

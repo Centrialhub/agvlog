@@ -44,6 +44,11 @@ vi.mock('@supabase/supabase-js', () => ({
         getUser: async () => ({ data: { user: { id: 'actor' } }, error: null }),
       },
       from: (table: string) => query(table),
+      rpc: async (name: string, args: Row) => {
+        if (name !== 'merge_tenant_pipeline_health_v1') throw new Error(`Unexpected RPC: ${name}`);
+        state.healthWrites.push(args._patch as Row);
+        return { data: args._patch, error: null };
+      },
     };
   },
 }));
@@ -202,11 +207,11 @@ describe('SSX pipeline post-ingestion chaining', () => {
     expect(liveStatus.headers.get('Authorization')).toBe(`Bearer ${ACTOR_JWT}`);
     expect(liveStatus.headers.has('x-agvlog-cron-secret')).toBe(false);
     expect(liveStatus.body).toEqual({ tenant_id: TENANT_ID });
-    expect(state.healthWrites.at(-1)).toMatchObject({ settings: { pipeline_health: {
+    expect(state.healthWrites.at(-1)).toMatchObject({
       last_run_touched_vehicles: 1,
       last_run_trip_live_status_updated: 1,
       last_run_trip_live_status_deferred_reason: null,
-    } } });
+    });
   });
 
   it('never impersonates a user during cron and exposes the required service-only follow-up', async () => {
@@ -223,9 +228,9 @@ describe('SSX pipeline post-ingestion chaining', () => {
       expect(call.headers.get('Authorization')).toBe('Bearer anon-test');
       expect(call.headers.get('x-agvlog-cron-secret')).toBe('vault-backed-test-secret');
     }
-    expect(state.healthWrites.at(-1)).toMatchObject({ settings: { pipeline_health: {
+    expect(state.healthWrites.at(-1)).toMatchObject({
       last_run_trip_live_status_deferred_reason: 'cron_requires_actor_jwt',
-    } } });
+    });
   });
 
   it('refreshes units before governance during a full synchronization', async () => {

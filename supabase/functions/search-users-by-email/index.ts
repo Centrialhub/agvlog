@@ -48,10 +48,9 @@ Deno.serve(async (req) => {
     // the requested tenant. This blocks cross-tenant identity disclosure.
     const matches: Array<{ id: string; email: string | null; full_name: string | null }> = [];
     const perPage = 100;
-    const maxPages = 10;
-    for (let page = 1; page <= maxPages && matches.length === 0; page++) {
+    for (let page = 1; matches.length === 0; page++) {
       const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-      if (error) break;
+      if (error) return json({ error: error.message }, 500);
       for (const u of data.users) {
         const email = u.email?.toLowerCase() ?? "";
         if (email === query) {

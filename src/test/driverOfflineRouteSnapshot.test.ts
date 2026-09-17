@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clearDriverRouteSnapshots,
   getNextDriverStop,
+  getPendingDriverStops,
   readDriverRouteSnapshot,
   saveDriverRouteSnapshot,
 } from '@/lib/driver/offlineRouteSnapshot';
@@ -38,6 +39,23 @@ describe('driver route offline snapshot', () => {
     expect(snapshot?.driver.name).toBe('Motorista QA');
     expect(getNextDriverStop(snapshot?.stops ?? [])?.id).toBe('next');
     expect(readDriverRouteSnapshot('tenant', 'other-user', storage)).toBeNull();
+  });
+
+  it('never restores any canonical terminal stop as pending', () => {
+    const terminalStatuses = [
+      'completed', 'delivered', 'cancelled', 'skipped',
+      'refused', 'returned', 'partial_delivery', 'failed',
+    ];
+    const stops = terminalStatuses.map((status, index) => ({
+      id: status,
+      stop_order: index + 1,
+      destination: status,
+      status,
+    }));
+    stops.push({ id: 'pending', stop_order: 20, destination: 'Próxima', status: 'pending' });
+
+    expect(getPendingDriverStops(stops).map((stop) => stop.id)).toEqual(['pending']);
+    expect(getNextDriverStop(stops)?.id).toBe('pending');
   });
 
   it('rejects malformed version-one snapshots instead of returning a partial route', () => {

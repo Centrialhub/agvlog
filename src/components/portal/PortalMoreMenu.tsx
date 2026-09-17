@@ -2,12 +2,13 @@ import { NavLink } from 'react-router-dom';
 import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, FileText, ClipboardCheck, AlertTriangle, BarChart3, Settings, LogOut } from 'lucide-react';
+import { MoreHorizontal, FileText, ClipboardCheck, AlertTriangle, BarChart3, Settings, LogOut, ReceiptText } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
 const MORE_ITEMS = [
   { to: '/portal/documents', label: 'Documentos', icon: FileText },
+  { to: '/portal/titles', label: 'Títulos', icon: ReceiptText },
   { to: '/portal/pods', label: 'Canhotos', icon: ClipboardCheck },
   { to: '/portal/occurrences', label: 'Ocorrências', icon: AlertTriangle },
   { to: '/portal/reports', label: 'Relatórios', icon: BarChart3 },

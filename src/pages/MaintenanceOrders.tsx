@@ -20,7 +20,7 @@ import { getErrorMessage } from '@/lib/errors';
 
 export default function MaintenanceOrdersPage() {
   const toast = useSonnerToast();
-  const { data: orders = [], isLoading } = useMaintenanceOrders();
+  const { data: orders = [], isLoading, isError, error } = useMaintenanceOrders();
   const { data: vehicles = [] } = useVehicles();
   const { data: employees = [] } = useEmployees();
   const createOrder = useCreateMaintenanceOrder();
@@ -64,6 +64,13 @@ export default function MaintenanceOrdersPage() {
   };
 
   const handleSave = async () => {
+    const odometer = form.odometer_km ? Number(form.odometer_km) : null;
+    const partsCost = form.parts_cost ? Number(form.parts_cost) : 0;
+    const laborCost = form.labor_cost ? Number(form.labor_cost) : 0;
+    if ((odometer !== null && (!Number.isFinite(odometer) || odometer < 0)) || !Number.isFinite(partsCost) || partsCost < 0 || !Number.isFinite(laborCost) || laborCost < 0) {
+      toast.error('Odômetro e custos devem ser valores não negativos.');
+      return;
+    }
     const payload = {
       vehicle_id: form.vehicle_id || null,
       maintenance_type: form.maintenance_type,
@@ -72,10 +79,10 @@ export default function MaintenanceOrdersPage() {
       diagnosis: form.diagnosis || null,
       supplier_vendor: form.supplier_vendor || null,
       responsible_employee_id: form.responsible_employee_id || null,
-      odometer_km: form.odometer_km ? Number(form.odometer_km) : null,
-      parts_cost: form.parts_cost ? Number(form.parts_cost) : 0,
-      labor_cost: form.labor_cost ? Number(form.labor_cost) : 0,
-      total_cost: (Number(form.parts_cost) || 0) + (Number(form.labor_cost) || 0),
+      odometer_km: odometer,
+      parts_cost: partsCost,
+      labor_cost: laborCost,
+      total_cost: partsCost + laborCost,
       services_performed: form.services_performed || null,
       notes: form.notes || null,
       status: form.status,
@@ -104,16 +111,16 @@ export default function MaintenanceOrdersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Wrench className="h-5 w-5" /> Ordens de Manutenção</h1>
-          <p className="text-sm text-muted-foreground">{orders.length} ordens</p>
+          <p className="text-sm text-muted-foreground">{isLoading ? 'Carregando ordens…' : isError ? 'Indicadores indisponíveis' : `${orders.length} ordens`}</p>
         </div>
         <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Nova OS</Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      {!isLoading && !isError ? <div className="grid grid-cols-3 gap-3">
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Em Aberto</p><p className="text-lg font-bold">{kpis.open}</p></CardContent></Card>
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Custo Total</p><p className="text-lg font-bold">{fmt(kpis.totalCost)}</p></CardContent></Card>
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Horas Parado</p><p className="text-lg font-bold">{kpis.downtime.toFixed(1)}h</p></CardContent></Card>
-      </div>
+      </div> : null}
 
       <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={orders.length} loading={isLoading} description="Os indicadores acima mostram todas as ordens." fields={[
         { key: 'search', label: 'Busca', type: 'search', placeholder: 'Número, problema, placa ou fornecedor', value: search, onChange: value => setFilter('search', value) },
@@ -129,6 +136,7 @@ export default function MaintenanceOrdersPage() {
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+          : isError ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-destructive">Não foi possível carregar as ordens: {error instanceof Error ? error.message : 'erro desconhecido'}</TableCell></TableRow>
           : filtered.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma OS</TableCell></TableRow>
           : filtered.map(o => (
             <TableRow key={o.id}>
@@ -160,14 +168,14 @@ export default function MaintenanceOrdersPage() {
               <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v }))}><SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="low">Baixa</SelectItem><SelectItem value="medium">Média</SelectItem><SelectItem value="high">Alta</SelectItem><SelectItem value="critical">Crítica</SelectItem></SelectContent></Select>
             </div>
-            <div><Label className="text-xs">Odômetro (km)</Label><Input type="number" value={form.odometer_km} onChange={e => setForm(f => ({ ...f, odometer_km: e.target.value }))} /></div>
+            <div><Label className="text-xs">Odômetro (km)</Label><Input type="number" min="0" value={form.odometer_km} onChange={e => setForm(f => ({ ...f, odometer_km: e.target.value }))} /></div>
             <div><Label className="text-xs">Responsável</Label>
               <Select value={form.responsible_employee_id} onValueChange={v => setForm(f => ({ ...f, responsible_employee_id: v }))}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>{employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent></Select>
             </div>
             <div><Label className="text-xs">Fornecedor/Oficina</Label><Input value={form.supplier_vendor} onChange={e => setForm(f => ({ ...f, supplier_vendor: e.target.value }))} /></div>
-            <div><Label className="text-xs">Custo Peças (R$)</Label><Input type="number" step="0.01" value={form.parts_cost} onChange={e => setForm(f => ({ ...f, parts_cost: e.target.value }))} /></div>
-            <div><Label className="text-xs">Custo Mão de Obra (R$)</Label><Input type="number" step="0.01" value={form.labor_cost} onChange={e => setForm(f => ({ ...f, labor_cost: e.target.value }))} /></div>
+            <div><Label className="text-xs">Custo Peças (R$)</Label><Input type="number" min="0" step="0.01" value={form.parts_cost} onChange={e => setForm(f => ({ ...f, parts_cost: e.target.value }))} /></div>
+            <div><Label className="text-xs">Custo Mão de Obra (R$)</Label><Input type="number" min="0" step="0.01" value={form.labor_cost} onChange={e => setForm(f => ({ ...f, labor_cost: e.target.value }))} /></div>
             {editing && <div><Label className="text-xs">Status</Label>
               <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}><SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{MAINT_STATUSES.map(s => <SelectItem key={s} value={s}>{MAINT_STATUS_LABELS[s]}</SelectItem>)}</SelectContent></Select>

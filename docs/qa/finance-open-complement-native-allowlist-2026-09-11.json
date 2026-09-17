@@ -1,0 +1,10 @@
+{
+  "purpose": "Native evidence only; no product SQL, deployment or commit executed",
+  "files": [
+    "scripts/test-finance-open-complement-native.mjs",
+    "scripts/test-finance-open-complement-native-cases.mjs",
+    "src/test/helpers/openComplementNativeFixture.ts",
+    "docs/qa/finance-open-complement-native-2026-09-11.md",
+    "docs/qa/finance-open-complement-native-2026-09-11.json"
+  ]
+}

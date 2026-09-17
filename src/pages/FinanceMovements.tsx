@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/hooks/useTenant';
 import { useFinanceAccess, useFinanceMovements } from '@/hooks/useFinanceLedger';
+import {useBankAccounts} from '@/hooks/useFinancialPayments';
 import { MovementEntryDialog } from '@/components/financial/MovementEntryDialog';
 import { ExpenseBatchDialog } from '@/components/financial/ExpenseBatchDialog';
 import {StatementImportDialog} from '@/components/financial/StatementImportDialog';
@@ -13,6 +14,7 @@ import {MovementReceiptTrace} from '@/components/financial/MovementReceiptTrace'
 import {InternalTransferDialog} from '@/components/financial/InternalTransferDialog';
 import {PendingTransfers} from '@/components/financial/PendingTransfers';
 import {AccountOpeningEntry} from '@/components/financial/AccountOpeningEntry';
+import {DriverAdvanceReturns} from '@/components/financial/DriverAdvanceReturns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +40,7 @@ function MovementWorkspace({ tenant, actor }: { tenant: string; actor: string })
   const [receiptTrace,setReceiptTrace]=useState<string|null>(null);
   const [correctionMovement,setCorrectionMovement]=useState<string|null>(null);
   const [transferEntry,setTransferEntry]=useState(false);
+  const accounts=useBankAccounts();
   const query = useFinanceMovements(filters, true), qc = useQueryClient(); const page = query.isFetching||query.isError?undefined:query.data;
   return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Movimentações registradas</h1>
@@ -46,12 +49,14 @@ function MovementWorkspace({ tenant, actor }: { tenant: string; actor: string })
     <Button variant="outline" onClick={()=>setTransferEntry(true)}>Registrar transferência entre contas</Button>
     <PendingTransfers tenant={tenant} actor={actor}/>
     <AccountOpeningEntry tenant={tenant} actor={actor}/>
+    <DriverAdvanceReturns tenant={tenant} actor={actor}/>
     {notice && <p role="status">{notice}</p>}
-    <form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); setFilters({ ...draft, page: 1 }); }}>
+    <form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); if(draft.from&&draft.to&&draft.from>draft.to){setNotice('A data inicial não pode ser posterior à data final.');return;}setNotice('');setFilters({ ...draft, page: 1 }); }}>
       <div className="min-w-56 flex-1"><Label htmlFor="movement-search">Buscar</Label><Input id="movement-search" value={draft.search} placeholder="Beneficiário, descrição ou referência" onChange={e => setDraft({ ...draft, search: e.target.value })} /></div>
-      <div><Label htmlFor="movement-from">De</Label><Input id="movement-from" type="date" value={draft.from} onChange={e => setDraft({ ...draft, from: e.target.value })} /></div>
-      <div><Label htmlFor="movement-to">Até</Label><Input id="movement-to" type="date" value={draft.to} onChange={e => setDraft({ ...draft, to: e.target.value })} /></div>
+      <div><Label htmlFor="movement-from">De</Label><Input id="movement-from" type="date" max={draft.to||undefined} value={draft.from} onChange={e => setDraft({ ...draft, from: e.target.value })} /></div>
+      <div><Label htmlFor="movement-to">Até</Label><Input id="movement-to" type="date" min={draft.from||undefined} value={draft.to} onChange={e => setDraft({ ...draft, to: e.target.value })} /></div>
       <div><Label htmlFor="movement-filter-direction">Direção</Label><select id="movement-filter-direction" className="h-10 rounded-md border bg-background px-3" value={draft.direction} onChange={e => setDraft({ ...draft, direction: e.target.value })}><option value="">Todas</option><option value="in">Entradas</option><option value="out">Saídas</option></select></div>
+      <div><Label htmlFor="movement-filter-account">Conta</Label><select id="movement-filter-account" className="h-10 min-w-52 rounded-md border bg-background px-3" value={draft.account_id} disabled={accounts.isPending||!!accounts.error} onChange={e=>setDraft({...draft,account_id:e.target.value})}><option value="">Todas as contas</option>{accounts.data?.map(item=><option key={item.id} value={item.id}>{item.name}{item.active?'':' (inativa)'}</option>)}</select>{accounts.error&&<p role="alert" className="text-xs">Não foi possível consultar as contas.</p>}</div>
       <Button type="submit">Filtrar</Button>
     </form>
     {query.isFetching && <p role="status">Carregando movimentações…</p>}

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import type { ShortageItemInput } from '@/lib/merchandiseShortages/shortageCalculator';
 import type { ShortageReportRow } from '@/lib/merchandiseShortages/shortageReportBuilder';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export interface ShortageCaseRow {
   id: string;
@@ -41,6 +42,7 @@ export interface ShortageCaseRow {
   occurrence_id: string | null;
   source_type: string;
   import_batch_id: string | null;
+  revision: number;
   created_at: string;
   updated_at: string;
 }
@@ -89,14 +91,11 @@ export function useShortageCases(filters: ShortageFilters = {}) {
     queryKey: ['merchandise-shortage-cases', tenantId, filters],
     enabled: !!tenantId,
     queryFn: async () => {
-      let q = supabase.from('merchandise_shortage_cases')
-        .select('*')
-        .eq('tenant_id', tenantId!)
-        .order('occurrence_date', { ascending: false })
-        .limit(1000);
-      if (filters.periodStart) q = q.gte('occurrence_date', filters.periodStart);
-      if (filters.periodEnd) q = q.lte('occurrence_date', filters.periodEnd);
-      if (filters.month && filters.year) {
+      return fetchAllPostgrestPages((from, to) => {
+      let q = supabase.from('merchandise_shortage_cases').select('*').eq('tenant_id', tenantId!)
+        .order('occurrence_date', { ascending: false }).order('id').range(from, to);
+      if (filters.periodStart) q=q.gte('occurrence_date',filters.periodStart); if(filters.periodEnd)q=q.lte('occurrence_date',filters.periodEnd);
+      if (filters.month && filters.year && filters.month >= 1 && filters.month <= 12 && filters.year >= 1900) {
         const start = `${filters.year}-${String(filters.month).padStart(2, '0')}-01`;
         const endD = new Date(filters.year, filters.month, 0);
         const end = `${filters.year}-${String(filters.month).padStart(2, '0')}-${String(endD.getDate()).padStart(2, '0')}`;
@@ -116,9 +115,8 @@ export function useShortageCases(filters: ShortageFilters = {}) {
       if (filters.onlyPending) q = q.in('status', ['draft','pending_review','investigating','waiting_driver','waiting_supplier','waiting_client']);
       if (filters.onlyFinalized) q = q.in('status', ['closed','not_shortage','cancelled','written_off','reimbursed','charged']);
       if (filters.onlyToCharge) q = q.gt('amount_to_charge', 0);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as ShortageCaseRow[];
+      return q;
+      }) as Promise<ShortageCaseRow[]>;
     },
   });
 }
@@ -191,11 +189,11 @@ export function useCreateShortageCase() {
 export function useUpdateShortageStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { case_id: string; status: string; payload?: Record<string, unknown> }) => {
+    mutationFn: async (args: { case_id: string; status: string; expected_revision: number; payload?: Record<string, unknown> }) => {
       const { error } = await supabase.rpc('update_merchandise_shortage_status', {
         _case_id: args.case_id,
         _status: args.status,
-        _payload: (args.payload ?? {}) as never,
+        _payload: { ...(args.payload ?? {}), expected_revision: args.expected_revision } as never,
       });
       if (error) throw error;
     },
@@ -214,10 +212,12 @@ export function useShortageReportRows(filters: ShortageFilters = {}) {
     queryKey: ['merchandise-shortage-items-batch', tenantId, caseIds],
     enabled: !!tenantId && caseIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase.from('merchandise_shortage_items')
-        .select('*').eq('tenant_id', tenantId!).in('shortage_case_id', caseIds);
-      if (error) throw error;
-      return (data ?? []) as ShortageItemRow[];
+      const rows: ShortageItemRow[] = [];
+      for (let index = 0; index < caseIds.length; index += 200) {
+        rows.push(...await fetchAllPostgrestPages((from, to) => supabase.from('merchandise_shortage_items').select('*')
+          .eq('tenant_id', tenantId!).in('shortage_case_id', caseIds.slice(index, index + 200)).order('id').range(from, to)) as ShortageItemRow[]);
+      }
+      return rows;
     },
   });
 
@@ -227,7 +227,7 @@ export function useShortageReportRows(filters: ShortageFilters = {}) {
     if (!byCase.has(it.shortage_case_id)) byCase.set(it.shortage_case_id, []);
     byCase.get(it.shortage_case_id)!.push(it);
   }
-  for (const c of cases.data ?? []) {
+  for (const c of (cases.data ?? []).filter(row => !['cancelled', 'not_shortage'].includes(row.status))) {
     const its = byCase.get(c.id) ?? [];
     if (its.length === 0) {
       rows.push({
@@ -252,7 +252,13 @@ export function useShortageReportRows(filters: ShortageFilters = {}) {
       }
     }
   }
-  return { rows, isLoading: cases.isLoading || items.isLoading, cases: cases.data ?? [] };
+  return {
+    rows,
+    isLoading: cases.isLoading || items.isLoading,
+    isError: cases.isError || items.isError,
+    error: cases.error ?? items.error,
+    cases: cases.data ?? [],
+  };
 }
 
 export function useShortageReports() {

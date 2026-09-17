@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 type IncidentRow = Database['public']['Tables']['incidents']['Row'];
 type IncidentInsert = Database['public']['Tables']['incidents']['Insert'];
@@ -69,7 +70,7 @@ export type CreateIncidentInput = Omit<
 export type UpdateIncidentInput = Omit<
   IncidentUpdate,
   'id' | 'tenant_id' | 'updated_by' | 'updated_at'
-> & { id: string };
+> & { id: string; expected_updated_at: string };
 
 export type IncidentResponsible = IncidentResponsibleRow & {
   employees?: { name: string } | null;
@@ -86,12 +87,9 @@ export function useIncidents() {
     queryKey: ['incidents', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('incidents').select('*, employees(name), clients(company_name)')
-        .eq('tenant_id', currentTenant.id)
-        .order('occurred_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as Incident[];
+      return await fetchAllPostgrestPages((from, to) => supabase.from('incidents')
+        .select('*, employees(name), clients(company_name)').eq('tenant_id', currentTenant.id)
+        .order('occurred_at', { ascending: false }).order('id').range(from, to)) as Incident[];
     },
     enabled: !!currentTenant,
   });
@@ -104,11 +102,10 @@ export function useCreateIncident() {
   return useMutation({
     mutationFn: async (values: CreateIncidentInput) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const num = `INC-${Date.now().toString(36).toUpperCase()}`;
       const payload: IncidentInsert = {
         ...values,
         tenant_id: currentTenant.id,
-        incident_number: num,
+        incident_number: `INC-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`,
         opened_by: user?.id ?? null,
         created_by: user?.id ?? null,
       };
@@ -125,7 +122,7 @@ export function useUpdateIncident() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: UpdateIncidentInput) => {
+    mutationFn: async ({ id, expected_updated_at, ...values }: UpdateIncidentInput) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       const payload: IncidentUpdate = {
         ...values,
@@ -136,9 +133,11 @@ export function useUpdateIncident() {
         .update(payload)
         .eq('id', id)
         .eq('tenant_id', currentTenant.id)
+        .eq('updated_at', expected_updated_at)
         .select()
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('A ocorrência foi alterada por outra pessoa. Atualize a lista e tente novamente.');
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['incidents'] }),
@@ -192,14 +191,14 @@ export function useIncidentActions(incidentId?: string) {
     queryKey: ['employee_incident_actions', incidentId],
     queryFn: async () => {
       if (!incidentId || !currentTenant) return [];
-      const { data, error } = await supabase
-        .from('employee_incident_actions')
+      const data = await fetchAllPostgrestPages((from, to) => supabase.from('employee_incident_actions')
         .select('*, employees(name)')
         .eq('incident_id', incidentId)
         .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as EmployeeIncidentAction[];
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to));
+      return data as EmployeeIncidentAction[];
     },
     enabled: !!incidentId && !!currentTenant,
   });

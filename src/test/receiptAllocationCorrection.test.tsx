@@ -1,0 +1,12 @@
+import {cleanup,fireEvent,render,screen} from '@testing-library/react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {afterEach,expect,it,vi} from 'vitest';
+import {ReceiptAllocationCorrection} from '@/components/financial/ReceiptAllocationCorrection';
+
+const mock=vi.hoisted(()=>({correct:vi.fn()}));
+vi.mock('@/lib/financial/ledgerClient',()=>({FinanceRejectedError:class extends Error{},correctReceiptAllocation:mock.correct}));
+const tenant='11111111-1111-4111-8111-111111111111',actor='22222222-2222-4222-8222-222222222222',payment='33333333-3333-4333-8333-333333333333';
+afterEach(()=>{cleanup();sessionStorage.clear();mock.correct.mockReset();});
+function show(client=new QueryClient()){render(<QueryClientProvider client={client}><ReceiptAllocationCorrection tenant={tenant} actor={actor} payment={payment} amount={1000} revision={'a'.repeat(32)} eligible disabled={false}/></QueryClientProvider>);}
+it('discards an incompatible receipt correction and enables a fresh review',()=>{const key=`finance-receipt-correction:${tenant}:${actor}:${payment}`;sessionStorage.setItem(key,'broken');show();expect(screen.getByRole('button',{name:'Revisar correção do vínculo'})).toBeDisabled();expect(screen.getByRole('alert')).toHaveTextContent('Novas correções permanecem bloqueadas');fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));expect(sessionStorage.getItem(key)).toBeNull();expect(screen.queryByText(/Novas correções permanecem bloqueadas/)).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Revisar correção do vínculo'})).toBeEnabled();});
+it('invalidates the installment position after correcting a receipt link',async()=>{const client=new QueryClient({defaultOptions:{queries:{staleTime:Infinity}}}),agreement=['receivable-agreement-position',tenant,actor,'receivable'];client.setQueryData(agreement,{revision:'old'});mock.correct.mockResolvedValue({confirmed:true});show(client);fireEvent.click(screen.getByRole('button',{name:'Corrigir vínculo desta baixa'}));fireEvent.change(screen.getByLabelText('Motivo da correção'),{target:{value:'Corrigir vínculo do recebimento'}});fireEvent.click(screen.getByRole('button',{name:'Revisar correção do vínculo'}));fireEvent.click(screen.getByRole('button',{name:'Confirmar correção do vínculo'}));expect(await screen.findByText(/Vínculo corrigido/)).toBeInTheDocument();expect(client.getQueryState(agreement)?.isInvalidated).toBe(true);expect(mock.correct).toHaveBeenCalledTimes(1);});

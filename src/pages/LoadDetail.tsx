@@ -637,7 +637,7 @@ export default function LoadDetail() {
                 <div className="text-lg font-bold">{computedTotals.pallets}{palletCapacity ? <span className="text-sm font-normal text-muted-foreground"> / {palletCapacity}</span> : ''}</div>
                 {palletPct !== null && (
                   <div className="flex items-center gap-2 mt-1">
-                    <Progress value={Math.min(palletPct, 100)} className={cn("h-1.5", palletPct > 100 && '[&>div]:bg-destructive')} />
+                    <Progress aria-label="Ocupação de paletes da carga" aria-valuetext={`${palletPct}%`} value={Math.min(palletPct, 100)} className={cn("h-1.5", palletPct > 100 && '[&>div]:bg-destructive')} />
                     <span className={cn("text-xs", palletPct > 100 ? 'text-destructive font-bold' : 'text-muted-foreground')}>{palletPct}%</span>
                     {palletPct > 100 && <AlertTriangle className="h-3 w-3 text-destructive" />}
                   </div>
@@ -648,7 +648,7 @@ export default function LoadDetail() {
                 <div className="text-lg font-bold">{computedTotals.weight.toLocaleString('pt-BR')} <span className="text-sm font-normal text-muted-foreground">kg{weightCapacity ? ` / ${weightCapacity}` : ''}</span></div>
                 {weightPct !== null && (
                   <div className="flex items-center gap-2 mt-1">
-                    <Progress value={Math.min(weightPct, 100)} className={cn("h-1.5", weightPct > 100 && '[&>div]:bg-destructive')} />
+                    <Progress aria-label="Ocupação de peso da carga" aria-valuetext={`${weightPct}%`} value={Math.min(weightPct, 100)} className={cn("h-1.5", weightPct > 100 && '[&>div]:bg-destructive')} />
                     <span className={cn("text-xs", weightPct > 100 ? 'text-destructive font-bold' : 'text-muted-foreground')}>{weightPct}%</span>
                   </div>
                 )}

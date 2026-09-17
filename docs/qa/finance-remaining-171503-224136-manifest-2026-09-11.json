@@ -1,0 +1,488 @@
+[
+  {
+    "order": 1,
+    "file": "20260910171503_finance_stock_consumption_attributions.sql",
+    "bytes": 25663,
+    "sha256": "255b91a22d7e9dfe2a4bf43fa48c7c591d288d24976dc352cca653b57d58401c",
+    "public_functions": [
+      "attribute_finance_stock_consumption",
+      "reverse_finance_stock_consumption_attribution"
+    ],
+    "patch_targets": [
+      "finance_private.guard_stock_acquisition_dependency()",
+      "finance_private.stock_acquisition_issue(uuid,uuid,uuid)",
+      "finance_private.stock_acquisition_snapshot(uuid,uuid,uuid)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 2,
+    "file": "20260910171734_finance_stock_consumption_readers.sql",
+    "bytes": 9392,
+    "sha256": "0929a3da07490b2b35a2fd1515af100d8014e6182f2d56f0eca0fbfba8cd51f4",
+    "public_functions": [
+      "get_finance_stock_consumption_context",
+      "preview_finance_stock_consumption"
+    ],
+    "patch_targets": [
+      "finance_private.audit_events(uuid,jsonb)",
+      "finance_private.stock_acquisition_context(uuid,uuid,integer,text)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 3,
+    "file": "20260910172624_finance_paid_projection_chains.sql",
+    "bytes": 18367,
+    "sha256": "81a04b56856933edce8341a07743d5b977e7a688b877d6cafebaf4fe680d4394",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.account_period_guards_ready()",
+      "finance_private.guard_closed_financial_source()",
+      "finance_private.legacy_cut_manifest(uuid,uuid,date,date)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 4,
+    "file": "20260910173336_reassert_finance_stock_relation_rls_and_grants.sql",
+    "bytes": 1796,
+    "sha256": "ae61372988b72bc4e17c8ab5c07e32ae0b60b226378668ca62919919d88c2a9f",
+    "public_functions": [],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 5,
+    "file": "20260910173906_finance_cash_period_closure.sql",
+    "bytes": 26020,
+    "sha256": "c5a8e1039831002b94b39f4ef870d5c641c835533df63c97c9961209ec0377e5",
+    "public_functions": [
+      "close_finance_cash_period",
+      "preview_finance_cash_period_close",
+      "record_finance_cash_period_count",
+      "reverse_finance_cash_period_count"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 6,
+    "file": "20260910174142_finance_cash_period_count_readers.sql",
+    "bytes": 3427,
+    "sha256": "503db8a0716759a73c7d3d9baac3b11c4af6801c800677dc6db811708bf3df68",
+    "public_functions": [
+      "get_finance_cash_period_counts"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 7,
+    "file": "20260910174822_finance_cash_period_manual_audit.sql",
+    "bytes": 535,
+    "sha256": "cef4cdafd97172a150bcf3c98d198ac10711b42afab992004506979737fc2c81",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.audit_events(uuid,jsonb)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 8,
+    "file": "20260910175310_finance_cash_account_identity_scope.sql",
+    "bytes": 753,
+    "sha256": "0de48bf482ee3bed0aa4e8985b43382822a37e946f807bdfcb38d8fe89b5cc63",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.guard_closed_financial_source()"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 9,
+    "file": "20260910175641_finance_unpaid_expense_cancellation.sql",
+    "bytes": 20796,
+    "sha256": "20fa89e70daa64f04ea1c8c4590801e9e0a63ea9e8e5e4f4ae7879f9d65b5984",
+    "public_functions": [
+      "cancel_finance_expense"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 10,
+    "file": "20260910175733_finance_expense_cancellation_preview.sql",
+    "bytes": 7316,
+    "sha256": "5f4f594b25ab43d4b2ebee6aae8a8200417594cc8089956443bd0407b5dc960b",
+    "public_functions": [
+      "preview_finance_expense_cancellation"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 11,
+    "file": "20260910180040_finance_payable_portfolio.sql",
+    "bytes": 12838,
+    "sha256": "51773219434d93c0a7cade674b75381f5a5e2f4dcc6dbd9bd24fd04f52c482f5",
+    "public_functions": [
+      "get_finance_payable_portfolio"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 12,
+    "file": "20260910180245_reassert_finance_cash_period_relation_rls_and_grants.sql",
+    "bytes": 762,
+    "sha256": "ed990a90b3b3fe18976e03ee8c53fbb9f13639f1e81dd48e2b3a082f665e617c",
+    "public_functions": [],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 13,
+    "file": "20260910181257_finance_unpaid_manual_expense_cancellation.sql",
+    "bytes": 17139,
+    "sha256": "524e93c21de27fcb3bb5b46720bc8e340304efc6d2be086460e249e3d19cb50a",
+    "public_functions": [
+      "cancel_finance_manual_expense"
+    ],
+    "patch_targets": [
+      "finance_private.guard_cancelled_expense_dependency()",
+      "finance_private.recorded_cost_summary(uuid,date,date,text,text)",
+      "finance_private.recorded_costs(uuid,jsonb)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 14,
+    "file": "20260910181549_finance_manual_expense_cancellation_preview.sql",
+    "bytes": 1545,
+    "sha256": "6ed93d5ec9d655f67adbfd9edd29b6335336d3eaa013d6f15c30683a5f8b5ed4",
+    "public_functions": [
+      "preview_finance_manual_expense_cancellation"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 15,
+    "file": "20260910182406_finance_expense_cancellation_manual_audit.sql",
+    "bytes": 502,
+    "sha256": "20740e5099f555dd58dff206adfc707e2ad139acda22b4906e415d89e7ef216b",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.audit_events(uuid,jsonb)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 16,
+    "file": "20260910182541_finance_movement_correction_foundation.sql",
+    "bytes": 3688,
+    "sha256": "1085d55520ecf05a34ca2c5a64e22e2830b64cdb906b2ef5aa37a07d8d09d74a",
+    "public_functions": [],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 17,
+    "file": "20260910182830_finance_movement_correction_history.sql",
+    "bytes": 3341,
+    "sha256": "7885c5accd363b5b60828dbe785030c95eef3212f5de47f4912a3a324e2cc485",
+    "public_functions": [],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 18,
+    "file": "20260910183438_finance_active_movement_period_projections.sql",
+    "bytes": 3433,
+    "sha256": "0eb73159b24bf1afd731e24aa4153db833cdef03bd5612e4249e856f2fbccc0f",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.account_opening(uuid,uuid,date,date)",
+      "finance_private.account_period_review(uuid,uuid,date,date)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 19,
+    "file": "20260910183442_finance_reconciliation_active_movements.sql",
+    "bytes": 2511,
+    "sha256": "1ace7642c0c66c131627b5d860f0289782d8b5ff2c48bc2e21d96dc0ad206ac8",
+    "public_functions": [],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 20,
+    "file": "20260910183506_finance_active_movement_financial_guards.sql",
+    "bytes": 7516,
+    "sha256": "130bc344d89633f918fefb977dd4d7d2a3a1769e3eaa4bf0bd6ff0079480dfaf",
+    "public_functions": [],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 21,
+    "file": "20260910184213_finance_movement_active_reference.sql",
+    "bytes": 1099,
+    "sha256": "8fbcdb2344bb125fa68f61647ce36c91db95f71e55eba09a4c7e24a746aebf3c",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.record_movement(jsonb)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 22,
+    "file": "20260910184543_finance_active_movement_options.sql",
+    "bytes": 1324,
+    "sha256": "2220b56fd093ff7c47556ddb6d75a96aff19acfd750b87d757fa11de82590275",
+    "public_functions": [],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 23,
+    "file": "20260910185338_finance_void_aware_monetary_proofs.sql",
+    "bytes": 7990,
+    "sha256": "de962a9c2d7ab108974c75fe5f9ec6430129b60d7725be75e9c1b4e17b0b8c0a",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.legacy_cut_manifest(uuid,uuid,date,date)",
+      "finance_private.legacy_cut_settlement_evidence(uuid,uuid)",
+      "finance_private.legacy_integrity_rows(uuid)",
+      "finance_private.paid_projection_chain(uuid,text,uuid)",
+      "finance_private.payable_portfolio_evidence(uuid,uuid)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 24,
+    "file": "20260910185517_finance_movement_recording_origin.sql",
+    "bytes": 5153,
+    "sha256": "d2e4601ab095e1245845036ab5c0965425e3f89443962789ca19690e6b1eaa2e",
+    "public_functions": [],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 25,
+    "file": "20260910190516_finance_movement_correction_context.sql",
+    "bytes": 28006,
+    "sha256": "aefa6e937c708cf31e983c7bf6bdfef8a2e788ed68bcf0683a67b4c256367b32",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.movement_correction_readiness()"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 26,
+    "file": "20260910190635_finance_movement_correction_preview.sql",
+    "bytes": 1733,
+    "sha256": "0a39c5eddc9c3ecb553c782ae3ccb7510333970cff0d8cefd07d2a25e3b8bd06",
+    "public_functions": [
+      "preview_finance_movement_correction"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 27,
+    "file": "20260910191905_finance_manual_movement_void_command.sql",
+    "bytes": 12346,
+    "sha256": "6f57f662c965f24ccc010973232ea16b9ed44d0eed8480f0a47a72524237039b",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.audit_events(uuid,jsonb)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 28,
+    "file": "20260910192831_finance_manual_movement_void_public_dispatch.sql",
+    "bytes": 4152,
+    "sha256": "c90da6bb84d7733b920b818f78761b3d8bb3fce53e255a3b6371d4381d536595",
+    "public_functions": [
+      "void_finance_manual_movement"
+    ],
+    "patch_targets": [
+      "finance_private.movement_correction_preview(uuid,uuid)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 29,
+    "file": "20260910193723_finance_period_money_package.sql",
+    "bytes": 22096,
+    "sha256": "685ce9177c4e3b5202d7ac9e6eb13cd4f5963db001a14c16204b23290b624adf",
+    "public_functions": [
+      "get_finance_period_money_package"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 30,
+    "file": "20260910195941_finance_receivable_temporal_foundation.sql",
+    "bytes": 8936,
+    "sha256": "8246ff32ae6d1e95ed9b4dda8495315c08328e002266253dd2258b04a86269c3",
+    "public_functions": [],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": true
+  },
+  {
+    "order": 31,
+    "file": "20260910201323_finance_receivable_captured_history.sql",
+    "bytes": 6764,
+    "sha256": "8a94f49b025db40e3a1629b091c0e33180720579e37c8fa04149cd28bca80fe6",
+    "public_functions": [
+      "get_finance_receivable_history"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 32,
+    "file": "20260910202421_finance_receivable_payments_page.sql",
+    "bytes": 4560,
+    "sha256": "e0873d2419bb9663e6ddc2e3483e648c0366852ca5b0794fb38e7834557bdd7b",
+    "public_functions": [
+      "get_finance_receivable_payments_page"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 33,
+    "file": "20260910203516_finance_period_unloading_flow.sql",
+    "bytes": 20687,
+    "sha256": "12b288b8809da09d3dda8e3ee2c323b32e4defcc5650af25b6cc915ba436a2ae",
+    "public_functions": [
+      "get_finance_period_unloading_flow"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 34,
+    "file": "20260910205941_finance_unloading_receivable_source_guard.sql",
+    "bytes": 3967,
+    "sha256": "b8701c4f801c6840e3d37ce1ab048cc366a98f7c10be92adf3974d673e66ee09",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.record_unloading(jsonb)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 35,
+    "file": "20260910210433_finance_unloading_receivable_context.sql",
+    "bytes": 2381,
+    "sha256": "6bad5b960550ad173a507cb03dce6239a63c6108ef0a13681364ba2a30238e77",
+    "public_functions": [],
+    "patch_targets": [
+      "public._receivable_financial_snapshot(uuid,uuid)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 36,
+    "file": "20260910211156_finance_unloading_projection_repair.sql",
+    "bytes": 18540,
+    "sha256": "c0e71109be86c5f43bc799b506479c6fa7103e4db1b9a38b5a500c61fcd8f482",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.audit_events(uuid,jsonb)",
+      "finance_private.guard_unloading_receivable_source()"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 37,
+    "file": "20260910211740_finance_unloading_projection_repair_preview.sql",
+    "bytes": 1276,
+    "sha256": "df7590dceae582bddf72f86008a62de2f083d2c41642a2ec3993155b0abd9e25",
+    "public_functions": [
+      "get_finance_unloading_projection_repair_context"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 38,
+    "file": "20260910212550_finance_public_unloading_projection_repair.sql",
+    "bytes": 3708,
+    "sha256": "0bbf8948dbbfe8bdfd4f5cbb157be6da61558d1a8387c1036038b619e0164d74",
+    "public_functions": [
+      "repair_finance_unloading_projection"
+    ],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 39,
+    "file": "20260910220847_finance_cargo_expense_active_movements.sql",
+    "bytes": 1270,
+    "sha256": "e43bad1fcf218eb51b2feba659e8a119ddce40be066afb483cf05d1e230b0ee6",
+    "public_functions": [],
+    "patch_targets": [],
+    "cron_reference": false,
+    "explicit_transaction": false
+  },
+  {
+    "order": 40,
+    "file": "20260910224136_finance_active_workspace_access.sql",
+    "bytes": 1917,
+    "sha256": "941fc6e45cff82d91eb9ef3a78f801c55ef0efad876ecad4ede317fdedf98bb8",
+    "public_functions": [],
+    "patch_targets": [
+      "finance_private.can_access(uuid)"
+    ],
+    "cron_reference": false,
+    "explicit_transaction": false
+  }
+]

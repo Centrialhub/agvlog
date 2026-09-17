@@ -208,10 +208,13 @@ Deno.serve(withFiscalCors(async (request) => {
       if(access.error||access.data!==true)return response(403,{error:'finance_access_denied'});
       if(!await consumeQuota(adminClient,fingerprint,'upload'))return response(429,{error:'upload_rate_limited'});
       const delimiter=form.get('delimiter');
+      const sheetIndexText=form.get('sheet_index'),sheetIndex=sheetIndexText===null?undefined:Number(sheetIndexText);
+      if(sheetIndexText!==null&&(!/^\d{1,2}$/.test(String(sheetIndexText))||!Number.isInteger(sheetIndex)||sheetIndex!<0||sheetIndex!>99))return response(400,{error:'upload_invalid_request'});
       const result=await quarantineUpload({tenant:tenantId,actor:user.id,request:evidenceRequestId,
         sourceType:String(form.get('source_type')??''),sourceId:String(form.get('source_id')??''),
         format:String(form.get('format')??'unknown'),mime:file.type||'application/octet-stream',bytes:new Uint8Array(await file.arrayBuffer()),
         delimiter:delimiter===';'||delimiter===','||delimiter==='\t'?delimiter:undefined,
+        sheetIndex,
       },{caller:(name,args)=>callerClient.rpc(name,args),service:(name,args)=>adminClient.rpc(name,args),
         image:async bytes=>{
           const {reencodeQuarantinedImage}=await import('./quarantine-magick.ts');

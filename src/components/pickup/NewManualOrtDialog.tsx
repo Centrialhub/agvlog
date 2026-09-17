@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import type { Json } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { useCreatePickupOrder, type CreatePickupOrderInput, type PickupOrder } from '@/hooks/usePickupOrders';
 import { maskCpfCnpj, maskCurrencyBRL } from '@/lib/inputMasks';
+import { localDateTimeInputValue } from '@/lib/utils/formatDate';
 
 interface Props {
   open: boolean;
@@ -27,7 +28,7 @@ const empty = () => ({
   // Documento
   doc_numero: '', doc_serie: '', pre_fatura: '', sgl_emp: '', sgl_fil: '',
   nf_ref: '', nf_int: '0', situacao_doc: '00', situacao_label: 'Documento regular',
-  nf_servico: '', data_emissao: new Date().toISOString().slice(0, 16),
+  nf_servico: '', data_emissao: localDateTimeInputValue(),
   agente: '', tab_icms: '', local_emissao: '', prev_entrega: '',
   nat_prestacao: 'TRANSP. INTERMUNICIPAL (COM)', modal: 'Rodoviário',
   emitente: '', calculado_ate: 'DESTINO',
@@ -167,8 +168,9 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
 
   const F = (label: string, k: TextFormKey, opts?: { type?: string; cls?: string; mask?: 'cpfcnpj' | 'currency' }) => (
     <div className={`space-y-1 ${opts?.cls || ''}`}>
-      <Label className="text-xs">{label}</Label>
+      <Label htmlFor={`manual-ort-${String(k)}`} className="text-xs">{label}</Label>
       <Input
+        id={`manual-ort-${String(k)}`}
         type={opts?.type || 'text'}
         value={String(form[k] ?? '')}
         onChange={e => {
@@ -193,6 +195,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nova ORT Manual — Outras Receitas com Transportes</DialogTitle>
+          <DialogDescription>Preencha os dados fiscais, operacionais e financeiros da ORT manual.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs defaultValue="doc" className="space-y-3">
@@ -233,13 +236,13 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                 {F('Local Emissão', 'local_emissao')}
                 {F('Prev. entrega data/hora', 'prev_entrega', { type: 'datetime-local' })}
                 <div className="space-y-1">
-                  <Label className="text-xs">Nat. Prestação</Label>
-                  <Input value={form.nat_prestacao} onChange={e => setText('nat_prestacao', e.target.value)} className="h-8 text-sm" />
+                  <Label htmlFor="manual-ort-nat-prestacao" className="text-xs">Nat. Prestação</Label>
+                  <Input id="manual-ort-nat-prestacao" value={form.nat_prestacao} onChange={e => setText('nat_prestacao', e.target.value)} className="h-8 text-sm" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Modal</Label>
+                  <Label htmlFor="manual-ort-modal" className="text-xs">Modal</Label>
                   <Select value={form.modal} onValueChange={v => setText('modal', v)}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="manual-ort-modal" className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Rodoviário">Rodoviário</SelectItem>
                       <SelectItem value="Aéreo">Aéreo</SelectItem>
@@ -262,7 +265,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                   <div className="text-sm font-semibold">Remetente</div>
                   <div className="w-72">
                     <Select value={remitterClientId} onValueChange={handleClientSelect}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Buscar cliente cadastrado…" /></SelectTrigger>
+                      <SelectTrigger aria-label="Buscar remetente cadastrado" className="h-8 text-xs"><SelectValue placeholder="Buscar cliente cadastrado…" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value={NONE}>— manual —</SelectItem>
                         {clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}
@@ -312,12 +315,12 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Observação</Label>
-                <Textarea value={form.observacao} onChange={e => setText('observacao', e.target.value)} rows={2} />
+                <Label htmlFor="manual-ort-observacao" className="text-xs">Observação</Label>
+                <Textarea id="manual-ort-observacao" value={form.observacao} onChange={e => setText('observacao', e.target.value)} rows={2} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Obs. Manual</Label>
-                <Textarea value={form.obs_manual} onChange={e => setText('obs_manual', e.target.value)} rows={2} />
+                <Label htmlFor="manual-ort-obs-manual" className="text-xs">Obs. Manual</Label>
+                <Textarea id="manual-ort-obs-manual" value={form.obs_manual} onChange={e => setText('obs_manual', e.target.value)} rows={2} />
               </div>
             </TabsContent>
 
@@ -335,9 +338,9 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                 {F('Descrição Classe', 'classe_fat_label')}
                 {F('Prioridade Frete', 'prioridade_frete')}
                 <div className="space-y-1">
-                  <Label className="text-xs">Motorista (cadastrado)</Label>
+                  <Label htmlFor="manual-ort-driver" className="text-xs">Motorista (cadastrado)</Label>
                   <Select value={driverId} onValueChange={setDriverId}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectTrigger id="manual-ort-driver" className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NONE}>—</SelectItem>
                       {drivers.map((driver) => <SelectItem key={driver.id} value={driver.id}>{driver.name}</SelectItem>)}
@@ -347,9 +350,9 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                 {F('Motorista (texto livre)', 'motorista')}
                 {F('Seguradora', 'seguradora')}
                 <div className="space-y-1">
-                  <Label className="text-xs">Placa (veículo cadastrado)</Label>
+                  <Label htmlFor="manual-ort-vehicle" className="text-xs">Placa (veículo cadastrado)</Label>
                   <Select value={vehicleId} onValueChange={setVehicleId}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectTrigger id="manual-ort-vehicle" className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NONE}>—</SelectItem>
                       {vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
@@ -447,9 +450,9 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                 {F('Cód. Plano Pagto', 'plano_pagto_codigo')}
                 {F('Descrição Plano', 'plano_pagto_descricao', { cls: 'md:col-span-3' })}
                 <div className="space-y-1">
-                  <Label className="text-xs">Condição</Label>
+                  <Label htmlFor="manual-ort-payment-condition" className="text-xs">Condição</Label>
                   <Select value={form.condicao_pagto} onValueChange={v => setText('condicao_pagto', v)}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="manual-ort-payment-condition" className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="A_VISTA">À Vista</SelectItem>
                       <SelectItem value="A_PRAZO">A Prazo</SelectItem>
@@ -461,9 +464,9 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Forma Pagto</Label>
+                  <Label htmlFor="manual-ort-payment-method" className="text-xs">Forma Pagto</Label>
                   <Select value={form.forma_pagto} onValueChange={v => setText('forma_pagto', v)}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="manual-ort-payment-method" className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="BOLETO">Boleto</SelectItem>
                       <SelectItem value="PIX">PIX</SelectItem>

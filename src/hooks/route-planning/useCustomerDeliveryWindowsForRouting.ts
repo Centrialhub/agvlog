@@ -3,10 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import type { CustomerWindow } from '@/lib/route-planning/routePlanningTypes';
 
-/**
- * Carrega janelas dos clientes referenciados nas paradas planejadas.
- * Para MVP, pega a primeira janela ativa do cliente (sem distinguir weekday).
- */
+/** Carrega todas as janelas ativas; o planejador escolhe somente o dia da rota. */
 export function useCustomerDeliveryWindowsForRouting(clientIds: string[]) {
   const { currentTenant } = useTenant();
   const ids = Array.from(new Set(clientIds.filter(Boolean))).sort();
@@ -19,19 +16,17 @@ export function useCustomerDeliveryWindowsForRouting(clientIds: string[]) {
         .select('client_id, start_time, end_time, active, weekday')
         .eq('tenant_id', currentTenant.id)
         .in('client_id', ids)
-        .eq('active', true);
+        .eq('active', true)
+        .order('client_id', { ascending: true })
+        .order('weekday', { ascending: true })
+        .order('start_time', { ascending: true });
       if (error) throw error;
-      const byClient = new Map<string, CustomerWindow>();
-      (data || []).forEach((window) => {
-        if (!byClient.has(window.client_id)) {
-          byClient.set(window.client_id, {
-            client_id: window.client_id,
-            start_time: String(window.start_time).slice(0, 5),
-            end_time: String(window.end_time).slice(0, 5),
-          });
-        }
-      });
-      return Array.from(byClient.values());
+      return (data || []).map((window) => ({
+        client_id: window.client_id,
+        weekday: window.weekday,
+        start_time: String(window.start_time).slice(0, 5),
+        end_time: String(window.end_time).slice(0, 5),
+      }));
     },
     enabled: !!currentTenant,
   });

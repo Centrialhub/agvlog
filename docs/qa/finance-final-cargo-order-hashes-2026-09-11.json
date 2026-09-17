@@ -1,0 +1,22 @@
+[
+  {
+    "file": "supabase\\migrations\\20260910211800_canonical_trip_cargo_close_gate.sql",
+    "sha256": "d961453fa8c1839ce1d481dc7cc4f45621c96e46d9d61ff7a9494657bde2ad27"
+  },
+  {
+    "file": "supabase\\migrations\\20260910213156_quarantine_legacy_settlements_until_cargo_close.sql",
+    "sha256": "68a7b3d136871db47094bfa170b62c6abef78f2acc1fcfffd12d12a66ecd9d4c"
+  },
+  {
+    "file": "supabase\\migrations\\20260910220847_finance_cargo_expense_active_movements.sql",
+    "sha256": "e43bad1fcf218eb51b2feba659e8a119ddce40be066afb483cf05d1e230b0ee6"
+  },
+  {
+    "file": "supabase\\migrations\\20260910190516_finance_movement_correction_context.sql",
+    "sha256": "fbffac3208c08250d6aabc82b91b3d127f3f3c0e675f2b6dd958a3ffb0d6bcfc"
+  },
+  {
+    "file": "supabase\\migrations\\20260910212550_finance_public_unloading_projection_repair.sql",
+    "sha256": "0bbf8948dbbfe8bdfd4f5cbb157be6da61558d1a8387c1036038b619e0164d74"
+  }
+]

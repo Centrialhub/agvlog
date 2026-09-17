@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
 
     let processed = 0;
     let eventsEmitted = 0;
+    const failures: Array<{ vehicle_id: string; error: string }> = [];
 
     for (const vehicleId of targetVehicleIds) {
       try {
@@ -161,7 +162,7 @@ Deno.serve(async (req) => {
         });
 
         // 7. Upsert vehicles_state
-        await supabase.from("vehicles_state").upsert({
+        const { error: stateError } = await supabase.from("vehicles_state").upsert({
           vehicle_id: vehicleId,
           tenant_id: tenant_id,
           last_position_id: latestRaw?.id || null,
@@ -176,27 +177,31 @@ Deno.serve(async (req) => {
           stopped_duration_seconds: computed.stopped_duration_seconds,
           updated_at: now.toISOString(),
         }, { onConflict: "vehicle_id" });
+        if (stateError) throw stateError;
 
         // 8. Insert events
         if (events.length > 0) {
-          await supabase.from("vehicle_events").insert(events);
+          const { error: eventsError } = await supabase.from("vehicle_events").insert(events);
+          if (eventsError) throw eventsError;
           eventsEmitted += events.length;
         }
 
         processed++;
       } catch (err: any) {
         console.error(`[compute-state] Error for vehicle ${vehicleId}: ${err.message}`);
+        failures.push({ vehicle_id: vehicleId, error: err.message });
       }
     }
 
     console.log(`[compute-state] Processed ${processed} vehicles, emitted ${eventsEmitted} events`);
 
     return jsonResp({
-      success: true,
+      success: failures.length === 0,
       processed,
       events_emitted: eventsEmitted,
       mode,
-    });
+      failures,
+    }, failures.length > 0 ? 500 : 200);
   } catch (err: any) {
     console.error("[compute-state] error:", err);
     return jsonResp({ error: "Internal error", details: err.message }, 500);

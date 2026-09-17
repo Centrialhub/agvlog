@@ -2,21 +2,21 @@ import {useEffect,useId,useRef,useState} from 'react';
 import {useTenant} from '@/hooks/useTenant';
 import {useAuth} from '@/hooks/useAuth';
 import {useExpenseCreation} from '@/hooks/useExpenseCreation';
-import {creationError,type ExpenseCreationContext,type ExpenseFields} from '@/lib/financial/expenseCreationCommands';
+import {creationError,expenseCreationContextInvalidated,type ExpenseCreationContext,type ExpenseFields} from '@/lib/financial/expenseCreationCommands';
 import {describeExpenseReceipt} from '@/lib/financial/expenseReceiptUpload';
 import {expenseCategoryLabels,expensePaymentLabels} from '@/lib/financial/expenseReviewCommands';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Textarea} from '@/components/ui/textarea';
+import {localDateTimeInputValue} from '@/lib/utils/formatDate';
 type Props={sourceType:'trip'|'settlement';sourceId:string;onConfirmed?:()=>void};
 export function ExpenseCreationForm(props:Props){
  const {currentTenant}=useTenant(),{user}=useAuth();return currentTenant&&user?<ScopedForm key={currentTenant.id+':'+user.id+':'+props.sourceType+':'+props.sourceId} {...props}/>:<p>Entre e selecione a empresa.</p>;
 }
-const localDate=()=>{const date=new Date();return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);};
 function ScopedForm({sourceType,sourceId,onConfirmed}:Props){
  const command=useExpenseCreation(sourceType,sourceId),prefix=useId(),alive=useRef(true);
  const [preview,setPreview]=useState<ExpenseCreationContext|null>(null),[invalidated,setInvalidated]=useState(false),[message,setMessage]=useState(''),[preparing,setPreparing]=useState(false);
- const [form,setForm]=useState({category:'fuel',amount:'',expense_at:localDate(),payment_source:'driver',reimbursable:true,supplier_name:'',document_number:'',city:'',state:'',odometer:'',cost_center:'',notes:'',no_receipt:false,no_receipt_reason:''});
+ const [form,setForm]=useState({category:'fuel',amount:'',expense_at:localDateTimeInputValue(),payment_source:'driver',reimbursable:true,supplier_name:'',document_number:'',city:'',state:'',odometer:'',cost_center:'',notes:'',no_receipt:false,no_receipt_reason:''});
  const [file,setFile]=useState<File>();
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
  useEffect(()=>{if(!preview&&command.query.data)setPreview(command.query.data);},[preview,command.query.data]);
@@ -37,7 +37,7 @@ function ScopedForm({sourceType,sourceId,onConfirmed}:Props){
    const {amount:unused,...rest}=fields as ExpenseFields&{amount:string};void unused;
    await command.submit({source_type:sourceType,source_id:sourceId,expected_revision:preview.revision,fields:rest,receipt},form.no_receipt?undefined:file);
    if(alive.current){setMessage('Despesa registrada e aguardando aprovação.');onConfirmed?.();}
-  }catch(cause){if(alive.current){setMessage(creationError(cause));setInvalidated(true);}}
+  }catch(cause){if(alive.current){setMessage(creationError(cause));setInvalidated(expenseCreationContextInvalidated(cause));}}
   finally{if(alive.current)setPreparing(false);}
  };
  return <form className="space-y-3" onSubmit={e=>{e.preventDefault();void submit();}}>

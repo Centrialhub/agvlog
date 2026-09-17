@@ -39,12 +39,16 @@ export interface LegacyImport {
   };
 }
 
-function numeric(v: unknown): number {
+function numeric(v: unknown, cell: string): number {
   if (v == null || v === '') return 0;
-  if (typeof v === 'number') return v;
+  if (typeof v === 'number') {
+    if(Number.isFinite(v))return v;
+    throw new Error(`Valor numérico inválido em ${cell}.`);
+  }
   const s = String(v).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
   const n = Number(s);
-  return Number.isFinite(n) ? n : 0;
+  if(!s||!Number.isFinite(n))throw new Error(`Valor numérico inválido em ${cell}: "${String(v).slice(0,80)}".`);
+  return n;
 }
 
 function toIsoDate(v: unknown): string | null {
@@ -76,6 +80,7 @@ export function parseLegacyWorkbook(buffer: ArrayBuffer): LegacyImport {
   // A typed byte view is also reliable when File.arrayBuffer() comes from
   // another browser realm; SheetJS must not interpret the ZIP bytes as text.
   const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+  if(wb.SheetNames.length!==1)throw new Error(`A pasta possui ${wb.SheetNames.length} abas (${wb.SheetNames.join(', ')}). Importe uma aba por arquivo para que nenhuma seja ignorada.`);
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const model = detectModel(sheet);
   const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
@@ -104,8 +109,8 @@ export function parseLegacyWorkbook(buffer: ArrayBuffer): LegacyImport {
         if (!r || r.every((cell) => cell === '' || cell == null)) continue;
         const arrival = toIsoDate(r[0]);
         const period = r[1] ? String(r[1]) : null;
-        const weight = numeric(r[2]);
-        const value = numeric(r[3]);
+        const weight = numeric(r[2],`${wb.SheetNames[0]}!C${i+1}`);
+        const value = numeric(r[3],`${wb.SheetNames[0]}!D${i+1}`);
         if (!arrival && !period) continue;
         summaryRows.push({ arrival_date: arrival, billing_period: period, weight_kg: weight, invoice_value: value });
         totals.total_weight_kg += weight;
@@ -147,9 +152,9 @@ export function parseLegacyWorkbook(buffer: ArrayBuffer): LegacyImport {
           issue_date: iEmis >= 0 ? toIsoDate(r[iEmis]) : null,
           invoice_number: iNota >= 0 ? String(r[iNota] ?? '') || null : null,
           cte_number: iCte >= 0 ? String(r[iCte] ?? '') || null : null,
-          invoice_value: iVal >= 0 ? numeric(r[iVal]) : 0,
-          weight_kg: iPeso >= 0 ? numeric(r[iPeso]) : 0,
-          freight_value: iFrete >= 0 ? numeric(r[iFrete]) : 0,
+          invoice_value: iVal >= 0 ? numeric(r[iVal],`${wb.SheetNames[0]}!${XLSX.utils.encode_col(iVal)}${i+1}`) : 0,
+          weight_kg: iPeso >= 0 ? numeric(r[iPeso],`${wb.SheetNames[0]}!${XLSX.utils.encode_col(iPeso)}${i+1}`) : 0,
+          freight_value: iFrete >= 0 ? numeric(r[iFrete],`${wb.SheetNames[0]}!${XLSX.utils.encode_col(iFrete)}${i+1}`) : 0,
           delivery_date: iEntrega >= 0 ? toIsoDate(r[iEntrega]) : null,
           observation: iObs >= 0 ? String(r[iObs] ?? '') || null : null,
         };

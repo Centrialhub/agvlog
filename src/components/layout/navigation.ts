@@ -18,6 +18,7 @@ export interface NavigationItem {
   icon: LucideIcon;
   keywords?: string;
   capability?: IntegrationCapability;
+  roles?: string[];
 }
 
 export interface NavigationSection {
@@ -111,7 +112,7 @@ export const navigationSections: NavigationSection[] = [
     { label: 'Histórico de importações', href: '/ingestion-reports', icon: FolderClock },
     { label: 'Resumo de notas importadas', href: '/imported-notes-summary', icon: FileSpreadsheet },
     { label: 'Auditoria de cargas', href: '/load-extraction-audit', icon: FileSearch },
-    { label: 'Auditoria de dados', href: '/data-audit', icon: DatabaseZap },
+    { label: 'Auditoria de dados', href: '/data-audit', icon: DatabaseZap, roles: ['owner', 'admin'] },
   ] },
   { id: 'system', label: 'Sistema', icon: Settings, items: [
     { label: 'Equipe e acessos', href: '/team', icon: UserCog },

@@ -4,7 +4,6 @@ import {
   accountId, linkId, otherLinkId, otherUnitId, otherVehicleId, tables, tenant, unitId, vehicleId,
   type RpcArgs,
 } from './helpers/ssxPositionPollRuntimeFixture';
-
 const state = vi.hoisted(() => ({
   handler: null as null | ((request: Request) => Promise<Response>),
   provider: { ok: true, status: 200, errorClass: undefined as string | undefined },
@@ -16,8 +15,6 @@ const state = vi.hoisted(() => ({
   partialReceipt: false,
   clientCalls: 0,
 }));
-
-
 vi.mock('../../supabase/functions/_shared/cron-auth.ts', () => ({
   isCronRequest: vi.fn().mockResolvedValue(true),
 }));
@@ -70,6 +67,16 @@ vi.mock('@supabase/supabase-js', () => ({
             tenant_id: args._tenant_id,
             integration_account_id: args._integration_account_id,
             cooldown_until: args._cooldown_until,
+          },
+          error: null,
+        };
+        if (name === 'clear_ssx_account_cooldown_v1') return {
+          data: {
+            version: 1,
+            tenant_id: args._tenant_id,
+            integration_account_id: args._integration_account_id,
+            observed_at: args._observed_at,
+            cleared: true,
           },
           error: null,
         };
@@ -208,7 +215,7 @@ describe('SSX poll handler atomic persistence contract', () => {
     expect(await response.json()).toMatchObject({
       success: true, total_inserted: 1, touched_vehicles: 1,
     });
-    expect(state.rpcCalls).toHaveLength(1);
+    expect(state.rpcCalls).toHaveLength(2);
     expect(state.rpcCalls[0]).toMatchObject({
       name: 'commit_ssx_position_batch_v1',
       args: {
@@ -222,6 +229,13 @@ describe('SSX poll handler atomic persistence contract', () => {
     expect(state.rpcCalls[0].args._positions).toMatchObject([{
       captured_at: capturedAt, lat: -23.55, lng: -46.63, speed: 44,
     }]);
+    expect(state.rpcCalls[1]).toMatchObject({
+      name: 'clear_ssx_account_cooldown_v1',
+      args: {
+        _tenant_id: tenant,
+        _integration_account_id: accountId,
+      },
+    });
     expect(state.writes).toEqual([]);
   });
 
@@ -232,11 +246,12 @@ describe('SSX poll handler atomic persistence contract', () => {
       success: true, vehicles_without_observation: 1,
       results: [{ status: 'no_data', positions_found: false }],
     });
-    expect(state.rpcCalls).toHaveLength(1);
+    expect(state.rpcCalls).toHaveLength(2);
     expect(state.rpcCalls[0].args._positions).toEqual([]);
     expect(state.rpcCalls[0].args._poll_memo).toMatchObject({
       combo_source: 'broadband_no_observation',
     });
+    expect(state.rpcCalls[1].name).toBe('clear_ssx_account_cooldown_v1');
     expect(state.writes).toEqual([]);
   });
 
@@ -288,6 +303,7 @@ describe('SSX poll handler atomic persistence contract', () => {
     });
     expect(state.rpcCalls.map((call) => call.name)).toEqual([
       'record_ssx_position_quarantine_batch_v1', 'commit_ssx_position_batch_v1',
+      'clear_ssx_account_cooldown_v1',
     ]);
     expect(state.rpcCalls[1].args._positions).toEqual([]);
   });
@@ -367,7 +383,8 @@ describe('SSX poll handler atomic persistence contract', () => {
     const oldHash = state.rpcCalls[0].args._positions![0].provider_payload_hash;
     tables.vehicle_tracker_links[0].id = otherLinkId;
     expect((await request({ integration_account_id: accountId })).status).toBe(200);
-    const newHash = state.rpcCalls[1].args._positions![0].provider_payload_hash;
+    const commits = state.rpcCalls.filter((call) => call.name === 'commit_ssx_position_batch_v1');
+    const newHash = commits[1].args._positions![0].provider_payload_hash;
     expect(newHash).not.toBe(oldHash);
   });
 
@@ -387,6 +404,7 @@ describe('SSX poll handler atomic persistence contract', () => {
     });
     expect(state.rpcCalls.map((call) => call.name)).toEqual([
       'record_ssx_position_quarantine_batch_v1', 'commit_ssx_position_batch_v1',
+      'clear_ssx_account_cooldown_v1',
     ]);
     expect(state.rpcCalls[1].args._positions).toEqual([]);
   });
@@ -409,6 +427,7 @@ describe('SSX poll handler atomic persistence contract', () => {
     expect(await response.json()).toMatchObject({ total_inserted: 1 });
     expect(state.rpcCalls.map((call) => call.name)).toEqual([
       'record_ssx_position_quarantine_batch_v1', 'commit_ssx_position_batch_v1',
+      'clear_ssx_account_cooldown_v1',
     ]);
     expect(state.rpcCalls[1].args._positions).toHaveLength(1);
   });
@@ -428,6 +447,7 @@ describe('SSX poll handler atomic persistence contract', () => {
     });
     expect(state.rpcCalls.map((call) => call.name)).toEqual([
       'record_ssx_position_quarantine_batch_v1', 'commit_ssx_position_batch_v1',
+      'clear_ssx_account_cooldown_v1',
     ]);
     expect(state.rpcCalls[0].args._records).toMatchObject([{
       reason: 'invalid_gps',

@@ -139,8 +139,19 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
   });
 
   useEffect(() => {
-    setForm(f => ({ ...f, driver_id: load.driver_id || '__none__', vehicle_id: load.vehicle_id || '__none__' }));
-  }, [load.id, load.driver_id, load.vehicle_id]);
+    setForm({
+      driver_id: load.driver_id || '__none__', vehicle_id: load.vehicle_id || '__none__',
+      trailer_plate: load.trailer_plate || '', operation_type: load.operation_type || '__none__',
+      origin: load.origin || '', destination: load.destination || '', actual_load_at: toLocalDT(load.actual_load_at),
+      estimated_arrival_at: toLocalDT(load.estimated_arrival_at), gate_departure_at: toLocalDT(load.gate_departure_at),
+      arrival_at: toLocalDT(load.arrival_at), ciot: load.ciot || '', monitored: !!load.monitored,
+      dedicated_vehicle: !!load.dedicated_vehicle, monitor_responsible: load.monitor_responsible || '',
+      sm_manager: load.sm_manager || '', sm_release: load.sm_release || '', driver_type: load.driver_type || '',
+      merchandise_value: load.merchandise_value?.toString() || '', total_pallet_count: load.total_pallet_count?.toString() || '',
+      total_weight_kg: load.total_weight_kg?.toString() || '', total_volume_m3: load.total_volume_m3?.toString() || '',
+      notes: load.notes || '', distribution_manifest: load.distribution_manifest || '', shipment_manifest: load.shipment_manifest || '',
+    });
+  }, [load]);
 
   const vehicle = useMemo(() => vehicles.find(candidate => candidate.id === load.vehicle_id), [vehicles, load.vehicle_id]);
 
@@ -162,10 +173,11 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
   const { data: ctes = [] } = useQuery({
     queryKey: ['romaneio_ctes', load.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('cte_documents')
         .select('id, cte_number, cte_series, freight_value, cargo_value, status, is_voided, recipient')
         .contains('load_ids', [load.id]);
+      if (error) throw error;
       return data || [];
     },
   });
@@ -177,10 +189,11 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
   const { data: tripIds = [] } = useQuery({
     queryKey: ['romaneio_trip_ids', load.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('dispatch_trips')
         .select('id')
         .eq('load_id', load.id);
+      if (error) throw error;
       return (data || []).map(trip => trip.id);
     },
   });
@@ -189,10 +202,11 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
     queryKey: ['romaneio_expenses', tripIds],
     enabled: tripIds.length > 0,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('driver_expenses')
         .select('id, category, amount, expense_at, notes, approval_status, dispatch_trip_id')
         .in('dispatch_trip_id', tripIds);
+      if (error) throw error;
       return data || [];
     },
   });
@@ -206,11 +220,12 @@ export default function LoadRomaneioTabs({ load, documents, onSaved }: Props) {
     queryKey: ['romaneio_stops', tripIds],
     enabled: tripIds.length > 0,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('dispatch_stops')
         .select('id, stop_order, destination, status, planned_arrival_at, actual_arrival_at, clients(company_name)')
         .in('dispatch_trip_id', tripIds)
         .order('stop_order');
+      if (error) throw error;
       return data || [];
     },
   });

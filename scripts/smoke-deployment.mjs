@@ -2,9 +2,15 @@ import { randomBytes } from "node:crypto";
 
 const target = process.env.DEPLOY_SMOKE_URL;
 if (!target) throw new Error("DEPLOY_SMOKE_URL is required for a deployed smoke test.");
-const origin = new URL(target).origin;
+const targetUrl = new URL(target);
+if (targetUrl.protocol !== "https:" && process.env.DEPLOY_SMOKE_ALLOW_HTTP !== "true") {
+  throw new Error("DEPLOY_SMOKE_URL must use HTTPS.");
+}
+if (targetUrl.username || targetUrl.password) throw new Error("DEPLOY_SMOKE_URL must not contain credentials.");
+const origin = targetUrl.origin;
+const fetchOptions = () => ({ redirect: "follow", signal: AbortSignal.timeout(15_000) });
 
-const page = await fetch(origin, { redirect: "follow" });
+const page = await fetch(origin, fetchOptions());
 if (!page.ok) throw new Error(`Frontend returned HTTP ${page.status}`);
 
 const requiredHeaders = {
@@ -24,16 +30,26 @@ const html = await page.text();
 if (/sb_secret_|service_role|BEGIN [A-Z ]*PRIVATE KEY/i.test(html)) {
   throw new Error("Recognized secret marker found in deployed HTML.");
 }
+
+const expectedRelease = process.env.DEPLOY_EXPECTED_RELEASE;
+if (!expectedRelease) throw new Error("DEPLOY_EXPECTED_RELEASE is required for immutable candidate verification.");
+const releaseResponse = await fetch(new URL("/release.json", origin), fetchOptions());
+if (!releaseResponse.ok) throw new Error(`Release metadata returned HTTP ${releaseResponse.status}`);
+const releaseMetadata = await releaseResponse.json();
+if (releaseMetadata?.release !== expectedRelease) {
+  throw new Error(`Candidate release mismatch: expected ${expectedRelease}, received ${releaseMetadata?.release ?? "<absent>"}`);
+}
 const scriptPaths = [...html.matchAll(/<script[^>]+src=["']([^"']+\.js)["']/gi)].map((match) => match[1]);
-for (const scriptPath of scriptPaths.slice(0, 5)) {
+for (const scriptPath of new Set(scriptPaths)) {
   const scriptUrl = new URL(scriptPath, origin);
-  const script = await fetch(scriptUrl);
+  if (scriptUrl.origin !== origin) throw new Error(`Unexpected cross-origin script: ${scriptUrl}`);
+  const script = await fetch(scriptUrl, fetchOptions());
   if (!script.ok) throw new Error(`Deployed chunk unavailable: ${scriptUrl}`);
   const source = await script.text();
   if (/sourceMappingURL=|sb_secret_|BEGIN [A-Z ]*PRIVATE KEY/i.test(source)) {
     throw new Error(`Unsafe marker in deployed chunk: ${scriptUrl}`);
   }
-  const sourceMap = await fetch(`${scriptUrl}.map`);
+  const sourceMap = await fetch(`${scriptUrl}.map`, fetchOptions());
   if (sourceMap.ok) throw new Error(`Public source map is reachable: ${scriptUrl}.map`);
 }
 
@@ -47,9 +63,14 @@ const signup = await fetch(`${supabaseUrl.replace(/\/$/, "")}/auth/v1/signup`, {
     email: `public-signup-probe-${Date.now()}@agvlog-e2e.invalid`,
     password: `${randomBytes(24).toString("base64url")}Aa1!`,
   }),
+  signal: AbortSignal.timeout(15_000),
 });
 if (signup.ok) {
   throw new Error("CRITICAL: hosted public signup accepted the probe; revoke the created test identity and disable signup.");
 }
+const signupBody = await signup.text();
+if (signup.status < 400 || signup.status >= 500 || !/signup_disabled|signup.*disabled|signups?.*not allowed/i.test(signupBody)) {
+  throw new Error(`Hosted signup was not rejected by the expected disabled-signup policy (HTTP ${signup.status}).`);
+}
 
-console.log(`Deployment smoke passed for ${origin}; hosted signup rejected with HTTP ${signup.status}.`);
+console.log(`Deployment smoke passed for ${origin} at release ${expectedRelease}; hosted signup is disabled.`);

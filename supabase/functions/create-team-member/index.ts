@@ -35,7 +35,15 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { tenant_id, email, full_name, role } = body;
+    const {
+      tenant_id,
+      email,
+      full_name,
+      role,
+      client_id,
+      access_type,
+      permissions,
+    } = body;
 
     if (!tenant_id || !email || !role) {
       return new Response(
@@ -44,10 +52,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!["admin", "operator", "driver"].includes(role)) {
+    if (!["admin", "operator", "driver", "client"].includes(role)) {
       return new Response(
-        JSON.stringify({ error: "Invalid role. Cliente externo deve ser cadastrado via client_portal_access." }),
+        JSON.stringify({ error: "Invalid role" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const portalAccessTypes = ["full", "remitter", "recipient", "payer", "financial", "documents_only", "viewer"];
+    if (role === "client" && (!client_id || !portalAccessTypes.includes(access_type))) {
+      return new Response(
+        JSON.stringify({ error: "Client portal invitation requires client_id and a valid access_type" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -79,6 +95,22 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (role === "client") {
+      const { data: portalClient } = await adminClient
+        .from("clients")
+        .select("id")
+        .eq("id", client_id)
+        .eq("tenant_id", tenant_id)
+        .eq("active", true)
+        .maybeSingle();
+      if (!portalClient) {
+        return new Response(
+          JSON.stringify({ error: "Client not found in the selected tenant" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     if (!appOrigin) {
       return new Response(
         JSON.stringify({ error: "AGVLOG_APP_ORIGIN is required to send secure invitations" }),
@@ -89,11 +121,15 @@ Deno.serve(async (req) => {
     // Authorize exactly one auth.users insertion. The database trigger rejects
     // public signups and only accepts this short-lived, unguessable invite nonce.
     const inviteNonce = crypto.randomUUID();
-    const { error: authorizationError } = await adminClient.rpc("prepare_auth_invite", {
+    const { error: authorizationError } = await adminClient.rpc("prepare_auth_invite_v2", {
       _email: normalizedEmail,
       _tenant_id: tenant_id,
       _invited_by: caller.id,
       _nonce: inviteNonce,
+      _role: role,
+      _client_id: role === "client" ? client_id : null,
+      _access_type: role === "client" ? access_type : null,
+      _permissions: permissions && typeof permissions === "object" ? permissions : {},
     });
 
     if (authorizationError) {
@@ -127,21 +163,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create tenant membership
-    const { error: memberError } = await adminClient
-      .from("tenant_memberships")
-      .insert({
-        tenant_id,
-        user_id: newUser.user.id,
-        role,
-        active: true,
-      });
+    // The auth.users AFTER INSERT trigger creates the tenant membership or
+    // portal access in the same database transaction as the invited account.
+    const { data: linkedAccess, error: linkError } = role === "client"
+      ? await adminClient.from("client_portal_access").select("id").eq("tenant_id", tenant_id).eq("user_id", newUser.user.id).maybeSingle()
+      : await adminClient.from("tenant_memberships").select("id").eq("tenant_id", tenant_id).eq("user_id", newUser.user.id).maybeSingle();
 
-    if (memberError) {
+    if (linkError || !linkedAccess) {
       await adminClient.auth.admin.deleteUser(newUser.user.id);
       return new Response(
-        JSON.stringify({ error: memberError.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: linkError?.message || "Invitation access was not created atomically" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -149,6 +181,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         invited: true,
+        access_kind: role === "client" ? "client_portal" : "tenant_member",
         user_id: newUser.user.id,
         email: newUser.user.email,
       }),

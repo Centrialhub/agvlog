@@ -58,6 +58,7 @@ export interface RoutePlanValidationIssue {
 
 export interface CustomerWindow {
   client_id: string;
+  weekday: number; // 0=domingo .. 6=sábado
   start_time: string; // HH:MM
   end_time: string;   // HH:MM
 }

@@ -4,8 +4,15 @@ vi.mock('@/integrations/supabase/client', () => ({
   supabase: { functions: { invoke: vi.fn() } },
 }));
 
-import { buildCadastroEnvelope, parseCadastroResponse } from '../../supabase/functions/_shared/tax-registry';
-import { validateOfficialParty, type OfficialTaxProfile } from '@/lib/fiscal/taxRegistryClient';
+import {
+  BRASIL_API_REGISTRY_SOURCE, brasilApiCnpjEndpoint, buildCadastroEnvelope,
+  parseBrasilApiCnpjResponse, parseCadastroResponse,
+} from '../../supabase/functions/_shared/tax-registry';
+import {
+  officialStateRegistrationForParty,
+  validateOfficialParty,
+  type OfficialTaxProfile,
+} from '@/lib/fiscal/taxRegistryClient';
 
 const profile: OfficialTaxProfile = {
   id: 'profile',
@@ -32,11 +39,17 @@ const profile: OfficialTaxProfile = {
 };
 
 describe('official tax registry contract', () => {
+  it('returns the active official IE so a missing CT-e field can be completed before transmission', () => {
+    expect(officialStateRegistrationForParty(profile.cnpj, [profile])).toBe(profile.state_registration);
+    expect(officialStateRegistrationForParty('00000000000000', [profile])).toBeNull();
+  });
+
   it('builds a scoped SOAP request without accepting XML injection', () => {
     const xml = buildCadastroEnvelope('mg', 'CNPJ', '31&459<273>000122');
     expect(xml).toContain('<UF>MG</UF>');
     expect(xml).toContain('<CNPJ>31&amp;459&lt;273&gt;000122</CNPJ>');
     expect(xml).toContain('versao="2.00"');
+    expect(xml).not.toMatch(/>\s+</);
   });
 
   it('normalizes the official CadConsultaCadastro response and address', () => {
@@ -68,6 +81,32 @@ describe('official tax registry contract', () => {
       reason: 'Contribuinte não localizado',
       records: [],
     });
+  });
+
+  it('normalizes a public Receita CNPJ address for an unsupported state service', () => {
+    expect(brasilApiCnpjEndpoint('14.998.371/0031-34'))
+      .toBe('https://brasilapi.com.br/api/cnpj/v1/14998371003134');
+    const record = parseBrasilApiCnpjResponse({
+      cnpj: '14.998.371/0031-34', razao_social: 'J MACEDO S/A',
+      descricao_situacao_cadastral: 'ATIVA', situacao_cadastral: 2,
+      logradouro: 'RUA ESTADO DE ISRAEL', numero: '215', complemento: 'PREDIO I',
+      bairro: 'COMERCIO', municipio: 'SALVADOR', uf: 'BA', cep: 40460620,
+      codigo_municipio_ibge: 2927408, cnae_fiscal: 1062700,
+    });
+    expect(record).toEqual(expect.objectContaining({
+      cnpj: '14998371003134', registryStatus: 'active', stateRegistration: null,
+      address: expect.objectContaining({ city: 'SALVADOR', state: 'BA', cityCode: '2927408', zip: '40460620' }),
+      raw: expect.objectContaining({ source: BRASIL_API_REGISTRY_SOURCE }),
+    }));
+  });
+
+  it('keeps the NF-e IE when the federal public fallback supplies only identity and address', () => {
+    expect(validateOfficialParty({ cnpj: profile.cnpj, stateRegistration: '72911823' }, [{
+      ...profile,
+      uf: 'BA',
+      state_registration: null,
+      source: BRASIL_API_REGISTRY_SOURCE,
+    }])).toBeNull();
   });
 
   it('accepts a safely restored MG leading zero and rejects a different IE', () => {

@@ -43,15 +43,20 @@ export function useCurrentDriver() {
 }
 
 export function useActiveTrip(driverId: string | undefined) {
+  const { user } = useAuth();
+  const { currentTenant } = useTenant();
+  const tenantId = currentTenant?.id;
+
   return useQuery({
-    queryKey: ['driver_active_trip', driverId],
+    queryKey: ['driver_active_trip', user?.id, tenantId, driverId],
     queryFn: async () => {
-      if (!driverId) return null;
+      if (!user || !driverId || !tenantId) return null;
         
         // 1. First, look for trips that are explicitly in an active status
         const { data: activeStatusTrips, error: tripsError } = await supabase
           .from('dispatch_trips')
           .select(DRIVER_TRIP_SELECT)
+          .eq('tenant_id', tenantId)
           .eq('driver_id', driverId)
           .in('status', TRIP_ACTIVE_STATUSES)
           .order('created_at', { ascending: false })
@@ -69,6 +74,7 @@ export function useActiveTrip(driverId: string | undefined) {
         const { data: transitLoads, error: loadsError } = await supabase
           .from('loads')
           .select('id')
+          .eq('tenant_id', tenantId)
           .eq('driver_id', driverId)
           .in('status', LOAD_ACTIVE_STATUSES)
           .order('updated_at', { ascending: false })
@@ -80,6 +86,7 @@ export function useActiveTrip(driverId: string | undefined) {
           const { data: canonicalLink, error: linkError } = await supabase
             .from('dispatch_trip_loads')
             .select('dispatch_trip_id')
+            .eq('tenant_id', tenantId)
             .in('load_id', transitLoads.map((load) => load.id))
             .order('created_at', { ascending: false })
             .limit(1)
@@ -91,6 +98,8 @@ export function useActiveTrip(driverId: string | undefined) {
           const { data: tripFromLoad, error: tripError } = await supabase
             .from('dispatch_trips')
             .select(DRIVER_TRIP_SELECT)
+            .eq('tenant_id', tenantId)
+            .eq('driver_id', driverId)
             .eq('id', canonicalLink.dispatch_trip_id)
             .maybeSingle();
           
@@ -100,7 +109,7 @@ export function useActiveTrip(driverId: string | undefined) {
 
         return null;
     },
-    enabled: !!driverId,
+    enabled: !!user && !!driverId && !!tenantId,
     retry: 1,
     staleTime: 1000 * 30, // 30 seconds
   });

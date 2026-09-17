@@ -62,9 +62,10 @@ Deno.serve(async (req) => {
     const dayStart = `${targetDay}T00:00:00Z`;
     const dayEnd = `${targetDay}T23:59:59.999Z`;
 
-    const { data: vehicles } = await supabase
+    const { data: vehicles, error: vehiclesError } = await supabase
       .from("vehicles").select("id")
       .eq("tenant_id", tenant_id).eq("active", true);
+    if (vehiclesError) throw vehiclesError;
 
     if (!vehicles || vehicles.length === 0) {
       return new Response(
@@ -77,46 +78,52 @@ Deno.serve(async (req) => {
 
     for (const vehicle of vehicles) {
       // Trips
-      const { data: trips } = await supabase
+      const { data: trips, error: tripsError } = await supabase
         .from("trips")
         .select("distance_km_estimated, moving_time_seconds, stopped_time_seconds")
         .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
         .gte("start_at", dayStart).lte("start_at", dayEnd);
+      if (tripsError) throw tripsError;
 
       // Stops
-      const { data: stops } = await supabase
+      const { data: stops, error: stopsError } = await supabase
         .from("trip_stops").select("id, stop_class")
         .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
         .gte("start_at", dayStart).lte("start_at", dayEnd);
+      if (stopsError) throw stopsError;
 
       // Overspeed events (sessions)
-      const { data: overspeedEvents } = await supabase
+      const { data: overspeedEvents, error: overspeedError } = await supabase
         .from("events").select("id, payload")
         .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
         .eq("event_type", "overspeed").eq("source", "engine")
         .gte("event_at", dayStart).lte("event_at", dayEnd);
+      if (overspeedError) throw overspeedError;
 
       // Route deviation events
-      const { data: routeDeviationEvents } = await supabase
+      const { data: routeDeviationEvents, error: routeError } = await supabase
         .from("events").select("id")
         .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
         .eq("event_type", "route_deviation").eq("source", "engine")
         .gte("event_at", dayStart).lte("event_at", dayEnd);
+      if (routeError) throw routeError;
 
       // Offline minutes from alert_instances
       let offlineMin = 0;
-      const { data: offlineRules } = await supabase
+      const { data: offlineRules, error: offlineRulesError } = await supabase
         .from("alert_rules").select("id")
         .eq("tenant_id", tenant_id).eq("rule_type", "offline").eq("enabled", true);
+      if (offlineRulesError) throw offlineRulesError;
 
       if (offlineRules && offlineRules.length > 0) {
         const ruleIds = offlineRules.map((r: any) => r.id);
-        const { data: offlineAlerts } = await supabase
+        const { data: offlineAlerts, error: offlineAlertsError } = await supabase
           .from("alert_instances")
           .select("opened_at, closed_at, status")
           .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
           .eq("source", "engine")
           .in("rule_id", ruleIds);
+        if (offlineAlertsError) throw offlineAlertsError;
 
         if (offlineAlerts) {
           for (const alert of offlineAlerts) {
@@ -132,12 +139,16 @@ Deno.serve(async (req) => {
       // Speed metrics from positions_raw
       let maxSpeedKmh = 0;
       let avgSpeedKmh = 0;
-      const { data: speedPositions } = await supabase
-        .from("positions_raw").select("speed")
-        .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
-        .gte("captured_at", dayStart).lte("captured_at", dayEnd)
-        .not("speed", "is", null)
-        .limit(5000);
+      const speedPositions: Array<{ speed: number | null }> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data: speedPage, error: speedError } = await supabase.from("positions_raw").select("speed")
+          .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
+          .gte("captured_at", dayStart).lte("captured_at", dayEnd).not("speed", "is", null)
+          .order("captured_at").order("id").range(from, from + 999);
+        if (speedError) throw speedError;
+        speedPositions.push(...(speedPage || []));
+        if ((speedPage || []).length < 1000) break;
+      }
 
       if (speedPositions && speedPositions.length > 0) {
         const speeds = speedPositions.map((p: any) => p.speed).filter((s: number) => s != null);
@@ -167,40 +178,44 @@ Deno.serve(async (req) => {
       let fuelEnd: number | null = null;
       let fuelConsumed: number | null = null;
 
-      const { data: firstFuel } = await supabase
+      const { data: firstFuel, error: firstFuelError } = await supabase
         .from("fuel_readings").select("fuel_value")
         .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
         .gte("captured_at", dayStart).lte("captured_at", dayEnd)
         .order("captured_at", { ascending: true }).limit(1);
+      if (firstFuelError) throw firstFuelError;
 
-      const { data: lastFuel } = await supabase
+      const { data: lastFuel, error: lastFuelError } = await supabase
         .from("fuel_readings").select("fuel_value")
         .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
         .gte("captured_at", dayStart).lte("captured_at", dayEnd)
         .order("captured_at", { ascending: false }).limit(1);
+      if (lastFuelError) throw lastFuelError;
 
       if (firstFuel && firstFuel.length > 0) fuelStart = firstFuel[0].fuel_value;
       if (lastFuel && lastFuel.length > 0) fuelEnd = lastFuel[0].fuel_value;
       if (fuelStart != null && fuelEnd != null) fuelConsumed = Math.round((fuelStart - fuelEnd) * 100) / 100;
 
       // Fuel events count
-      const { data: refuelEvents } = await supabase
+      const { data: refuelEvents, error: refuelError } = await supabase
         .from("fuel_events").select("id")
         .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
         .eq("event_type", "refuel")
         .gte("event_at", dayStart).lte("event_at", dayEnd);
+      if (refuelError) throw refuelError;
 
-      const { data: drainEvents } = await supabase
+      const { data: drainEvents, error: drainError } = await supabase
         .from("fuel_events").select("id")
         .eq("tenant_id", tenant_id).eq("vehicle_id", vehicle.id)
         .eq("event_type", "drain")
         .gte("event_at", dayStart).lte("event_at", dayEnd);
+      if (drainError) throw drainError;
 
       const kmEstimated = (trips || []).reduce((s: number, t: any) => s + (t.distance_km_estimated || 0), 0);
       const movingTime = (trips || []).reduce((s: number, t: any) => s + (t.moving_time_seconds || 0), 0);
       const stoppedTime = (trips || []).reduce((s: number, t: any) => s + (t.stopped_time_seconds || 0), 0);
 
-      await supabase.from("metrics_daily").upsert({
+      const { error: metricsError } = await supabase.from("metrics_daily").upsert({
         tenant_id,
         vehicle_id: vehicle.id,
         day: targetDay,
@@ -222,6 +237,7 @@ Deno.serve(async (req) => {
         fuel_refuel_events: (refuelEvents || []).length,
         fuel_drain_events: (drainEvents || []).length,
       }, { onConflict: "tenant_id,vehicle_id,day" });
+      if (metricsError) throw metricsError;
       aggregated++;
     }
 

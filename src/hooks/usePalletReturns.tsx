@@ -3,7 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import { uploadSecureFile } from '@/lib/secureUpload';
-import type { Json, Tables, TablesUpdate } from '@/integrations/supabase/types';
+import type { Json, Tables } from '@/integrations/supabase/types';
+import { localDateInputValue } from '@/lib/utils/formatDate';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { protocolDedupeKey } from '@/lib/palletReturns/palletReturnImporter';
 
 export interface PalletType {
   id: string;
@@ -106,28 +109,25 @@ export function usePalletProtocols(filters: PalletFilters = {}) {
     queryKey: ['pallet_return_protocols', currentTenant?.id, filters],
     queryFn: async (): Promise<PalletProtocol[]> => {
       if (!currentTenant) return [];
-      let q = supabase.from('pallet_return_protocols')
-        .select('*, items:pallet_return_items(*)')
-        .eq('tenant_id', currentTenant.id)
-        .order('issue_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(1000);
-      if (filters.supplierId) q = q.eq('supplier_id', filters.supplierId);
-      if (filters.supplierName) q = q.ilike('supplier_name_snapshot', `%${filters.supplierName}%`);
-      if (filters.status) q = q.eq('status', filters.status);
-      if (filters.driverId) q = q.eq('driver_id', filters.driverId);
-      if (filters.plate) q = q.ilike('vehicle_plate_snapshot', `%${filters.plate}%`);
-      if (filters.loadId) q = q.eq('load_id', filters.loadId);
-      if (filters.protocolNumber) q = q.ilike('protocol_number', `%${filters.protocolNumber}%`);
-      if (filters.fromIssue) q = q.gte('issue_date', filters.fromIssue);
-      if (filters.toIssue) q = q.lte('issue_date', filters.toIssue);
-      if (filters.fromReturn) q = q.gte('returned_at', filters.fromReturn);
-      if (filters.toReturn) q = q.lte('returned_at', filters.toReturn);
-      if (filters.onlyPending) q = q.not('status', 'in', '(confirmed,cancelled)');
-      if (filters.onlyConfirmed) q = q.eq('status', 'confirmed');
-      const { data, error } = await q;
-      if (error) throw error;
-      let rows = (data || []).map((row) => ({
+      const data = await fetchAllPostgrestPages((from, to) => {
+        let q = supabase.from('pallet_return_protocols').select('*, items:pallet_return_items(*)')
+          .eq('tenant_id', currentTenant.id).order('issue_date', { ascending: false }).order('created_at', { ascending: false }).order('id').range(from, to);
+        if (filters.supplierId) q = q.eq('supplier_id', filters.supplierId);
+        if (filters.supplierName) q = q.ilike('supplier_name_snapshot', `%${filters.supplierName}%`);
+        if (filters.status) q = q.eq('status', filters.status);
+        if (filters.driverId) q = q.eq('driver_id', filters.driverId);
+        if (filters.plate) q = q.ilike('vehicle_plate_snapshot', `%${filters.plate}%`);
+        if (filters.loadId) q = q.eq('load_id', filters.loadId);
+        if (filters.protocolNumber) q = q.ilike('protocol_number', `%${filters.protocolNumber}%`);
+        if (filters.fromIssue) q = q.gte('issue_date', filters.fromIssue);
+        if (filters.toIssue) q = q.lte('issue_date', filters.toIssue);
+        if (filters.fromReturn) q = q.gte('returned_at', filters.fromReturn);
+        if (filters.toReturn) q = q.lte('returned_at', filters.toReturn);
+        if (filters.onlyPending) q = q.not('status', 'in', '(confirmed,cancelled)');
+        if (filters.onlyConfirmed) q = q.eq('status', 'confirmed');
+        return q;
+      });
+      let rows = data.map((row) => ({
         ...row,
         items: [...(row.items || [])].sort((a, b) => a.sort_order - b.sort_order),
       })) as unknown as PalletProtocol[];
@@ -218,70 +218,21 @@ export interface EditProtocolInput {
 
 export function useEditPalletProtocol() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: EditProtocolInput) => {
       if (!currentTenant) throw new Error('no_tenant');
 
-      // Fetch existing to guard status
-      const { data: existing, error: exErr } = await supabase.from('pallet_return_protocols')
-        .select('id, status, tenant_id')
-        .eq('id', args.protocolId)
-        .eq('tenant_id', currentTenant.id)
-        .maybeSingle();
-      if (exErr) throw exErr;
-      if (!existing) throw new Error('protocol_not_found');
-      if (['confirmed', 'cancelled'].includes(existing.status)) {
-        throw new Error('Protocolo confirmado ou cancelado não pode ser editado.');
-      }
-
-      const updates: TablesUpdate<'pallet_return_protocols'> = {
-        ...args.patch,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (args.items) {
-        const total = args.items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
-        updates.total_quantity = total;
-      }
-
-      const { error: upErr } = await supabase.from('pallet_return_protocols')
-        .update(updates)
-        .eq('id', args.protocolId)
-        .eq('tenant_id', currentTenant.id);
-      if (upErr) throw upErr;
-
-      if (args.items) {
-        const { error: delErr } = await supabase.from('pallet_return_items').delete()
-          .eq('protocol_id', args.protocolId)
-          .eq('tenant_id', currentTenant.id);
-        if (delErr) throw delErr;
-        const rows = args.items.map((i, idx) => ({
+      const { error } = await supabase.rpc('edit_pallet_return_protocol_v1', {
+        _payload: {
           tenant_id: currentTenant.id,
           protocol_id: args.protocolId,
-          pallet_type_id: i.pallet_type_id || null,
-          pallet_type_code: i.pallet_type_code,
-          pallet_type_name: i.pallet_type_name,
-          pallet_color: i.pallet_color || null,
-          quantity: Number(i.quantity),
-          notes: i.notes || null,
-          sort_order: i.sort_order ?? idx,
-        }));
-        const { error: insErr } = await supabase.from('pallet_return_items').insert(rows);
-        if (insErr) throw insErr;
-      }
-
-      // Audit trail
-      const { error: historyError } = await supabase.from('pallet_return_history').insert({
-        tenant_id: currentTenant.id,
-        protocol_id: args.protocolId,
-        action: 'edited',
-        reason: args.reason || null,
-        metadata: { patch: args.patch, items_replaced: !!args.items } as Json,
-        created_by: user?.id ?? null,
+          patch: args.patch,
+          items: args.items,
+          reason: args.reason || null,
+        } as unknown as Json,
       });
-      if (historyError) throw historyError;
+      if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pallet_return_protocols'] }),
   });
@@ -339,13 +290,13 @@ export function useImportPalletReturns() {
       if (bErr) throw bErr;
 
       // Fetch clients for matching
-      const { data: clients, error: clientsError } = await supabase.from('clients').select('id, company_name, trade_name').eq('tenant_id', currentTenant.id).limit(2000);
-      if (clientsError) throw clientsError;
+      const clients = await fetchAllPostgrestPages((from, to) => supabase.from('clients').select('id, company_name, trade_name')
+        .eq('tenant_id', currentTenant.id).order('id').range(from, to));
       const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
       const findClient = (name: string) => {
         const n = norm(name);
-        return (clients || []).find((c) => norm(c.company_name || '') === n || norm(c.trade_name || '') === n)
-          || (clients || []).find((c) => norm(c.company_name || '').includes(n) || n.includes(norm(c.company_name || '')));
+        const exact = clients.filter(c => norm(c.company_name || '') === n || norm(c.trade_name || '') === n);
+        return exact.length === 1 ? exact[0] : undefined;
       };
 
       let imported = 0, unmatched = 0;
@@ -356,11 +307,16 @@ export function useImportPalletReturns() {
           if (!client) unmatched += 1;
           // dedupe check
           const { data: existing, error: existingError } = await supabase.from('pallet_return_protocols')
-            .select('id, total_quantity').eq('tenant_id', currentTenant.id)
-            .eq('supplier_name_snapshot', p.supplier).eq('issue_date', p.issueDate).limit(5);
+            .select('id, supplier_id, supplier_name_snapshot, pallet_return_items(pallet_type_code, pallet_type_name, quantity)')
+            .eq('tenant_id', currentTenant.id).eq('issue_date', p.issueDate);
           if (existingError) throw existingError;
-          const sameTotal = (existing || []).some((entry) => entry.total_quantity === (p.totalDeclared || p.items.reduce((sum, item) => sum + item.quantity, 0)));
-          if (sameTotal) { errors.push({ supplier: p.supplier, date: p.issueDate, reason: 'duplicate' }); continue; }
+          const importedKey = protocolDedupeKey(client?.id ?? p.supplier, p.issueDate, p.items);
+          const duplicate = (existing || []).some(entry => protocolDedupeKey(
+            entry.supplier_id ?? entry.supplier_name_snapshot,
+            p.issueDate,
+            (entry.pallet_return_items || []).map(item => ({ code: item.pallet_type_code, name: item.pallet_type_name, quantity: item.quantity })),
+          ) === importedKey);
+          if (duplicate) { errors.push({ supplier: p.supplier, date: p.issueDate, reason: 'duplicate' }); continue; }
 
           const { error: rpcErr } = await supabase.rpc('create_pallet_return_protocol', {
             _tenant_id: currentTenant.id,
@@ -401,6 +357,10 @@ export function useAttachPalletProof() {
   return useMutation({
     mutationFn: async (args: { protocolId: string; file: File; receiverName?: string; receiverDocument?: string; signatureDate?: string }) => {
       if (!currentTenant) throw new Error('no_tenant');
+      const { data: protocol, error: readError } = await supabase.from('pallet_return_protocols').select('status')
+        .eq('tenant_id', currentTenant.id).eq('id', args.protocolId).single();
+      if (readError) throw readError;
+      if (!['returned', 'partially_returned', 'awaiting_signature'].includes(protocol.status)) throw new Error('Marque o protocolo como devolvido antes de anexar o comprovante.');
       const path = await uploadSecureFile({
         tenantId: currentTenant.id,
         bucket: 'pallet-return-proofs',
@@ -410,15 +370,15 @@ export function useAttachPalletProof() {
       });
       const { error } = await supabase.rpc('update_pallet_return_status', {
         _protocol_id: args.protocolId,
-        _status: 'awaiting_signature',
+        _status: 'confirmed',
         _payload: {
           signed_proof_url: path,
           receiver_name: args.receiverName || null,
           receiver_document: args.receiverDocument || null,
-          signature_date: args.signatureDate || new Date().toISOString().slice(0, 10),
+          signature_date: args.signatureDate || localDateInputValue(),
         },
       });
-      if (error) throw error;
+      if (error) { await supabase.storage.from('pallet-return-proofs').remove([path]); throw error; }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pallet_return_protocols'] }),
   });

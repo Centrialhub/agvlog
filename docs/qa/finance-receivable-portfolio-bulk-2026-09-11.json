@@ -1,5 +1,5 @@
 {
-  "status": "local_candidate_tests_passed_native_review_pending",
+  "status": "local_candidate_final_tests_and_native_body_benchmark_passed",
   "own_tests": {
     "passed": 2,
     "time": "08:45:14",
@@ -29,5 +29,12 @@
     "final_preflight_verified_separately": true,
     "query_body_unchanged": true,
     "report": "docs/qa/finance-receivable-10k-bulk-native-benchmark-2026-09-11.json"
+  },
+  "independent_review": {
+    "passed": 9,
+    "time": "08:47:48",
+    "lint_exit_code": 0,
+    "qa": "docs/qa/finance-receivable-portfolio-bulk-differential-2026-09-11.md",
+    "allowlist": "docs/qa/finance-receivable-portfolio-bulk-review-allowlist-2026-09-11.json"
   }
 }

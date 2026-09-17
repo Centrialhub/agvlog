@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -150,7 +151,7 @@ export default function LoadExtractionAudit() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `auditoria-cargas-nao-extraidas-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `auditoria-cargas-nao-extraidas-${localDateInputValue()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

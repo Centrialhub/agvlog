@@ -23,7 +23,7 @@ export default function PickupOrderPicker({ value, noPickup, onChange, onNoPicku
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const { data: pickups = [], isLoading } = usePickupOrders({
+  const { data: pickups = [], isLoading, isError, error } = usePickupOrders({
     status: 'all',
     search: search.length >= 2 ? search : undefined,
   });
@@ -95,7 +95,7 @@ export default function PickupOrderPicker({ value, noPickup, onChange, onNoPicku
                 />
                 <CommandList>
                   <CommandEmpty>
-                    {isLoading ? 'Carregando...' : 'Nenhuma coleta encontrada.'}
+                    {isLoading ? 'Carregando...' : isError ? `Falha ao carregar: ${error instanceof Error ? error.message : 'erro desconhecido'}` : 'Nenhuma coleta encontrada.'}
                   </CommandEmpty>
                   <CommandGroup>
                     {filtered.map((p) => (

@@ -1,10 +1,13 @@
+import {useEmployeeAdvanceRegistration} from './useEmployeeAdvanceRegistration';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
-import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
-import {readPayrollProjection,readPayrollPeriods} from '@/lib/financial/ledgerClient';
+import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import {readPayrollProjection,readPayrollPeriodPage,readPayrollPeriods} from '@/lib/financial/ledgerClient';
 import type {PayrollPaymentSummary} from '@/lib/financial/payrollPaymentContract';
+import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
+import {acknowledgeDurableOperatorCommand,prepareDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
 
 // ---------------- Constants / labels ----------------
 export const PAYROLL_PERIOD_STATUSES = ['draft','calculated','under_review','approved','closed','cancelled'] as const;
@@ -57,17 +60,17 @@ export type CreateEmployeeContractInput = Omit<TablesInsert<'employee_contracts'
 export type UpdateEmployeeContractInput = TablesUpdate<'employee_contracts'> & { id: string };
 
 // ---------------- Payroll Periods ----------------
-export function usePayrollPeriods() {
+export function usePayrollPeriods(page=1,filters={search:'',status:'all',payment:'all'},paging={snapshotAt:'',collectionRevision:''}) {
   const { currentTenant } = useTenant();
   return useQuery({
-    queryKey: ['payroll_periods', currentTenant?.id],
+    queryKey: ['payroll_periods', currentTenant?.id,page,filters,paging],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      return await readPayrollPeriods(currentTenant.id) as unknown as PayrollPeriod[];
+      if (!currentTenant) return {rows:[] as PayrollPeriod[],total:0,snapshot_at:'',collection_revision:''};
+      const result=await readPayrollPeriodPage(currentTenant.id,page,30,{...filters,snapshot_at:paging.snapshotAt,collection_revision:paging.collectionRevision});return {rows:result.rows as unknown as PayrollPeriod[],total:result.total,snapshot_at:result.snapshot_at,collection_revision:result.collection_revision};
     },
     enabled: !!currentTenant,
     refetchOnWindowFocus:true,
-    refetchInterval:30000,
+    staleTime:60000,
   });
 }
 
@@ -102,11 +105,8 @@ export function usePayrollEntryItems(entryId?: string) {
     queryKey: ['payroll_entry_items', entryId],
     queryFn: async () => {
       if (!entryId) return [];
-      const { data, error } = await supabase.from('payroll_entry_items').select('*')
-        .eq('payroll_entry_id', entryId)
-        .order('nature').order('created_at');
-      if (error) throw error;
-      return (data || []) as unknown as PayrollEntryItem[];
+      return await fetchAllPostgrestPages((from,to)=>supabase.from('payroll_entry_items').select('*')
+        .eq('payroll_entry_id', entryId).order('nature').order('created_at').order('id').range(from,to)) as unknown as PayrollEntryItem[];
     },
     enabled: !!entryId,
   });
@@ -178,6 +178,17 @@ export function useClosePayrollPeriod() {
   });
 }
 
+export function usePayrollGenerationIssues(periodId?:string){
+ const {currentTenant}=useTenant();return useQuery({queryKey:['payroll_generation_issues',currentTenant?.id,periodId],enabled:!!currentTenant&&!!periodId,queryFn:async()=>{
+  if(!currentTenant||!periodId)return [];return await fetchAllPostgrestPages((from,to)=>supabase.from('payroll_generation_issues').select('*').eq('tenant_id',currentTenant.id).eq('payroll_period_id',periodId).eq('resolved',false).order('created_at').order('id').range(from,to));
+ }});
+}
+export function useChangePayrollPeriodState(){const qc=useQueryClient();const {currentTenant}=useTenant();const {user}=useAuth();return useMutation({mutationFn:async(input:{periodId:string;action:'cancel'|'reopen';reason:string})=>{
+ if(input.reason.trim().length<5)throw new Error('Informe um motivo com pelo menos 5 caracteres.');if(!currentTenant||!user)throw new Error('Sessão não disponível.');
+ const command={period_id:input.periodId,action:input.action,reason:input.reason.trim()};const pending=await prepareDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'change_payroll_period_state',entityId:input.periodId,payload:command});
+ const {error}=await (supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{error:{message:string}|null}>)('change_payroll_period_state_v2',{_period_id:input.periodId,_action:input.action,_reason:input.reason.trim(),_request_id:pending.requestId});if(error)throw new Error(error.message);acknowledgeDurableOperatorCommand(pending);
+ },onSuccess:()=>{qc.invalidateQueries({queryKey:['payroll_periods']});qc.invalidateQueries({queryKey:['payroll_entries']});qc.invalidateQueries({queryKey:['payroll_generation_issues']});qc.invalidateQueries({queryKey:['payables']});}});}
+
 // ---------------- Manual item ops ----------------
 export function useAddPayrollManualItem() {
   const qc = useQueryClient();
@@ -241,22 +252,18 @@ export function useEmployeeContracts(employeeId?: string) {
 
 export function useCreateEmployeeContract() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
+  const {user}=useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: CreateEmployeeContractInput) => {
-      // Ensure exclusive active: if creating active, deactivate previous
-      if (values.active) {
-        await supabase.from('employee_contracts')
-          .update({ active: false, end_date: values.start_date ?? new Date().toISOString().slice(0,10) })
-          .eq('employee_id', values.employee_id!)
-          .eq('active', true);
-      }
-      const { data, error } = await supabase.from('employee_contracts').insert({
-        ...values, tenant_id: currentTenant!.id, created_by: user?.id,
-      }).select().single();
+      if(!user)throw new Error('Usuário não autenticado');
+      const pending=await prepareDurableOperatorCommand({tenantId:currentTenant!.id,actorId:user.id,action:'create_employee_contract',entityId:'new',payload:values});
+      const { data, error } = await supabase.rpc('create_employee_contract_v1', {
+        _payload: { ...values, tenant_id: currentTenant!.id,request_id:pending.requestId } as unknown as Json,
+      });
       if (error) throw error;
-      return data as EmployeeContract;
+      acknowledgeDurableOperatorCommand(pending);
+      return data as unknown as EmployeeContract;
     },
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['employee_contracts', v.employee_id] }),
   });
@@ -284,62 +291,14 @@ export function useEmployeeAdvances(filters?: { employeeId?: string; status?: st
     queryKey: ['employee_advances', currentTenant?.id, filters],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = supabase.from('employee_advances').select('*, employees(name)')
-        .eq('tenant_id', currentTenant.id);
-      if (filters?.employeeId) q = q.eq('employee_id', filters.employeeId);
-      if (filters?.status) q = q.eq('status', filters.status);
-      const { data, error } = await q.order('advance_date', { ascending: false });
-      if (error) throw error;
-      return (data || []) as unknown as (EmployeeAdvance & { employees?: { name: string } })[];
+      const rows:(EmployeeAdvance & {employees?:{name:string}})[]=[];
+      for(let from=0;;from+=1000){let q=supabase.from('employee_advances').select('*, employees(name)').eq('tenant_id',currentTenant.id);if(filters?.employeeId)q=q.eq('employee_id',filters.employeeId);if(filters?.status)q=q.eq('status',filters.status);const {data,error}=await q.order('advance_date',{ascending:false}).order('id').range(from,from+999);if(error)throw error;rows.push(...((data||[]) as unknown as typeof rows));if(!data||data.length<1000)break;}return rows;
     },
     enabled: !!currentTenant,
   });
 }
 
-export function useRegisterEmployeeAdvance() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (args: {
-      employee_id: string; amount: number; advance_date?: string;
-      reason?: string; payment_method?: string; payment_reference?: string;
-      create_payable?: boolean; mark_paid?: boolean;
-    }) => {
-      const { data, error } = await supabase.rpc('register_employee_advance', {
-        _tenant_id: currentTenant!.id,
-        _employee_id: args.employee_id,
-        _amount: args.amount,
-        _advance_date: args.advance_date ?? new Date().toISOString().slice(0,10),
-        _reason: args.reason ?? undefined,
-        _payment_method: args.payment_method ?? undefined,
-        _payment_reference: args.payment_reference ?? undefined,
-        _create_payable: args.create_payable ?? false,
-        _mark_paid: args.mark_paid ?? false,
-      });
-      if (error) throw error;
-      return data as string;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['employee_advances'] });
-      qc.invalidateQueries({ queryKey: ['payables'] });
-    },
-  });
-}
-
-export function useUpdateAdvanceStatus() {
-  const { user } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const patch: TablesUpdate<'employee_advances'> = { status, updated_at: new Date().toISOString() };
-      if (status === 'approved') { patch.approved_by = user?.id; patch.approved_at = new Date().toISOString(); }
-      if (status === 'paid') { patch.paid_by = user?.id; patch.paid_at = new Date().toISOString(); }
-      const { error } = await supabase.from('employee_advances').update(patch).eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee_advances'] }),
-  });
-}
+export function useRegisterEmployeeAdvance() {return useEmployeeAdvanceRegistration();}
 
 // ---------------- Employee incident actions ----------------
 export function useEmployeeIncidentActions(employeeId?: string) {

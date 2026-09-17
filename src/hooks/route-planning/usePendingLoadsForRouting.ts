@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import type { Tables } from '@/integrations/supabase/types';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export interface RoutingLoadItem {
   id: string;
@@ -44,8 +46,16 @@ export interface RoutingLoad {
   status: string;
   created_at: string;
   notes: string | null;
+  vehicle_id: string | null;
+  driver_id: string | null;
   items: RoutingLoadItem[];
 }
+
+type RoutingLoadItemRow = Tables<'load_items'> & {
+  fiscal_documents: RoutingLoadItem['fiscal_documents'];
+};
+
+const IN_FILTER_CHUNK = 100;
 
 type RoutingClientLocation = {
   id: string;
@@ -71,31 +81,40 @@ export function usePendingLoadsForRouting() {
     queryKey: ['pending_loads_for_routing', currentTenant?.id],
     queryFn: async (): Promise<RoutingLoad[]> => {
       if (!currentTenant) return [];
-      const { data: loads, error } = await supabase.from('loads')
+      const loads = await fetchAllPostgrestPages<Tables<'loads'>>((from, to) => supabase.from('loads')
         .select('*')
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'planned')
         .is('trip_id', null)
         .eq('on_hold', false)
-        .order('destination', { ascending: true });
-      if (error) throw error;
-      if (!loads || loads.length === 0) return [];
+        .order('destination', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to));
+      if (loads.length === 0) return [];
 
       const loadIds = loads.map(load => load.id);
-      const { data: items, error: itemsErr } = await supabase
-        .from('load_items')
-        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, client_id, supplier_id, value, weight_kg, issue_date)')
-        .in('load_id', loadIds)
-        .order('created_at', { ascending: true });
-      if (itemsErr) throw itemsErr;
+      const items: RoutingLoadItemRow[] = [];
+      for (let index = 0; index < loadIds.length; index += IN_FILTER_CHUNK) {
+        const loadIdChunk = loadIds.slice(index, index + IN_FILTER_CHUNK);
+        items.push(...await fetchAllPostgrestPages<RoutingLoadItemRow>((from, to) => supabase
+          .from('load_items')
+          .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, client_id, supplier_id, value, weight_kg, issue_date)')
+          .in('load_id', loadIdChunk)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to)));
+      }
 
-      const clientIds = [...new Set((items || []).map((item) => item.fiscal_documents?.client_id).filter(Boolean))] as string[];
-      const { data: clients, error: clientsError } = clientIds.length ? await supabase.rpc(
-        'get_routing_client_locations_v1' as never,
-        { _tenant_id: currentTenant.id, _client_ids: clientIds } as never,
-      ) : { data: [], error: null };
-      if (clientsError) throw clientsError;
-      const routingClients = (clients || []) as unknown as RoutingClientLocation[];
+      const clientIds = [...new Set(items.map((item) => item.fiscal_documents?.client_id).filter(Boolean))] as string[];
+      const routingClients: RoutingClientLocation[] = [];
+      for (let index = 0; index < clientIds.length; index += IN_FILTER_CHUNK) {
+        const { data, error } = await supabase.rpc(
+          'get_routing_client_locations_v1' as never,
+          { _tenant_id: currentTenant.id, _client_ids: clientIds.slice(index, index + IN_FILTER_CHUNK) } as never,
+        );
+        if (error) throw error;
+        routingClients.push(...((data || []) as unknown as RoutingClientLocation[]));
+      }
       const addressByClient = new Map(routingClients.map((client) => [client.id,
         [client.address_street, client.address_number, client.address_complement, client.address_neighborhood,
           client.address_city, client.address_state, client.address_zip].filter(Boolean).join(', ')]));
@@ -108,7 +127,7 @@ export function usePendingLoadsForRouting() {
           }] as const] : []));
 
       const byLoad: Record<string, RoutingLoadItem[]> = {};
-      (items || []).forEach((it) => {
+      items.forEach((it) => {
         (byLoad[it.load_id] ||= []).push({
           ...it,
           fiscal_documents: it.fiscal_documents ? {

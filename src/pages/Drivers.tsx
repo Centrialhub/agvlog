@@ -24,6 +24,7 @@ import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
 import {useWorkspaceSsxAccounts} from '@/hooks/useWorkspaceSsxAccounts';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 type DriverRow = Tables<'drivers'>;
 type DriverVehicle = Pick<Tables<'vehicles'>, 'id' | 'plate' | 'nickname'>;
@@ -113,7 +114,7 @@ export default function Drivers() {
     retry: false,
   });
 
-  const { data: vehicles = [] } = useQuery({
+  const vehiclesQuery = useQuery({
     queryKey: ['vehicles_for_assign', currentTenant?.id, user?.id],
     queryFn: async () => {
       if (!currentTenant || !user) return [];
@@ -128,41 +129,43 @@ export default function Drivers() {
     enabled: !!currentTenant && !!user,
     retry: false,
   });
+  const vehicles = vehiclesQuery.data ?? [];
 
   // Usuários da tenant que têm role 'driver' (candidatos a vincular a um motorista)
-  const { data: driverUsers = [] } = useQuery({
+  const driverUsersQuery = useQuery({
     queryKey: ['driver_users_for_link', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data: m, error: membershipsError } = await supabase
+      const memberships = await fetchAllPostgrestPages<{ user_id: string }>((from, to) => supabase
         .from('tenant_memberships')
         .select('user_id')
         .eq('tenant_id', currentTenant.id)
         .eq('role', 'driver')
-        .eq('active', true);
-      if (membershipsError) throw membershipsError;
-      const ids = (m || []).map(membership => membership.user_id);
+        .eq('active', true)
+        .range(from, to));
+      const ids = memberships.map(membership => membership.user_id);
       if (!ids.length) return [];
-      const { data: p, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', ids);
-      if (profilesError) throw profilesError;
-      const profileMap = new Map((p || []).map(profile => [profile.id, profile.full_name]));
+      const profiles: Array<{ id: string; full_name: string | null }> = [];
+      for (let index = 0; index < ids.length; index += 200) {
+        const chunkIds = ids.slice(index, index + 200);
+        const chunk = await fetchAllPostgrestPages<{ id: string; full_name: string | null }>((from, to) => supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', chunkIds)
+          .range(from, to));
+        profiles.push(...chunk);
+      }
+      const profileMap = new Map(profiles.map(profile => [profile.id, profile.full_name]));
 
       // Enrich with email/metadata name via edge function (Admin API).
       const emailMap = new Map<string, { email: string | null; full_name: string | null }>();
-      try {
-        const { data: fn, error: fnError } = await supabase.functions.invoke<MemberUsersResponse>('list-tenant-members', {
-          body: { tenant_id: currentTenant.id },
-        });
-        if (fnError) throw fnError;
-        if (fn?.error) throw new Error(fn.error);
-        for (const u of (fn?.users ?? [])) {
-          emailMap.set(u.id, { email: u.email, full_name: u.full_name });
-        }
-      } catch {
-        // fallback silently
+      const { data: fn, error: fnError } = await supabase.functions.invoke<MemberUsersResponse>('list-tenant-members', {
+        body: { tenant_id: currentTenant.id },
+      });
+      if (fnError) throw fnError;
+      if (fn?.error) throw new Error(fn.error);
+      for (const u of (fn?.users ?? [])) {
+        emailMap.set(u.id, { email: u.email, full_name: u.full_name });
       }
 
       return ids.map((id) => {
@@ -173,6 +176,7 @@ export default function Drivers() {
     },
     enabled: !!currentTenant && isAdmin,
   });
+  const driverUsers = driverUsersQuery.data ?? [];
 
   const assignMutation = useMutation({
     mutationFn: async ({ driverId, vehicleId }: { driverId: string; vehicleId: string | null }) => {
@@ -192,7 +196,8 @@ export default function Drivers() {
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao atualizar vínculo')),
   });
 
-  const {data:ssxAccounts=[]}=useWorkspaceSsxAccounts(!!currentTenant&&isAdmin&&ssxEnabled);
+  const ssxAccountsQuery = useWorkspaceSsxAccounts(!!currentTenant&&isAdmin&&ssxEnabled);
+  const ssxAccounts = ssxAccountsQuery.data ?? [];
   const accounts=ssxAccounts.filter(account=>account.status==='ok'&&account.migration_state==='ready');
 
   const deleteMutation = useMutation({
@@ -254,6 +259,24 @@ export default function Drivers() {
         )}
       </div>
 
+      {(vehiclesQuery.isError || driverUsersQuery.isError || ssxAccountsQuery.isError) && (
+        <Card className="border-destructive/40">
+          <CardContent className="space-y-3 py-4" role="alert">
+            <p className="text-sm font-medium text-destructive">Alguns dados auxiliares estão indisponíveis</p>
+            {vehiclesQuery.isError && <p className="text-xs text-muted-foreground">Veículos: {errorMessage(vehiclesQuery.error, 'falha de consulta')}</p>}
+            {driverUsersQuery.isError && <p className="text-xs text-muted-foreground">Usuários motoristas: {errorMessage(driverUsersQuery.error, 'falha de consulta')}</p>}
+            {ssxAccountsQuery.isError && <p className="text-xs text-muted-foreground">Contas SSX: {errorMessage(ssxAccountsQuery.error, 'falha de consulta')}</p>}
+            <Button size="sm" variant="outline" onClick={() => void Promise.all([
+              vehiclesQuery.isError ? vehiclesQuery.refetch() : Promise.resolve(),
+              driverUsersQuery.isError ? driverUsersQuery.refetch() : Promise.resolve(),
+              ssxAccountsQuery.isError ? ssxAccountsQuery.refetch() : Promise.resolve(),
+            ])}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filteredDrivers.length} totalCount={drivers.length} loading={isLoading} fields={[
         { key: 'search', label: 'Buscar motorista', type: 'search', placeholder: 'Nome, documento, telefone ou placa', value: filters.search, onChange: value => setFilter('search', value) },
         { key: 'status', label: 'Situação', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas as situações' }, { value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Inativos' }] },
@@ -306,6 +329,7 @@ export default function Drivers() {
                             driverId: d.id,
                             vehicleId: val === '__none__' ? null : val,
                           })}
+                          disabled={vehiclesQuery.isError || vehiclesQuery.isLoading}
                         >
                           <SelectTrigger className="h-7 w-40 text-xs">
                             <SelectValue placeholder="Sem veículo" />
@@ -362,7 +386,7 @@ export default function Drivers() {
                           <Button variant="ghost" size="icon" aria-label={`Editar motorista ${d.name}`} onClick={() => { setEditing(d); setDialogOpen(true); }}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          {ssxEnabled && accounts.length > 0 && d.provider_person_sync_status !== 'synced' && (
+                          {ssxEnabled && !ssxAccountsQuery.isError && accounts.length > 0 && d.provider_person_sync_status !== 'synced' && (
                             <Button
                               variant="ghost" size="icon"
                               onClick={() => syncMutation.mutate({ driverId: d.id, accountId: accounts[0].id })}
@@ -447,8 +471,20 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUser
     if (!payload.phone && payload.mobile) payload.phone = payload.mobile;
 
     if (driver) {
-      const { error } = await supabase.from('drivers').update(payload).eq('id', driver.id).eq('tenant_id', tenantId);
+      const { data: updated, error } = await supabase.from('drivers')
+        .update(payload)
+        .eq('id', driver.id)
+        .eq('tenant_id', tenantId)
+        .eq('updated_at', driver.updated_at)
+        .select('id')
+        .maybeSingle();
       if (error) { toast.error(error.message); setLoading(false); return; }
+      if (!updated) {
+        toast.error('Este motorista foi alterado por outro usuário. Reabra o formulário para revisar os dados atuais.');
+        queryClient.invalidateQueries({ queryKey: ['drivers'] });
+        setLoading(false);
+        return;
+      }
       toast.success('Motorista atualizado');
     } else {
       const insertPayload: TablesInsert<'drivers'> = {

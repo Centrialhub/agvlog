@@ -207,22 +207,21 @@ export function DriverDeliveryEventFormSheet({
               )}
 
               <div className="grid grid-cols-3 gap-2">
-                <ActionButton
+                {def.requiresSignature && <ActionButton
                   icon={FileSignature}
                   label="Assinatura"
                   active={!!draft.signatureDataUrl}
                   onClick={() => {
-                    if (!def.requiresSignature) notify({ title: 'Assinatura opcional', description: 'Use o quadro abaixo para assinar.' });
                     document.getElementById('sig-anchor')?.scrollIntoView({ behavior: 'smooth' });
                   }}
-                />
+                />}
                 <ActionButton icon={Camera} label="Câmera" active={draft.photos.length > 0} onClick={() => draft.cameraInputRef.current?.click()} />
                 <ActionButton icon={ImageIcon} label="Galeria" active={draft.photos.length > 0} onClick={() => draft.galleryInputRef.current?.click()} />
               </div>
 
               <input ref={draft.cameraInputRef} aria-label="Capturar foto da entrega" type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(event) => draft.selectPhotos(event, selection.eventKey, (message) => notify({ title: 'Foto inválida', description: message, variant: 'destructive' }))} />
               <input ref={draft.galleryInputRef} aria-label="Selecionar fotos da entrega" type="file" accept="image/*" multiple className="hidden" onChange={(event) => draft.selectPhotos(event, selection.eventKey, (message) => notify({ title: 'Foto inválida', description: message, variant: 'destructive' }))} />
-              <div id="sig-anchor" />
+              {def.requiresSignature && <div id="sig-anchor" />}
             </fieldset>
 
             {submissionLocked && <p role="status" className="text-sm">Os dados deste envio foram preservados. Tentar novamente usa os mesmos anexos e identificador.</p>}

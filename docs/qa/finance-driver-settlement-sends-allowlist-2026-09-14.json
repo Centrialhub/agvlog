@@ -1,0 +1,38 @@
+[
+  {
+    "path": "src/components/financial/DriverSettlementSends.tsx",
+    "sha256": "01a86fc88a7d007be6c85f73455d9522402cdc5464d75e77bf816a838d55b5ba"
+  },
+  {
+    "path": "src/components/financial/DriverSettlementDrawer.tsx",
+    "sha256": "d50f0e798db1019af566c91b5adf918bcf871becac1352335a786a6f069415b8"
+  },
+  {
+    "path": "src/components/financial/MovementEntryDialog.tsx",
+    "sha256": "f2797a903774984c70d114d6c976f8ac738dff3f8427adcb5314d5f5c5661ea9"
+  },
+  {
+    "path": "src/lib/financial/ledgerClient.ts",
+    "sha256": "134b121c86ccaee11153245b9f54efc50bb155c38b3ad5c33badc5ebca0f4c30"
+  },
+  {
+    "path": "src/lib/financial/ledgerContract.ts",
+    "sha256": "ca31db5c8b481626f618fbaffeeac0423a5abd1c035a28cfbe41f83b9a07223c"
+  },
+  {
+    "path": "src/test/driverSettlementSends.test.tsx",
+    "sha256": "1ac0b18a1fba91108e6996ce8b29b4f5c46f0e9a57094793563d59a80e24bec0"
+  },
+  {
+    "path": "src/test/driverMovementScope.test.ts",
+    "sha256": "2d6ab3d9447f4a49f94ff66448f279ef3bb1fdba3ab401e174fc3f7b4eb3bc1b"
+  },
+  {
+    "path": "src/test/financeMovementEntry.test.tsx",
+    "sha256": "c2b7f3fe83a850aec2b79a9c03f9f300b3ba7b0c2150c704f32e770f5e5d58e4"
+  },
+  {
+    "path": "docs/qa/finance-driver-settlement-sends-2026-09-14.md",
+    "sha256": "9692809fcee8a8e82e21d0001932eae6a4be3babb24da12c434a20cce9fb7763"
+  }
+]

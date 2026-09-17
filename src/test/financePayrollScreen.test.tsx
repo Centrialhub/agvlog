@@ -15,7 +15,8 @@ const period={id:'period',status:'approved',period_name:'Setembro'} as PayrollPe
 beforeEach(()=>{
  state.error=null;state.loading=false;state.fetching=false;
  state.rows=[{id:'entry',employees:{name:'Pessoa QA'},status:'approved',employee_id:'employee',entry_type:'employee',
- gross_amount:1000,discount_amount:0,already_paid_amount:200,amount_to_pay:800,
+ gross_amount:1000,discount_amount:0,already_paid_amount:200,amount_to_pay:800,carryover_amount:25,
+ source_summary:{payroll_carryover:{amount_cents:'5000'}},
  payment_summary:{paid_via_titles:'300.00',remaining_amount:'500.00',status:'partial',issues:[]}}];
 });
 describe('payroll payment presentation',()=>{
@@ -27,7 +28,15 @@ describe('payroll payment presentation',()=>{
   expect(within(row).getByText(/500,00/)).toBeInTheDocument();
   expect(within(row).queryByText(/800,00/)).not.toBeInTheDocument();
   expect(within(row).getByText('Parcial')).toBeInTheDocument();
-  expect(screen.getByText(/confirmação pelo extrato bancário é uma conferência separada/)).toBeInTheDocument();
+ expect(screen.getByText(/confirmação pelo extrato bancário é uma conferência separada/)).toBeInTheDocument();
+ });
+ it('shows incoming and outgoing carryover separately from payments and the payable balance',()=>{
+  render(<PeriodEntries period={period} onOpenEntry={vi.fn()}/>);
+  const row=screen.getByText('Pessoa QA').closest('tr')!;
+  expect(within(row).getByText(/50,00/)).toBeInTheDocument();
+  expect(within(row).getByText(/25,00/)).toBeInTheDocument();
+  expect(screen.getAllByText('Saldo anterior')).toHaveLength(2);
+  expect(screen.getAllByText('A transportar')).toHaveLength(2);
  });
  it('shows exceptions and suppresses stale values when the payment query fails',()=>{
   state.rows[0]={...(state.rows[0] as object),payment_summary:{paid_via_titles:'900',remaining_amount:'0',status:'review',issues:['overpaid']}};

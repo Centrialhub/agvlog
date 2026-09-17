@@ -1,9 +1,44 @@
 type JsonRecord = Record<string, unknown>;
 
-const record = (value: unknown): JsonRecord => value && typeof value === 'object' && !Array.isArray(value)
-  ? value as JsonRecord : {};
-const number = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : 0;
-const text = (value: unknown) => typeof value === 'string' ? value : null;
+const isRecord = (value: unknown): value is JsonRecord => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+function requiredRecord(root: JsonRecord, key: string): JsonRecord {
+  const value = root[key];
+  if (!isRecord(value)) throw new Error(`Métricas de tracking incompatíveis: bloco ${key} ausente.`);
+  return value;
+}
+
+function count(group: JsonRecord, key: string): number {
+  const value = group[key];
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw new Error(`Métricas de tracking incompatíveis: ${key} inválido.`);
+  }
+  return value;
+}
+
+function optionalPositiveNumber(group: JsonRecord, key: string, fallback: number): number {
+  if (!(key in group)) return fallback;
+  const value = group[key];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`Métricas de tracking incompatíveis: ${key} inválido.`);
+  }
+  return value;
+}
+
+function optionalText(group: JsonRecord, key: string): string | null {
+  const value = group[key];
+  if (value == null) return null;
+  if (typeof value !== 'string') throw new Error(`Métricas de tracking incompatíveis: ${key} inválido.`);
+  return value;
+}
+
+function optionalTimestamp(group: JsonRecord, key: string): string | null {
+  const value = optionalText(group, key);
+  if (value !== null && !Number.isFinite(new Date(value).getTime())) {
+    throw new Error(`Métricas de tracking incompatíveis: ${key} não é uma data válida.`);
+  }
+  return value;
+}
 
 export interface TrackingObservability {
   positions: { fresh: number; stale: number; lastAt: string | null };
@@ -16,28 +51,46 @@ export interface TrackingObservability {
 }
 
 export function parseTrackingObservability(value: unknown): TrackingObservability {
-  const root = record(value);
-  const positions = record(root.positions);
-  const trackerLinks = record(root.tracker_links);
-  const geofences = record(root.geofences);
-  const queue = record(root.queue);
-  const addresses = record(root.addresses);
-  const integration = record(root.integration);
-  const schedule = record(root.schedule);
+  if (!isRecord(value)) throw new Error('A resposta de observabilidade não contém um envelope válido.');
+  const positions = requiredRecord(value, 'positions');
+  const trackerLinks = requiredRecord(value, 'tracker_links');
+  const geofences = requiredRecord(value, 'geofences');
+  const queue = requiredRecord(value, 'queue');
+  const addresses = requiredRecord(value, 'addresses');
+  const integration = requiredRecord(value, 'integration');
+  const schedule = requiredRecord(value, 'schedule');
+  const integrationSuccess = integration.success;
+  if (integrationSuccess != null && typeof integrationSuccess !== 'boolean') {
+    throw new Error('Métricas de tracking incompatíveis: success inválido.');
+  }
+  const scheduleEnabled = schedule.enabled;
+  if (scheduleEnabled != null && typeof scheduleEnabled !== 'boolean') {
+    throw new Error('Métricas de tracking incompatíveis: enabled inválido.');
+  }
   return {
-    positions: { fresh: number(positions.fresh), stale: number(positions.stale), lastAt: text(positions.last_at) },
-    trackerLinks: { active: number(trackerLinks.active), conflicts: number(trackerLinks.conflicts) },
-    geofences: { fleet: number(geofences.fleet), delivery: number(geofences.delivery), events24h: number(geofences.events_24h), lastEvaluatedAt: text(geofences.last_evaluated_at) },
-    queue: { pending: number(queue.pending), errors: number(queue.errors) },
-    addresses: { pending: number(addresses.pending), ambiguous: number(addresses.ambiguous), error: number(addresses.error) },
-    integration: { lastAt: text(integration.last_at), success: typeof integration.success === 'boolean' ? integration.success : null, action: text(integration.action), error: text(integration.error) },
+    positions: { fresh: count(positions, 'fresh'), stale: count(positions, 'stale'), lastAt: optionalTimestamp(positions, 'last_at') },
+    trackerLinks: { active: count(trackerLinks, 'active'), conflicts: count(trackerLinks, 'conflicts') },
+    geofences: {
+      fleet: count(geofences, 'fleet'),
+      delivery: count(geofences, 'delivery'),
+      events24h: count(geofences, 'events_24h'),
+      lastEvaluatedAt: optionalTimestamp(geofences, 'last_evaluated_at'),
+    },
+    queue: { pending: count(queue, 'pending'), errors: count(queue, 'errors') },
+    addresses: { pending: count(addresses, 'pending'), ambiguous: count(addresses, 'ambiguous'), error: count(addresses, 'error') },
+    integration: {
+      lastAt: optionalTimestamp(integration, 'last_at'),
+      success: typeof integrationSuccess === 'boolean' ? integrationSuccess : null,
+      action: optionalText(integration, 'action'),
+      error: optionalText(integration, 'error'),
+    },
     schedule: {
-      enabled: schedule.enabled === true,
-      pollMinutes: number(schedule.poll_interval_minutes) || 3,
-      fullSyncHours: number(schedule.full_sync_interval_hours) || 6,
-      lastFinishedAt: text(schedule.last_finished_at),
-      lastStatus: text(schedule.last_status),
-      consecutiveFailures: number(schedule.consecutive_failures),
+      enabled: scheduleEnabled === true,
+      pollMinutes: optionalPositiveNumber(schedule, 'poll_interval_minutes', 3),
+      fullSyncHours: optionalPositiveNumber(schedule, 'full_sync_interval_hours', 6),
+      lastFinishedAt: optionalTimestamp(schedule, 'last_finished_at'),
+      lastStatus: optionalText(schedule, 'last_status'),
+      consecutiveFailures: 'consecutive_failures' in schedule ? count(schedule, 'consecutive_failures') : 0,
     },
   };
 }

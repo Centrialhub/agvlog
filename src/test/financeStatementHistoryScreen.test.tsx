@@ -2,13 +2,14 @@ import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import FinanceStatements from '@/pages/FinanceStatements';
-const mocks=vi.hoisted(()=>({list:vi.fn(),lines:vi.fn(),role:'operator',access:true}));
+const mocks=vi.hoisted(()=>({list:vi.fn(),lines:vi.fn(),history:vi.fn(),role:'operator',access:true}));
 const tenant='10000000-0000-4000-8000-000000000001',actor='20000000-0000-4000-8000-000000000001';
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:tenant},currentRole:mocks.role})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:actor}})}));
 vi.mock('@/hooks/useFinanceLedger',()=>({useFinanceAccess:()=>({data:mocks.access,isPending:false,error:null})}));
-vi.mock('@/lib/financial/ledgerClient',async original=>({...await original<object>(),readFinanceStatements:mocks.list,readFinanceStatementLines:mocks.lines}));
+vi.mock('@/lib/financial/ledgerClient',async original=>({...await original<object>(),readFinanceStatements:mocks.list,readFinanceStatementLines:mocks.lines,readFinanceStatementHistory:mocks.history}));
 vi.mock('@/components/financial/StatementImportDialog',()=>({StatementImportDialog:()=>null}));
+vi.mock('@/hooks/useFinancialPayments',()=>({useBankAccounts:()=>({data:[{id:'account-a',name:'Conta principal',account_type:'checking'}],isPending:false,isError:false,refetch:vi.fn()})}));
 const statement={id:crypto.randomUUID(),tenant_id:tenant,bank_account_id:crypto.randomUUID(),account_name:'Conta principal',file_name:'Janeiro.csv',file_hash:'a'.repeat(64),source_path:'',
   period_start:'2026-01-01',period_end:'2026-01-31',input_rows:2,created_at:'2026-02-01T12:00:00Z',source_verification:'rows_match',verification_report:{},counts:{new:1,ambiguous:1},identity_review_count:1};
 function mount(){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><FinanceStatements/></QueryClientProvider>);}
@@ -16,6 +17,8 @@ beforeEach(()=>{vi.clearAllMocks();mocks.role='operator';mocks.access=true;
   mocks.list.mockResolvedValue({version:1,tenant_id:tenant,page:1,page_size:20,total:21,rows:[statement]});
   mocks.lines.mockResolvedValue({version:1,tenant_id:tenant,import_id:statement.id,page:1,page_size:30,total:2,row_amount_total_cents:'-100000',rows:[],
     history:[{id:crypto.randomUUID(),actor_id:actor,actor_name:'Maria Financeiro',action:'source_checked',reason:'Conferência solicitada',created_at:'2026-02-01T12:00:00Z'}]});
+  mocks.history.mockResolvedValue({version:1,tenant_id:tenant,import_id:statement.id,page:1,page_size:30,total:1,
+    rows:[{id:crypto.randomUUID(),actor_id:actor,actor_name:'Maria Financeiro',action:'source_checked',reason:'Conferência solicitada',created_at:'2026-02-01T12:00:00Z'}]});
 });
 describe('statement history preserves distinction between source checks and bank confirmation',()=>{
   it('shows original checks, pending identities, full-filter total and requesting actor',async()=>{
@@ -31,6 +34,20 @@ describe('statement history preserves distinction between source checks and bank
     await waitFor(()=>expect(mocks.list).toHaveBeenLastCalledWith(tenant,expect.objectContaining({search:'100%',page:1})));
     fireEvent.click(await screen.findByRole('button',{name:'Próxima'}));
     await waitFor(()=>expect(mocks.list).toHaveBeenLastCalledWith(tenant,expect.objectContaining({search:'100%',page:2})));
+  });
+  it('filters statements by the exact selected bank-account identifier',async()=>{
+    mount();await screen.findByText('Janeiro.csv');
+    fireEvent.change(screen.getByLabelText('Conta bancária'),{target:{value:'account-a'}});
+    fireEvent.click(screen.getByRole('button',{name:'Filtrar'}));
+    await waitFor(()=>expect(mocks.list).toHaveBeenLastCalledWith(tenant,expect.objectContaining({account_id:'account-a',page:1})));
+  });
+  it('explains and blocks an inverted statement date range before querying',async()=>{
+    mount();await screen.findByText('Janeiro.csv');
+    fireEvent.change(screen.getByLabelText('Até'),{target:{value:'2026-01-10'}});
+    fireEvent.change(screen.getByLabelText('De'),{target:{value:'2026-01-11'}});
+    expect(screen.getByRole('alert')).toHaveTextContent('A data inicial não pode ser posterior à data final');
+    expect(screen.getByRole('button',{name:'Filtrar'})).toBeDisabled();
+    expect(mocks.list).toHaveBeenCalledTimes(1);
   });
   it('does not request financial data for drivers or server-denied internal users',()=>{
     mocks.role='driver';const first=mount();expect(mocks.list).not.toHaveBeenCalled();first.unmount();

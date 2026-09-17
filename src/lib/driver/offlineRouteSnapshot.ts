@@ -1,4 +1,5 @@
 import type { DriverDestinationStop } from '@/components/driver/NextDestinationCard';
+import { isStopTerminal } from '@/lib/status/stopStatus';
 
 const KEY_PREFIX = 'agvlog:driver-route:v1:';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -103,13 +104,9 @@ export function clearDriverRouteSnapshots(storage: Pick<Storage, 'length' | 'key
   }
 }
 
-const TERMINAL_STOP_STATUSES = new Set([
-  'completed', 'delivered', 'refused', 'returned', 'failed', 'partial_delivery', 'skipped',
-]);
-
 export function getPendingDriverStops(stops: DriverDestinationStop[]): DriverDestinationStop[] {
   return stops
-    .filter((stop) => !TERMINAL_STOP_STATUSES.has(stop.status))
+    .filter((stop) => !isStopTerminal(stop.status))
     .sort((first, second) => (first.stop_order ?? Number.MAX_SAFE_INTEGER) - (second.stop_order ?? Number.MAX_SAFE_INTEGER));
 }
 

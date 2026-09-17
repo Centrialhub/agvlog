@@ -67,12 +67,7 @@ export function detectCompanyOrigin(text: string): string | null {
   return null;
 }
 
-export function parsePalletReturnSheet(buffer: ArrayBuffer | Uint8Array, _fileName?: string): ParsedPalletReturn {
-  const wb = XLSX.read(buffer, { type: 'array', cellDates: false });
-  const sheetName = wb.SheetNames[0];
-  const ws = wb.Sheets[sheetName];
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
-
+function parsePalletReturnRows(rows: unknown[][]): ParsedPalletReturn {
   let supplier: string | null = null;
   let companyOrigin: string | null = null;
   let issueDate: string | null = null;
@@ -171,7 +166,23 @@ export function parsePalletReturnSheet(buffer: ArrayBuffer | Uint8Array, _fileNa
   };
 }
 
+export function parsePalletReturnWorkbook(buffer: ArrayBuffer | Uint8Array, _fileName?: string): ParsedPalletReturn[] {
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
+  return workbook.SheetNames.flatMap(sheetName => {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) return [];
+    const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true });
+    return [parsePalletReturnRows(rows)];
+  });
+}
+
+export function parsePalletReturnSheet(buffer: ArrayBuffer | Uint8Array, fileName?: string): ParsedPalletReturn {
+  const [first] = parsePalletReturnWorkbook(buffer, fileName);
+  if (!first) throw new Error('A planilha não contém abas legíveis.');
+  return first;
+}
+
 export function protocolDedupeKey(supplier: string, issueDate: string, items: ParsedPalletItem[]): string {
   const sig = [...items].map((i) => `${i.code}:${i.quantity}`).sort().join('|');
-  return `${stripAccent(supplier).toUpperCase()}#${issueDate}#${sig}`;
+  return `${stripAccent(normalize(supplier)).toUpperCase()}#${issueDate}#${sig}`;
 }

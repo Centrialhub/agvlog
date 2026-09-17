@@ -1,5 +1,5 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FilterField as Field } from '@/components/ui/filter-field';
@@ -24,6 +24,8 @@ import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
 import { useSortableData } from '@/hooks/useSortableData';
 import { Table, TableHead, TableHeader, TableRow, TableBody, TableCell } from '@/components/ui/table';
+import { FiscalListPagination } from '@/components/fiscal/FiscalListPagination';
+import { useSearchParams } from 'react-router-dom';
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Falha inesperada';
 
@@ -40,7 +42,7 @@ function saveBlob(blob: Blob, filename: string) {
 
 function openBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
-  const win = window.open(objectUrl, '_blank');
+  const win = window.open(objectUrl, '_blank', 'noopener,noreferrer');
   if (!win) {
     // Pop-up bloqueado: entrega o arquivo já baixado como download.
     const a = document.createElement('a');
@@ -142,23 +144,41 @@ function StatusPill({ status }: { status: SefazStatus }) {
 // Mostra todos os status por padrão — CT-es autorizadas (processed) precisam
 // aparecer no monitor para download de PDF/XML.
 const DEFAULT_STATUSES: SefazStatus[] = [];
+const TABLE_PAGE_SIZE = 50;
 
 export default function CteMonitor() {
   const toast = useSonnerToast();
+  const [searchParams] = useSearchParams();
+  const linkedDocumentId = searchParams.get('fiscalDocumentId');
+  const linkedDocumentNumber = searchParams.get('docNumber') || undefined;
   const [filters, setFilters] = useState<CteMonitorFilters>({
     statuses: DEFAULT_STATUSES,
     correctionLetter: 'all',
+    docNumber: linkedDocumentNumber,
   });
   const [draft, setDraft] = useState<CteMonitorFilters>(filters);
   const [selected, setSelected] = useState<CteMonitorRow | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [page, setPage] = useState(1);
 
-  const { data: rowsData = [], isLoading, refetch, isFetching } = useCteMonitor(filters);
+  const { data: queriedRows = [], isLoading, isError, error, refetch, isFetching } = useCteMonitor(filters);
+  const rowsData = useMemo(() => isError ? [] : queriedRows, [isError, queriedRows]);
   const resend = useResendCte();
 
   const { sortedItems: rows, requestSort, sortConfig } = useSortableData(rowsData);
+  useEffect(() => {
+    if (!linkedDocumentId || selected) return;
+    const linkedRow = rowsData.find((row) => row.fiscal_document_id === linkedDocumentId || row.id === linkedDocumentId);
+    if (linkedRow) setSelected(linkedRow);
+  }, [linkedDocumentId, rowsData, selected]);
+  const pageCount = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleRows = useMemo(
+    () => rows.slice((currentPage - 1) * TABLE_PAGE_SIZE, currentPage * TABLE_PAGE_SIZE),
+    [rows, currentPage],
+  );
 
   const downloadableRows = useMemo(() => rows.filter((r) => r.hub_document_id || r.pdf_url || r.xml_url), [rows]);
   const checkedRows = useMemo(() => rows.filter((r) => checked.has(r.id)), [rows, checked]);
@@ -226,11 +246,14 @@ export default function CteMonitor() {
 
   function applyFilters() {
     setFilters(draft);
+    setPage(1);
+    setChecked(new Set());
   }
   function clearFilters() {
     const cleared: CteMonitorFilters = { statuses: DEFAULT_STATUSES, correctionLetter: 'all' };
     setDraft(cleared);
     setFilters(cleared);
+    setPage(1);
     setChecked(new Set());
   }
 
@@ -450,14 +473,17 @@ export default function CteMonitor() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && (
+                {isError && (
+                  <TableRow><TableCell colSpan={11} className="py-8"><div role="alert" className="mx-auto max-w-xl rounded-md border border-destructive/30 bg-destructive/10 p-4 text-center text-sm"><p>{errorMessage(error)}</p><Button className="mt-3" size="sm" variant="outline" onClick={() => void refetch()} disabled={isFetching}>Tentar novamente</Button></div></TableCell></TableRow>
+                )}
+                {!isError && isLoading && (
                   <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
                 )}
-                {!isLoading && rows.length === 0 && (
+                {!isError && !isLoading && rows.length === 0 && (
                   <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado para os filtros informados.</TableCell></TableRow>
 
                 )}
-                {rows.map((r) => (
+                {!isError && visibleRows.map((r) => (
                   <TableRow
                     key={r.id}
                     className="border-t hover:bg-muted/30 cursor-pointer"
@@ -516,6 +542,7 @@ export default function CteMonitor() {
               </TableBody>
             </Table>
           </div>
+          {!isError && <div className="px-3 pb-3"><FiscalListPagination page={currentPage} pageSize={TABLE_PAGE_SIZE} totalItems={rows.length} onPageChange={setPage} /></div>}
         </Card>
 
         <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
@@ -531,7 +558,7 @@ export default function CteMonitor() {
 function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }) {
   const { promptAction } = useScopedAlerts();
   const toast = useSonnerToast();
-  const { data: events = [] } = useCteSefazEvents(row.id);
+  const { data: events = [], isLoading: eventsLoading, isError: eventsError, error: eventsQueryError } = useCteSefazEvents(row.cte_document_id ?? null);
   const cancelCte = useCancelCTe();
 
   const handleCancel = async () => {
@@ -542,7 +569,7 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
     });
     if (!motive) return;
     try {
-      await cancelCte.mutateAsync({ fiscalDocumentId: row.id, justificativa: motive });
+      await cancelCte.mutateAsync({ fiscalDocumentId: row.fiscal_document_id ?? undefined, cteDocumentId: row.cte_document_id ?? undefined, justificativa: motive });
       toast.success('Cancelamento solicitado com sucesso');
     } catch {
       // toast já disparado pelo hook
@@ -600,7 +627,9 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
       <div>
         <h3 className="font-medium text-sm mb-2">Histórico de eventos SEFAZ</h3>
         <div className="border rounded max-h-64 overflow-y-auto divide-y">
-          {events.length === 0 && (
+          {eventsLoading && <p className="text-xs text-muted-foreground p-3">Carregando eventos…</p>}
+          {eventsError && <p role="alert" className="text-xs text-destructive p-3">Não foi possível carregar os eventos: {eventsQueryError instanceof Error ? eventsQueryError.message : 'erro desconhecido'}.</p>}
+          {!eventsLoading && !eventsError && events.length === 0 && (
             <p className="text-xs text-muted-foreground p-3">Nenhum evento registrado ainda. A integração fiscal envia os eventos via webhook.</p>
           )}
           {events.map((e) => (

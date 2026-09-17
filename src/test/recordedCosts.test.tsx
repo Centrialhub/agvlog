@@ -2,13 +2,14 @@ import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import CostCenters from '@/pages/CostCenters';
-const mocks=vi.hoisted(()=>({read:vi.fn(),legacy:vi.fn(),access:true}));
+const mocks=vi.hoisted(()=>({read:vi.fn(),legacy:vi.fn(),access:true,manualExpense:vi.fn()}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'tenant'},currentRole:'operator'})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'actor'}})}));
 vi.mock('@/hooks/useFinanceLedger',()=>({useFinanceAccess:()=>({data:mocks.access,isPending:false,isFetchedAfterMount:true,error:null})}));
 vi.mock('@/lib/financial/ledgerClient',()=>({readRecordedCosts:mocks.read}));
 vi.mock('@/pages/LegacyCostCenters',()=>({default:()=>{mocks.legacy();return <p>Fontes antigas</p>;}}));
-vi.mock('@/components/cost-centers/CostCenterManager',()=>({CostCenterManager:()=>null}));
+vi.mock('@/components/cost-centers/CostCenterManager',()=>({CostCenterManager:()=><p>Cadastro de centros</p>}));
+vi.mock('@/components/financial/ManualExpenseWorkspace',()=>({ManualExpenseWorkspace:({onClose}:{onClose:()=>void})=>{mocks.manualExpense();return <div role="dialog"><p>Formulário de despesa</p><button onClick={onClose}>Fechar despesa</button></div>;}}));
 const data={page:1,page_size:30,total:33,total_cents:'23100',cancelled_count:1,needs_review_count:1,recorded_date_count:1,cost_centers:[{cost_center_id:null,cost_center_name:null,amount_cents:'23100'}],categories:[],rows:[]};
 beforeEach(()=>{vi.clearAllMocks();mocks.access=true;mocks.read.mockResolvedValue(data);});afterEach(cleanup);
 const mount=()=>render(<QueryClientProvider client={new QueryClient()}><CostCenters/></QueryClientProvider>);
@@ -19,6 +20,15 @@ it('shows complete server totals, disputed values and date basis without loading
  await waitFor(()=>expect(mocks.read).toHaveBeenLastCalledWith('tenant',expect.objectContaining({cost_center:'unassigned',page:1})));
  fireEvent.click(await screen.findByRole('button',{name:'Próxima'}));
  await waitFor(()=>expect(mocks.read).toHaveBeenLastCalledWith('tenant',expect.objectContaining({cost_center:'unassigned',page:2})));
+});
+it('opens the audited manual-expense flow directly from cost centers',async()=>{
+ mount();await screen.findByText('R$ 231,00');expect(mocks.manualExpense).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Adicionar despesa'}));expect(screen.getByRole('dialog')).toHaveTextContent('Formulário de despesa');
+ fireEvent.click(screen.getByRole('button',{name:'Fechar despesa'}));await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+});
+it('opens the center registration directly from the recorded-cost view',async()=>{
+ mount();await screen.findByText('R$ 231,00');fireEvent.click(screen.getByRole('button',{name:'Novo centro de custo'}));
+ expect(screen.getByText('Cadastro de centros')).toBeInTheDocument();
 });
 it('does not expose either dataset when server access is denied',()=>{
  mocks.access=false;mount();expect(mocks.read).not.toHaveBeenCalled();expect(mocks.legacy).not.toHaveBeenCalled();expect(screen.getByRole('alert')).toHaveTextContent('Acesso financeiro não permitido');

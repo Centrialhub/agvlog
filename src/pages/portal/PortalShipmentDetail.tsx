@@ -9,13 +9,15 @@ import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { PortalStatusBadge } from '@/components/portal/PortalStatusBadge';
 import { PortalShipmentTimeline } from '@/components/portal/PortalShipmentTimeline';
 import { PortalShipmentProofs } from '@/components/portal/PortalShipmentProofs';
+import { PortalFiscalBundle } from '@/components/portal/PortalFiscalBundle';
 import { useDownloadPortalPod } from '@/hooks/portal/usePortalPods';
 import { useToast } from '@/hooks/use-toast';
 import type { PublicShipmentStatus } from '@/lib/portal/portalStatus';
 import { portalErrorMessage } from '@/lib/portal/portalErrors';
+import { fmtDateSafe, fmtDateTimeSafe } from '@/lib/utils/formatDate';
 
-const fmt = (d?: string | null) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
-const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
+const fmt = (d?: string | null) => fmtDateTimeSafe(d);
+const fmtDate = (d?: string | null) => fmtDateSafe(d);
 const fmtBRL = (v?: number | null) =>
   v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -123,7 +125,7 @@ export default function PortalShipmentDetail() {
         <TabsList className="flex flex-wrap h-auto">
           <TabsTrigger value="overview">Visão geral</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="documents">Documentos</TabsTrigger>
+          <TabsTrigger value="documents">Documentos e canhotos</TabsTrigger>
           <TabsTrigger value="pods">Canhotos</TabsTrigger>
           <TabsTrigger value="occurrences">Ocorrências ({data.occurrences?.length ?? 0})</TabsTrigger>
           <TabsTrigger value="tracking">Tracking</TabsTrigger>
@@ -176,15 +178,27 @@ export default function PortalShipmentDetail() {
 
         <TabsContent value="documents">
           <Card>
-            <CardContent className="p-4 text-xs space-y-2">
-              <Field label="NF-e" value={doc.invoice_number || doc.access_key?.slice(0, 8)} />
-              {load?.load_number && <Field label="Carga" value={load.load_number} />}
-              <div className="pt-2">
-                <PortalEmptyState
-                  title="Downloads indisponíveis"
-                  description="XML/PDF ainda não disponibilizados no armazenamento. Utilize a aba Canhotos para baixar o POD quando disponível."
+            <CardContent className="p-4 space-y-5">
+              <section className="space-y-2">
+                <div>
+                  <h2 className="text-sm font-semibold">Documentos fiscais emitidos</h2>
+                  <p className="text-xs text-muted-foreground">CT-e e NFS-e relacionados à NF {doc.invoice_number || 'consultada'}.</p>
+                </div>
+                {documentId && <PortalFiscalBundle fiscalDocumentId={documentId} />}
+              </section>
+              <section className="space-y-2 border-t pt-4">
+                <div>
+                  <h2 className="text-sm font-semibold">Canhotos vinculados</h2>
+                  <p className="text-xs text-muted-foreground">Comprovantes de entrega atuais e versões anteriores desta NF.</p>
+                </div>
+                <PortalShipmentProofs
+                  current={data.proofs}
+                  history={data.proof_history ?? []}
+                  canDownload={perms.can_download_documents}
+                  pending={download.isPending}
+                  onDownload={handleDownloadProof}
                 />
-              </div>
+              </section>
             </CardContent>
           </Card>
         </TabsContent>

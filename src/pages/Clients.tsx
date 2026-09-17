@@ -36,13 +36,15 @@ export default function Clients() {
   const {
     data: clientPage,
     isLoading,
+    isFetching,
     isError,
     error,
     refetch,
   } = useClientsPage({ page, pageSize: PAGE_SIZE, search: debouncedSearch, kind });
   const clients = clientPage?.rows || [];
   const totalCount = clientPage?.totalCount || 0;
-  const { data: counts = { clients: 0, suppliers: 0, both: 0, total: 0 } } = useClientCounts();
+  const countsQuery = useClientCounts();
+  const counts = countsQuery.data;
   const createClient = useCreateClient();
   const updateClient = useUpdateClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -74,7 +76,7 @@ export default function Clients() {
   const handleSave = async (values: CreateClientInput) => {
     try {
       if (editingClient) {
-        await updateClient.mutateAsync({ id: editingClient.id, ...values });
+        await updateClient.mutateAsync({ id: editingClient.id, expected_updated_at: editingClient.updated_at, ...values });
         toast({ title: 'Cadastro atualizado' });
       } else {
         await createClient.mutateAsync(values);
@@ -89,7 +91,7 @@ export default function Clients() {
   };
 
   const handleToggleActive = async (c: Client) => {
-    await updateClient.mutateAsync({ id: c.id, active: !c.active });
+    await updateClient.mutateAsync({ id: c.id, expected_updated_at: c.updated_at, active: !c.active });
     toast({ title: c.active ? 'Cadastro inativado' : 'Cadastro reativado' });
   };
 
@@ -107,7 +109,8 @@ export default function Clients() {
             <Building2 className="h-6 w-6 text-primary" /> Clientes e Fornecedores
           </h1>
           <p className="text-sm text-muted-foreground">
-            {counts.total} cadastros — {counts.clients} clientes, {counts.suppliers} fornecedores, {counts.both} ambos
+            {countsQuery.isLoading ? 'Carregando contagens…' : countsQuery.isError ? 'Contagens indisponíveis' :
+              `${counts?.total ?? 0} cadastros — ${counts?.clients ?? 0} clientes, ${counts?.suppliers ?? 0} fornecedores, ${counts?.both ?? 0} ambos`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -122,12 +125,13 @@ export default function Clients() {
 
       <Tabs value={kind} onValueChange={(v) => setKind(v as ClientKindFilter)}>
         <TabsList>
-          <TabsTrigger value="all">Todos ({counts.total})</TabsTrigger>
-          <TabsTrigger value="client">Clientes ({counts.clients})</TabsTrigger>
-          <TabsTrigger value="supplier">Fornecedores ({counts.suppliers})</TabsTrigger>
-          <TabsTrigger value="both">Ambos ({counts.both})</TabsTrigger>
+          <TabsTrigger value="all">Todos ({counts?.total ?? '—'})</TabsTrigger>
+          <TabsTrigger value="client">Clientes ({counts?.clients ?? '—'})</TabsTrigger>
+          <TabsTrigger value="supplier">Fornecedores ({counts?.suppliers ?? '—'})</TabsTrigger>
+          <TabsTrigger value="both">Ambos ({counts?.both ?? '—'})</TabsTrigger>
         </TabsList>
       </Tabs>
+      {countsQuery.isError ? <p role="alert" className="text-sm text-destructive">Não foi possível carregar as contagens: {countsQuery.error instanceof Error ? countsQuery.error.message : 'erro inesperado'}.</p> : null}
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -156,8 +160,8 @@ export default function Clients() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
+              {isLoading || isFetching ? (
+                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">{isLoading ? 'Carregando...' : 'Atualizando página e filtros...'}</TableCell></TableRow>
               ) : isError ? (
                 <TableRow>
                   <TableCell colSpan={9} className="py-8 text-center">

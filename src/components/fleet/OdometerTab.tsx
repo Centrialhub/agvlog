@@ -25,7 +25,7 @@ interface Props {
 
 export default function OdometerTab({ vehicleId }: Props) {
   const toast = useSonnerToast();
-  const { data: readings = [], isLoading } = useVehicleOdometerList(vehicleId);
+  const readingsQuery=useVehicleOdometerList(vehicleId);const readings=readingsQuery.data??[],isLoading=readingsQuery.isLoading;
   const createMut = useCreateOdometerReading();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [km, setKm] = useState('');
@@ -43,8 +43,10 @@ export default function OdometerTab({ vehicleId }: Props) {
     }));
 
   const handleSave = async () => {
+    const value=Number(km);if(!Number.isFinite(value)||value<0){toast.error('Informe uma quilometragem válida e não negativa');return;}
+    if(latest&&value<Number(latest.reading_km)){toast.error('A leitura não pode ser menor que o último odômetro registrado');return;}
     try {
-      await createMut.mutateAsync({ vehicle_id: vehicleId, reading_km: Number(km), notes: notes || undefined });
+      await createMut.mutateAsync({ vehicle_id: vehicleId, reading_km: value, notes: notes || undefined });
       toast.success('Leitura registrada');
       setDialogOpen(false);
       setKm('');
@@ -57,6 +59,7 @@ export default function OdometerTab({ vehicleId }: Props) {
   return (
     <div className="space-y-4">
       {/* KPIs */}
+      {readingsQuery.isError&&<Card><CardContent className="py-4" role="alert">Não foi possível carregar as leituras. <Button variant="outline" onClick={()=>void readingsQuery.refetch()}>Tentar novamente</Button></CardContent></Card>}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
@@ -126,7 +129,7 @@ export default function OdometerTab({ vehicleId }: Props) {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : readings.length === 0 ? (
+              ) : !readingsQuery.isError&&readings.length === 0 ? (
                 <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhuma leitura registrada</TableCell></TableRow>
               ) : readings.map(r => (
                 <TableRow key={r.id}>
@@ -147,7 +150,7 @@ export default function OdometerTab({ vehicleId }: Props) {
           <div className="space-y-4">
             <div>
               <Label>Quilometragem Atual (km)</Label>
-              <Input type="number" value={km} onChange={e => setKm(e.target.value)} placeholder={latest ? `Última: ${Number(latest.reading_km).toLocaleString()}` : ''} required />
+              <Input type="number" min={latest?Number(latest.reading_km):0} value={km} onChange={e => setKm(e.target.value)} placeholder={latest ? `Última: ${Number(latest.reading_km).toLocaleString()}` : ''} required />
             </div>
             <div>
               <Label>Observações</Label>

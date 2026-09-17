@@ -42,6 +42,7 @@ import {
 } from '@/lib/ingestion/ortUtils';
 import { buildIngestionReport, createIngestionBatchId } from '@/lib/ingestion/report';
 import { normalizeNfeAccessKey } from '@/lib/fiscalDocuments/nfeAccessKey';
+import { matchClientForFiscalDoc } from '@/lib/fiscalDocuments/clientMatcher';
 
 import { supabase } from '@/integrations/supabase/client';
 import type { Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -186,8 +187,13 @@ export default function Ingestion() {
     });
     if (alreadyExists) return;
     const newDests = [...currentDests, { name: cityName }];
-    updateRoute.mutate({ id: routeId, destinations: newDests });
-    toast({ title: 'Rota atualizada', description: `"${cityName}" adicionada à rota. Próxima vez será automático.` });
+    updateRoute.mutate(
+      { id: routeId, expectedUpdatedAt: route.updated_at, destinations: newDests },
+      {
+        onSuccess: () => toast({ title: 'Rota atualizada', description: `"${cityName}" adicionada à rota. Próxima vez será automático.` }),
+        onError: error => toast({ title: 'Não foi possível atualizar a rota', description: getErrorMessage(error), variant: 'destructive' }),
+      },
+    );
   }, [operationalRoutes, updateRoute, toast]);
 
   const [step, setStep] = useState(0);
@@ -262,11 +268,19 @@ export default function Ingestion() {
         report: toJson(report),
         created_by: user?.id || null,
       };
-      await supabase.from('ingestion_reports').insert(payload);
-    } catch (e) {
+      const { error } = await supabase.from('ingestion_reports').insert(payload);
+      if (error) throw error;
+      return true;
+    } catch (e: unknown) {
       console.error('persistIngestionReport failed', e);
+      toast({
+        title: 'Importação concluída, mas o relatório não foi salvo',
+        description: 'Os documentos foram processados. Tente gerar o relatório de auditoria novamente.',
+        variant: 'destructive',
+      });
+      return false;
     }
-  }, [currentTenant, user?.id]);
+  }, [currentTenant, toast, user?.id]);
 
   const remitterMismatchDocs = useMemo(() => {
     if (!pickupOrder || noPickup) return [] as ValidatedDocument[];
@@ -704,18 +718,24 @@ export default function Ingestion() {
         }
       };
 
-      // Já existe no cadastro? (match por CNPJ + Cidade → Anti-erro de filial)
-      if (cnpjDigits) {
-        const matches = clients.filter(c => onlyDigits(c.tax_id || '') === cnpjDigits);
-        if (matches.length > 1 && cityKey) {
-          const byCity = matches.find(c => (c.address_city || '').trim().toLowerCase() === cityKey);
-          if (byCity) { await backfillIe(byCity.id); return byCity.id; }
-        }
-        if (matches.length > 0) { await backfillIe(matches[0].id); return matches[0].id; }
-        if (autoCreatedByCnpj.has(cnpjDigits)) return autoCreatedByCnpj.get(cnpjDigits)!;
+      // CNPJ completo identifica a filial. O matcher só cai para nome/cidade
+      // quando o XML realmente não trouxe documento fiscal.
+      const matchedByFiscalIdentity = matchClientForFiscalDoc({
+        cnpj: src.recipientCnpj,
+        name: src.recipientName,
+        city: src.recipientCity,
+        state: src.recipientState,
+        address: src.recipientAddress,
+        zip: src.recipientZip,
+      }, clients);
+      if (matchedByFiscalIdentity) {
+        await backfillIe(matchedByFiscalIdentity.id);
+        return matchedByFiscalIdentity.id;
       }
-      // Match por IE (com mesma UF quando disponível) — evita duplicar quando CNPJ não foi extraído
-      if (ieDigits) {
+      if (cnpjDigits && autoCreatedByCnpj.has(cnpjDigits)) return autoCreatedByCnpj.get(cnpjDigits)!;
+
+      // Identidades secundárias só podem ser usadas quando não há CNPJ.
+      if (!cnpjDigits && ieDigits) {
         const existingByIe = clients.find(c => {
           const cIe = onlyDigits(c.state_registration || '');
           if (!cIe || cIe !== ieDigits) return false;
@@ -725,8 +745,7 @@ export default function Ingestion() {
         if (existingByIe) return existingByIe.id;
         if (autoCreatedByIe.has(ieKey)) return autoCreatedByIe.get(ieKey)!;
       }
-      // Match por IM (com mesma cidade quando disponível)
-      if (imDigits) {
+      if (!cnpjDigits && imDigits) {
         const existingByIm = clients.find(c => {
           const cIm = onlyDigits(c.municipal_registration || '');
           if (!cIm || cIm !== imDigits) return false;
@@ -736,11 +755,7 @@ export default function Ingestion() {
         if (existingByIm) { await backfillIe(existingByIm.id); return existingByIm.id; }
         if (autoCreatedByIm.has(imKey)) return autoCreatedByIm.get(imKey)!;
       }
-      if (nameKey) {
-        const existingByName = clients.find(c => (c.company_name || '').trim().toLowerCase() === nameKey);
-        if (existingByName) { await backfillIe(existingByName.id); return existingByName.id; }
-        if (!cnpjDigits && autoCreatedByName.has(nameKey)) return autoCreatedByName.get(nameKey)!;
-      }
+      if (!cnpjDigits && nameKey && autoCreatedByName.has(nameKey)) return autoCreatedByName.get(nameKey)!;
 
       // Sem dado mínimo, não cria
       const recipientName = src.recipientName;
@@ -1009,7 +1024,7 @@ export default function Ingestion() {
         generatedByUserId: user?.id,
       });
       setIngestionReport(reportSaveDocs);
-      void persistIngestionReport(reportSaveDocs, saveLabel);
+      await persistIngestionReport(reportSaveDocs, saveLabel);
       const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
       if (autoCreatedCount > 0) {
         queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -1449,7 +1464,7 @@ export default function Ingestion() {
         generatedByUserId: user?.id,
       });
       setIngestionReport(reportExec);
-      void persistIngestionReport(reportExec, execLabel);
+      await persistIngestionReport(reportExec, execLabel);
 
       toast({
         title: 'Importação concluída',

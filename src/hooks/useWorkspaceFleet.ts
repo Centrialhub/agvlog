@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import type { Json } from '@/integrations/supabase/types';
+import type { Database, Json } from '@/integrations/supabase/types';
 import type { MovementState } from './useVehiclesState';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export interface WorkspaceFleetSnapshot {
   id: string;
@@ -35,17 +36,21 @@ export interface WorkspaceFleetSnapshot {
   state_updated_at: string | null;
 }
 
+type WorkspaceFleetRpcRow = Database['public']['Functions']['list_workspace_fleet_snapshot_v1']['Returns'][number];
+
 export function useWorkspaceFleetSnapshot() {
   const { currentTenant } = useTenant();
   return useQuery({
     queryKey: ['workspace_fleet_snapshot', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.rpc('list_workspace_fleet_snapshot_v1', {
-        _tenant_id: currentTenant.id,
-      });
-      if (error) throw error;
-      return (data || []) as WorkspaceFleetSnapshot[];
+      const rows = await fetchAllPostgrestPages<WorkspaceFleetRpcRow>(
+        (from, to) => supabase
+          .rpc('list_workspace_fleet_snapshot_v1', { _tenant_id: currentTenant.id })
+          .range(from, to),
+        500,
+      );
+      return rows as WorkspaceFleetSnapshot[];
     },
     enabled: !!currentTenant,
     refetchInterval: 30_000,

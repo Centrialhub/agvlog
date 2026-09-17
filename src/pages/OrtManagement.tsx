@@ -1,15 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileSearch, Sparkles } from 'lucide-react';
 import OrtConsultaTab from '@/components/fiscal/OrtConsultaTab';
 import OrtGeracaoTab from '@/components/fiscal/OrtGeracaoTab';
 
 export default function OrtManagement() {
-  const initialTab = typeof window !== 'undefined'
-    ? (new URLSearchParams(window.location.search).get('tab') || 'consulta')
-    : 'consulta';
-
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [params, setParams] = useSearchParams();
+  const normalizeTab = (value: string | null) => value === 'geracao' ? 'geracao' : 'consulta';
+  const [activeTab, setActiveTab] = useState(() => normalizeTab(params.get('tab')));
+  useEffect(() => {
+    const raw = params.get('tab');
+    const nextTab = normalizeTab(raw);
+    setActiveTab(current => current === nextTab ? current : nextTab);
+    if (raw && raw !== nextTab) {
+      const next = new URLSearchParams(params); next.delete('tab'); setParams(next, { replace: true });
+    }
+  }, [params, setParams]);
+  const changeTab = (value: string) => {
+    const nextTab = normalizeTab(value); setActiveTab(nextTab);
+    const next = new URLSearchParams(params);
+    if (nextTab === 'consulta') next.delete('tab'); else next.set('tab', nextTab);
+    setParams(next);
+  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -23,7 +36,7 @@ export default function OrtManagement() {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={changeTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="consulta" className="gap-2">
             <FileSearch className="h-4 w-4" /> Consulta

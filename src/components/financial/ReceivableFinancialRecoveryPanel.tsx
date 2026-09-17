@@ -9,7 +9,7 @@ export function ReceivableFinancialRecoveryPanel(){
  const [notice,setNotice]=useState({scope,message:''});const message=notice.scope===scope?notice.message:'';
  if(!api.pending&&!api.recoveryError&&!message)return null;
  return <section aria-label="Recuperação de operações financeiras" className="mb-4 space-y-2 rounded border p-3">
-  {api.recoveryError?<p role="alert">{api.recoveryError}</p>:null}
+  {api.recoveryError?<div role="alert"><p>{api.recoveryError}</p><Button variant="outline" onClick={()=>{api.discardRecovery();setNotice({scope,message:'Pedido incompatível descartado. Você já pode iniciar uma nova operação.'});}}>Descartar pedido incompatível</Button></div>:null}
   {api.pending?<><p>Operação sem confirmação: {financialActionLabels[api.pending.payload.action]}. Não repita com outro pedido.</p><Button disabled={api.isPending} onClick={async()=>{
    setNotice({scope,message:''});try{const result=await api.recover();setNotice({scope,message:`Operação recuperada: ${financialActionLabels[result.action]}. Consulte os saldos atuais no título.`});}
    catch(cause){setNotice({scope,message:financialError(cause)});}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -18,22 +18,32 @@ type Row = {
   suggested_action: string | null;
 };
 
+const AUDIT_BATCH_SIZE = 500;
+
 export default function DataAudit() {
-  const { currentTenant } = useTenant();
+  const { currentTenant, currentRole } = useTenant();
   const [stamp, setStamp] = useState(0);
   const [domainFilter, setDomainFilter] = useState<string>('all');
+  useEffect(() => { setDomainFilter('all'); }, [currentTenant?.id]);
 
-  const { data = [], isLoading, refetch, isFetching } = useQuery({
+  const { data = [], isLoading, isError, error, isFetching } = useQuery({
     queryKey: ['data_audit', currentTenant?.id, stamp],
-    queryFn: async (): Promise<Row[]> => {
+    queryFn: async ({ signal }): Promise<Row[]> => {
       if (!currentTenant) return [];
-      const { data, error } = await (supabase as any).rpc('audit_data_consistency_v2', {
-        _tenant_id: currentTenant.id,
-      });
-      if (error) throw error;
-      return (data || []) as Row[];
+      const rows: Row[] = [];
+      for (let offset = 0; ; offset += AUDIT_BATCH_SIZE) {
+        const { data, error } = await (supabase as any)
+          .rpc('audit_data_consistency_v2', { _tenant_id: currentTenant.id })
+          .range(offset, offset + AUDIT_BATCH_SIZE - 1)
+          .abortSignal(signal);
+        if (error) throw error;
+        if (!Array.isArray(data)) throw new Error('A auditoria retornou um lote incompatível.');
+        rows.push(...data as Row[]);
+        if (data.length < AUDIT_BATCH_SIZE) break;
+      }
+      return rows;
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && ['owner', 'admin'].includes(currentRole || ''),
   });
 
   const critical = data.filter(d => d.severity === 'critical');
@@ -42,6 +52,8 @@ export default function DataAudit() {
   const domains = Array.from(new Set(data.map(d => d.domain))).sort();
   const filtered = domainFilter === 'all' ? data : data.filter(d => d.domain === domainFilter);
   const pagination = usePagination(filtered, { pageSize: 50, resetKey: domainFilter });
+
+  if (!['owner', 'admin'].includes(currentRole || '')) return <p role="alert" className="p-6">A auditoria de dados é restrita a administradores.</p>;
 
   return (
     <div className="space-y-6 p-6">
@@ -52,13 +64,13 @@ export default function DataAudit() {
             Inconsistências de dados detectadas no locatário atual.
           </p>
         </div>
-        <Button onClick={() => { setStamp(s => s + 1); refetch(); }} disabled={isFetching}>
+        <Button onClick={() => setStamp(s => s + 1)} disabled={isFetching}>
           <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
           Reexecutar
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      {!isLoading && !isError ? <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Críticos</CardTitle></CardHeader>
           <CardContent>
@@ -86,7 +98,7 @@ export default function DataAudit() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </div> : null}
 
       {domains.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -106,6 +118,8 @@ export default function DataAudit() {
         <CardContent>
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Carregando...</p>
+          ) : isError ? (
+            <p role="alert" className="text-sm text-destructive">Não foi possível executar a auditoria: {error instanceof Error ? error.message : 'erro desconhecido'}.</p>
           ) : filtered.length === 0 ? (
             <p className="text-sm text-success">Nenhuma inconsistência detectada.</p>
           ) : (

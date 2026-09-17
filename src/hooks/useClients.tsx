@@ -81,7 +81,7 @@ export type CreateClientInput = Omit<
 export type UpdateClientInput = Omit<
   Database['public']['Tables']['clients']['Update'],
   'id' | 'tenant_id' | 'updated_by' | 'updated_at'
-> & { id: string };
+> & { id: string; expected_updated_at: string };
 
 export type ClientKindFilter = 'all' | 'client' | 'supplier' | 'both';
 
@@ -247,14 +247,15 @@ export function useUpdateClient() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: UpdateClientInput) => {
+    mutationFn: async ({ id, expected_updated_at, ...values }: UpdateClientInput) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       const { data, error } = await supabase.from('clients').update({
         ...values,
         updated_by: user?.id ?? null,
         updated_at: new Date().toISOString(),
-      }).eq('id', id).eq('tenant_id', currentTenant.id).select().single();
+      }).eq('id', id).eq('tenant_id', currentTenant.id).eq('updated_at', expected_updated_at).select().maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('O cadastro foi alterado por outra pessoa. Atualize a lista e tente novamente.');
       return data;
     },
     onSuccess: () => {

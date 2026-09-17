@@ -40,6 +40,7 @@ function ClosingCreationForm({clients,vehicles,drivers}:Props){
  const create=async()=>{
   if(!preview||blocked)return;setError('');setNotice('');
   try{
+   if(form.expectedPay&&form.periodEnd&&form.expectedPay<form.periodEnd)throw new Error('O vencimento previsto não pode ser anterior ao fim do período.');
    const result=await api.submit({mode:'system',reason:form.reason,header:{client_id:form.clientId||null,payer_client_id:form.payerId||null,
     title:form.title||`Fechamento ${REPORT_TYPE_LABELS[form.reportType]} ${form.periodStart} a ${form.periodEnd}`,
     report_type:form.reportType,report_model:'detailed',period_start:form.periodStart,period_end:form.periodEnd,
@@ -57,7 +58,7 @@ function ClosingCreationForm({clients,vehicles,drivers}:Props){
    <label>Período início<Input type="date" value={form.periodStart} onChange={e=>set('periodStart',e.target.value)}/></label>
    <label>Período fim<Input type="date" value={form.periodEnd} onChange={e=>set('periodEnd',e.target.value)}/></label>
    <label>Data usada no filtro<select className={selectClass} value={form.dateBasis} onChange={e=>set('dateBasis',e.target.value as typeof form.dateBasis)}><option value="invoice_issue">Emissão da nota</option><option value="delivery_result">Resultado auditado da entrega</option></select></label>
-   <label>Vencimento previsto<Input type="date" value={form.expectedPay} onChange={e=>set('expectedPay',e.target.value)}/></label>
+   <label>Vencimento previsto<Input type="date" min={form.periodEnd||form.periodStart||undefined} value={form.expectedPay} onChange={e=>set('expectedPay',e.target.value)}/></label>
    <label>Rateio de frete<select className={selectClass} value={form.freightAllocation} onChange={e=>set('freightAllocation',e.target.value as FreightAllocation)}><option value="per_nf">Frete por NF</option><option value="cte_by_value">Ratear CT-e por valor</option><option value="cte_by_weight">Ratear CT-e por peso</option><option value="first_nf_only">Só na primeira NF do CT-e</option></select></label>
    <div className="space-y-2"><label className="flex gap-2"><input type="checkbox" checked={form.onlyWithCte} onChange={e=>set('onlyWithCte',e.target.checked)}/>Só com CT-e confirmado</label><label className="flex gap-2"><input type="checkbox" checked={form.onlyDelivered} onChange={e=>set('onlyDelivered',e.target.checked)}/>Só entregues integralmente</label></div>
    <label>Filtrar por placa<select className={selectClass} value={form.vehicleId} onChange={e=>set('vehicleId',e.target.value)}><option value="">Todas</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate}</option>)}</select></label>

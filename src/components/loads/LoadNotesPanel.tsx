@@ -189,13 +189,19 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   // Payment suggestions are drafts only. Opening this panel must never update a load or note.
 
   const saveTotals = async () => {
+    const cash = Number(cashToReceive);
+    const pix = Number(pixToReceive);
+    if (!Number.isFinite(cash) || cash < 0 || !Number.isFinite(pix) || pix < 0) {
+      toast.error('Dinheiro e PIX devem ser valores não negativos.');
+      return;
+    }
     setSavingTotals(true);
     try {
       const { error } = await supabase
         .from('loads')
         .update({
-          cash_to_receive: Number(cashToReceive || 0),
-          pix_to_receive: Number(pixToReceive || 0),
+          cash_to_receive: cash,
+          pix_to_receive: pix,
         })
         .eq('id', load.id);
       if (error) throw error;

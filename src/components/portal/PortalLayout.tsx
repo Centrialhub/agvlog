@@ -20,6 +20,7 @@ import {
   MapPin,
   BarChart3,
   Settings,
+  ReceiptText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -29,6 +30,7 @@ const NAV = [
   { to: '/portal/tracking', label: 'Tracking', icon: MapPin },
   { to: '/portal/pickups', label: 'Coletas', icon: Inbox },
   { to: '/portal/documents', label: 'Documentos', icon: FileText },
+  { to: '/portal/titles', label: 'Títulos', icon: ReceiptText },
   { to: '/portal/pods', label: 'Canhotos', icon: ClipboardCheck },
   { to: '/portal/occurrences', label: 'Ocorrências', icon: AlertTriangle },
   { to: '/portal/reports', label: 'Relatórios', icon: BarChart3 },
@@ -52,13 +54,33 @@ export default function PortalLayout() {
 
 function PortalLayoutInner() {
   const { signOut } = useAuth();
-  const { data: access, isLoading } = useClientPortalAccess();
+  const { data: access, isLoading, error, refetch, isFetching } = useClientPortalAccess();
   const { pathname } = useLocation();
 
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="max-w-md text-center space-y-3" role="alert">
+          <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+          <h1 className="text-lg font-semibold">Não foi possível confirmar seu acesso</h1>
+          <p className="text-sm text-muted-foreground">
+            Os dados do portal permaneceram ocultos. Verifique a conexão e tente novamente.
+          </p>
+          <div className="flex justify-center gap-2">
+            <Button size="sm" onClick={() => { void refetch(); }} disabled={isFetching}>
+              {isFetching ? 'Tentando novamente…' : 'Tentar novamente'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={signOut}>Sair</Button>
+          </div>
+        </div>
       </div>
     );
   }

@@ -64,7 +64,7 @@ export const STOP_STATUS_TONE: Record<string, string> = {
   failed: 'bg-destructive/10 text-destructive',
 };
 
-export function isStopTerminal(s: string | null | undefined): boolean {
+export function isStopTerminal(s: string | null | undefined): s is StopTerminalStatus {
   return !!s && (STOP_TERMINAL_STATUSES as readonly string[]).includes(s);
 }
 

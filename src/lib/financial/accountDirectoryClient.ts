@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {supabase} from '@/integrations/supabase/client';
-const row=z.object({id:z.string().uuid(),tenant_id:z.string().uuid(),name:z.string(),account_type:z.enum(['checking','savings','cash','company_card','pix','other']),active:z.boolean()});
+const row=z.object({id:z.string().uuid(),tenant_id:z.string().uuid(),name:z.string(),account_type:z.enum(['checking','savings','money_market','cash','company_card','pix','other']),active:z.boolean()});
 export async function readAccountDirectory(tenant:string,search:string,page:number){
  if(!Number.isInteger(page)||page<1)throw new Error('Página inválida.');
  let query=supabase.from('bank_accounts').select('id,tenant_id,name,account_type,active',{count:'exact'}).eq('tenant_id',tenant);

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export const ASSET_CATEGORIES = ['vehicle','implement','equipment','tracker','phone_radio','tool','ppe','other'] as const;
 export const ASSET_STATUSES = ['available','in_use','maintenance','decommissioned','lost'] as const;
@@ -30,12 +31,10 @@ export function useAssets() {
     queryKey: ['assets', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
+      return fetchAllPostgrestPages((from, to) => supabase
         .from('assets').select('*, employees(name)')
         .eq('tenant_id', currentTenant.id)
-        .order('name');
-      if (error) throw error;
-      return (data || []) as Asset[];
+        .order('name').order('id').range(from, to)) as Promise<Asset[]>;
     },
     enabled: !!currentTenant,
   });

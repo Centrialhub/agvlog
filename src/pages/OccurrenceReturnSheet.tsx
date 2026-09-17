@@ -43,24 +43,26 @@ export default function OccurrenceReturnSheetPage() {
   const { data: companyProfile } = useCompanyProfile();
   const companyInfo = toCompanyPdfInfo(companyProfile, currentTenant?.name);
 
-  const { data: occurrence, isLoading: loadingOcc } = useQuery({
-    queryKey: ['delivery-occurrence-detail', occurrenceId],
-    enabled: !!occurrenceId,
+  const occurrenceQuery = useQuery({
+    queryKey: ['delivery-occurrence-detail', currentTenant?.id, occurrenceId],
+    enabled: !!occurrenceId && !!currentTenant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('delivery_occurrences')
         .select('*')
         .eq('id', occurrenceId!)
+        .eq('tenant_id', currentTenant!.id)
         .maybeSingle();
       if (error) throw error;
       return data;
     },
   });
+  const occurrence = occurrenceQuery.data;
 
   const sheetsQuery = useReturnSheetsForOccurrence(occurrenceId);
   const activeSheet = useMemo<ReturnSheet | null>(() => {
     const list = sheetsQuery.data ?? [];
-    return (list.find((s) => s.status !== 'cancelled' && s.status !== 'superseded') ?? list[0] ?? null) as ReturnSheet | null;
+    return (list.find((s) => ['generated', 'printed', 'signed'].includes(s.status)) ?? null) as ReturnSheet | null;
   }, [sheetsQuery.data]);
 
   const generateMut = useGenerateReturnSheet();
@@ -115,7 +117,21 @@ export default function OccurrenceReturnSheetPage() {
 
   const historyQuery = useReturnSheetHistory(activeSheet?.id);
 
-  if (loadingOcc) return <div className="p-6">Carregando...</div>;
+  if (occurrenceQuery.isLoading || sheetsQuery.isLoading) return <div className="p-6">Carregando...</div>;
+  if (occurrenceQuery.isError || sheetsQuery.isError) {
+    const queryError = occurrenceQuery.error || sheetsQuery.error;
+    return (
+      <div className="container mx-auto p-4 md:p-6 max-w-6xl">
+        <Alert variant="destructive">
+          <AlertTitle>Não foi possível carregar a folha de devolução</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p>{queryError instanceof Error ? queryError.message : 'Falha ao consultar ocorrência ou versões da folha.'}</p>
+            <Button variant="outline" size="sm" onClick={() => void Promise.all([occurrenceQuery.refetch(), sheetsQuery.refetch()])}>Tentar novamente</Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
   if (!occurrence) return <div className="p-6">Ocorrência não encontrada</div>;
 
   return (
@@ -183,7 +199,7 @@ export default function OccurrenceReturnSheetPage() {
                 <Button size="sm" variant="outline" onClick={() => openReturnSheetPdfPrint(activeSheet, sheetCompanyName(activeSheet), companyInfo)}>
                   <Printer className="w-4 h-4 mr-1" /> Imprimir
                 </Button>
-                {activeSheet.status !== 'printed' && activeSheet.status !== 'signed' && (
+                {activeSheet.status === 'generated' && (
                   <Button size="sm" variant="outline" onClick={() => printMut.mutate(activeSheet.id)}>
                     Marcar como impressa
                   </Button>
@@ -191,14 +207,14 @@ export default function OccurrenceReturnSheetPage() {
                 {activeSheet.signed_proof_url && (
                   <Button size="sm" variant="outline" onClick={async () => {
                     const url = await getSignedProofUrl(activeSheet.signed_proof_url!);
-                    if (url) window.open(url, '_blank'); else toast.error('Não foi possível abrir');
+                    if (url) window.open(url, '_blank', 'noopener,noreferrer'); else toast.error('Não foi possível abrir');
                   }}>
                     Ver folha assinada
                   </Button>
                 )}
               </div>
 
-              {activeSheet.status !== 'signed' && (
+              {['generated', 'printed'].includes(activeSheet.status) && (
                 <div className="border rounded p-3 space-y-2">
                   <div className="font-medium text-sm">Anexar folha assinada</div>
                   <div className="grid grid-cols-2 gap-2">
@@ -248,7 +264,17 @@ export default function OccurrenceReturnSheetPage() {
 
           <OccurrenceReturnSheetPreview sheet={activeSheet} />
 
-          {(historyQuery.data ?? []).length > 0 && (
+          {historyQuery.isError && (
+            <Alert variant="destructive">
+              <AlertTitle>Histórico indisponível</AlertTitle>
+              <AlertDescription>
+                {historyQuery.error instanceof Error ? historyQuery.error.message : 'Falha ao consultar o histórico.'}
+                <Button variant="link" onClick={() => void historyQuery.refetch()}>Tentar novamente</Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!historyQuery.isError && (historyQuery.data ?? []).length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-base">Histórico</CardTitle></CardHeader>
               <CardContent className="text-xs space-y-1">

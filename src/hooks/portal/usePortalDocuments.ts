@@ -21,6 +21,11 @@ export interface PortalDocument {
   has_pod: boolean;
 }
 
+export interface PortalDocumentsPage {
+  rows: PortalDocument[];
+  hasMore: boolean;
+}
+
 export function usePortalDocuments(filters?: {
   document_type?: string;
   search?: string;
@@ -33,8 +38,9 @@ export function usePortalDocuments(filters?: {
   const { selectedClientId } = usePortalClientScope();
   return useQuery({
     queryKey: ['portal_documents', currentTenant?.id, selectedClientId, filters],
-    queryFn: async (): Promise<PortalDocument[]> => {
-      if (!currentTenant) return [];
+    queryFn: async (): Promise<PortalDocumentsPage> => {
+      if (!currentTenant) return { rows: [], hasMore: false };
+      const requestedLimit = filters?.limit ?? 50;
       const { data, error } = await supabase.rpc('list_client_documents_v2', {
         _tenant_id: currentTenant.id,
         _client_id: selectedClientId ?? undefined,
@@ -42,11 +48,15 @@ export function usePortalDocuments(filters?: {
         _search: filters?.search || undefined,
         _start_date: filters?.start || undefined,
         _end_date: filters?.end || undefined,
-        _limit: filters?.limit ?? 50,
+        _limit: requestedLimit + 1,
         _offset: filters?.offset ?? 0,
       });
       if (error) throw error;
-      return data as PortalDocument[];
+      const rows = (data as PortalDocument[]) || [];
+      return {
+        rows: rows.slice(0, requestedLimit),
+        hasMore: rows.length > requestedLimit,
+      };
     },
     enabled: !!currentTenant,
   });

@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
 import JSZip from 'jszip';
-import { uniqueFilename, mergePdfBlobs, zipFiles, runBulkDownload, summarizeBulkResult, blobToUint8 } from '@/lib/fiscal/bulkFileMerge';
+import {
+  uniqueFilename,
+  mergePdfBlobs,
+  zipFiles,
+  runBulkDownload,
+  summarizeBulkResult,
+  blobToUint8,
+  type BulkItemFailure,
+} from '@/lib/fiscal/bulkFileMerge';
 
 async function makePdf(pages = 1): Promise<Blob> {
   const doc = await PDFDocument.create();
@@ -31,7 +39,7 @@ describe('mergePdfBlobs', () => {
   });
 
   it('ignora arquivos inválidos e relata falha', async () => {
-    const failures: any[] = [];
+    const failures: BulkItemFailure[] = [];
     const res = await mergePdfBlobs([
       { label: 'ok', filename: 'ok.pdf', blob: await makePdf(1) },
       { label: 'ruim', filename: 'ruim.pdf', blob: new Blob(['não é pdf']) },
@@ -101,5 +109,17 @@ describe('runBulkDownload', () => {
       labelOf: () => 'x',
       filenameOf: () => 'x.pdf',
     })).rejects.toThrow('502 hub');
+  });
+
+  it('rejeita resposta HTML antes de gerar o arquivo final', async () => {
+    await expect(runBulkDownload({
+      rows: [1],
+      format: 'xml',
+      outputBase: 'lote',
+      delayMs: 0,
+      fetchOne: () => Promise.resolve(new Blob(['<html>erro do provedor</html>'])),
+      labelOf: () => 'NFS-e 1',
+      filenameOf: () => 'nfse-1.xml',
+    })).rejects.toThrow('XML válido');
   });
 });

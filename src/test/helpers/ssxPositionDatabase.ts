@@ -4,6 +4,11 @@ import { PGlite } from '@electric-sql/pglite';
 const baseline = readFileSync('supabase/migrations/20260824224152_baseline.sql', 'utf8');
 export const ssxPositionMigration = '20260831211632_make_ssx_position_ingestion_monotonic.sql';
 export const ssxPositionSql = () => readFileSync('supabase/migrations/' + ssxPositionMigration, 'utf8');
+export const ssxAccountRecoveryMigration = '20260915055000_ssx_account_recovery_rpc.sql';
+export const ssxAccountRecoverySql = () => readFileSync(
+  'supabase/migrations/' + ssxAccountRecoveryMigration,
+  'utf8',
+);
 
 export const ssxIds = {
   tenant: '21000000-0000-4000-8000-000000000001',
@@ -65,6 +70,7 @@ export async function prepareSsxPositionDatabase(
     ' to service_role;',
   );
   await db.exec(ssxPositionSql());
+  await db.exec(ssxAccountRecoverySql());
 }
 
 export async function seedSsxPosition(db: Pick<PGlite, 'query'>) {

@@ -27,8 +27,10 @@ describe('manual statement identity decision recovery',()=>{
     mount();prepare();const storage=vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('quota');});
     fireEvent.click(screen.getByRole('button',{name:'Confirmar decisão manual'}));expect(await screen.findByRole('alert')).toHaveTextContent('Nenhum envio foi iniciado');expect(mocks.review).not.toHaveBeenCalled();storage.mockRestore();
   });
-  it('blocks a corrupt saved request instead of silently replacing it',()=>{
+  it('blocks a corrupt saved request until the user explicitly discards it',()=>{
     sessionStorage.setItem(key,'broken');mount();expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível recuperar');
-    expect(screen.getByRole('button',{name:'Revisar decisão antes de registrar'})).toBeDisabled();expect(mocks.review).not.toHaveBeenCalled();
+    expect(screen.getByRole('button',{name:'Revisar decisão antes de registrar'})).toBeDisabled();
+    fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));
+    expect(sessionStorage.getItem(key)).toBeNull();expect(screen.getByRole('button',{name:'Revisar identificação manualmente'})).toBeInTheDocument();expect(mocks.review).not.toHaveBeenCalled();
   });
 });

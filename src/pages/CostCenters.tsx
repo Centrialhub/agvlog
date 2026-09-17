@@ -18,8 +18,8 @@ export default function CostCenters(){
 }
 function Workspace({tenant,actor}:{tenant:string;actor:string}){
  const [tab,setTab]=useState('costs');
- return <div className="space-y-4"><h1 className="text-2xl font-semibold">Centros de custo</h1><Tabs value={tab} onValueChange={setTab}><TabsList><TabsTrigger value="costs">Custos registrados</TabsTrigger><TabsTrigger value="management">Gerenciar centros</TabsTrigger><TabsTrigger value="legacy">Comparar fontes antigas</TabsTrigger></TabsList>
- <TabsContent value="costs">{tab==='costs'&&<RecordedCosts tenant={tenant} actor={actor}/>}</TabsContent><TabsContent value="management">{tab==='management'&&<CostCenterManager/>}</TabsContent>
+ return <div className="min-w-0 space-y-4"><div><h1 className="text-2xl font-semibold">Centros de custo</h1><p className="text-sm text-muted-foreground">Organize os custos por área e consulte os registros consolidados da empresa.</p></div><Tabs value={tab} onValueChange={setTab}><TabsList className="grid h-auto w-full grid-cols-1 sm:grid-cols-3"><TabsTrigger className="min-h-11 whitespace-normal py-2 text-center" value="costs">Custos registrados</TabsTrigger><TabsTrigger className="min-h-11 whitespace-normal py-2 text-center" value="management">Gerenciar centros</TabsTrigger><TabsTrigger className="min-h-11 whitespace-normal py-2 text-center" value="legacy">Comparar fontes antigas</TabsTrigger></TabsList>
+ <TabsContent value="costs">{tab==='costs'&&<RecordedCosts tenant={tenant} actor={actor} onManageCenters={()=>setTab('management')}/>}</TabsContent><TabsContent value="management">{tab==='management'&&<CostCenterManager/>}</TabsContent>
  <TabsContent value="legacy">{tab==='legacy'&&<><p role="alert" className="rounded border border-amber-600 p-3">Esta consulta antiga soma fontes sobrepostas e pode conter duplicidades. Seus totais e exportações não representam o custo consolidado nem o saldo bancário. Use-a para comparar os registros durante a migração.</p><LegacyCostCenters/></>}</TabsContent>
  </Tabs></div>;
 }

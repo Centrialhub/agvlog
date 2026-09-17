@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { LOAD_STATUS_LABELS } from '@/hooks/useLoads';
+import { csvSafeCell } from '@/lib/csvSafety';
 
 export interface ExportableLoad {
   load_number: string;
@@ -75,15 +76,9 @@ const COLUMNS: Array<{ key: string; label: string; get: (l: ExportableLoad) => s
   { key: 'arrival_at', label: 'Chegada', get: l => fmtDateTime(l.arrival_at) },
 ];
 
-const csvEscape = (v: string) => {
-  const s = String(v ?? '');
-  if (/[",;\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-};
-
 export function exportLoadsCSV(loads: ExportableLoad[], filename = 'cargas.csv') {
-  const header = COLUMNS.map(c => csvEscape(c.label)).join(';');
-  const rows = loads.map(l => COLUMNS.map(c => csvEscape(c.get(l))).join(';'));
+  const header = COLUMNS.map(c => csvSafeCell(c.label)).join(';');
+  const rows = loads.map(l => COLUMNS.map(c => csvSafeCell(c.get(l))).join(';'));
   // BOM for Excel UTF-8 detection
   const csv = '\uFEFF' + [header, ...rows].join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

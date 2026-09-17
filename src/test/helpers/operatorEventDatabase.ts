@@ -5,6 +5,8 @@ import {createRedeliveryDatabase} from './redeliveryDatabase.ts';
 import {operationIds as i,operationRpc} from './operationOutcomeDatabase.ts';
 
 export const operatorEventMigration='20260901010000_add_operator_pod_and_occurrence_commands.sql';
+const podHistoryHardeningMigration='supabase/migrations/20260917134000_harden_cargo_close_and_pod_history.sql';
+const podHistoryPagingMigration='supabase/migrations/20260917145200_page_operator_pod_history.sql';
 export const operatorEventSql=()=>readFileSync('supabase/migrations/'+operatorEventMigration,'utf8');
 export const inconsistentResolvedEvent='ec900000-0000-4000-8000-000000000001';
 
@@ -44,6 +46,11 @@ async function installOperatorEventFixture(db:PGlite){
   values($1,$2,$3,'other','medium','Ocorrência histórica resolvida','Tratativa histórica confirmada',now(),now(),now(),true,true,false,'open')`,
  [inconsistentResolvedEvent,i.tenant,i.client]);
  await db.exec(operatorEventSql());
+ const hardening=readFileSync(podHistoryHardeningMigration,'utf8');
+ const start=hardening.indexOf('create or replace function public.get_operator_pod_history_v1');
+ const end=hardening.indexOf('$function$;',start)+'$function$;'.length;
+ await db.exec(hardening.slice(start,end));
+ await db.exec(readFileSync(podHistoryPagingMigration,'utf8'));
 }
 
 export async function createOperatorEventDatabase(){

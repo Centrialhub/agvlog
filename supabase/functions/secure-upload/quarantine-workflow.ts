@@ -17,7 +17,7 @@ const record=(value:unknown):Record<string,unknown>=>{
  return value as Record<string,unknown>;
 };
 const uuid=(value:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
-export async function quarantineUpload(input:{tenant:string;actor:string;request:string;sourceType:string;sourceId:string;format:string;mime:string;bytes:Uint8Array;delimiter?:';'|','|'\t'},deps:QuarantineDependencies):Promise<Record<string,unknown>>{
+export async function quarantineUpload(input:{tenant:string;actor:string;request:string;sourceType:string;sourceId:string;format:string;mime:string;bytes:Uint8Array;delimiter?:';'|','|'\t';sheetIndex?:number},deps:QuarantineDependencies):Promise<Record<string,unknown>>{
  const {tenant,actor,request,sourceType,sourceId,format,mime,bytes}=input;
  if(![tenant,actor,request,sourceId].every(uuid)||!['trip','settlement','bank_account','expense_item','expense_draft'].includes(sourceType)||!['ofx','csv','jpeg','png','pdf','xls','xlsx','unknown'].includes(format)||!bytes.length||bytes.length>10485760)throw new Error('upload_invalid_request');
  const sha256=await quarantineSha256(bytes);
@@ -46,7 +46,7 @@ export async function quarantineUpload(input:{tenant:string;actor:string;request
  if(format==='jpeg'||format==='png'){
   if(!deps.image)issues=['image_processing_unavailable'];
   else try{validation={...await deps.image(bytes),financialMappingRequired:false};}catch(error){if(error instanceof Error&&error.message.startsWith('image_runtime_'))throw error;issues=[error instanceof Error&&/^image_[a-z_]+$/.test(error.message)?error.message:'image_validation_failed'];}
- }else try{validation=validateQuarantinedData(format,bytes,input.delimiter);}catch{state='rejected';issues=['structured_validation_failed'];}
+ }else try{validation=validateQuarantinedData(format,bytes,input.delimiter,input.sheetIndex);}catch{state='rejected';issues=['structured_validation_failed'];}
  if(validation?.state==='quarantined')issues=[validation.issue];
  if(validation?.state==='validated_data'||validation?.state==='sanitized_derivative'){
   const extension=validation.mime==='image/jpeg'?'jpg':validation.mime==='image/png'?'png':'json';

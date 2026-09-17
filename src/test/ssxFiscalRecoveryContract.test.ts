@@ -9,8 +9,12 @@ describe('SSX credential recovery contract', () => {
   const upsert = source('supabase', 'functions', 'agvlog-integration-upsert', 'index.ts');
   const login = source('supabase', 'functions', 'ssx-login', 'index.ts');
   const pipeline = source('supabase', 'functions', 'agvlog-pipeline-run', 'index.ts');
+  const pollPositions = source('supabase', 'functions', 'ssx-poll-positions', 'index.ts');
+  const ruleViolations = source('supabase', 'functions', 'ssx-sync-rule-violations', 'index.ts');
   const settings = source('src', 'pages', 'Settings.tsx');
   const workspaceManagement = source('supabase', 'migrations', '20260910135800_workspace_ssx_account_management.sql');
+  const processingWrapper = source('supabase', 'migrations', '20260911020330_secure_position_processing_page_wrapper.sql');
+  const accountRecovery = source('supabase', 'migrations', '20260915055000_ssx_account_recovery_rpc.sql');
 
   it('resets stale authentication state when an administrator replaces credentials', () => {
     expect(workspaceManagement).toContain('token_cache = null');
@@ -22,6 +26,8 @@ describe('SSX credential recovery contract', () => {
     expect(upsert).toContain('_hashcode: effectiveHashcentral');
     expect(upsert).toContain('SSX_HASHAUTH_REQUIRED');
     expect(upsert).toContain('upsert_workspace_ssx_account_v1');
+    expect(upsert).toContain('anonClient.auth.getUser(token)');
+    expect(upsert).toContain('SSX_CREDENTIAL_SAVE_INTERNAL');
   });
 
   it('distinguishes credential re-entry from provider rate limiting', () => {
@@ -54,6 +60,19 @@ describe('SSX credential recovery contract', () => {
     expect(pipeline).toContain('workspace_ssx_accounts');
     expect(pipeline).toContain('registry.integration_account_id');
     expect(pipeline).toContain('.eq("id", registry.integration_account_id)');
+  });
+
+  it('recovers cleanly from provider throttling and keeps queue privileges scoped', () => {
+    expect(pollPositions).toContain('clear_ssx_account_cooldown_v1');
+    expect(pollPositions).toContain('ACCOUNT_RECOVERY_FAILED');
+    expect(accountRecovery).toContain('poll_cooldown_until = null');
+    expect(accountRecovery).toContain('to service_role');
+    expect(accountRecovery).toContain('from public, anon, authenticated');
+    expect(ruleViolations).toContain('documented_lower_bound');
+    expect(ruleViolations).toContain('rate_limited_backoff');
+    expect(processingWrapper).toContain('security definer');
+    expect(processingWrapper).toContain('from public, anon, authenticated');
+    expect(processingWrapper).toContain('to service_role');
   });
 });
 

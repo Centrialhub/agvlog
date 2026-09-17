@@ -12,8 +12,10 @@ import { Separator } from '@/components/ui/separator';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { WaypointEditor } from './WaypointEditor';
 import type { Waypoint } from '@/lib/routes/waypoints';
-import type { Tables, TablesInsert } from '@/integrations/supabase/types';
+import type { Json, Tables } from '@/integrations/supabase/types';
 import { getErrorMessage } from '@/lib/errors';
+import {useAuth} from '@/hooks/useAuth';
+import {acknowledgeDurableOperatorCommand,prepareDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
 
 type RouteTemplate = Tables<'route_templates'>;
 type GeofenceOption = Pick<Tables<'geofences'>, 'id' | 'name' | 'category'>;
@@ -29,6 +31,7 @@ interface RouteDialogProps {
 }
 
 export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, editRoute }: RouteDialogProps) {
+  const {user}=useAuth();
   const toast = useSonnerToast();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
@@ -41,7 +44,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
 
   // Load existing waypoints when editing
-  const { data: existingWaypoints = [] } = useQuery({
+  const existingWaypointsQuery = useQuery({
     queryKey: ['route_waypoints', editRoute?.id],
     queryFn: async () => {
       if (!editRoute?.id) return [];
@@ -55,7 +58,6 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
     },
     enabled: !!editRoute?.id && open,
   });
-
   // Reset form when dialog opens (only once per open)
   const [initialized, setInitialized] = useState(false);
 
@@ -69,7 +71,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
       setName(editRoute.name || '');
       setCorridorId(editRoute.corridor_geofence_id || '');
       setThreshold(String(Math.round((editRoute.corridor_inside_ratio_threshold || 0.85) * 100)));
-      setOutsideMin(String(editRoute.allowed_outside_minutes || 5));
+      setOutsideMin(String(editRoute.allowed_outside_minutes ?? 5));
       setSpeedLimit(editRoute.route_speed_limit_kmh ? String(editRoute.route_speed_limit_kmh) : '');
       setEnabled(editRoute.enabled ?? true);
     } else {
@@ -82,9 +84,9 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
 
   // Load existing waypoints when editing (only once after they load)
   useEffect(() => {
-    if (!open || !editRoute || initialized) return;
-    if (existingWaypoints.length > 0 || editRoute) {
-      setWaypoints(existingWaypoints.map((w) => ({
+    if (!open || !editRoute || initialized || !existingWaypointsQuery.isSuccess) return;
+    {
+      setWaypoints((existingWaypointsQuery.data ?? []).map((w) => ({
         id: w.id,
         waypoint_order: w.waypoint_order,
         waypoint_type: w.waypoint_type,
@@ -97,44 +99,32 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
       })));
       setInitialized(true);
     }
-  }, [open, editRoute, existingWaypoints, initialized]);
+  }, [open, editRoute, existingWaypointsQuery.data, existingWaypointsQuery.isSuccess, initialized]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenantId || !name) return;
+    if (!tenantId || !user || !name.trim() || (editRoute && !existingWaypointsQuery.isSuccess)) return;
+    const outside = Number(outsideMin);
+    const speed = speedLimit === '' ? null : Number(speedLimit);
+    if (!Number.isFinite(outside) || outside < 0 || (speed != null && (!Number.isFinite(speed) || speed < 0)) || waypoints.some(point => Number(point.estimated_duration_min ?? 0) < 0)) return;
     setLoading(true);
     try {
-      const payload: TablesInsert<'route_templates'> = {
+      const payload = {
         tenant_id: tenantId,
-        name,
+        route_id: editRoute?.id ?? null,
+        name: name.trim(),
         corridor_geofence_id: corridorId || null,
         start_poi_id: null,
         end_poi_id: null,
         corridor_inside_ratio_threshold: parseInt(threshold) / 100,
-        allowed_outside_minutes: parseInt(outsideMin) || 5,
-        route_speed_limit_kmh: speedLimit ? parseInt(speedLimit) : null,
+        allowed_outside_minutes: outside,
+        route_speed_limit_kmh: speed,
         enabled,
       };
-
-      let routeId: string;
-
-      if (editRoute) {
-        const { error } = await supabase.from('route_templates').update(payload).eq('id', editRoute.id);
-        if (error) throw error;
-        routeId = editRoute.id;
-      } else {
-        const { data, error } = await supabase.from('route_templates').insert(payload).select('id').single();
-        if (error) throw error;
-        routeId = data.id;
-      }
-
-      // Sync waypoints: delete all then re-insert
-      await supabase.from('route_waypoints').delete().eq('route_id', routeId);
-
-      if (waypoints.length > 0) {
-        const wpRows = waypoints.map((wp, i) => ({
-          tenant_id: tenantId,
-          route_id: routeId,
+      const command={
+          ...payload,
+          expected_revision: editRoute?.revision ?? null,
+          waypoints: waypoints.map((wp, i) => ({
           waypoint_order: i,
           waypoint_type: wp.waypoint_type,
           label: wp.label || null,
@@ -143,14 +133,19 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
           geofence_id: wp.geofence_id || null,
           estimated_duration_min: wp.estimated_duration_min,
           notes: wp.notes || null,
-        }));
-        const { error: wpErr } = await supabase.from('route_waypoints').insert(wpRows);
-        if (wpErr) throw wpErr;
-      }
+          })),
+        };
+      const pending=await prepareDurableOperatorCommand({tenantId,actorId:user.id,action:'save_route_template',entityId:editRoute?.id??'new',payload:command});
+      const { error } = await supabase.rpc('save_route_template_v1', {
+        _payload: {...command,request_id:pending.requestId} as unknown as Json,
+      });
+      if (error) throw error;
+      acknowledgeDurableOperatorCommand(pending);
 
       toast.success(editRoute ? 'Rota atualizada' : 'Rota criada');
       queryClient.invalidateQueries({ queryKey: ['route_templates'] });
       queryClient.invalidateQueries({ queryKey: ['route_waypoints'] });
+      queryClient.invalidateQueries({ queryKey: ['route_waypoints_all'] });
       onOpenChange(false);
     } catch (error: unknown) {
       toast.error(getErrorMessage(error));
@@ -207,7 +202,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Vel. máx (km/h)</Label>
-                  <Input type="number" value={speedLimit} onChange={e => setSpeedLimit(e.target.value)} placeholder="Opcional" />
+                  <Input type="number" min={0} value={speedLimit} onChange={e => setSpeedLimit(e.target.value)} placeholder="Opcional" />
                 </div>
               </div>
             </div>

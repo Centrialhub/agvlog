@@ -11,6 +11,7 @@ export interface SupplierReportRow {
 }
 
 export function buildSupplierReport(protocols: PalletProtocol[]): SupplierReportRow[] {
+  protocols = protocols.filter(protocol => !['draft', 'scheduled', 'cancelled'].includes(protocol.status));
   const map = new Map<string, SupplierReportRow>();
   for (const p of protocols) {
     const key = p.supplier_name_snapshot || '(sem fornecedor)';
@@ -47,7 +48,8 @@ export interface MonthlyReportRow {
 }
 
 export function buildMonthlyReport(protocols: PalletProtocol[]): MonthlyReportRow[] {
-  const map = new Map<string, MonthlyReportRow>();
+  protocols = protocols.filter(protocol => !['draft', 'scheduled', 'cancelled'].includes(protocol.status));
+  const map = new Map<string, MonthlyReportRow & { protocolIds: Set<string> }>();
   for (const p of protocols) {
     const base = (p.returned_at || p.issue_date || '').slice(0, 7);
     if (!base) continue;
@@ -58,14 +60,16 @@ export function buildMonthlyReport(protocols: PalletProtocol[]): MonthlyReportRo
         supplierName: p.supplier_name_snapshot,
         palletType: it.pallet_type_code,
         quantity: 0,
-        protocols: 0,
+        protocols: 0, protocolIds: new Set<string>(),
       };
       row.quantity += it.quantity;
-      row.protocols += 1;
+      row.protocolIds.add(p.id);
+      row.protocols = row.protocolIds.size;
       map.set(k, row);
     }
   }
-  return Array.from(map.values()).sort((a, b) => a.yearMonth.localeCompare(b.yearMonth) || a.supplierName.localeCompare(b.supplierName));
+  return Array.from(map.values()).map(({ protocolIds: _protocolIds, ...row }) => row)
+    .sort((a, b) => a.yearMonth.localeCompare(b.yearMonth) || a.supplierName.localeCompare(b.supplierName));
 }
 
 export interface PalletTypeRankingRow {
@@ -76,6 +80,7 @@ export interface PalletTypeRankingRow {
 }
 
 export function buildPalletTypeRanking(protocols: PalletProtocol[]): PalletTypeRankingRow[] {
+  protocols = protocols.filter(protocol => !['draft', 'scheduled', 'cancelled'].includes(protocol.status));
   const map = new Map<string, { quantity: number; protocolSet: Set<string>; supplierSet: Set<string> }>();
   for (const p of protocols) {
     for (const it of p.items || []) {
@@ -107,6 +112,7 @@ export function daysSince(dateISO: string | null | undefined): number | null {
 }
 
 export function totalsByPalletType(protocols: PalletProtocol[]): Record<string, number> {
+  protocols = protocols.filter(protocol => !['draft', 'scheduled', 'cancelled'].includes(protocol.status));
   const out: Record<string, number> = {};
   for (const p of protocols) {
     for (const it of p.items || []) {

@@ -1,8 +1,7 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useDrivers } from '@/hooks/useDrivers';
@@ -45,12 +44,14 @@ import { normalizeCity } from '@/lib/utils/normalizeCity';
 import type { Json } from '@/integrations/supabase/types';
 import { getErrorMessage } from '@/lib/errors';
 import { routeDraftDeleteError } from '@/lib/route-planning/draftDeleteCommand';
+import { usePendingLoadsForRouting } from '@/hooks/route-planning/usePendingLoadsForRouting';
 import {
   sortAvailableLoadsByRecipient,
   sortItemsByRecipient,
   sortLoadsByRecipient,
+  areAllVisibleLoadsSelected,
+  toggleVisibleLoadSelection,
   type PendingRoutePlanningLoad as PendingLoad,
-  type RoutePlanningLoadItem as LoadItem,
 } from '@/lib/route-planning/routePlanningLoads';
 
 /* ────────────── types ────────────── */
@@ -107,61 +108,10 @@ export default function RoutePlanning() {
 
   const { data: drivers = [] } = useDrivers();
 
-  // Cargas pendentes (planned, sem trip vinculada)
-  const { data: pendingLoads = [], isLoading } = useQuery({
-    queryKey: ['pending_loads_for_routing', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data: loads, error } = await supabase.from('loads')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('status', 'planned')
-        .is('trip_id', null)
-        .eq('on_hold', false)
-        .order('destination', { ascending: true });
-      if (error) throw error;
-      if (!loads || loads.length === 0) return [];
-
-      // Buscar items com NF-es para cada carga
-      const loadIds = loads.map(load => load.id);
-      const { data: items, error: itemsErr } = await supabase
-        .from('load_items')
-        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, client_id, supplier_id, value, weight_kg, issue_date)')
-        .in('load_id', loadIds)
-        .order('created_at', { ascending: true });
-      if (itemsErr) throw itemsErr;
-
-      const clientIds = [...new Set((items || []).map((item) => item.fiscal_documents?.client_id).filter(Boolean))] as string[];
-      const { data: clients, error: clientsError } = clientIds.length ? await supabase.from('clients')
-        .select('id, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, address_zip')
-        .eq('tenant_id', currentTenant.id).in('id', clientIds) : { data: [], error: null };
-      if (clientsError) throw clientsError;
-      const addressByClient = new Map((clients || []).map((client) => [client.id,
-        [client.address_street, client.address_number, client.address_complement, client.address_neighborhood,
-          client.address_city, client.address_state, client.address_zip].filter(Boolean).join(', ')]));
-
-      const itemsByLoad: Record<string, LoadItem[]> = {};
-      (items || []).forEach((item) => {
-        if (!itemsByLoad[item.load_id]) itemsByLoad[item.load_id] = [];
-        itemsByLoad[item.load_id].push({
-          ...item,
-          fiscal_documents: item.fiscal_documents ? {
-            ...item.fiscal_documents,
-            client_address: item.fiscal_documents.client_id ? addressByClient.get(item.fiscal_documents.client_id) || null : null,
-          } : null,
-          pallet_count: item.pallet_count ?? 0,
-          weight_kg: item.weight_kg ?? 0,
-          volume_m3: item.volume_m3 ?? 0,
-        });
-      });
-
-      return loads.map((load) => ({
-        ...load,
-        items: itemsByLoad[load.id] || [],
-      })) as PendingLoad[];
-    },
-    enabled: !!currentTenant,
-  });
+  // Cargas pendentes (planned, sem trip vinculada), com paginação, lotes e localização verificada.
+  const pendingLoadsQuery = usePendingLoadsForRouting();
+  const pendingLoads: PendingLoad[] = pendingLoadsQuery.data ?? [];
+  const { isLoading } = pendingLoadsQuery;
 
   const [routes, setRoutes] = useState<RoutePlan[]>([]);
   const [selectedLoads, setSelectedLoads] = useState<Set<string>>(new Set());
@@ -169,19 +119,23 @@ export default function RoutePlanning() {
   const [newRouteName, setNewRouteName] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [globalStartAt, setGlobalStartAt] = useState<string>(() => defaultPlannedStartAt());
-  const { data: persistedDrafts = [] } = useRoutePlanningDrafts();
+  const draftsQuery = useRoutePlanningDrafts();
+  const persistedDrafts = draftsQuery.data ?? [];
   const savePlanSnapshot = useSavePlanSnapshot();
   const deleteDraft = useDeleteDraft();
   const draftsHydratedRef = useRef(false);
   const [restoredFromDraft, setRestoredFromDraft] = useState(false);
 
-  // Carrega janelas dos clientes presentes nas paradas
-  const clientIdsInRoutes = useMemo(() => {
+  // Carrega janelas dos clientes disponíveis e já presentes nas paradas.
+  const clientIdsForRouting = useMemo(() => {
     const ids = new Set<string>();
+    pendingLoads.forEach(load => load.items.forEach(item => {
+      if (item.fiscal_documents?.client_id) ids.add(item.fiscal_documents.client_id);
+    }));
     routes.forEach(r => (r.stops || []).forEach(s => { if (s.client_id) ids.add(s.client_id); }));
     return Array.from(ids);
-  }, [routes]);
-  const { data: customerWindows = [] } = useCustomerDeliveryWindowsForRouting(clientIdsInRoutes);
+  }, [pendingLoads, routes]);
+  const { data: customerWindows = [] } = useCustomerDeliveryWindowsForRouting(clientIdsForRouting);
 
   const assignedLoadIds = useMemo(
     () => new Set(routes.flatMap(r => r.loads.map(l => l.id))),
@@ -191,7 +145,8 @@ export default function RoutePlanning() {
   // ──── Hidratar drafts persistidos (uma vez quando pendingLoads chega) ────
   useEffect(() => {
     if (draftsHydratedRef.current) return;
-    if (!pendingLoads || pendingLoads.length === 0) return;
+    if (!pendingLoadsQuery.isSuccess || !draftsQuery.isSuccess) return;
+    if (pendingLoads.length === 0) { draftsHydratedRef.current = true; return; }
     if (persistedDrafts.length === 0) { draftsHydratedRef.current = true; return; }
     const loadById = new Map(pendingLoads.map(l => [l.id, l] as const));
     const hydrated: RoutePlan[] = persistedDrafts.map((d) => {
@@ -220,12 +175,12 @@ export default function RoutePlanning() {
       setRestoredFromDraft(true);
     }
     draftsHydratedRef.current = true;
-  }, [pendingLoads, persistedDrafts, savePlanSnapshot]);
+  }, [draftsQuery.isSuccess, pendingLoads, pendingLoadsQuery.isSuccess, persistedDrafts, savePlanSnapshot]);
 
   useRoutePlanAutosave(routes,dispatchPlan.pendingDispatches,draftsHydratedRef,savePlanSnapshot,()=>{
     toast.error('Rascunho alterado em outra sessão. Recarregando última versão.');
     void qc.invalidateQueries({queryKey:['route_planning_drafts']});draftsHydratedRef.current=false;
-  });
+  },(error)=>toast.error(`Não foi possível salvar o planejamento automaticamente: ${getErrorMessage(error)}`));
 
   const availableLoads = useMemo(() => {
     return pendingLoads.filter(l => !assignedLoadIds.has(l.id));
@@ -248,6 +203,8 @@ export default function RoutePlanning() {
     const visibleIds = new Set(filteredLoads.map(l => l.id));
     return availableLoads.filter(l => selectedLoads.has(l.id) && !visibleIds.has(l.id));
   }, [filteredLoads, availableLoads, selectedLoads]);
+  const visibleLoadIds = useMemo(() => filteredLoads.map(load => load.id), [filteredLoads]);
+  const allVisibleLoadsSelected = areAllVisibleLoadsSelected(selectedLoads, visibleLoadIds);
 
   const confirmIfHidden = useCallback(async (proceed: () => void) => {
     if (hiddenSelectedLoads.length === 0) { proceed(); return; }
@@ -268,11 +225,7 @@ export default function RoutePlanning() {
   };
 
   const selectAll = () => {
-    if (selectedLoads.size === filteredLoads.length) {
-      setSelectedLoads(new Set());
-    } else {
-      setSelectedLoads(new Set(filteredLoads.map(l => l.id)));
-    }
+    setSelectedLoads(previous => toggleVisibleLoadSelection(previous, visibleLoadIds));
   };
 
   const addToRoute = (routeId: string) => {
@@ -350,6 +303,8 @@ export default function RoutePlanning() {
       toast.info('Nenhum plano gerado.');
       return;
     }
+    const oversized = plans.find(plan => plan.stops.length > 30);
+    if (oversized) { toast.error(`${oversized.name} possui ${oversized.stops.length} paradas. Divida as cargas antes de gerar a rota.`); return; }
     const newRoutes: RoutePlan[] = plans.map(p => ({
       id: p.id,
       name: p.name,
@@ -465,7 +420,8 @@ export default function RoutePlanning() {
       return { id: tripId } as { id: string };
     },
     onSuccess: (_, route) => {
-      removeRoute(route.id);
+      setRoutes(previous => previous.filter(item => item.id !== route.id));
+      savePlanSnapshot.forgetVersion(route.id);
       dispatchPlan.invalidateAll();
       toast.success('Rota despachada! Redirecionando para a carga...');
       // Redirecionar para o detalhe da primeira carga para faturamento/CT-e
@@ -566,7 +522,10 @@ export default function RoutePlanning() {
 
   /** Despacho em lote: só rotas com status 'ready' por padrão. */
   const [batchSummary, setBatchSummary] = useState<{ ok: number; fail: number; skipped: number; errors: string[] } | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const batchDispatchLockRef = useRef(false);
   const dispatchAllValid = async (allowReview = false) => {
+    if (batchDispatchLockRef.current) return;
     const ready = routes.filter(r => {
       const st = routeStatus(r);
       return st === 'ready' || (allowReview && st === 'review');
@@ -575,41 +534,47 @@ export default function RoutePlanning() {
       toast.info(allowReview ? 'Nenhuma rota elegível.' : 'Nenhuma rota pronta para despacho em lote.');
       return;
     }
-    const skipped = routes.length - ready.length;
-    let ok = 0, fail = 0;
-    const errors: string[] = [];
-    for (const r of ready) {
-      setRoutes(prev => prev.map(x => x.id === r.id ? { ...x, dispatching: true, lastDispatchError: undefined } : x));
-      try {
-        await savePlanSnapshot.mutateAsync({routeId:r.id,name:r.name,snapshot:{
-          loads:r.loads.map(l=>({id:l.id})),stops:r.stops,vehicle_id:r.vehicle_id,driver_id:r.driver_id,
-          planned_start_at:r.planned_start_at,sortMode:r.sortMode,notes:r.notes,
-        }});
-        await dispatchPlan.dispatchRoute({
-          attempt_scope: r.id,
-          planning_draft_id: r.id,
-          vehicle_id: r.vehicle_id!,
-          driver_id: r.driver_id!,
-          planned_start_at: r.planned_start_at!,
-          route_name: r.name,
-          load_ids: r.loads.map(l => l.id),
-          stops: r.stops!,
-        });
-        ok++;
-        // remove on success
-        setRoutes(prev => prev.filter(x => x.id !== r.id));
-        savePlanSnapshot.forgetVersion(r.id);
-      } catch (error: unknown) {
-        fail++;
-        const msg = getErrorMessage(error);
-        errors.push(`${r.name}: ${msg}`);
-        setRoutes(prev => prev.map(x => x.id === r.id ? { ...x, dispatching: false, lastDispatchError: msg } : x));
+    batchDispatchLockRef.current = true;
+    setBatchBusy(true);
+    try {
+      const skipped = routes.length - ready.length;
+      let ok = 0, fail = 0;
+      const errors: string[] = [];
+      for (const r of ready) {
+        setRoutes(prev => prev.map(x => x.id === r.id ? { ...x, dispatching: true, lastDispatchError: undefined } : x));
+        try {
+          await savePlanSnapshot.mutateAsync({routeId:r.id,name:r.name,snapshot:{
+            loads:r.loads.map(l=>({id:l.id})),stops:r.stops,vehicle_id:r.vehicle_id,driver_id:r.driver_id,
+            planned_start_at:r.planned_start_at,sortMode:r.sortMode,notes:r.notes,
+          }});
+          await dispatchPlan.dispatchRoute({
+            attempt_scope: r.id,
+            planning_draft_id: r.id,
+            vehicle_id: r.vehicle_id!,
+            driver_id: r.driver_id!,
+            planned_start_at: r.planned_start_at!,
+            route_name: r.name,
+            load_ids: r.loads.map(l => l.id),
+            stops: r.stops!,
+          });
+          ok++;
+          setRoutes(prev => prev.filter(x => x.id !== r.id));
+          savePlanSnapshot.forgetVersion(r.id);
+        } catch (error: unknown) {
+          fail++;
+          const msg = getErrorMessage(error);
+          errors.push(`${r.name}: ${msg}`);
+          setRoutes(prev => prev.map(x => x.id === r.id ? { ...x, dispatching: false, lastDispatchError: msg } : x));
+        }
       }
+      dispatchPlan.invalidateAll();
+      setBatchSummary({ ok, fail, skipped, errors });
+      if (ok > 0) toast.success(`${ok} rota(s) despachada(s)`);
+      if (fail > 0) toast.error(`${fail} rota(s) falharam`);
+    } finally {
+      batchDispatchLockRef.current = false;
+      setBatchBusy(false);
     }
-    dispatchPlan.invalidateAll();
-    setBatchSummary({ ok, fail, skipped, errors });
-    if (ok > 0) toast.success(`${ok} rota(s) despachada(s)`);
-    if (fail > 0) toast.error(`${fail} rota(s) falharam`);
   };
 
   const buildRouteRomaneio = (route: RoutePlan) => {
@@ -671,6 +636,12 @@ export default function RoutePlanning() {
           <Button size="sm" variant="ghost" onClick={() => setRestoredFromDraft(false)}>OK</Button>
         </div>
       )}
+      {draftsQuery.isError && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/40 px-3 py-2 text-xs" role="alert">
+          <span className="flex items-center gap-2"><AlertTriangle className="h-3 w-3 text-destructive" /> Não foi possível restaurar os rascunhos de planejamento.</span>
+          <Button size="sm" variant="outline" onClick={() => void draftsQuery.refetch()} disabled={draftsQuery.isFetching}>Tentar novamente</Button>
+        </div>
+      )}
       <Dialog open={!!batchSummary} onOpenChange={(o) => !o && setBatchSummary(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Resumo do despacho em lote</DialogTitle></DialogHeader>
@@ -727,8 +698,8 @@ export default function RoutePlanning() {
                 : `${selectedLoads.size} carga(s) selecionada(s) entrarão no planejamento.`}
             </span>
           </div>
-          <Button variant="default" onClick={() => dispatchAllValid(false)} disabled={routes.length === 0 || dispatchRouteMutation.isPending}>
-            <Rocket className="h-4 w-4 mr-2" /> Despachar rotas prontas
+          <Button variant="default" onClick={() => void dispatchAllValid(false)} disabled={routes.length === 0 || dispatchRouteMutation.isPending || batchBusy}>
+            <Rocket className="h-4 w-4 mr-2" /> {batchBusy ? 'Despachando rotas…' : 'Despachar rotas prontas'}
           </Button>
           <Button variant="outline" onClick={printAllRoutes} disabled={routes.length === 0}>
             <Printer className="h-4 w-4 mr-2" /> Imprimir todas as rotas
@@ -787,6 +758,11 @@ export default function RoutePlanning() {
         <CardContent className="p-0">
           {isLoading ? (
             <p className="text-center py-8 text-muted-foreground">Carregando...</p>
+          ) : pendingLoadsQuery.isError ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center" role="alert">
+              <p className="text-destructive">Não foi possível consultar as cargas pendentes para roteirização.</p>
+              <Button variant="outline" onClick={() => void pendingLoadsQuery.refetch()} disabled={pendingLoadsQuery.isFetching}>Tentar novamente</Button>
+            </div>
           ) : availableLoads.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">Nenhuma carga pendente para roteirização. Importe NF-es na tela de Ingestão.</p>
           ) : (
@@ -794,7 +770,7 @@ export default function RoutePlanning() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
-                    <Checkbox aria-label="Selecionar todas as cargas visíveis" checked={selectedLoads.size === filteredLoads.length && filteredLoads.length > 0} onCheckedChange={selectAll} />
+                    <Checkbox aria-label="Selecionar todas as cargas visíveis" checked={allVisibleLoadsSelected} onCheckedChange={selectAll} />
                   </TableHead>
                   <TableHead>Carga</TableHead>
                   <TableHead>Destino</TableHead>

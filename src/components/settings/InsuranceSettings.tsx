@@ -23,7 +23,7 @@ const EMPTY: InsuranceProfile = {};
 export function InsuranceSettings() {
   const toast = useSonnerToast();
   const isAdmin = useIsAdmin();
-  const { data: profile, isLoading } = useInsuranceProfile();
+  const { data: profile, isLoading, isError, error, refetch } = useInsuranceProfile();
   const updateMut = useUpdateInsuranceProfile();
   const [form, setForm] = useState<InsuranceProfile>(EMPTY);
   const [editing, setEditing] = useState(false);
@@ -36,6 +36,10 @@ export function InsuranceSettings() {
   const readOnly = !isAdmin || (hasSaved && !editing);
 
   const save = async () => {
+    if (isError || !profile) {
+      toast.error('Recarregue os dados da seguradora antes de salvar.');
+      return;
+    }
     if (!form.name || form.name.trim().length < 3) {
       toast.error('Informe a razão social da seguradora (mín. 3 caracteres)');
       return;
@@ -71,6 +75,12 @@ export function InsuranceSettings() {
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+          </div>
+        ) : isError ? (
+          <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+            <p className="font-medium text-destructive">Não foi possível carregar a seguradora padrão.</p>
+            <p className="text-xs text-muted-foreground">{error instanceof Error ? error.message : 'Falha na consulta.'}</p>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button>
           </div>
         ) : (
           <>
@@ -115,7 +125,7 @@ export function InsuranceSettings() {
               </Button>
             ) : (
               <div className="flex items-center gap-2">
-                <Button size="sm" onClick={save} disabled={updateMut.isPending}>
+                <Button size="sm" onClick={save} disabled={updateMut.isPending || !profile}>
                   {updateMut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Salvar seguradora
                 </Button>

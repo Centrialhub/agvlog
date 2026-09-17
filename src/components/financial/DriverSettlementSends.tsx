@@ -40,7 +40,7 @@ export function DriverSettlementSendsWorkspace({tenant,actor,driver}:Props&{acto
    {!data.total&&<p>Nenhum envio neste filtro.</p>}
    <Button disabled={filters.page===1} onClick={()=>setFilters(old=>({...old,page:old.page-1}))}>Envios anteriores</Button><span> Página {data.page} </span><Button disabled={data.page*data.page_size>=data.total} onClick={()=>setFilters(old=>({...old,page:old.page+1}))}>Próximos envios</Button>
   </>}
-  {entry&&<MovementEntryDialog tenant={tenant} actor={actor} initialDriver={driver} onClose={()=>setEntry(false)} onRecorded={()=>{setEntry(false);setNotice('Envio registrado. Confira a movimentação no extrato; nenhum pagamento de acerto foi criado.');void cache.invalidateQueries({queryKey:['finance-movements',tenant]});void invalidateAccountReview(cache,tenant);}}/>}
+  {entry&&<MovementEntryDialog tenant={tenant} actor={actor} initialDriver={driver} onClose={()=>setEntry(false)} onRecorded={()=>{setEntry(false);setNotice('Envio registrado. Confira a movimentação no extrato; nenhum pagamento de acerto foi criado.');void invalidateAccountReview(cache,tenant);for(const prefix of ['finance-movements','finance-audit','finance-reconciliation-options','finance-automatic-reconciliation'])void cache.invalidateQueries({queryKey:[prefix,tenant]});}}/>}
   {correction&&<MovementCorrectionDialog tenant={tenant} actor={actor} movementId={correction} onClose={()=>setCorrection(null)}/>}
  </section>;
 }

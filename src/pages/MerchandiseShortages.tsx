@@ -16,6 +16,7 @@ import {
 } from '@/hooks/useMerchandiseShortages';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import {
   computeItemTotal, computeCaseTotal, validateCase, validateFinalize, parseQuantity,
   formatBRL, monthLabel,
@@ -28,6 +29,8 @@ import { shortageReportToCsvBlob } from '@/lib/merchandiseShortages/shortageRepo
 import { driverBreakdown, companyBreakdown, observationBreakdown, totalOf } from '@/lib/merchandiseShortages/shortageReportBuilder';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
+import { useDrivers } from '@/hooks/useDrivers';
+import { useClients } from '@/hooks/useClients';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -58,10 +61,12 @@ export default function MerchandiseShortages() {
   const updateStatus = useUpdateShortageStatus();
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
+  const { data: drivers = [] } = useDrivers();
+  const { data: clients = [] } = useClients();
 
   // "Nova Falta" state
   const [form, setForm] = useState({
-    occurrence_date: new Date().toISOString().slice(0, 10),
+    occurrence_date: localDateInputValue(),
     company: '', supplier: '', driver: '', plate: '',
     invoice: '', cte: '', load: '', city: '', customer: '',
     observation: '', status: 'pending_review',
@@ -122,40 +127,38 @@ export default function MerchandiseShortages() {
   };
 
   const casesData = cases.data ?? [];
-  const pending = casesData.filter(c => ['draft','pending_review','investigating','waiting_driver','waiting_supplier','waiting_client'].includes(c.status));
+  const pending = casesData.filter(c => ['draft','pending_review','investigating','waiting_driver','waiting_supplier','waiting_client','confirmed_shortage','supplier_fault','driver_fault','company_fault','customer_fault'].includes(c.status));
   const finalized = casesData.filter(c => ['closed','not_shortage','cancelled','written_off','reimbursed','charged'].includes(c.status));
   const inInvestigation = casesData.filter(c => c.status === 'investigating');
   const notFoundVehicle = casesData.filter(c => c.shortage_type === 'not_found_in_vehicle');
   const supplierFault = casesData.filter(c => c.shortage_type === 'supplier_fault' || c.responsible_party_type === 'supplier');
-  const totalMonth = casesData.reduce((a, c) => a + Number(c.total_amount || 0), 0);
+  const effectiveCases = casesData.filter(c => !['cancelled','not_shortage'].includes(c.status));
+  const totalMonth = effectiveCases.reduce((a, c) => a + Number(c.total_amount || 0), 0);
   const totalToCharge = casesData.reduce((a, c) => a + Number(c.amount_to_charge || 0), 0);
   const totalWrittenOff = casesData.reduce((a, c) => a + Number(c.amount_written_off || 0), 0);
   const totalReimbursed = casesData.reduce((a, c) => a + Number(c.amount_reimbursed || 0), 0);
 
   // Import
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [previewFingerprint, setPreviewFingerprint] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
 
   const handleFile = async (file: File | null) => {
     if (!file) return;
     const buf = await file.arrayBuffer();
+    const digest = await crypto.subtle.digest('SHA-256', buf);
+    setPreviewFingerprint(Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join(''));
     const p = parseShortageWorkbook(buf, file.name);
     setPreview(p);
     toast.info(`${p.validRows} linhas válidas em ${p.cases.length} casos`);
   };
 
   const commitImport = async () => {
-    if (!preview || !currentTenant?.id) return;
+    if (!preview || !previewFingerprint || !currentTenant?.id) return;
     setImporting(true);
     try {
-      const { data: batch } = await supabase.from('merchandise_shortage_import_batches')
-        .insert({ tenant_id: currentTenant.id, file_name: preview.fileName, row_count: preview.totalRows, status: 'processing' })
-        .select('id').single();
-      let ok = 0, err = 0;
-      for (const c of preview.cases) {
-        try {
-          await createCase.mutateAsync({
-            occurrence_date: c.occurrence_date ?? new Date().toISOString().slice(0, 10),
+      const importCases = preview.cases.map(c => ({
+            occurrence_date: c.occurrence_date ?? localDateInputValue(),
             company_name_snapshot: c.company,
             driver_name_snapshot: c.driver,
             invoice_number: c.invoice,
@@ -165,20 +168,24 @@ export default function MerchandiseShortages() {
             shortage_type: c.shortage_type,
             status: 'investigating',
             source_type: 'spreadsheet_import',
-            import_batch_id: batch?.id ?? null,
             metadata: { sheet: c.sheet, month: c.month, year: c.year, responsible_party_type: c.responsible_party_type },
             items: c.items,
-          });
-          ok++;
-        } catch (e) { err++; console.error(e); }
-      }
-      if (batch?.id) {
-        await supabase.from('merchandise_shortage_import_batches')
-          .update({ imported_count: ok, error_count: err, status: err ? 'completed_with_errors' : 'completed' })
-          .eq('id', batch.id);
-      }
-      toast.success(`Importados: ${ok}, erros: ${err}`);
+      }));
+      const { data, error } = await supabase.rpc('import_merchandise_shortage_batch_v1', {
+        _tenant_id: currentTenant.id,
+        _request_id: crypto.randomUUID(),
+        _file_name: preview.fileName,
+        _row_count: preview.totalRows,
+        _file_hash: previewFingerprint,
+        _cases: importCases as never,
+      });
+      if (error) throw error;
+      const result = data as unknown as { imported_count?: number; replayed?: boolean };
+      toast.success(result.replayed ? `Arquivo já importado (${result.imported_count ?? 0} casos)` : `Importados: ${result.imported_count ?? importCases.length}`);
       setPreview(null);
+      setPreviewFingerprint(null);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao importar faltas de mercadoria');
     } finally {
       setImporting(false);
     }
@@ -209,16 +216,20 @@ export default function MerchandiseShortages() {
           <div className="flex gap-2 items-end">
             <div>
               <Label className="text-xs">Mês</Label>
-              <Input type="number" min={1} max={12} value={month} onChange={e => { const m = Number(e.target.value); setMonth(m); setFilters(f => ({ ...f, month: m })); }} className="w-20" />
+              <Input type="number" min={1} max={12} value={month} onChange={e => { const m = Math.min(12, Math.max(1, Number(e.target.value) || 1)); setMonth(m); setFilters(f => ({ ...f, month: m })); }} className="w-20" />
             </div>
             <div>
               <Label className="text-xs">Ano</Label>
-              <Input type="number" value={year} onChange={e => { const y = Number(e.target.value); setYear(y); setFilters(f => ({ ...f, year: y })); }} className="w-24" />
+              <Input type="number" min={1900} value={year} onChange={e => { const y = Math.max(1900, Number(e.target.value) || now.getFullYear()); setYear(y); setFilters(f => ({ ...f, year: y })); }} className="w-24" />
             </div>
           </div>
         </div>
 
-        <Tabs defaultValue="list" className="space-y-4">
+        {cases.isLoading ? (
+          <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Carregando faltas de mercadoria…</CardContent></Card>
+        ) : cases.isError ? (
+          <Card><CardContent className="py-10 text-center text-sm text-destructive">Não foi possível carregar as faltas: {cases.error instanceof Error ? cases.error.message : 'erro desconhecido'}</CardContent></Card>
+        ) : <Tabs defaultValue="list" className="space-y-4">
           <TabsList>
             <TabsTrigger value="list">Lançamentos</TabsTrigger>
             <TabsTrigger value="new">Nova Falta</TabsTrigger>
@@ -397,7 +408,7 @@ export default function MerchandiseShortages() {
                         <TableCell>{c.responsible_party_type ?? '-'}</TableCell>
                         <TableCell className="space-x-1">
                           <Select onValueChange={async (v) => {
-                            const errs = validateFinalize(v, { responsible_party_type: c.responsible_party_type });
+                            const errs = validateFinalize(v, { responsible_party_type: c.responsible_party_type, responsible_driver_id: c.responsible_driver_id, responsible_supplier_id: c.responsible_supplier_id });
                             if (errs.length && v === 'closed') { toast.error(errs[0].message); return; }
                             if (v === 'cancelled') {
                               const reason = await promptAction('Informe por que esta ocorrência deve ser cancelada.', {
@@ -405,9 +416,17 @@ export default function MerchandiseShortages() {
                                 label: 'Motivo do cancelamento',
                               });
                               if (!reason) return;
-                              await updateStatus.mutateAsync({ case_id: c.id, status: v, payload: { cancellation_reason: reason } });
+                              await updateStatus.mutateAsync({ case_id: c.id, status: v, expected_revision: c.revision, payload: { cancellation_reason: reason } });
                             } else {
-                              await updateStatus.mutateAsync({ case_id: c.id, status: v });
+                              const amountField = v === 'charged' ? 'amount_to_charge' : v === 'reimbursed' ? 'amount_reimbursed' : v === 'written_off' ? 'amount_written_off' : null;
+                              let payload: Record<string, unknown> | undefined;
+                              if (amountField) {
+                                const value = await promptAction('Informe um valor positivo para concluir esta etapa.', { title: 'Valor obrigatório', label: 'Valor' });
+                                const amount = Number(String(value || '').replace(',', '.'));
+                                if (!Number.isFinite(amount) || amount <= 0) { toast.error('Informe um valor positivo.'); return; }
+                                payload = { [amountField]: amount };
+                              }
+                              await updateStatus.mutateAsync({ case_id: c.id, status: v, expected_revision: c.revision, payload });
                             }
                             toast.success('Status atualizado');
                           }}>
@@ -416,8 +435,10 @@ export default function MerchandiseShortages() {
                               {STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                          {c.responsible_party_type === 'driver' && <Select value={c.responsible_driver_id || undefined} onValueChange={id => updateStatus.mutateAsync({ case_id: c.id, status: c.status, expected_revision: c.revision, payload: { responsible_driver_id: id } })}><SelectTrigger className="w-40"><SelectValue placeholder="Motorista" /></SelectTrigger><SelectContent>{drivers.map(driver => <SelectItem key={driver.id} value={driver.id}>{driver.name}</SelectItem>)}</SelectContent></Select>}
+                          {c.responsible_party_type === 'supplier' && <Select value={c.responsible_supplier_id || undefined} onValueChange={id => updateStatus.mutateAsync({ case_id: c.id, status: c.status, expected_revision: c.revision, payload: { responsible_supplier_id: id } })}><SelectTrigger className="w-40"><SelectValue placeholder="Fornecedor" /></SelectTrigger><SelectContent>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}</SelectContent></Select>}
                           <Select onValueChange={async (v) => {
-                            await updateStatus.mutateAsync({ case_id: c.id, status: c.status, payload: { responsible_party_type: v } });
+                            await updateStatus.mutateAsync({ case_id: c.id, status: c.status, expected_revision: c.revision, payload: { responsible_party_type: v } });
                             toast.success('Responsável definido');
                           }}>
                             <SelectTrigger className="w-36"><SelectValue placeholder="Responsável" /></SelectTrigger>
@@ -440,12 +461,14 @@ export default function MerchandiseShortages() {
               <CardHeader className="flex flex-row justify-between items-center">
                 <CardTitle>Relatório Mensal — {monthLabel(month, year)}</CardTitle>
                 <div className="flex gap-2">
-                  <Button onClick={exportPdf}>PDF</Button>
-                <Button variant="outline" onClick={exportXlsx}>Excel</Button>
-                  <Button variant="outline" onClick={exportCsv}>CSV</Button>
+                  <Button onClick={exportPdf} disabled={reports.isLoading || reports.isError}>PDF</Button>
+                <Button variant="outline" onClick={exportXlsx} disabled={reports.isLoading || reports.isError}>Excel</Button>
+                  <Button variant="outline" onClick={exportCsv} disabled={reports.isLoading || reports.isError}>CSV</Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {reports.isLoading ? <p className="py-6 text-center text-sm text-muted-foreground">Carregando itens do relatório…</p> : reports.isError ?
+                  <p className="py-6 text-center text-sm text-destructive">Não foi possível carregar os itens do relatório: {reports.error instanceof Error ? reports.error.message : 'erro desconhecido'}</p> : <>
                 <div className="grid grid-cols-3 gap-4">
                   <MetricCard label="Itens" value={String(reports.rows.length)} />
                   <MetricCard label="Casos" value={String(reports.cases.length)} />
@@ -456,6 +479,7 @@ export default function MerchandiseShortages() {
                   <SubtotalTable title="Por Empresa" rows={companyBreakdown(reports.rows).map(d => ({ key: d.company_name, items: d.item_count, total: d.total_amount }))} />
                   <SubtotalTable title="Por Observação" rows={observationBreakdown(reports.rows).map(d => ({ key: d.observation, items: d.item_count, total: d.total_amount }))} />
                 </div>
+                </>}
               </CardContent>
             </Card>
           </TabsContent>
@@ -504,7 +528,7 @@ export default function MerchandiseShortages() {
                     <div>Meses detectados: {preview.detectedMonths.join(', ') || '—'}</div>
                     <div>Linhas válidas: {preview.validRows} | Subtotais ignorados: {preview.skippedSubtotals} | Casos: {preview.cases.length}</div>
                     <div>Total calculado: {formatBRL(preview.totalAmountCalculated)}</div>
-                    <Button onClick={commitImport} disabled={importing}>{importing ? 'Importando…' : 'Confirmar importação'}</Button>
+                    <Button onClick={commitImport} disabled={importing || !previewFingerprint}>{importing ? 'Importando…' : 'Confirmar importação'}</Button>
                   </div>
                 )}
                 <div className="border-t pt-3">
@@ -528,7 +552,7 @@ export default function MerchandiseShortages() {
               </CardContent>
             </Card>
           </TabsContent>
-        </Tabs>
+        </Tabs>}
       </div>
   );
 }

@@ -409,6 +409,12 @@ begin
     raise exception 'invalid_address_resolution' using errcode='22023';end if;
   v_hash:=encode(sha256(convert_to((_payload-'request_id')::text,'UTF8')),'hex');
   perform pg_advisory_xact_lock(hashtextextended('operator_command:'||v_tenant::text||':'||v_request::text,0));
+  -- Revalidate current membership after waits; never authorize replay from an old check.
+  if auth.uid() is distinct from v_actor or v_actor is null
+    or private.request_tenant_id() is distinct from v_tenant
+    or not private.is_request_tenant_member(v_tenant)
+    or not coalesce(public.is_tenant_admin(v_tenant),false) then
+    raise exception 'not_authorized' using errcode='42501';end if;
   select * into v_existing from public.operator_command_ledger
     where tenant_id=v_tenant and request_id=v_request;
   if found then
@@ -418,6 +424,12 @@ begin
     return v_existing.response;
   end if;
   select * into v_item from public.address_resolution_queue where id=v_id and tenant_id=v_tenant for update;
+  -- Revalidate current membership after waits; never authorize replay from an old check.
+  if auth.uid() is distinct from v_actor or v_actor is null
+    or private.request_tenant_id() is distinct from v_tenant
+    or not private.is_request_tenant_member(v_tenant)
+    or not coalesce(public.is_tenant_admin(v_tenant),false) then
+    raise exception 'not_authorized' using errcode='42501';end if;
   if not found or v_item.status not in ('pending','ambiguous','error') then
     raise exception 'address_resolution_not_available' using errcode='23514';end if;
   v_details:=jsonb_build_object('selected_label',left(coalesce(_payload->>'label','Ponto ajustado no mapa'),500),
@@ -451,6 +463,12 @@ begin
     and status in ('pending','ambiguous','error');
   v_result:=jsonb_build_object('ok',true,'idempotent',false,'request_id',v_request,'queue_id',v_id,
     'canonical_address_id',v_item.canonical_address_id,'selection_kind',v_kind);
+  -- Revalidate current membership after waits; never authorize replay from an old check.
+  if auth.uid() is distinct from v_actor or v_actor is null
+    or private.request_tenant_id() is distinct from v_tenant
+    or not private.is_request_tenant_member(v_tenant)
+    or not coalesce(public.is_tenant_admin(v_tenant),false) then
+    raise exception 'not_authorized' using errcode='42501';end if;
   insert into public.operator_command_ledger(tenant_id,request_id,actor_id,action,entity_type,entity_id,payload_hash,response)
     values(v_tenant,v_request,v_actor,'resolve_address',v_item.entity_type,v_id,v_hash,v_result);
   return v_result;
@@ -478,6 +496,12 @@ begin
     raise exception 'not_authorized' using errcode='42501';end if;
   v_hash:=encode(sha256(convert_to((_payload-'request_id')::text,'UTF8')),'hex');
   perform pg_advisory_xact_lock(hashtextextended('operator_command:'||v_tenant::text||':'||v_request::text,0));
+  -- Revalidate current membership after waits; never authorize replay from an old check.
+  if auth.uid() is distinct from v_actor or v_actor is null
+    or private.request_tenant_id() is distinct from v_tenant
+    or not private.is_request_tenant_member(v_tenant)
+    or not coalesce(public.is_tenant_admin(v_tenant),false) then
+    raise exception 'not_authorized' using errcode='42501';end if;
   select * into v_existing from public.operator_command_ledger where tenant_id=v_tenant and request_id=v_request;
   if found then
     if v_existing.actor_id<>v_actor or v_existing.action<>'upsert_geofence' or v_existing.payload_hash<>v_hash then
@@ -492,6 +516,12 @@ begin
   where g.tenant_id=v_tenant and g.id=v_id;
   if not found then raise exception 'geofence_not_found' using errcode='P0002';end if;
   v_result:=jsonb_build_object('ok',true,'idempotent',false,'request_id',v_request,'geofence_id',v_id);
+  -- Revalidate current membership after waits; never authorize replay from an old check.
+  if auth.uid() is distinct from v_actor or v_actor is null
+    or private.request_tenant_id() is distinct from v_tenant
+    or not private.is_request_tenant_member(v_tenant)
+    or not coalesce(public.is_tenant_admin(v_tenant),false) then
+    raise exception 'not_authorized' using errcode='42501';end if;
   insert into public.operator_command_ledger(tenant_id,request_id,actor_id,action,entity_type,entity_id,payload_hash,response)
     values(v_tenant,v_request,v_actor,'upsert_geofence','geofence',v_id,v_hash,v_result);
   return v_result;
@@ -520,6 +550,12 @@ begin
   v_hash:=encode(sha256(convert_to(jsonb_build_object('divergence_id',_divergence_id,
     'status',_status,'reason',btrim(coalesce(_reason,'')))::text,'UTF8')),'hex');
   perform pg_advisory_xact_lock(hashtextextended('operator_command:'||_tenant_id::text||':'||_request_id::text,0));
+  -- Revalidate current membership after waits; never authorize replay from an old check.
+  if auth.uid() is distinct from v_actor or v_actor is null
+    or private.request_tenant_id() is distinct from _tenant_id
+    or not private.is_request_tenant_member(_tenant_id)
+    or not coalesce(public.is_tenant_operator_or_admin(_tenant_id),false) then
+    raise exception 'not_authorized' using errcode='42501';end if;
   select * into v_existing from public.operator_command_ledger where tenant_id=_tenant_id and request_id=_request_id;
   if found then
     if v_existing.actor_id<>v_actor or v_existing.action<>'review_trip_cargo_divergence'
@@ -529,6 +565,12 @@ begin
   end if;
   v_result:=private.review_trip_cargo_divergence(_tenant_id,_divergence_id,_status,_reason)
     ||jsonb_build_object('request_id',_request_id,'idempotent',false);
+  -- Revalidate current membership after waits; never authorize replay from an old check.
+  if auth.uid() is distinct from v_actor or v_actor is null
+    or private.request_tenant_id() is distinct from _tenant_id
+    or not private.is_request_tenant_member(_tenant_id)
+    or not coalesce(public.is_tenant_operator_or_admin(_tenant_id),false) then
+    raise exception 'not_authorized' using errcode='42501';end if;
   insert into public.operator_command_ledger(tenant_id,request_id,actor_id,action,entity_type,entity_id,payload_hash,response)
     values(_tenant_id,_request_id,v_actor,'review_trip_cargo_divergence','trip_cargo_divergence',
       _divergence_id,v_hash,v_result);

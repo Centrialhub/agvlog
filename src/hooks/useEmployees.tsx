@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export const EMPLOYEE_STATUSES = ['active', 'inactive', 'on_leave', 'terminated'] as const;
 export type EmployeeStatus = typeof EMPLOYEE_STATUSES[number];
@@ -22,12 +23,8 @@ export function useEmployees() {
     queryKey: ['employees', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('employees').select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('name');
-      if (error) throw error;
-      return (data || []) as Employee[];
+      return await fetchAllPostgrestPages((from, to) => supabase.from('employees').select('*')
+        .eq('tenant_id', currentTenant.id).order('name').order('id').range(from, to)) as Employee[];
     },
     enabled: !!currentTenant,
   });

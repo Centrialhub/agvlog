@@ -22,10 +22,11 @@ import { format } from 'date-fns';
 import FreightAuditDrawer from '@/components/freight/FreightAuditDrawer';
 
 const n = (value: unknown) => (value ? Number(value) : 0);
-const numField = (label: string, value: string | number, onChange: (v: string) => void, opts?: { step?: string; prefix?: string }) => (
+const numField = (label: string, value: string | number, onChange: (v: string) => void, opts?: { step?: string; prefix?: string; readOnly?: boolean }) => (
   <div>
-    <Label>{label}</Label>
-    <Input type="number" step={opts?.step || '0.01'} placeholder="0,00" value={value || ''} onChange={e => onChange(e.target.value)} />
+    <Label>{label}{opts?.readOnly ? ' (calculado)' : ''}</Label>
+    <Input type="number" min="0" step={opts?.step || '0.01'} placeholder="0,00" value={value ?? ''}
+      readOnly={opts?.readOnly} aria-readonly={opts?.readOnly} onChange={e => { if (!opts?.readOnly) onChange(e.target.value); }} />
   </div>
 );
 
@@ -36,12 +37,35 @@ interface OrderFormState extends Record<string, string | number> {
   payer_type: string;
 }
 
-function OrderForm({ order, clients, onSave, onCancel }: {
+function calculateOrderTotals(previous: OrderFormState): OrderFormState {
+  const subtotal = ['freight_weight_value','freight_delivery_value','insurance_value','toll_value','loading_value','tracking_value','gris_value','other_costs']
+    .reduce((sum, key) => sum + n(previous[key]), 0);
+  const total = Math.max(subtotal - n(previous.discount_value), 0);
+  const base = (key: string) => String(previous[key] ?? '').trim() === '' ? total : n(previous[key]);
+  const icmsVal = base('icms_base') * n(previous.icms_rate) / 100;
+  const pisVal = total * n(previous.pis_rate) / 100;
+  const cofinsVal = total * n(previous.cofins_rate) / 100;
+  const cbsVal = base('cbs_base') * n(previous.cbs_rate) / 100;
+  const ibsVal = base('ibs_base') * n(previous.ibs_rate) / 100;
+  return {
+    ...previous,
+    subtotal: subtotal.toFixed(2), total_freight: total.toFixed(2),
+    icms_base: base('icms_base').toFixed(2), cbs_base: base('cbs_base').toFixed(2), ibs_base: base('ibs_base').toFixed(2),
+    icms_value: icmsVal.toFixed(2), pis_value: pisVal.toFixed(2), cofins_value: cofinsVal.toFixed(2),
+    cbs_value: cbsVal.toFixed(2), ibs_value: ibsVal.toFixed(2),
+    financial_value: (total - icmsVal - pisVal - cofinsVal - cbsVal - ibsVal).toFixed(2),
+  };
+}
+
+function OrderForm({ order, clients, onSave, onCancel, isSaving }: {
   order?: Order;
   clients: Client[];
-  onSave: (values: Partial<Order>) => void;
+  onSave: (values: Partial<Order>) => Promise<void>;
   onCancel: () => void;
+  isSaving: boolean;
 }) {
+  const { toast } = useToast();
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<OrderFormState>({
     order_number: order?.order_number || '',
     client_id: order?.client_id || '',
@@ -73,7 +97,7 @@ function OrderForm({ order, clients, onSave, onCancel }: {
     tracking_value: order?.tracking_value || '',
     gris_value: order?.gris_value || '',
     other_costs: order?.other_costs || '',
-    icms_base: order?.icms_base || '',
+    icms_base: order?.icms_base ?? '',
     icms_rate: order?.icms_rate || '',
     icms_value: order?.icms_value || '',
     pis_rate: order?.pis_rate ?? '0.65',
@@ -84,10 +108,10 @@ function OrderForm({ order, clients, onSave, onCancel }: {
     discount_value: order?.discount_value || '',
     subtotal: order?.subtotal || '',
     financial_value: order?.financial_value || '',
-    cbs_base: order?.cbs_base || '',
+    cbs_base: order?.cbs_base ?? '',
     cbs_rate: order?.cbs_rate ?? '0.90',
     cbs_value: order?.cbs_value || '',
-    ibs_base: order?.ibs_base || '',
+    ibs_base: order?.ibs_base ?? '',
     ibs_rate: order?.ibs_rate ?? '0.10',
     ibs_value: order?.ibs_value || '',
   });
@@ -98,61 +122,40 @@ function OrderForm({ order, clients, onSave, onCancel }: {
   })), []);
 
   // Auto-calculate totals
-  const calcTotals = useCallback(() => {
-    setForm(prev => {
-      const fw = n(prev.freight_weight_value);
-      const fd = n(prev.freight_delivery_value);
-      const ins = n(prev.insurance_value);
-      const toll = n(prev.toll_value);
-      const load = n(prev.loading_value);
-      const track = n(prev.tracking_value);
-      const gris = n(prev.gris_value);
-      const other = n(prev.other_costs);
-      const sub = fw + fd + ins + toll + load + track + gris + other;
-      const disc = n(prev.discount_value);
-      const total = Math.max(sub - disc, 0);
+  const calcTotals = useCallback(() => setForm(calculateOrderTotals), []);
 
-      const icmsBase = n(prev.icms_base) || total;
-      const icmsRate = n(prev.icms_rate);
-      const icmsVal = icmsBase * icmsRate / 100;
-      const pisRate = n(prev.pis_rate);
-      const pisVal = total * pisRate / 100;
-      const cofinsRate = n(prev.cofins_rate);
-      const cofinsVal = total * cofinsRate / 100;
-      const cbsBase = n(prev.cbs_base) || total;
-      const cbsRate = n(prev.cbs_rate);
-      const cbsVal = cbsBase * cbsRate / 100;
-      const ibsBase = n(prev.ibs_base) || total;
-      const ibsRate = n(prev.ibs_rate);
-      const ibsVal = ibsBase * ibsRate / 100;
-
-      return {
-        ...prev,
-        subtotal: sub.toFixed(2),
-        total_freight: total.toFixed(2),
-        icms_value: icmsVal.toFixed(2),
-        pis_value: pisVal.toFixed(2),
-        cofins_value: cofinsVal.toFixed(2),
-        cbs_value: cbsVal.toFixed(2),
-        ibs_value: ibsVal.toFixed(2),
-        financial_value: (total - icmsVal - pisVal - cofinsVal - cbsVal - ibsVal).toFixed(2),
-      };
-    });
-  }, []);
-
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (submitting || isSaving) return;
     const numFields = [
-      'quantity', 'weight_kg', 'volume_m3', 'value',
+      'quantity', 'pallet_count', 'weight_kg', 'volume_m3', 'value',
       'freight_weight_value', 'freight_delivery_value', 'insurance_value', 'insurance_percent',
       'toll_value', 'loading_value', 'tracking_value', 'gris_value', 'other_costs',
       'icms_base', 'icms_rate', 'icms_value', 'pis_rate', 'pis_value',
       'cofins_rate', 'cofins_value', 'total_freight', 'discount_value', 'subtotal', 'financial_value',
       'cbs_base', 'cbs_rate', 'cbs_value', 'ibs_base', 'ibs_rate', 'ibs_value',
     ];
-    const out: Record<string, string | number | null> = { ...form };
+    const calculated = calculateOrderTotals(form);
+    if (n(form.discount_value) > n(calculated.subtotal)) {
+      toast({ title: 'Desconto inválido', description: 'O desconto não pode ser maior que o subtotal do frete.', variant: 'destructive' });
+      return;
+    }
+    const invalid = numFields.some(key => {
+      const raw = calculated[key];
+      return String(raw ?? '').trim() !== '' && (!Number.isFinite(Number(raw)) || Number(raw) < 0);
+    });
+    if (invalid) {
+      toast({ title: 'Valores inválidos', description: 'Quantidades, custos, bases e alíquotas não podem ser negativos.', variant: 'destructive' });
+      return;
+    }
+    const out: Record<string, string | number | null> = { ...calculated };
     numFields.forEach(k => { out[k] = out[k] ? Number(out[k]) : null; });
     ['client_id', 'remitter', 'recipient', 'nf_series', 'issue_date', 'payment_plan', 'city', 'neighborhood'].forEach(k => { out[k] = out[k] || null; });
-    onSave(out as unknown as Partial<Order>);
+    setSubmitting(true);
+    try {
+      await onSave(out as unknown as Partial<Order>);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -207,14 +210,14 @@ function OrderForm({ order, clients, onSave, onCancel }: {
           </div>
           <p className="text-xs font-semibold text-muted-foreground pt-2">Carga</p>
           <div className="grid grid-cols-4 gap-3">
-            <div><Label>Valor NF (R$)</Label><Input type="number" step="0.01" value={form.value} onChange={e => set('value', e.target.value)} /></div>
-            <div><Label>Volume (m³)</Label><Input type="number" step="0.01" value={form.volume_m3} onChange={e => set('volume_m3', e.target.value)} /></div>
-            <div><Label>Peso (kg)</Label><Input type="number" value={form.weight_kg} onChange={e => set('weight_kg', e.target.value)} /></div>
-            <div><Label>Paletes</Label><Input type="number" value={form.pallet_count} onChange={e => set('pallet_count', parseInt(e.target.value) || 0)} /></div>
+            <div><Label>Valor NF (R$)</Label><Input type="number" min="0" step="0.01" value={form.value} onChange={e => set('value', e.target.value)} /></div>
+            <div><Label>Volume (m³)</Label><Input type="number" min="0" step="0.01" value={form.volume_m3} onChange={e => set('volume_m3', e.target.value)} /></div>
+            <div><Label>Peso (kg)</Label><Input type="number" min="0" value={form.weight_kg} onChange={e => set('weight_kg', e.target.value)} /></div>
+            <div><Label>Paletes</Label><Input type="number" min="0" value={form.pallet_count} onChange={e => set('pallet_count', parseInt(e.target.value) || 0)} /></div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div><Label>Tipo Carga</Label><Input value={form.cargo_type} onChange={e => set('cargo_type', e.target.value)} /></div>
-            <div><Label>Qtd</Label><Input type="number" value={form.quantity} onChange={e => set('quantity', e.target.value)} /></div>
+            <div><Label>Qtd</Label><Input type="number" min="0" value={form.quantity} onChange={e => set('quantity', e.target.value)} /></div>
             <div><Label>Plano Pagamento</Label><Input placeholder="Ex: 30/60 dias" value={form.payment_plan} onChange={e => set('payment_plan', e.target.value)} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -263,27 +266,27 @@ function OrderForm({ order, clients, onSave, onCancel }: {
           <div className="grid grid-cols-3 gap-3">
             {numField('Base ICMS (R$)', form.icms_base, v => set('icms_base', v))}
             {numField('Alíquota ICMS (%)', form.icms_rate, v => set('icms_rate', v))}
-            {numField('Valor ICMS (R$)', form.icms_value, v => set('icms_value', v))}
+            {numField('Valor ICMS (R$)', form.icms_value, v => set('icms_value', v), { readOnly: true })}
           </div>
           <p className="text-xs font-semibold text-muted-foreground pt-2">PIS / COFINS</p>
           <div className="grid grid-cols-2 gap-3">
             {numField('Alíquota PIS (%)', form.pis_rate, v => set('pis_rate', v))}
-            {numField('Valor PIS (R$)', form.pis_value, v => set('pis_value', v))}
+            {numField('Valor PIS (R$)', form.pis_value, v => set('pis_value', v), { readOnly: true })}
           </div>
           <div className="grid grid-cols-2 gap-3">
             {numField('Alíquota COFINS (%)', form.cofins_rate, v => set('cofins_rate', v))}
-            {numField('Valor COFINS (R$)', form.cofins_value, v => set('cofins_value', v))}
+            {numField('Valor COFINS (R$)', form.cofins_value, v => set('cofins_value', v), { readOnly: true })}
           </div>
           <p className="text-xs font-semibold text-muted-foreground pt-2">CBS / IBS (Reforma Tributária)</p>
           <div className="grid grid-cols-3 gap-3">
             {numField('Base CBS (R$)', form.cbs_base, v => set('cbs_base', v))}
             {numField('Alíquota CBS (%)', form.cbs_rate, v => set('cbs_rate', v))}
-            {numField('Valor CBS (R$)', form.cbs_value, v => set('cbs_value', v))}
+            {numField('Valor CBS (R$)', form.cbs_value, v => set('cbs_value', v), { readOnly: true })}
           </div>
           <div className="grid grid-cols-3 gap-3">
             {numField('Base IBS (R$)', form.ibs_base, v => set('ibs_base', v))}
             {numField('Alíquota IBS (%)', form.ibs_rate, v => set('ibs_rate', v))}
-            {numField('Valor IBS (R$)', form.ibs_value, v => set('ibs_value', v))}
+            {numField('Valor IBS (R$)', form.ibs_value, v => set('ibs_value', v), { readOnly: true })}
           </div>
           <Button type="button" variant="outline" size="sm" onClick={calcTotals}>
             <DollarSign className="h-4 w-4 mr-1" /> Recalcular
@@ -297,14 +300,16 @@ function OrderForm({ order, clients, onSave, onCancel }: {
 
       <div className="flex gap-2 justify-end pt-2">
         <Button variant="outline" onClick={onCancel}>Cancelar</Button>
-        <Button onClick={handleSubmit} disabled={!form.order_number.trim()}>Salvar</Button>
+        <Button onClick={() => void handleSubmit()} disabled={!form.order_number.trim() || submitting || isSaving}>
+          {submitting || isSaving ? 'Salvando...' : 'Salvar'}
+        </Button>
       </div>
     </div>
   );
 }
 
 export default function Orders() {
-  const { data: orders = [], isLoading } = useOrders();
+  const { data: orders = [], isLoading, isError, error } = useOrders();
   const { data: clients = [] } = useClients();
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
@@ -325,7 +330,7 @@ export default function Orders() {
   const handleSave = async (values: Partial<Order>) => {
     try {
       if (editingOrder) {
-        await updateOrder.mutateAsync({ id: editingOrder.id, ...values });
+        await updateOrder.mutateAsync({ id: editingOrder.id, expected_updated_at: editingOrder.updated_at, ...values });
         toast({ title: 'Pedido atualizado' });
       } else {
         await createOrder.mutateAsync(values);
@@ -364,7 +369,9 @@ export default function Orders() {
           </DialogTrigger>
           <DialogContent className="max-w-3xl">
             <DialogHeader><DialogTitle>{editingOrder ? 'Editar Pedido' : 'Novo Pedido'}</DialogTitle></DialogHeader>
-            <OrderForm order={editingOrder} clients={clients} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingOrder(undefined); }} />
+            <OrderForm order={editingOrder} clients={clients} onSave={handleSave}
+              isSaving={createOrder.isPending || updateOrder.isPending}
+              onCancel={() => { setDialogOpen(false); setEditingOrder(undefined); }} />
           </DialogContent>
         </Dialog>
       </div>
@@ -397,6 +404,8 @@ export default function Orders() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow><TableCell colSpan={10} className="text-center text-destructive py-8">Não foi possível carregar os pedidos: {error instanceof Error ? error.message : 'erro desconhecido'}</TableCell></TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">Nenhum pedido encontrado</TableCell></TableRow>
               ) : filtered.map(o => (

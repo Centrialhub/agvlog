@@ -1,0 +1,3 @@
+// @vitest-environment node
+import {it,expect} from 'vitest';import {writeFileSync} from 'node:fs';import {createFinanceForwardBlockDatabase} from './helpers/financeForwardBlockDatabase';
+it('installs all revised fresh financial files through openings on real invoice lifecycle',async()=>{const {db,applied}=await createFinanceForwardBlockDatabase('20260910140011',true);try{for(const prefix of ['20260910011121','20260910025658','20260910133352'])expect(applied.some(x=>x.file.startsWith('supabase/migrations/'+prefix))).toBe(true);expect(applied.at(-1)?.file).toContain('20260910140010');writeFileSync('docs/qa/finance-fresh-forward-manifest-2026-09-11.json',JSON.stringify(applied,null,2));}finally{await db.close();}},120000);

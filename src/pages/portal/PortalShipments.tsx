@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table';
 import { Loader2, Search, ChevronRight, ClipboardCheck, AlertTriangle, X } from 'lucide-react';
 import type { PublicShipmentStatus } from '@/lib/portal/portalStatus';
+import { fmtDateSafe, fmtDateTimeSafe } from '@/lib/utils/formatDate';
 
 function resolvePublicStatus(r: ShipmentRow): PublicShipmentStatus {
   if (r.public_status) return r.public_status as PublicShipmentStatus;
@@ -22,8 +23,8 @@ function resolvePublicStatus(r: ShipmentRow): PublicShipmentStatus {
   return 'received';
 }
 
-const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
-const fmtDateTime = (d?: string | null) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
+const fmtDate = (d?: string | null) => fmtDateSafe(d);
+const fmtDateTime = (d?: string | null) => fmtDateTimeSafe(d);
 
 type QuickChip = {
   id: string;

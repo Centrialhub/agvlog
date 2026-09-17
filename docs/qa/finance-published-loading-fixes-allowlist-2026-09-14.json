@@ -1,0 +1,14 @@
+[
+  {
+    "path": "src/pages/ClosingReports.tsx",
+    "sha256": "e0f00d72bf59d2c10e67b13487e1f1e76d7c7cbe31c7ea5e095d495d0888cf97"
+  },
+  {
+    "path": "src/components/financial/payroll/PayrollEntryDrawer.tsx",
+    "sha256": "1797e096e17e110beaa02ac071f390f943b926c80ee869d453d88bfb78a22c36"
+  },
+  {
+    "path": "src/test/financialPublishedLoadingStates.test.tsx",
+    "sha256": "34fec452806e1dbcf5dc3eda799c75342760d8cc192effb0d67576f41c4b4397"
+  }
+]

@@ -23,6 +23,7 @@ import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Truck, User, Bu
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Switch } from '@/components/ui/switch';
+import { csvSafeCell } from '@/lib/csvSafety';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -324,12 +325,8 @@ export default function OperationalEvents() {
         ? `ocorrencias_${opts.driverName.replace(/[^\p{L}\p{N}_-]+/gu, '_')}_${format(new Date(), 'yyyyMMdd_HHmm')}`
         : `ocorrencias_${format(new Date(), 'yyyyMMdd_HHmm')}`;
       if (fmt === 'csv') {
-        const escape = (v: unknown) => {
-          const s = v == null ? '' : String(v);
-          return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-        };
         const csv = [detailHeaders, ...detailRows]
-          .map(r => r.map(escape).join(';'))
+          .map(r => r.map(csvSafeCell).join(';'))
           .join('\r\n');
         const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);

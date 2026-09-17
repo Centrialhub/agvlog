@@ -93,9 +93,11 @@ export function validateCase(input: {
     if (!it.product_description || !it.product_description.trim()) {
       errors.push({ field: `items.${i}.product_description`, message: 'Descrição obrigatória' });
     }
-    if (it.quantity == null && !it.quantity_text) {
-      errors.push({ field: `items.${i}.quantity`, message: 'Quantidade obrigatória' });
-    }
+    const parsed = parseQuantity(it.quantity_text);
+    const quantity = it.quantity ?? parsed.quantity;
+    const parsedSafely = it.quantity != null ? Number.isFinite(it.quantity) : parsed.parsedSafely;
+    if (!parsedSafely || quantity == null || !Number.isFinite(quantity) || quantity <= 0)
+      errors.push({ field: `items.${i}.quantity`, message: 'Quantidade deve ser um número positivo' });
     if ((it.unit_cost ?? 0) < 0) {
       errors.push({ field: `items.${i}.unit_cost`, message: 'Custo unitário deve ser >= 0' });
     }
@@ -151,5 +153,6 @@ export function formatBRL(n: number): string {
 
 export function monthLabel(month: number, year: number): string {
   const names = ['JANEIRO','FEVEREIRO','MARÇO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
+  if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year) || year < 1900) return 'PERÍODO INVÁLIDO';
   return `${names[month - 1]}/${year}`;
 }

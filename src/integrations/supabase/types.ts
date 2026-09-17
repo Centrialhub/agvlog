@@ -9745,6 +9745,7 @@ export type Database = {
           responsible_driver_id: string | null
           responsible_party_type: string | null
           responsible_supplier_id: string | null
+          revision: number
           shortage_number: string | null
           shortage_type: string | null
           source_type: string
@@ -9794,6 +9795,7 @@ export type Database = {
           responsible_driver_id?: string | null
           responsible_party_type?: string | null
           responsible_supplier_id?: string | null
+          revision?: number
           shortage_number?: string | null
           shortage_type?: string | null
           source_type?: string
@@ -9843,6 +9845,7 @@ export type Database = {
           responsible_driver_id?: string | null
           responsible_party_type?: string | null
           responsible_supplier_id?: string | null
+          revision?: number
           shortage_number?: string | null
           shortage_type?: string | null
           source_type?: string
@@ -10007,10 +10010,13 @@ export type Database = {
           created_by: string | null
           error_count: number
           errors: Json
+          file_hash: string | null
           file_name: string | null
           id: string
           imported_count: number
           metadata: Json
+          payload_hash: string | null
+          request_id: string | null
           row_count: number
           status: string
           tenant_id: string
@@ -10022,10 +10028,13 @@ export type Database = {
           created_by?: string | null
           error_count?: number
           errors?: Json
+          file_hash?: string | null
           file_name?: string | null
           id?: string
           imported_count?: number
           metadata?: Json
+          payload_hash?: string | null
+          request_id?: string | null
           row_count?: number
           status?: string
           tenant_id: string
@@ -10037,10 +10046,13 @@ export type Database = {
           created_by?: string | null
           error_count?: number
           errors?: Json
+          file_hash?: string | null
           file_name?: string | null
           id?: string
           imported_count?: number
           metadata?: Json
+          payload_hash?: string | null
+          request_id?: string | null
           row_count?: number
           status?: string
           tenant_id?: string
@@ -13933,6 +13945,7 @@ export type Database = {
           end_poi_id: string | null
           id: string
           name: string
+          revision: number
           route_speed_limit_kmh: number | null
           start_poi_id: string | null
           tenant_id: string
@@ -13946,6 +13959,7 @@ export type Database = {
           end_poi_id?: string | null
           id?: string
           name: string
+          revision?: number
           route_speed_limit_kmh?: number | null
           start_poi_id?: string | null
           tenant_id: string
@@ -13959,6 +13973,7 @@ export type Database = {
           end_poi_id?: string | null
           id?: string
           name?: string
+          revision?: number
           route_speed_limit_kmh?: number | null
           start_poi_id?: string | null
           tenant_id?: string
@@ -15999,6 +16014,18 @@ export type Database = {
       }
     }
     Functions: {
+      add_driver_forecast_v1: { Args: { _payload: Json }; Returns: Json }
+      add_driver_progress_v1: { Args: { _payload: Json }; Returns: Json }
+      delete_failed_cte_draft_v1: { Args: { _cte_document_id: string }; Returns: boolean }
+      import_driver_monitoring_workbook_v1: { Args: { _payload: Json }; Returns: Json }
+      create_employee_contract_v1: { Args: { _payload: Json }; Returns: Json }
+      create_pickup_order_v1: { Args: { _payload: Json }; Returns: Json }
+      update_pickup_order_v1: { Args: { _payload: Json }; Returns: Json }
+      create_stock_movement_v1: { Args: { _payload: Json }; Returns: Json }
+      create_vehicle_fueling_with_odometer_v1: { Args: { _payload: Json }; Returns: Json }
+      edit_pallet_return_protocol_v1: { Args: { _payload: Json }; Returns: Json }
+      import_occurrence_report_batch_v1: { Args: { _batch: Json; _occurrences: Json }; Returns: Json }
+      save_route_template_v1: { Args: { _payload: Json }; Returns: Json }
       create_or_reactivate_cost_center_v1: { Args: { _tenant_id: string; _name: string }; Returns: Json }
       driver_get_load_fiscal_file: { Args: { _tenant_id: string; _load_id: string; _document_kind: string; _document_id: string; _format: string }; Returns: Json }
       driver_list_load_fiscal_catalog: { Args: { _tenant_id: string; _load_id: string }; Returns: Json }
@@ -16189,6 +16216,10 @@ export type Database = {
         Args: { _load_ids: string[]; _settlement_id: string }
         Returns: undefined
       }
+      audit_imported_notes_v1: {
+        Args: { _document_ids: string[]; _tenant_id: string }
+        Returns: Json
+      }
       audit_data_consistency: {
         Args: { _tenant_id: string }
         Returns: {
@@ -16360,6 +16391,18 @@ export type Database = {
         Returns: Json
       }
       create_client_invoice: { Args: { payload: Json }; Returns: string }
+      create_checklist_execution_v1: {
+        Args: {
+          _checked_items: Json
+          _checklist_id: string
+          _dispatch_trip_id?: string
+          _employee_id?: string
+          _notes?: string
+          _tenant_id: string
+          _vehicle_id?: string
+        }
+        Returns: Json
+      }
       create_client_occurrence: {
         Args: {
           _client_id: string
@@ -16527,6 +16570,17 @@ export type Database = {
       create_tenant_with_owner: {
         Args: { _tenant_name: string }
         Returns: string
+      }
+      import_merchandise_shortage_batch_v1: {
+        Args: {
+          _cases: Json
+          _file_hash: string
+          _file_name: string
+          _request_id: string
+          _row_count: number
+          _tenant_id: string
+        }
+        Returns: Json
       }
       create_workspace_tenant_v1: {
         Args: {
@@ -16844,6 +16898,55 @@ export type Database = {
           total_pallets: number
           total_value: number
           total_weight: number
+        }[]
+      }
+      get_fiscal_documents_page_v1: {
+        Args: {
+          _cursor_created_at?: string | null
+          _cursor_id?: string | null
+          _document_type?: string | null
+          _expected_revision?: number | string | null
+          _load_filter?: string | null
+          _page_limit?: number
+          _search?: string | null
+          _status?: string | null
+          _tenant_id: string
+        }
+        Returns: {
+          has_more: boolean
+          items: Json
+          next_cursor_created_at: string | null
+          next_cursor_id: string | null
+          revision: string
+          total_count: number
+        }[]
+      }
+      get_active_address_resolution_queue_v2: {
+        Args: {
+          _cursor_created_at?: string
+          _cursor_id?: string
+          _page_limit?: number
+          _snapshot_at?: string
+          _tenant_id: string
+        }
+        Returns: {
+          ambiguous_count: number
+          error_count: number
+          has_more: boolean
+          items: Json
+          next_cursor_created_at: string | null
+          next_cursor_id: string | null
+          pending_count: number
+          snapshot_at: string
+          total_count: number
+        }[]
+      }
+      get_operations_load_counts_v1: {
+        Args: { _tenant_id: string }
+        Returns: {
+          active_count: number
+          delayed_count: number
+          in_transit_count: number
         }[]
       }
       get_open_trip_alerts: {
@@ -17274,8 +17377,43 @@ export type Database = {
           total_count: number
         }[]
       }
+      list_client_occurrence_messages_v2: {
+        Args: {
+          _before_created_at?: string
+          _before_id?: string
+          _limit?: number
+          _occurrence_id: string
+          _tenant_id: string
+        }
+        Returns: {
+          author_name: string
+          author_role: string
+          created_at: string
+          id: string
+          message: string
+        }[]
+      }
       get_current_driver_journey_v1: {
         Args: never
+        Returns: Json
+      }
+      list_driver_settlements_v2: {
+        Args: {
+          _cursor?: Json
+          _date_from?: string
+          _date_to?: string
+          _driver_id?: string
+          _only_expense_pending?: boolean
+          _only_km_pending?: boolean
+          _only_needs_recalculation?: boolean
+          _only_no_freight?: boolean
+          _page_size?: number
+          _search?: string
+          _snapshot_at?: string
+          _status?: string
+          _tenant_id: string
+          _vehicle_id?: string
+        }
         Returns: Json
       }
       get_workspace_ssx_accounts_v1: {

@@ -26,6 +26,15 @@ export interface LoadReportOptions {
   unloading?: UnloadingChargeRow[];
 }
 
+export function selectLoadReportRows(kind: LoadReportKind, rows: LoadControlRow[]): LoadControlRow[] {
+  if (kind === 'paid') return rows.filter(row => row.payment_status === 'paid');
+  if (kind === 'open') return rows.filter(row => {
+    const balance = Number(row.freight_amount || 0) - Number(row.received_amount || 0);
+    return row.payment_status !== 'paid' && row.payment_status !== 'cancelled' && balance > 0;
+  });
+  return rows;
+}
+
 function header(doc: jsPDF, opts: LoadReportOptions): number {
   const info: CompanyPdfInfo = opts.company ?? { name: opts.carrierName || 'Transportadora' };
   const y = drawCompanyHeader(doc, info, { y: 10 });
@@ -78,8 +87,9 @@ export function downloadLoadControlPdf(opts: LoadReportOptions, filename = 'cont
     by_city: ['Cidade/UF', 'Cargas', 'Peso', 'Faturado', 'Frete'],
     unloading: [],
   };
+  const reportRows = selectLoadReportRows(opts.kind, opts.rows);
   const heads = HEADS[opts.kind];
-  const body = opts.rows.map(r => buildRow(opts.kind, r));
+  const body = reportRows.map(r => buildRow(opts.kind, r));
   autoTable(doc, {
     startY,
     head: [heads], body,
@@ -90,7 +100,7 @@ export function downloadLoadControlPdf(opts: LoadReportOptions, filename = 'cont
   });
 
   // Totals
-  const tot = opts.rows.reduce((acc, r) => {
+  const tot = reportRows.reduce((acc, r) => {
     acc.billed += Number(r.gross_cargo_value || 0);
     acc.freight += Number(r.freight_amount || 0);
     acc.received += Number(r.received_amount || 0);
@@ -99,7 +109,7 @@ export function downloadLoadControlPdf(opts: LoadReportOptions, filename = 'cont
   const finalY = getAutoTableFinalY(doc, 30);
   doc.setFontSize(9); doc.setFont('helvetica', 'bold');
   doc.text(
-    `Cargas: ${opts.rows.length}   Faturado: ${money(tot.billed)}   Frete: ${money(tot.freight)}   Recebido: ${money(tot.received)}   Saldo: ${money(tot.freight - tot.received)}`,
+    `Cargas: ${reportRows.length}   Faturado: ${money(tot.billed)}   Frete: ${money(tot.freight)}   Recebido: ${money(tot.received)}   Saldo: ${money(tot.freight - tot.received)}`,
     14, finalY + 8,
   );
   footer(doc); doc.save(filename);

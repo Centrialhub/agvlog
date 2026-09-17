@@ -3,9 +3,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { AlertTriangle, CheckCircle, Search } from 'lucide-react';
+import { AlertTriangle, CheckCircle, RefreshCw, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
+import type { Tables } from '@/integrations/supabase/types';
 import type { FreightBreakdown } from '@/hooks/useFreightCalculator';
+
+type FreightLog = Tables<'freight_calculation_log'>;
 
 interface Props {
   open: boolean;
@@ -15,24 +19,52 @@ interface Props {
   breakdown?: FreightBreakdown | null;
 }
 
-export default function FreightAuditDrawer({ open, onOpenChange, entityId, breakdown: propBreakdown }: Props) {
-  const [logs, setLogs] = useState<any[]>([]);
+export default function FreightAuditDrawer({ open, onOpenChange, entityId, entityType, breakdown: propBreakdown }: Props) {
+  const [logs, setLogs] = useState<FreightLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [reload, setReload] = useState(0);
+  const [historyLimit, setHistoryLimit] = useState(10);
+  const [totalLogs, setTotalLogs] = useState(0);
+
+  useEffect(() => { setHistoryLimit(10); }, [open, entityId, entityType]);
 
   useEffect(() => {
-    if (!open || !entityId) return;
+    setLogs([]);
+    setLoadError('');
+    setLoading(false);
+    setTotalLogs(0);
+    if (!open || !entityId) return undefined;
+    const controller = new AbortController();
+    let active = true;
     setLoading(true);
-    supabase
+    let query = supabase
       .from('freight_calculation_log')
-      .select('*')
-      .eq('entity_id', entityId)
-      .order('created_at', { ascending: false })
-      .limit(10)
-      .then(({ data }) => {
+      .select('*', { count: 'exact' })
+      .eq('entity_id', entityId);
+    if (entityType) query = query.eq('entity_type', entityType);
+    void (async () => {
+      try {
+        const { data, error, count } = await query
+          .order('created_at', { ascending: false })
+          .range(0, historyLimit - 1)
+          .abortSignal(controller.signal);
+        if (!active) return;
+        if (error) {
+          setLoadError(error.message || 'Não foi possível carregar a auditoria do frete.');
+          return;
+        }
         setLogs(data || []);
-        setLoading(false);
-      });
-  }, [open, entityId]);
+        setTotalLogs(count ?? data?.length ?? 0);
+      } catch (cause: unknown) {
+        if (!active && controller.signal.aborted) return;
+        setLoadError(cause instanceof Error ? cause.message : 'Não foi possível carregar a auditoria do frete.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; controller.abort(); };
+  }, [open, entityId, entityType, historyLimit, reload]);
 
   const bd = propBreakdown || (logs.length > 0 ? logsToBreakdown(logs[0]) : null);
   const fmt = (v: number | null | undefined) => `R$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
@@ -46,7 +78,14 @@ export default function FreightAuditDrawer({ open, onOpenChange, entityId, break
           </SheetTitle>
         </SheetHeader>
 
-        {!bd ? (
+        {loadError ? (
+          <div role="alert" className="mt-4 space-y-3 rounded-md border border-destructive/40 p-4 text-sm text-destructive">
+            <p>Não foi possível carregar a auditoria do frete: {loadError}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => setReload(value => value + 1)}>
+              <RefreshCw className="mr-2 h-4 w-4" />Tentar novamente
+            </Button>
+          </div>
+        ) : !bd ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
             {loading ? 'Carregando...' : 'Nenhum cálculo registrado'}
           </div>
@@ -151,7 +190,7 @@ export default function FreightAuditDrawer({ open, onOpenChange, entityId, break
             {logs.length > 1 && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-medium text-muted-foreground">Histórico ({logs.length})</CardTitle>
+                  <CardTitle className="text-xs font-medium text-muted-foreground">Histórico ({logs.length} de {totalLogs})</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {logs.map((log) => (
@@ -163,6 +202,10 @@ export default function FreightAuditDrawer({ open, onOpenChange, entityId, break
                       <span className="font-medium">{fmt(Number(log.final_value))}</span>
                     </div>
                   ))}
+                  {logs.length < totalLogs ? <Button type="button" variant="outline" size="sm" className="w-full"
+                    disabled={loading} onClick={() => setHistoryLimit(limit => limit + 10)}>
+                    {loading ? 'Carregando...' : `Carregar mais (${totalLogs - logs.length} restantes)`}
+                  </Button> : null}
                 </CardContent>
               </Card>
             )}
@@ -185,37 +228,48 @@ function Row({ label, value, bold, primary }: { label: string; value: number; bo
   );
 }
 
-function logsToBreakdown(log: any): FreightBreakdown {
-  const comp = log.components || {};
+function objectValue(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function numeric(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function logsToBreakdown(log: FreightLog): FreightBreakdown {
+  const comp = objectValue(log.components);
+  const matchedCriteria = Object.fromEntries(Object.entries(objectValue(log.matched_criteria)).map(([key, value]) => [key, String(value)]));
+  const ignoredCriteria = Array.isArray(log.ignored_criteria) ? log.ignored_criteria.map(String) : [];
   return {
     tableName: log.freight_table_name || '—',
     tableId: log.freight_table_id || '',
     tableCode: 0,
     regionId: log.region_id,
     regionName: log.region_name,
-    matchedCriteria: log.matched_criteria || {},
-    ignoredCriteria: log.ignored_criteria || [],
+    matchedCriteria,
+    ignoredCriteria,
     specificityScore: 0,
     components: {
-      ratePercent: comp.ratePercent || 0,
-      rateValue: comp.rateValue || 0,
-      fixedValue: comp.fixedValue || 0,
-      perKgValue: comp.perKgValue || 0,
-      perKgTotal: comp.perKgTotal || 0,
-      perPalletValue: comp.perPalletValue || 0,
-      perPalletTotal: comp.perPalletTotal || 0,
-      dispatchValue: comp.dispatchValue || 0,
-      trackingValue: comp.trackingValue || 0,
-      tollValue: comp.tollValue || 0,
-      loadingValue: comp.loadingValue || 0,
-      grisValue: comp.grisValue || 0,
-      insurancePercent: comp.insurancePercent || 0,
-      insuranceValue: comp.insuranceValue || 0,
+      ratePercent: numeric(comp.ratePercent),
+      rateValue: numeric(comp.rateValue),
+      fixedValue: numeric(comp.fixedValue),
+      perKgValue: numeric(comp.perKgValue),
+      perKgTotal: numeric(comp.perKgTotal),
+      perPalletValue: numeric(comp.perPalletValue),
+      perPalletTotal: numeric(comp.perPalletTotal),
+      dispatchValue: numeric(comp.dispatchValue),
+      trackingValue: numeric(comp.trackingValue),
+      tollValue: numeric(comp.tollValue),
+      loadingValue: numeric(comp.loadingValue),
+      grisValue: numeric(comp.grisValue),
+      insurancePercent: numeric(comp.insurancePercent),
+      insuranceValue: numeric(comp.insuranceValue),
     },
     baseValue: Number(log.base_value) || 0,
     minValue: 0,
     finalValue: Number(log.final_value) || 0,
     fallbackUsed: log.fallback_used || false,
-    fallbackReason: log.fallback_reason,
+    fallbackReason: log.fallback_reason ?? undefined,
   };
 }

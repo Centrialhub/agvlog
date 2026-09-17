@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -11,19 +11,39 @@ export interface PortalOccurrenceMessage {
   created_at: string;
 }
 
+const MESSAGE_PAGE_SIZE = 100;
+
+async function readMessagePage(args: {
+  tenantId: string;
+  occurrenceId: string;
+  signal: AbortSignal;
+  before?: PortalOccurrenceMessage;
+}): Promise<PortalOccurrenceMessage[]> {
+  const { data, error } = await supabase.rpc('list_client_occurrence_messages_v2', {
+    _tenant_id: args.tenantId,
+    _occurrence_id: args.occurrenceId,
+    _limit: MESSAGE_PAGE_SIZE + 1,
+    _before_created_at: args.before?.created_at,
+    _before_id: args.before?.id,
+  }).abortSignal(args.signal);
+  if (error) throw error;
+  return (data as PortalOccurrenceMessage[]) || [];
+}
+
 export function usePortalOccurrenceMessages(occurrenceId: string | null) {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
+  const [olderMessages, setOlderMessages] = useState<PortalOccurrenceMessage[]>([]);
+  const [olderHasMore, setOlderHasMore] = useState<boolean | null>(null);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState<unknown>(null);
+  const olderRequestRef = useRef<{ contextKey: string; controller: AbortController } | null>(null);
+  const contextKey = `${currentTenant?.id ?? ''}:${occurrenceId ?? ''}`;
   const query = useQuery({
     queryKey: ['portal_occurrence_messages', currentTenant?.id, occurrenceId],
-    queryFn: async (): Promise<PortalOccurrenceMessage[]> => {
+    queryFn: async ({ signal }): Promise<PortalOccurrenceMessage[]> => {
       if (!currentTenant || !occurrenceId) return [];
-      const { data, error } = await supabase.rpc('list_client_occurrence_messages', {
-        _tenant_id: currentTenant.id,
-        _occurrence_id: occurrenceId,
-      });
-      if (error) throw error;
-      return (data as PortalOccurrenceMessage[]) || [];
+      return readMessagePage({ tenantId: currentTenant.id, occurrenceId, signal });
     },
     enabled: !!currentTenant && !!occurrenceId,
     // Fallback de polling (10s) enquanto o diálogo está aberto — Realtime
@@ -31,6 +51,61 @@ export function usePortalOccurrenceMessages(occurrenceId: string | null) {
     refetchInterval: occurrenceId ? 10000 : false,
     refetchIntervalInBackground: false,
   });
+
+  useEffect(() => {
+    olderRequestRef.current?.controller.abort();
+    olderRequestRef.current = null;
+    setOlderMessages([]);
+    setOlderHasMore(null);
+    setIsLoadingOlder(false);
+    setOlderError(null);
+    return () => {
+      const request = olderRequestRef.current;
+      if (request?.contextKey === contextKey) {
+        request.controller.abort();
+        olderRequestRef.current = null;
+      }
+    };
+  }, [contextKey]);
+
+  const latestMessages = (query.data ?? []).slice(0, MESSAGE_PAGE_SIZE);
+  const messages = useMemo(() => {
+    const byId = new Map<string, PortalOccurrenceMessage>();
+    for (const message of [...latestMessages, ...olderMessages]) byId.set(message.id, message);
+    return [...byId.values()].sort((left, right) => (
+      left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id)
+    ));
+  }, [latestMessages, olderMessages]);
+
+  const hasOlder = olderHasMore ?? (query.data?.length ?? 0) > MESSAGE_PAGE_SIZE;
+  const loadOlder = useCallback(async () => {
+    if (!currentTenant || !occurrenceId || !hasOlder || isLoadingOlder || olderRequestRef.current) return;
+    const oldest = messages[0];
+    if (!oldest) return;
+    const request = { contextKey, controller: new AbortController() };
+    olderRequestRef.current = request;
+    setIsLoadingOlder(true);
+    setOlderError(null);
+    try {
+      const page = await readMessagePage({
+        tenantId: currentTenant.id,
+        occurrenceId,
+        before: oldest,
+        signal: request.controller.signal,
+      });
+      if (olderRequestRef.current !== request || request.controller.signal.aborted) return;
+      setOlderMessages((current) => [...current, ...page.slice(0, MESSAGE_PAGE_SIZE)]);
+      setOlderHasMore(page.length > MESSAGE_PAGE_SIZE);
+    } catch (error) {
+      if (olderRequestRef.current !== request || request.controller.signal.aborted) return;
+      setOlderError(error);
+    } finally {
+      if (olderRequestRef.current === request) {
+        olderRequestRef.current = null;
+        setIsLoadingOlder(false);
+      }
+    }
+  }, [currentTenant, occurrenceId, hasOlder, isLoadingOlder, messages, contextKey]);
 
   useEffect(() => {
     if (!currentTenant || !occurrenceId) return undefined;
@@ -56,7 +131,14 @@ export function usePortalOccurrenceMessages(occurrenceId: string | null) {
     };
   }, [currentTenant, occurrenceId, qc]);
 
-  return query;
+  return {
+    ...query,
+    data: messages,
+    hasOlder,
+    loadOlder,
+    isLoadingOlder,
+    olderError,
+  };
 }
 
 export function useReplyPortalOccurrence() {

@@ -97,7 +97,7 @@ function returnedLoad(load: Load) {
 
 export default function ManifestPanel({ load }: Props) {
   const toast = useSonnerToast();
-  const initializedLoad = useRef<string | null>(null);
+  const initializedSignature = useRef<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [downloading, setDownloading] = useState<'pdf' | 'xml' | null>(null);
 
@@ -149,9 +149,16 @@ export default function ManifestPanel({ load }: Props) {
     [credentials, form.environment],
   );
 
+  const initializationSignature = useMemo(() => JSON.stringify({
+    load: [load.id, load.updated_at, load.vehicle_id, load.driver_id, load.ciot, load.origin, load.destination],
+    ctes: ctes.map(document => [document.id, document.recipient_city_ibge, document.taker_document, document.insurance_endorsements]),
+    emitters: emitters.map(candidate => [candidate.id, candidate.updated_at]),
+    vehicles: vehicles.map(candidate => [candidate.id, candidate.plate, candidate.current_driver_id]),
+  }), [ctes, emitters, load, vehicles]);
+
   useEffect(() => {
     if (
-      initializedLoad.current === load.id || emittersLoading || vehiclesLoading ||
+      initializedSignature.current === initializationSignature || emittersLoading || vehiclesLoading ||
       ctesLoading || driverLoading || !emitters.length
     ) return;
     const defaultEmitter = emitters.find(candidate => candidate.active && candidate.is_default)
@@ -176,8 +183,8 @@ export default function ManifestPanel({ load }: Props) {
       destinationIbge,
       destinationUf: first?.recipient_state || stateFromIbge(destinationIbge),
     });
-    initializedLoad.current = load.id;
-  }, [ctes, ctesLoading, driverLoading, emitters, emittersLoading, load, vehicles, vehiclesLoading]);
+    initializedSignature.current = initializationSignature;
+  }, [ctes, ctesLoading, driverLoading, emitters, emittersLoading, initializationSignature, load, vehicles, vehiclesLoading]);
 
   const lifecycle = normalizeMdfeStatus(manifest?.status);
   const canRetry = !manifest || ['rejected', 'cancelled'].includes(lifecycle);

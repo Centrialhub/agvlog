@@ -45,8 +45,24 @@ import {
   buildClientIndex,
   fillPartyFieldsFromRegistry,
   resolveParty,
+  sanitizeIe,
 } from '@/lib/fiscal/partyRegistry';
-import { consultOfficialTaxRegistry, validateOfficialParty } from '@/lib/fiscal/taxRegistryClient';
+import {
+  consultOfficialTaxRegistry,
+  officialStateRegistrationForParty,
+  validateOfficialParty,
+} from '@/lib/fiscal/taxRegistryClient';
+import {
+  mergeCteDraftAfterAsyncDefaults,
+  mergeCtePartyAddresses,
+  missingCteRemitterAddressFields,
+  missingCteRecipientAddressFields,
+  needsCtePartyRegistryEnrichment,
+  needsCteRemitterAddressAutocomplete,
+  needsCteRecipientAddressAutocomplete,
+  stateFromNfeAccessKey,
+} from '@/lib/fiscal/cteAddressAutocomplete';
+import { isDefinitiveCteIssueError } from '@/lib/fiscal/cteIssueOutcome';
 
 /** Recalcula base/valor do ICMS respeitando o regime embutido (por dentro). */
 function recalcIcms(
@@ -101,7 +117,10 @@ interface EditableCte {
   remitterStreet: string;
   remitterNumber: string;
   remitterNeighborhood: string;
+  remitterCity: string;
+  remitterState: string;
   remitterZip: string;
+  remitterCityIbge: string;
   recipientName: string;
   recipientCnpj: string;
   recipientIe: string;
@@ -248,7 +267,10 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     remitterStreet: '',
     remitterNumber: '',
     remitterNeighborhood: '',
+    remitterCity: '',
+    remitterState: stateFromNfeAccessKey(first?.access_key),
     remitterZip: '',
+    remitterCityIbge: '',
     recipientName: g.recipient || '',
     recipientCnpj: first?.recipient_cnpj || '',
     recipientIe: '',
@@ -371,6 +393,7 @@ function toBuildInput(
             number: emitter.endereco?.numero || null,
             neighborhood: emitter.endereco?.bairro || null,
             city: emitter.endereco?.municipio || null,
+            city_ibge: emitter.city_code || null,
             state: emitter.endereco?.uf || null,
             zip: emitter.endereco?.cep || null,
           },
@@ -380,7 +403,10 @@ function toBuildInput(
       street: e.remitterStreet || null,
       number: e.remitterNumber || null,
       neighborhood: e.remitterNeighborhood || null,
-      zip: e.remitterZip || null
+      city: e.remitterCity || null,
+      state: e.remitterState || null,
+      zip: e.remitterZip || null,
+      city_ibge: e.remitterCityIbge || null,
     }, e.remitterIe),
     recipient: enrichParty(
       e.recipientName,
@@ -398,7 +424,7 @@ function toBuildInput(
       e.clientId,
     ),
     overrides: {
-      remitter: (e.remitterStreet || e.remitterNumber || e.remitterNeighborhood || e.remitterZip || e.remitterCnpj || e.remitterIe || e.remitterName) ? {
+      remitter: (e.remitterStreet || e.remitterNumber || e.remitterNeighborhood || e.remitterCity || e.remitterState || e.remitterZip || e.remitterCityIbge || e.remitterCnpj || e.remitterIe || e.remitterName) ? {
         name: e.remitterName || undefined,
         cnpj: e.remitterCnpj || null,
         ie: e.remitterIe || null,
@@ -406,7 +432,10 @@ function toBuildInput(
           street: e.remitterStreet || null,
           number: e.remitterNumber || null,
           neighborhood: e.remitterNeighborhood || null,
-          zip: e.remitterZip || null
+          city: e.remitterCity || null,
+          state: e.remitterState || null,
+          zip: e.remitterZip || null,
+          city_ibge: e.remitterCityIbge || null,
         }
       } : null,
       recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe || e.recipientCityIbge || e.recipientCity || e.recipientState || e.recipientName) ? {
@@ -531,6 +560,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const [items, setItems] = useState<EditableCte[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [transmitting, setTransmitting] = useState(false);
+  const [autocompletingAddresses, setAutocompletingAddresses] = useState(false);
+  const [addressAutocompleteErrors, setAddressAutocompleteErrors] = useState<string[]>([]);
   const [bulkEditPartes, setBulkEditPartes] = useState(false);
   const [bulkEditTomador, setBulkEditTomador] = useState(false);
   const [bulkEditTransporte, setBulkEditTransporte] = useState(false);
@@ -612,9 +643,16 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       if (cancelled) return;
       setItems((prev) => {
         const previousByKey = new Map(prev.map((it) => [it.key, it]));
+        const baseByKey = new Map(baseItems.map((it) => [it.key, it]));
         return patched.map((it) => {
           const previous = previousByKey.get(it.key);
-          return previous ? preserveInsurerFields(previous, it) : it;
+          const base = baseByKey.get(it.key);
+          if (!previous || !base) return it;
+          return mergeCteDraftAfterAsyncDefaults(
+            base as unknown as Record<string, unknown>,
+            previous as unknown as Record<string, unknown>,
+            preserveInsurerFields(previous, it) as unknown as Record<string, unknown>,
+          ) as unknown as EditableCte;
         });
       });
     })();
@@ -744,6 +782,34 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     [activeCreds, activeEnvironment],
   );
 
+  const incompleteAddressSignature = useMemo(
+    () => items
+      .filter(needsCtePartyRegistryEnrichment)
+      .map((item) => [
+        item.key,
+        onlyDigits(item.remitterCnpj),
+        item.remitterIe,
+        item.remitterStreet,
+        item.remitterNumber,
+        item.remitterNeighborhood,
+        item.remitterCity,
+        item.remitterState,
+        onlyDigits(item.remitterZip),
+        item.remitterCityIbge,
+        onlyDigits(item.recipientCnpj),
+        item.recipientIe,
+        item.recipientStreet,
+        item.recipientNumber,
+        item.recipientNeighborhood,
+        item.recipientCity,
+        item.recipientState,
+        onlyDigits(item.recipientZip),
+        item.recipientCityIbge,
+      ].join(':'))
+      .join('|'),
+    [items],
+  );
+
   const validation = useMemo(() => {
     if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[], consistencyError: false };
     const em = selectActiveEmitterById(emitters, active.emitterId);
@@ -781,7 +847,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
   const allValid = items.every((it) => {
     const em = selectActiveEmitterById(emitters, it.emitterId);
-    const input = toBuildInput(it, em, 'sandbox', clients);
+    const input = toBuildInput(it, em, activeEnvironment, clients);
     const r = buildCtePayload(input);
     
     const isSimples = isSimpleTaxRegime(em);
@@ -856,6 +922,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     setTransmitting(true);
     let okCount = 0;
     const errors: string[] = [];
+    let stopBatch = false;
     
     // Cache de credenciais por emitente para evitar lookups repetitivos
     const credsCache: Record<string, { env: 'sandbox' | 'homologation' | 'production' }> = {};
@@ -916,11 +983,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               ),
             );
             errors.push(`#${i + 1}: ${message}`);
+            stopBatch = !isDefinitiveCteIssueError(error);
           }
         })();
 
-        // Stop the batch on uncertainty/rejection so remaining sources are not dispatched blindly.
-        if (errors.length > 0) break;
+        // Continue after a definitive rejection; stop only when dispatch outcome is uncertain.
+        if (stopBatch) break;
       }
 
       if (okCount === 0) {
@@ -942,30 +1010,54 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   }
 
 
-  async function validateOfficialRegistryBeforeTransmit(): Promise<string[]> {
-    if (activeEnvironment !== 'production') return [];
+  async function prepareOfficialRegistryBeforeTransmit(
+    sourceItems: EditableCte[] = items,
+    addressOnly = false,
+  ): Promise<{
+    errors: string[];
+    warnings: string[];
+    preparedItems: EditableCte[];
+  }> {
+    const preparedItems = sourceItems.map(item => ({ ...item }));
+    // A validação fiscal oficial é exclusiva de produção, mas o autofill de
+    // endereço também precisa funcionar na homologação (ambiente padrão da
+    // prévia). A consulta cadastral continua sendo somente leitura.
+    if (!addressOnly && activeEnvironment !== 'production') {
+      return { errors: [], warnings: [], preparedItems };
+    }
     const errors: string[] = [];
+    const warnings: string[] = [];
     const checked = new Map<string, Awaited<ReturnType<typeof consultOfficialTaxRegistry>>>();
     const clientByCnpj = new Map(clients.map(client => [onlyDigits(client.tax_id || ''), client]));
 
-    for (const item of items) {
-      const emitter = selectActiveEmitterById(emitters, item.emitterId);
-      // Existing tenants opt in when their own official profile is applied.
-      if (!emitter?.registry_verified_at) continue;
+    for (const item of preparedItems) {
+
+      const recipientClient = clientByCnpj.get(onlyDigits(item.recipientCnpj));
       const parties = [
         {
-          role: 'destinatário', cnpj: item.recipientCnpj, ie: item.recipientIe,
-          uf: item.recipientState,
+          role: 'destinatário' as const, cnpj: item.recipientCnpj, ie: item.recipientIe,
+          uf: item.recipientState || recipientClient?.address_state || '',
         },
         {
-          role: 'remetente', cnpj: item.remitterCnpj, ie: item.remitterIe,
-          uf: clientByCnpj.get(onlyDigits(item.remitterCnpj))?.address_state || '',
+          role: 'remetente' as const, cnpj: item.remitterCnpj, ie: item.remitterIe,
+          uf: item.remitterState || clientByCnpj.get(onlyDigits(item.remitterCnpj))?.address_state || '',
         },
       ];
       for (const party of parties) {
+        const needsAddress = party.role === 'destinatário'
+          ? needsCteRecipientAddressAutocomplete(item)
+          : needsCteRemitterAddressAutocomplete(item);
+        const needsIe = !sanitizeIe(party.ie);
+        if (addressOnly && !needsAddress && !needsIe) continue;
         const cnpj = onlyDigits(party.cnpj);
         const uf = String(party.uf || '').toUpperCase();
-        if (cnpj.length !== 14 || !uf) continue;
+        if (cnpj.length !== 14 || uf.length !== 2) {
+          if (addressOnly) {
+            const notes = item.invoices.map(invoice => invoice.number).filter(Boolean).join(', ');
+            errors.push(`NF ${notes || 'sem número'} · ${party.role}: CNPJ e UF válidos são necessários para completar o endereço`);
+          }
+          continue;
+        }
         const key = `${item.emitterId}:${uf}:${cnpj}`;
         try {
           let result = checked.get(key);
@@ -975,20 +1067,109 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             });
             checked.set(key, result);
           }
-          const problem = validateOfficialParty({ cnpj, stateRegistration: party.ie }, result.profiles);
+          const problem = addressOnly
+            ? null
+            : validateOfficialParty({ cnpj, stateRegistration: party.ie }, result.profiles);
           if (problem) {
             const notes = item.invoices.map(invoice => invoice.number).filter(Boolean).join(', ');
             errors.push(`NF ${notes || 'sem número'} · ${party.role}: ${problem}`);
+            continue;
+          }
+          const profile = result.profiles.find(candidate => onlyDigits(candidate.cnpj) === cnpj);
+          const officialIe = officialStateRegistrationForParty(cnpj, result.profiles);
+          if (party.role === 'destinatário') item.recipientIe ||= officialIe || '';
+          else item.remitterIe ||= officialIe || '';
+          const address = profile?.official_address;
+          if (!address) {
+            if (addressOnly) {
+              const notes = item.invoices.map(invoice => invoice.number).filter(Boolean).join(', ');
+              errors.push(`NF ${notes || 'sem número'} · ${party.role}: endereço não localizado no cadastro oficial`);
+            }
+            continue;
+          }
+          if (party.role === 'destinatário') {
+            item.recipientStreet ||= address.street || '';
+            item.recipientNumber ||= address.number || '';
+            item.recipientNeighborhood ||= address.neighborhood || '';
+            item.recipientCity ||= address.city || '';
+            item.recipientState ||= address.state || '';
+            item.recipientZip ||= address.zip || '';
+            item.recipientCityIbge ||= address.cityCode || '';
+          } else {
+            item.remitterStreet ||= address.street || '';
+            item.remitterNumber ||= address.number || '';
+            item.remitterNeighborhood ||= address.neighborhood || '';
+            item.remitterCity ||= address.city || '';
+            item.remitterState ||= address.state || '';
+            item.remitterZip ||= address.zip || '';
+            item.remitterCityIbge ||= address.cityCode || '';
           }
         } catch (error) {
-          errors.push(`${party.role} ${cnpj}: ${error instanceof Error ? error.message : 'falha na consulta oficial'}`);
+          const message = `${party.role} ${cnpj}: ${error instanceof Error ? error.message : 'falha na consulta oficial'}`;
+          // Se a parte ainda depende da consulta para obter endereco ou IE,
+          // continuar faria o lote falhar apenas depois de alguns CT-es ja
+          // transmitidos. Trata como preflight bloqueante.
+          if (addressOnly || needsAddress || needsIe) errors.push(message);
+          else warnings.push(message);
+        }
+      }
+      if (addressOnly) {
+        const missing = [
+          ...missingCteRecipientAddressFields(item),
+          ...missingCteRemitterAddressFields(item),
+        ];
+        if (missing.length > 0) {
+          const notes = item.invoices.map(invoice => invoice.number).filter(Boolean).join(', ');
+          errors.push(`NF ${notes || 'sem número'} · endereço: ${missing.join(', ')}`);
         }
       }
     }
-    return [...new Set(errors)];
+    return {
+      errors: [...new Set(errors)],
+      warnings: [...new Set(warnings)],
+      preparedItems,
+    };
   }
 
+  // Resolve automaticamente endereços incompletos assim que o lote é carregado
+  // ou quando uma edição deixa um campo obrigatório vazio. O botão continua
+  // bloqueado durante a preparação e só é liberado após a validação completa.
+  useEffect(() => {
+    if (!open || !incompleteAddressSignature) {
+      setAutocompletingAddresses(false);
+      setAddressAutocompleteErrors([]);
+      return;
+    }
+
+    let cancelled = false;
+    const sourceItems = items;
+    setAutocompletingAddresses(true);
+    setAddressAutocompleteErrors([]);
+
+    void prepareOfficialRegistryBeforeTransmit(sourceItems, true)
+      .then(({ errors, preparedItems }) => {
+        if (cancelled) return;
+        const preparedByKey = new Map(preparedItems.map(item => [item.key, item]));
+        setItems(current => current.map(item => {
+          const completed = preparedByKey.get(item.key);
+          return completed ? mergeCtePartyAddresses(item, completed) : item;
+        }));
+        setAddressAutocompleteErrors(errors);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setAddressAutocompleteErrors([errorMessage(error)]);
+      })
+      .finally(() => {
+        if (!cancelled) setAutocompletingAddresses(false);
+      });
+
+    return () => { cancelled = true; };
+    // The signature is the complete snapshot consumed by the async preparation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeEnvironment, incompleteAddressSignature, clients]);
+
   async function handleTransmitClick() {
+    if (autocompletingAddresses) return;
     const localDestinations = items.filter((item) => {
       const emitter = selectActiveEmitterById(emitters, item.emitterId);
       return emitter && isSameFiscalMunicipality(
@@ -1009,14 +1190,33 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     }
     setTransmitting(true);
     try {
-      const registryErrors = await validateOfficialRegistryBeforeTransmit();
+      const { errors: registryErrors, warnings: registryWarnings, preparedItems } = await prepareOfficialRegistryBeforeTransmit();
       if (registryErrors.length > 0) {
         toast.error('Cadastro fiscal oficial divergente — transmissão bloqueada.', {
           description: registryErrors.slice(0, 4).join(' • '), duration: 12000,
         });
         return;
       }
-      await transmit();
+      if (registryWarnings.length > 0) {
+        toast.warning('Consulta oficial indisponível — usando os dados preenchidos na prévia.', {
+          description: registryWarnings.slice(0, 4).join(' • '), duration: 12000,
+        });
+      }
+      const payloadErrors = preparedItems.flatMap((item, index) => {
+        const emitter = selectActiveEmitterById(emitters, item.emitterId);
+        const result = buildCtePayload(toBuildInput(item, emitter, activeEnvironment, clients));
+        if (result.ok) return [];
+        const notes = item.invoices.map(invoice => invoice.number).filter(Boolean).join(', ');
+        return [`CT-e #${index + 1}${notes ? ` (NF ${notes})` : ''}: ${result.missing.join(', ')}`];
+      });
+      if (payloadErrors.length > 0) {
+        toast.error('Lote não transmitido — existem documentos incompletos.', {
+          description: payloadErrors.slice(0, 4).join(' • '), duration: 12000,
+        });
+        return;
+      }
+      setItems(preparedItems);
+      await transmit(preparedItems);
     } finally {
       setTransmitting(false);
     }
@@ -1053,6 +1253,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             <span className="text-muted-foreground">
               scope: {activeCteCred.doc_scope} · env: {activeCteCred.environment}
             </span>
+          )}
+          {autocompletingAddresses && (
+            <Badge variant="secondary">
+              <RotateCw className="mr-1 h-3 w-3 animate-spin" /> Completando cadastro fiscal…
+            </Badge>
           )}
           <div className="ml-auto flex items-center gap-4 text-xs text-muted-foreground italic">
             Configurações de lote por aba (checkbox abaixo)
@@ -1106,6 +1311,15 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
           {/* Editor do CT-e ativo */}
           <div className="max-h-[540px] overflow-y-auto pr-1">
+            {addressAutocompleteErrors.length > 0 && (
+              <Alert variant="destructive" className="mb-3">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Não foi possível completar todos os endereços/IE automaticamente:</strong>{' '}
+                  {addressAutocompleteErrors.slice(0, 4).join(' • ')}
+                </AlertDescription>
+              </Alert>
+            )}
             {validation.consistencyError && (
               <Alert variant="destructive" className="mb-3">
                 <AlertCircle className="h-4 w-4" />
@@ -1208,6 +1422,18 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div className="col-span-2">
                     <Label className="text-xs">Bairro</Label>
                     <Input className="h-8" value={active.remitterNeighborhood} onChange={(e) => patch({ remitterNeighborhood: e.target.value }, 'partes')} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Município</Label>
+                    <Input className="h-8" value={active.remitterCity} onChange={(e) => patch({ remitterCity: e.target.value }, 'partes')} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">UF</Label>
+                    <Input className="h-8" value={active.remitterState} onChange={(e) => patch({ remitterState: e.target.value }, 'partes')} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Cód. Município (IBGE)</Label>
+                    <Input className="h-8" value={active.remitterCityIbge} onChange={(e) => patch({ remitterCityIbge: e.target.value }, 'partes')} placeholder="Ex: 3550308" />
                   </div>
                 </div>
 
@@ -1943,8 +2169,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             </Button>
           </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          <Button disabled={!allValid || transmitting} onClick={handleTransmitClick}>
-            {transmitting ? (
+          <Button disabled={!allValid || transmitting || autocompletingAddresses} onClick={handleTransmitClick}>
+            {autocompletingAddresses ? (
+              <><RotateCw className="h-4 w-4 mr-2 animate-spin" /> Completando endereços…</>
+            ) : transmitting ? (
               <><RotateCw className="h-4 w-4 mr-2 animate-spin" /> Transmitindo…</>
             ) : (
               <><Send className="h-4 w-4 mr-2" /> Transmitir {items.length} CT-e(s)</>

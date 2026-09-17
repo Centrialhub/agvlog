@@ -30,7 +30,7 @@ async function fileToDataUrl(file: File, maxDim = 512): Promise<string> {
 export function CompanySettings() {
   const toast = useSonnerToast();
   const isAdmin = useIsAdmin();
-  const { data: profile, isLoading } = useCompanyProfile();
+  const { data: profile, isLoading, isError, error, refetch } = useCompanyProfile();
   const updateMut = useUpdateCompanyProfile();
   const [form, setForm] = useState<CompanyProfile>(EMPTY);
   const [uploading, setUploading] = useState(false);
@@ -60,6 +60,10 @@ export function CompanySettings() {
   };
 
   const save = async () => {
+    if (isError || !profile) {
+      toast.error('Recarregue os dados da empresa antes de salvar.');
+      return;
+    }
     try {
       await updateMut.mutateAsync(form);
       toast.success('Dados da empresa salvos');
@@ -81,6 +85,12 @@ export function CompanySettings() {
       <CardContent className="space-y-4">
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
+        ) : isError ? (
+          <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+            <p className="font-medium text-destructive">Não foi possível carregar os dados da empresa.</p>
+            <p className="text-xs text-muted-foreground">{error instanceof Error ? error.message : 'Falha na consulta.'}</p>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button>
+          </div>
         ) : (
           <>
             <div className="grid gap-4 md:grid-cols-[160px_1fr] items-start">
@@ -131,7 +141,7 @@ export function CompanySettings() {
 
             {isAdmin ? (
               <div className="flex justify-end">
-                <Button onClick={save} disabled={updateMut.isPending}>
+                <Button onClick={save} disabled={updateMut.isPending || !profile}>
                   {updateMut.isPending ? 'Salvando…' : 'Salvar alterações'}
                 </Button>
               </div>

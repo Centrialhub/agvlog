@@ -48,3 +48,7 @@ export function creationError(cause:unknown){
  if(/receipt_/.test(message))return 'O comprovante não foi confirmado para este pedido. Recupere com o mesmo arquivo.';
  return message||'Despesa sem confirmação. Recupere o mesmo pedido antes de repetir.';
 }
+export function expenseCreationContextInvalidated(cause:unknown){
+ const message=cause instanceof Error?cause.message:isRecord(cause)?String(cause.message??''):String(cause??'');
+ return /context_changed|concurrent_change|A viagem ou o acerto mudou ou está em uso/i.test(message);
+}

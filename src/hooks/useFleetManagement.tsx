@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import {acknowledgeDurableOperatorCommand,prepareDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
+import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
 
 /* ─── Types ─── */
 export type VehicleMaintenance = Tables<'vehicle_maintenance'> & {
@@ -27,15 +29,14 @@ export function useVehicleMaintenanceList(vehicleId?: string) {
     queryKey: ['vehicle_maintenance', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = supabase
+      const makeQuery=()=>{let q = supabase
         .from('vehicle_maintenance')
         .select('*, vehicles(plate, nickname)')
         .eq('tenant_id', currentTenant.id)
-        .order('scheduled_date', { ascending: false, nullsFirst: false });
+        .order('scheduled_date', { ascending: false, nullsFirst: false }).order('id');
       if (vehicleId) q = q.eq('vehicle_id', vehicleId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []) as VehicleMaintenance[];
+      return q;};
+      return await fetchAllPostgrestPages((from,to)=>makeQuery().range(from,to)) as VehicleMaintenance[];
     },
     enabled: !!currentTenant,
   });
@@ -80,15 +81,14 @@ export function useVehicleFuelingList(vehicleId?: string) {
     queryKey: ['vehicle_fueling', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = supabase
+      const makeQuery=()=>{let q = supabase
         .from('vehicle_fueling')
         .select('*, vehicles(plate, nickname), drivers(name)')
         .eq('tenant_id', currentTenant.id)
-        .order('fueled_at', { ascending: false });
+        .order('fueled_at', { ascending: false }).order('id');
       if (vehicleId) q = q.eq('vehicle_id', vehicleId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []) as VehicleFueling[];
+      return q;};
+      return await fetchAllPostgrestPages((from,to)=>makeQuery().range(from,to)) as VehicleFueling[];
     },
     enabled: !!currentTenant,
   });
@@ -96,36 +96,27 @@ export function useVehicleFuelingList(vehicleId?: string) {
 
 export function useCreateFueling() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
+  const {user}=useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: CreateVehicleFuelingInput) => {
-      const payload: TablesInsert<'vehicle_fueling'> = {
+      if(!user)throw new Error('Usuário não autenticado');
+      const payload = {
         ...values,
         tenant_id: currentTenant!.id,
-        created_by: user?.id,
       };
-      // Auto-calculate total_cost
-      if (payload.liters && payload.price_per_liter) {
-        payload.total_cost = Number(payload.liters) * Number(payload.price_per_liter);
-      }
-      const { data, error } = await supabase.from('vehicle_fueling').insert(payload).select().single();
+      const pending=await prepareDurableOperatorCommand({tenantId:currentTenant!.id,actorId:user.id,action:'create_vehicle_fueling',entityId:'new',payload});
+      const { data, error } = await supabase.rpc('create_vehicle_fueling_with_odometer_v1', {
+        _payload: {...payload,request_id:pending.requestId},
+      });
       if (error) throw error;
-
-      // Also record odometer reading if provided
-      if (values.odometer_km && values.vehicle_id) {
-        await supabase.from('vehicle_odometer').insert({
-          tenant_id: currentTenant!.id,
-          vehicle_id: values.vehicle_id,
-          reading_km: values.odometer_km,
-          source: 'fueling',
-          created_by: user?.id,
-        });
-        qc.invalidateQueries({ queryKey: ['vehicle_odometer'] });
-      }
-      return data;
+      acknowledgeDurableOperatorCommand(pending);
+      return data as Tables<'vehicle_fueling'>;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['vehicle_fueling'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vehicle_fueling'] });
+      qc.invalidateQueries({ queryKey: ['vehicle_odometer'] });
+    },
   });
 }
 
@@ -136,15 +127,14 @@ export function useVehicleOdometerList(vehicleId?: string) {
     queryKey: ['vehicle_odometer', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = supabase
+      const makeQuery=()=>{let q = supabase
         .from('vehicle_odometer')
         .select('*')
         .eq('tenant_id', currentTenant.id)
-        .order('recorded_at', { ascending: false });
+        .order('recorded_at', { ascending: false }).order('id');
       if (vehicleId) q = q.eq('vehicle_id', vehicleId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []) as VehicleOdometer[];
+      return q;};
+      return await fetchAllPostgrestPages((from,to)=>makeQuery().range(from,to)) as VehicleOdometer[];
     },
     enabled: !!currentTenant,
   });
@@ -171,7 +161,7 @@ export function useCreateOdometerReading() {
 
 /* ─── Consumption calculation ─── */
 export function useConsumptionHistory(vehicleId?: string) {
-  const { data: fuelings = [] } = useVehicleFuelingList(vehicleId);
+  const query=useVehicleFuelingList(vehicleId);const fuelings=query.data??[];
 
   // Calculate km/l between consecutive full-tank fuelings
   const consumption = fuelings
@@ -197,5 +187,5 @@ export function useConsumptionHistory(vehicleId?: string) {
     ? consumption.reduce((s, c) => s + c.kmPerLiter, 0) / consumption.length
     : null;
 
-  return { consumption, avgKmPerLiter, fuelings };
+  return { consumption, avgKmPerLiter, fuelings,isLoading:query.isLoading,isError:query.isError,error:query.error,refetch:query.refetch };
 }

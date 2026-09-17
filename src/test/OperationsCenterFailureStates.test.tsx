@@ -137,6 +137,10 @@ describe('OperationsCenter query states', () => {
     expect(screen.getByText('1 no recorte')).toBeInTheDocument();
     expect(screen.getByText('Exibindo até 6 de 23 alerta(s) ativo(s).')).toBeInTheDocument();
     expect(screen.getByText('Exibindo até 5 de 76 incidente(s) aberto(s).')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Abrir carga 1001' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Distribuição de cargas por destino/ })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Status das cargas/ })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Fluxo documental por dia/ })).toBeInTheDocument();
   });
 
   it('fails closed without turning read failures into zeros or empty-success messages', () => {

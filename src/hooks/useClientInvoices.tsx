@@ -5,6 +5,7 @@ import type { InvoiceCharge, InvoiceDetail } from '@/lib/clientInvoicePdf';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import {parseInvoiceList} from '@/lib/financial/clientInvoiceList';
+import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
 
 export const INVOICE_STATUSES = ['draft', 'generated', 'sent', 'paid', 'cancelled'] as const;
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
@@ -40,6 +41,8 @@ export interface ClientInvoice {
   cancelled_at: string | null;
   cancellation_reason: string | null;
   created_at: string;
+  payer_snapshot?: Json;
+  company_snapshot?: Json;
   clients?: { company_name: string; tax_id?: string | null } | null;
 }
 
@@ -89,8 +92,12 @@ export function useClientInvoices() {
     queryKey: ['client_invoices', currentTenant?.id, user?.id],
     queryFn: async ({signal}) => {
       if(!currentTenant||!user)return {rows:[],truncated:false};
-      const {data,error}=await supabase.rpc('list_client_invoice_financials',{_tenant_id:currentTenant.id}).abortSignal(signal);
-      if(error)throw error;return parseInvoiceList(data,currentTenant.id,user.id);
+      const [protectedResult,allRows]=await Promise.all([
+       supabase.rpc('list_client_invoice_financials',{_tenant_id:currentTenant.id}).abortSignal(signal),
+       fetchAllPostgrestPages((from,to)=>supabase.from('client_invoices').select('*, clients(company_name,tax_id)').eq('tenant_id',currentTenant.id).order('created_at',{ascending:false}).order('id').range(from,to).abortSignal(signal)),
+      ]);
+      if(protectedResult.error)throw protectedResult.error;const protectedList=parseInvoiceList(protectedResult.data,currentTenant.id,user.id),verified=new Map(protectedList.rows.map(row=>[row.id,row]));
+      return {rows:allRows.map(row=>verified.get(row.id)??{...row,received_amount:null,open_amount:null,requires_reconciliation:true}) as ClientInvoice[],truncated:false};
     },
     enabled: !!currentTenant&&!!user,
   });
@@ -107,13 +114,11 @@ export function useClientInvoiceDetail(invoiceId: string | null) {
       if (!invoiceId || !tenantId) return null;
       const [inv, charges, details] = await Promise.all([
         supabase.from('client_invoices').select('*, clients(*)').eq('id', invoiceId).eq('tenant_id', tenantId).maybeSingle(),
-        supabase.from('client_invoice_charges').select('*').eq('invoice_id', invoiceId).eq('tenant_id', tenantId).order('sort_order'),
-        supabase.from('client_invoice_details').select('*').eq('invoice_id', invoiceId).eq('tenant_id', tenantId).order('sort_order'),
+        fetchAllPostgrestPages((from,to)=>supabase.from('client_invoice_charges').select('*').eq('invoice_id', invoiceId).eq('tenant_id', tenantId).order('sort_order').order('id').range(from,to)),
+        fetchAllPostgrestPages((from,to)=>supabase.from('client_invoice_details').select('*').eq('invoice_id', invoiceId).eq('tenant_id', tenantId).order('sort_order').order('id').range(from,to)),
       ]);
       if (inv.error) throw inv.error;
-      if (charges.error) throw charges.error;
-      if (details.error) throw details.error;
-      return { invoice: inv.data, charges: charges.data || [], details: details.data || [] };
+      return { invoice: inv.data, charges, details };
     },
   });
 }
@@ -128,17 +133,12 @@ export function useEligibleCtes(clientId: string | null) {
     queryFn: async () => {
       const tenantId = currentTenant?.id;
       if (!tenantId || !clientId) return [];
-      const { data, error } = await supabase
+      const data = await fetchAllPostgrestPages((from,to)=>supabase
         .from('cte_documents')
         .select('id, cte_number, cte_series, issued_at, freight_value, cargo_value, weight_kg, recipient, remitter, recipient_city, recipient_state, fiscal_document_ids, invoice_numbers, sefaz_status, status, cancelled_at')
-        .eq('tenant_id', tenantId)
-        .eq('client_id', clientId)
-        .is('cancelled_at', null)
-        .eq('status', 'authorized').eq('sefaz_environment', 'production')
-        .eq('is_voided', false)
-        .order('issued_at', { ascending: false })
-        .limit(500);
-      if (error) throw error;
+        .eq('tenant_id', tenantId).eq('client_id', clientId).is('cancelled_at', null)
+        .eq('status', 'authorized').eq('sefaz_environment', 'production').eq('is_voided', false)
+        .order('issued_at', { ascending: false }).order('id').range(from,to));
       const ids = (data || []).map(d => d.id);
       if (ids.length === 0) return [];
       const { data: usedRows, error: usedError } = await supabase
@@ -167,17 +167,12 @@ export function useEligibleNfse(clientId: string | null) {
     queryFn: async () => {
       const tenantId = currentTenant?.id;
       if (!tenantId || !clientId) return [];
-      const { data, error } = await supabase
+      const data = await fetchAllPostgrestPages((from,to)=>supabase
         .from('nfse_documents')
         .select('id, nfse_number, series, issue_date, valor_total, valor_liquido, valor_ir, description, cliente_nome, cliente_municipio, cliente_uf, reference_number, ctrc_complemento, items, cancelled, status')
-        .eq('tenant_id', tenantId)
-        .eq('cliente_id', clientId)
-        .eq('cancelled', false)
-        .neq('status', 'cancelled')
-        .eq('is_preview', false)
-        .order('issue_date', { ascending: false })
-        .limit(500);
-      if (error) throw error;
+        .eq('tenant_id', tenantId).eq('cliente_id', clientId).eq('cancelled', false)
+        .neq('status', 'cancelled').eq('is_preview', false)
+        .order('issue_date', { ascending: false }).order('id').range(from,to));
       const ids = (data || []).map(d => d.id);
       if (ids.length === 0) return [];
       const { data: usedRows, error: usedError } = await supabase

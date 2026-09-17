@@ -1,4 +1,4 @@
-import {fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {DriverSettlementSends} from '@/components/financial/DriverSettlementSends';
@@ -18,3 +18,11 @@ it('scopes every page and date query to the selected driver and opens the existi
  expect(screen.getByText(/não comprova vínculo exclusivo/)).toBeInTheDocument();
 });
 it('does not read another company through a stale settlement',()=>{mount('00000000-0000-4000-8000-000000000004');expect(screen.getByRole('alert')).toHaveTextContent('Selecione a empresa');expect(m.read).not.toHaveBeenCalled();});
+it('refreshes the settlement list and bank reconciliation candidates after recording a send',async()=>{
+ const invalidation=vi.spyOn(QueryClient.prototype,'invalidateQueries');mount();await screen.findByText(/31 registros/);
+ fireEvent.click(screen.getByText('Registrar envio realizado'));
+ const props=m.entry.mock.calls.at(-1)?.[0] as {onRecorded:()=>void};
+ await act(async()=>{props.onRecorded();});
+ for(const prefix of ['finance-movements','finance-audit','finance-reconciliation-options','finance-automatic-reconciliation'])expect(invalidation).toHaveBeenCalledWith({queryKey:[prefix,m.tenant]});
+ expect(screen.getByRole('status')).toHaveTextContent('Confira a movimentação no extrato');
+});

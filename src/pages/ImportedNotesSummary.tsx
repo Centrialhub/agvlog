@@ -1,5 +1,6 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
-import { useMemo, useState } from 'react';
+import { localDateInputValue } from '@/lib/utils/formatDate';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useImportedNotes, exportImportedNotesCsv, getImportedNoteSummaryTotals,
@@ -25,6 +26,7 @@ import { downloadImportedNotesXlsx } from '@/lib/importedNotesXlsx';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { useSortableData } from '@/hooks/useSortableData';
+import { validateImportedNoteFilters } from '@/lib/importedNotesFilters';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,11 +52,16 @@ const STATUS_VARIANT: Record<NoteOperationalStatus, React.ComponentProps<typeof 
   transferred: 'secondary', not_transferred: 'destructive',
 };
 
+const AUDITABLE_NOTE_STATUSES = new Set<NoteOperationalStatus>([
+  'not_processed', 'not_processed_redispatch', 'processed',
+]);
+const EMPTY_IMPORTED_NOTES: ImportedNoteRow[] = [];
+
 const emptyFilters: ImportedNoteFilters = {
   branch: null, controlLot: null, dynamicLot: null,
   issueFrom: null, issueTo: null, importFrom: null, importTo: null,
   remitter: null, clientId: null, supplierId: null, originCity: null, destinationCity: null,
-  status: 'all', invoiceNumber: null, grouped: true,
+  status: 'all', invoiceNumber: null,
 };
 
 export default function ImportedNotesSummary() {
@@ -63,10 +70,16 @@ export default function ImportedNotesSummary() {
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
-  const { data: clients = [] } = useClients();
+  const {
+    data: clients = [],
+    isLoading: clientsLoading,
+    isError: clientsIsError,
+    error: clientsError,
+    refetch: refetchClients,
+  } = useClients();
   const [filters, setFilters] = useState<ImportedNoteFilters>(emptyFilters);
   const [applied, setApplied] = useState<ImportedNoteFilters>(emptyFilters);
-  const { data: rowsData = [], isLoading, isError, error, refetch } = useImportedNotes(applied);
+  const { data: rowsData = EMPTY_IMPORTED_NOTES, isLoading, isError, error, refetch } = useImportedNotes(applied);
   const { sortedItems: rows, requestSort, sortConfig } = useSortableData(rowsData);
 
   const [printDlgOpen, setPrintDlgOpen] = useState(false);
@@ -78,22 +91,38 @@ export default function ImportedNotesSummary() {
   const [bulkActionDlg, setBulkActionDlg] = useState<{ open: boolean; type: 'audit' | 'delete' | null }>({ open: false, type: null });
 
   const totals = useMemo(() => getImportedNoteSummaryTotals(rows), [rows]);
+  const selectedContainsNonAuditable = [...selectedIds].some((id) => {
+    const row = rows.find((candidate) => candidate.id === id);
+    return !row || !AUDITABLE_NOTE_STATUSES.has(row.operational_status);
+  });
+  useEffect(() => { setSelectedIds(new Set()); }, [applied]);
+  useEffect(() => {
+    const visibleIds = new Set(rowsData.map((row) => row.id));
+    setSelectedIds((previous) => new Set([...previous].filter((id) => visibleIds.has(id))));
+  }, [rowsData]);
   const set = <K extends keyof ImportedNoteFilters>(key: K, value: ImportedNoteFilters[K]) =>
     setFilters((previous) => ({ ...previous, [key]: value === '' ? null : value }));
 
-  const doSearch = () => setApplied(filters);
+  const doSearch = () => {
+    try {
+      validateImportedNoteFilters(filters);
+      setApplied(filters);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Período informado inválido.');
+    }
+  };
   const doClear = () => { setFilters(emptyFilters); setApplied(emptyFilters); };
 
   const handleAudit = async (row: ImportedNoteRow) => {
     try {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { error } = await supabase
-        .from('fiscal_documents')
-        .update({ imported_note_status: 'processed' })
-        .eq('id', row.id)
-        .eq('tenant_id', currentTenant.id);
-      
+      if (!AUDITABLE_NOTE_STATUSES.has(row.operational_status)) throw new Error('Esta nota já possui um resultado operacional e não requer auditoria de processamento.');
+      const { data, error } = await supabase.rpc('audit_imported_notes_v1', {
+        _tenant_id: currentTenant.id,
+        _document_ids: [row.id],
+      });
       if (error) throw error;
+      if (!data || typeof data !== 'object' || Array.isArray(data) || data.audited_count !== 1) throw new Error('O servidor não confirmou a auditoria da nota.');
       toast.success(`Nota ${row.invoice_number} auditada com sucesso.`);
       refetch();
     } catch (error: unknown) {
@@ -136,10 +165,10 @@ export default function ImportedNotesSummary() {
   };
 
   const toggleAll = () => {
-    if (selectedIds.size === rows.length) {
+    if (rows.length > 0 && rows.every((row) => selectedIds.has(row.id))) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(rows.map(r => r.id)));
+      setSelectedIds(new Set(rows.map((row) => row.id)));
     }
   };
 
@@ -147,14 +176,15 @@ export default function ImportedNotesSummary() {
     if (selectedIds.size === 0) return;
     try {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { error } = await supabase
-        .from('fiscal_documents')
-        .update({ imported_note_status: 'processed' })
-        .in('id', Array.from(selectedIds))
-        .eq('tenant_id', currentTenant.id);
-      
+      if (selectedContainsNonAuditable) throw new Error('A seleção contém notas com resultado operacional que não devem ser auditadas como processamento.');
+      const ids = Array.from(selectedIds);
+      const { data, error } = await supabase.rpc('audit_imported_notes_v1', {
+        _tenant_id: currentTenant.id,
+        _document_ids: ids,
+      });
       if (error) throw error;
-      toast.success(`${selectedIds.size} notas auditadas com sucesso.`);
+      if (!data || typeof data !== 'object' || Array.isArray(data) || data.audited_count !== ids.length) throw new Error('O servidor não confirmou todas as auditorias solicitadas.');
+      toast.success(`${ids.length} notas auditadas com sucesso.`);
       setSelectedIds(new Set());
       setBulkActionDlg({ open: false, type: null });
       refetch();
@@ -204,6 +234,7 @@ export default function ImportedNotesSummary() {
       })) return;
     }
     try {
+      await createSummaryReportSnapshot(currentTenant!.id, reportType, reportType !== 'raw_list', applied, rows);
       downloadImportedNotesSummaryPdf({
         reportType,
         carrier: {
@@ -221,7 +252,6 @@ export default function ImportedNotesSummary() {
         manifest: null,
         rows,
       });
-      await createSummaryReportSnapshot(currentTenant!.id, reportType, reportType !== 'raw_list', applied, rows);
       toast.success('Relatório gerado');
       setPrintDlgOpen(false);
     } catch (error: unknown) {
@@ -231,11 +261,14 @@ export default function ImportedNotesSummary() {
 
   const handleCsv = () => {
     if (rows.length === 0) { toast.error('Nenhum resultado para exportar.'); return; }
-    const csv = exportImportedNotesCsv(rows);
+    const csv = exportImportedNotesCsv(rows, {
+      company: companyProfile?.legal_name || companyProfile?.trade_name || currentTenant?.name,
+      branch: currentTenant?.name || companyProfile?.trade_name || companyProfile?.legal_name,
+    });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `nfs_importadas_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.href = url; a.download = `nfs_importadas_${localDateInputValue()}.csv`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
@@ -267,14 +300,20 @@ export default function ImportedNotesSummary() {
           <div><Label htmlFor="summary-invoice-number">Nº Nota</Label><Input id="summary-invoice-number" value={filters.invoiceNumber || ''} onChange={e => set('invoiceNumber', e.target.value)} placeholder="Ex: 12345" /></div>
           <div><Label>Lote Controle</Label><Input value={filters.controlLot || ''} onChange={e => set('controlLot', e.target.value)} /></div>
           <div><Label>Lote Dinâmico</Label><Input value={filters.dynamicLot || ''} onChange={e => set('dynamicLot', e.target.value)} /></div>
-          <div><Label>Emissão de</Label><Input type="date" value={filters.issueFrom || ''} onChange={e => set('issueFrom', e.target.value)} /></div>
-          <div><Label>Emissão até</Label><Input type="date" value={filters.issueTo || ''} onChange={e => set('issueTo', e.target.value)} /></div>
+          <div><Label htmlFor="summary-issue-from">Emissão de</Label><Input id="summary-issue-from" type="date" max={filters.issueTo || undefined} value={filters.issueFrom || ''} onChange={e => set('issueFrom', e.target.value)} /></div>
+          <div><Label htmlFor="summary-issue-to">Emissão até</Label><Input id="summary-issue-to" type="date" min={filters.issueFrom || undefined} value={filters.issueTo || ''} onChange={e => set('issueTo', e.target.value)} /></div>
           <div><Label htmlFor="summary-import-from">Importação de</Label><Input id="summary-import-from" type="date" value={filters.importFrom || ''} onChange={e => set('importFrom', e.target.value)} /></div>
           <div><Label htmlFor="summary-import-to">Importação até</Label><Input id="summary-import-to" type="date" value={filters.importTo || ''} onChange={e => set('importTo', e.target.value)} /></div>
           <div><Label>Remetente</Label><Input value={filters.remitter || ''} onChange={e => set('remitter', e.target.value)} /></div>
+          {clientsIsError && (
+            <div role="alert" className="md:col-span-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+              <span>Não foi possível carregar clientes e fornecedores. {clientsError instanceof Error ? clientsError.message : 'Tente novamente.'}</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => refetchClients()}>Tentar novamente</Button>
+            </div>
+          )}
           <div>
             <Label>Cliente</Label>
-            <Select value={filters.clientId || '__all__'} onValueChange={(v) => set('clientId', v === '__all__' ? null : v)}>
+            <Select disabled={clientsLoading || clientsIsError} value={filters.clientId || '__all__'} onValueChange={(v) => set('clientId', v === '__all__' ? null : v)}>
               <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos</SelectItem>
@@ -284,7 +323,7 @@ export default function ImportedNotesSummary() {
           </div>
           <div>
             <Label>Fornecedor</Label>
-            <Select value={filters.supplierId || '__all__'} onValueChange={(v) => set('supplierId', v === '__all__' ? null : v)}>
+            <Select disabled={clientsLoading || clientsIsError} value={filters.supplierId || '__all__'} onValueChange={(v) => set('supplierId', v === '__all__' ? null : v)}>
               <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos</SelectItem>
@@ -306,16 +345,6 @@ export default function ImportedNotesSummary() {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>Agrupado</Label>
-            <Select value={filters.grouped ? 'yes' : 'no'} onValueChange={(v) => set('grouped', v === 'yes')}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="yes">Sim</SelectItem>
-                <SelectItem value="no">Não</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="md:col-span-4 flex flex-wrap gap-2 pt-2">
             <Button onClick={doSearch}><Search className="h-4 w-4 mr-2" />Buscar</Button>
             <Button variant="outline" onClick={doClear}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
@@ -329,6 +358,7 @@ export default function ImportedNotesSummary() {
                   size="sm" 
                   className="bg-green-600 hover:bg-green-700 text-white"
                   onClick={() => setBulkActionDlg({ open: true, type: 'audit' })}
+                  disabled={selectedContainsNonAuditable}
                 >
                   <ShieldCheck className="h-4 w-4 mr-2" />Auditar Massa
                 </Button>
@@ -364,7 +394,7 @@ export default function ImportedNotesSummary() {
               <TableRow>
                 <TableHead className="w-[40px]">
                   <Checkbox 
-                    checked={rows.length > 0 && selectedIds.size === rows.length}
+                    checked={rows.length > 0 && rows.every((row) => selectedIds.has(row.id))}
                     onCheckedChange={toggleAll}
                   />
                 </TableHead>
@@ -485,7 +515,7 @@ export default function ImportedNotesSummary() {
                   variant="default" 
                   className="bg-green-600 hover:bg-green-700 text-white"
                   onClick={() => handleAudit(detailRow)}
-                  disabled={false}
+                  disabled={!AUDITABLE_NOTE_STATUSES.has(detailRow.operational_status)}
                 >
                   <ShieldCheck className="h-4 w-4 mr-2" />Auditar
                 </Button>

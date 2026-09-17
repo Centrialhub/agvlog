@@ -2,6 +2,86 @@ import { AlertTriangle, ClipboardCheck, Clock, FileText, Map } from 'lucide-reac
 import DriverDeliveryMap, { type DeliveryPoint, type VehiclePoint } from '@/components/driver/DriverDeliveryMap';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+
+export function DriverHomeLoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <Card className="border-destructive/50">
+      <CardContent className="p-4 space-y-3" role="alert">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium">Falha ao carregar a operação</p>
+            <p className="text-xs text-muted-foreground">{message}</p>
+          </div>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={onRetry}>Tentar novamente</Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function DriverHomeVehiclePositionError({
+  refreshing,
+  onRetry,
+}: {
+  refreshing: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <Card className="border-destructive/50">
+      <CardContent className="p-4 space-y-3" role="alert">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium">Posição do veículo indisponível</p>
+            <p className="text-xs text-muted-foreground">
+              Não foi possível atualizar a localização. As paradas e demais dados da viagem continuam disponíveis.
+            </p>
+          </div>
+        </div>
+        <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={onRetry}>
+          {refreshing ? 'Atualizando posição…' : 'Tentar atualizar posição'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function DriverHomeChecklistAlert({
+  preCompleted,
+  preCheckedCount,
+  preTotalCount,
+  postCheckedCount,
+  postTotalCount,
+  onOpen,
+}: {
+  preCompleted: boolean;
+  preCheckedCount: number;
+  preTotalCount: number;
+  postCheckedCount: number;
+  postTotalCount: number;
+  onOpen: () => void;
+}) {
+  return (
+    <Card className="border-warning/50 bg-warning/5 cursor-pointer hover:bg-warning/10 transition-colors"
+      role="button" tabIndex={0} onClick={onOpen}
+      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(); } }}>
+      <CardContent className="p-3 flex items-center gap-3">
+        <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+        <div className="flex-1">
+          <p className="text-xs font-medium">Checklist pendente</p>
+          <p className="text-[10px] text-muted-foreground">
+            {preCompleted
+              ? `Pós-viagem: ${postCheckedCount}/${postTotalCount} itens`
+              : `Pré-viagem: ${preCheckedCount}/${preTotalCount} itens`}
+          </p>
+        </div>
+        <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+      </CardContent>
+    </Card>
+  );
+}
 
 export function DriverHomeDeliveryMap({ stops, vehicle }: { stops: DeliveryPoint[]; vehicle: VehiclePoint }) {
   return (

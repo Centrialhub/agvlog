@@ -490,7 +490,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                   <span className="text-muted-foreground">Paletes</span>
                   <span className={isOverPallets ? 'text-destructive font-bold' : ''}>{totalPallets} / {vehicleMaxPallets}</span>
                 </div>
-                <Progress value={Math.min(palletOccupancy!, 100)} className={isOverPallets ? '[&>div]:bg-destructive' : ''} />
+                <Progress aria-label="Ocupação de paletes da carga" aria-valuetext={`${palletOccupancy}%`} value={Math.min(palletOccupancy!, 100)} className={isOverPallets ? '[&>div]:bg-destructive' : ''} />
                 {isOverPallets && (
                   <div className="flex items-center gap-1 text-xs text-destructive">
                     <AlertTriangle className="h-3 w-3" /> Excede capacidade!
@@ -504,7 +504,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                   <span className="text-muted-foreground">Peso</span>
                   <span className={isOverWeight ? 'text-destructive font-bold' : ''}>{totalWeight} / {vehicleMaxWeight} kg</span>
                 </div>
-                <Progress value={Math.min(weightOccupancy!, 100)} className={isOverWeight ? '[&>div]:bg-destructive' : ''} />
+                <Progress aria-label="Ocupação de peso da carga" aria-valuetext={`${weightOccupancy}%`} value={Math.min(weightOccupancy!, 100)} className={isOverWeight ? '[&>div]:bg-destructive' : ''} />
                 {isOverWeight && (
                   <div className="flex items-center gap-1 text-xs text-destructive">
                     <AlertTriangle className="h-3 w-3" /> Excede capacidade!

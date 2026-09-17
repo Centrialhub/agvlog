@@ -57,23 +57,34 @@ Deno.serve(async (req) => {
       .from(metadata.storage_bucket || 'receipts')
       .createSignedUrl(metadata.storage_path, 300);
     if (signErr || !signed?.signedUrl) {
-      await admin.rpc('log_pod_access_v2', {
+      const { error: auditError } = await admin.rpc('log_pod_access_v2', {
         _tenant_id: tenant_id,
         _pod_id: pod.id,
         _fiscal_document_id: pod.fiscal_document_id,
         _actor_user_id: userId,
         _success: false,
-      }).catch(() => undefined);
+        _error_message: signErr?.message || 'Could not sign URL',
+      });
+      if (auditError) {
+        console.error('Failed to audit rejected POD access', auditError);
+        return new Response(JSON.stringify({ error: 'Could not sign or audit POD access' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       return new Response(JSON.stringify({ error: 'Could not sign URL' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    await admin.rpc('log_pod_access_v2', {
+    const { error: auditError } = await admin.rpc('log_pod_access_v2', {
       _tenant_id: tenant_id,
       _pod_id: pod.id,
       _fiscal_document_id: pod.fiscal_document_id,
       _actor_user_id: userId,
       _success: true,
-    }).catch(() => undefined);
+    });
+    if (auditError) {
+      console.error('Failed to audit successful POD access', auditError);
+      return new Response(JSON.stringify({ error: 'Could not audit POD access' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     return new Response(JSON.stringify({ signed_url: signed.signedUrl }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

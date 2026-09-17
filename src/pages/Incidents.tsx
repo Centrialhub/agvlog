@@ -30,7 +30,7 @@ function errorMessage(error: unknown): string {
 
 export default function Incidents() {
   const toast = useSonnerToast();
-  const { data: incidents = [], isLoading } = useIncidents();
+  const { data: incidents = [], isLoading, isError, error } = useIncidents();
   const { data: employees = [] } = useEmployees();
   const { data: vehicles = [] } = useVehicles();
   const { data: clients = [] } = useClients();
@@ -84,6 +84,7 @@ export default function Incidents() {
 
   const handleSave = async () => {
     if (!form.title.trim()) { toast.error('Título obrigatório'); return; }
+    if (form.estimated_cost && (!Number.isFinite(Number(form.estimated_cost)) || Number(form.estimated_cost) < 0)) { toast.error('Custo estimado não pode ser negativo'); return; }
     if (form.category === 'hr' && !form.employee_id) {
       toast.error('Ocorrência de RH exige um funcionário vinculado'); return;
     }
@@ -98,15 +99,11 @@ export default function Incidents() {
       vehicle_id: form.vehicle_id || null,
       client_id: form.client_id || null,
       estimated_cost: form.estimated_cost ? Number(form.estimated_cost) : 0,
-      resolved_at: ['resolved', 'closed'].includes(form.status) && !editing?.resolved_at
-        ? new Date().toISOString()
-        : editing?.resolved_at,
-      closed_at: form.status === 'closed' && !editing?.closed_at
-        ? new Date().toISOString()
-        : editing?.closed_at,
+      resolved_at: ['resolved', 'closed'].includes(form.status) ? (editing?.resolved_at || new Date().toISOString()) : null,
+      closed_at: form.status === 'closed' ? (editing?.closed_at || new Date().toISOString()) : null,
     };
     try {
-      if (editing) await updateIncident.mutateAsync({ id: editing.id, ...payload });
+      if (editing) await updateIncident.mutateAsync({ id: editing.id, expected_updated_at: editing.updated_at, ...payload });
       else {
         const created = await createIncident.mutateAsync(payload);
         toast.success('Ocorrência registrada');
@@ -143,16 +140,16 @@ export default function Incidents() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><AlertOctagon className="h-5 w-5" /> Ocorrências</h1>
-          <p className="text-sm text-muted-foreground">{incidents.length} registradas</p>
+          <p className="text-sm text-muted-foreground">{isLoading ? 'Carregando ocorrências…' : isError ? 'Indicadores indisponíveis' : `${incidents.length} registradas`}</p>
         </div>
         <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Nova Ocorrência</Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      {!isLoading && !isError ? <div className="grid grid-cols-3 gap-3">
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Abertas</p><p className="text-lg font-bold">{kpis.open}</p></CardContent></Card>
         <Card className={kpis.critical > 0 ? 'border-destructive' : ''}><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Críticas Ativas</p><p className="text-lg font-bold text-destructive">{kpis.critical}</p></CardContent></Card>
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Custo Acumulado</p><p className="text-lg font-bold">R$ {kpis.totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p></CardContent></Card>
-      </div>
+      </div> : null}
 
       <div className="flex gap-2">
         <div className="relative flex-1 max-w-xs">
@@ -185,6 +182,7 @@ export default function Incidents() {
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+            : isError ? <TableRow><TableCell colSpan={9} className="text-center py-8 text-destructive">Não foi possível carregar as ocorrências: {error instanceof Error ? error.message : 'erro desconhecido'}</TableCell></TableRow>
             : filtered.length === 0 ? <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma ocorrência</TableCell></TableRow>
             : filtered.map(i => (
               <TableRow key={i.id}>
@@ -249,7 +247,7 @@ export default function Incidents() {
                   <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label className="text-xs">Custo Estimado (R$)</Label><Input type="number" step="0.01" value={form.estimated_cost} onChange={e => setForm(f => ({ ...f, estimated_cost: e.target.value }))} /></div>
+              <div><Label className="text-xs">Custo Estimado (R$)</Label><Input type="number" min="0" step="0.01" value={form.estimated_cost} onChange={e => setForm(f => ({ ...f, estimated_cost: e.target.value }))} /></div>
               {editing && (
                 <div><Label className="text-xs">Status</Label>
                   <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
@@ -278,7 +276,7 @@ export default function Incidents() {
 
 function HrActionsSection({ incidentId, defaultEmployeeId, savedEmployeeId }: { incidentId: string; defaultEmployeeId?: string; savedEmployeeId?: string }) {
   const toast = useSonnerToast();
-  const { data: actions = [] } = useIncidentActions(incidentId);
+  const { data: actions = [], isLoading, isError, error } = useIncidentActions(incidentId);
   const addAction = useAddEmployeeIncidentAction();
   const [actionType, setActionType] = useState<string>('note');
   const [description, setDescription] = useState('');
@@ -316,6 +314,8 @@ function HrActionsSection({ incidentId, defaultEmployeeId, savedEmployeeId }: { 
         <Badge variant="outline" className="text-[10px]">{actions.length}</Badge>
       </div>
       <Separator />
+      {isLoading ? <p className="text-xs text-muted-foreground">Carregando ações de RH…</p> : null}
+      {isError ? <p role="alert" className="text-xs text-destructive">Não foi possível carregar as ações: {error instanceof Error ? error.message : 'erro desconhecido'}.</p> : null}
       <div className="grid grid-cols-2 gap-2">
         <div><Label className="text-xs">Tipo de ação</Label>
           <Select value={actionType} onValueChange={setActionType}>
@@ -339,11 +339,11 @@ function HrActionsSection({ incidentId, defaultEmployeeId, savedEmployeeId }: { 
         {employeeMismatch && (
           <span className="text-[10px] text-destructive">Salve a alteração do funcionário antes de adicionar ações de RH.</span>
         )}
-        <Button size="sm" onClick={handleAdd} disabled={addAction.isPending || employeeMismatch}>
+        <Button size="sm" onClick={handleAdd} disabled={addAction.isPending || employeeMismatch || isLoading || isError}>
           <Plus className="h-3 w-3 mr-1" /> Adicionar ação
         </Button>
       </div>
-      {actions.length > 0 && (
+      {!isLoading && !isError && actions.length > 0 && (
         <div className="space-y-1 pt-2">
           {actions.map(a => (
             <div key={a.id} className="flex items-center justify-between text-xs border rounded px-2 py-1 bg-background">

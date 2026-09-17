@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -17,6 +17,7 @@ import { FileText, Calculator, CheckCircle, Eye, Edit3, Search } from 'lucide-re
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import FreightReviewDialog from '@/components/freight/FreightReviewDialog';
 import type { Json, TablesInsert } from '@/integrations/supabase/types';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 
 interface Doc {
   id: string;
@@ -80,7 +81,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
   const [overrideValue, setOverrideValue] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
   const [reviewDoc, setReviewDoc] = useState<Doc | null>(null);
-  const [calculatedFreight, setCalculatedFreight] = useState<number | null>(null);
+  const [calculation, setCalculation] = useState<{ selectionKey: string; value: number } | null>(null);
 
   const toggleDoc = (id: string) => {
     setSelectedIds(prev => {
@@ -106,9 +107,26 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
     weight: selectedDocs.reduce((s, d) => s + (Number(d.weight_kg) || 0), 0),
     value: selectedDocs.reduce((s, d) => s + (Number(d.value) || 0), 0),
   }), [selectedDocs]);
+  const selectionKey = useMemo(() => JSON.stringify({
+    loadId, destination, ids: selectedDocs.map(document => document.id).sort(), ...totals,
+  }), [destination, loadId, selectedDocs, totals]);
+  const selectionKeyRef = useRef(selectionKey);
+  selectionKeyRef.current = selectionKey;
+  const calculatedFreight = calculation?.selectionKey === selectionKey ? calculation.value : null;
+  const parsedOverride = overrideValue.trim() ? Number(overrideValue) : null;
+  const hasValidOverride = parsedOverride !== null && Number.isFinite(parsedOverride) && parsedOverride > 0;
+  const canPreview = overrideValue.trim() ? hasValidOverride : calculatedFreight !== null && calculatedFreight > 0;
+
+  useEffect(() => {
+    setCalculation(null);
+    setPreviewOpen(false);
+    setOverrideValue('');
+    setOverrideReason('');
+  }, [selectionKey]);
 
   const handleCalcFreight = async () => {
     if (!currentTenant) return;
+    const requestedSelection = selectionKey;
     const result = await calculateFreight({
       tenantId: currentTenant.id,
       destination,
@@ -116,13 +134,14 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
       totalWeight: totals.weight,
       totalPallets: totals.pallets,
     });
-    if (result.success) {
-      setCalculatedFreight(result.value);
+    if (selectionKeyRef.current !== requestedSelection) return;
+    if (result.success && Number.isFinite(result.value) && result.value > 0) {
+      setCalculation({ selectionKey: requestedSelection, value: result.value });
       setOverrideValue('');
       toast.success(`Frete calculado: R$ ${result.value.toFixed(2)}`);
     } else {
       toast.error(result.error || 'Erro no cálculo');
-      setCalculatedFreight(0);
+      setCalculation(null);
     }
   };
 
@@ -130,8 +149,10 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
     mutationFn: async () => {
       if (!currentTenant || selectedDocs.length === 0) throw new Error('Selecione documentos');
       
-      const freightValue = overrideValue ? Number(overrideValue) : calculatedFreight;
-      if (freightValue === null) throw new Error('Calcule o frete primeiro');
+      const freightValue = overrideValue.trim() ? Number(overrideValue) : calculatedFreight;
+      if (freightValue === null || !Number.isFinite(freightValue) || freightValue <= 0) {
+        throw new Error('Calcule um frete válido e positivo antes de gerar o CT-e');
+      }
 
       const cteNumber = `CTE-${loadNumber}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
       const itemSummary = selectedDocs
@@ -153,7 +174,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
         freight_value: freightValue,
         product_summary: itemSummary,
         status: 'confirmed',
-        issue_date: new Date().toISOString().slice(0, 10),
+        issue_date: localDateInputValue(),
       };
       const { data, error } = await supabase.from('fiscal_documents').insert(payload).select().single();
 
@@ -195,7 +216,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
       toast.success('CT-e gerado com sucesso');
       setPreviewOpen(false);
       setSelectedIds(new Set());
-      setCalculatedFreight(null);
+      setCalculation(null);
       setOverrideValue('');
       setOverrideReason('');
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
@@ -305,7 +326,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
                 <Button size="sm" variant="outline" onClick={handleCalcFreight}>
                   <Calculator className="h-3 w-3 mr-1" /> Calcular Frete
                 </Button>
-                <Button size="sm" onClick={() => setPreviewOpen(true)} disabled={calculatedFreight === null && !overrideValue}>
+                <Button size="sm" onClick={() => setPreviewOpen(true)} disabled={!canPreview}>
                   <Eye className="h-3 w-3 mr-1" /> Preview
                 </Button>
               </div>

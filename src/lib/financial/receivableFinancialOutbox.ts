@@ -4,6 +4,11 @@ export const FINANCIAL_COMMAND_CHANGED='agvlog:receivable-financial-changed';
 const keyFor=(tenant:string,actor:string)=>`agvlog:receivable-financial:v1:${tenant}:${actor}`;
 const unavailable=()=>new Error('Recuperação da operação financeira indisponível ou incompatível. Nenhum novo pedido foi enviado.');
 export interface PendingFinancialCommand {version:1;tenantId:string;actorId:string;createdAt:string;payload:FinancialCommand}
+export function discardPendingFinancialCommand(storage:Storage,tenant:string,actor:string){
+ const suffix=`:${tenant}:${actor}`;const keys:string[]=[];
+ for(let index=0;index<storage.length;index++){const key=storage.key(index);if(key?.startsWith('agvlog:receivable-financial:')&&key.endsWith(suffix))keys.push(key);}
+ for(const key of keys)storage.removeItem(key);
+}
 export function pendingFinancialCommand(storage:Storage,tenant:string,actor:string):PendingFinancialCommand|null{
  try{
   for(let index=0;index<storage.length;index++){const key=storage.key(index);if(key?.startsWith('agvlog:receivable-financial:')&&key.endsWith(`:${tenant}:${actor}`)&&key!==keyFor(tenant,actor))throw unavailable();}
@@ -11,6 +16,9 @@ export function pendingFinancialCommand(storage:Storage,tenant:string,actor:stri
   if(!isRecord(row)||row.version!==1||row.tenantId!==tenant||row.actorId!==actor||typeof row.createdAt!=='string'||!Number.isFinite(Date.parse(row.createdAt)))throw unavailable();
   const payload=financialCommandSchema.parse(row.payload);if(payload.tenant_id!==tenant||payload.actor_id!==actor)throw unavailable();return {...row,payload} as PendingFinancialCommand;
  }catch{throw unavailable();}
+}
+export function pendingFinancialAttachment(storage:Storage,tenant:string,actor:string,path:string){
+ try{const payload=pendingFinancialCommand(storage,tenant,actor)?.payload;return payload?.action==='receive'&&payload.attachment_path===path;}catch{return true;}
 }
 interface Dependencies {storage:Storage;uuid:()=>string;assertContext:()=>void;changed:()=>void;lock:<T>(key:string,work:()=>Promise<T>)=>Promise<T>;send:(payload:FinancialCommand)=>Promise<{data:unknown;error:unknown}>}
 export function createFinancialOutbox(deps:Dependencies){

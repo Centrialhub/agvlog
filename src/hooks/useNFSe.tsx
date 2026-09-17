@@ -9,6 +9,8 @@ import type { TenantEmitter } from './useEmitters';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { hubFiscal, type HubResponse, type NFSeBatchMode, type NFSeBatchResponse } from '@/lib/fiscal/hubFiscalClient';
 import { buildNFSeEmitPayload, type BuildNFSeInput } from '@/lib/fiscal/nfseBuilder';
+import { assertNFSeBatchRetryable } from '@/lib/fiscal/nfseBatchRetry';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { requireHubEnvironment, selectScopedHubCredential, type HubEnvironment } from '../../supabase/functions/_shared/fiscal-environment';
 
 export interface NFSeItem {
@@ -38,7 +40,41 @@ interface NFSeSyncOutcome {
 interface NFSeSyncResponse extends Record<string, unknown> {
   silent?: boolean;
   checked?: number;
+  total_pending?: number;
+  remaining?: number;
+  truncated?: boolean;
+  partial?: boolean;
+  stopped_reason?: string | null;
   results?: NFSeSyncOutcome[];
+}
+
+const TERMINAL_SYNC_OUTCOMES = new Set(['issued', 'rejected', 'cancelled']);
+
+export function summarizeNFSeSyncResponse(res: NFSeSyncResponse) {
+  const resolved = (res.results || []).filter(result => TERMINAL_SYNC_OUTCOMES.has(String(result.outcome || ''))).length;
+  const remaining = Math.max(0, Number(res.remaining || 0));
+  if (res.partial || res.stopped_reason || remaining > 0 || res.truncated) {
+    const reason = res.stopped_reason === 'rate_limited'
+      ? 'O provedor limitou temporariamente as consultas.'
+      : res.stopped_reason === 'provider_unavailable'
+        ? 'O provedor ficou indisponível durante a consulta.'
+        : 'A fila é maior que o limite desta execução.';
+    return {
+      tone: 'warning' as const,
+      title: 'Consulta parcial de NFS-e',
+      description: `${reason} Consultadas: ${Number(res.checked || 0)}. Restantes: ${remaining}.`,
+    };
+  }
+  if (resolved > 0) return {
+    tone: 'success' as const,
+    title: `${resolved} NFS-e com status fiscal atualizado`,
+    description: null,
+  };
+  return {
+    tone: 'info' as const,
+    title: `Consulta concluída — ${Number(res.checked || 0)} nota(s) ainda em processamento`,
+    description: null,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,19 +129,20 @@ export function useNFSeList(filters?: { status?: string; loadId?: string; client
     queryKey: ['nfse', currentTenant?.id, filters],
     enabled: !!currentTenant,
     queryFn: async () => {
-      let q = supabase
-        .from('nfse_documents')
-        .select('*')
-        .eq('tenant_id', currentTenant!.id)
-        .order('issue_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(500);
-      if (filters?.status) q = q.eq('status', filters.status);
-      if (filters?.loadId) q = q.eq('load_id', filters.loadId);
-      if (filters?.clientId) q = q.eq('cliente_id', filters.clientId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []).map(normalizeNFSeDocument);
+      const data = await fetchAllPostgrestPages<Tables<'nfse_documents'>>((from, to) => {
+        let q = supabase
+          .from('nfse_documents')
+          .select('*')
+          .eq('tenant_id', currentTenant!.id)
+          .order('issue_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false });
+        if (filters?.status) q = q.eq('status', filters.status);
+        if (filters?.loadId) q = q.eq('load_id', filters.loadId);
+        if (filters?.clientId) q = q.eq('cliente_id', filters.clientId);
+        return q.range(from, to);
+      });
+      return data.map(normalizeNFSeDocument);
     },
   });
 }
@@ -224,13 +261,7 @@ export function useCreateNFSe() {
         .single();
       if (error) throw error;
       // Drafts do not consume fiscal sources; the server reserves them at dispatch.
-      await supabase.from('nfse_events').insert({
-        tenant_id: currentTenant.id,
-        nfse_id: data.id,
-        event_type: 'created',
-        message: `RPS ${nextNum} criado (rascunho)`,
-        created_by: user?.id ?? null,
-      });
+      // The database trigger records the matching audit event in this same transaction.
       return normalizeNFSeDocument(data);
     },
     onSuccess: () => {
@@ -434,6 +465,10 @@ export function useIssueNFSeBatch(selectedEnvironment: HubEnvironment) {
         .from('nfse_documents').select('*').in('id', uniqueIds);
       if (documentsError) throw documentsError;
       if (!rows || rows.length !== uniqueIds.length) throw new Error('Uma NFS-e do lote não foi encontrada.');
+      // Uma rejeição definitiva pertence ao snapshot fiscal já transmitido.
+      // Reenviar o mesmo rascunho preservaria, inclusive, um CEP antigo. A
+      // correção deve gerar novos RPS depois de um novo preflight cadastral.
+      assertNFSeBatchRetryable(rows);
       const documents = new Map(rows.map(row => [row.id, normalizeNFSeDocument(row)]));
       const emitterIds = new Set(rows.map(row => row.emitter_id).filter((id): id is string => Boolean(id)));
       if (emitterIds.size !== 1) throw new Error('Todas as NFS-e do lote devem usar o mesmo emitente.');
@@ -489,6 +524,7 @@ export function useCancelNFSe() {
     const justification=reason.trim();if(justification.length<15)throw new Error('Justificativa deve ter pelo menos 15 caracteres.');
     const found=await supabase.from('nfse_documents').select('id,tenant_id,provider,status').eq('id',id).eq('tenant_id',currentTenant.id).single();
     if(found.error)throw found.error;
+    if(!['issued','authorized'].includes(found.data.status))throw new Error('Somente uma NFS-e autorizada pode ser cancelada no provedor.');
     const latest=await supabase.from('hub_fiscal_emissions').select('id,hub_document_id').eq('nfse_document_id',id).eq('tenant_id',currentTenant.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
     if(latest.error)throw latest.error;
     if(latest.data){
@@ -496,12 +532,7 @@ export function useCancelNFSe() {
       const result=await hubFiscal.cancelNFSe(latest.data.hub_document_id,justification,latest.data.id);
       return {status:result.hub?.document?.status==='cancelled'?'cancelled':'pending'};
     }
-    if(found.data.status!=='draft')throw new Error('Documento sem referência verificável no provedor. Concilie antes de cancelar.');
-    const saved=await supabase.from('nfse_documents').update({status:'cancelled',cancelled:true,cancellation_date:new Date().toISOString(),cancellation_reason:justification}).eq('id',id).eq('tenant_id',currentTenant.id).select('id').single();
-    if(saved.error)throw saved.error;
-    const released=await supabase.from('fiscal_documents').update({nfse_emitted_at:null,nfse_emitted_document_id:null}).eq('tenant_id',currentTenant.id).eq('nfse_emitted_document_id',id);
-    if(released.error)throw new Error('Rascunho cancelado; falha ao liberar as origens. Atualize e concilie.');
-    return {status:'cancelled'};
+    throw new Error('Documento autorizado sem referência verificável no provedor. Concilie antes de cancelar.');
   },onSuccess:(data)=>{
     for(const key of ['nfse','finance-receivable-portfolio','finance-fiscal-dashboard-summary','finance-unbilled-freight-summary','finance-unbilled-freight-origins','billing_documents','fiscal_documents','eligible_nfse'])qc.invalidateQueries({queryKey:[key]});
     if(data.status==='cancelled')toast.success('Cancelamento confirmado');else toast.info('Cancelamento solicitado; aguardando confirmação do provedor.');
@@ -533,6 +564,10 @@ export function useResendNFSe() {
   const toast=useSonnerToast();const {currentTenant}=useTenant();const qc=useQueryClient();
   return useMutation({mutationFn:async(id:string)=>{
     if(!currentTenant)throw new Error('Tenant não selecionado');
+    const {data:document,error:documentError}=await supabase.from('nfse_documents')
+      .select('rps_number,status').eq('tenant_id',currentTenant.id).eq('id',id).single();
+    if(documentError)throw documentError;
+    assertNFSeBatchRetryable([document]);
     const {data:emission,error}=await supabase.from('hub_fiscal_emissions')
       .select('emitter_id,environment,request_payload').eq('tenant_id',currentTenant.id)
       .eq('nfse_document_id',id).eq('doc_type','nfse').order('created_at',{ascending:false}).limit(1).maybeSingle();
@@ -562,9 +597,10 @@ export function useSyncNFSeStatus() {
     onSuccess: (res: NFSeSyncResponse) => {
       qc.invalidateQueries({ queryKey: ['nfse'] });
       if (res?.silent) return;
-      const resolved = (res.results || []).filter((result) => result.outcome && result.outcome !== 'pending').length;
-      if (resolved > 0) toast.success(`${resolved} NFS-e com status atualizado`);
-      else toast.info(`Consulta concluída — ${res?.checked ?? 0} nota(s) ainda em processamento`);
+      const summary = summarizeNFSeSyncResponse(res);
+      if (summary.tone === 'warning') toast.warning(summary.title, { description: summary.description });
+      else if (summary.tone === 'success') toast.success(summary.title);
+      else toast.info(summary.title);
     },
     onError: (error: unknown) => toast.error(errorMessage(error, 'Falha ao consultar status das NFS-e')),
   });

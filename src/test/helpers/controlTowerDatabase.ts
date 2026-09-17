@@ -76,7 +76,12 @@ export async function prepareControlTowerDatabase(db: Pick<PGlite,'exec'>,candid
   }
   if (candidate) {await db.exec(towerSql());await db.exec(towerAtomicSql());await db.exec(towerRouteSql());
     // The builder is tested on the complete financial fixture, not faked here.
-    await db.exec(towerRouteFinanceSql().split('-- FULL FINANCIAL BUILDER')[0]+'commit;');}
+    await db.exec(towerRouteFinanceSql().split('-- FULL FINANCIAL BUILDER')[0]+'commit;');
+    await db.exec(readFileSync('supabase/migrations/20260917131500_restore_control_tower_live_contract.sql','utf8'));
+    await db.exec(readFileSync('supabase/migrations/20260917132000_make_control_tower_reader_catalog_compatible.sql','utf8'));
+    await db.exec(readFileSync('supabase/migrations/20260917143500_restore_control_tower_revision_guards.sql','utf8'));
+    await db.exec(readFileSync('supabase/migrations/20260917143600_bound_control_tower_snapshot.sql','utf8'));
+  }
 }
 
 export async function seedTower(db: PGlite) {
@@ -96,10 +101,10 @@ export async function towerActor(db: PGlite, aal = 'aal1', actor = towerIds.acto
   await db.query("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claims',$2,false)", [actor, JSON.stringify({aal})]);
 }
 export async function towerRead<T = unknown>(db: PGlite, name = 'get_active_trips_live', tenant = towerIds.tenant): Promise<T> {
-  if (!['get_active_trips_live', 'get_open_trip_alerts'].includes(name)) throw new Error('Unknown test reader');
+  if (!['get_active_trips_live', 'get_open_trip_alerts', 'get_control_tower_snapshot_v1'].includes(name)) throw new Error('Unknown test reader');
   await db.exec('set role authenticated');
   try {
-    if (name === 'get_active_trips_live') return (await db.query<{data:T}>(`select public.${name}($1) data`, [tenant])).rows[0].data;
+    if (name !== 'get_open_trip_alerts') return (await db.query<{data:T}>(`select public.${name}($1) data`, [tenant])).rows[0].data;
     return (await db.query(`select * from public.${name}($1)`, [tenant])).rows as T;
   } finally { await db.exec('reset role').catch(() => { /* Caller rolls back aborted test transactions. */ }); }
 }

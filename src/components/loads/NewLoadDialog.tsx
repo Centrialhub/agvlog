@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCreateLoadWithNextNumber } from '@/hooks/useLoads';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
-import { useAuth } from '@/hooks/useAuth';
 import { useUserUiPreference } from '@/hooks/useUserUiPreference';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -17,8 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertTriangle, Eye, Loader2, Plus, Search, UserX, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Vehicle } from '@/hooks/useVehicles';
-import type { TablesInsert } from '@/integrations/supabase/types';
 import { getErrorMessage } from '@/lib/errors';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 type DriverOption = { id: string; name: string; user_id: string | null };
 type AvailableFiscalDocument = {
@@ -75,9 +73,7 @@ function useDebouncedValue<T>(value: T, delay: number) {
 }
 
 export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
-  const createLoad = useCreateLoadWithNextNumber();
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const { data: clients = [] } = useClients();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -104,8 +100,18 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const recentDocListRef = useRef<HTMLDivElement | null>(null);
   const isDocPreferenceHydrated = useRef(false);
   const skipNextFilterReset = useRef(false);
+  const createRequestId = useRef(crypto.randomUUID());
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
   const currentDocPreference = useMemo(() => ({ filters: docFilters, sort: docSort, visibleDocCount, visibleRecentDocCount, scrollTop: docScrollTop, recentScrollTop: recentDocScrollTop }), [docFilters, docSort, visibleDocCount, visibleRecentDocCount, docScrollTop, recentDocScrollTop]);
+  const createLoad = useMutation({
+    mutationFn: async (payload: Record<string, unknown>) => {
+      const { data, error } = await supabase.rpc('create_load_with_documents_v1' as never, { _payload: payload } as never);
+      if (error) throw error;
+      const result = data as unknown as { load_id?: string; load?: { id?: string } };
+      if (!result?.load_id && !result?.load?.id) throw new Error('Criação da carga sem confirmação compatível.');
+      return result;
+    },
+  });
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -131,15 +137,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     queryKey: ['new_load_available_fiscal_docs', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('fiscal_documents')
+      return fetchAllPostgrestPages((from, to) => supabase.from('fiscal_documents')
         .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, status, load_id, created_at, clients!fiscal_documents_client_id_fkey(company_name), loads(id, load_number)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
-        .order('created_at', { ascending: false })
-        .limit(1000);
-      if (error) throw error;
-      return data || [];
+        .order('created_at', { ascending: false }).order('id')
+        .range(from, to)) as Promise<AvailableFiscalDocument[]>;
     },
     enabled: !!currentTenant && open,
   });
@@ -148,13 +151,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     queryKey: ['new_load_linked_load_lookup', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('loads')
+      return fetchAllPostgrestPages((from, to) => supabase.from('loads')
         .select('id, load_number')
         .eq('tenant_id', currentTenant.id)
-        .limit(1000);
-      if (error) throw error;
-      return data || [];
+        .order('id').range(from, to));
     },
     enabled: !!currentTenant && open,
   });
@@ -472,71 +472,13 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         form.neighborhood ? `Bairro: ${form.neighborhood}` : '',
       ].filter(Boolean).join('\n');
 
-      const load = await createLoad.mutateAsync({
-        load_number: form.load_number.trim(),
-        origin: form.origin || null,
-        destination: form.destination || form.neighborhood || null,
-        notes: notes || null,
-        vehicle_id: form.vehicle_id || null,
-        driver_id: form.driver_id || null,
-        status: 'planned',
-      });
-
-      let manualDocId: string | null = null;
       const selectedDocIdList = Array.from(selectedDocIds);
-
-      if (selectedDocIdList.length === 1) {
-        const { error: updateDocError } = await supabase.from('fiscal_documents').update({
-          invoice_number: form.invoice_number.trim() || null,
-          client_id: form.client_id || null,
-          recipient: form.client_name || clients.find(c => c.id === form.client_id)?.company_name || null,
-          recipient_neighborhood: form.neighborhood || null,
-          recipient_city: form.destination || null,
-          updated_at: new Date().toISOString(),
-        }).eq('id', selectedDocIdList[0]);
-        if (updateDocError) throw updateDocError;
-      }
-
-      if (form.invoice_number.trim() && selectedDocIdList.length === 0) {
-        const payload: TablesInsert<'fiscal_documents'> = {
-          tenant_id: currentTenant!.id,
-          created_by: user?.id,
-          document_type: 'inbound',
-          invoice_number: form.invoice_number.trim(),
-          client_id: form.client_id || null,
-          recipient: form.client_name || clients.find(c => c.id === form.client_id)?.company_name || null,
-          remitter: form.supplier || null,
-          recipient_neighborhood: form.neighborhood || null,
-          recipient_city: form.destination || null,
-          // load_items is the canonical document/load relationship. The
-          // compatibility mirror is synchronized by the database trigger.
-          load_id: null,
-          status: 'confirmed',
-        };
-        const { data: createdDoc, error: docError } = await supabase.from('fiscal_documents').insert(payload).select('id').single();
-        if (docError) throw docError;
-        manualDocId = createdDoc.id;
-      }
-
-      const docIds = [...selectedDocIdList, ...(manualDocId ? [manualDocId] : [])];
-      if (docIds.length > 0) {
-        if (selectedDocIdList.length > 0) {
-          const { error: assignError } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
-            _tenant_id: currentTenant!.id,
-            _load_id: load.id,
-            _document_ids: selectedDocIdList,
-          });
-          if (assignError) throw assignError;
-          const auditEvents = selectedDocIdList.map(docId => {
+      const auditEvents = selectedDocIdList.map(docId => {
             const doc = fiscalDocs.find(document => document.id === docId);
             const autoFilledFields = docAutofillSnapshots[docId] || {};
             return {
-              tenant_id: currentTenant!.id,
-              load_id: load.id,
               fiscal_document_id: docId,
               previous_load_id: doc?.load_id || null,
-              created_by: user?.id,
-              action_type: 'selected_for_load',
               invoice_number: doc?.invoice_number || form.invoice_number || null,
               client_name: autoFilledFields.client_name || form.client_name || null,
               supplier_name: autoFilledFields.supplier || form.supplier || null,
@@ -564,18 +506,28 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               },
             };
           });
-          const { error: auditError } = await supabase.from('load_note_audit_events').insert(auditEvents);
-          if (auditError) throw auditError;
-        }
-        if (manualDocId) {
-          const { error: assignManualError } = await supabase.rpc('assign_fiscal_documents_to_load_v2', {
-            _tenant_id: currentTenant!.id,
-            _load_id: load.id,
-            _document_ids: [manualDocId],
-          });
-          if (assignManualError) throw assignManualError;
-        }
-      }
+      await createLoad.mutateAsync({
+        tenant_id: currentTenant!.id,
+        request_id: createRequestId.current,
+        changes: {
+          ...(form.load_number.trim() ? { load_number: form.load_number.trim() } : {}),
+          origin: form.origin || null, destination: form.destination || form.neighborhood || null,
+          notes: notes || null, vehicle_id: form.vehicle_id || null, driver_id: form.driver_id || null,
+        },
+        selected_document_ids: selectedDocIdList,
+        single_document_patch: selectedDocIdList.length === 1 ? {
+          invoice_number: form.invoice_number.trim() || null, client_id: form.client_id || null,
+          recipient: form.client_name || clients.find(c => c.id === form.client_id)?.company_name || null,
+          recipient_neighborhood: form.neighborhood || null, recipient_city: form.destination || null,
+        } : undefined,
+        manual_document: form.invoice_number.trim() && selectedDocIdList.length === 0 ? {
+          invoice_number: form.invoice_number.trim(), client_id: form.client_id || null,
+          recipient: form.client_name || clients.find(c => c.id === form.client_id)?.company_name || null,
+          remitter: form.supplier || null, recipient_neighborhood: form.neighborhood || null,
+          recipient_city: form.destination || null,
+        } : undefined,
+        audit_events: auditEvents,
+      });
 
       toast({ title: 'Carga criada' });
       setOpen(false);
@@ -584,6 +536,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       setDocAutofillSnapshots({});
       setPreviewDoc(null);
       setDetailsDoc(null);
+      createRequestId.current = crypto.randomUUID();
       queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
       queryClient.invalidateQueries({ queryKey: ['load_items'] });
       onCreated();

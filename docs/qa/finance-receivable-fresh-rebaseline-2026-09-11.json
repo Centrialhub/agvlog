@@ -1,0 +1,18 @@
+{
+  "inline_credit_predecessor": "b47c1f216593712ceabee63a333d4794",
+  "inline_correction_predecessor": "9eea07b84402130cc9e0d7f8e25d2ef3",
+  "records": [
+    {
+      "path": "supabase/migrations/20260910011121_finance_fiscal_cancellation_credits.sql",
+      "archive": "docs/qa/20260910011121_finance_fiscal_cancellation_credits.before-delegated-fix.sql",
+      "old_sha256": "f804d5aa34c45ff1cb63bdd0827d157e76ce75a22b54ad45a85172db95c1a02c",
+      "new_sha256": "3655553151f1d61c328c636cc3e16ca7155d11e85b6b0521f171f1edab1719e7"
+    },
+    {
+      "path": "supabase/migrations/20260910025658_finance_receipt_allocation_corrections.sql",
+      "archive": "docs/qa/20260910025658_finance_receipt_allocation_corrections.before-delegated-fix.sql",
+      "old_sha256": "1d6084d521c55c9b784bc25e38d7335dfdef9f57a128bae31700b2aa1e45259f",
+      "new_sha256": "fa548e79da43d1e6ec083cd20bcb1765812e5afd8cb7dc84447c19ac0d1b9745"
+    }
+  ]
+}

@@ -80,7 +80,9 @@ export function readOfxStatement(bytes:Uint8Array){
  if(root.children.some(node=>!['SIGNONMSGSRSV1','BANKMSGSRSV1'].includes(node.name)))return fail('ofx_unsupported_message_set');
  const statement=child(response,'STMTRS')!,currency=value(statement,'CURDEF');if(currency!=='BRL')return fail('ofx_unsupported_currency');
  const account=child(statement,'BANKACCTFROM')!,transactions=child(statement,'BANKTRANLIST')!;
- const start=ofxDate(value(transactions,'DTSTART')!),end=ofxDate(value(transactions,'DTEND')!);if(start.instant>end.instant)return fail('ofx_reversed_period');
+ const start=ofxDate(value(transactions,'DTSTART')!),end=ofxDate(value(transactions,'DTEND')!);
+ if(start.precision==='date'||end.precision==='date'||start.offset_minutes===null||end.offset_minutes===null)return fail('ofx_period_requires_time_and_offset');
+ if(start.instant>end.instant)return fail('ofx_reversed_period');
  if(transactions.children.some(node=>!['DTSTART','DTEND','STMTTRN'].includes(node.name)))return fail('ofx_unsupported_transaction_element');
  const accountInfo={bank_id:value(account,'BANKID')!,branch_id:value(account,'BRANCHID',false),account_id:value(account,'ACCTID')!,account_type:value(account,'ACCTTYPE')!};
  if(!['CHECKING','SAVINGS','MONEYMRKT'].includes(accountInfo.account_type))return fail('ofx_unsupported_account_type');

@@ -29,11 +29,18 @@ beforeAll(async()=>{
  await db.exec(readFileSync('supabase/migrations/20260910004550_finance_fiscal_observation_queue.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260910005509_finance_fiscal_receivable_basis.sql','utf8'));
  const financial=readFileSync('supabase/migrations/20260830183929_audit_receivable_payments_and_reversals.sql','utf8');
+ const invoiceLifecycle=readFileSync('supabase/migrations/20260830192908_audit_client_invoice_lifecycle.sql','utf8');
  const guard=financial.match(/create function public\._guard_receivable_ledger\(\)[\s\S]*?\$fn\$;/)?.[0];
  if(!guard)throw new Error('Missing real receivable ledger guard');await db.exec(guard);
- for(const name of ['_recalc_receivable_received','_receivable_financial_snapshot','_lock_receivable_financial_graph']){
+ for(const name of ['_recalc_receivable_received','_lock_receivable_financial_graph']){
   const definition=financial.match(new RegExp(`create (?:or replace )?function public\\.${name}\\([\\s\\S]*?\\$fn\\$;`))?.[0];
   if(!definition)throw new Error(`Missing real ${name}`);await db.exec(definition);
+ }
+ for(const name of ['_receivable_ledger_evidence','_receivable_financial_snapshot']){
+  const start=invoiceLifecycle.indexOf(`function public.${name}(`),end=invoiceLifecycle.indexOf('$fn$;',start)+5;
+  if(start<0||end<5)throw new Error(`Missing real ${name}`);
+  await db.exec('create or replace '+invoiceLifecycle.slice(start,end));
+  await db.exec(`revoke all on function public.${name}(uuid,uuid) from public,anon,authenticated,service_role;`);
  }
  await db.exec('create trigger ledger_guard before insert or update or delete on receivables for each row execute function _guard_receivable_ledger();');
  await db.exec(readFileSync('supabase/migrations/20260910010034_finance_fiscal_receivable_projection.sql','utf8'));

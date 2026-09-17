@@ -21,6 +21,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import type { Enums, Tables, TablesInsert } from '@/integrations/supabase/types';
 import { useDrivers } from '@/hooks/useDrivers';
 import { useClients } from '@/hooks/useClients';
+import { isPortalInviteEmail, PORTAL_PERMISSION_FIELDS, type CreatePortalInviteResponse, type PortalPermissionKey } from '@/lib/portal/portalAccessInvite';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 type AppRole = Enums<'app_role'>;
 type TeamRole = Extract<AppRole, 'admin' | 'operator' | 'driver'>;
@@ -92,6 +94,8 @@ interface MemberRow {
   profile_email: string | null;
 }
 
+type MembershipRow = Omit<MemberRow, 'profile_name' | 'profile_email'>;
+
 export default function TeamManagement() {
   const toast = useSonnerToast();
   const { currentTenant } = useTenant();
@@ -101,46 +105,47 @@ export default function TeamManagement() {
   const [editMember, setEditMember] = useState<MemberRow | null>(null);
   const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', role: 'all', status: 'all' });
 
-  const { data: members = [], isLoading } = useQuery({
+  const { data: members = [], isLoading, isError, error: membersError, refetch: refetchMembers } = useQuery({
     queryKey: ['tenant_members', currentTenant?.id],
     queryFn: async (): Promise<MemberRow[]> => {
       if (!currentTenant) return [];
       // Get memberships
-      const { data: memberships, error } = await supabase
-        .from('tenant_memberships')
-        .select('id, user_id, role, active, created_at, updated_at')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
+      const memberships = await fetchAllPostgrestPages<MembershipRow>(
+        (from, to) => supabase
+          .from('tenant_memberships')
+          .select('id, user_id, role, active, created_at, updated_at')
+          .eq('tenant_id', currentTenant.id)
+          .order('created_at', { ascending: true })
+          .range(from, to),
+      );
 
       // Get profiles for names
-      const userIds = (memberships || []).map(m => m.user_id);
-      let profiles: Pick<Tables<'profiles'>, 'id' | 'full_name'>[] = [];
-      if (userIds.length > 0) {
-        const { data: p, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', userIds);
-        if (profilesError) throw profilesError;
-        profiles = p || [];
+      const userIds = memberships.map(m => m.user_id);
+      const profiles: Pick<Tables<'profiles'>, 'id' | 'full_name'>[] = [];
+      for (let index = 0; index < userIds.length; index += 200) {
+        const ids = userIds.slice(index, index + 200);
+        const page = await fetchAllPostgrestPages<Pick<Tables<'profiles'>, 'id' | 'full_name'>>(
+          (from, to) => supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', ids)
+            .range(from, to),
+        );
+        profiles.push(...page);
       }
       const profileMap = new Map(profiles.map(p => [p.id, p]));
 
       // Get emails and metadata names via edge function (Admin API)
       const emailMap = new Map<string, { email: string | null; full_name: string | null }>();
-      try {
-        const { data: fnData, error: fnError } = await supabase.functions.invoke<EdgeUsersResponse>('list-tenant-members', {
-          body: { tenant_id: currentTenant.id },
-        });
-        if (fnError) throw fnError;
-        if (fnData?.error) throw new Error(fnData.error);
-        const list = fnData?.users || [];
-        for (const u of list) emailMap.set(u.id, { email: u.email, full_name: u.full_name });
-      } catch {
-        // ignore — falls back to profile name only
-      }
+      const { data: fnData, error: fnError } = await supabase.functions.invoke<EdgeUsersResponse>('list-tenant-members', {
+        body: { tenant_id: currentTenant.id },
+      });
+      if (fnError) throw fnError;
+      if (fnData?.error) throw new Error(fnData.error);
+      const list = fnData?.users || [];
+      for (const u of list) emailMap.set(u.id, { email: u.email, full_name: u.full_name });
 
-      return (memberships || []).map(m => ({
+      return memberships.map(m => ({
         ...m,
         profile_name:
           profileMap.get(m.user_id)?.full_name ||
@@ -220,20 +225,32 @@ export default function TeamManagement() {
             Gerencie membros, convide novos usuários e controle os níveis de acesso
           </p>
         </div>
-        <Button onClick={() => setInviteOpen(true)}>
+        <Button onClick={() => setInviteOpen(true)} disabled={isError}>
           <UserPlus className="mr-2 h-4 w-4" />Convidar membro
         </Button>
       </div>
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard label="Total" value={stats.total} icon={<Users className="h-4 w-4" />} />
-        <StatCard label="Ativos" value={stats.active} icon={<CheckCircle2 className="h-4 w-4 text-success" />} />
-        <StatCard label="Admins" value={stats.admins} icon={<ShieldCheck className="h-4 w-4" />} />
-        <StatCard label="Operadores" value={stats.operators} icon={<UserCog className="h-4 w-4" />} />
-        <StatCard label="Motoristas" value={stats.drivers} icon={<Truck className="h-4 w-4" />} />
-        <StatCard label="Clientes" value={stats.clients} icon={<Building2 className="h-4 w-4" />} />
-      </div>
+      {isError ? (
+        <Card className="border-destructive/50">
+          <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
+            <AlertTriangle className="h-6 w-6 text-destructive" />
+            <div>
+              <p className="font-medium text-destructive">Não foi possível carregar a equipe</p>
+              <p className="text-sm text-muted-foreground">{errorMessage(membersError, 'Falha ao consultar membros e perfis.')}</p>
+            </div>
+            <Button variant="outline" onClick={() => void refetchMembers()}>Tentar novamente</Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard label="Total" value={stats.total} icon={<Users className="h-4 w-4" />} />
+          <StatCard label="Ativos" value={stats.active} icon={<CheckCircle2 className="h-4 w-4 text-success" />} />
+          <StatCard label="Admins" value={stats.admins} icon={<ShieldCheck className="h-4 w-4" />} />
+          <StatCard label="Operadores" value={stats.operators} icon={<UserCog className="h-4 w-4" />} />
+          <StatCard label="Motoristas" value={stats.drivers} icon={<Truck className="h-4 w-4" />} />
+          <StatCard label="Clientes" value={stats.clients} icon={<Building2 className="h-4 w-4" />} />
+        </div>
+      )}
 
       {/* Info cards explaining roles */}
       <Card>
@@ -255,7 +272,7 @@ export default function TeamManagement() {
       {/* Members table */}
       <Tabs defaultValue="members">
         <TabsList>
-          <TabsTrigger value="members">Membros ({members.length})</TabsTrigger>
+          <TabsTrigger value="members">Membros ({isError ? '—' : members.length})</TabsTrigger>
           <TabsTrigger value="portal_access">Acessos do Portal</TabsTrigger>
         </TabsList>
         <TabsContent value="members" className="mt-4 space-y-4">
@@ -267,7 +284,7 @@ export default function TeamManagement() {
 
           {isLoading ? (
             <Card><CardContent className="py-8 text-center text-muted-foreground">Carregando...</CardContent></Card>
-          ) : (
+          ) : isError ? null : (
             <Card>
               <Table>
                 <TableHeader>
@@ -416,23 +433,6 @@ type PortalAccessRow = Pick<
   | 'can_view_driver_contact'
 >;
 
-type PortalPermissionKey =
-  | 'can_view_financial'
-  | 'can_download_documents'
-  | 'can_open_occurrences'
-  | 'can_request_pickup'
-  | 'can_view_vehicle_live'
-  | 'can_view_driver_contact';
-
-const PERM_FIELDS: ReadonlyArray<readonly [PortalPermissionKey, string]> = [
-  ['can_view_financial', 'Ver valores'],
-  ['can_download_documents', 'Baixar documentos/canhotos'],
-  ['can_open_occurrences', 'Abrir ocorrências'],
-  ['can_request_pickup', 'Solicitar coleta'],
-  ['can_view_vehicle_live', 'Ver veículo ao vivo'],
-  ['can_view_driver_contact', 'Ver contato do motorista'],
-];
-
 function PortalAccessTab({ tenantId }: { tenantId?: string }) {
   const { confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
@@ -440,17 +440,14 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PortalAccessRow | null>(null);
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading, isError, error } = useQuery({
     queryKey: ['client_portal_access_admin', tenantId],
     queryFn: async () => {
       if (!tenantId) return [] as PortalAccessRow[];
-      const { data, error } = await supabase
-        .from('client_portal_access')
+      return await fetchAllPostgrestPages((from, to) => supabase.from('client_portal_access')
         .select('id, user_id, client_id, access_type, active, can_view_financial, can_download_documents, can_open_occurrences, can_request_pickup, can_view_vehicle_live, can_view_driver_contact')
         .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as PortalAccessRow[];
+        .order('created_at', { ascending: false }).order('id').range(from, to)) as PortalAccessRow[];
     },
     enabled: !!tenantId,
   });
@@ -484,8 +481,8 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Conceda acesso a clientes externos. O cliente <strong>não</strong> precisa ser membro da empresa —
-          basta criar a conta dele no Supabase e adicionar uma linha aqui.
+          Convide clientes e fornecedores externos sem adicioná-los à equipe interna. O acesso fica limitado
+          ao cliente, ao tipo de vínculo e às permissões escolhidas abaixo.
         </div>
         <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}>
           <Link2 className="h-4 w-4 mr-1" /> Novo acesso
@@ -506,6 +503,8 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
           <TableBody>
             {isLoading ? (
               <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+            ) : isError ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-destructive">Não foi possível carregar os acessos do portal: {error instanceof Error ? error.message : 'erro desconhecido'}</TableCell></TableRow>
             ) : rows.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum acesso de portal cadastrado.</TableCell></TableRow>
             ) : (
@@ -515,7 +514,7 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
                   <TableCell>{clientMap.get(r.client_id) || r.client_id.slice(0, 8)}</TableCell>
                   <TableCell><Badge variant="outline" className="text-[10px]">{r.access_type}</Badge></TableCell>
                   <TableCell className="text-xs">
-                    {PERM_FIELDS.filter(([key]) => r[key]).map(([, label]) => label).join(' · ') || <span className="text-muted-foreground">—</span>}
+                    {PORTAL_PERMISSION_FIELDS.filter(([key]) => r[key]).map(([, label]) => label).join(' · ') || <span className="text-muted-foreground">—</span>}
                   </TableCell>
                   <TableCell><Badge variant={r.active ? 'default' : 'secondary'}>{r.active ? 'Ativo' : 'Inativo'}</Badge></TableCell>
                   <TableCell className="text-right space-x-1">
@@ -527,10 +526,14 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
                       size="sm"
                       variant="ghost"
                       title="Copiar link do portal"
-                      onClick={() => {
-                        const url = `${window.location.origin}/portal`;
-                        navigator.clipboard.writeText(url);
-                        toast.success('Link do portal copiado');
+                      onClick={async () => {
+                        try {
+                          const url = `${window.location.origin}/portal`;
+                          await navigator.clipboard.writeText(url);
+                          toast.success('Link do portal copiado');
+                        } catch (cause) {
+                          toast.error(errorMessage(cause, 'Não foi possível copiar o link do portal'));
+                        }
                       }}
                     >
                       <Link2 className="h-3 w-3" />
@@ -563,6 +566,7 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
   const queryClient = useQueryClient();
   const [userId, setUserId] = useState('');
   const [userQuery, setUserQuery] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [userResults, setUserResults] = useState<Array<{ id: string; email: string | null; full_name: string | null }>>([]);
   const [searching, setSearching] = useState(false);
   const [pickedLabel, setPickedLabel] = useState<string>('');
@@ -578,10 +582,10 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
         setPickedLabel(editing.user_id);
         setClientId(editing.client_id);
         setAccessType(editing.access_type);
-        setPerms(Object.fromEntries(PERM_FIELDS.map(([key]) => [key, editing[key]])));
+        setPerms(Object.fromEntries(PORTAL_PERMISSION_FIELDS.map(([key]) => [key, editing[key]])));
       } else {
-        setUserId(''); setPickedLabel(''); setUserQuery(''); setUserResults([]);
-        setClientId(''); setAccessType('full'); setPerms({});
+        setUserId(''); setPickedLabel(''); setUserQuery(''); setInviteName(''); setUserResults([]);
+        setClientId(''); setAccessType('full'); setPerms({ can_download_documents: true });
       }
     }
   }, [open, editing]);
@@ -589,7 +593,7 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
   useEffect(() => {
     if (!open || !tenantId) return undefined;
     const q = userQuery.trim();
-    if (q.length < 2) { setUserResults([]); return undefined; }
+    if (!isPortalInviteEmail(q)) { setUserResults([]); return undefined; }
     const handle = setTimeout(async () => {
       setSearching(true);
       try {
@@ -607,15 +611,16 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
   }, [toast, userQuery, open, tenantId]);
 
   const save = async () => {
-    if (!tenantId || !userId || !clientId) { toast.error('Preencha usuário, cliente e tipo'); return; }
+    const inviteEmail = userQuery.trim().toLowerCase();
+    const canInvite = isPortalInviteEmail(inviteEmail);
+    if (!tenantId || !clientId || (!userId && !canInvite)) { toast.error('Preencha e-mail, cliente e tipo de acesso'); return; }
     setLoading(true);
     try {
-      const payload: TablesInsert<'client_portal_access'> = {
+      const payload = {
         tenant_id: tenantId,
         user_id: userId.trim(),
         client_id: clientId,
         access_type: accessType,
-        active: true,
         can_view_financial: !!perms.can_view_financial,
         can_download_documents: !!perms.can_download_documents,
         can_open_occurrences: !!perms.can_open_occurrences,
@@ -627,15 +632,32 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
         const { error } = await supabase.from('client_portal_access').update(payload).eq('id', editing.id).eq('tenant_id', tenantId);
         if (error) throw error;
         toast.success('Acesso atualizado');
-      } else {
-        const { error } = await supabase.from('client_portal_access').insert(payload);
+      } else if (userId) {
+        const insertPayload: TablesInsert<'client_portal_access'> = { ...payload, active: true };
+        const { error } = await supabase.from('client_portal_access').insert(insertPayload);
         if (error) throw error;
         toast.success('Acesso criado');
+      } else {
+        const { data, error } = await supabase.functions.invoke<CreatePortalInviteResponse>('create-team-member', {
+          body: {
+            tenant_id: tenantId,
+            email: inviteEmail,
+            full_name: inviteName.trim() || inviteEmail,
+            role: 'client',
+            client_id: clientId,
+            access_type: accessType,
+            permissions: perms,
+          },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        if (!data?.success || data.access_kind !== 'client_portal') throw new Error('Resposta inválida ao criar o acesso externo.');
+        toast.success(`Convite do portal enviado para ${data.email || inviteEmail}`);
       }
       queryClient.invalidateQueries({ queryKey: ['client_portal_access_admin'] });
       onOpenChange(false);
-      setUserId(''); setPickedLabel(''); setUserQuery(''); setUserResults([]);
-      setClientId(''); setAccessType('full'); setPerms({});
+      setUserId(''); setPickedLabel(''); setUserQuery(''); setInviteName(''); setUserResults([]);
+      setClientId(''); setAccessType('full'); setPerms({ can_download_documents: true });
     } catch (error: unknown) {
       toast.error(errorMessage(error, 'Falha ao salvar acesso'));
     } finally { setLoading(false); }
@@ -663,11 +685,19 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
                 <Input
                   value={userQuery}
                   onChange={(e) => setUserQuery(e.target.value)}
-                  placeholder="Buscar por e-mail ou nome (mín. 2 caracteres)"
+                  type="email"
+                  placeholder="E-mail do usuário"
                 />
                 {searching && <p className="text-[11px] text-muted-foreground">Buscando…</p>}
-                {!searching && userQuery.trim().length >= 2 && userResults.length === 0 && (
-                  <p className="text-[11px] text-muted-foreground">Nenhum usuário encontrado.</p>
+                {!searching && isPortalInviteEmail(userQuery) && userResults.length === 0 && (
+                  <div className="space-y-2 rounded-md border border-dashed p-3">
+                    <p className="text-[11px] text-muted-foreground">Conta ainda não encontrada. Ao salvar, enviaremos um convite seguro para este e-mail.</p>
+                    <Input
+                      value={inviteName}
+                      onChange={(event) => setInviteName(event.target.value)}
+                      placeholder="Nome do contato (opcional)"
+                    />
+                  </div>
                 )}
                 {userResults.length > 0 && (
                   <div className="max-h-40 overflow-y-auto rounded-md border divide-y">
@@ -712,7 +742,7 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
           <div className="space-y-2">
             <Label className="text-xs">Permissões</Label>
             <div className="grid grid-cols-2 gap-2">
-              {PERM_FIELDS.map(([k, label]) => (
+              {PORTAL_PERMISSION_FIELDS.map(([k, label]) => (
                 <label key={k} className="flex items-center gap-2 text-xs cursor-pointer">
                   <Checkbox checked={!!perms[k]} onCheckedChange={(checked) => setPerms((current) => ({ ...current, [k]: !!checked }))} />
                   {label}
@@ -722,7 +752,9 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
+            <Button onClick={save} disabled={loading || !clientId || (!userId && !isPortalInviteEmail(userQuery))}>
+              {loading ? 'Salvando...' : editing || userId ? 'Salvar acesso' : 'Convidar e criar acesso'}
+            </Button>
           </div>
         </div>
       </DialogContent>
@@ -934,6 +966,7 @@ function EditMemberDialog({
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   // Reset form when member changes
   const open = !!member;
@@ -962,9 +995,8 @@ function EditMemberDialog({
         user_id: member.user_id,
       };
       if (fullName.trim()) body.full_name = fullName.trim();
-      if (email.trim()) body.email = email.trim();
 
-      if (!body.full_name && !body.email) {
+      if (!body.full_name) {
         toast.info('Nenhuma alteração informada.');
         setLoading(false);
         return;
@@ -981,6 +1013,23 @@ function EditMemberDialog({
       toast.error(errorMessage(error, 'Erro ao atualizar conta'));
     }
     setLoading(false);
+  };
+
+  const handlePasswordReset = async () => {
+    if (!tenantId || !member) return;
+    setResettingPassword(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<UpdateMemberResponse>('update-team-member', {
+        body: { tenant_id: tenantId, user_id: member.user_id, action: 'send_password_reset' },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success('Link de redefinição solicitado.');
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, 'Erro ao enviar redefinição de senha'));
+    } finally {
+      setResettingPassword(false);
+    }
   };
 
   return (
@@ -1007,10 +1056,15 @@ function EditMemberDialog({
             <Label>E-mail</Label>
             <Input
               type="email"
-              placeholder="Novo e-mail (deixe vazio para manter)"
+              placeholder="E-mail da conta"
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              readOnly
+              disabled
             />
+            <p className="text-xs text-muted-foreground">O e-mail é uma identidade global e não pode ser alterado por um administrador de tenant.</p>
+            <Button type="button" variant="outline" size="sm" disabled={resettingPassword || !email} onClick={handlePasswordReset}>
+              {resettingPassword ? 'Enviando...' : 'Enviar redefinição de senha'}
+            </Button>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

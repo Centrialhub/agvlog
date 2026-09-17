@@ -33,6 +33,8 @@ import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 import type { Tables } from '@/integrations/supabase/types';
+import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
+import type {CompanyProfile} from '@/hooks/useCompanyProfile';
 
 const brl = (n: unknown) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kg = (n: unknown) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 }) + ' kg';
@@ -53,6 +55,9 @@ const toBuiltItems = (rows: Tables<'closing_report_items'>[]): BuiltItem[] => ro
   if (!isBuiltItemSource(row.source_type)) throw new Error(`Origem inválida no fechamento: ${row.source_type}`);
   return { ...row, source_type: row.source_type };
 });
+const object=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
+const snapshotName=(value:unknown)=>{const row=object(value);return String(row.company_name||row.name||'')||null;};
+const snapshotCompany=(value:unknown):CompanyProfile=>{const row=object(value),company=object(row.company);return {...row,...company} as CompanyProfile;};
 
 export default function ClosingReports() {
   const {currentTenant}=useTenant();const {user}=useAuth();
@@ -98,27 +103,23 @@ function ClosingReportsScreen() {
   const fetchReportItems = async (reportId: string): Promise<{items:BuiltItem[];summary:SummaryLine[]}> => {
     const tenantId = currentTenant?.id;
     if (!tenantId) throw new Error('Tenant ativo não encontrado.');
-    const { data, error } = await supabase
-      .from('closing_report_items')
-      .select('*')
-      .eq('closing_report_id', reportId)
-      .eq('tenant_id', tenantId)
-      .order('sort_order');
-    if (error) throw error;
-    const {data:summary,error:summaryError}=await supabase.from('closing_report_summary_lines').select('*').eq('closing_report_id',reportId).eq('tenant_id',tenantId).order('sort_order');
-    if(summaryError)throw summaryError;
+    const [data,summary]=await Promise.all([
+      fetchAllPostgrestPages((from,to)=>supabase.from('closing_report_items').select('*').eq('closing_report_id', reportId).eq('tenant_id', tenantId).order('sort_order').order('id').range(from,to)),
+      fetchAllPostgrestPages((from,to)=>supabase.from('closing_report_summary_lines').select('*').eq('closing_report_id',reportId).eq('tenant_id',tenantId).order('sort_order').order('id').range(from,to)),
+    ]);
     if(!active.current)throw new Error('A sessão ou empresa mudou. Abra novamente o relatório.');
-    const source=summary??[];const group=source.some(row=>row.group_type==='arrival_date')?'arrival_date':'billing_period';
-    return {items:toBuiltItems(data||[]),summary:source.filter(row=>row.group_type===group).map(row=>({...row,group_type:group}))};
+    const group=summary.some(row=>row.group_type==='arrival_date')?'arrival_date':'billing_period';
+    return {items:toBuiltItems(data),summary:summary.filter(row=>row.group_type===group).map(row=>({...row,group_type:group}))};
   };
 
   const exportPdf = async (r: ClosingReportRow, model: 'summary' | 'detailed' | 'trips' = 'detailed') => {
     try {
       const {items,summary} = await fetchReportItems(r.id);
+      const preservedCompany=snapshotCompany(r.company_snapshot);const company=Object.keys(preservedCompany).length?preservedCompany:companyProfile;
       downloadClosingReportPdf(`${r.closing_number}.pdf`, {
-        title: r.title, clientName: r.client?.name, periodStart: r.period_start, periodEnd: r.period_end,
+        title: r.title, clientName: snapshotName(r.client_snapshot)||r.client?.name, periodStart: r.period_start, periodEnd: r.period_end,
         closingNumber: r.closing_number, items, summaryLines:summary, model:r.report_model==='summary'?'summary':model,
-        company: toCompanyPdfInfo(companyProfile, currentTenant?.name),
+        company: toCompanyPdfInfo(company,snapshotName(r.company_snapshot)||currentTenant?.name),
       });
     } catch (error: unknown) {
       toast.error(errorMessage(error, 'Falha ao exportar PDF'));
@@ -127,7 +128,7 @@ function ClosingReportsScreen() {
   const exportExcel = async (r: ClosingReportRow) => {
     try {
       const {items,summary} = await fetchReportItems(r.id);
-      const wb = buildWorkbook({ title: r.title, clientName: r.client?.name ?? null, periodStart: r.period_start, periodEnd: r.period_end, items, summaryLines:summary });
+      const wb = buildWorkbook({ title: r.title, clientName: snapshotName(r.client_snapshot)||r.client?.name||null, periodStart: r.period_start, periodEnd: r.period_end, items, summaryLines:summary });
       downloadWorkbook(`${r.closing_number}.xlsx`, wb);
     } catch (error: unknown) {
       toast.error(errorMessage(error, 'Falha ao exportar Excel'));
@@ -143,8 +144,8 @@ function ClosingReportsScreen() {
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 p-4 md:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Relatórios de Fechamento</h1>
           <p className="text-sm text-muted-foreground">Fechamentos decenais, quinzenais, mensais e por período livre.</p>
@@ -152,13 +153,15 @@ function ClosingReportsScreen() {
       </div>
 
       <Tabs defaultValue="list">
-        <TabsList>
-          <TabsTrigger value="list">Fechamentos</TabsTrigger>
-          <TabsTrigger value="new">Novo Fechamento</TabsTrigger>
-          <TabsTrigger value="review">Conferência</TabsTrigger>
-          <TabsTrigger value="reports">Relatórios</TabsTrigger>
-          <TabsTrigger value="legacy">Importar Legado</TabsTrigger>
-        </TabsList>
+        <div className="-m-1 overflow-x-auto p-1">
+          <TabsList className="h-auto min-w-max justify-start">
+            <TabsTrigger value="list">Fechamentos</TabsTrigger>
+            <TabsTrigger value="new">Novo Fechamento</TabsTrigger>
+            <TabsTrigger value="review">Conferência</TabsTrigger>
+            <TabsTrigger value="reports">Relatórios</TabsTrigger>
+            <TabsTrigger value="legacy">Importar Legado</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* ------- LIST ------- */}
         <TabsContent value="list" className="space-y-4">
@@ -175,57 +178,57 @@ function ClosingReportsScreen() {
 
           <Card>
             <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-6 gap-3">
-              <div><Label>Cliente</Label>
+              <div><Label htmlFor="closing-client">Cliente</Label>
                 <Select value={filters.clientId ?? '__all__'} onValueChange={v => setFilters({ ...filters, clientId: v === '__all__' ? null : v })}>
-                  <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+                  <SelectTrigger id="closing-client"><SelectValue placeholder="Todos" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">Todos</SelectItem>
                     {clients.map(client => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Tipo</Label>
+              <div><Label htmlFor="closing-type">Tipo</Label>
                 <Select value={filters.reportType ?? '__all__'} onValueChange={v => setFilters({ ...filters, reportType: v === '__all__' ? null : v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="closing-type"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">Todos</SelectItem>
                     {Object.entries(REPORT_TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Status</Label>
+              <div><Label htmlFor="closing-status">Status</Label>
                 <Select value={filters.status ?? '__all__'} onValueChange={v => setFilters({ ...filters, status: v === '__all__' ? null : v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="closing-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">Todos</SelectItem>
                     {Object.entries(STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Financeiro</Label>
+              <div><Label htmlFor="closing-payment-status">Financeiro</Label>
                 <Select value={filters.paymentStatus ?? '__all__'} onValueChange={v => setFilters({ ...filters, paymentStatus: v === '__all__' ? null : v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="closing-payment-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">Todos</SelectItem>
                     {Object.entries(PAYMENT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Nº fechamento</Label><Input value={filters.closingNumber ?? ''} onChange={e => setFilters({ ...filters, closingNumber: e.target.value || null })} /></div>
-              <div><Label>Período de</Label><Input type="date" value={filters.periodFrom ?? ''} onChange={e => setFilters({ ...filters, periodFrom: e.target.value || null })} /></div>
-              <div><Label>Período até</Label><Input type="date" value={filters.periodTo ?? ''} onChange={e => setFilters({ ...filters, periodTo: e.target.value || null })} /></div>
-              <div><Label>Placa</Label>
+              <div><Label htmlFor="closing-number">Nº fechamento</Label><Input id="closing-number" value={filters.closingNumber ?? ''} onChange={e => setFilters({ ...filters, closingNumber: e.target.value || null })} /></div>
+              <div><Label htmlFor="closing-period-from">Período de</Label><Input id="closing-period-from" type="date" value={filters.periodFrom ?? ''} onChange={e => setFilters({ ...filters, periodFrom: e.target.value || null })} /></div>
+              <div><Label htmlFor="closing-period-to">Período até</Label><Input id="closing-period-to" type="date" value={filters.periodTo ?? ''} onChange={e => setFilters({ ...filters, periodTo: e.target.value || null })} /></div>
+              <div><Label htmlFor="closing-plate">Placa</Label>
                 <Select value={filters.plate ?? '__all__'} onValueChange={v => setFilters({ ...filters, plate: v === '__all__' ? null : v })}>
-                  <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectTrigger id="closing-plate"><SelectValue placeholder="Todas" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">Todas</SelectItem>
                     {vehicles.map(v => <SelectItem key={v.id} value={(v.plate || '').toUpperCase()}>{v.plate}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Motorista</Label>
+              <div><Label htmlFor="closing-driver">Motorista</Label>
                 <Select value={filters.driverName ?? '__all__'} onValueChange={v => setFilters({ ...filters, driverName: v === '__all__' ? null : v })}>
-                  <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+                  <SelectTrigger id="closing-driver"><SelectValue placeholder="Todos" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">Todos</SelectItem>
                     {drivers.map(d => <SelectItem key={d.id} value={(d.name || '').toUpperCase()}>{d.name}</SelectItem>)}
@@ -240,7 +243,7 @@ function ClosingReportsScreen() {
 
           <Card>
             <CardContent className="pt-4">
-              <Table>
+              <Table scrollLabel="Fechamentos; deslize horizontalmente para ver todas as colunas" className="min-w-[70rem]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nº</TableHead>
@@ -275,10 +278,10 @@ function ClosingReportsScreen() {
                       <TableCell>
                         <div className="flex gap-1 flex-wrap">
                           <Button size="sm" variant="outline" onClick={()=>setActionReport(r)} aria-label={`Gerenciar fechamento ${r.closing_number}`}>Ações</Button>
-                          <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'detailed')} title="PDF detalhado"><FileText className="h-3 w-3" /></Button>
-                          <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'trips')} title="PDF controle de viagens"><FileText className="h-3 w-3" />V</Button>
-                          <Button size="sm" variant="outline" onClick={() => exportExcel(r)} title="Excel"><FileSpreadsheet className="h-3 w-3" /></Button>
-                          <Button size="sm" variant="outline" onClick={() => exportCsv(r)} title="CSV"><Download className="h-3 w-3" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'detailed')} aria-label={`Exportar PDF detalhado do fechamento ${r.closing_number}`} title="PDF detalhado"><FileText className="h-3 w-3" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'trips')} aria-label={`Exportar controle de viagens do fechamento ${r.closing_number} em PDF`} title="PDF controle de viagens"><FileText className="h-3 w-3" />V</Button>
+                          <Button size="sm" variant="outline" onClick={() => exportExcel(r)} aria-label={`Exportar fechamento ${r.closing_number} em Excel`} title="Excel"><FileSpreadsheet className="h-3 w-3" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => exportCsv(r)} aria-label={`Exportar fechamento ${r.closing_number} em CSV`} title="CSV"><Download className="h-3 w-3" /></Button>
                           <Button size="sm" variant="outline" onClick={() => setEditTripsFor(r)} title="Editar KMs por viagem">KM</Button>
                           {['closed', 'sent'].includes(r.status) && !r.client_invoice_id && (
                             <Button size="sm" variant="secondary" onClick={() => setInvoiceReport(r)}>

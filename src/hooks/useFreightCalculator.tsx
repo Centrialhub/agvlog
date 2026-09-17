@@ -1,11 +1,14 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
+import { localDateInputValue } from '@/lib/utils/formatDate';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 type FreightTable = Tables<'freight_tables'>;
 
 export interface FreightInput {
   tenantId: string;
   clientId?: string | null;
+  payerName?: string | null;
   payerGroup?: string | null;
   destination?: string | null;
   destinationState?: string | null;
@@ -22,6 +25,7 @@ export interface FreightInput {
   totalValue: number;
   totalWeight: number;
   totalPallets: number;
+  referenceDate?: string | null;
 }
 
 export interface FreightBreakdown {
@@ -168,25 +172,6 @@ export function computeSpecificity(table: Partial<FreightTable>, input: FreightI
     }
   };
 
-  // Soft check: when the input side is missing (null/empty), do NOT disqualify.
-  // Only pushes negative on a real mismatch (both sides present and different).
-  // This prevents generic all-null tables from being wrongly rejected in favor of
-  // a specific-but-mismatched fallback.
-  const checkSoft = (field: string, tableVal: string | null | undefined, inputVal: string | null | undefined) => {
-    if (!tableVal) return;
-    if (!inputVal) {
-      ignored.push(`${field}: table="${tableVal}" vs input="(vazio)" (não pontua, não desqualifica)`);
-      return;
-    }
-    if (tableVal.toLowerCase() === inputVal.toLowerCase()) {
-      score += 10;
-      matched[field] = tableVal;
-    } else {
-      score -= 100;
-      ignored.push(`${field}: table="${tableVal}" vs input="${inputVal}"`);
-    }
-  };
-
   const checkContains = (field: string, tableVal: string | null | undefined, inputVal: string | null | undefined) => {
     if (!tableVal) return;
     if (inputVal && inputVal.toLowerCase().includes(tableVal.toLowerCase())) {
@@ -198,12 +183,9 @@ export function computeSpecificity(table: Partial<FreightTable>, input: FreightI
     }
   };
 
-  // payer_group is treated softly: a table restricted to a payer_group should not be
-  // disqualified merely because the input's client hasn't been assigned to that group yet.
-  // This is the common source of wrong-fallback selection in production.
-  checkSoft('payer_group', table.payer_group, input.payerGroup);
-  // payer is compared to the actual client id, not the literal string "client".
-  checkSoft('payer', table.payer, input.clientId);
+  check('client_id', table.client_id, input.clientId);
+  check('payer_group', table.payer_group, input.payerGroup);
+  check('payer', table.payer, input.payerName);
   check('origin_state', table.origin_state, input.originState);
   check('destination_state', table.destination_state, input.destinationState);
   check('origin_municipality', table.origin_municipality, input.originMunicipality);
@@ -246,7 +228,7 @@ function computeFreightValue(table: FreightTable, input: FreightInput): FreightB
 }
 
 export async function calculateFreight(input: FreightInput): Promise<FreightResult> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = input.referenceDate?.slice(0, 10) || localDateInputValue();
 
   // ===== Auto-fallback: detect missing critical fields and substitute with UNKNOWN =====
   const missingFields: string[] = [];
@@ -276,15 +258,30 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
     unknownSubstitutions['destination'] = UNKNOWN;
   }
 
-  const { data: tables, error } = await supabase
-    .from('freight_tables')
-    .select('*')
-    .eq('tenant_id', input.tenantId)
-    .eq('blocked', false)
-    .lte('valid_from', today)
-    .order('table_code', { ascending: false });
+  let regionName: string | null = null;
+  let regionId: string | null = null;
+  if (input.destinationMunicipality) {
+    const regions = await fetchAllPostgrestPages((from, to) => {
+      let query = supabase.from('client_regions').select('id, region_name, municipality, state_code, client_id, payer_group')
+        .eq('tenant_id', input.tenantId).order('id').range(from, to);
+      if (input.destinationState) query = query.eq('state_code', input.destinationState);
+      if (input.clientId) query = query.eq('client_id', input.clientId);
+      if (input.payerGroup) query = query.eq('payer_group', input.payerGroup);
+      return query;
+    });
+    const normalize = (value: string | null | undefined) => (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    const exact = regions.filter(region => normalize(region.municipality) === normalize(input.destinationMunicipality));
+    if (exact.length === 1) { regionId = exact[0].id; regionName = exact[0].region_name; }
+    else if (exact.length > 1) return { success: false, value: 0, breakdown: null, error: 'Região de destino ambígua para o cliente/UF informados' };
+  }
+  normalizedInput.destination = regionName || normalizedInput.destination;
 
-  if (error) return { success: false, value: 0, breakdown: null, error: error.message };
+  let tables: FreightTable[];
+  try {
+    tables = await fetchAllPostgrestPages((from, to) => supabase.from('freight_tables').select('*')
+      .eq('tenant_id', input.tenantId).eq('blocked', false).lte('valid_from', today)
+      .order('table_code', { ascending: false }).order('id').range(from, to)) as FreightTable[];
+  } catch (error) { return { success: false, value: 0, breakdown: null, error: error instanceof Error ? error.message : 'Falha ao consultar tabelas' }; }
   if (!tables || tables.length === 0) {
     return { success: false, value: 0, breakdown: null, error: 'Nenhuma tabela de frete ativa encontrada' };
   }
@@ -310,12 +307,13 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
 
   if (qualified.length > 0) {
     // Pick highest specificity
-    qualified.sort((a, b) => b.score - a.score);
+    qualified.sort((a, b) => b.score - a.score || (b.table.table_code || 0) - (a.table.table_code || 0));
+    if (qualified.length > 1 && qualified[0].score === qualified[1].score) return { success: false, value: 0, breakdown: null, error: 'Mais de uma tabela vigente possui a mesma prioridade para este contexto' };
     chosen = qualified[0];
     // Fallback flag only when the winner is a generic all-wildcard table AND we had
     // missing context — a genuine specific match on an all-null table is NOT fallback.
     const winnerHasAnyCriteria =
-      !!chosen.table.payer_group || !!chosen.table.payer ||
+      !!chosen.table.client_id || !!chosen.table.payer_group || !!chosen.table.payer ||
       !!chosen.table.origin_state || !!chosen.table.destination_state ||
       !!chosen.table.origin_municipality || !!chosen.table.destination_municipality ||
       !!chosen.table.origin_region || !!chosen.table.destination_region ||
@@ -327,18 +325,7 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
       fallbackReason = `Campos ausentes substituídos por UNKNOWN: ${missingFields.join(', ')}`;
     }
   } else {
-    // Fallback: use first table (least specific / generic)
-    fallbackUsed = true;
-    fallbackReason = missingFields.length > 0
-      ? `Nenhuma tabela compatível — usando tabela genérica. Campos ausentes: ${missingFields.join(', ')}`
-      : 'Nenhuma tabela compatível — usando tabela genérica';
-    // Deterministic pick: least-negative score first (closest to matching), then
-    // lowest table_code as a stable tiebreaker.
-    chosen = scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return (a.table.table_code || 0) - (b.table.table_code || 0);
-    })[0];
-    fallbackReason += ` — tabela escolhida: #${chosen.table.table_code} ${chosen.table.table_name}`;
+    return { success: false, value: 0, breakdown: null, error: missingFields.length ? `Contexto insuficiente para escolher a tabela: ${missingFields.join(', ')}` : 'Nenhuma tabela compatível' };
   }
 
   const components = computeFreightValue(chosen.table, normalizedInput);
@@ -348,21 +335,6 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
   const minValue = Number(chosen.table.min_value) || 0;
   const finalValue = Math.max(baseValue, minValue);
 
-  // Resolve region name
-  let regionName: string | null = null;
-  let regionId: string | null = null;
-  if (normalizedInput.destination) {
-    const { data: regions } = await supabase
-      .from('client_regions')
-      .select('id, region_name')
-      .eq('tenant_id', normalizedInput.tenantId)
-      .or(`municipality.ilike.%${normalizedInput.destinationMunicipality || normalizedInput.destination}%`)
-      .limit(1);
-    if (regions && regions.length > 0) {
-      regionId = regions[0].id;
-      regionName = regions[0].region_name;
-    }
-  }
   if (!regionName && missingFields.includes('destination_municipality')) {
     regionName = UNKNOWN;
   }

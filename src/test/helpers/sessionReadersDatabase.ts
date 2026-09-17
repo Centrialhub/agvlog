@@ -2,6 +2,7 @@ import {readFileSync} from 'node:fs';
 import type {PGlite} from '@electric-sql/pglite';
 import {settlementAdjustmentDatabase} from './settlementAdjustmentDatabase.ts';
 const baseline=readFileSync('supabase/migrations/20260824224152_baseline.sql','utf8');
+const settlementPaging=readFileSync('supabase/migrations/20260917133000_page_driver_settlements_with_snapshot.sql','utf8');
 async function install(db:PGlite,sql:string,name:string){
  const start=sql.toLowerCase().indexOf('create or replace function public.'+name+'('),end=sql.indexOf('$function$;',start)+11;
  if(start<0||end<11)throw new Error('Missing actual function '+name);await db.exec(sql.slice(start,end));
@@ -13,6 +14,10 @@ export async function sessionReadersDatabase(){
   const declaration=baseline.match(/CREATE TABLE public\.client_portal_access \([\s\S]*?\n\);/)?.[0];if(!declaration)throw new Error('Missing actual portal table');await db.exec(declaration);
  }
  for(const name of ['list_driver_settlements','list_driver_settlement_filter_options'])await install(db,baseline,name);
+ await db.exec(settlementPaging);
+ await db.exec(readFileSync('supabase/migrations/20260917083137_invalidate_changed_settlement_snapshot.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20260917083458_fix_settlement_local_date_filters.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20260917083936_page_driver_settlement_filter_options.sql','utf8'));
  await install(db,readFileSync('supabase/migrations/20260826165000_require_privileged_mfa.sql','utf8'),'get_current_memberships_v1');
  const release=readFileSync('supabase/migrations/20260828210458_enforce_privileged_mfa_release.sql','utf8');
  for(const name of ['session_has_privileged_mfa_v1','get_user_portal_tenants'])await install(db,release,name);

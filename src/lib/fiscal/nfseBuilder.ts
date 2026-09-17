@@ -19,6 +19,7 @@ import {
   isValidEmail,
 } from './fiscalAddress';
 import { sanitizeIe } from './partyRegistry';
+import { resolveNFSeNationalServiceCode } from './nfseServiceCode';
 
 function num(v: unknown): number {
   const n = Number(v);
@@ -40,11 +41,20 @@ function nonEmpty<T extends Record<string, unknown>>(obj: T): T {
   return out as T;
 }
 
+function normalizeNfeAccessKey(value: unknown): string | null {
+  const key = onlyDigits(value);
+  if (key.length !== 44) return null;
+  // Access-key positions 21-22 identify the fiscal model.
+  return key.slice(20, 22) === '55' ? key : null;
+}
+
 interface NFSeServiceItemInput {
   description?: unknown;
   quantity?: unknown;
   unit_value?: unknown;
   total?: unknown;
+  fiscal_document_id?: unknown;
+  access_key?: unknown;
 }
 
 interface NFSeDocumentInput extends Record<string, unknown> {
@@ -104,6 +114,8 @@ interface NFSeDocumentInput extends Record<string, unknown> {
   series?: string | number | null;
   pedido?: string | null;
   reference_number?: string | null;
+  fiscal_document_ids?: string[] | null;
+  tipo_tributacao?: number | null;
 }
 
 interface NFSeEmitterAddress {
@@ -209,8 +221,11 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl }:
   if (!doc?.issue_date) {
     throw new Error('Informe a data de emissão.');
   }
-  if (!doc?.cod_servico) {
-    throw new Error('Informe o código do serviço antes de emitir.');
+  const serviceCode = resolveNFSeNationalServiceCode(doc.cod_trib_municipal, doc.cod_servico);
+  if (!serviceCode) {
+    throw new Error(
+      'Informe o código de tributação nacional do serviço com 6 dígitos (ex.: 160201).',
+    );
   }
   if (money(doc?.valor_servicos) <= 0) {
     throw new Error('Valor dos serviços deve ser maior que zero.');
@@ -223,12 +238,26 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl }:
 
   const end = endRaw;
   const totalServicos = money(doc.valor_servicos);
+  const issRetido = doc.iss_retido === true;
   const isSimples = emitter.regime_tributario === 'simples' || emitter.regime_tributario === 'mei' || doc.regime_tributario === '1';
-  const baseCalculo = isSimples ? 0 : money(doc.base_calculo || totalServicos);
-  const aliquota = isSimples ? 0 : num(doc.aliquota_iss);
-  const valorIss = isSimples ? 0 : money(doc.valor_iss || (baseCalculo * aliquota) / 100);
+  const baseCalculo = money(doc.base_calculo || totalServicos);
+  const aliquota = num(doc.aliquota_iss);
+  const valorIss = money(doc.valor_iss || (baseCalculo * aliquota) / 100);
 
   const items = Array.isArray(doc.items) ? doc.items.filter(isNFSeServiceItem) : [];
+  const linkedSourceIds = Array.isArray(doc.fiscal_document_ids)
+    ? [...new Set(doc.fiscal_document_ids.map(String).filter(Boolean))]
+    : [];
+  const linkedItems = items.filter((item) => Boolean(item.fiscal_document_id));
+  const invalidLinkedItems = linkedItems.filter((item) => !normalizeNfeAccessKey(item.access_key));
+  if (invalidLinkedItems.length > 0 || (linkedSourceIds.length > 0 && linkedItems.length < linkedSourceIds.length)) {
+    throw new Error(
+      'Uma ou mais NF-e de origem não possuem chave de acesso válida de 44 dígitos (modelo 55).',
+    );
+  }
+  const notasFiscais = [...new Set(
+    linkedItems.map((item) => normalizeNfeAccessKey(item.access_key)).filter((key): key is string => Boolean(key)),
+  )].map((chave) => ({ chave }));
   const baseDiscriminacao = String(
     doc.description ||
       items.map((item) => `${String(item.description ?? '')} (${num(item.quantity)}x R$ ${num(item.unit_value).toFixed(2)})`).join(' | ') ||
@@ -265,17 +294,11 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl }:
     .filter(Boolean)
     .join('\n')
     .slice(0, 2000);
-  const observacao = [doc.notes || '', insuranceText].filter(Boolean).join(' — ').slice(0, 2000) || undefined;
 
   const payload = nonEmpty({
-    // Identificação do RPS
     idIntegracao: integrationId,
-    tipo: (doc.doc_type || 'RPS').toUpperCase(),
-    natureza: doc.nat_operacao || '1', // 1 = Tributação no município
-    regimeEspecialTributacao: isSimples ? 1 : undefined, // 1 = Microempresa Municipal (Simples)
-    optanteSimplesNacional: isSimples,
-    regimeApuracaoSN: isSimples ? 1 : undefined, // 1 = Faturamento (Competência)
-    ambiente: env === 'production' ? 'producao' : 'homologacao',
+    naturezaOperacao: doc.nat_operacao || '1',
+    regimeApuracaoTributaria: isSimples ? 1 : undefined,
 
     prestador: {
       cpfCnpj: emitterCnpj,
@@ -329,66 +352,33 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl }:
       },
     },
 
-    servico: {
-      itemListaServico: doc.cod_servico || undefined, // Campo ABRASF (Ex: 07.02)
-      codigoTributacaoMunicipio: doc.cod_trib_municipal || doc.cod_servico || undefined,
-      codigoLocalPrestacao: normalizeIbgeCity(doc.cod_municipio_prestacao) || prestadorCityCode,
-      codigoMunicipioIncidencia: normalizeIbgeCity(doc.cod_municipio_prestacao) || prestadorCityCode,
-      codigoCnae: onlyDigits(doc.cnae) || undefined,
-      codigoServico: doc.cod_servico || undefined,
+    servico: [{
+      codigo: serviceCode,
       discriminacao,
-      issRetido: !!doc.iss_retido,
-      exigibilidade: doc.exigibilidade_iss || 1, // 1 = exigível (default)
       valor: {
         servico: totalServicos,
-        deducoes: money(doc.valor_deducoes),
-        baseCalculo,
-        aliquota,
-        iss: valorIss,
         pis: money(doc.valor_pis),
         cofins: money(doc.valor_cofins),
         inss: money(doc.valor_inss),
         ir: money(doc.valor_ir),
         csll: money(doc.valor_csll),
-        outrasRetencoes: money(doc.outras_retencoes),
-        issRetido: doc.iss_retido ? valorIss : 0,
-        liquido: money(
-          totalServicos -
-            num(doc.valor_deducoes) -
-            (doc.iss_retido ? valorIss : 0) -
-            num(doc.valor_pis) - num(doc.valor_cofins) - num(doc.valor_inss) -
-            num(doc.valor_ir) - num(doc.valor_csll) - num(doc.outras_retencoes),
-        ),
-        descontoIncondicionado: 0,
-        descontoCondicionado: 0,
       },
-      itens: items
-        .filter((item) => fiscalText(item.description, 120))
-        .map((item) => ({
-          descricao: fiscalText(item.description, 120),
-          quantidade: num(item.quantity) || 1,
-          valorUnitario: money(item.unit_value),
-          valorTotal: money(item.total || num(item.quantity) * num(item.unit_value)),
-        })),
-    },
+      iss: {
+        tipoTributacao: Number(doc.tipo_tributacao) || 6,
+        exigibilidade: Number(doc.exigibilidade_iss) || 1,
+        retido: issRetido,
+        aliquota: isSimples && !issRetido ? undefined : aliquota,
+        valor: isSimples && !issRetido ? undefined : valorIss,
+      },
+    }],
 
     rps: {
       numero: onlyDigits(doc.rps_number) || String(doc.rps_number),
       serie: String(doc.series || '1'),
-      tipo: 'RPS',
-      status: 'Normal',
-      dataEmissao: doc.issue_date,
-      competencia: String(doc.issue_date).slice(0, 10),
+      tipo: 1,
     },
 
-    pedido: fiscalText(doc.pedido || doc.reference_number, 60) || undefined,
-    observacao,
-
-    // Bloco extra de seguro — enviado ao Hub para auditoria/impressão quando
-    // o provedor municipal suportar campos adicionais.
-    seguro: hasInsurance ? insurance : undefined,
-    seguradora: hasInsurance ? insurance : undefined,
-    seguros: hasInsurance ? [insurance] : undefined,
+    notasFiscais: notasFiscais.length ? notasFiscais : undefined,
   });
 
   return {

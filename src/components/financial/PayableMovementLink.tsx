@@ -20,9 +20,9 @@ export function PayableMovementLink({tenant,actor,payable,onRecorded}:{tenant:st
  const [pending,setPending]=useState<Saved|null>(restored.saved),[preview,setPreview]=useState<Saved|null>(null);
  const [open,setOpen]=useState(!!restored.saved||!!restored.error),[choice,setChoice]=useState<PayableMovementOption|null>(null);
  const [search,setSearch]=useState(''),[term,setTerm]=useState(''),[page,setPage]=useState(1),[amount,setAmount]=useState('');
- const [method,setMethod]=useState<PaymentMethod>('pix'),[reason,setReason]=useState(''),[error,setError]=useState(restored.error),[busy,setBusy]=useState(false);
+ const [method,setMethod]=useState<PaymentMethod>('pix'),[reason,setReason]=useState(''),[error,setError]=useState(''),[recoveryError,setRecoveryError]=useState(restored.error),[busy,setBusy]=useState(false);
  const sending=useRef(false),active=useRef(true);useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
- const query=useQuery({queryKey:['finance-payable-options',tenant,actor,payable,term,page],enabled:open&&!pending&&!restored.error,
+ const query=useQuery({queryKey:['finance-payable-options',tenant,actor,payable,term,page],enabled:open&&!pending&&!recoveryError,
   queryFn:()=>readPayableMovements(tenant,payable,term,page),staleTime:0});
  function prepare(){
   const cents=parseFinanceAmount(amount),data=query.data;
@@ -32,8 +32,9 @@ export function PayableMovementLink({tenant,actor,payable,onRecorded}:{tenant:st
   if(!command.success){setError('Informe valor, forma de pagamento e motivo com pelo menos cinco caracteres.');return;}
   setPreview({command:command.data,choice,title:data.payable_name});setError('');
  }
+ const discardRecovery=()=>{setError('');try{sessionStorage.removeItem(key);setPending(null);setPreview(null);setRecoveryError('');}catch{setError('Não foi possível descartar a recuperação incompatível nesta sessão.');}};
  async function submit(){
-  if(sending.current||restored.error)return;const saved=pending||preview;if(!saved)return;const wasUncertain=!!pending;
+  if(sending.current||recoveryError)return;const saved=pending||preview;if(!saved)return;const wasUncertain=!!pending;
   try{sessionStorage.setItem(key,JSON.stringify(saved));}catch{setError('Não foi possível preservar o pedido. Nenhum envio foi iniciado.');return;}
   sending.current=true;setBusy(true);setPending(saved);setPreview(null);setError('');
   try{await applyPayableMovement(saved.command);sessionStorage.removeItem(key);if(active.current){setPending(null);setChoice(null);setOpen(false);setAmount('');onRecorded();}}
@@ -45,6 +46,7 @@ export function PayableMovementLink({tenant,actor,payable,onRecorded}:{tenant:st
  const frozen=pending||preview;
  return <section aria-label="Vincular saída ao título" className="rounded border p-3 space-y-3">
   <p className="text-sm">Selecione o envio que pagou este título. O vínculo não executa pagamento e não confirma conciliação bancária.</p>
+  {recoveryError&&<div role="alert"><p>{recoveryError}</p><Button variant="outline" disabled={busy} onClick={discardRecovery}>Descartar recuperação incompatível</Button></div>}
   {frozen?<div className="space-y-2 text-sm">
    <p>Título: {frozen.title}</p><p>Destinatário do envio: {frozen.choice.beneficiary_name}</p>
    <p>{frozen.choice.account_name} · {frozen.choice.occurred_on} · {frozen.choice.bank_reference||frozen.choice.description}</p>
@@ -52,7 +54,7 @@ export function PayableMovementLink({tenant,actor,payable,onRecorded}:{tenant:st
    <p className="font-medium">Parcela para este título: {formatFinanceCents(frozen.command.amount_cents)}</p>
    <p>Forma registrada: {PAYMENT_METHOD_LABELS[frozen.command.method]}</p><p>Motivo: {frozen.command.reason}</p>
    {pending&&<p role="status">Pedido preservado. Retome com os mesmos dados.</p>}
-   <Button disabled={busy||!!restored.error} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma baixa':'Confirmar vínculo e registrar baixa'}</Button>
+   <Button disabled={busy||!!recoveryError} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma baixa':'Confirmar vínculo e registrar baixa'}</Button>
    {!pending&&<Button variant="outline" onClick={()=>setPreview(null)}>Voltar à edição</Button>}
   </div>:<>
    <div className="flex gap-2"><Input aria-label="Buscar saída" value={search} onChange={e=>setSearch(e.target.value)}/><Button onClick={()=>{setTerm(search);setPage(1);}}>Buscar</Button></div>
@@ -70,7 +72,7 @@ export function PayableMovementLink({tenant,actor,payable,onRecorded}:{tenant:st
    <label className="block">Valor para este título (R$)<Input inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="300,00"/></label>
    <label className="block">Forma de pagamento<select className="block border rounded p-2" value={method} onChange={e=>setMethod(e.target.value as PaymentMethod)}>{PAYMENT_METHODS.map(m=><option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}</select></label>
    <label className="block">Motivo do vínculo<Input maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)}/></label>
-   <Button disabled={!!restored.error||!!query.error||!query.data?.can_apply} onClick={prepare}>Revisar vínculo</Button>
+   <Button disabled={!!recoveryError||!!query.error||!query.data?.can_apply} onClick={prepare}>Revisar vínculo</Button>
   </>}
   {error&&<p role="alert">{error}</p>}
  </section>;

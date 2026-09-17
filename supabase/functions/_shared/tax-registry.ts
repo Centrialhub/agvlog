@@ -27,6 +27,9 @@ export interface OfficialRegistryRecord {
   raw: Record<string, string | null>;
 }
 
+export const BRASIL_API_CNPJ_ENDPOINT = 'https://brasilapi.com.br/api/cnpj/v1';
+export const BRASIL_API_REGISTRY_SOURCE = 'BRASILAPI_MINHA_RECEITA_PUBLIC_DATA';
+
 const DEFAULT_ENDPOINTS: Record<string, { production: string; homologation: string }> = {
   MG: {
     production: 'https://nfe.fazenda.mg.gov.br/nfe2/services/CadConsultaCadastro4',
@@ -51,26 +54,63 @@ export function registryEndpoint(uf: string, environment: RegistryEnvironment): 
   return endpoint;
 }
 
+export function brasilApiCnpjEndpoint(cnpj: string): string {
+  const normalized = digits(cnpj);
+  if (normalized.length !== 14) throw new Error('CNPJ_INVALIDO_PARA_CONSULTA_PUBLICA');
+  return `${BRASIL_API_CNPJ_ENDPOINT}/${normalized}`;
+}
+
+/**
+ * Normaliza a resposta pública de CNPJ (dados abertos da Receita Federal)
+ * para o mesmo contrato usado pela consulta estadual. Essa fonte serve como
+ * fallback de endereço quando a UF não publica CadConsultaCadastro4; ela não
+ * inventa nem valida a inscrição estadual.
+ */
+export function parseBrasilApiCnpjResponse(payload: unknown): OfficialRegistryRecord {
+  const value = payload && typeof payload === 'object'
+    ? payload as Record<string, unknown>
+    : {};
+  const cnpj = digits(value.cnpj);
+  if (cnpj.length !== 14) throw new Error('RESPOSTA_CNPJ_PUBLICA_INVALIDA');
+  const status = cleanText(value.descricao_situacao_cadastral)?.toUpperCase();
+  return {
+    cnpj,
+    stateRegistration: null,
+    legalName: cleanText(value.razao_social),
+    tradeName: cleanText(value.nome_fantasia),
+    registryStatus: status === 'ATIVA' ? 'active' : status ? 'inactive' : 'unknown',
+    statusCode: cleanText(value.situacao_cadastral),
+    taxRegime: null,
+    economicActivityCode: digits(value.cnae_fiscal) || null,
+    address: {
+      street: cleanText(value.logradouro),
+      number: cleanText(value.numero),
+      complement: cleanText(value.complemento),
+      neighborhood: cleanText(value.bairro),
+      cityCode: digits(value.codigo_municipio_ibge) || digits(value.codigo_municipio) || null,
+      city: cleanText(value.municipio),
+      state: cleanText(value.uf)?.toUpperCase() || null,
+      zip: digits(value.cep) || null,
+    },
+    raw: {
+      descricao_situacao_cadastral: status || null,
+      data_situacao_cadastral: cleanText(value.data_situacao_cadastral),
+      data_inicio_atividade: cleanText(value.data_inicio_atividade),
+      source: BRASIL_API_REGISTRY_SOURCE,
+    },
+  };
+}
+
 export function digits(value: unknown): string {
   return String(value ?? '').replace(/\D/g, '');
 }
 
 export function buildCadastroEnvelope(uf: string, lookupType: LookupType, lookupValue: string): string {
   const value = escapeXml(lookupValue);
-  return `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Body>
-    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/CadConsultaCadastro4">
-      <ConsCad xmlns="http://www.portalfiscal.inf.br/nfe" versao="2.00">
-        <infCons>
-          <xServ>CONS-CAD</xServ>
-          <UF>${escapeXml(uf.toUpperCase())}</UF>
-          <${lookupType}>${value}</${lookupType}>
-        </infCons>
-      </ConsCad>
-    </nfeDadosMsg>
-  </soap12:Body>
-</soap12:Envelope>`;
+  // CadConsultaCadastro4 (notably SEFAZ/MG) rejects formatting whitespace
+  // inside nfeDadosMsg with cStat 588. Keep the request byte-compact: no
+  // line breaks or indentation before, after, or between the fiscal tags.
+  return `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/CadConsultaCadastro4"><ConsCad xmlns="http://www.portalfiscal.inf.br/nfe" versao="2.00"><infCons><xServ>CONS-CAD</xServ><UF>${escapeXml(uf.toUpperCase())}</UF><${lookupType}>${value}</${lookupType}></infCons></ConsCad></nfeDadosMsg></soap12:Body></soap12:Envelope>`;
 }
 
 export function parseCadastroResponse(xml: string): {
@@ -151,6 +191,11 @@ function stripMarkup(value: string): string {
 function clean(value: string | null): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function cleanText(value: unknown): string | null {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
 }
 
 function escapeXml(value: string): string {

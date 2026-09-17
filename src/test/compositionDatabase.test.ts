@@ -1,11 +1,12 @@
 // @vitest-environment node
+import {readFileSync} from 'node:fs';
 import type {PGlite} from '@electric-sql/pglite';
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from 'vitest';
 import {createCompositionDatabase,compositionContracts,compositionIds as i,compositionRpc,seedComposition} from './helpers/compositionDatabase';
 import {dispatchPlanning,planningPayload} from './helpers/planningDatabase';
 
 let db:PGlite;
-beforeAll(async()=>{db=await createCompositionDatabase({candidate:true});},30000);
+beforeAll(async()=>{db=await createCompositionDatabase({candidate:true});for(const migration of ['20260917123500_guard_reallocation_vehicle_capacity.sql','20260917124000_cleanup_empty_source_after_reallocation.sql','20260917124100_reject_unknown_reallocation_capacity.sql','20260917124200_sync_reallocation_cleanup_audit.sql'])await db.exec(readFileSync(`supabase/migrations/${migration}`,'utf8'));},30000);
 afterAll(async()=>{await db?.close();});beforeEach(async()=>{await seedComposition(db);});
 const move=(ids=[i.item],source=i.load,target=i.load2)=>compositionRpc(db,
   'select public.move_load_items_between_loads($1,$2,$3,$4) result',[i.tenant,source,target,ids]);
@@ -32,6 +33,16 @@ describe('composition integrity candidate',()=>{
     expect(await number('select total_pallet_count value from loads where id=$1',[i.load])).toBe(1);
     expect(await number('select total_volume_m3 value from loads where id=$1',[i.load2])).toBe(1);
     expect(await number("select count(*) value from entity_audit_log where action in('move_items_out','move_items_in')")).toBe(2);
+  });
+  it('rejects capacity validation when a current or moved item has an unknown enforced measure',async()=>{
+    await db.query('update vehicles set max_pallets=10,max_weight_kg=100 where id=$1',[i.vehicle]);
+    await db.query('update loads set vehicle_id=$1 where id=$2',[i.vehicle,i.load2]);
+    await db.query('update load_items set weight_kg=null where id=$1',[i.item]);
+    await unchanged(()=>move(),/target_load_capacity_measure_unknown/);
+    await db.query('update load_items set weight_kg=10 where id=$1',[i.item]);
+    await move([i.item2]);
+    await db.query('update load_items set weight_kg=null where id=$1',[i.item2]);
+    await unchanged(()=>move(),/target_load_capacity_measure_unknown/);
   });
   it('rejects tenant-B target before changing any tenant-A item or document',async()=>{
     await db.query('update loads set tenant_id=$1 where id=$2',[i.otherTenant,i.load2]);
@@ -74,6 +85,7 @@ describe('composition integrity candidate',()=>{
     const result=await move([i.item,i.item2]);expect(result.rows[0]).toMatchObject({result:{moved:2,source_removed:true}});
     expect(await number('select count(*) value from loads where id=$1',[i.load])).toBe(0);
     expect(await number('select total_weight_kg value from loads where id=$1',[i.load2])).toBe(30);
+    expect((await db.query("select new_data->>'source_removed' source_removed from entity_audit_log where action='move_items_out' and entity_id=$1",[i.load])).rows).toEqual([{source_removed:'true'}]);
   });
   it('requires explicit replanning when moving a planned item outside its trip',async()=>{
     await dispatchPlanning(db);await unchanged(()=>move(),/composition_requires_replanning/);

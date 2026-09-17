@@ -56,10 +56,10 @@ describe('Control Tower page → actual read hooks → PostgreSQL',()=>{
   it('refreshes the selected drawer from current stop data and closes it once the trip ends',async()=>{
     open();await loaded();fireEvent.click(screen.getByRole('button',{name:/QA-1234/}));
     await db.query("update dispatch_stops set status='returned',actual_arrival_at=now() where id=$1",[i.stop]);
-    await client.invalidateQueries({queryKey:['active-trips-live']});
+    await client.invalidateQueries({queryKey:['control-tower-snapshot']});
     expect(await screen.findByText('Concluídas (1)')).toBeInTheDocument();
     await db.query("update dispatch_trips set status='completed' where id=$1",[i.trip]);
-    await client.invalidateQueries({queryKey:['active-trips-live']});
+    await client.invalidateQueries({queryKey:['control-tower-snapshot']});
     await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
   it('does not turn permission loss into empty success or leave the old drawer visible',async()=>{
@@ -79,7 +79,7 @@ describe('Control Tower page → actual read hooks → PostgreSQL',()=>{
   });
   it('validates a response tenant before rendering it',async()=>{
     const foreign=await towerRead<Record<string,unknown>[]>(db);
-    state.rpc.mockImplementation((name:string)=>({abortSignal:async()=>({data:name==='get_active_trips_live'?foreign.map(t=>({...t,tenant_id:i.other})):[],error:null})}));
+    state.rpc.mockImplementation(()=>({abortSignal:async()=>({data:{version:1,tenant_id:i.tenant,read_at:new Date().toISOString(),trip_limit:200,trip_total:foreign.length,truncated:false,trips:foreign.map(t=>({...t,tenant_id:i.other})),alerts:[]},error:null})}));
     open();expect(await screen.findByText(/Não foi possível consultar as viagens/)).toBeInTheDocument();expect(screen.queryByText('QA-1234')).not.toBeInTheDocument();
   });
   it('counts a resolved Edge error as failure, never as a successful route',async()=>{
@@ -112,7 +112,7 @@ describe('Control Tower page → actual read hooks → PostgreSQL',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Reavaliar rastreamento'}));
     await waitFor(()=>expect(screen.getByRole('button',{name:/QA-1234/})).toHaveTextContent('Em rota'));
     await serial;await db.query("update dispatch_stops set status='arrived' where id=$1",[i.stop]);
-    await client.invalidateQueries({queryKey:['active-trips-live']});
+    await client.invalidateQueries({queryKey:['control-tower-snapshot']});
     await waitFor(()=>expect(screen.getByRole('button',{name:/QA-1234/})).toHaveTextContent('Aguardando avaliação'));
   });
 });

@@ -1,0 +1,86 @@
+[
+  {
+    "signature": "add_payroll_manual_item(uuid,text,text,numeric,text)",
+    "hash": "ff6d7a194cea86aa1c75260d6e32b64d",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=public"
+    ],
+    "authenticated": true,
+    "anon": false,
+    "service": true
+  },
+  {
+    "signature": "approve_payroll_period(uuid)",
+    "hash": "05658ba081cf795d4555ab513d96ac19",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=public"
+    ],
+    "authenticated": true,
+    "anon": false,
+    "service": true
+  },
+  {
+    "signature": "close_payroll_period(uuid,text)",
+    "hash": "6f4b0b28b9a68e693c969163bc84e524",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=public"
+    ],
+    "authenticated": true,
+    "anon": false,
+    "service": true
+  },
+  {
+    "signature": "delete_payroll_entry_item(uuid,text)",
+    "hash": "8916eb63b0928bfffd5dd37bc80234d5",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=public"
+    ],
+    "authenticated": true,
+    "anon": false,
+    "service": true
+  },
+  {
+    "signature": "generate_payroll_period(uuid,date,date,text,boolean,boolean)",
+    "hash": "050629f9ccda3098cc0df8920f4c4ea0",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=public"
+    ],
+    "authenticated": true,
+    "anon": false,
+    "service": true
+  },
+  {
+    "signature": "recalculate_payroll_entry(uuid)",
+    "hash": "d12f1e373756f83c95d7f2ab0f0acc9a",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=public"
+    ],
+    "authenticated": true,
+    "anon": false,
+    "service": true
+  },
+  {
+    "signature": "recompute_payroll_entry_totals(uuid)",
+    "hash": "51ed988068a0e25098210847a4499f6e",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=public"
+    ],
+    "authenticated": false,
+    "anon": false,
+    "service": true
+  }
+]

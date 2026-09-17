@@ -28,7 +28,6 @@ import { getDriverDeliveryEvent, type DeliveryEventSelection, type DriverStop, t
 import { driverOperationalSnapshotStore, type DriverOperationalSnapshot } from '@/lib/driver/driverOperationalOffline';
 import { useDriverOperationalOffline } from '@/hooks/useDriverOperationalOffline';
 import { fiscalSnapshotAsJson, getDriverDeliveryFiscalSnapshot, type DriverDeliveryFiscalSnapshot } from '@/lib/driver/driverDeliveryFiscalSnapshot';
-
 type DeliveryTrip = {
   id: string;
   status: string;
@@ -36,7 +35,6 @@ type DeliveryTrip = {
   actual_end_at?: string | null;
   loads: { id?: string; load_number: string; status?: string; origin?: string | null; destination?: string | null } | null;
 };
-
 function stopFromSnapshot(snapshot: DriverOperationalSnapshot, stop: DriverOperationalSnapshot['stops'][number]): DriverStop {
   const now = snapshot.cachedAt;
   return {
@@ -51,7 +49,6 @@ function stopFromSnapshot(snapshot: DriverOperationalSnapshot, stop: DriverOpera
     dispatch_stop_documents: [],
   };
 }
-
 function tripFromSnapshot(snapshot: DriverOperationalSnapshot): DeliveryTrip {
   const load = snapshot.loads[0];
   return { id: snapshot.tripId, status: snapshot.trip.status, actual_start_at: snapshot.trip.actualStartAt,
@@ -257,7 +254,7 @@ export default function DriverDeliveries() {
       setOperationalSnapshot(next);
     })().catch(() => { /* Live reads remain usable even when IndexedDB is unavailable. */ });
   }, [currentTenant?.id, deliveryFiscalSnapshotQuery.data, deliveryItemsSnapshotQuery.data, driver, liveTrip, stopsQuery.data, stopsQuery.isError, user?.id]);
-  const { tab, setTab, search, setSearch, filteredStops, completedStops } = useDriverDeliveryStopsView(effectiveStops, pendingStopIds);
+  const { tab, setTab, search, setSearch, filteredStops, completedStops, enRouteCount } = useDriverDeliveryStopsView(effectiveStops, pendingStopIds);
   const currentFormStop = effectiveStops.find(stop => stop.id===eventForm?.stop.id && !pendingStopIds.has(stop.id));
   useEffect(() => {
     if (!isOnline || !trip?.id) return;
@@ -300,7 +297,7 @@ export default function DriverDeliveries() {
         }));
         const fiscalSnapshot=deliveryFiscalSnapshotQuery.data?.[eventForm.stop.id]
           ?? (operationalSnapshot?.tripId===trip.id?operationalSnapshot.deliveryFiscalSnapshotsByStop?.[eventForm.stop.id]:undefined);
-        if(!fiscalSnapshot)throw new Error('O snapshot fiscal desta parada não está disponível. Conecte-se antes de confirmar.');
+        if(def.category==='finalizador'&&!fiscalSnapshot)throw new Error('O snapshot fiscal desta parada não está disponível. Conecte-se antes de confirmar.');
         const deliveryLocation=def.requiresReceipt ? await getCurrentDriverLocation() : null;
         submissionRef.current = createDeliverySubmission({tenantId:currentTenant.id,actorId:user!.id,tripId:trip.id,stopId:eventForm.stop.id,
           expectedStatus:currentFormStop!.status,eventKey:def.key,photos:draft.photos,receiptScan:draft.receiptScan,signatureDataUrl:draft.signatureDataUrl,details:{
@@ -308,8 +305,10 @@ export default function DriverDeliveries() {
             receiver_name:draft.receiverName.trim() || null,receiver_document:draft.receiverDoc.trim() || null,
             latitude:deliveryLocation?.latitude ?? null,longitude:deliveryLocation?.longitude ?? null,
             accuracy_m:deliveryLocation?.accuracyM ?? null,
-            fiscal_document_links:fiscalDocumentLinks,
-            fiscal_snapshot:fiscalSnapshotAsJson(fiscalSnapshot),
+            ...(def.category==='finalizador'&&fiscalSnapshot?{
+              fiscal_document_links:fiscalDocumentLinks,
+              fiscal_snapshot:fiscalSnapshotAsJson(fiscalSnapshot),
+            }:{}),
             returned_items:positiveItems,discount_amount:draft.discountAmount || null,discount_kind:draft.discountKind,
             discount_reason:draft.discountReason.trim() || null,boleto_due_date:draft.boletoDueDate || null,boleto_note:draft.boletoNote.trim() || null,
           }});
@@ -440,6 +439,7 @@ export default function DriverDeliveries() {
         tab={tab}
         filteredStops={filteredStops}
         completedStops={completedStops}
+        enRouteCount={enRouteCount}
         pendingStopIds={pendingStopIds}
         onSearchChange={setSearch}
         onTabChange={setTab}

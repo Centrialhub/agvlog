@@ -53,12 +53,12 @@ describe('Control Tower actual SQL readers, with internal RLS and MFA', () => {
     await db.exec('savepoint denied'); await expect(towerRead(db,'get_open_trip_alerts',i.other)).rejects.toThrow(/Forbidden/); await db.exec('rollback to denied');
     await db.exec('update tenant_memberships set active=false'); await expect(rows()).rejects.toThrow(/Forbidden/);
   });
-  it('uses invoker semantics and grants no anon or service access', async () => {
+  it('uses invoker semantics, denies anon and permits the internal service role', async () => {
     const result=await db.query<{prosecdef:boolean;anon:boolean;service:boolean;authenticated:boolean}>(`select p.prosecdef,
       has_function_privilege('anon',p.oid,'execute') anon,has_function_privilege('service_role',p.oid,'execute') service,
       has_function_privilege('authenticated',p.oid,'execute') authenticated from pg_proc p
       where p.oid in ('public.get_active_trips_live(uuid)'::regprocedure,'public.get_open_trip_alerts(uuid)'::regprocedure)`);
-    expect(result.rows).toEqual([{prosecdef:false,anon:false,service:false,authenticated:true},{prosecdef:false,anon:false,service:false,authenticated:true}]);
+    expect(result.rows).toEqual([{prosecdef:false,anon:false,service:true,authenticated:true},{prosecdef:false,anon:false,service:true,authenticated:true}]);
   });
   it('RLS denial remains effective inside the invoker reader', async () => {
     await db.exec("create policy qa_deny_trip on dispatch_trips as restrictive for select to authenticated using(false)");

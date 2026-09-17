@@ -64,9 +64,9 @@ export function usePortalTracking() {
         _client_id: scope.selectedClientId,
       });
       if (error) throw error;
-      if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Resposta de tracking incompatível com o contrato esperado.');
       const items = data.items;
-      if (!Array.isArray(items)) return [];
+      if (!Array.isArray(items)) throw new Error('Resposta de tracking sem a lista obrigatória de cargas.');
       return (items as unknown as Omit<PortalTrackingItem, 'telemetry_freshness'>[]).map((item) => {
         const telemetryFreshness = classifyTelemetryFreshness(item.captured_at);
         return {

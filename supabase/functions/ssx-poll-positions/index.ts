@@ -131,27 +131,33 @@ Deno.serve(async (req) => {
     }
 
     // Get provider units to poll
-    let unitsQuery = supabase
-      .from("provider_units").select("*")
-      .eq("integration_account_id", integration_account_id)
-      .eq("active", true);
-    if (provider_unit_ids?.length) {
-      unitsQuery = unitsQuery.in("id", provider_unit_ids);
+    const units: any[] = [];
+    let unitsErr: any = null;
+    for (let from = 0; ; from += 500) {
+      let unitsQuery = supabase.from("provider_units").select("*")
+        .eq("integration_account_id", integration_account_id).eq("active", true)
+        .order("id").range(from, from + 499);
+      if (provider_unit_ids?.length) unitsQuery = unitsQuery.in("id", provider_unit_ids);
+      const page = await unitsQuery;
+      if (page.error) { unitsErr = page.error; break; }
+      units.push(...(page.data || []));
+      if ((page.data || []).length < 500) break;
     }
-    const { data: units, error: unitsErr } = await unitsQuery;
     if (unitsErr || !units?.length) {
       return jsonResp({ error: "No active provider units found" }, 404);
     }
 
     // Get vehicle_tracker_links for all units
     const unitIds = units.map((u: any) => u.id);
-    const { data: links, error: linksError } = await supabase
-      .from("vehicle_tracker_links")
-      .select("id,provider_unit_id,vehicle_id,tenant_id,start_at,end_at")
-      .eq("tenant_id", account.tenant_id)
-      .in("provider_unit_id", unitIds).eq("active", true);
-    if (linksError) {
-      return jsonResp({ error: "Failed to read tracker bindings" }, 500);
+    const links: any[] = [];
+    for (let index = 0; index < unitIds.length; index += 200) {
+      const { data: linkPage, error: linksError } = await supabase
+        .from("vehicle_tracker_links")
+        .select("id,provider_unit_id,vehicle_id,tenant_id,start_at,end_at")
+        .eq("tenant_id", account.tenant_id)
+        .in("provider_unit_id", unitIds.slice(index, index + 200)).eq("active", true);
+      if (linksError) return jsonResp({ error: "Failed to read tracker bindings" }, 500);
+      links.push(...(linkPage || []));
     }
 
     const unitToVehicle: Record<string, TrackerBinding> = {};
@@ -563,6 +569,19 @@ async function broadbandPoll(params: {
       positions_found: false, inserted: 0, duplicates: 0,
       combo_source: "broadband_no_observation",
     });
+  }
+
+  // Account health recovery is monotonic and service-only. It cannot erase a
+  // newer rate-limit observation that raced this successful provider response.
+  if (!persistenceFailed) {
+    const recovery = await clearAccountCooldown(
+      supabase, tenant_id, integration_account_id, windowEnd.toISOString(),
+    );
+    if (!recovery.ok) {
+      console.error("[SSX:poll-positions] ACCOUNT_RECOVERY_FAILED", {
+        error: recovery.error,
+      });
+    }
   }
 
   // Log integration
@@ -1677,6 +1696,27 @@ async function setAccountCooldown(
       receipt.integration_account_id !== accountId ||
       typeof receipt.cooldown_until !== "string") {
     return { ok: false, error: "ssx_account_cooldown_receipt_invalid" };
+  }
+  return { ok: true };
+}
+
+async function clearAccountCooldown(
+  supabase: any,
+  tenantId: string,
+  accountId: string,
+  observedAt: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data, error } = await supabase.rpc("clear_ssx_account_cooldown_v1", {
+    _tenant_id: tenantId,
+    _integration_account_id: accountId,
+    _observed_at: observedAt,
+  });
+  if (error) return { ok: false, error: error.message || "ssx_account_recovery_failed" };
+  const receipt = Array.isArray(data) ? data[0] : data;
+  if (!receipt || receipt.version !== 1 || receipt.tenant_id !== tenantId
+      || receipt.integration_account_id !== accountId
+      || typeof receipt.cleared !== "boolean") {
+    return { ok: false, error: "ssx_account_recovery_receipt_invalid" };
   }
   return { ok: true };
 }

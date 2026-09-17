@@ -23,3 +23,12 @@ Flowv1 preservado; campos opcionais v2 apresentam original/ajuste/líquido sem c
 ## Próxima verificação operacional recomendada
 
 Após disponibilidade do banco confirmada pelo coordenador, executar as rotas com operador autorizado e confirmar carga dos readers fundamentais, lançamento de despesa e recebimento utilizando saídas/entradas registradas. Falha de endpoint não pode ser tratada como lista vazia. Não é necessário criar novas funcionalidades para esse aceite.
+
+
+## Atualização de 11/09: organização publicada
+
+A folha de pagamento foi movida para o grupo Financeiro. As 16 páginas financeiras têm rotas existentes protegidas, e a resolução da página atual agora escolhe a rota mais específica; abrir /financial/movements ou /financial/statements não destaca o painel nem produz seu breadcrumb incorretamente.
+
+Validação: 12 testes em sidebarNavigation, navigationContract e financialRouteNavigation passaram. TypeScript e build:check passaram. Sites19 publicado com sucesso, revisão 292ebefb713d7e3a2246ef29975ce7c19b1763ec, deployment appgdep_6aa385e913748191933f86488425adac. A audiência existente e a autenticação foram preservadas.
+
+No navegador autenticado, o botão real abriu o formulário de movimentação e o link real navegou para Extratos importados via HTMLElement.click. O comando click da CLI não acionava os controles apesar de retornar sucesso. Durante uma verificação posterior de múltiplas páginas, a sessão retornou à autenticação e o token deixou de estar persistido. Não foi possível concluir a navegação autenticada de todas as páginas nesta rodada; não há evidência para atribuir o encerramento da sessão a uma causa específica. Nenhum lançamento financeiro foi criado pelo teste.

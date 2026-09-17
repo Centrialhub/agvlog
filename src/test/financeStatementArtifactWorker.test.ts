@@ -3,6 +3,8 @@ import {verifyStatementSource,type StatementSourceContext} from '../../supabase/
 import {validateQuarantinedData} from '../../supabase/functions/secure-upload/quarantine-validation';
 import {originalHash} from '../../supabase/functions/secure-upload/statement-original';
 import {ofxFile} from './helpers/financeOfxFixture';
+import * as XLSX from 'xlsx';
+import {mapStatementMatrix} from '../../supabase/functions/_shared/finance-statement-reader';
 async function setup(){
  const tenant=crypto.randomUUID(),account=crypto.randomUUID(),request=crypto.randomUUID(),artifact=crypto.randomUUID(),importId=crypto.randomUUID();
  const original=new TextEncoder().encode(ofxFile()),derived=validateQuarantinedData('ofx',original);
@@ -29,5 +31,22 @@ describe('statement artifact verification',()=>{
  });
  it('rejects another account before reading any file',async()=>{
   const s=await setup();s.context.import_data.bank_account_id=crypto.randomUUID();await expect(verifyStatementSource(s.input,s.deps)).rejects.toThrow('scope_invalid');expect(s.deps.downloadArtifact).not.toHaveBeenCalled();
+ });
+ it('recomputes mapped workbook rows from the inert derivative and preserves original identity',async()=>{
+  const tenant=crypto.randomUUID(),account=crypto.randomUUID(),request=crypto.randomUUID(),artifact=crypto.randomUUID(),importId=crypto.randomUUID();
+  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Data','Descrição','Valor'],['01/01/2026','PIX',-500]]),'Extrato');
+  const original=new Uint8Array(XLSX.write(book,{type:'array',bookType:'xlsx'})),derived=validateQuarantinedData('xlsx',original,undefined,0);
+  if(derived.state!=='validated_data')throw new Error('fixture');
+  const hash=await originalHash(original),dh=await originalHash(derived.bytes),path=`${tenant}/${request}/validated.json`,mapping={header_row:0,sheet_index:0,date_column:0,description_column:1,amount_column:2,date_format:'dmy' as const,number_format:'decimal' as const};
+  const matrix=JSON.parse(new TextDecoder().decode(derived.bytes)).rows;
+  const rows=mapStatementMatrix(matrix,mapping,{start:'2026-01-01',end:'2026-01-31'},false).rows;
+  const context:StatementSourceContext={revision:'r',rows:rows.map(row=>({...row})),import_data:{id:importId,tenant_id:tenant,bank_account_id:account,source_path:path,file_hash:hash,parser_version:'mapped-workbook-v1',mapping,period_start:'2026-01-01',period_end:'2026-01-31',source_snapshot:{artifact:{version:2,artifact_id:artifact,tenant_id:tenant,source_type:'bank_account',source_id:account,state:'validated_data',original:{sha256:hash,size_bytes:original.length,format:'xlsx'},derivative:{bucket:'upload-validated',path,sha256:dh,size_bytes:derived.bytes.length,mime:'application/json',method:'strict-workbook-matrix-v1',financial_mapping_required:true}}}}};
+  const record=vi.fn(async()=>({confirmed:true})),downloadArtifact=vi.fn(async()=>derived.bytes),download=vi.fn(),workbook=vi.fn();
+  await verifyStatementSource({tenant,actor:crypto.randomUUID(),importId,request:crypto.randomUUID()},{inspect:async()=>context,download,downloadArtifact,workbook,authorize:async()=>true,record});
+  expect(download).not.toHaveBeenCalled();expect(workbook).not.toHaveBeenCalled();
+  expect(record).toHaveBeenCalledWith(expect.objectContaining({reader_version:'statement-artifact-v2',outcome:'rows_match',file_hash:hash,report:expect.objectContaining({original_sha256:hash,original_reopened:false,derivative_hash_verified:true,validation_method:'strict-workbook-matrix-v1',sheet_count:1})}));
+  const snapshot=context.import_data.source_snapshot as {artifact:{original:{format:string}}};snapshot.artifact.original.format='xls';record.mockClear();
+  await verifyStatementSource({tenant,actor:crypto.randomUUID(),importId,request:crypto.randomUUID()},{inspect:async()=>context,download,downloadArtifact,workbook,authorize:async()=>true,record});
+  expect(record).toHaveBeenCalledWith(expect.objectContaining({outcome:'unreadable',report:expect.objectContaining({error:'parser_format_mismatch'})}));
  });
 });

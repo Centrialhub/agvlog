@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DollarSign, Map, Calculator } from 'lucide-react';
 import FreightTables from './FreightTables';
@@ -8,9 +8,18 @@ import { useSearchParams } from 'react-router-dom';
 
 export default function FreightHub() {
   const [params, setParams] = useSearchParams();
-  const tabParam = params.get('tab');
-  const initial = tabParam === 'regions' ? 'regions' : tabParam === 'simulator' ? 'simulator' : 'tables';
-  const [tab, setTab] = useState(initial);
+  const normalizeTab = (value: string | null) => value === 'regions' || value === 'simulator' ? value : 'tables';
+  const [tab, setTab] = useState(() => normalizeTab(params.get('tab')));
+  useEffect(() => {
+    const raw = params.get('tab');
+    const nextTab = normalizeTab(raw);
+    setTab(current => current === nextTab ? current : nextTab);
+    if (raw && raw !== nextTab) {
+      const next = new URLSearchParams(params);
+      next.delete('tab');
+      setParams(next, { replace: true });
+    }
+  }, [params, setParams]);
 
   return (
     <div className="space-y-4">
@@ -28,7 +37,7 @@ export default function FreightHub() {
           const next = new URLSearchParams(params);
           if (v === 'tables') next.delete('tab');
           else next.set('tab', v);
-          setParams(next, { replace: true });
+          setParams(next);
         }}
       >
         <TabsList>

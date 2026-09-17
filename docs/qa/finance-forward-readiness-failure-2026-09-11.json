@@ -1,0 +1,22 @@
+{
+  "readiness": [
+    {
+      "missing": [
+        "definition:finance_private.check_payable_payment_insert()"
+      ]
+    }
+  ],
+  "guard": [
+    {
+      "hash": "8dffa1b366291f565e438b07803bab8d",
+      "prosrc": "\ndeclare p public.payables%rowtype;paid numeric;\nbegin\n if not finance_private.can_access(new.tenant_id) then raise exception 'finance_access_denied' using errcode='42501';end if;\n perform pg_advisory_xact_lock(hashtextextended(new.tenant_id::text||':finance',0));\n select * into p from public.payables where id=new.payable_id and tenant_id=new.tenant_id for update;\n if not found or p.status='cancelled' then raise exception 'finance_payable_not_payable' using errcode='22023';end if;\n if new.amount is null or new.amount<=0 or new.amount<>trunc(new.amount,2) or new.amount::text in ('NaN','Infinity','-Infinity') then\n  raise exception 'finance_invalid_payment_amount' using errcode='22023';end if;\n if not exists(select 1 from public.bank_accounts where tenant_id=new.tenant_id and id=new.bank_account_id) then\n  raise exception 'finance_invalid_account' using errcode='22023';end if;\n select coalesce(sum(amount),0) into paid from finance_private.active_payable_payments where payable_id=p.id and tenant_id=p.tenant_id;\n if paid<0 or paid<>trunc(paid,2) or paid+new.amount>p.amount then raise exception 'finance_payable_overpaid' using errcode='23514';end if;\n return new;\nend;\n",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "prosecdef": true,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    }
+  ]
+}

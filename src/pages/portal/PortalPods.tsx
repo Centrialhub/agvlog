@@ -38,11 +38,15 @@ export default function PortalPods() {
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const { data: pods = [], isLoading, error, refetch } = usePortalPods({
+  const {
+    data: pods = [], isLoading, error, refetch,
+    fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError, restart,
+  } = usePortalPods({
     status: status === 'all' ? undefined : status,
     start: startDate || undefined,
     end: endDate || undefined,
   });
+  const restartPods = restart;
   const download = useDownloadPortalPod();
   const { toast } = useToast();
 
@@ -51,7 +55,7 @@ export default function PortalPods() {
   const handleDownload = async (id: string) => {
     try {
       const url = await download.mutateAsync(id);
-      window.open(url, '_blank');
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch (error: unknown) {
       toast({ title: 'Erro ao baixar', description: portalErrorMessage(error, 'Não foi possível baixar o canhoto.'), variant: 'destructive' });
     }
@@ -68,7 +72,7 @@ export default function PortalPods() {
         { key: 'status', label: 'Situação', value: status, onChange: setStatus, options: [{ value: 'all', label: 'Todas as situações' }, ...Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))] },
         { key: 'from', label: 'Recebido de', type: 'date', value: startDate, max: endDate || undefined, onChange: setStartDate },
         { key: 'to', label: 'Recebido até', type: 'date', value: endDate, min: startDate || undefined, onChange: setEndDate },
-      ]} onReset={clear} activeCount={activeCount} resultCount={error ? undefined : filtered.length} totalCount={pods.length} loading={isLoading} description="Busca por nota e recebedor nos até 200 canhotos carregados para o período." /></div>
+      ]} onReset={clear} activeCount={activeCount} resultCount={error ? undefined : filtered.length} totalCount={pods.length} loading={isLoading} description="Busca por nota e recebedor em todos os canhotos carregados para o período." /></div>
 
       {/* Desktop */}
       <Card className="hidden md:block">
@@ -162,6 +166,25 @@ export default function PortalPods() {
           ))
         )}
       </div>
+      {(hasNextPage || isFetchNextPageError) && !error && (
+        <div className="mt-4 text-center">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              if (isFetchNextPageError) {
+                void restartPods();
+                return;
+              }
+              void fetchNextPage();
+            }}
+            disabled={isFetchingNextPage}
+          >
+            {isFetchingNextPage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isFetchNextPageError ? 'A lista mudou — atualizar' : 'Carregar mais canhotos'}
+          </Button>
+        </div>
+      )}
     </PortalSection>
   );
 }

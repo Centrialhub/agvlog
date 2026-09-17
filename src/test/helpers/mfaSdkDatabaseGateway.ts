@@ -97,7 +97,11 @@ export function mfaSdkDatabaseGateway(db:PGlite){
       // Missing fields must retain SQL defaults, as PostgREST does.
       const supplied=keys.filter(key=>key in body);
       data=(await operationRpc(db,'select list_driver_settlements('+supplied.map((key,n)=>key+'=> $'+(n+1)).join(',')+') result',supplied.map(key=>body[key]))).rows[0].result;
-     }else if(name==='list_driver_settlement_filter_options')data=(await operationRpc(db,'select list_driver_settlement_filter_options($1) result',[body._tenant_id])).rows[0].result;
+     }else if(name==='list_driver_settlements_v2'){
+      const keys=['_tenant_id','_search','_driver_id','_vehicle_id','_status','_date_from','_date_to','_only_km_pending','_only_expense_pending','_only_no_freight','_only_needs_recalculation','_snapshot_at','_cursor','_page_size'];
+      const values=keys.map(key=>key==='_cursor'?(body[key]?JSON.stringify(body[key]):null):body[key]??null);
+      data=(await operationRpc(db,'select list_driver_settlements_v2('+keys.map((_,n)=>n===12?'$13::jsonb':'$'+(n+1)).join(',')+') result',values)).rows[0].result;
+     }else if(name==='list_driver_settlement_filter_options')data=(await operationRpc(db,'select list_driver_settlement_filter_options($1,$2,$3,$4,$5,$6) result',[body._tenant_id,body._kind,body._search,body._page,body._page_size,body._expected_revision])).rows[0].result;
      else throw new Error('Unexpected SQL endpoint '+name);
      return json(data);
     }catch(error){return json({code:'42501',message:error instanceof Error?error.message:'Database refused'},403);}

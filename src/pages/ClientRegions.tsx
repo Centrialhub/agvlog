@@ -35,6 +35,7 @@ import { useSonnerToast } from '@/hooks/useSonnerToast';
 import * as XLSX from 'xlsx';
 import { useRef } from 'react';
 import type { Tables, TablesInsert } from '@/integrations/supabase/types';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 const UF_OPTIONS = [
   'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
@@ -77,14 +78,11 @@ export default function ClientRegions() {
     queryKey: ['clients_list', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('clients')
+      return fetchAllPostgrestPages((from, to) => supabase.from('clients')
         .select('id, company_name')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
-        .order('company_name');
-      if (error) throw error;
-      return data || [];
+        .order('company_name').order('id').range(from, to));
     },
     enabled: !!currentTenant,
   });
@@ -93,14 +91,11 @@ export default function ClientRegions() {
     queryKey: ['client_regions', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('client_regions')
+      return fetchAllPostgrestPages((from, to) => supabase.from('client_regions')
         .select('*, clients(company_name)')
         .eq('tenant_id', currentTenant.id)
         .order('region_name')
-        .order('municipality');
-      if (error) throw error;
-      return (data || []) as RegionRow[];
+        .order('municipality').order('id').range(from, to)) as Promise<RegionRow[]>;
     },
     enabled: !!currentTenant,
   });
@@ -108,13 +103,16 @@ export default function ClientRegions() {
   const upsertMutation = useMutation({
     mutationFn: async (values: typeof form & { id?: string }) => {
       if (!currentTenant) throw new Error('Sem tenant');
+      const municipality = values.municipality.trim().replace(/\s+/g, ' ');
+      const regionName = values.region_name.trim().replace(/\s+/g, ' ');
+      if (!municipality || !regionName) throw new Error('Município e região são obrigatórios.');
       const record = {
         tenant_id: currentTenant.id,
         client_id: values.client_id || null,
         payer_group: values.payer_group || null,
-        municipality: values.municipality,
+        municipality,
         state_code: values.state_code,
-        region_name: values.region_name,
+        region_name: regionName,
       };
       if (values.id) {
         const { error } = await supabase
@@ -221,8 +219,8 @@ export default function ClientRegions() {
       }
 
       // Build client name -> id map (case-insensitive, trimmed)
-      const clientMap = new Map<string, string>();
-      clients.forEach((c) => clientMap.set(cleanUpper(c.company_name), c.id));
+      const clientMap = new Map<string, string[]>();
+      clients.forEach((c) => clientMap.set(cleanUpper(c.company_name), [...(clientMap.get(cleanUpper(c.company_name)) || []), c.id]));
 
       // Existing keys to dedupe (against DB)
       const keyOf = (cli: string | null, payer: string | null, muni: string, uf: string) =>
@@ -243,9 +241,11 @@ export default function ClientRegions() {
       for (const r of parsed) {
         let clientId: string | null = null;
         if (r.client) {
-          clientId = clientMap.get(cleanUpper(r.client)) || null;
+          const matches = clientMap.get(cleanUpper(r.client)) || [];
+          clientId = matches.length === 1 ? matches[0] : null;
           if (!clientId) {
             missingClients.add(r.client);
+            if (matches.length > 1) issues.push(`Linha ${r.rowNum}: cliente "${r.client}" é ambíguo (${matches.length} cadastros)`);
             continue;
           }
         }
@@ -290,17 +290,13 @@ export default function ClientRegions() {
         return;
       }
 
-      // Insert in chunks of 100 — tolerate per-chunk failures (e.g. unique index)
+      // Isolate inserts so one concurrent duplicate does not roll back valid rows.
       let inserted = 0;
       const chunkErrors: string[] = [];
-      for (let i = 0; i < records.length; i += 100) {
-        const chunk = records.slice(i, i + 100);
-        const { error } = await supabase.from('client_regions').insert(chunk);
-        if (error) {
-          chunkErrors.push(`Lote ${Math.floor(i / 100) + 1}: ${error.message}`);
-        } else {
-          inserted += chunk.length;
-        }
+      for (const record of records) {
+        const { error } = await supabase.from('client_regions').insert(record);
+        if (error && error.code !== '23505') chunkErrors.push(`${record.municipality}/${record.state_code}: ${error.message}`);
+        else if (!error) inserted += 1;
       }
 
       if (inserted > 0) toast.success(`${inserted} regiões importadas`);
@@ -432,7 +428,7 @@ export default function ClientRegions() {
               </div>
               <Button
                 className="w-full"
-                disabled={!form.municipality || !form.state_code || !form.region_name}
+                disabled={!form.municipality.trim() || !form.state_code || !form.region_name.trim()}
                 onClick={() => upsertMutation.mutate({ ...form, id: editingId || undefined })}
               >
                 {editingId ? 'Salvar Alterações' : 'Cadastrar'}

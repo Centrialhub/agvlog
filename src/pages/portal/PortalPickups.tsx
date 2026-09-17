@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { usePortalPickups, useRequestPortalPickup, useCancelPortalPickup } from '@/hooks/portal/usePortalPickups';
-import { useClientPortalAccess, hasAnyPermission } from '@/hooks/portal/useClientPortalAccess';
+import { useClientPortalAccess } from '@/hooks/portal/useClientPortalAccess';
 import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,16 +35,25 @@ const STATUS_TONE: Record<string, string> = {
 export default function PortalPickups() {
   const { data: access = [] } = useClientPortalAccess();
   const { selectedClientId } = usePortalClientScope();
-  const canRequest = hasAnyPermission(access, 'can_request_pickup');
   const requestableClients = access.filter(a => a.can_request_pickup);
+  const selectedClientCanRequest = selectedClientId
+    ? requestableClients.some((client) => client.client_id === selectedClientId)
+    : requestableClients.length > 0;
+  const canCancelVisiblePickups = selectedClientId
+    ? selectedClientCanRequest
+    : access.length > 0 && requestableClients.length === access.length;
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const { data: pickups = [], isLoading, error, refetch } = usePortalPickups({
+  const {
+    data: pickups = [], isLoading, error, refetch,
+    fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError, restart,
+  } = usePortalPickups({
     status: statusFilter === 'all' ? undefined : statusFilter,
     start: from || undefined, end: to || undefined,
   });
+  const restartPickups = restart;
   const filteredPickups = pickups.filter(row => matchesSearch(search, row.pickup_number, row.remitter_name, row.recipient_name, row.notes));
   const [open, setOpen] = useState(false);
   const [cancelPickupId, setCancelPickupId] = useState<string | null>(null);
@@ -52,8 +61,9 @@ export default function PortalPickups() {
   // Pré-selecionar cliente quando escopo estiver reduzido a um único cliente
   useEffect(() => {
     if (open && !form.client_id) {
-      const preselect = selectedClientId
-        || (requestableClients.length === 1 ? requestableClients[0].client_id : '');
+      const preselect = selectedClientId && requestableClients.some((client) => client.client_id === selectedClientId)
+        ? selectedClientId
+        : (requestableClients.length === 1 ? requestableClients[0].client_id : '');
       if (preselect) setForm(f => ({ ...f, client_id: preselect }));
     }
   }, [open, selectedClientId, requestableClients, form.client_id]);
@@ -62,7 +72,7 @@ export default function PortalPickups() {
   const { toast } = useToast();
 
   const handleCancel = async () => {
-    if (!cancelPickupId) return;
+    if (!cancelPickupId || !canCancelVisiblePickups) return;
     try {
       await cancelMut.mutateAsync(cancelPickupId);
       toast({ title: 'Coleta cancelada' });
@@ -75,6 +85,10 @@ export default function PortalPickups() {
   const submit = async () => {
     if (!form.client_id || !form.pickup_at) {
       toast({ title: 'Preencha cliente e data', variant: 'destructive' });
+      return;
+    }
+    if (!requestableClients.some((client) => client.client_id === form.client_id)) {
+      toast({ title: 'Sem permissão para solicitar coleta para este cliente', variant: 'destructive' });
       return;
     }
     try {
@@ -102,9 +116,9 @@ export default function PortalPickups() {
         { key: 'status', label: 'Situação', value: statusFilter, onChange: setStatusFilter, options: [{ value: 'all', label: 'Todas as situações' }, { value: 'pendente', label: 'Pendente' }, { value: 'vinculada', label: 'Vinculada' }, { value: 'finalizada', label: 'Finalizada' }, { value: 'cancelada', label: 'Cancelada' }] },
         { key: 'from', label: 'Coleta de', type: 'date', value: from, max: to || undefined, onChange: setFrom },
         { key: 'to', label: 'Coleta até', type: 'date', value: to, min: from || undefined, onChange: setTo },
-      ]} onReset={() => { setSearch(''); setStatusFilter('all'); setFrom(''); setTo(''); }} activeCount={Number(Boolean(search)) + Number(statusFilter !== 'all') + Number(Boolean(from)) + Number(Boolean(to))} resultCount={error ? undefined : filteredPickups.length} totalCount={pickups.length} loading={isLoading} description="Busca textual nas até 200 coletas carregadas para o período e situação." /></div>
+      ]} onReset={() => { setSearch(''); setStatusFilter('all'); setFrom(''); setTo(''); }} activeCount={Number(Boolean(search)) + Number(statusFilter !== 'all') + Number(Boolean(from)) + Number(Boolean(to))} resultCount={error ? undefined : filteredPickups.length} totalCount={pickups.length} loading={isLoading} description="Busca textual em todas as coletas carregadas para o período e situação." /></div>
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        {canRequest && (
+        {selectedClientCanRequest && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="ml-auto"><Plus className="h-4 w-4 mr-2" />Solicitar coleta</Button>
@@ -160,6 +174,7 @@ export default function PortalPickups() {
           ) : filteredPickups.length === 0 ? (
             <PortalEmptyState title="Nenhuma coleta" description="Você ainda não tem coletas registradas." />
           ) : (
+            <>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -184,7 +199,7 @@ export default function PortalPickups() {
                       <Badge variant="outline" className={STATUS_TONE[p.status] || ''}>{p.status}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {p.status === 'pendente' && canRequest && (
+                      {p.status === 'pendente' && canCancelVisiblePickups && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -201,6 +216,26 @@ export default function PortalPickups() {
                 ))}
               </TableBody>
             </Table>
+            {(hasNextPage || isFetchNextPageError) && (
+              <div className="border-t p-3 text-center">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (isFetchNextPageError) {
+                      void restartPickups();
+                      return;
+                    }
+                    void fetchNextPage();
+                  }}
+                  disabled={isFetchingNextPage}
+                >
+                  {isFetchingNextPage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isFetchNextPageError ? 'A lista mudou — atualizar' : 'Carregar mais coletas'}
+                </Button>
+              </div>
+            )}
+            </>
           )}
         </CardContent>
       </Card>

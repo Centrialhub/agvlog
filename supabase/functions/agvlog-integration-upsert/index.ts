@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { corsHeaders as defaultCorsHeaders } from "../_shared/cors.ts";
 import { requireActiveTenant } from "../_shared/active-tenant.ts";
 import { normalizeSsxBaseUrl } from "../_shared/ssx-utils.ts";
+import { parseAes256HexKey } from "../_shared/aes-key.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -17,6 +18,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json", "Allow": "POST, OPTIONS" },
+    });
+  }
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -31,9 +38,11 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const encryptionKey = Deno.env.get("AGVLOG_ENCRYPTION_KEY");
-
-    if (!encryptionKey) {
-      return new Response(JSON.stringify({ error: "AGVLOG_ENCRYPTION_KEY is required" }), {
+    let encryptionKeyBytes: Uint8Array<ArrayBuffer>;
+    try {
+      encryptionKeyBytes = parseAes256HexKey(encryptionKey);
+    } catch {
+      return new Response(JSON.stringify({ error: "AGVLOG_ENCRYPTION_KEY must be exactly 64 hexadecimal characters" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -41,18 +50,21 @@ Deno.serve(async (req) => {
 
     const anonClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
     });
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: userData, error: userError } = await anonClient.auth.getUser(token);
+    if (userError || !userData?.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const callerId = claimsData.claims.sub as string;
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const callerId = userData.user.id;
+    const supabase = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
     const {
       tenant_id, base_url, username, password, hashauth, hashcode, id,
@@ -141,7 +153,7 @@ Deno.serve(async (req) => {
       });
     }
     // New credentials must never be persisted as plaintext.
-    const encryptedPassword = await encrypt(password, encryptionKey);
+    const encryptedPassword = await encrypt(password, encryptionKeyBytes);
 
     let settings: JsonObject = {};
     let currentHashauth: string | null = null;
@@ -239,15 +251,23 @@ Deno.serve(async (req) => {
     );
   } catch (err: unknown) {
     console.error("agvlog-integration-upsert error:", err);
+    const detail = err && typeof err === "object" && "code" in err && typeof err.code === "string"
+      ? err.code
+      : err instanceof Error
+        ? err.name
+        : "unknown";
     return new Response(
-      JSON.stringify({ error: "Internal error" }),
+      JSON.stringify({
+        error: "Internal error",
+        code: "SSX_CREDENTIAL_SAVE_INTERNAL",
+        detail,
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
 
-async function encrypt(plaintext: string, keyHex: string): Promise<string> {
-  const keyBytes = hexToBytes(keyHex.padEnd(64, "0").slice(0, 64));
+async function encrypt(plaintext: string, keyBytes: Uint8Array<ArrayBuffer>): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
     keyBytes,
@@ -267,14 +287,6 @@ async function encrypt(plaintext: string, keyHex: string): Promise<string> {
   const ivHex = bytesToHex(iv);
   const ctHex = bytesToHex(new Uint8Array(ciphertext));
   return `enc:v1:${ivHex}:${ctHex}`;
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
 }
 
 function bytesToHex(bytes: Uint8Array): string {

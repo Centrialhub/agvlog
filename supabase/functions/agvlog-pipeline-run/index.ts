@@ -450,13 +450,7 @@ Deno.serve(async (req) => {
 
     // ===== Update pipeline health on tenant settings =====
     try {
-      const { data: tenantData } = await supabase
-        .from("tenants").select("settings").eq("id", tenant_id).single();
-      const tenantSettings = (tenantData?.settings as JsonObject) || {};
       const pipelineHealth: JsonObject = {
-        ...((tenantSettings.pipeline_health && typeof tenantSettings.pipeline_health === "object")
-          ? tenantSettings.pipeline_health as JsonObject
-          : {}),
         last_run_at: new Date().toISOString(),
         last_run_mode: mode,
         last_run_inserted: stats.total_inserted,
@@ -472,14 +466,23 @@ Deno.serve(async (req) => {
         last_run_error_messages: stats.errors.slice(0, 20),
         last_run_attention: stats.needs_attention.slice(0, 20),
       };
+      const completedSuccessfully = stats.errors.length === 0 && stats.needs_attention.length === 0;
+      const automaticPollingRun = Boolean(isCron) && (mode === "poll" || mode === "full");
+      const automaticPollingSucceeded = automaticPollingRun && completedSuccessfully &&
+        stats.steps_executed.includes("position_polling");
+      pipelineHealth.automatic_poll_run = automaticPollingRun;
       if (stats.total_inserted > 0) {
         pipelineHealth.last_successful_poll_at = new Date().toISOString();
       }
-      if (stats.errors.length === 0) {
+      if (completedSuccessfully) {
         const successfulAt = new Date().toISOString();
-        pipelineHealth.first_successful_run_at = pipelineHealth.first_successful_run_at || successfulAt;
+        pipelineHealth.first_successful_run_at = successfulAt;
         pipelineHealth.last_successful_run_at = successfulAt;
-        pipelineHealth.successful_run_count = Number(pipelineHealth.successful_run_count || 0) + 1;
+      }
+      if (automaticPollingSucceeded) {
+        const successfulAt = new Date().toISOString();
+        pipelineHealth.first_automatic_poll_success_at = successfulAt;
+        pipelineHealth.last_automatic_poll_success_at = successfulAt;
       }
       if (stats.errors.some(e => e.includes("persistence_failure"))) {
         pipelineHealth.last_persistence_failure_at = new Date().toISOString();
@@ -487,9 +490,12 @@ Deno.serve(async (req) => {
       if (stats.errors.some(e => e.includes("rate_limited") || e.includes("429"))) {
         pipelineHealth.last_rate_limit_at = new Date().toISOString();
       }
-      await supabase.from("tenants").update({
-        settings: { ...tenantSettings, pipeline_health: pipelineHealth },
-      }).eq("id", tenant_id);
+      const { error: healthError } = await supabase.rpc("merge_tenant_pipeline_health_v1", {
+        _tenant_id: tenant_id,
+        _patch: pipelineHealth,
+        _increment_success: automaticPollingSucceeded,
+      });
+      if (healthError) throw healthError;
     } catch (_) { /* non-critical */ }
 
     if (stats.errors.length > 0) {

@@ -1,0 +1,18 @@
+[
+  {
+    "path": "src/pages/Payables.tsx",
+    "sha256": "027b2b481b1fa770004579290afcb3c021603f6fbfd0a458e96fe6681d0d9a82"
+  },
+  {
+    "path": "src/components/financial/FiscalXmlUpload.tsx",
+    "sha256": "2e904bae879ce0faf7f1d0e7d39d024223e28875cd0a2d941ad45cf0fd2d4795"
+  },
+  {
+    "path": "src/test/payablesXmlFailure.test.tsx",
+    "sha256": "254fe49fe3a56050256c3d5bb0643265912b9502b13e88cf08f68be21548bd24"
+  },
+  {
+    "path": "src/test/helpers/payableNfeFixture.ts",
+    "sha256": "56ab527de20ceeae6e1158fc3cf934ce53d10ca4df4a4de113b973a3d2aa702a"
+  }
+]

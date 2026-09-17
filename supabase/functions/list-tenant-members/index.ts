@@ -43,16 +43,19 @@ Deno.serve(async (req) => {
       .eq("tenant_id", tenant_id);
     if (mErr) return json({ error: mErr.message }, 500);
 
-    const ids = new Set((memberships || []).map((m) => m.user_id));
+    const ids = [...new Set((memberships || []).map((m) => m.user_id))];
     const users: Array<{ id: string; email: string | null; full_name: string | null }> = [];
 
-    const perPage = 200;
-    const maxPages = 20;
-    for (let page = 1; page <= maxPages; page++) {
-      const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-      if (error) break;
-      for (const u of data.users) {
-        if (ids.has(u.id)) {
+    // Memberships already provide the authoritative IDs. Resolve those users
+    // directly instead of scanning a capped prefix of the global auth catalog.
+    const batchSize = 25;
+    for (let index = 0; index < ids.length; index += batchSize) {
+      const batch = ids.slice(index, index + batchSize);
+      const results = await Promise.all(batch.map((id) => admin.auth.admin.getUserById(id)));
+      for (const result of results) {
+        if (result.error) return json({ error: result.error.message }, 500);
+        const u = result.data.user;
+        if (u) {
           const meta = (u.user_metadata as any) || {};
           users.push({
             id: u.id,
@@ -61,8 +64,6 @@ Deno.serve(async (req) => {
           });
         }
       }
-      if (data.users.length < perPage) break;
-      if (users.length >= ids.size) break;
     }
 
     return json({ users });

@@ -50,29 +50,70 @@ export async function parseFiscalPkcs12(bytes: Uint8Array, password: string): Pr
 }
 
 export function extractCertificateCnpj(certificate: any): string | null {
-  const values: string[] = [];
-  for (const attribute of certificate.subject?.attributes || []) values.push(String(attribute.value || ''));
-  const seen = new WeakSet<object>();
-  const visit = (value: unknown, depth = 0) => {
-    if (depth > 8 || value == null) return;
-    if (typeof value === 'string') {
-      values.push(value);
-      values.push(Array.from(value, character => {
-        const code = character.charCodeAt(0);
-        return code >= 32 && code <= 126 ? character : ' ';
-      }).join(''));
-      return;
-    }
-    if (typeof value !== 'object' || seen.has(value as object)) return;
-    seen.add(value as object);
-    if (Array.isArray(value)) value.forEach(item => visit(item, depth + 1));
-    else Object.values(value as Record<string, unknown>).forEach(item => visit(item, depth + 1));
-  };
-  visit(certificate.extensions || []);
-  const candidates = values.flatMap(value => value.match(/\d{14}/g) || []).filter(isValidCnpj);
-  return candidates[0] || null;
+  const official = extractIcpBrasilOtherNameValues(certificate, '2.16.76.1.3.3')
+    .flatMap(validCnpjCandidates);
+  if (official.length > 0) return official[0];
+
+  const subjectValues = (certificate.subject?.attributes || [])
+    .map((attribute: any) => String(attribute.value || ''));
+  return subjectValues.flatMap(validCnpjCandidates)[0] || null;
 }
 
+function extractIcpBrasilOtherNameValues(certificate: any, expectedOid: string): string[] {
+  const values: string[] = [];
+  for (const extension of certificate.extensions || []) {
+    if (extension.name !== 'subjectAltName' && extension.id !== '2.5.29.17') continue;
+    for (const altName of extension.altNames || []) {
+      if (altName.type !== 0) continue;
+      let otherName = altName.value;
+      if (typeof otherName === 'string') {
+        try {
+          otherName = forge.asn1.fromDer(forge.util.createBuffer(otherName));
+        } catch {
+          continue;
+        }
+      }
+      const nodes: any[] = [];
+      visitAsn1Nodes(otherName, node => nodes.push(node));
+      const oid = nodes.find(node =>
+        node?.tagClass === forge.asn1.Class.UNIVERSAL && node?.type === forge.asn1.Type.OID
+      );
+      if (!oid) continue;
+      try {
+        if (forge.asn1.derToOid(oid.value) !== expectedOid) continue;
+      } catch {
+        continue;
+      }
+      for (const node of nodes) {
+        if (node === oid || typeof node?.value !== 'string') continue;
+        values.push(node.value);
+      }
+    }
+  }
+  return values;
+}
+
+function visitAsn1Nodes(value: unknown, visit: (node: any) => void, depth = 0): void {
+  if (depth > 8 || value == null) return;
+  if (Array.isArray(value)) {
+    value.forEach(item => visitAsn1Nodes(item, visit, depth + 1));
+    return;
+  }
+  if (typeof value !== 'object') return;
+  const node = value as any;
+  if ('tagClass' in node && 'type' in node && 'value' in node) visit(node);
+  visitAsn1Nodes(node.value, visit, depth + 1);
+}
+
+function validCnpjCandidates(value: string): string[] {
+  const digits = Array.from(value, character => /\d/.test(character) ? character : '').join('');
+  const candidates: string[] = [];
+  for (let index = 0; index <= digits.length - 14; index++) {
+    const candidate = digits.slice(index, index + 14);
+    if (isValidCnpj(candidate) && !candidates.includes(candidate)) candidates.push(candidate);
+  }
+  return candidates;
+}
 export function isValidCnpj(cnpj: string): boolean {
   if (!/^\d{14}$/.test(cnpj) || /^(\d)\1+$/.test(cnpj)) return false;
   const calculate = (length: number) => {

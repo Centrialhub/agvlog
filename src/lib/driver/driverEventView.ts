@@ -17,7 +17,7 @@ export type DriverEventView = {
 };
 
 const FINAL_EVENT_TYPES = new Set([
-  'delivered', 'refused', 'returned', 'partial_delivery', 'damaged', 'missing_goods',
+  'delivered', 'refused', 'client_refused', 'returned', 'return', 'partial_delivery', 'damaged', 'missing_goods',
   'delivery_completed', 'delivery_failed',
 ]);
 

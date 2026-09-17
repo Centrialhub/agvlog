@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Boxes, Download, Upload, FileText, Plus, Trash2, CheckCircle2, XCircle, RefreshCw, Package, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/hooks/useTenant';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import { useClients } from '@/hooks/useClients';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import {
@@ -22,7 +23,7 @@ import {
   type PalletFilters, type PalletProtocol, type PalletType,
 } from '@/hooks/usePalletReturns';
 import {
-  parsePalletReturnSheet, type ParsedPalletReturn,
+  parsePalletReturnWorkbook, type ParsedPalletReturn,
 } from '@/lib/palletReturns/palletReturnImporter';
 import { generatePalletReturnProtocolPdf, generatePalletReportPdf, downloadBlob } from '@/lib/palletReturns/palletReturnPdf';
 import { protocolsToCsv, rowsToCsv, downloadCsv } from '@/lib/palletReturns/palletReturnCsv';
@@ -78,7 +79,7 @@ export default function PalletReturns() {
   // ---- New protocol form ----
   const [supplierId, setSupplierId] = useState<string>('');
   const [supplierName, setSupplierName] = useState('');
-  const [issueDate, setIssueDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [issueDate, setIssueDate] = useState<string>(() => localDateInputValue());
   const [returnDate, setReturnDate] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [driverName, setDriverName] = useState('');
@@ -137,7 +138,7 @@ export default function PalletReturns() {
     const totals = totalsByPalletType(protocols);
     const pending = pendingProtocols(protocols);
     return {
-      totalPallets: protocols.reduce((s, p) => s + (p.total_quantity || 0), 0),
+      totalPallets: Object.values(totals).reduce((sum, quantity) => sum + quantity, 0),
       totalProtocols: protocols.length,
       pending: pending.length,
       confirmed: protocols.filter((p) => p.status === 'confirmed').length,
@@ -154,22 +155,36 @@ export default function PalletReturns() {
 
   // ---- Import ----
   const [previewList, setPreviewList] = useState<ParsedPalletReturn[]>([]);
+  const [importFileName,setImportFileName]=useState('importacao');
   const [importStatus, setImportStatus] = useState<'confirmed' | 'returned'>('confirmed');
+  useEffect(() => {
+    setSupplierId(''); setSupplierName(''); setIssueDate(localDateInputValue()); setReturnDate(''); setNotes('');
+    setDriverName(''); setPlate(''); setItems([]); setInitialStatus('draft');
+    setPreviewList([]); setImportFileName('importacao'); setImportStatus('confirmed');
+  }, [currentTenant?.id]);
   const handleFile = async (file: File) => {
     try {
       const buf = await file.arrayBuffer();
-      const parsed = parsePalletReturnSheet(buf, file.name);
-      setPreviewList([parsed]);
+      const parsed = parsePalletReturnWorkbook(buf, file.name);
+      if (parsed.length === 0) throw new Error('A planilha não contém abas legíveis.');
+      setImportFileName(file.name);
+      setPreviewList(parsed);
+      toast({ title: 'Prévia carregada', description: `${parsed.length} aba(s) encontrada(s) no arquivo.` });
     } catch (error: unknown) {
       toast({ title: 'Erro ao ler planilha', description: errorMessage(error), variant: 'destructive' });
     }
   };
   const commitImport = async () => {
+    const divergent = previewList.filter(parsed => parsed.hasTotalDivergence);
+    if (divergent.length) {
+      toast({ title: 'Totais divergentes', description: `Corrija ${divergent.length} aba(s) cuja soma dos itens não corresponde ao total declarado.`, variant: 'destructive' });
+      return;
+    }
     const valid = previewList.filter((p) => p.supplier && p.issueDate && p.items.length > 0);
     if (valid.length === 0) { toast({ title: 'Nada para importar', variant: 'destructive' }); return; }
     try {
       const res = await importMut.mutateAsync({
-        fileName: 'importacao',
+        fileName: importFileName,
         asStatus: importStatus,
         parsedList: valid.map((p) => ({
           supplier: p.supplier!, issueDate: p.issueDate!,
@@ -190,7 +205,7 @@ export default function PalletReturns() {
   const [cancelReason, setCancelReason] = useState('');
   const [attachTarget, setAttachTarget] = useState<PalletProtocol | null>(null);
   const [receiverName, setReceiverName] = useState('');
-  const [signatureDate, setSignatureDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [signatureDate, setSignatureDate] = useState<string>(() => localDateInputValue());
   const [proofFile, setProofFile] = useState<File | null>(null);
 
   // Edit dialog state
@@ -368,8 +383,8 @@ export default function PalletReturns() {
                       {p.status !== 'confirmed' && p.status !== 'cancelled' && (
                         <Button variant="ghost" size="sm" onClick={() => changeStatus(p, 'returned')} title="Marcar devolvido"><RefreshCw className="h-4 w-4" /></Button>
                       )}
-                      {p.status !== 'confirmed' && p.status !== 'cancelled' && (
-                        <Button variant="ghost" size="sm" onClick={() => setAttachTarget(p)} title="Comprovante"><Upload className="h-4 w-4" /></Button>
+                      {['returned','partially_returned','awaiting_signature'].includes(p.status) && (
+                        <Button variant="ghost" size="sm" onClick={() => { setReceiverName(''); setSignatureDate(localDateInputValue()); setProofFile(null); setAttachTarget(p); }} title="Comprovante"><Upload className="h-4 w-4" /></Button>
                       )}
                       {['returned','partially_returned','awaiting_signature'].includes(p.status) && (
                         <Button variant="ghost" size="sm" onClick={() => changeStatus(p, 'confirmed')} title="Confirmar"><CheckCircle2 className="h-4 w-4 text-emerald-600" /></Button>
@@ -544,7 +559,19 @@ export default function PalletReturns() {
 
         {/* --- Types --- */}
         <TabsContent value="types" className="space-y-3">
-          <PalletTypesEditor onSave={(t) => upsertType.mutate(t)} types={types} />
+          <PalletTypesEditor
+            types={types}
+            saving={upsertType.isPending}
+            onSave={async palletType => {
+              try {
+                await upsertType.mutateAsync(palletType);
+                toast({ title: palletType.id ? 'Tipo de palete atualizado' : 'Tipo de palete adicionado' });
+              } catch (error) {
+                toast({ title: 'Não foi possível salvar o tipo de palete', description: errorMessage(error), variant: 'destructive' });
+                throw error;
+              }
+            }}
+          />
         </TabsContent>
 
         {/* --- Import --- */}
@@ -599,7 +626,7 @@ export default function PalletReturns() {
               </div>
               {detail.notes && (<div><strong>Observações:</strong> {detail.notes}</div>)}
               {detail.signed_proof_url && (
-                <Button variant="link" size="sm" onClick={async () => { const url = await getPalletProofSignedUrl(detail.signed_proof_url!); if (url) window.open(url, '_blank'); }}>Abrir comprovante assinado</Button>
+                <Button variant="link" size="sm" onClick={async () => { const url = await getPalletProofSignedUrl(detail.signed_proof_url!); if (url) window.open(url, '_blank', 'noopener,noreferrer'); }}>Abrir comprovante assinado</Button>
               )}
             </div>
           )}
@@ -711,11 +738,19 @@ export default function PalletReturns() {
   );
 }
 
-function PalletTypesEditor({ types, onSave }: {
+function PalletTypesEditor({ types, onSave, saving }: {
   types: PalletType[];
-  onSave: (palletType: Partial<PalletType> & Pick<PalletType, 'code' | 'name'>) => void;
+  saving: boolean;
+  onSave: (palletType: Partial<PalletType> & Pick<PalletType, 'code' | 'name'>) => Promise<void>;
 }) {
   const [code, setCode] = useState(''); const [name, setName] = useState(''); const [color, setColor] = useState(''); const [desc, setDesc] = useState('');
+  const addType = async () => {
+    if (!code || !name || saving) return;
+    try {
+      await onSave({ code, name, color: color || null, description: desc || null });
+      setCode(''); setName(''); setColor(''); setDesc('');
+    } catch { /* Parent keeps the typed values and reports the mutation error. */ }
+  };
   return (
     <>
       <Card><CardContent className="p-4 space-y-3">
@@ -725,7 +760,7 @@ function PalletTypesEditor({ types, onSave }: {
           <div><Label>Cor</Label><Input value={color} onChange={(e) => setColor(e.target.value)} /></div>
           <div className="md:col-span-2"><Label>Descrição</Label><Input value={desc} onChange={(e) => setDesc(e.target.value)} /></div>
         </div>
-        <Button onClick={() => { if (!code || !name) return; onSave({ code, name, color: color || null, description: desc || null }); setCode(''); setName(''); setColor(''); setDesc(''); }}>Adicionar tipo</Button>
+        <Button disabled={saving} onClick={() => void addType()}>{saving ? 'Salvando...' : 'Adicionar tipo'}</Button>
       </CardContent></Card>
       <Card><CardContent className="p-0">
         <Table><TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Nome</TableHead><TableHead>Cor</TableHead><TableHead>Ativo</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
@@ -734,7 +769,7 @@ function PalletTypesEditor({ types, onSave }: {
               <TableCell className="font-mono">{t.code}</TableCell><TableCell>{t.name}</TableCell>
               <TableCell>{t.color || '—'}</TableCell>
               <TableCell>{t.is_active ? <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">Sim</Badge> : <Badge variant="outline">Não</Badge>}</TableCell>
-              <TableCell className="text-right"><Button variant="ghost" size="sm" onClick={() => onSave({ ...t, is_active: !t.is_active })}>{t.is_active ? 'Desativar' : 'Ativar'}</Button></TableCell>
+              <TableCell className="text-right"><Button variant="ghost" size="sm" disabled={saving} onClick={() => void onSave({ ...t, is_active: !t.is_active }).catch(() => undefined)}>{t.is_active ? 'Desativar' : 'Ativar'}</Button></TableCell>
             </TableRow>))}
           </TableBody>
         </Table>

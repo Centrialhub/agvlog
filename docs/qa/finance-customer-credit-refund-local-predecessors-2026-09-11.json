@@ -1,0 +1,72 @@
+[
+  {
+    "signature": "finance_private.assert_closed_source_mutable(_tenant uuid, _table text, _row jsonb, _depth integer)",
+    "normalized_md5": "e01e7cbebe1234e7d2e3ef537a92327d",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.check_movement_use()",
+    "normalized_md5": "e6fbb687d6b63f0ee667e04f8cf4a2f8",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.check_payable_payment_insert()",
+    "normalized_md5": "8dffa1b366291f565e438b07803bab8d",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.check_settlement_movement_link()",
+    "normalized_md5": "9233f0f1e283d98ccf50cdb27599ef58",
+    "prosecdef": true,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.customer_credit_position(_tenant uuid, _credit uuid)",
+    "normalized_md5": "9c7f511f9f20852086366abba5b2b56b",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.movement_recording_origin(_tenant uuid, _movement uuid)",
+    "normalized_md5": "fa6f51930c05baed7362e3a6fa40a99f",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  },
+  {
+    "signature": "finance_private.movement_used_cents(_tenant uuid, _movement uuid)",
+    "normalized_md5": "cc216802448c49d665d2b5d2e2335415",
+    "prosecdef": true,
+    "provolatile": "s",
+    "proconfig": [
+      "search_path=\"\""
+    ],
+    "proacl": "{postgres=X/postgres}"
+  }
+]

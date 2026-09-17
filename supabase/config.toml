@@ -77,6 +77,9 @@ verify_jwt = false
 [functions.agvlog-pipeline-run]
 verify_jwt = false
 
+[functions.portal-download-file]
+verify_jwt = true
+
 [functions.agvlog-schedule-tenants]
 verify_jwt = false
 
@@ -180,4 +183,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.finance-fiscal-evidence-preview]
+verify_jwt = true
+
+[functions.finance-image-runtime-benchmark]
+verify_jwt = false
+
+[functions.finance-payable-xml]
 verify_jwt = true

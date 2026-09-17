@@ -1,6 +1,6 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
-import { useState, useMemo } from 'react';
-import { useOperationalRoutes, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute, type OperationalRoute } from '@/hooks/useOperationalRoutes';
+import { useEffect, useState, useMemo } from 'react';
+import { cloneRouteDestinations, useOperationalRoutes, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute, type OperationalRoute, type RouteDestination } from '@/hooks/useOperationalRoutes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,13 +11,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Pencil, Trash2, Map as MapIcon, X } from 'lucide-react';
+import { AlertTriangle, Plus, Pencil, RefreshCw, Trash2, Map as MapIcon, X } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { normalizeCity as norm } from '@/lib/utils/normalizeCity';
 import { getErrorMessage } from '@/lib/errors';
 import { useListFilters } from '@/hooks/useListFilters';
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { matchesSearch } from '@/lib/listFilters';
+import { useTenant } from '@/hooks/useTenant';
 
 
 const CLASSIFICATIONS = [
@@ -27,25 +28,37 @@ const CLASSIFICATIONS = [
   { value: 'regional', label: 'Regional' },
 ];
 
+const destinationName = (destination: RouteDestination) => (
+  typeof destination === 'string' ? destination : destination.name
+);
+const EMPTY_ROUTES: OperationalRoute[] = [];
+
 export default function OperationalRoutesPage() {
+  const { currentTenant } = useTenant();
   const { confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'active', classification: 'all' });
-  const { data: routes = [], isLoading } = useOperationalRoutes({ includeInactive: true });
+  const routesQuery = useOperationalRoutes({ includeInactive: true });
+  const routes = routesQuery.data ?? EMPTY_ROUTES;
+  const { isLoading, isError, error, refetch } = routesQuery;
+  const invalidRouteCount = routesQuery.data?.invalidCount ?? 0;
+  const invalidRoutes = routesQuery.data?.invalidRoutes ?? [];
   const createRoute = useCreateOperationalRoute();
   const updateRoute = useUpdateOperationalRoute();
   const deleteRoute = useDeleteOperationalRoute();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingRevision, setEditingRevision] = useState<string | null>(null);
   const [form, setForm] = useState({
-    name: '', description: '', classification: 'general', region_name: '', active: true, destinations: [] as string[],
+    name: '', description: '', classification: 'general', region_name: '', active: true, destinations: [] as RouteDestination[],
   });
   const [newDest, setNewDest] = useState('');
 
-  const filtered = routes.filter(row =>
-    matchesSearch(filters.search, row.name, row.region_name, row.description, ...row.destinations.map(destination => typeof destination === 'string' ? destination : destination.name))
+  const filtered = useMemo(() => routes.filter(row =>
+    matchesSearch(filters.search, row.name, row.region_name, row.description, ...row.destinations.map(destinationName))
     && (filters.status === 'all' || row.active === (filters.status === 'active'))
-    && (filters.classification === 'all' || row.classification === filters.classification));
+    && (filters.classification === 'all' || row.classification === filters.classification)),
+  [filters.classification, filters.search, filters.status, routes]);
 
   // Detecta cidades presentes em mais de uma rota ativa (duplicatas de cobertura)
   const duplicateCities = useMemo(() => {
@@ -53,7 +66,7 @@ export default function OperationalRoutesPage() {
     routes.filter(r => r.active).forEach(r => {
       const seen = new Set<string>();
       r.destinations.forEach(destination => {
-        const key = norm(typeof destination === 'string' ? destination : destination.name);
+        const key = norm(destinationName(destination));
         if (key && !seen.has(key)) {
           seen.add(key);
           counts.set(key, (counts.get(key) || 0) + 1);
@@ -66,7 +79,7 @@ export default function OperationalRoutesPage() {
   const hasDuplicate = (r: OperationalRoute) => {
     if (!r.active) return false;
     return r.destinations.some(destination => {
-      const key = norm(typeof destination === 'string' ? destination : destination.name);
+      const key = norm(destinationName(destination));
       return key && (duplicateCities.get(key) || 0) > 1;
     });
   };
@@ -75,25 +88,35 @@ export default function OperationalRoutesPage() {
     setForm({ name: '', description: '', classification: 'general', region_name: '', active: true, destinations: [] });
     setNewDest('');
     setEditingId(null);
+    setEditingRevision(null);
     setDialogOpen(false);
   };
 
+  useEffect(() => {
+    setForm({ name: '', description: '', classification: 'general', region_name: '', active: true, destinations: [] });
+    setNewDest('');
+    setEditingId(null);
+    setEditingRevision(null);
+    setDialogOpen(false);
+  }, [currentTenant?.id]);
+
   const openEdit = (r: OperationalRoute) => {
     setEditingId(r.id);
+    setEditingRevision(r.updated_at);
     setForm({
       name: r.name || '',
       description: r.description || '',
       classification: r.classification || 'general',
       region_name: r.region_name || '',
       active: r.active !== false,
-      destinations: r.destinations.map(destination => typeof destination === 'string' ? destination : destination.name),
+      destinations: cloneRouteDestinations(r.destinations),
     });
     setDialogOpen(true);
   };
 
   const addDest = () => {
     if (newDest.trim()) {
-      setForm(f => ({ ...f, destinations: [...f.destinations, newDest.trim()] }));
+      setForm(f => ({ ...f, destinations: [...f.destinations, { name: newDest.trim() }] }));
       setNewDest('');
     }
   };
@@ -114,10 +137,14 @@ export default function OperationalRoutesPage() {
         classification: form.classification,
         region_name: form.region_name || null,
         active: form.active,
-        destinations: form.destinations.map(d => ({ name: d })),
+        destinations: cloneRouteDestinations(form.destinations),
       };
       if (editingId) {
-        await updateRoute.mutateAsync({ id: editingId, ...values });
+        if (!editingRevision) {
+          toast.error('Não foi possível identificar a revisão da rota. Atualize a lista e tente novamente.');
+          return;
+        }
+        await updateRoute.mutateAsync({ id: editingId, expectedUpdatedAt: editingRevision, ...values });
         toast.success('Rota atualizada');
       } else {
         await createRoute.mutateAsync(values);
@@ -134,6 +161,21 @@ export default function OperationalRoutesPage() {
     }
   };
 
+  const deactivateInvalidRoute = async (route: OperationalRoute) => {
+    try {
+      await updateRoute.mutateAsync({
+        id: route.id,
+        expectedUpdatedAt: route.updated_at,
+        name: route.name,
+        active: false,
+        destinations: cloneRouteDestinations(route.destinations),
+      });
+      toast.success('Rota incompatível desativada');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Erro ao desativar rota'));
+    }
+  };
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
@@ -145,7 +187,7 @@ export default function OperationalRoutesPage() {
             Cadastro de rotas para roteirização. Diferente de corredores monitorados (telemetria).
           </p>
         </div>
-        <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+        <Button disabled={isError} title={isError ? 'Atualize o catálogo antes de criar uma rota.' : undefined} onClick={() => { resetForm(); setDialogOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Nova Rota
         </Button>
       </div>
@@ -178,6 +220,19 @@ export default function OperationalRoutesPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-8">
+                    <div role="alert" className="flex flex-col items-center gap-3 text-center text-destructive">
+                      <AlertTriangle className="h-5 w-5" />
+                      <span>Não foi possível consultar as rotas. Nenhum cadastro foi considerado ausente.</span>
+                      <span className="text-xs text-muted-foreground">{getErrorMessage(error, 'Falha na consulta.')}</span>
+                      <Button variant="outline" size="sm" onClick={() => void refetch()}>
+                        <RefreshCw className="mr-2 h-3.5 w-3.5" /> Tentar novamente
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma rota encontrada</TableCell></TableRow>
               ) : filtered.map((r) => (
@@ -194,7 +249,7 @@ export default function OperationalRoutesPage() {
                   <TableCell className="text-sm text-muted-foreground">{r.region_name || '—'}</TableCell>
                   <TableCell className="text-sm">
                     {r.destinations.slice(0, 3).map((d, i) => (
-                      <Badge key={i} variant="secondary" className="mr-1 text-xs">{typeof d === 'string' ? d : d.name || '?'}</Badge>
+                      <Badge key={i} variant="secondary" className="mr-1 text-xs">{destinationName(d)}</Badge>
                     ))}
                     {r.destinations.length > 3 && <span className="text-xs text-muted-foreground">+{r.destinations.length - 3}</span>}
                   </TableCell>
@@ -203,9 +258,9 @@ export default function OperationalRoutesPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
-                        if (await confirmAction('Excluir esta rota?', { title: 'Excluir rota', confirmLabel: 'Excluir' })) deleteRoute.mutate(r.id, { onSuccess: () => toast.success('Rota removida'), onError: (error: Error) => toast.error(error.message) });
+                      <Button aria-label={`Editar rota ${r.name}`} variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button aria-label={`Excluir rota ${r.name}`} variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={async () => {
+                        if (await confirmAction('Excluir esta rota?', { title: 'Excluir rota', confirmLabel: 'Excluir' })) deleteRoute.mutate({ id: r.id, expectedUpdatedAt: r.updated_at }, { onSuccess: () => toast.success('Rota removida'), onError: (error: Error) => toast.error(error.message) });
                       }}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
                   </TableCell>
@@ -213,6 +268,42 @@ export default function OperationalRoutesPage() {
               ))}
             </TableBody>
           </Table>
+          {!isLoading && !isError && invalidRouteCount > 0 && (
+            <div role="alert" className="space-y-3 border-t px-4 py-3 text-xs text-amber-700 dark:text-amber-400">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {invalidRouteCount} rota(s) com dados incompatíveis foram isoladas. Corrija, desative ou exclua os registros abaixo.
+              </div>
+              {invalidRoutes.map(route => (
+                <div key={route.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
+                  <div>
+                    <div className="font-medium text-foreground">{route.name}</div>
+                    <div>{route.validationIssue}</div>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="outline" onClick={() => openEdit(route)}>
+                      <Pencil className="mr-1 h-3.5 w-3.5" /> Corrigir
+                    </Button>
+                    {route.active && (
+                      <Button size="sm" variant="outline" onClick={() => void deactivateInvalidRoute(route)}>
+                        Desativar
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" className="text-destructive" onClick={async () => {
+                      if (await confirmAction('Excluir esta rota incompatível?', { title: 'Excluir rota', confirmLabel: 'Excluir' })) {
+                        deleteRoute.mutate({ id: route.id, expectedUpdatedAt: route.updated_at }, { onSuccess: () => toast.success('Rota removida'), onError: (error: Error) => toast.error(error.message) });
+                      }
+                    }}>
+                      <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {invalidRoutes.length < invalidRouteCount && (
+                <div>{invalidRouteCount - invalidRoutes.length} registro(s) não possuem identidade segura para recuperação e precisam de intervenção administrativa.</div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -242,8 +333,8 @@ export default function OperationalRoutesPage() {
               <div className="flex flex-wrap gap-1 mt-2">
                 {form.destinations.map((d, i) => (
                   <Badge key={i} variant="secondary" className="gap-1">
-                    {d}
-                    <button onClick={() => removeDest(i)}><X className="h-3 w-3" /></button>
+                    {destinationName(d)}
+                    <button type="button" aria-label={`Remover destino ${destinationName(d)}`} onClick={() => removeDest(i)}><X className="h-3 w-3" /></button>
                   </Badge>
                 ))}
               </div>

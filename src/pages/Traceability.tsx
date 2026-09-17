@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
@@ -24,6 +25,7 @@ import { CLIENT_LOAD_OBSERVATION_RULES } from '@/lib/documentParsers';
 import { useSortableData } from '@/hooks/useSortableData';
 import { useCreateOperationalEvent } from '@/hooks/useOperationalEvents';
 import { getErrorMessage } from '@/lib/errors';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 type SiatStatus = 'pending' | 'in_transit' | 'delivered';
 
@@ -35,6 +37,7 @@ type TraceDocument = {
   issue_date: string | null;
   created_at: string | null;
   created_by: string | null;
+  import_batch_id: string | null;
   recipient: string | null;
   recipient_city: string | null;
   recipient_state: string | null;
@@ -102,12 +105,26 @@ type DispatchStop = {
   stop_order: number;
 };
 
+type DeliveryProof = {
+  id: string;
+  fiscal_document_id: string;
+  proof_type: string;
+  status: string;
+  storage_path: string | null;
+  photo_url: string | null;
+  signature_url: string | null;
+  received_at: string | null;
+};
+
 type TraceRow = {
   doc: TraceDocument;
   siatStatus: SiatStatus;
   events: OperationalEvent[];
   trip: DispatchTrip | null;
   stops: DispatchStop[];
+  hasPod: boolean;
+  hasCanhoto: boolean;
+  proofReceivedAt: string | null;
 };
 
 const siatLabels: Record<SiatStatus | 'all', string> = {
@@ -216,48 +233,98 @@ export default function Traceability() {
   const [analyzerOpen, setAnalyzerOpen] = useState(false);
   const [analyzerResult, setAnalyzerResult] = useState<AnalyzerResult | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['traceability', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return { docs: [], events: [], trips: [], stops: [] };
-      const { data: docs, error: docsError } = await supabase
-        .from('fiscal_documents')
-        .select('id, invoice_number, access_key, document_type, issue_date, created_at, created_by, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, client_load_source, clients!fiscal_documents_client_id_fkey(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false })
-        .limit(1000);
-      if (docsError) throw docsError;
+      if (!currentTenant) return { docs: [], events: [], trips: [], stops: [], proofs: [] };
+      const docs = await fetchAllPostgrestPages<TraceDocument>(async (from, to) => {
+        const { data: page, error: pageError } = await supabase
+          .from('fiscal_documents')
+          .select('id, invoice_number, access_key, document_type, issue_date, created_at, created_by, import_batch_id, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, client_load_source, clients!fiscal_documents_client_id_fkey(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
+          .eq('tenant_id', currentTenant.id)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to);
+        return { data: (page || []) as unknown as TraceDocument[], error: pageError };
+      });
+
+      const proofs: DeliveryProof[] = [];
+      const documentIds = docs.map(document => document.id);
+      for (let index = 0; index < documentIds.length; index += 200) {
+        const ids = documentIds.slice(index, index + 200);
+        const chunk = await fetchAllPostgrestPages<DeliveryProof>(async (from, to) => {
+          const { data: page, error: pageError } = await supabase
+            .from('proof_of_delivery')
+            .select('id, fiscal_document_id, proof_type, status, storage_path, photo_url, signature_url, received_at')
+            .eq('tenant_id', currentTenant.id)
+            .eq('is_active', true)
+            .in('fiscal_document_id', ids)
+            .range(from, to);
+          return { data: (page || []) as DeliveryProof[], error: pageError };
+        });
+        proofs.push(...chunk);
+      }
 
       const loadIds = Array.from(new Set(
-        (docs || []).map((document) => document.load_id).filter((id): id is string => Boolean(id)),
+        docs.map((document) => document.load_id).filter((id): id is string => Boolean(id)),
       ));
-      if (!loadIds.length) return { docs: (docs || []) as TraceDocument[], events: [], trips: [], stops: [] };
+      if (!loadIds.length) return { docs, events: [], trips: [], stops: [], proofs };
 
-      const [{ data: events, error: eventsError }, { data: trips, error: tripsError }] = await Promise.all([
-        supabase.from('operational_events').select('id, load_id, event_type, severity, description, resolved_at, created_at, drivers(name)').eq('tenant_id', currentTenant.id).in('load_id', loadIds).order('created_at', { ascending: false }),
-        supabase.from('dispatch_trips').select('id, load_id, actual_start_at, actual_end_at, planned_start_at, planned_end_at, status').eq('tenant_id', currentTenant.id).in('load_id', loadIds),
-      ]);
-      if (eventsError) throw eventsError;
-      if (tripsError) throw tripsError;
+      const events: OperationalEvent[] = [];
+      const trips: DispatchTrip[] = [];
+      for (let index = 0; index < loadIds.length; index += 200) {
+        const ids = loadIds.slice(index, index + 200);
+        const [eventChunk, tripChunk] = await Promise.all([
+          fetchAllPostgrestPages<OperationalEvent>(async (from, to) => {
+            const { data: page, error: pageError } = await supabase
+              .from('operational_events')
+              .select('id, load_id, event_type, severity, description, resolved_at, created_at, drivers(name)')
+              .eq('tenant_id', currentTenant.id)
+              .in('load_id', ids)
+              .order('created_at', { ascending: false })
+              .range(from, to);
+            return { data: (page || []) as unknown as OperationalEvent[], error: pageError };
+          }),
+          fetchAllPostgrestPages<DispatchTrip>(async (from, to) => {
+            const { data: page, error: pageError } = await supabase
+              .from('dispatch_trips')
+              .select('id, load_id, actual_start_at, actual_end_at, planned_start_at, planned_end_at, status')
+              .eq('tenant_id', currentTenant.id)
+              .in('load_id', ids)
+              .order('planned_start_at', { ascending: false, nullsFirst: false })
+              .order('id', { ascending: false })
+              .range(from, to);
+            return { data: (page || []) as DispatchTrip[], error: pageError };
+          }),
+        ]);
+        events.push(...eventChunk);
+        trips.push(...tripChunk);
+      }
 
-      const tripIds = (trips || []).map((trip) => trip.id);
-      let stops: DispatchStop[] = [];
-      if (tripIds.length) {
-        const stopsResult = await supabase
-          .from('dispatch_stops')
-          .select('id, dispatch_trip_id, destination, status, actual_arrival_at, actual_departure_at, planned_arrival_at, stop_order')
-          .eq('tenant_id', currentTenant.id)
-          .in('dispatch_trip_id', tripIds)
-          .order('stop_order');
-        if (stopsResult.error) throw stopsResult.error;
-        stops = (stopsResult.data || []) as DispatchStop[];
+      const tripIds = trips.map((trip) => trip.id);
+      const stops: DispatchStop[] = [];
+      for (let index = 0; index < tripIds.length; index += 200) {
+        const ids = tripIds.slice(index, index + 200);
+        const chunk = await fetchAllPostgrestPages<DispatchStop>(async (from, to) => {
+          const { data: page, error: pageError } = await supabase
+            .from('dispatch_stops')
+            .select('id, dispatch_trip_id, destination, status, actual_arrival_at, actual_departure_at, planned_arrival_at, stop_order')
+            .eq('tenant_id', currentTenant.id)
+            .in('dispatch_trip_id', ids)
+            .order('stop_order')
+            .order('id')
+            .range(from, to);
+          return { data: (page || []) as DispatchStop[], error: pageError };
+        });
+        stops.push(...chunk);
       }
 
       return {
-        docs: (docs || []) as TraceDocument[],
-        events: (events || []) as OperationalEvent[],
-        trips: (trips || []) as DispatchTrip[],
-        stops: (stops || []) as DispatchStop[],
+        docs,
+        events,
+        trips,
+        stops,
+        proofs,
       };
     },
     enabled: !!currentTenant,
@@ -267,29 +334,39 @@ export default function Traceability() {
     const events = data?.events || [];
     const trips = data?.trips || [];
     const stops = data?.stops || [];
+    const proofsByDocument = new Map<string, DeliveryProof[]>();
+    for (const proof of data?.proofs || []) {
+      const current = proofsByDocument.get(proof.fiscal_document_id) || [];
+      current.push(proof);
+      proofsByDocument.set(proof.fiscal_document_id, current);
+    }
     return (data?.docs || []).map(doc => {
-      const trip = trips.find(t => t.load_id === doc.load_id || t.id === doc.loads?.trip_id) || null;
+      const trip = trips.find(t => t.id === doc.loads?.trip_id)
+        || trips.find(t => t.load_id === doc.load_id)
+        || null;
+      const proofs = proofsByDocument.get(doc.id) || [];
+      const evidenceProofs = proofs.filter(proof =>
+        ['uploaded', 'validated'].includes(proof.status)
+        || Boolean(proof.storage_path || proof.photo_url || proof.signature_url || proof.received_at),
+      );
       return {
         doc,
         siatStatus: loadStatusToSiat(doc),
         events: events.filter(e => e.load_id === doc.load_id),
         trip,
         stops: trip ? stops.filter(s => s.dispatch_trip_id === trip.id) : [],
+        hasPod: evidenceProofs.length > 0,
+        hasCanhoto: evidenceProofs.some(proof =>
+          Boolean(proof.signature_url)
+          || ['signature', 'receiver_confirmation', 'manual_receipt'].includes(proof.proof_type),
+        ),
+        proofReceivedAt: evidenceProofs.map(proof => proof.received_at).filter((value): value is string => Boolean(value)).sort().at(-1) || null,
       };
     });
   }, [data]);
 
-  // Lote de importação derivado: como o schema atual não persiste um batch_id em
-  // fiscal_documents, usamos a heurística "mesmo created_by + created_at no mesmo
-  // bucket de 60s" — isso reflete bem um upload em massa (lote XML/CSV) que insere
-  // várias NFs quase simultaneamente. Ordenamos cronologicamente desc para o select.
-  const BATCH_BUCKET_MS = 60_000;
   const batchKeyOf = (doc: TraceDocument): string | null => {
-    if (!doc.created_at) return null;
-    const t = new Date(doc.created_at).getTime();
-    if (!Number.isFinite(t)) return null;
-    const bucket = Math.floor(t / BATCH_BUCKET_MS);
-    return `${doc.created_by || 'anon'}|${bucket}`;
+    return doc.import_batch_id || null;
   };
 
   const importBatches = useMemo(() => {
@@ -332,8 +409,8 @@ export default function Traceability() {
       if (filters.driver && !q(doc.loads?.drivers?.name, filters.driver)) return false;
       if (filters.occurrence && !row.events.some(e => q(e.description || e.event_type, filters.occurrence))) return false;
       if (filters.status !== 'all' && row.siatStatus !== filters.status) return false;
-      if (filters.pod !== 'all' && (filters.pod === 'yes') !== (row.siatStatus === 'delivered')) return false;
-      if (filters.canhoto !== 'all' && (filters.canhoto === 'yes') !== (row.siatStatus === 'delivered')) return false;
+      if (filters.pod !== 'all' && (filters.pod === 'yes') !== row.hasPod) return false;
+      if (filters.canhoto !== 'all' && (filters.canhoto === 'yes') !== row.hasCanhoto) return false;
       if (filters.start && (!doc.issue_date || doc.issue_date < filters.start)) return false;
       if (filters.end && (!doc.issue_date || doc.issue_date > filters.end)) return false;
       if (filters.importStart || filters.importEnd) {
@@ -504,7 +581,7 @@ export default function Traceability() {
       'Lead-time Importação→Entrega (h)', 'Lead-time Emissão→Entrega (h)', 'Atraso vs Previsto (h)',
       'SLA Entrega (formatado)', 'SLA Status', `SLA Limite (h)`,
     ];
-    const body = filteredRows.map(({ doc, siatStatus, events, trip, stops }) => {
+    const body = filteredRows.map(({ doc, siatStatus, events, trip, stops, hasPod, hasCanhoto, proofReceivedAt }) => {
       const firstStop = stops[0];
       const lastStop = stops.at(-1);
       const completedStops = stops.filter(s => s.actual_arrival_at).length;
@@ -528,8 +605,8 @@ export default function Traceability() {
         fmtDate(doc.issue_date),
         `${fmtDate(doc.created_at)} ${fmtTime(doc.created_at)}`.trim(),
         `${fmtDate(lastStop?.actual_arrival_at)} ${fmtTime(lastStop?.actual_arrival_at)}`.trim(),
-        siatStatus === 'delivered' ? 'Sim' : 'Não',
-        siatStatus === 'delivered' ? `${fmtDate(lastStop?.actual_arrival_at)} ${fmtTime(lastStop?.actual_arrival_at)}`.trim() : '',
+        hasCanhoto ? 'Sim' : 'Não',
+        hasCanhoto ? `${fmtDate(proofReceivedAt)} ${fmtTime(proofReceivedAt)}`.trim() : '',
         doc.loads?.load_number || '',
         doc.loads?.status || '',
         doc.loads?.trip_id || '',
@@ -549,8 +626,8 @@ export default function Traceability() {
         doc.loads?.vehicles?.nickname || '',
         doc.loads?.drivers?.name || '',
         siatLabels[siatStatus],
-        siatStatus === 'delivered' ? 'Sim' : 'Não',
-        siatStatus === 'delivered' ? 'Sim' : 'Não',
+        hasPod ? 'Sim' : 'Não',
+        hasCanhoto ? 'Sim' : 'Não',
         doc.value ?? 0,
         doc.freight_value ?? 0,
         doc.pallet_count ?? 0,
@@ -599,8 +676,8 @@ export default function Traceability() {
         doc.loads?.vehicles?.plate || '',
         doc.loads?.drivers?.name || '',
         // ─── Detalhe completo (canhoto / POD) ───
-        siatStatus === 'delivered' ? 'Recebido' : 'Pendente',
-        deliveredAt || '',
+        hasCanhoto ? 'Recebido' : 'Pendente',
+        proofReceivedAt || '',
         lastStop?.destination || '',
         lastStop?.id || '',
         hoursBetween(doc.created_at, deliveredAt),
@@ -630,7 +707,7 @@ export default function Traceability() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rastreabilidade-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `rastreabilidade-${localDateInputValue()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -671,7 +748,7 @@ export default function Traceability() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `nfs-sem-carga-cliente-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `nfs-sem-carga-cliente-${localDateInputValue()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: 'CSV exportado', description: `${missing.length} NF(s) sem número da carga do cliente.` });
@@ -713,6 +790,27 @@ export default function Traceability() {
       toast({ title: 'Não foi possível copiar', variant: 'destructive' });
     }
   };
+
+  if (isError) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><FileSearch className="h-6 w-6 text-primary" /> Rastreabilidade NF</h1>
+          <p className="text-sm text-muted-foreground">Consulta operacional de NF, carga, entrega, POD e ocorrências.</p>
+        </div>
+        <Card className="border-destructive/50">
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center" role="alert">
+            <AlertCircle className="h-7 w-7 text-destructive" />
+            <div>
+              <p className="font-medium text-destructive">Não foi possível carregar a rastreabilidade</p>
+              <p className="text-sm text-muted-foreground">{getErrorMessage(error)}</p>
+            </div>
+            <Button variant="outline" onClick={() => void refetch()}>Tentar novamente</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -815,13 +913,13 @@ export default function Traceability() {
                           <TableCell className="text-right font-mono text-sm">{s.hits}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <Progress value={s.sharePct} className="h-1.5" />
+                              <Progress aria-label="Participação no conjunto rastreado" aria-valuetext={`${s.sharePct}%`} value={s.sharePct} className="h-1.5" />
                               <span className="w-10 text-right text-xs text-muted-foreground">{s.sharePct.toFixed(0)}%</span>
                             </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <Progress value={s.coveragePct} className="h-1.5" />
+                              <Progress aria-label="Cobertura rastreada" aria-valuetext={`${s.coveragePct}%`} value={s.coveragePct} className="h-1.5" />
                               <span className="w-10 text-right text-xs text-muted-foreground">{s.coveragePct.toFixed(0)}%</span>
                             </div>
                           </TableCell>
@@ -975,7 +1073,7 @@ export default function Traceability() {
                     <TableRow key={row.doc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRow(row)}>
                       <TableCell><Search className="h-4 w-4 text-muted-foreground" /></TableCell>
                       <TableCell><Checkbox checked={(row.doc.pallet_count || 0) > 0} aria-label="Palete" /></TableCell>
-                      <TableCell><Checkbox checked={delivered} aria-label="POD" /></TableCell>
+                      <TableCell><Checkbox checked={row.hasPod} aria-label="POD" /></TableCell>
                       <TableCell>
                         <Link
                           to={`/traceability/${row.doc.id}/pod`}
@@ -985,9 +1083,9 @@ export default function Traceability() {
                           title="Abrir histórico completo do POD em nova aba"
                           className="inline-block hover:opacity-80 transition-opacity"
                         >
-                          {delivered ? (
+                          {row.hasCanhoto ? (
                             <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-[10px] gap-1 cursor-pointer">
-                              <CheckCircle2 className="h-3 w-3" /> {fmtDate(lastStop?.actual_arrival_at)}
+                              <CheckCircle2 className="h-3 w-3" /> {fmtDate(row.proofReceivedAt)}
                               <ExternalLink className="h-2.5 w-2.5 ml-0.5 opacity-70" />
                             </Badge>
                           ) : (
@@ -1131,11 +1229,11 @@ export default function Traceability() {
                   <p className="text-sm"><span className="text-muted-foreground">Fim:</span> {fmtDate(selectedRow.trip?.actual_end_at || selectedRow.trip?.planned_end_at)} {fmtTime(selectedRow.trip?.actual_end_at || selectedRow.trip?.planned_end_at)}</p>
                   {(() => {
                     const last = selectedRow.stops.at(-1);
-                    const delivered = selectedRow.siatStatus === 'delivered';
                     return (
                       <>
                         <p className="text-sm"><span className="text-muted-foreground">Entrega (última parada):</span> {last?.actual_arrival_at ? <span className="font-medium text-success">{fmtDate(last.actual_arrival_at)} {fmtTime(last.actual_arrival_at)}</span> : '—'}</p>
-                        <p className="text-sm"><span className="text-muted-foreground">Canhoto:</span> {delivered ? <Badge variant="outline" className="bg-success/10 text-success border-success/20 gap-1"><CheckCircle2 className="h-3 w-3" /> Recebido {last?.actual_arrival_at ? `em ${fmtDate(last.actual_arrival_at)} ${fmtTime(last.actual_arrival_at)}` : ''}</Badge> : <Badge variant="outline" className="bg-muted/40 text-muted-foreground">Pendente</Badge>}</p>
+                        <p className="text-sm"><span className="text-muted-foreground">POD:</span> {selectedRow.hasPod ? <Badge variant="outline" className="bg-success/10 text-success border-success/20 gap-1"><CheckCircle2 className="h-3 w-3" /> Disponível</Badge> : <Badge variant="outline" className="bg-muted/40 text-muted-foreground">Pendente</Badge>}</p>
+                        <p className="text-sm"><span className="text-muted-foreground">Canhoto:</span> {selectedRow.hasCanhoto ? <Badge variant="outline" className="bg-success/10 text-success border-success/20 gap-1"><CheckCircle2 className="h-3 w-3" /> Recebido {selectedRow.proofReceivedAt ? `em ${fmtDate(selectedRow.proofReceivedAt)} ${fmtTime(selectedRow.proofReceivedAt)}` : ''}</Badge> : <Badge variant="outline" className="bg-muted/40 text-muted-foreground">Pendente</Badge>}</p>
                       </>
                     );
                   })()}

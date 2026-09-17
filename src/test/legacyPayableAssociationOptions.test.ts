@@ -8,7 +8,7 @@ import {financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
 import {legacyPayableContextSchema} from '@/lib/financial/legacyPayableAssociationContract';
 import {payablePaymentHistorySchema} from '@/lib/financial/payableMovementContract';
 let db:PGlite;
-beforeAll(async()=>{db=await createLegacyPayableAssociationDatabase();await db.exec(readFileSync('supabase/migrations/20260910143920_finance_legacy_payable_association_options.sql','utf8'));},30000);
+beforeAll(async()=>{db=await createLegacyPayableAssociationDatabase();await db.exec(readFileSync('supabase/migrations/20260910143920_finance_legacy_payable_association_options.sql','utf8'));await db.exec('create or replace view finance_private.active_movements as select * from finance_movements');await db.exec(readFileSync('supabase/migrations/20260917072951_stabilize_legacy_association_paging.sql','utf8'));},30000);
 beforeEach(async()=>{await db.exec('begin');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[i.operator]);});afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
 async function fixture(){const title=randomUUID(),payment=randomUUID(),tx=randomUUID();
  await db.query("insert into payables(id,tenant_id,supplier_name,category,description,amount,due_date,status,driver_id) values($1,$2,'Fornecedor antigo','other','Antigo',300,'2026-01-01','approved',$3)",[title,i.tenant,i.driver]);
@@ -16,7 +16,7 @@ async function fixture(){const title=randomUUID(),payment=randomUUID(),tx=random
  await db.query("insert into payables_payments(id,tenant_id,payable_id,amount,paid_at,bank_account_id,method,bank_transaction_id,created_by) values($1,$2,$3,300,'2026-01-01T15:00:00Z',$4,'pix',$5,$6)",[payment,i.tenant,title,i.account,tx,i.operator]);return {title,payment,tx};
 }
 async function movement(extra:Record<string,unknown>={}){const result=await financeAs<{result:{movement_id:string}}>(db,i.operator,'select record_finance_movement($1) result',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),bank_account_id:i.account,driver_id:i.driver,direction:'out',nature:'payment',amount_cents:50000,occurred_on:'2026-01-01',description:'Saída já registrada',beneficiary_name:'Motorista QA',reason:'Conferência do registro histórico',...extra}]);return result.rows[0].result.movement_id;}
-async function read(payment:string,page=1,actor=i.operator){return legacyPayableContextSchema.parse((await financeAs<{result:unknown}>(db,actor,'select get_finance_legacy_payable_association($1,$2,$3) result',[i.tenant,payment,page])).rows[0].result);}
+async function read(payment:string,page=1,actor=i.operator,expectedRevision:string|null=null){return legacyPayableContextSchema.parse((await financeAs<{result:unknown}>(db,actor,'select get_finance_legacy_payable_association($1,$2,$3,$4) result',[i.tenant,payment,page,expectedRevision])).rows[0].result);}
 async function associate(payment:string,movement_id:string){const preview=await read(payment);return (await financeAs<{result:{link_id:string}}>(db,i.operator,'select associate_finance_legacy_payable_payment($1) result',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),payment_id:payment,movement_id,revision:preview.revision,reason:'Associação explicitamente conferida'}])).rows[0].result;}
 it('offers only same-day outgoing movements with matching driver and enough capacity',async()=>{
  const f=await fixture(),good=await movement();await movement({occurred_on:'2026-01-02'});await movement({driver_id:undefined});await movement({amount_cents:20000});await movement({direction:'in',nature:'receipt'});
@@ -35,6 +35,12 @@ it('preserves association history across reversal and reassociation without dupl
 it('paginates all eligible exits and returns safe diagnostics for an invalid payment date',async()=>{
  const f=await fixture();for(let n=0;n<21;n++)await movement();expect(await read(f.payment)).toMatchObject({total:21,rows:expect.any(Array)});expect((await read(f.payment)).rows).toHaveLength(20);expect((await read(f.payment,2)).rows).toHaveLength(1);
  await db.query("update payables_payments set paid_at='infinity' where id=$1",[f.payment]);expect(await read(f.payment)).toMatchObject({eligible:false,payment:{paid_on:null},rows:[]});
+});
+it('rejects a later page when a concurrent association changes candidates or history',async()=>{
+ const current=await fixture(),other=await fixture();for(let n=0;n<21;n++)await movement();
+ const first=await read(current.payment);await associate(other.payment,first.rows[0].id);
+ await expect(read(current.payment,2,i.operator,first.page_revision)).rejects.toThrow('finance_legacy_association_page_changed');
+ const refreshed=await read(current.payment);expect(refreshed.page_revision).not.toBe(first.page_revision);expect(refreshed.total).toBe(20);
 });
 it('denies drivers, unknown payments and invalid pages',async()=>{
  const f=await fixture();await expect(read(f.payment,1,i.driverUser)).rejects.toThrow('finance_access_denied');await expect(read(randomUUID())).rejects.toThrow('finance_payment_not_found');await expect(read(f.payment,0)).rejects.toThrow('finance_invalid_filters');

@@ -27,7 +27,7 @@ const receiptMetrics=z.object({total:count,pending_validation:count,rejected:cou
 const emailMetrics=z.object({queued:count,sending:count,sent:count,delivered:count,bounced:count,failed:count,retryable:count}).strict();
 const expenseMetrics=z.object({pending:count,approved:count,rejected:count,without_receipt:count}).strict();
 const operationsSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,generated_at:timestamp,receipts:receiptMetrics,emails:emailMetrics,
-  expenses:expenseMetrics,templates:z.array(deliveryReceiptEmailTemplateSchema),batches:z.array(deliveryReceiptEmailBatchSchema).max(50)}).strict();
+  expenses:expenseMetrics.nullable(),templates:z.array(deliveryReceiptEmailTemplateSchema),batches:z.array(deliveryReceiptEmailBatchSchema).max(50)}).strict();
 export type DeliveryReceiptOperations=z.infer<typeof operationsSchema>;
 const ocrHealthSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,queued:count,processing:count,completed:count,
   failed:count,unavailable:count,low_confidence:count}).strict();
@@ -46,7 +46,6 @@ export async function getDeliveryReceiptOperations(tenant:string,actor:string,si
   if(error)throw error;const parsed=operationsSchema.parse(data);
   if(parsed.tenant_id!==tenant||parsed.actor_id!==actor)throw new Error('Painel operacional incompatível com a sessão atual.');return parsed;
 }
-
 export async function listDeliveryReceiptEmailHistory(tenant:string,actor:string,input:{search?:string;status?:string;limit?:number;offset?:number}={},signal?:AbortSignal){
   const limit=input.limit??25,offset=input.offset??0;const request=rpc('list_delivery_receipt_email_batches_v1',{
     _tenant_id:tenant,_search:input.search?.trim()||null,_status:input.status||null,_limit:limit,_offset:offset});
@@ -57,13 +56,11 @@ export async function listDeliveryReceiptEmailHistory(tenant:string,actor:string
   }
   return parsed;
 }
-
 export async function getDeliveryReceiptOcrHealth(tenant:string,actor:string,signal?:AbortSignal){
   const request=rpc('get_delivery_receipt_ocr_health_v1',{_tenant_id:tenant});const {data,error}=await(signal?request.abortSignal(signal):request);
   if(error)throw error;const parsed=ocrHealthSchema.parse(data);if(parsed.tenant_id!==tenant||parsed.actor_id!==actor)throw new Error('OCR incompatível com a sessão atual.');
   return parsed;
 }
-
 export async function searchDeliveryReceiptOcr(tenant:string,actor:string,query:string,signal?:AbortSignal){
   const request=rpc('search_delivery_receipt_ocr_v1',{_tenant_id:tenant,_query:query.trim(),_limit:50});const {data,error}=await(signal?request.abortSignal(signal):request);
   if(error)throw error;const parsed=ocrSearchSchema.parse(data);if(parsed.tenant_id!==tenant||parsed.actor_id!==actor)throw new Error('Busca OCR incompatível com a sessão atual.');

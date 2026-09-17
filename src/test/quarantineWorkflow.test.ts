@@ -1,9 +1,10 @@
 import {describe,it,expect,vi} from 'vitest';
 import {quarantineUpload,quarantineSha256,type QuarantineDependencies} from '../../supabase/functions/secure-upload/quarantine-workflow';
+import * as XLSX from 'xlsx';
 const tenant='11111111-1111-4111-8111-111111111111',actor='22222222-2222-4222-8222-222222222222',request='33333333-3333-4333-8333-333333333333',artifact='44444444-4444-4444-8444-444444444444',ticket='55555555-5555-4555-8555-555555555555';
-async function setup(format='csv',text='data;valor\n2026-09-10;10,00'){
- const bytes=new TextEncoder().encode(text),hash=await quarantineSha256(bytes);
- const input={tenant,actor,request,sourceType:'bank_account',sourceId:tenant,format,mime:'text/csv',bytes,delimiter:';' as const};
+async function setup(format='csv',content:string|Uint8Array='data;valor\n2026-09-10;10,00',sheetIndex?:number){
+ const bytes=typeof content==='string'?new TextEncoder().encode(content):content,hash=await quarantineSha256(bytes);
+ const input={tenant,actor,request,sourceType:'bank_account',sourceId:tenant,format,mime:format==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'text/csv',bytes,delimiter:';' as const,sheetIndex};
  const dto={version:2,tenant_id:tenant,actor_id:actor,request_id:request,artifact_id:artifact,source_type:'bank_account',source_id:tenant,state:'quarantined',usable:false,derivative:null,issues:[],original:{sha256:hash,size_bytes:bytes.length,format,received:false}};
  const put=vi.fn<QuarantineDependencies['put']>(async()=>{}),finalize=vi.fn();
  const deps:QuarantineDependencies={caller:vi.fn(async()=>({data:dto,error:null})),put,
@@ -21,6 +22,20 @@ describe('quarantine workflow',()=>{
   expect(s.put.mock.calls[0][0]).toBe('upload-quarantine');
   expect(s.put.mock.calls[1][0]).toBe('upload-validated');
   expect(s.finalize).toHaveBeenCalledWith(expect.objectContaining({_payload:expect.objectContaining({state:'validated_data',method:'strict-csv-matrix-v1',derivative:expect.objectContaining({financial_mapping_required:true})})}));
+ });
+ it('stores an immutable XLSX original first and publishes a mapped inert derivative bound to its hash',async()=>{
+  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Data','Descrição','Valor'],['01/01/2026','PIX',-500]]),'Extrato');
+  const original=new Uint8Array(XLSX.write(book,{type:'array',bookType:'xlsx'})),s=await setup('xlsx',original,0),result=await quarantineUpload(s.input,s.deps);
+  const originalHash=await quarantineSha256(original);
+  expect(s.put.mock.calls).toHaveLength(2);expect(s.put.mock.calls[0]).toEqual(['upload-quarantine',`${tenant}/${request}/original`,original,'application/octet-stream',expect.objectContaining({kind:'quarantine_original',sha256:originalHash})]);
+  expect(s.put.mock.calls[1][0]).toBe('upload-validated');expect(s.put.mock.calls[1][4]).toEqual(expect.objectContaining({kind:'validated_derivative',original_sha256:originalHash}));
+  expect(JSON.parse(new TextDecoder().decode(s.put.mock.calls[1][2]))).toMatchObject({version:1,format:'xlsx',sheet_index:0,sheet_count:1,rows:[['Data','Descrição','Valor'],['01/01/2026','PIX',-500]]});
+  expect(result).toMatchObject({state:'validated_data',usable:true,original:{sha256:originalHash,format:'xlsx',received:true},derivative:{method:'strict-workbook-matrix-v1',financial_mapping_required:true}});
+ });
+ it('preserves legacy XLS/CFB only in quarantine and publishes no derivative',async()=>{
+  const legacy=new Uint8Array([0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1,0,0,0,0]),s=await setup('xls',legacy,0),result=await quarantineUpload(s.input,s.deps);
+  expect(s.put).toHaveBeenCalledTimes(1);expect(s.put.mock.calls[0][0]).toBe('upload-quarantine');
+  expect(result).toMatchObject({state:'quarantined',usable:false,derivative:null,issues:['legacy_workbook_requires_review'],original:{format:'xls',received:true}});
  });
  it('retains PDF without usable derivative or fake AV claim',async()=>{
   const s=await setup('pdf','%PDF-1.7');const result=await quarantineUpload(s.input,s.deps);

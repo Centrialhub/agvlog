@@ -1,21 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DataPagination } from '@/components/ui/data-pagination';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   useFiscalDocumentSummary,
   useFiscalDocumentsPage,
+  FiscalDocumentListChangedError,
   useCreateFiscalDocument,
-  useUpdateFiscalDocument,
   DOC_TYPES,
   DOC_TYPE_LABELS,
   DOC_STATUSES,
   DOC_STATUS_LABELS,
   FiscalDocument,
   type CreateFiscalDocumentInput,
-  type UpdateFiscalDocumentInput,
   DocType,
   DocStatus,
-  type FiscalDocumentSummary,
 } from '@/hooks/useFiscalDocuments';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useClients } from '@/hooks/useClients';
@@ -34,43 +32,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   Search, Plus, FileText, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   PackageCheck, Clock, XCircle, ExternalLink, ChevronDown, ChevronRight,
-  DollarSign, Weight, Layers, RefreshCcw,
+  RefreshCcw,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { assertFiscalDocumentIdentity } from '@/lib/fiscalDocuments/fiscalDocumentIdentity';
+import { FiscalDocumentSummaryCards } from '@/components/fiscal/FiscalDocumentSummaryCards';
 
 const PAGE_SIZE = 50;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Falha inesperada no documento fiscal';
-}
-
-/* ─── Summary Cards ─── */
-function SummaryCards({ summary }: { summary: FiscalDocumentSummary }) {
-  const cards = [
-    { label: 'NF-e Entrada', value: summary.inboundCount, icon: ArrowDownToLine, color: 'text-emerald-500' },
-    { label: 'CT-e / Saída', value: summary.outboundCount, icon: ArrowUpFromLine, color: 'text-blue-500' },
-    { label: 'Pendentes', value: summary.pendingCount, icon: Clock, color: 'text-amber-500' },
-    { label: 'Valor Total', value: summary.totalValue > 0 ? `R$ ${summary.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—', icon: DollarSign, color: 'text-primary' },
-    { label: 'Peso Total', value: summary.totalWeight > 0 ? `${summary.totalWeight.toLocaleString('pt-BR')} kg` : '—', icon: Weight, color: 'text-muted-foreground' },
-    { label: 'Paletes', value: summary.totalPallets, icon: Layers, color: 'text-muted-foreground' },
-  ];
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-      {cards.map(c => (
-        <Card key={c.label} className="border-border/50">
-          <CardContent className="p-4 flex items-center gap-3">
-            <c.icon className={`h-5 w-5 shrink-0 ${c.color}`} />
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground truncate">{c.label}</p>
-              <p className="text-lg font-semibold text-foreground">{c.value}</p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
 }
 
 /* ─── Form ─── */
@@ -89,11 +61,15 @@ interface FiscalDocumentFormState {
   value: string;
 }
 
-function DocForm({ clients, orders, onSave, onCancel }: {
+function DocForm({ clients, orders, onSave, onCancel, saving, catalogsLoading, catalogsError, onRetryCatalogs }: {
   clients: Client[];
   orders: Order[];
-  onSave: (value: CreateFiscalDocumentInput) => void;
+  onSave: (value: CreateFiscalDocumentInput) => Promise<void>;
   onCancel: () => void;
+  saving: boolean;
+  catalogsLoading: boolean;
+  catalogsError: boolean;
+  onRetryCatalogs: () => void;
 }) {
   const [form, setForm] = useState<FiscalDocumentFormState>({
     document_type: 'inbound',
@@ -109,9 +85,40 @@ function DocForm({ clients, orders, onSave, onCancel }: {
     weight_kg: '',
     value: '',
   });
+  const submitLock = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (submitLock.current || saving || catalogsLoading || catalogsError) return;
+    const payload: CreateFiscalDocumentInput = {
+      ...form,
+      client_id: form.client_id || null,
+      order_id: form.order_id || null,
+      weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
+      value: form.value ? Number(form.value) : null,
+    };
+    try {
+      assertFiscalDocumentIdentity(payload);
+      submitLock.current = true;
+      setSubmitting(true);
+      setFormError(null);
+      await onSave(payload);
+    } catch (error: unknown) {
+      setFormError(errorMessage(error));
+    } finally {
+      submitLock.current = false;
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+      {catalogsLoading && <p role="status" className="text-sm text-muted-foreground">Carregando clientes e pedidos…</p>}
+      {catalogsError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/40 p-3 text-sm text-destructive">
+        <span>Não foi possível carregar clientes ou pedidos. O cadastro fica bloqueado para evitar um documento sem o vínculo pretendido.</span>
+        <Button type="button" size="sm" variant="outline" onClick={onRetryCatalogs}>Tentar novamente</Button>
+      </div>}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label>Tipo *</Label>
@@ -134,7 +141,7 @@ function DocForm({ clients, orders, onSave, onCancel }: {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label>Cliente</Label>
-          <Select value={form.client_id} onValueChange={v => setForm(f => ({ ...f, client_id: v }))}>
+          <Select value={form.client_id} onValueChange={v => setForm(f => ({ ...f, client_id: v }))} disabled={catalogsLoading || catalogsError}>
             <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
             <SelectContent>
               {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
@@ -143,7 +150,7 @@ function DocForm({ clients, orders, onSave, onCancel }: {
         </div>
         <div>
           <Label>Pedido Vinculado</Label>
-          <Select value={form.order_id} onValueChange={v => setForm(f => ({ ...f, order_id: v }))}>
+          <Select value={form.order_id} onValueChange={v => setForm(f => ({ ...f, order_id: v }))} disabled={catalogsLoading || catalogsError}>
             <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
             <SelectContent>
               {orders.map(o => <SelectItem key={o.id} value={o.id}>{o.order_number}</SelectItem>)}
@@ -162,15 +169,10 @@ function DocForm({ clients, orders, onSave, onCancel }: {
         <div><Label>Valor (R$)</Label><Input type="number" min={0} step="0.01" value={form.value} onChange={e => setForm(f => ({ ...f, value: e.target.value }))} /></div>
       </div>
       <div><Label>Resumo dos Produtos</Label><Input value={form.product_summary} onChange={e => setForm(f => ({ ...f, product_summary: e.target.value }))} /></div>
+      {formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}
       <div className="flex gap-2 justify-end pt-2">
-        <Button variant="outline" onClick={onCancel}>Cancelar</Button>
-        <Button onClick={() => onSave({
-          ...form,
-          client_id: form.client_id || null,
-          order_id: form.order_id || null,
-          weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
-          value: form.value ? Number(form.value) : null,
-        })}>Salvar</Button>
+        <Button variant="outline" onClick={onCancel} disabled={saving || submitting}>Cancelar</Button>
+        <Button onClick={() => void submit()} disabled={saving || submitting || catalogsLoading || catalogsError}>{saving || submitting ? 'Salvando…' : 'Salvar'}</Button>
       </div>
     </div>
   );
@@ -202,7 +204,7 @@ const typeColor = (t: string) => {
 };
 
 /* ─── Expandable Row ─── */
-function DocRow({ doc, onStatusChange }: { doc: FiscalDocument; onStatusChange: (id: string, status: DocStatus) => void }) {
+function DocRow({ doc }: { doc: FiscalDocument }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -273,21 +275,8 @@ function DocRow({ doc, onStatusChange }: { doc: FiscalDocument; onStatusChange: 
                 )}
               </div>
               <div className="space-y-2">
-                <p className="text-muted-foreground">Alterar Status:</p>
-                <div className="flex gap-2 flex-wrap">
-                  {DOC_STATUSES.filter(s => s !== doc.status).map(s => (
-                    <Button
-                      key={s}
-                      size="sm"
-                      variant="outline"
-                      className={`text-xs ${statusColor(s)}`}
-                      onClick={e => { e.stopPropagation(); onStatusChange(doc.id, s); }}
-                    >
-                      {statusIcon(s)}
-                      <span className="ml-1">{DOC_STATUS_LABELS[s]}</span>
-                    </Button>
-                  ))}
-                </div>
+                <p className="text-muted-foreground">Status fiscal:</p>
+                <p className="text-xs">Alterações de status são feitas pelos comandos operacionais e fiscais correspondentes, com validação dos vínculos e auditoria.</p>
                 <p className="text-xs text-muted-foreground">
                   Criado em {format(new Date(doc.created_at), 'dd/MM/yyyy HH:mm')}
                 </p>
@@ -303,10 +292,11 @@ function DocRow({ doc, onStatusChange }: { doc: FiscalDocument; onStatusChange: 
 /* ─── Main Page ─── */
 export default function FiscalDocuments() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: clients = [] } = useClients();
-  const { data: orders = [] } = useOrders();
+  const clientsQuery = useClients();
+  const clients = clientsQuery.data ?? [];
+  const ordersQuery = useOrders();
+  const orders = ordersQuery.data ?? [];
   const createDoc = useCreateFiscalDocument();
-  const updateDoc = useUpdateFiscalDocument();
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [typeFilter, setTypeFilter] = useState(searchParams.get('type') || 'all');
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
@@ -353,6 +343,10 @@ export default function FiscalDocuments() {
   }, [page, pageCount]);
 
   useEffect(() => {
+    if (error instanceof FiscalDocumentListChangedError) setPage(1);
+  }, [error]);
+
+  useEffect(() => {
     const next = new URLSearchParams();
     if (debouncedSearch) next.set('q', debouncedSearch);
     if (typeFilter !== 'all') next.set('type', typeFilter);
@@ -369,16 +363,6 @@ export default function FiscalDocuments() {
       setDialogOpen(false);
     } catch (error: unknown) {
       toast({ title: 'Erro ao criar documento', description: errorMessage(error), variant: 'destructive' });
-    }
-  };
-
-  const handleStatusChange = async (id: string, status: DocStatus) => {
-    try {
-      const update: UpdateFiscalDocumentInput = { id, status };
-      await updateDoc.mutateAsync(update);
-      toast({ title: `Status alterado para ${DOC_STATUS_LABELS[status]}` });
-    } catch (error: unknown) {
-      toast({ title: 'Erro ao atualizar', description: errorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -403,7 +387,10 @@ export default function FiscalDocuments() {
               <DialogTitle>Novo Documento Fiscal</DialogTitle>
               <DialogDescription>Cadastre a identificação, o vínculo e os totais do documento.</DialogDescription>
             </DialogHeader>
-            <DocForm clients={clients} orders={orders} onSave={handleSave} onCancel={() => setDialogOpen(false)} />
+            <DocForm clients={clients} orders={orders} onSave={handleSave} onCancel={() => setDialogOpen(false)} saving={createDoc.isPending}
+              catalogsLoading={clientsQuery.isLoading || ordersQuery.isLoading}
+              catalogsError={clientsQuery.isError || ordersQuery.isError}
+              onRetryCatalogs={() => void Promise.allSettled([clientsQuery.refetch(), ordersQuery.refetch()])} />
           </DialogContent>
         </Dialog>
       </div>
@@ -412,7 +399,7 @@ export default function FiscalDocuments() {
       {summaryFailed ? (
         <p role="alert" className="text-sm text-destructive">Não foi possível carregar o resumo fiscal.</p>
       ) : (
-        <SummaryCards summary={summary} />
+        <FiscalDocumentSummaryCards summary={summary} />
       )}
 
       {/* Filters */}
@@ -480,7 +467,7 @@ export default function FiscalDocuments() {
               ) : docs.length === 0 ? (
                 <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-12">Nenhum documento encontrado</TableCell></TableRow>
               ) : docs.map(d => (
-                <DocRow key={d.id} doc={d} onStatusChange={handleStatusChange} />
+                <DocRow key={d.id} doc={d} />
               ))}
             </TableBody>
           </Table>

@@ -246,3 +246,9 @@ describe('legacy settlement cargo quarantine and historical reconciliation',()=>
     await setting('test.finance_access','true');
   });
 });
+
+it('keeps manual null-trip settlements released without creating cargo quarantine',async()=>{
+  const result=(await db.query<{id:string}>('insert into driver_settlements(tenant_id,dispatch_trip_id) values($1,null) returning id',[tenantA])).rows[0];
+  expect((await db.query<{released:boolean}>('select private.driver_settlement_is_cargo_released_v1($1,$2) released',[tenantA,result.id])).rows).toEqual([{released:true}]);
+  expect((await db.query<{n:number}>('select count(*)::int n from driver_settlement_cargo_quarantines where settlement_id=$1',[result.id])).rows).toEqual([{n:0}]);
+});

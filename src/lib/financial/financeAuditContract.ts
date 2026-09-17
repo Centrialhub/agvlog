@@ -31,9 +31,9 @@ financeAuditActions.legacy_payable_associated='Pagamento antigo associado manual
 financeAuditActions.legacy_payable_association_reversed='Associação de pagamento antigo desfeita';
 financeAuditActions.legacy_receivable_associated='Recebimento antigo associado manualmente à entrada';
 financeAuditActions.legacy_receivable_association_reversed='Associação de recebimento antigo desfeita';
-export interface FinanceAuditFilters{page:number;page_size:number;from:string;to:string;action:string;actor_id:string;actor_search:string;search:string;manual_only:boolean}
+export interface FinanceAuditFilters{page:number;page_size:number;from:string;to:string;action:string;actor_id:string;actor_search:string;search:string;manual_only:boolean;snapshot_at:string}
 export const financeAuditSchema=z.object({version:z.literal(1),tenant_id:uuid,page:z.number().int().positive(),page_size:z.number().int().positive(),
-  total:z.number().int().nonnegative(),manual_count:z.number().int().nonnegative(),timezone:z.literal('America/Sao_Paulo'),rows:z.array(z.object({
+  total:z.number().int().nonnegative(),manual_count:z.number().int().nonnegative(),timezone:z.string().min(1),snapshot_at:z.string().datetime(),rows:z.array(z.object({
     id:uuid,tenant_id:uuid,entity_type:z.string(),entity_id:uuid,action:z.string(),actor_id:uuid,actor_name:z.string(),reason:z.string(),created_at:z.string(),manual_intervention:z.boolean(),
     decision:z.string().nullable(),row_id:uuid.nullable(),statement_name:z.string().nullable(),source_row:z.number().int().nullable(),
   }))});
@@ -73,3 +73,9 @@ financeAuditActions.customer_credit_refunded='Devolução de crédito vinculada 
 financeAuditActions.receivable_discount_applied='Desconto concedido (sem caixa)';
 financeAuditActions.receivable_loss_applied='Perda registrada (sem caixa)';
 financeAuditActions.receivable_balance_adjustment_reversed='Baixa por desconto ou perda revertida (sem caixa)';
+financeAuditActions.payable_bulk_movement_applied='Baixas em lote vinculadas a saídas registradas';
+financeAuditActions.payable_bulk_movement_confirmed='Baixas em lote confirmadas manualmente';
+financeAuditActions.payroll_period_cancelled='Folha cancelada manualmente';
+financeAuditActions.payroll_period_reopened='Folha reaberta manualmente';
+financeAuditActions.statement_account_reassigned='Conta bancária do extrato corrigida manualmente';
+financeAuditActions.customer_credit_refund_reversed='Vínculo de devolução de crédito revertido manualmente';

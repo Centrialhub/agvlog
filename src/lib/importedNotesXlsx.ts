@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import {
   getImportedNoteSummaryTotals, NOTE_STATUS_LABELS,
   type ImportedNoteRow,
@@ -104,5 +105,5 @@ export function buildImportedNotesWorkbook(rows: ImportedNoteRow[]) {
 
 export function downloadImportedNotesXlsx(rows: ImportedNoteRow[]) {
   const wb = buildImportedNotesWorkbook(rows);
-  XLSX.writeFile(wb, `relacao_nf_documentos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.writeFile(wb, `relacao_nf_documentos_${localDateInputValue()}.xlsx`);
 }

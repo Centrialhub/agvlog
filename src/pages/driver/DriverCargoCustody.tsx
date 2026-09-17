@@ -15,7 +15,7 @@ import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-import { uploadSecureFile } from '@/lib/secureUpload';
+import { removeSecureFiles, uploadSecureFile } from '@/lib/secureUpload';
 import {
   buildTripCargoDivergenceCommand, getTripCargoControl, tripCargoDocumentLabels, tripCargoStatusLabels, updateDriverTripCargo,
   tripCargoSealStatusLabels, type DriverTripCargoAction, type TripCargoAvailableSnapshot,
@@ -23,13 +23,17 @@ import {
 import { driverOperationalSnapshotStore } from '@/lib/driver/driverOperationalOffline';
 import { supabase } from '@/integrations/supabase/client';
 import { invalidateTripLoadQueries, isConfirmedTripStart } from '@/lib/tripMutation';
+import { parseTripCargoLoadDrafts, requireExactCargoDocuments, type TripCargoLoadDraft } from '@/lib/driver/tripCargoConfirmation';
 
-type LoadDraft = { load_id: string; volume_count: string; pallet_count: string; weight_kg: string };
 type EvidenceDraft = { kind: 'loading' | 'tie_down' | 'damage' | 'shortage' | 'surplus' | 'seal' | 'other'; file: File | null; path: string | null };
 type SealResolutionDraft = { status: 'removed' | 'broken' | 'missing'; reason: string; file: File | null; path: string | null };
 type SealInstallationDraft = { file: File | null; path: string | null };
 
 const parseSealNumbers = (value: string) => [...new Set(value.split(/[,;\n]/).map(item => item.trim()).filter(Boolean))];
+const emptyEvidence = (): EvidenceDraft[] => [
+  { kind: 'loading', file: null, path: null }, { kind: 'tie_down', file: null, path: null },
+  { kind: 'other', file: null, path: null },
+];
 
 export default function DriverCargoCustody() {
   const [params] = useSearchParams();
@@ -42,7 +46,7 @@ export default function DriverCargoCustody() {
   const driver = useCurrentDriver();
   const activeTrip = useActiveTrip(driver.data?.id);
   const tripId = params.get('trip') || activeTrip.data?.id || null;
-  const [loads, setLoads] = useState<LoadDraft[]>([]);
+  const [loads, setLoads] = useState<TripCargoLoadDraft[]>([]);
   const [documents, setDocuments] = useState<string[]>([]);
   const [vehicleChecked, setVehicleChecked] = useState(false);
   const [tieDown, setTieDown] = useState(false);
@@ -54,10 +58,7 @@ export default function DriverCargoCustody() {
   const [divergence, setDivergence] = useState('');
   const [divergenceLoadId, setDivergenceLoadId] = useState('');
   const [divergenceDocumentId, setDivergenceDocumentId] = useState('');
-  const [evidence, setEvidence] = useState<EvidenceDraft[]>([
-    { kind: 'loading', file: null, path: null }, { kind: 'tie_down', file: null, path: null },
-    { kind: 'other', file: null, path: null },
-  ]);
+  const [evidence, setEvidence] = useState<EvidenceDraft[]>(emptyEvidence);
   const hydratedControl = useRef<string | null>(null);
   const requestIds = useRef(new Map<string, string>());
   const [cachedCargo, setCachedCargo] = useState<Awaited<ReturnType<typeof getTripCargoControl>> | null>(null);
@@ -69,10 +70,22 @@ export default function DriverCargoCustody() {
     queryFn: () => getTripCargoControl(currentTenant!.id, tripId!),
   });
   useEffect(() => {
+    hydratedControl.current = null;
+    requestIds.current.clear();
+    setCachedCargo(null);
+    setLoads([]); setDocuments([]); setVehicleChecked(false); setTieDown(false);
+    setSeal(''); setSealReason(''); setSealInstallationEvidence({}); setSealResolutions({});
+    setDivergenceKind(''); setDivergence(''); setDivergenceLoadId(''); setDivergenceDocumentId('');
+    setEvidence(emptyEvidence());
+  }, [currentTenant?.id, tripId]);
+  useEffect(() => {
     if (!currentTenant?.id || !user?.id || !tripId) { setCachedCargo(null); return; }
+    let cancelled = false;
+    setCachedCargo(null);
     void driverOperationalSnapshotStore.read(currentTenant.id, user.id, tripId)
-      .then(snapshot => setCachedCargo(snapshot?.cargo ?? null))
-      .catch(() => setCachedCargo(null));
+      .then(snapshot => { if (!cancelled) setCachedCargo(snapshot?.cargo ?? null); })
+      .catch(() => { if (!cancelled) setCachedCargo(null); });
+    return () => { cancelled = true; };
   }, [currentTenant?.id, tripId, user?.id]);
 
   useEffect(() => {
@@ -138,7 +151,7 @@ export default function DriverCargoCustody() {
   const execute = useMutation({
     mutationFn: async ({ action, payload }: { action: DriverTripCargoAction; payload?: Record<string, unknown> }) => {
       if (!currentTenant?.id || !tripId) throw new Error('Viagem ou empresa indisponível.');
-      const identity = `${action}:${JSON.stringify(payload ?? {})}`;
+      const identity = `${tripId}:${action}:${JSON.stringify(payload ?? {})}`;
       const requestId = requestIds.current.get(identity) ?? crypto.randomUUID();
       requestIds.current.set(identity, requestId);
       const result = await updateDriverTripCargo({ tenantId: currentTenant.id, tripId, requestId, action, payload });
@@ -155,6 +168,7 @@ export default function DriverCargoCustody() {
 
   const confirmCargo = async (snapshot: TripCargoAvailableSnapshot) => {
     if (!currentTenant?.id || !tripId) return;
+    const uploadedPaths: string[] = [];
     try {
       const divergenceCommand = buildTripCargoDivergenceCommand({
         kind: divergenceKind,
@@ -164,28 +178,51 @@ export default function DriverCargoCustody() {
         loads: snapshot.loads,
         documents: snapshot.documents,
       });
-      const nextEvidence = await Promise.all(evidence.map(async item => item.path || !item.file ? item : ({ ...item,
-        path: await uploadSecureFile({ tenantId: currentTenant.id, bucket: 'receipts',
-          folder: `trip-cargo/${tripId}`, file: item.file, kind: 'image' }),
-      })));
+      const parsedLoads = parseTripCargoLoadDrafts(loads, snapshot.loads.map(row => row.load_id));
+      requireExactCargoDocuments(documents, snapshot.documents.map(row => row.id));
+      if (!vehicleChecked || !tieDown) throw new Error('Confirme o veículo e a amarração da carga.');
       const sealNumbers = parseSealNumbers(seal);
+      if (sealNumbers.some(number => number.length < 2)) throw new Error('Informe números de lacre válidos.');
+      if (!sealNumbers.length && sealReason.trim().length < 5) throw new Error('Justifique a ausência de lacre com pelo menos 5 caracteres.');
+      const hasStoredLoading = snapshot.evidence.some(item => item.evidence_kind === 'loading');
+      const hasStoredTieDown = snapshot.evidence.some(item => item.evidence_kind === 'tie_down');
+      if ((!evidence[0]?.file && !evidence[0]?.path && !hasStoredLoading)
+        || (!evidence[1]?.file && !evidence[1]?.path && !hasStoredTieDown)) {
+        throw new Error('Anexe as fotos da carga e da amarração.');
+      }
+      if (['damage', 'shortage', 'surplus'].includes(divergenceKind) && !evidence[2]?.file && !evidence[2]?.path) {
+        throw new Error('Anexe uma foto da avaria, falta ou sobra informada.');
+      }
+      for (const sealNumber of sealNumbers) {
+        const draft = sealInstallationEvidence[sealNumber];
+        if (!draft?.file && !draft?.path) throw new Error(`Anexe uma foto do lacre ${sealNumber} instalado.`);
+      }
+      const activeEvidence = divergenceKind ? evidence : evidence.slice(0, 2);
+      const nextEvidence = await Promise.all(activeEvidence.map(async item => {
+        if (item.path || !item.file) return item;
+        const path = await uploadSecureFile({ tenantId: currentTenant.id, bucket: 'receipts',
+          folder: `trip-cargo/${tripId}`, file: item.file, kind: 'image' });
+        uploadedPaths.push(path);
+        return { ...item, path };
+      }));
       const nextSealEvidence = Object.fromEntries(await Promise.all(sealNumbers.map(async sealNumber => {
         const draft = sealInstallationEvidence[sealNumber] ?? { file: null, path: null };
-        const path = draft.path ?? (draft.file ? await uploadSecureFile({ tenantId: currentTenant.id, bucket: 'receipts',
-          folder: `trip-cargo/${tripId}/seals/installation`, file: draft.file, kind: 'image' }) : null);
+        let path = draft.path;
+        if (!path && draft.file) {
+          path = await uploadSecureFile({ tenantId: currentTenant.id, bucket: 'receipts',
+            folder: `trip-cargo/${tripId}/seals/installation`, file: draft.file, kind: 'image' });
+          uploadedPaths.push(path);
+        }
         if (!path) throw new Error(`Anexe uma foto do lacre ${sealNumber} instalado.`);
         return [sealNumber, { ...draft, path }] as const;
       })));
-      setEvidence(nextEvidence);
-      setSealInstallationEvidence(nextSealEvidence);
       const payload = {
         vehicle_checked: vehicleChecked,
         tie_down_confirmed: tieDown,
         seal_not_applicable_reason: seal.trim() ? null : sealReason.trim(),
         seals: sealNumbers,
         documents,
-        loads: loads.map(row => ({ load_id: row.load_id, volume_count: Number(row.volume_count),
-          pallet_count: Number(row.pallet_count), weight_kg: Number(row.weight_kg) })),
+        loads: parsedLoads,
         evidence: [
           ...nextEvidence.filter(item => item.path).map(item => ({ kind: item.kind, path: item.path })),
           ...sealNumbers.map(sealNumber => ({ kind: 'seal', path: nextSealEvidence[sealNumber].path })),
@@ -193,12 +230,11 @@ export default function DriverCargoCustody() {
         seal_evidence: sealNumbers.map(sealNumber => ({ seal_number: sealNumber, path: nextSealEvidence[sealNumber].path })),
         divergences: divergenceCommand ? [divergenceCommand] : [],
       };
-      if (documents.length !== snapshot.documents.length) throw new Error('Confirme todos os documentos e referências antes de liberar a carga.');
-      if (['damage', 'shortage', 'surplus'].includes(divergenceKind) && !nextEvidence[2]?.path) {
-        throw new Error('Anexe uma foto da avaria, falta ou sobra informada.');
-      }
       await execute.mutateAsync({ action: 'confirm_cargo', payload });
+      setEvidence(current => current.map((item, index) => nextEvidence[index] ?? item));
+      setSealInstallationEvidence(nextSealEvidence);
     } catch (error) {
+      if (uploadedPaths.length) await removeSecureFiles(currentTenant.id, 'receipts', uploadedPaths).catch(() => undefined);
       toast({ title: 'Conferência incompleta', description: error instanceof Error ? error.message : 'Revise os dados informados.', variant: 'destructive' });
     }
   };
@@ -206,18 +242,31 @@ export default function DriverCargoCustody() {
   const resolveInstalledSeals = async (snapshot: TripCargoAvailableSnapshot) => {
     if (!currentTenant?.id || !tripId) return;
     const installed = snapshot.seals.filter(row => row.status === 'installed');
+    const uploadedPaths: string[] = [];
     try {
-      const items = await Promise.all(installed.map(async row => {
+      for (const row of installed) {
         const draft = sealResolutions[row.id];
         if (!draft || draft.reason.trim().length < 5) throw new Error(`Informe o motivo da situação do lacre ${row.seal_number}.`);
-        const path = draft.path ?? (draft.file ? await uploadSecureFile({ tenantId: currentTenant.id, bucket: 'receipts',
-          folder: `trip-cargo/${tripId}/seals/${row.id}`, file: draft.file, kind: 'image' }) : null);
+        if (!draft.path && !draft.file) throw new Error(`Anexe a foto de retorno do lacre ${row.seal_number}.`);
+      }
+      const items = await Promise.all(installed.map(async row => {
+        const draft = sealResolutions[row.id]!;
+        let path = draft.path;
+        if (!path && draft.file) {
+          path = await uploadSecureFile({ tenantId: currentTenant.id, bucket: 'receipts',
+            folder: `trip-cargo/${tripId}/seals/${row.id}`, file: draft.file, kind: 'image' });
+          uploadedPaths.push(path);
+        }
         if (!path) throw new Error(`Anexe a foto de retorno do lacre ${row.seal_number}.`);
-        setSealResolutions(current => ({ ...current, [row.id]: { ...draft, path } }));
         return { seal_id: row.id, status: draft.status, reason: draft.reason.trim(), evidence_path: path };
       }));
       await execute.mutateAsync({ action: 'resolve_seals', payload: { seals: items } });
+      const confirmedDrafts = Object.fromEntries(items.map(item => [item.seal_id, {
+        ...sealResolutions[item.seal_id]!, path: item.evidence_path,
+      }]));
+      setSealResolutions(current => ({ ...current, ...confirmedDrafts }));
     } catch (error) {
+      if (uploadedPaths.length) await removeSecureFiles(currentTenant.id, 'receipts', uploadedPaths).catch(() => undefined);
       toast({ title: 'Situação dos lacres incompleta', description: error instanceof Error ? error.message : 'Revise os lacres.', variant: 'destructive' });
     }
   };
@@ -267,8 +316,8 @@ export default function DriverCargoCustody() {
   const divergenceDocuments = divergenceLoadId
     ? snapshot.documents.filter(document => !document.load_id || document.load_id === divergenceLoadId)
     : snapshot.documents;
-  const evidenceComplete = evidence.slice(0, 2).every(item => !!item.path || !!item.file)
-    || snapshot.evidence.some(item => item.evidence_kind === 'loading') && snapshot.evidence.some(item => item.evidence_kind === 'tie_down');
+  const evidenceComplete = (!!evidence[0]?.path || !!evidence[0]?.file || snapshot.evidence.some(item => item.evidence_kind === 'loading'))
+    && (!!evidence[1]?.path || !!evidence[1]?.file || snapshot.evidence.some(item => item.evidence_kind === 'tie_down'));
 
   return <div className="space-y-4 pb-24">
     <div className="flex items-start justify-between gap-3">
@@ -331,7 +380,7 @@ export default function DriverCargoCustody() {
           setDivergenceLoadId('');
           setDivergenceDocumentId('');
           setEvidence(current => current.map((entry, index) => index === 2
-            ? { ...entry, kind: (['damage', 'shortage', 'surplus', 'seal'].includes(kind) ? kind : 'other') as EvidenceDraft['kind'], path: null }
+            ? { ...entry, kind: (['damage', 'shortage', 'surplus', 'seal'].includes(kind) ? kind : 'other') as EvidenceDraft['kind'], file: null, path: null }
             : entry));
         }}>
           <option value="">Sem divergência adicional</option><option value="damage">Avaria</option><option value="shortage">Falta</option>

@@ -74,6 +74,34 @@ only after portal authorization and its audit RPC remains backend-only.
 
 ## Verification
 
+Latest cleanroom re-verification on 2026-09-16:
+
+- the hosted contract returned `baseline_contract_ok` with 324 public tables,
+  749 public functions, 1,303 policies and 1,498 indexes;
+- every tenant-scoped public table has a leading `tenant_id` index after the
+  14-index bridge in
+  `20260916043810_harden_active_rpc_catalog_and_tenant_indexes.sql`;
+- the same bridge repairs the active `get_active_trips_live`,
+  `list_client_occurrence_messages` and `delete_driver_settlement` RPCs while
+  preserving authenticated/service-role execution and denying anonymous
+  execution;
+- production recorded that reviewed bridge as the environment-generated
+  version `20260916045352_harden_active_rpc_catalog_and_tenant_indexes`; compare
+  its name and postconditions rather than rewriting either timestamp;
+- authenticated live checks covered active-trip reads, portal occurrence
+  messages and settlement deletion inside rollback transactions; all temporary
+  rows and events were absent or restored afterwards;
+- repository baseline checks passed 40/40, Edge Function syntax passed 90/90,
+  and the complete application gate passed 6,018 tests with one intentional
+  skip across 888 passing test files;
+- repository hygiene reports 447 active migrations and 47 Edge Functions, and
+  the production bundle contains no source maps or recognized secrets.
+
+The historical migration ledger has substantially more environment-generated
+rows than the repository has timestamp-identical files. Logical names and final
+catalog postconditions are the reconciliation authority for this populated
+project. Do not mass-repair or blindly push the local timestamps.
+
 Latest repository and production checks on 2026-08-28:
 
 - the forward hardening migrations through

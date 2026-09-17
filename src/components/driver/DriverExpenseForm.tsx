@@ -7,14 +7,13 @@ import {useOnlineStatus} from '@/hooks/useOnlineStatus';
 import {useDriverExpenseSubmission,useOperationalDriverExpenseContext} from '@/hooks/useDriverExpensesOperational';
 import {creationError,type ExpenseCreationInput,type ExpenseFields} from '@/lib/financial/expenseCreationCommands';
 import {expenseCategoryLabels,expensePaymentLabels} from '@/lib/financial/expenseReviewCommands';
+import {localDateTimeInputValue} from '@/lib/utils/formatDate';
 
 interface Props {sourceId:string;onSaved:(message:string)=>void}
-const localDate=()=>{const now=new Date();return new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,16);};
-
 export function DriverExpenseForm({sourceId,onSaved}:Props){
  const prefix=useId(),online=useOnlineStatus(),contextQuery=useOperationalDriverExpenseContext(sourceId),command=useDriverExpenseSubmission();
  const [file,setFile]=useState<File>(),[message,setMessage]=useState('');
- const [form,setForm]=useState({category:'fuel',amount:'',expense_at:localDate(),payment_source:'driver',reimbursable:true,supplier_name:'',document_number:'',city:'',state:'',odometer:'',notes:''});
+ const [form,setForm]=useState({category:'fuel',amount:'',expense_at:localDateTimeInputValue(),payment_source:'driver',reimbursable:true,supplier_name:'',document_number:'',city:'',state:'',odometer:'',notes:''});
  const field=(name:keyof typeof form,value:string|boolean)=>setForm(current=>({...current,[name]:value}));
  const textField=(name:'amount'|'expense_at'|'supplier_name'|'document_number'|'city'|'state'|'odometer',label:string,type='text')=><div><label htmlFor={prefix+name}>{label}</label><Input id={prefix+name} type={type} value={form[name]} onChange={event=>field(name,event.target.value)} inputMode={name==='amount'?'decimal':undefined}/></div>;
  const context=contextQuery.data?.context;const disabled=command.submit.isPending||contextQuery.isPending||!context?.can_create;

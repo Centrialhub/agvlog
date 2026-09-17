@@ -18,7 +18,9 @@ import {Checkbox} from '@/components/ui/checkbox';
 import {Plus,FileText} from 'lucide-react';
 import {useSonnerToast} from '@/hooks/useSonnerToast';
 import {computeInvoiceTotals} from '@/lib/clientInvoicePdf';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 import type {Json} from '@/integrations/supabase/types';
+import {useCompanyProfile} from '@/hooks/useCompanyProfile';
 
 const brl = (n: number) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = (s?: string | null) => s ? new Date(s.length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '-';
@@ -41,9 +43,10 @@ export function NewInvoiceWizard(props:WizardProps){
 function InvoiceWizardForm({open,onClose,clients,onGenerated}:WizardProps){
   const toast = useSonnerToast();
   const { currentTenant } = useTenant();
+  const {data:companyProfile={}}=useCompanyProfile();
   const [step, setStep] = useState(1);
   const [clientId, setClientId] = useState<string>('');
-  const [issueDate, setIssueDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [issueDate, setIssueDate] = useState<string>(() => localDateInputValue());
   const [dueDate, setDueDate] = useState<string>('');
   const [discount, setDiscount] = useState<string>('0');
   const [interest, setInterest] = useState<string>('0');
@@ -168,7 +171,10 @@ function InvoiceWizardForm({open,onClose,clients,onGenerated}:WizardProps){
   const goPreview=async()=>{
     if(previewLock.current)return;previewLock.current=true;setPreviewBusy(true);setError('');setQuote(null);setDraft(null);
     try{const charges=await buildCharges();if(!alive.current)return;if(!currentTenant||!charges.length)throw new Error('Selecione ao menos um documento ou adicione um serviço.');
-      const candidate:CreateClientInvoicePayload={tenant_id:currentTenant.id,client_id:clientId,issue_date:issueDate,due_date:dueDate||null,discount_amount:Number(discount||0),interest_amount:Number(interest||0),notes:notes||null,charges};
+      if(dueDate&&dueDate<issueDate)throw new Error('O vencimento não pode ser anterior à emissão.');
+      const payer=clients.find(client=>client.id===clientId);if(!payer)throw new Error('Cliente selecionado não está mais disponível.');
+      const candidate:CreateClientInvoicePayload={tenant_id:currentTenant.id,client_id:clientId,issue_date:issueDate,due_date:dueDate||null,discount_amount:Number(discount||0),interest_amount:Number(interest||0),notes:notes||null,
+       payer_snapshot:JSON.parse(JSON.stringify(payer)),company_snapshot:JSON.parse(JSON.stringify({...companyProfile,name:companyProfile.legal_name||companyProfile.trade_name||currentTenant.name})),charges};
       const context=await api.quote(candidate);if(!alive.current)return;
       const total=computeInvoiceTotals(charges,candidate.discount_amount,candidate.interest_amount).total;
       if(!context.can_generate||context.client_id!==clientId||context.amount_cents!==Math.round(total*100))throw new Error('Prévia financeira divergente. Confira os valores antes de continuar.');
@@ -213,8 +219,8 @@ function InvoiceWizardForm({open,onClose,clients,onGenerated}:WizardProps){
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label htmlFor="invoice-issue">Emissão</Label><Input id="invoice-issue" type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} /></div>
-              <div><Label htmlFor="invoice-due">Vencimento</Label><Input id="invoice-due" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
+              <div><Label htmlFor="invoice-issue">Emissão</Label><Input id="invoice-issue" type="date" max={dueDate||undefined} value={issueDate} onChange={e => setIssueDate(e.target.value)} /></div>
+              <div><Label htmlFor="invoice-due">Vencimento</Label><Input id="invoice-due" type="date" min={issueDate||undefined} value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
               <div><Label htmlFor="invoice-discount">Desconto (R$)</Label><Input id="invoice-discount" type="number" step="0.01" value={discount} onChange={e => setDiscount(e.target.value)} /></div>
               <div><Label htmlFor="invoice-interest">Juros (R$)</Label><Input id="invoice-interest" type="number" step="0.01" value={interest} onChange={e => setInterest(e.target.value)} /></div>
               <div className="col-span-2"><Label htmlFor="invoice-notes">Observação</Label><Textarea id="invoice-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={3} /></div>

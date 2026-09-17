@@ -176,6 +176,7 @@ export function printLoadNotesReport(load: PrintableLoad, documents: PrintableLo
     alert('Permita pop-ups para gerar o relatório.');
     return;
   }
+  w.opener = null;
   w.document.open();
   w.document.write(html);
   w.document.close();

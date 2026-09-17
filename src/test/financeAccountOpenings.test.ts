@@ -12,7 +12,7 @@ beforeAll(async()=>{
  create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,metadata jsonb);
  alter table storage.objects enable row level security;grant usage on schema storage to authenticated,anon;
  create function finance_private.can_read_receipt(text) returns boolean language sql as $$select true$$;`);
- for(const name of ['20260909222851_finance_statement_intake','20260909223737_finance_statement_source_verification','20260909233625_finance_audit_queries','20260910020543_finance_ofx_statement_intake','20260910021404_finance_native_statement_account','20260910130956_finance_statement_period_evidence','20260910140010_finance_account_opening_balances'])await db.exec(readFileSync(`supabase/migrations/${name}.sql`,'utf8'));
+ for(const name of ['20260909222851_finance_statement_intake','20260909223737_finance_statement_source_verification','20260909233625_finance_audit_queries','20260910020543_finance_ofx_statement_intake','20260910021404_finance_native_statement_account','20260910130956_finance_statement_period_evidence','20260910140010_finance_account_opening_balances','20260910141240_finance_cash_opening_counts','20260917074429_page_account_opening_history'])await db.exec(readFileSync(`supabase/migrations/${name}.sql`,'utf8'));
 },30000);
 beforeEach(async()=>{await db.exec('begin');});afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db.close();});
 const date=(day:string,time:string)=>({date:day,raw:day.replace(/-/g,'')+time+'[-3:BRT]',offset_minutes:-180});
@@ -28,6 +28,7 @@ async function read(actor=i.operator){return (await financeAs<{result:Record<str
 async function payload(){return {version:1,tenant_id:i.tenant,request_id:randomUUID(),account_id:i.account,from:'2026-09-01',to:'2026-09-30',revision:(await read()).revision,reason:'Conferência da abertura com extrato original'};}
 async function record(p:unknown,actor=i.operator){return (await financeAs<{result:{opening_id:string}}>(db,actor,'select record_finance_account_opening($1) result',[p])).rows[0].result;}
 async function opening(from='2026-09-01',to='2026-09-30',actor=i.operator){return (await financeAs<{result:Record<string,unknown>}>(db,actor,'select get_finance_account_opening($1,$2,$3,$4) result',[i.tenant,i.account,from,to])).rows[0].result;}
+async function history(page:number,actor=i.operator){return (await financeAs<{result:{page:number;has_more:boolean;rows:{id:string}[]}}>(db,actor,'select get_finance_account_opening_history($1,$2,$3) result',[i.tenant,i.account,page])).rows[0].result;}
 it('derives cents from the identified anchor without generating a revenue or money movement',async()=>{
  const s=await source('2026-08-31',12345);const p=await payload();const result=await record(p);
  expect(result).toMatchObject({confirmed:true,cash_created:false});
@@ -69,6 +70,13 @@ it('reverses with permanent authorship, replay and immutable history before a re
  const audit=(await financeAs<{result:{rows:{manual_intervention:boolean}[]}}>(db,i.operator,'select list_finance_audit_events($1,$2) result',[i.tenant,{manual_only:true}])).rows[0].result;
  expect(audit.rows).toHaveLength(3);expect(audit.rows.every(row=>row.manual_intervention)).toBe(true);
  expect((await db.query('select * from finance_movements')).rows).toEqual([]);
+});
+it('bounds the compatibility history and pages the permanent history separately',async()=>{
+ await source('2026-08-31',10000);const revision=(await read()).revision;
+ for(let n=0;n<21;n++){const saved=await record({version:1,tenant_id:i.tenant,request_id:randomUUID(),account_id:i.account,from:'2026-09-01',to:'2026-09-30',revision,reason:`Abertura histórica auditada número ${n}`});await financeAs(db,i.operator,'select reverse_finance_account_opening($1)',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),opening_id:saved.opening_id,reason:`Correção histórica auditada número ${n}`}]);}
+ expect(await opening()).toMatchObject({history_has_more:true,history:expect.any(Array)});expect(((await opening()).history as unknown[])).toHaveLength(20);
+ const first=await history(1),second=await history(2);expect(first).toMatchObject({page:1,has_more:true});expect(first.rows).toHaveLength(20);expect(second).toMatchObject({page:2,has_more:false});expect(second.rows).toHaveLength(1);expect(new Set([...first.rows,...second.rows].map(row=>row.id)).size).toBe(21);
+ await expect(history(1,i.driverUser)).rejects.toThrow('finance_access_denied');
 });
 it('requires review after an anchor verification changes, even with the same balance',async()=>{
  const s=await source('2026-08-31',10000);await record(await payload());

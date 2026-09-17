@@ -23,6 +23,7 @@ export default function PortalDashboard() {
   const { data: summary, isLoading, error: summaryError, refetch: refetchSummary } = usePortalSummary({ clientId: selectedClientId });
   const { data: upcoming = [], isLoading: loadingUpcoming, error: upcomingError, refetch: refetchUpcoming } = usePortalUpcomingDeliveries({ clientId: selectedClientId });
   const { data: alerts = [], isLoading: loadingAlerts, error: alertsError, refetch: refetchAlerts } = usePortalAlerts({ clientId: selectedClientId });
+  const requiresClientSelection = !selectedClientId && clients.length > 1;
 
   const contextDescription = clients.length > 0
     ? 'Acompanhe suas mercadorias e documentos em tempo real.'
@@ -52,7 +53,9 @@ export default function PortalDashboard() {
       </PortalSection>
 
       <PortalSection title="Próximas entregas" description="Documentos com previsão de chegada nas próximas horas.">
-        {loadingUpcoming ? (
+        {requiresClientSelection ? (
+          <PortalEmptyState title="Selecione um cliente" description="Escolha um cliente para consultar as próximas entregas." />
+        ) : loadingUpcoming ? (
           <p className="text-sm text-muted-foreground">Carregando...</p>
         ) : upcomingError ? (
           <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/30 p-6 text-center text-sm text-destructive">
@@ -99,7 +102,9 @@ export default function PortalDashboard() {
       </PortalSection>
 
       <PortalSection title="Alertas" description="Atrasos, ocorrências e pendências que exigem atenção.">
-        {alertsError ? (
+        {requiresClientSelection ? (
+          <PortalEmptyState title="Selecione um cliente" description="Escolha um cliente para consultar seus alertas operacionais." />
+        ) : alertsError ? (
           <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/30 p-6 text-center text-sm text-destructive">
             <span>Erro ao carregar alertas: {(alertsError as Error).message}</span>
             <Button size="sm" variant="outline" onClick={() => refetchAlerts()}>Tentar novamente</Button>

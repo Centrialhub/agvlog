@@ -14,6 +14,7 @@ type Props = {
   tab: DeliveryStopTab;
   filteredStops: DriverStop[];
   completedStops: DriverStop[];
+  enRouteCount: number;
   pendingStopIds: Set<string>;
   onSearchChange: (value: string) => void;
   onTabChange: (value: DeliveryStopTab) => void;
@@ -25,6 +26,7 @@ export function DriverDeliveryStopList({
   tab,
   filteredStops,
   completedStops,
+  enRouteCount,
   pendingStopIds,
   onSearchChange,
   onTabChange,
@@ -47,7 +49,7 @@ export function DriverDeliveryStopList({
         if (value === 'em_rota' || value === 'concluidas') onTabChange(value);
       }}>
         <TabsList className="grid grid-cols-2 w-full h-10">
-          <TabsTrigger value="em_rota" className="text-xs">Em Rota ({filteredStops.length})</TabsTrigger>
+          <TabsTrigger value="em_rota" className="text-xs">Em Rota ({enRouteCount})</TabsTrigger>
           <TabsTrigger value="concluidas" className="text-xs">Concluídas ({completedStops.length})</TabsTrigger>
         </TabsList>
 

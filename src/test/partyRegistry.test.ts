@@ -68,6 +68,27 @@ describe('partyRegistry', () => {
     expect(p?.address?.city).toBe('Montes Claros');
   });
 
+  it('mescla todos os campos sem deixar valores vazios apagarem o cadastro', () => {
+    const p = resolveParty(idx, { name: 'J. MACEDO S/A' }, {
+      street: '',
+      number: '25',
+      neighborhood: '',
+      city: 'Fortaleza',
+      state: 'Ceará',
+      zip: '',
+      city_ibge: '2304400',
+    });
+    expect(p?.address).toMatchObject({
+      street: 'Rua A',
+      number: '25',
+      neighborhood: 'Centro',
+      city: 'Fortaleza',
+      city_ibge: '2304400',
+      state: 'CE',
+      zip: '60000000',
+    });
+  });
+
   it('retorna null sem nome e sem cadastro', () => {
     expect(resolveParty(idx, { name: '' })).toBeNull();
   });

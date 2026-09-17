@@ -13,4 +13,12 @@ describe('driver operational expense boundary',()=>{
   expect(form).toContain('Comprovante obrigatório');expect(form).toContain('required capture="environment"');expect(form).not.toContain('Sem comprovante');
   expect(page).toContain('Motivo da decisão:');
  });
+ it('paginates trip sources and sent history with an accurate empty message',()=>{
+  const page=readFileSync('src/pages/driver/DriverOperationalExpenses.tsx','utf8');
+  expect(page).toContain('useOperationalDriverExpenseSources(sourceOffset,open)');
+  expect(page).toContain('useDriverExpenseHistory(historyOffset)');
+  expect(page).toContain('Mais viagens');expect(page).toContain('Próxima página');
+  expect(page).toContain('Nenhum gasto enviado ainda.');
+  expect(page).not.toContain('Nenhum gasto enviado nesta viagem.');
+ });
 });

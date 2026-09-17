@@ -40,6 +40,7 @@ export interface OfficialTaxProfile {
   tax_regime: string | null;
   economic_activity_code: string | null;
   official_address: OfficialTaxAddress;
+  source?: string;
   verified_at: string;
 }
 
@@ -129,28 +130,83 @@ export function validateOfficialParty(
   if (informedIe && officialIe && informedIe !== officialIe) {
     return `IE informada ${informedIe} não corresponde à IE oficial ${officialIe}`;
   }
+  // UFs sem CadConsultaCadastro4 usam o cadastro público federal apenas para
+  // identidade/endereço. A IE informada na NF é preservada, mas não é tratada
+  // como validada pela Receita Federal.
+  if (!officialIe && profile.source === 'BRASILAPI_MINHA_RECEITA_PUBLIC_DATA') {
+    return informedIe ? null : 'Inscrição Estadual não informada para o contribuinte';
+  }
   if (!officialIe) return 'Cadastro oficial não retornou Inscrição Estadual ativa';
   return null;
 }
 
+export function officialStateRegistrationForParty(
+  cnpjValue: string | null | undefined,
+  profiles: OfficialTaxProfile[],
+): string | null {
+  const cnpj = onlyDigits(cnpjValue);
+  const profile = profiles.find(item => onlyDigits(item.cnpj) === cnpj);
+  if (!profile || profile.registry_status !== 'active') return null;
+  return restoreStateRegistrationLeadingZeros(profile.state_registration, profile.uf)
+    || onlyDigits(profile.state_registration)
+    || null;
+}
+
 async function invoke<T = unknown>(functionName: string, body: Record<string, unknown> | FormData): Promise<T> {
-  const { data, error } = await supabase.functions.invoke(functionName, { body });
+  let { data, error } = await supabase.functions.invoke(functionName, { body });
   if (error) {
-    let message = error.message || 'Falha ao chamar serviço cadastral';
-    const context = (error as { context?: Response }).context;
-    if (context && typeof context.clone === 'function') {
-      try {
-        const payload = await context.clone().json() as { error?: string };
-        if (payload?.error) message = payload.error;
-      } catch {
-        // Preserve the transport error when the backend did not return JSON.
+    let detail = await functionErrorDetail(error);
+    if (detail.status === 401) {
+      const refreshed = await supabase.auth.refreshSession();
+      if (!refreshed.error) {
+        ({ data, error } = await supabase.functions.invoke(functionName, { body }));
+        if (!error) return functionPayload<T>(data);
+        detail = await functionErrorDetail(error);
       }
+    } else if (detail.status !== undefined && detail.status >= 500 && isReadOnlyList(body)) {
+      await new Promise(resolve => setTimeout(resolve, 350));
+      ({ data, error } = await supabase.functions.invoke(functionName, { body }));
+      if (!error) return functionPayload<T>(data);
+      detail = await functionErrorDetail(error);
     }
-    throw new Error(message);
+    throw new Error(detail.message);
   }
+  return functionPayload<T>(data);
+}
+
+async function functionErrorDetail(error: unknown): Promise<{ status?: number; message: string }> {
+  const candidate = error as { message?: string; context?: Response };
+  let message = candidate?.message || 'Falha ao chamar serviço cadastral';
+  const context = candidate?.context;
+  if (context && typeof context.clone === 'function') {
+    try {
+      const payload = await context.clone().json() as {
+        error?: string | { message?: string };
+        message?: string;
+        details?: string;
+      };
+      const responseMessage = typeof payload.error === 'string'
+        ? payload.error
+        : payload.error?.message || payload.message || payload.details;
+      if (responseMessage && responseMessage !== 'Internal error') message = responseMessage;
+      else if (context.status === 401) message = 'Sua sessão fiscal foi rejeitada. Entre novamente e repita a operação.';
+      else if (context.status >= 500) message = 'O serviço fiscal está temporariamente indisponível. Tente novamente em instantes.';
+    } catch {
+      if (context.status === 401) message = 'Sua sessão fiscal foi rejeitada. Entre novamente e repita a operação.';
+      else if (context.status >= 500) message = 'O serviço fiscal está temporariamente indisponível. Tente novamente em instantes.';
+    }
+  }
+  return { status: context?.status, message };
+}
+
+function functionPayload<T>(data: unknown): T {
   const payload = data as T & { error?: string };
   if (payload && typeof payload === 'object' && typeof payload.error === 'string') throw new Error(payload.error);
   return payload as T;
+}
+
+function isReadOnlyList(body: Record<string, unknown> | FormData): boolean {
+  return !(body instanceof FormData) && body.action === 'list';
 }
 
 function onlyDigits(value?: string | null): string {

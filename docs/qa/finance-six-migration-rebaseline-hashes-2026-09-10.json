@@ -1,0 +1,38 @@
+[
+  {
+    "file": "20260910125034_finance_manual_expense_cost_center.sql",
+    "current_sha256": "f8cf14a80c9cbc99371ad08020813ccde444119cc4a92b679630ca5864745523",
+    "previous_sha256": "469be864296ae2be1c5ad57c049efc570df0a3e09869de657415ebc626086034",
+    "exact_previous_hash_reconstructed": []
+  },
+  {
+    "file": "20260910125357_finance_recorded_costs.sql",
+    "current_sha256": "fe87f64973c88721ca993f3039c02e3d537cba585310e28fe3eeadb2a9d67342",
+    "previous_sha256": "4ff64ddafb49126e05b1e7ddc5925fe76dd63df00a1f380e0e6bd9e8db10099c",
+    "exact_previous_hash_reconstructed": []
+  },
+  {
+    "file": "20260910130032_finance_payroll_recorded_costs.sql",
+    "current_sha256": "ef2770c883450c705a1ab0d9b8a57d823571eb90f9917a9ecd5c653aa3f5c88c",
+    "previous_sha256": "e0d51628df54abeedfa0d78cd7b48632b7daf19ff43ae28dffe9875e77ceebae",
+    "exact_previous_hash_reconstructed": []
+  },
+  {
+    "file": "20260910130956_finance_statement_period_evidence.sql",
+    "current_sha256": "15b27ade6edb13d6352a7e33b48226f9afae580c347f915578b7bf51170cd40c",
+    "previous_sha256": "862a3329a13e7b22a29a5c10861f2d12b18d71221c2367c2692fa105eec82cd7",
+    "exact_previous_hash_reconstructed": []
+  },
+  {
+    "file": "20260910132406_finance_payroll_reimbursement_source_dedup.sql",
+    "current_sha256": "402e7da46ec96f8e582f513fdbd75a80e070bb1dc7bca10c8bc855eb74d5161a",
+    "previous_sha256": "d335fc5dcd74d283255283824ac7b39c3ed9f7160a87576d586352b125e157f4",
+    "exact_previous_hash_reconstructed": []
+  },
+  {
+    "file": "20260910124716_finance_expense_cost_center_totals.sql",
+    "current_sha256": "65da31d88b15ec57584933e8ecb0e16e3dcdc72946c0b1e38b3dd700208927e4",
+    "previous_sha256": "04cb0d0d10595997c33e9b9c8b6d64f572fc9d2d235fbe79801e64c580a83ece",
+    "exact_previous_hash_reconstructed": []
+  }
+]

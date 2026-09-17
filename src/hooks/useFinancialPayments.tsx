@@ -20,14 +20,14 @@ export function useBankAccounts() {
     queryKey: ['finance-active-accounts', currentTenant?.id,user?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('bank_accounts')
-        .select('id, name, bank_name, account_number, active')
-        .eq('tenant_id', currentTenant.id)
-        .eq('active', true)
-        .order('name');
-      if (error) throw error;
-      return data || [];
+      const rows: Array<{id:string;name:string;bank_name:string|null;account_number:string|null;account_type:string;active:boolean}> = [];
+      for (let from=0;;from+=1000) {
+        const { data, error } = await supabase.from('bank_accounts').select('id, name, bank_name, account_number, account_type, active').eq('tenant_id', currentTenant.id).eq('active', true).order('name').order('id').range(from,from+999);
+        if (error) throw error;
+        rows.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      return rows;
     },
     enabled: !!currentTenant&&!!user,
   });
@@ -55,4 +55,11 @@ export async function uploadPaymentAttachment(tenantId: string, kind: 'payable'|
     file,
     kind: 'financial',
   });
+}
+
+export async function deletePaymentAttachment(tenantId:string,kind:'payable'|'receivable',path:string):Promise<void>{
+  const prefix=`${tenantId}/${kind}-payments/`;
+  if(!path.startsWith(prefix)||path.includes('..')||path.includes('\\'))throw new Error('Caminho de comprovante inválido.');
+  const {error}=await supabase.storage.from('receipts').remove([path]);
+  if(error)throw error;
 }

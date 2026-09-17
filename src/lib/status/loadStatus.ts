@@ -1,21 +1,15 @@
-/**
+/** Canonical status helpers for loads. */
 
- * Canonical status helpers for loads and stops.
- * Mirror of public.stop_terminal_statuses() in the database.
- */
+import {
+  STOP_TERMINAL_STATUSES,
+  isStopTerminal,
+  type StopTerminalStatus,
+} from './stopStatus';
 
-export const TERMINAL_STOP_STATUSES = [
-  'completed',
-  'delivered',
-  'cancelled',
-  'skipped',
-  'refused',
-  'returned',
-  'partial_delivery',
-  'failed',
-] as const;
-
-export type TerminalStopStatus = typeof TERMINAL_STOP_STATUSES[number];
+/** @deprecated Import STOP_TERMINAL_STATUSES from stopStatus instead. */
+export const TERMINAL_STOP_STATUSES = STOP_TERMINAL_STATUSES;
+/** @deprecated Import StopTerminalStatus from stopStatus instead. */
+export type TerminalStopStatus = StopTerminalStatus;
 
 export const LOAD_STATUSES = [
   'planned',
@@ -82,7 +76,7 @@ export const LOAD_STATUS_TONE: Record<LoadStatus, string> = {
 };
 
 export function isTerminalStopStatus(s: string | null | undefined): s is TerminalStopStatus {
-  return !!s && (TERMINAL_STOP_STATUSES as readonly string[]).includes(s);
+  return isStopTerminal(s);
 }
 
 export function loadStatusLabel(status: string | null | undefined): string {

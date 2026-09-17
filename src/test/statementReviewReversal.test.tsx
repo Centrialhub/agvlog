@@ -28,4 +28,8 @@ describe('manual review reversal confirmation and recovery',()=>{
     expect(await screen.findByRole('alert')).toHaveTextContent('Outras revisões utilizam esta transação');
     expect(screen.getByLabelText('Motivo da reversão')).toBeInTheDocument();expect(sessionStorage.getItem(key)).toBeNull();
   });
+  it('lets the user discard a corrupt scoped reversal recovery',()=>{
+    sessionStorage.setItem(key,'broken');mount();fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));
+    expect(sessionStorage.getItem(key)).toBeNull();expect(screen.getByRole('button',{name:'Reverter esta decisão'})).toBeInTheDocument();expect(mocks.reverse).not.toHaveBeenCalled();
+  });
 });

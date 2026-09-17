@@ -5,19 +5,19 @@ import { loginThroughUi } from "./fixtures/session";
 
 const internalRoutes = [
   "/", "/dashboard", "/vehicles", `/vehicles/${fixtureIds.vehicleA}`, "/drivers", "/fleet-map", "/alerts", "/geofences",
-  "/reports", "/corridors", "/clients", "/orders", "/fiscal-documents", "/inventory",
+  "/address-resolution", "/reports", "/corridors", "/clients", "/orders", "/fiscal-documents", "/inventory",
   "/loads", `/loads/${fixtureIds.loadA}`, "/traceability", `/traceability/${fixtureIds.fiscalDocumentA}/pod`, "/load-extraction-audit",
-  "/operations", "/operations-control", "/events", "/ingestion", "/ingestion-reports",
+  "/delivery-receipts", "/trip-cargo-custody", "/operations", "/operations-control", "/events", "/ingestion", "/ingestion-reports",
   "/productivity", "/settings", "/expense-approval", "/integration-health", "/team",
   "/data-audit", "/regions", "/freight", "/route-planning", "/receivables", "/financial",
   "/financial/movements", "/financial/recorded-expenses", "/financial/statements",
-  "/financial/audit", "/financial/fiscal-queue",
+  "/financial/audit", "/financial/fiscal-queue", "/financial/cash-forecast",
   "/driver-settlements", "/cost-centers", "/bank-reconciliation", "/payables",
   "/client-invoices", "/billing-edi", "/operational-routes", "/employees", "/incidents",
   "/payroll", "/assets", "/maintenance-orders", "/stock", "/checklists", "/reallocation",
   "/billing", "/cte-monitor", "/cte-search", "/cte-hub", "/nfse", "/cte-consistency",
   "/pickup-orders", "/ort-management", "/product-traceability", "/product-history",
-  "/mdfe-provisional", "/imported-notes-summary", "/load-control", "/closing-reports",
+  "/mdfe", "/mdfe-provisional", "/imported-notes-summary", "/load-control", "/closing-reports",
   "/rural-clients", "/driver-monitoring", "/occurrence-reports", `/occurrences/${fixtureIds.occurrenceA}/return-sheet`, "/pallet-returns",
   "/merchandise-shortages", "/routes",
 ] as const;
@@ -25,10 +25,11 @@ const internalRoutes = [
 const driverRoutes = [
   "/driver", "/driver/loads", "/driver/stops", "/driver/deliveries", "/driver/issues",
   "/driver/journey", "/driver/expenses", "/driver/checklist", "/driver/events", `/driver/events/${fixtureIds.operationalEventA}`, "/driver/chat",
+  "/driver/sync", "/driver/cargo", "/driver/install",
 ] as const;
 
 const portalRoutes = [
-  "/portal", "/portal/shipments", `/portal/shipments/${fixtureIds.fiscalDocumentA}`, "/portal/pickups", "/portal/documents", "/portal/pods",
+  "/portal", "/portal/shipments", `/portal/shipments/${fixtureIds.fiscalDocumentA}`, "/portal/pickups", "/portal/documents", "/portal/titles", "/portal/pods",
   "/portal/occurrences", "/portal/tracking", "/portal/reports", "/portal/settings",
 ] as const;
 

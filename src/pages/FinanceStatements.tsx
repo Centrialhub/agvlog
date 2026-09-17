@@ -10,6 +10,7 @@ import {StatementHistoryDetail} from '@/components/financial/StatementHistoryDet
 import {StatementImportDialog} from '@/components/financial/StatementImportDialog';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
+import {useBankAccounts} from '@/hooks/useFinancialPayments';
 import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow} from '@/components/ui/table';
 const initial:StatementListFilters={page:1,page_size:20,search:'',from:'',to:'',account_id:'',source_status:''};
 const date=(value:string)=>value.split('-').reverse().join('/');
@@ -26,16 +27,22 @@ function StatementWorkspace({tenant,actor}:{tenant:string;actor:string}){
   const [filters,setFilters]=useState(initial),[draft,setDraft]=useState(initial),[entry,setEntry]=useState(false);
   const [selected,setSelected]=useState<StatementSummary|null>(null),[notice,setNotice]=useState('');
   const qc=useQueryClient(),query=useQuery({queryKey:['finance-statements',tenant,actor,filters],retry:false,queryFn:()=>readFinanceStatements(tenant,filters)}),page=query.data;
+  const accounts=useBankAccounts();
+  const invalidDateRange=!!draft.from&&!!draft.to&&draft.from>draft.to;
   return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Extratos importados</h1>
     <p className="text-sm text-muted-foreground">Arquivos originais, conferência das linhas e pendências de identificação.</p></div><Button onClick={()=>setEntry(true)}>Importar extrato</Button></div>
     {notice&&<p role="status">{notice}</p>}
-    <form className="flex flex-wrap items-end gap-3" onSubmit={e=>{e.preventDefault();setFilters({...draft,page:1});setSelected(null);}}>
+    <form className="flex flex-wrap items-end gap-3" onSubmit={e=>{e.preventDefault();if(invalidDateRange)return;setFilters({...draft,page:1});setSelected(null);}}>
       <label className="text-sm">Buscar<Input value={draft.search} maxLength={200} onChange={e=>setDraft({...draft,search:e.target.value})} placeholder="Arquivo ou conta"/></label>
-      <label className="text-sm">De<Input type="date" value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})}/></label>
-      <label className="text-sm">Até<Input type="date" min={draft.from||undefined} value={draft.to} onChange={e=>setDraft({...draft,to:e.target.value})}/></label>
+      <label className="text-sm">Conta bancária<select aria-label="Conta bancária" className="block h-10 rounded border bg-background px-2" value={draft.account_id} disabled={accounts.isPending||accounts.isError} onChange={e=>setDraft({...draft,account_id:e.target.value})}>
+        <option value="">Todas</option>{(accounts.data||[]).filter(account=>account.account_type!=='cash').map(account=><option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+      <label className="text-sm">De<Input type="date" max={draft.to||undefined} aria-invalid={invalidDateRange} value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})}/></label>
+      <label className="text-sm">Até<Input type="date" min={draft.from||undefined} aria-invalid={invalidDateRange} value={draft.to} onChange={e=>setDraft({...draft,to:e.target.value})}/></label>
       <label className="text-sm">Conferência do original<select className="block h-10 rounded border bg-background px-2" value={draft.source_status} onChange={e=>setDraft({...draft,source_status:e.target.value})}>
-        <option value="">Todas</option>{Object.entries(statementSourceLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><Button type="submit">Filtrar</Button>
+        <option value="">Todas</option>{Object.entries(statementSourceLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><Button type="submit" disabled={invalidDateRange}>Filtrar</Button>
     </form>
+    {accounts.isError&&<p role="alert">Não foi possível consultar as contas para o filtro. <Button type="button" variant="outline" onClick={()=>void accounts.refetch()}>Tentar novamente</Button></p>}
+    {invalidDateRange&&<p role="alert">A data inicial não pode ser posterior à data final.</p>}
     <p className="text-sm text-muted-foreground">O período filtra arquivos com cobertura declarada sobreposta. Conferir as linhas com o original ainda não confirma conta, cobertura, saldos ou conciliação.</p>
     {query.isPending&&<p role="status">Carregando extratos…</p>}{query.error&&<p role="alert">Não foi possível consultar os extratos. <Button onClick={()=>void query.refetch()}>Tentar novamente</Button></p>}
     {page&&!query.error&&<><p>{page.total} arquivo(s) no filtro</p><div className="rounded border"><Table><TableHeader><TableRow>

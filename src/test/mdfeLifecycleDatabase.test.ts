@@ -57,15 +57,25 @@ beforeAll(async () => {
       id uuid primary key,tenant_id uuid,doc_type text,environment text,status text,
       dispatch_state text,hub_document_id text,access_key text,authorization_protocol text,
       number text,series text,message text,pdf_url text,xml_url text,
-      last_response jsonb,last_callback jsonb,created_at timestamptz default clock_timestamp()
+      request_payload jsonb,last_response jsonb,last_callback jsonb,
+      created_at timestamptz default clock_timestamp()
     );
     create function public.claim_hub_fiscal_emission(uuid,uuid,uuid,text,text,jsonb,uuid,uuid,uuid)
-      returns jsonb language sql as $$select '{}'::jsonb$$;
+      returns jsonb language plpgsql as $$
+      declare emission public.hub_fiscal_emissions%rowtype;
+      begin
+        insert into public.hub_fiscal_emissions(
+          id,tenant_id,doc_type,environment,status,dispatch_state,request_payload
+        ) values(gen_random_uuid(),$1,$4,$5,'pending','in_flight',$6)
+        returning * into emission;
+        return jsonb_build_object('dispatch',true,'emission',to_jsonb(emission));
+      end$$;
   `);
   const migration = readFileSync(
-    'supabase/migrations/20260901181949_production_mdfe_load_lifecycle.sql',
+    'supabase/migrations/20260916030030_reconcile_mdfe_load_lifecycle.sql',
     'utf8',
   );
+  await db.exec(migration);
   await db.exec(migration);
   await db.query('select set_config($1,$2,false)', ['request.jwt.claim.sub', ids.actor]);
   await db.query('insert into tenants values($1)', [ids.tenant]);
@@ -114,6 +124,62 @@ describe('MDF-e production load lifecycle migration', () => {
     expect(second.request_payload).toMatchObject({
       externalId: first.external_id,
       payload: { idIntegracao: first.external_id, modalidadeDeTransporte: '1' },
+    });
+  });
+
+  it('binds the durable Hub claim to its MDF-e manifest without exposing the service RPC', async () => {
+    const manifest = await prepare();
+    const claim = await db.query<{ result: { dispatch: boolean; emission: { id: string } } }>(
+      'select claim_mdfe_fiscal_emission($1,$2,$3,$4,$5::jsonb,$6) result',
+      [ids.tenant, ids.actor, ids.emitter, 'production', JSON.stringify(manifest.request_payload), manifest.id],
+    );
+    const linked = await db.query<{ emission_id: string; manifest_id: string }>(`
+      select e.id emission_id,e.load_manifest_id manifest_id
+      from hub_fiscal_emissions e where e.id=$1
+    `, [claim.rows[0].result.emission.id]);
+    const privileges = await db.query<{ authenticated: boolean; service_role: boolean }>(`
+      select
+        has_function_privilege('authenticated','public.claim_mdfe_fiscal_emission(uuid,uuid,uuid,text,jsonb,uuid)','execute') authenticated,
+        has_function_privilege('service_role','public.claim_mdfe_fiscal_emission(uuid,uuid,uuid,text,jsonb,uuid)','execute') service_role
+    `);
+    expect(claim.rows[0].result.dispatch).toBe(true);
+    expect(linked.rows[0]).toEqual({ emission_id: claim.rows[0].result.emission.id, manifest_id: manifest.id });
+    expect(privileges.rows[0]).toEqual({ authenticated: false, service_role: true });
+  });
+
+  it('keeps browser and service-role MDF-e commands separated by function privileges', async () => {
+    const privileges = await db.query<{
+      prepare_authenticated: boolean;
+      prepare_anon: boolean;
+      prepare_service: boolean;
+      close_authenticated: boolean;
+      close_service: boolean;
+      record_authenticated: boolean;
+      record_service: boolean;
+      mirror_authenticated: boolean;
+      mirror_service: boolean;
+    }>(`
+      select
+        has_function_privilege('authenticated','public.prepare_mdfe_issue(uuid,uuid,uuid,text,uuid[],jsonb)','execute') prepare_authenticated,
+        has_function_privilege('anon','public.prepare_mdfe_issue(uuid,uuid,uuid,text,uuid[],jsonb)','execute') prepare_anon,
+        has_function_privilege('service_role','public.prepare_mdfe_issue(uuid,uuid,uuid,text,uuid[],jsonb)','execute') prepare_service,
+        has_function_privilege('authenticated','public.begin_mdfe_closure(uuid,uuid,uuid)','execute') close_authenticated,
+        has_function_privilege('service_role','public.begin_mdfe_closure(uuid,uuid,uuid)','execute') close_service,
+        has_function_privilege('authenticated','public.record_mdfe_closure_response(uuid,uuid,jsonb,integer)','execute') record_authenticated,
+        has_function_privilege('service_role','public.record_mdfe_closure_response(uuid,uuid,jsonb,integer)','execute') record_service,
+        has_function_privilege('authenticated','public.mirror_hub_mdfe_to_load_manifest()','execute') mirror_authenticated,
+        has_function_privilege('service_role','public.mirror_hub_mdfe_to_load_manifest()','execute') mirror_service
+    `);
+    expect(privileges.rows[0]).toEqual({
+      prepare_authenticated: true,
+      prepare_anon: false,
+      prepare_service: false,
+      close_authenticated: false,
+      close_service: true,
+      record_authenticated: false,
+      record_service: true,
+      mirror_authenticated: false,
+      mirror_service: false,
     });
   });
 

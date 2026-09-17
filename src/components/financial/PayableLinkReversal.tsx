@@ -9,12 +9,13 @@ export function PayableLinkReversal({tenant,actor,link,reversed,onRecorded}:{ten
   const command=payableReversalCommandSchema.parse(JSON.parse(raw));if(command.tenant_id!==tenant||command.link_id!==link)throw new Error('scope');return {command,error:''};
  }catch{return {command:null,error:'Não foi possível recuperar a correção anterior. Não envie outro pedido nesta sessão.'};}});
  const [pending,setPending]=useState<PayableReversalCommand|null>(restored.command),[preview,setPreview]=useState<PayableReversalCommand|null>(null);
- const [open,setOpen]=useState(!!restored.command||!!restored.error),[reason,setReason]=useState(''),[error,setError]=useState(restored.error),[busy,setBusy]=useState(false);
+ const [open,setOpen]=useState(!!restored.command||!!restored.error),[reason,setReason]=useState(''),[error,setError]=useState(''),[recoveryError,setRecoveryError]=useState(restored.error),[busy,setBusy]=useState(false);
  const active=useRef(true),sending=useRef(false);useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
  function prepare(){const parsed=payableReversalCommandSchema.safeParse({version:1,tenant_id:tenant,request_id:crypto.randomUUID(),link_id:link,reason});
   if(!parsed.success){setError('Informe o motivo com pelo menos dez caracteres.');return;}setPreview(parsed.data);setError('');}
+ const discardRecovery=()=>{setError('');try{sessionStorage.removeItem(key);setPending(null);setPreview(null);setRecoveryError('');}catch{setError('Não foi possível descartar a recuperação incompatível nesta sessão.');}};
  async function submit(){
-  if(sending.current||restored.error)return;const command=pending||preview;if(!command)return;const uncertain=!!pending;
+  if(sending.current||recoveryError)return;const command=pending||preview;if(!command)return;const uncertain=!!pending;
   try{sessionStorage.setItem(key,JSON.stringify(command));}catch{setError('Não foi possível preservar o pedido. Nenhum envio foi iniciado.');return;}
   sending.current=true;setBusy(true);setPending(command);setPreview(null);setError('');
   try{await reversePayableLink(command);sessionStorage.removeItem(key);if(active.current){setPending(null);setOpen(false);onRecorded();}}
@@ -22,16 +23,17 @@ export function PayableLinkReversal({tenant,actor,link,reversed,onRecorded}:{ten
    if(cause instanceof FinanceRejectedError&&!uncertain){try{sessionStorage.removeItem(key);setPending(null);}catch{/* Keep the frozen request if cleanup fails. */}}}}
   finally{sending.current=false;if(active.current)setBusy(false);}
  }
- if(reversed&&!pending&&!restored.error)return null;
+ if(reversed&&!pending&&!recoveryError)return null;
  if(!open)return <Button variant="outline" size="sm" onClick={()=>setOpen(true)}>Corrigir vínculo desta baixa</Button>;
  const frozen=pending||preview;
  return <section aria-label="Correção do vínculo da baixa" className="border rounded p-3 space-y-2">
   <p>Desvincular esta baixa reabre o saldo do título e libera o valor do envio. O dinheiro registrado e o histórico permanecem; isso não registra devolução bancária.</p>
+  {recoveryError&&<div role="alert"><p>{recoveryError}</p><Button variant="outline" disabled={busy} onClick={discardRecovery}>Descartar recuperação incompatível</Button></div>}
   {frozen?<><p>Motivo: {frozen.reason}</p>{pending&&<p role="status">Pedido preservado para retomada.</p>}
-   <Button disabled={busy||!!restored.error} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma correção':'Confirmar desvinculação'}</Button>
+   <Button disabled={busy||!!recoveryError} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma correção':'Confirmar desvinculação'}</Button>
    {!pending&&<Button variant="outline" onClick={()=>setPreview(null)}>Voltar à edição</Button>}</>:<>
    <label>Motivo da correção<Input maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)}/></label>
-   <Button disabled={!!restored.error} onClick={prepare}>Revisar correção</Button>
+   <Button disabled={!!recoveryError} onClick={prepare}>Revisar correção</Button>
   </>}
   {error&&<p role="alert">{error}</p>}
  </section>;

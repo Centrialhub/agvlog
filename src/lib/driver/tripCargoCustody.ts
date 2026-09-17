@@ -69,9 +69,12 @@ const unavailableSchema = z.object({
 });
 const availableSchema = z.object({
   version: z.literal(1), available: z.literal(true), trip_id: uuid, trip_status: z.string(),
-  control: controlSchema, loads: z.array(loadSchema).max(100), documents: z.array(documentSchema).max(2_000),
-  seals: z.array(sealSchema).max(100), evidence: z.array(evidenceSchema).max(200),
-  divergences: z.array(divergenceSchema).max(500), physical_receipts: physicalSchema,
+  control: controlSchema, loads: z.array(loadSchema), documents: z.array(documentSchema),
+  seals: z.array(sealSchema), evidence: z.array(evidenceSchema),
+  divergences: z.array(divergenceSchema), collection_counts: z.object({
+    loads: z.number().int().nonnegative(), documents: z.number().int().nonnegative(),
+    seals: z.number().int().nonnegative(), evidence: z.number().int().nonnegative(), divergences: z.number().int().nonnegative(),
+  }), physical_receipts: physicalSchema,
 });
 const snapshotSchema = z.discriminatedUnion('available', [unavailableSchema, availableSchema]);
 const acknowledgementSchema = z.object({
@@ -79,11 +82,37 @@ const acknowledgementSchema = z.object({
   status: z.enum(tripCargoStatuses), updated_at: z.string().optional(),
 });
 const listSchema = z.object({
-  version: z.literal(1), tenant_id: uuid,
+  version: z.literal(2), tenant_id: uuid, total_count: z.number().int().nonnegative(),
+  page: z.number().int().positive(), page_size: z.number().int().min(1).max(100),
+  revision: z.string().regex(/^[a-f0-9]{32}$/),
   items: z.array(z.object({
     id: uuid, trip_id: uuid, driver_id: uuid, vehicle_id: uuid, status: z.enum(tripCargoStatuses),
     updated_at: z.string(), pending_divergences: z.number().int().nonnegative(), pending_physical_receipts: z.number().int().nonnegative(),
-  })).max(5_000),
+  })).max(100),
+});
+
+const collectionCountSchema = z.object({
+  loads: z.number().int().nonnegative(), documents: z.number().int().nonnegative(),
+  seals: z.number().int().nonnegative(), evidence: z.number().int().nonnegative(),
+  divergences: z.number().int().nonnegative(),
+});
+const baseSnapshotSchema = z.discriminatedUnion('available', [
+  z.object({
+    version: z.literal(2), available: z.literal(false), tenant_id: uuid, trip_id: uuid,
+    trip_status: z.string(), driver_id: uuid, vehicle_id: uuid.nullable(),
+  }),
+  z.object({
+    version: z.literal(2), available: z.literal(true), tenant_id: uuid, trip_id: uuid,
+    trip_status: z.string(), control: controlSchema, collection_counts: collectionCountSchema,
+    physical_receipts: physicalSchema,
+  }),
+]);
+const collectionNameSchema = z.enum(['loads', 'documents', 'seals', 'evidence', 'divergences']);
+export type TripCargoCollection = z.infer<typeof collectionNameSchema>;
+const collectionPageSchema = z.object({
+  version: z.literal(1), tenant_id: uuid, trip_id: uuid, collection: collectionNameSchema,
+  page: z.number().int().positive(), page_size: z.number().int().min(1).max(500),
+  total_count: z.number().int().nonnegative(), items: z.array(z.unknown()).max(500),
 });
 
 export type TripCargoSnapshot = z.infer<typeof snapshotSchema>;
@@ -91,6 +120,14 @@ export type TripCargoAvailableSnapshot = z.infer<typeof availableSchema>;
 export type TripCargoList = z.infer<typeof listSchema>;
 export type TripCargoDivergenceStatus = TripCargoAvailableSnapshot['divergences'][number]['status'];
 export type TripCargoDivergenceKind = TripCargoAvailableSnapshot['divergences'][number]['divergence_kind'];
+type TripCargoCollectionItems = {
+  loads: TripCargoAvailableSnapshot['loads']; documents: TripCargoAvailableSnapshot['documents'];
+  seals: TripCargoAvailableSnapshot['seals']; evidence: TripCargoAvailableSnapshot['evidence'];
+  divergences: TripCargoAvailableSnapshot['divergences'];
+};
+export type TripCargoCollectionPage<C extends TripCargoCollection> = {
+  page:number; pageSize:number; total:number; items:TripCargoCollectionItems[C];
+};
 
 export interface TripCargoDivergenceCommand {
   kind: TripCargoDivergenceKind;
@@ -156,7 +193,7 @@ export function buildTripCargoDivergenceCommand(input: {
   };
 }
 
-type RpcResult = PromiseLike<{ data: unknown; error: { message?: string } | null }>;
+type RpcResult = PromiseLike<{ data: unknown; error: { message?: string; code?: string } | null }>;
 const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => RpcResult;
 
 function invalidResponse() {
@@ -164,11 +201,51 @@ function invalidResponse() {
 }
 
 export async function getTripCargoControl(tenantId: string, tripId: string): Promise<TripCargoSnapshot> {
-  const { data, error } = await rpc('get_trip_cargo_control_v1', { _tenant_id: tenantId, _trip_id: tripId });
+  const { data, error } = await rpc('get_trip_cargo_control_v2', { _tenant_id: tenantId, _trip_id: tripId });
   if (error) throw new Error(error.message || 'Não foi possível consultar o dossiê de carga.');
-  const parsed = snapshotSchema.safeParse(data);
-  if (!parsed.success || parsed.data.trip_id !== tripId) throw invalidResponse();
+  const base = baseSnapshotSchema.safeParse(data);
+  if (!base.success || base.data.tenant_id !== tenantId || base.data.trip_id !== tripId) throw invalidResponse();
+  if (!base.data.available) return snapshotSchema.parse({ ...base.data, version: 1 });
+  const [loads, documents, seals, evidence, divergences] = await Promise.all([
+    getTripCargoCollectionPage(tenantId, tripId, 'loads', 1, 50, base.data.collection_counts.loads),
+    getTripCargoCollectionPage(tenantId, tripId, 'documents', 1, 50, base.data.collection_counts.documents),
+    getTripCargoCollectionPage(tenantId, tripId, 'seals', 1, 50, base.data.collection_counts.seals),
+    getTripCargoCollectionPage(tenantId, tripId, 'evidence', 1, 50, base.data.collection_counts.evidence),
+    getTripCargoCollectionPage(tenantId, tripId, 'divergences', 1, 50, base.data.collection_counts.divergences),
+  ]);
+  const parsed = snapshotSchema.safeParse({
+    version: 1, available: true, trip_id: base.data.trip_id, trip_status: base.data.trip_status,
+    control: base.data.control, physical_receipts: base.data.physical_receipts,
+    loads:loads.items, documents:documents.items, seals:seals.items, evidence:evidence.items, divergences:divergences.items,
+    collection_counts:base.data.collection_counts,
+  });
+  if (!parsed.success) throw invalidResponse();
   return parsed.data;
+}
+
+const tripCargoCollectionItemSchemas = {
+  loads: loadSchema, documents: documentSchema, seals: sealSchema, evidence: evidenceSchema, divergences: divergenceSchema,
+} as const;
+
+export async function getTripCargoCollectionPage<C extends TripCargoCollection>(
+  tenantId: string,
+  tripId: string,
+  collection: C,
+  page: number,
+  pageSize = 50,
+  expectedTotal?: number,
+): Promise<TripCargoCollectionPage<C>> {
+  const { data, error } = await rpc('get_trip_cargo_collection_page_v1', {
+    _tenant_id: tenantId, _trip_id: tripId, _collection: collection, _page: page, _page_size: pageSize,
+  });
+  if (error) throw new Error(error.message || 'Não foi possível consultar uma seção do dossiê.');
+  const parsed = collectionPageSchema.safeParse(data);
+  if (!parsed.success || parsed.data.tenant_id !== tenantId || parsed.data.trip_id !== tripId
+    || parsed.data.collection !== collection || parsed.data.page !== page || parsed.data.page_size !== pageSize
+    || (expectedTotal !== undefined && parsed.data.total_count !== expectedTotal)) throw invalidResponse();
+  const items = z.array(tripCargoCollectionItemSchemas[collection]).safeParse(parsed.data.items);
+  if (!items.success || new Set(items.data.map(item=>item.id)).size !== items.data.length) throw invalidResponse();
+  return {page,pageSize,total:parsed.data.total_count,items:items.data} as TripCargoCollectionPage<C>;
 }
 
 export type DriverTripCargoAction = 'accept' | 'start_loading' | 'confirm_cargo' | 'mark_departed' | 'resolve_seals' | 'mark_returned';
@@ -185,11 +262,23 @@ export async function updateDriverTripCargo(input: {
   return parsed.data;
 }
 
-export async function listTripCargoControls(tenantId: string, status?: TripCargoStatus | null): Promise<TripCargoList> {
-  const { data, error } = await rpc('list_trip_cargo_controls_v1', { _tenant_id: tenantId, _status: status ?? null });
-  if (error) throw new Error(error.message || 'Não foi possível listar as custódias de carga.');
+const tripCargoListRevisions=new Map<string,string>();
+export class TripCargoListChangedError extends Error {}
+export async function listTripCargoControls(
+  tenantId: string,
+  status?: TripCargoStatus | null,
+  page = 1,
+  pageSize = 50,
+): Promise<TripCargoList> {
+  const key=`${tenantId}:${status??''}`,expected=page===1?null:tripCargoListRevisions.get(key);
+  if(page>1&&!expected)throw new TripCargoListChangedError('Atualize a primeira página antes de continuar.');
+  const { data, error } = await rpc('list_trip_cargo_controls_v2', {
+    _tenant_id: tenantId, _status: status ?? null, _page: page, _page_size: pageSize, _expected_revision: expected,
+  });
+  if (error) {if(error.code==='40001')throw new TripCargoListChangedError('As custódias mudaram. A lista voltou à primeira página.');throw new Error(error.message || 'Não foi possível listar as custódias de carga.');}
   const parsed = listSchema.safeParse(data);
-  if (!parsed.success || parsed.data.tenant_id !== tenantId) throw invalidResponse();
+  if (!parsed.success || parsed.data.tenant_id !== tenantId || expected&&parsed.data.revision!==expected) throw invalidResponse();
+  if(page===1)tripCargoListRevisions.set(key,parsed.data.revision);
   return parsed.data;
 }
 

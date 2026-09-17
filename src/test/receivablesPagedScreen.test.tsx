@@ -36,6 +36,18 @@ it('coalesces rapid typing into one server search',async()=>{
  expect(mock.read).toHaveBeenLastCalledWith('tenant',expect.objectContaining({search:'cliente'}),1);
 });
 
+it('keeps the current page and does not query an inverted due-date interval',async()=>{
+ show();await screen.findByText('Frete da página');
+ fireEvent.change(screen.getByLabelText('Vencimento até'),{target:{value:'2026-02-01'}});
+ await waitFor(()=>expect(mock.read).toHaveBeenLastCalledWith('tenant',expect.objectContaining({to:'2026-02-01'}),1));
+ mock.read.mockClear();
+ fireEvent.change(screen.getByLabelText('Vencimento de'),{target:{value:'2026-02-02'}});
+ expect(await screen.findByRole('alert')).toHaveTextContent('A data final deve ser igual ou posterior à inicial.');
+ expect(screen.getByText('Frete da página')).toBeInTheDocument();
+ await new Promise(resolve=>setTimeout(resolve,350));
+ expect(mock.read).not.toHaveBeenCalled();
+});
+
 it('sends the unloading origin filter to the server and resets pagination',async()=>{
  show();await screen.findByText('Frete da página');
  fireEvent.click(screen.getByRole('button',{name:'Próximos títulos'}));await waitFor(()=>expect(mock.read).toHaveBeenCalledWith('tenant',expect.any(Object),2));

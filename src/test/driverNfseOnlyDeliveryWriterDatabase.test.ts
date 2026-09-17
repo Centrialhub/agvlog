@@ -12,6 +12,18 @@ const extractCurrentDeliveryWriter = () => {
   if (start < 0 || body < 0 || end < 0) throw new Error('current delivery writer not found');
   return source.slice(start, end + '$function$;'.length);
 };
+
+const realFunction = (file: string, name: string) => {
+  const source = migration(file);
+  const match = new RegExp('create (?:or replace )?function public\\.' + name + '\\(', 'i').exec(source);
+  if (!match) throw new Error('Missing real function ' + name);
+  const tail = source.slice(match.index);
+  const delimiter = /as\s+(\$[a-z_]*\$)/i.exec(tail);
+  if (!delimiter) throw new Error('Missing body ' + name);
+  const end = tail.indexOf(delimiter[1] + ';', delimiter.index + delimiter[0].length);
+  return tail.slice(0, end + delimiter[1].length + 1);
+};
+
 const fiscalSnapshotGate = migration('20260910211200_driver_delivery_fiscal_snapshot_gate');
 const fiscalConflictResolution = migration('20260910213021_reconcile_legacy_cargo_gate_and_service_delivery_adapters');
 
@@ -46,13 +58,14 @@ beforeAll(async () => {
       $$select nullif(current_setting('test.active_tenant', true), '')::uuid$$;
 
     create table public.tenants(id uuid primary key);
+    create table public.tenant_memberships(user_id uuid,tenant_id uuid,role text,active boolean);
     create table public.clients(id uuid primary key,tenant_id uuid,company_name text,trade_name text,
       address_city text,address_state text);
     create table public.drivers(id uuid primary key,tenant_id uuid,user_id uuid,active boolean,name text);
     create table public.vehicles(id uuid primary key,tenant_id uuid,plate text);
-    create table public.loads(id uuid primary key,tenant_id uuid);
+    create table public.loads(id uuid primary key,tenant_id uuid,trip_id uuid,status text default 'in_transit',updated_at timestamptz);
     create table public.dispatch_trips(id uuid primary key,tenant_id uuid,driver_id uuid,vehicle_id uuid,
-      status text,load_id uuid);
+      status text,load_id uuid,actual_start_at timestamptz default clock_timestamp(),actual_end_at timestamptz,updated_at timestamptz);
     create table public.dispatch_stops(id uuid primary key,tenant_id uuid,dispatch_trip_id uuid,status text,
       destination text,client_id uuid,notes text,actual_arrival_at timestamptz,actual_departure_at timestamptz,
       updated_at timestamptz);
@@ -61,7 +74,8 @@ beforeAll(async () => {
       created_by uuid,event_at timestamptz not null default clock_timestamp(),created_at timestamptz not null default clock_timestamp());
     create table public.fiscal_documents(id uuid primary key,tenant_id uuid,load_id uuid,status text,
       fiscal_model text,invoice_number text,reference_number text,invoice_series text,access_key text,
-      issue_date date,remitter text,remitter_cnpj text,recipient text,supplier_id uuid,updated_at timestamptz);
+      issue_date date,remitter text,remitter_cnpj text,recipient text,supplier_id uuid,updated_at timestamptz,
+      document_type text default 'inbound',deleted_at timestamptz,client_id uuid);
     create table public.nfse_documents(id uuid primary key,tenant_id uuid,nfse_number text,rps_number text,
       invoice_number text,series text,issue_date date,pagador_nome text,pagador_cnpj text,cliente_nome text,
       fiscal_document_ids uuid[],status text,load_id uuid,trip_id uuid,cancelled boolean default false,
@@ -73,13 +87,13 @@ beforeAll(async () => {
     create table public.dispatch_stop_documents(id uuid primary key default gen_random_uuid(),tenant_id uuid,
       dispatch_stop_id uuid,fiscal_document_id uuid,load_id uuid,delivery_attempt_id uuid);
     create table public.dispatch_trip_loads(id uuid primary key default gen_random_uuid(),tenant_id uuid,
-      dispatch_trip_id uuid,load_id uuid);
+      dispatch_trip_id uuid,load_id uuid,created_at timestamptz default clock_timestamp());
     create table public.load_items(id uuid primary key,tenant_id uuid,load_id uuid,fiscal_document_id uuid,
       quantity numeric,delivery_attempt_id uuid);
     create table public.current_delivery_document_outcomes(tenant_id uuid,dispatch_stop_id uuid,
       dispatch_stop_document_id uuid,fiscal_document_id uuid,outcome text);
     create view public.delivery_allocation_documents as
-      select allocation.id as allocation_id,fiscal.id,fiscal.status,
+      select allocation.id as allocation_id,fiscal.id,fiscal.status,fiscal.tenant_id,fiscal.document_type,
         coalesce(allocation.load_id,fiscal.load_id) as load_id
       from public.dispatch_stop_documents as allocation
       join public.fiscal_documents as fiscal on fiscal.id=allocation.fiscal_document_id;
@@ -92,7 +106,7 @@ beforeAll(async () => {
       longitude numeric(11,8),accuracy numeric,version integer not null default 1,is_active boolean not null default true,
       content_hash text,photo_url text,signature_url text);
     create table public.operational_events(id uuid primary key default gen_random_uuid(),tenant_id uuid,
-      load_id uuid,report_details jsonb default '{}',payload jsonb default '{}');
+      load_id uuid,report_details jsonb default '{}',payload jsonb default '{}',client_id uuid,vehicle_id uuid,driver_id uuid,dispatch_trip_id uuid,dispatch_stop_id uuid,fiscal_document_id uuid,event_type text,severity text,description text,visible_to_client boolean,client_action_required boolean,public_status text,created_by uuid);
     create table public.entity_audit_log(id uuid primary key default gen_random_uuid(),tenant_id uuid,
       entity_type text,entity_id uuid,action text,old_value jsonb,new_value jsonb,source text);
     create table public.driver_expenses(id uuid primary key,tenant_id uuid,approval_status text,
@@ -124,33 +138,23 @@ beforeAll(async () => {
     create trigger block_retained_storage_evidence_delete before delete on storage.objects
       for each row execute function storage_evidence_private.block_retained_delete();
 
-    create function public.is_tenant_operator_or_admin(uuid) returns boolean language sql stable as $$select true$$;
-    create function public._assert_driver_owns_trip(uuid) returns void language plpgsql stable as $$
-      begin if not exists(select 1 from public.dispatch_trips trip join public.drivers driver on driver.id=trip.driver_id
-        where trip.id=$1 and driver.user_id=auth.uid() and driver.active) then raise exception 'not_authorized';end if;end$$;
     create function public._log_entity_audit(uuid,text,uuid,text,jsonb,jsonb,text) returns void language sql as $$
       insert into public.entity_audit_log(tenant_id,entity_type,entity_id,action,old_value,new_value,source)
       values($1,$2,$3,$4,$5,$6,$7)$$;
     create function public.stop_terminal_statuses() returns text[] language sql immutable as $$
       select array['completed','delivered','cancelled','skipped','refused','returned','partial_delivery','failed']::text[]$$;
-    create function public._lock_driver_delivery_stop(uuid) returns setof public.dispatch_stops language sql as $$
-      select * from public.dispatch_stops where id=$1 for update$$;
-    create function public._delivery_items_for_stop(uuid)
-      returns table(id uuid,tenant_id uuid,load_id uuid,fiscal_document_id uuid,quantity numeric)
-      language sql stable as $$
-        select item.id,item.tenant_id,item.load_id,item.fiscal_document_id,item.quantity
-        from public.load_items as item join public.dispatch_stop_documents as link
-          on link.dispatch_stop_id=$1 and link.fiscal_document_id=item.fiscal_document_id$$;
-    create function public.driver_create_operational_occurrence(uuid,text,text,text,uuid,uuid) returns uuid
-      language plpgsql as $$declare v_id uuid:=gen_random_uuid();begin
-        insert into public.operational_events(id,tenant_id,payload)
-        select v_id,trip.tenant_id,'{}'::jsonb from public.dispatch_trips as trip where trip.id=$1;
-        return v_id;end$$;
-    create function public._prepare_delivery_proof(uuid,uuid,uuid,uuid) returns uuid language sql as $$select gen_random_uuid()$$;
-    create function public._delivery_result_from_statuses(text[]) returns text language sql immutable as $$select $1[1]$$;
-    create function public._derive_driver_delivery_result(uuid,uuid) returns void language sql as $$select$$;
   `);
 
+  // Install production graph bodies; none of these helpers returns simulated success.
+  await db.exec(realFunction('20260830024309_enforce_driver_journey_state_machine', '_assert_driver_owns_trip'));
+  await db.exec(realFunction('20260831164442_remove_authenticator_requirement', 'is_tenant_operator_or_admin'));
+  for (const name of ['_lock_driver_delivery_stop', '_delivery_result_from_statuses']) {
+    await db.exec(realFunction('20260830050226_enforce_delivery_outcome_atomicity', name).replace(/^create function/i, 'create or replace function'));
+  }
+  for (const name of ['_lock_delivery_trip_graph', '_derive_driver_delivery_result', '_prepare_delivery_proof', '_delivery_items_for_stop']) {
+    await db.exec(realFunction('20260830142048_enable_audited_delivery_reallocation', name));
+  }
+  await db.exec(realFunction('20260830013356_harden_driver_occurrence_scope', 'driver_create_operational_occurrence'));
   await db.exec(extractCurrentDeliveryWriter());
   await db.exec(migration('20260910131419_driver_delivery_receipt_foundation'));
   await db.exec(migration('20260910160603_preserve_delivery_receipt_scan_integrity'));
@@ -166,11 +170,12 @@ beforeAll(async () => {
   await db.query('select set_config($1,$2,false)', ['test.active_tenant', ids.tenant]);
   await db.query('insert into auth.users values($1)', [ids.user]);
   await db.query('insert into tenants values($1)', [ids.tenant]);
+  await db.query("insert into tenant_memberships values($1,$2,'operator',true)", [ids.user,ids.tenant]);
   await db.query("insert into clients(id,tenant_id,company_name) values(gen_random_uuid(),$1,'Cliente NFS-e')", [ids.tenant]);
   await db.query("insert into drivers values($1,$2,$3,true,'Motorista NFS-e')", [ids.driver,ids.tenant,ids.user]);
   await db.query("insert into vehicles values($1,$2,'NFS1E99')", [ids.vehicle,ids.tenant]);
-  await db.query('insert into loads values($1,$2)', [ids.load,ids.tenant]);
-  await db.query("insert into dispatch_trips values($1,$2,$3,$4,'in_transit',null)",
+  await db.query('insert into loads(id,tenant_id) values($1,$2)', [ids.load,ids.tenant]);
+  await db.query("insert into dispatch_trips(id,tenant_id,driver_id,vehicle_id,status,load_id) values($1,$2,$3,$4,'in_transit',null)",
     [ids.trip,ids.tenant,ids.driver,ids.vehicle]);
   await db.query('insert into dispatch_trip_loads(tenant_id,dispatch_trip_id,load_id) values($1,$2,$3)',
     [ids.tenant,ids.trip,ids.load]);
@@ -253,6 +258,15 @@ describe('NFS-e-only driver delivery writer', () => {
     expect((await db.query('select count(*)::int count from delivery_receipt_documents')).rows).toEqual([{count:1}]);
   });
 
+  it('persists real graph aggregate changes after NFS-e-only delivery', async () => {
+    expect((await db.query('select status from loads where id=$1', [ids.load])).rows).toEqual([{status:'delivered'}]);
+    expect((await db.query('select status,actual_end_at is not null ended from dispatch_trips where id=$1', [ids.trip])).rows).toEqual([{status:'completed',ended:true}]);
+    await db.exec('begin;savepoint revoked_driver');
+    await db.query('update drivers set active=false where id=$1', [ids.driver]);
+    await expect(db.query('select public._lock_driver_delivery_stop($1)', [ids.stop])).rejects.toMatchObject({code:'42501'});
+    await db.exec('rollback');
+  });
+
   it('routes a mixed NF-e/NFS-e reallocation conflict once and replays the same audited decision', async () => {
     const trip='80000000-0000-4000-8000-000000000098';
     const stop='82000000-0000-4000-8000-000000000098';
@@ -260,7 +274,7 @@ describe('NFS-e-only driver delivery writer', () => {
     const document='90000000-0000-4000-8000-000000000098';
     const item='92000000-0000-4000-8000-000000000098';
     const request='a0000000-0000-4000-8000-000000000098';
-    await db.query("insert into dispatch_trips values($1,$2,$3,$4,'in_transit',null)",
+    await db.query("insert into dispatch_trips(id,tenant_id,driver_id,vehicle_id,status,load_id) values($1,$2,$3,$4,'in_transit',null)",
       [trip,ids.tenant,ids.driver,ids.vehicle]);
     await db.query('insert into dispatch_trip_loads(tenant_id,dispatch_trip_id,load_id) values($1,$2,$3)',
       [ids.tenant,trip,ids.load]);
@@ -376,7 +390,7 @@ describe('NFS-e-only driver delivery writer', () => {
     const stop='82000000-0000-4000-8000-000000000096';
     const nfse='91000000-0000-4000-8000-000000000096';
     const request='a0000000-0000-4000-8000-000000000096';
-    await db.query("insert into dispatch_trips values($1,$2,$3,$4,'in_transit',null)",
+    await db.query("insert into dispatch_trips(id,tenant_id,driver_id,vehicle_id,status,load_id) values($1,$2,$3,$4,'in_transit',null)",
       [trip,ids.tenant,ids.driver,ids.vehicle]);
     await db.query('insert into dispatch_stops(id,tenant_id,dispatch_trip_id,status,destination,actual_arrival_at) '+
       "values($1,$2,$3,'arrived','Callback fiscal',clock_timestamp())",[stop,ids.tenant,trip]);
@@ -408,7 +422,7 @@ describe('NFS-e-only driver delivery writer', () => {
     const stop='82000000-0000-4000-8000-000000000095';
     const nfseA='91000000-0000-4000-8000-000000000095';
     const nfseB='91000000-0000-4000-8000-000000000094';
-    await db.query("insert into dispatch_trips values($1,$2,$3,$4,'in_transit',null)",
+    await db.query("insert into dispatch_trips(id,tenant_id,driver_id,vehicle_id,status,load_id) values($1,$2,$3,$4,'in_transit',null)",
       [trip,ids.tenant,ids.driver,ids.vehicle]);
     await db.query('insert into dispatch_stops(id,tenant_id,dispatch_trip_id,status,destination,actual_arrival_at) '+
       "values($1,$2,$3,'arrived','Link NFS-e',clock_timestamp())",[stop,ids.tenant,trip]);

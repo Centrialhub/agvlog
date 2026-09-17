@@ -261,7 +261,6 @@ export async function getAdminToken(
 
     const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
     const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-    const MIN_TTL_MS = 5 * 60 * 1000;
     let ttlMs = DEFAULT_TTL_MS;
     try {
       let parsedExpires = Number(expiresInSeconds);
@@ -277,7 +276,7 @@ export async function getAdminToken(
         }
         ttlMs = parsedExpires * 1000;
         if (ttlMs > MAX_TTL_MS) ttlMs = MAX_TTL_MS;
-        if (ttlMs < MIN_TTL_MS) ttlMs = DEFAULT_TTL_MS;
+        ttlMs = Math.max(1_000, ttlMs);
       }
     } catch { /* keep default */ }
 

@@ -32,5 +32,6 @@ describe('audited payable link correction',()=>{
   expect(api.reverse).not.toHaveBeenCalled();expect(screen.getByRole('alert')).toHaveTextContent('Nenhum envio foi iniciado');
   spy.mockRestore();view.unmount();sessionStorage.setItem(key,'bad');mount();
   expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível recuperar');expect(screen.getByRole('button',{name:'Revisar correção'})).toBeDisabled();
+  fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));expect(sessionStorage.getItem(key)).toBeNull();expect(screen.getByRole('button',{name:'Revisar correção'})).toBeEnabled();expect(api.reverse).not.toHaveBeenCalled();
  });
 });

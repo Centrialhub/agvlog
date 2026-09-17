@@ -22,6 +22,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { getErrorMessage } from '@/lib/errors';
+import { payrollCarryoverInAmount, payrollItemTypeLabel } from '@/lib/financial/payrollCarryoverPresentation';
 import { payrollPaymentIssues, payrollPaymentLabels } from '@/lib/financial/payrollPaymentContract';
 import { formatPayrollCurrency } from './formatPayrollCurrency';
 
@@ -44,6 +45,8 @@ export function EntryDrawer({ entry: selectedEntry, period, onClose }: { entry: 
   const [manualNature, setManualNature] = useState<'credit' | 'debit'>('debit');
 
   const locked = paymentBusy||!!paymentError||itemsBusy||itemQuery.isError||!entry||!period || period.status === 'approved' || period.status === 'closed' || period.status === 'cancelled';
+  const carryoverIn = entry ? payrollCarryoverInAmount(entry) : 0;
+  const carryoverOut = Number(entry?.carryover_amount || 0);
 
   const handleAdd = async () => {
     if (!entry||locked) return;
@@ -79,12 +82,15 @@ export function EntryDrawer({ entry: selectedEntry, period, onClose }: { entry: 
         {selectedEntry&&!paymentBusy&&!paymentError&&!entry&&<p role="status">Entrada não encontrada na consulta atual.</p>}
         {entry && (
           <div className="space-y-4 mt-4">
-            <div className="grid grid-cols-4 gap-2 text-sm">
+            <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-6">
               <div><p className="text-[10px] uppercase text-muted-foreground">Bruto</p><p className="font-bold">{formatPayrollCurrency(Number(entry.gross_amount))}</p></div>
               <div><p className="text-[10px] uppercase text-muted-foreground">Desc.</p><p className="font-bold text-red-600">{formatPayrollCurrency(Number(entry.discount_amount))}</p></div>
               <div><p className="text-[10px] uppercase text-muted-foreground">Pago antes da folha</p><p className="font-bold">{formatPayrollCurrency(Number(entry.already_paid_amount))}</p></div>
+              <div><p className="text-[10px] uppercase text-muted-foreground">Saldo anterior</p><p className="font-bold text-blue-700">{formatPayrollCurrency(carryoverIn)}</p></div>
               <div><p className="text-[10px] uppercase text-muted-foreground">Saldo original</p><p className="font-bold">{formatPayrollCurrency(Number(entry.amount_to_pay))}</p></div>
+              <div><p className="text-[10px] uppercase text-muted-foreground">A transportar</p><p className="font-bold text-amber-700">{formatPayrollCurrency(carryoverOut)}</p></div>
             </div>
+            {(carryoverIn > 0 || carryoverOut > 0) && <p role="note" className="rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-950">O saldo transportado reaproveita pagamentos comprovados da competência anterior. Não cria novo pagamento, saída bancária ou documento fiscal.</p>}
             {paymentError ? <p role="alert" className="text-destructive">Não foi possível atualizar os pagamentos.</p> : entry.payment_summary && <div className="text-sm space-y-1">
               <p>Pago pelos títulos: {formatPayrollCurrency(Number(entry.payment_summary.paid_via_titles))}</p>
               <p className="font-bold">Saldo restante: {formatPayrollCurrency(Number(entry.payment_summary.remaining_amount))}</p>
@@ -100,7 +106,7 @@ export function EntryDrawer({ entry: selectedEntry, period, onClose }: { entry: 
                   {itemsBusy?<TableRow><TableCell colSpan={5}><p role="status">Consultando itens da folha…</p></TableCell></TableRow>:itemQuery.isError?<TableRow><TableCell colSpan={5}><p role="alert">Não foi possível consultar os itens da folha.</p><Button onClick={()=>void itemQuery.refetch()}>Tentar consultar itens novamente</Button></TableCell></TableRow>:items.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">Sem itens</TableCell></TableRow>
                     : items.map(item => (
                       <TableRow key={item.id}>
-                        <TableCell className="text-xs">{PAYROLL_ITEM_TYPE_LABELS[item.item_type] ?? item.item_type}</TableCell>
+                        <TableCell className="text-xs">{payrollItemTypeLabel(item, PAYROLL_ITEM_TYPE_LABELS)}</TableCell>
                         <TableCell className="text-xs">{item.description}</TableCell>
                         <TableCell><Badge variant="outline" className={`text-[10px] ${item.nature === 'credit' ? 'text-green-600' : item.nature === 'debit' ? 'text-red-600' : item.nature === 'already_paid' ? 'text-blue-600' : ''}`}>{item.nature}</Badge></TableCell>
                         <TableCell className="text-right text-xs">{formatPayrollCurrency(Number(item.amount))}</TableCell>

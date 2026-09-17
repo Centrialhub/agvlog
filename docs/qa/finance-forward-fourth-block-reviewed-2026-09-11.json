@@ -1,0 +1,140 @@
+[
+  {
+    "file": "supabase/migrations/20260910152711_finance_fiscal_dashboard_summary.sql",
+    "sha256": "151e22506ad6ad5eeece44a198223768e3f8d82811248fc757b2495297c8e5be",
+    "integration": "PGlite whole file passed",
+    "review": "Leitura de bases fiscais incorporadas; depende snapshots fiscais existentes; não emite documentos."
+  },
+  {
+    "file": "supabase/migrations/20260910153731_finance_unbilled_freight_summary.sql",
+    "sha256": "9b604c01b0222f3bd029aae85912dd3af69616fb64303af9e371faecd577ded4",
+    "integration": "PGlite whole file passed",
+    "review": "Leitura de expectativa; exige tabela fiscal_source_reservations de31124505 e claims comerciais; não cria recebível."
+  },
+  {
+    "file": "supabase/migrations/20260910154046_finance_receivables_paged_list.sql",
+    "sha256": "826d1663c923afb300a9fa08c88cb4dd0861b5a093e3ef49ac5c69f86b88d6c1",
+    "integration": "PGlite whole file passed",
+    "review": "Paginação de recebíveis atuais por filtros; leitura integral server-side."
+  },
+  {
+    "file": "supabase/migrations/20260910155442_finance_legacy_expense_cost_associations.sql",
+    "sha256": "74ba3d2af100d5c41643705037c9535836cda26cc88646a1360a06b13e718e19",
+    "integration": "PGlite whole file passed",
+    "review": "Cria vínculos/reversões de custo legado; patch de dedup/folha e guard de driver_expenses. Operações posteriores preservam dinheiro e marcam acerto editável para recálculo."
+  },
+  {
+    "file": "supabase/migrations/20260910155523_finance_legacy_cost_readers.sql",
+    "sha256": "f7e120e53e4639d9092de78f5c499827e46fac0cd52cea4ad9af50219a86ee63",
+    "integration": "PGlite whole file passed",
+    "review": "Leitores de custo legado e contexto; depende155442 e audit."
+  },
+  {
+    "file": "supabase/migrations/20260910160441_finance_maintenance_cost_context.sql",
+    "sha256": "aa361402faf7a95a0f6ddea62d0f1107068c19e3a0ba1cab85755d0cab9d4495",
+    "integration": "PGlite whole file passed",
+    "review": "Contexto de manutenção e helper monetário exato; depende tabelas manutenção/estoque baseline."
+  },
+  {
+    "file": "supabase/migrations/20260910160822_finance_legacy_cost_manual_audit.sql",
+    "sha256": "37b880bc8491a4d9348de4347c147b34977ea63feb39976dfd8a888db6d438bd",
+    "integration": "PGlite whole file passed",
+    "review": "Patch exato de classificação manual na auditoria."
+  },
+  {
+    "file": "supabase/migrations/20260910160950_finance_maintenance_labor_cost_associations.sql",
+    "sha256": "aabe0b31982ed475c01c191f31acf812de0d2aaef866df33e07721bde96a0d25",
+    "integration": "PGlite whole file passed",
+    "review": "Vínculo/reversão mão de obra; guards de origem manutenção. Nenhum backfill monetário."
+  },
+  {
+    "file": "supabase/migrations/20260910161129_finance_maintenance_labor_context.sql",
+    "sha256": "4fc143c6d08ca1a1c0c429db3f4848a07b6bea1aea80387f63c928e737f895e6",
+    "integration": "PGlite whole file passed",
+    "review": "Contexto de mão de obra; leitura baseada em160950."
+  },
+  {
+    "file": "supabase/migrations/20260910161702_finance_maintenance_direct_part_associations.sql",
+    "sha256": "578a379624bd801402cc986406bf4f55dfecf46f405442debc8b828ac55646bc",
+    "integration": "PGlite whole file passed",
+    "review": "Peças diretas e claims compartilhados; backfill apenas labor ativo para tabela nova, duplicidade aborta. Guards em peças/OS/estoque e patches de mão de obra."
+  },
+  {
+    "file": "supabase/migrations/20260910161828_finance_maintenance_direct_part_context.sql",
+    "sha256": "20933142fa6cf0974c26652300d2b69323681b2fb477ba9f6149c5e387261a1f",
+    "integration": "PGlite whole file passed",
+    "review": "Contexto peça direta; depende161702/160441/auditoria."
+  },
+  {
+    "file": "supabase/migrations/20260910162807_finance_account_period_closure_foundation.sql",
+    "sha256": "4dd0e61229f86c1826b50f945cceaad12ee2233188dfa0913522969ceccd9b29",
+    "integration": "PGlite whole file passed",
+    "review": "Tabelas imutáveis de fechamento, reabertura e dependências; comandos de capacidade admin/owner."
+  },
+  {
+    "file": "supabase/migrations/20260910162958_finance_account_period_close_snapshot.sql",
+    "sha256": "fc425b1e8b9e6ee22a04603bf2b86de1375ecc390512a847092c8267e8ff152c",
+    "integration": "PGlite whole file passed",
+    "review": "Produtor snapshot de fechamento por conta/período, exige evidência/cobertura/revisão e guards."
+  },
+  {
+    "file": "supabase/migrations/20260910163109_finance_account_period_closed_source_guards.sql",
+    "sha256": "10a3e77207b379485e3ce4e1016ebd826c6ec83bb3e2316db218c5e5a40bc4bc",
+    "integration": "PGlite whole file passed",
+    "review": "Guards BEFORE em27 tabelas monetárias/fontes, finance advisory trylock mesmo sem fechamento; preservação de originais. Proteção conta de caixa recebe ajuste posterior175310 antes ativação plena."
+  },
+  {
+    "file": "supabase/migrations/20260910163116_finance_legacy_cut_reviews.sql",
+    "sha256": "6baa25c2e21533aae152f6c61fbda8ecb891541888b133f2c325dd546bc21e0d",
+    "integration": "PGlite whole file passed",
+    "review": "Classificação/revisão durável de corte; trigger adicional protegendo revisão usada por fechamento."
+  },
+  {
+    "file": "supabase/migrations/20260910164256_finance_account_period_history.sql",
+    "sha256": "28589666e27f55dc604ce585ac3a424b7df9e84f05f97d24793289e404377301",
+    "integration": "PGlite whole file passed",
+    "review": "Histórico de fechamento/reabertura por conta, somente leitura."
+  },
+  {
+    "file": "supabase/migrations/20260910164711_reassert_finance_relation_rls_and_grants.sql",
+    "sha256": "78d784966c181a7d2cc895a8607af8d3dec88d48db17b0ed30f495a8085ccee2",
+    "integration": "PGlite whole file passed",
+    "review": "Reafirma RLS e revoga writes diretos authenticated/anon/service_role em23 tabelas; apenasSELECT permanece auth/service."
+  },
+  {
+    "file": "supabase/migrations/20260910164923_finance_account_period_closure_evidence.sql",
+    "sha256": "882ed7914eb25e877f1ccbddc0930bd0473868002ea3b76140b9d05cd59eecae",
+    "integration": "PGlite whole file passed",
+    "review": "Evidência congelada com conferência de hash e conjunto relacional de dependências."
+  },
+  {
+    "file": "supabase/migrations/20260910164942_finance_closed_period_late_payment_composition.sql",
+    "sha256": "8909c59453111cdd2ca6d001f49707926c032c26a466a59adf3c5745e1c748e7",
+    "integration": "PGlite whole file passed",
+    "review": "Constraints diferidas de composição tardia para pagamentos já comprovados em movimentos congelados; patch guard imediato, nenhum novo dinheiro permitido."
+  },
+  {
+    "file": "supabase/migrations/20260910165830_finance_period_manual_audit.sql",
+    "sha256": "af579d29457377bf3d612aafa5105af8939f7aba369565f2956ef53ed85a63e1",
+    "integration": "PGlite whole file passed",
+    "review": "Patch auditoria manual de revisão/fechamento/reabertura."
+  },
+  {
+    "file": "supabase/migrations/20260910170213_finance_legacy_cut_settlement_mapping.sql",
+    "sha256": "2641e645cc06ec82195173094c88e7a67402bb9cc18a6b6de4f112a37388cd63",
+    "integration": "PGlite whole file passed",
+    "review": "Resolve vínculos de acerto por IDs no corte legado e capacidade; não duplica pagamentos."
+  },
+  {
+    "file": "supabase/migrations/20260910170454_finance_stock_acquisition_associations.sql",
+    "sha256": "8e56e0d16b593974ab2299713253c1282423793c21442c0f671c3bc6bdce9c7e",
+    "integration": "PGlite whole file passed",
+    "review": "Aquisição estoque: vínculos, reversões, dependências e expansão claims; guards de estoque/catálogo/peça."
+  },
+  {
+    "file": "supabase/migrations/20260910170539_finance_stock_acquisition_readers.sql",
+    "sha256": "1f7f17c1f2b419c949824e5731c332e31935bfbfc9fd26481cc216fd0b2cfb2e",
+    "integration": "PGlite whole file passed",
+    "review": "Leitores aquisição/estoque e auditoria manual; depende170454/160441."
+  }
+]

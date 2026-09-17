@@ -77,3 +77,14 @@ export const sortItemsByRecipient = (items: RoutePlanningLoadItem[]) =>
         b.fiscal_documents?.invoice_number || '—',
       ),
   );
+
+export function areAllVisibleLoadsSelected(selected: ReadonlySet<string>, visibleIds: string[]) {
+  return visibleIds.length > 0 && visibleIds.every(id => selected.has(id));
+}
+
+export function toggleVisibleLoadSelection(selected: ReadonlySet<string>, visibleIds: string[]) {
+  const next = new Set(selected);
+  if (areAllVisibleLoadsSelected(selected, visibleIds)) visibleIds.forEach(id => next.delete(id));
+  else visibleIds.forEach(id => next.add(id));
+  return next;
+}

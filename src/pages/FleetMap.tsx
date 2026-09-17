@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { resolvePositionTelemetry } from '@/lib/positionTelemetry';
 import {useWorkspaceSsxAccounts} from '@/hooks/useWorkspaceSsxAccounts';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 
 interface PipelineHealth {
   last_run_at?: string;
@@ -25,6 +26,15 @@ interface PipelineHealth {
   last_rate_limit_at?: string;
   last_persistence_failure_at?: string;
   consecutive_failures?: number;
+}
+
+interface PipelineRunResponse {
+  success?: boolean;
+  status?: string;
+  error?: string;
+  details?: string;
+  errors?: string[];
+  needs_attention?: string[];
 }
 
 function createVehicleIcon(state: MovementState) {
@@ -38,10 +48,11 @@ function createVehicleIcon(state: MovementState) {
 
 /** Pipeline health summary component */
 function PipelineHealthBanner({ tenantId }: { tenantId: string }) {
-  const { data: tenant } = useQuery({
+  const { data: tenant, error } = useQuery({
     queryKey: ['tenant_health', tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from('tenants').select('settings').eq('id', tenantId).single();
+      const { data, error } = await supabase.from('tenants').select('settings').eq('id', tenantId).single();
+      if (error) throw error;
       const settings = data?.settings;
       if (!settings || Array.isArray(settings) || typeof settings !== 'object') return null;
       const health = (settings as Record<string, unknown>).pipeline_health;
@@ -52,6 +63,7 @@ function PipelineHealthBanner({ tenantId }: { tenantId: string }) {
     refetchInterval: 60000,
   });
 
+  if (error) return <div role="alert" className="px-3 py-1.5 text-xs border-b bg-destructive/10 text-destructive">Falha ao consultar a saúde do pipeline.</div>;
   if (!tenant) return null;
 
   const lastRun = tenant.last_run_at ? new Date(tenant.last_run_at) : null;
@@ -102,16 +114,23 @@ export default function FleetMap() {
   const navigate = useNavigate();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
+  const toast = useSonnerToast();
   const telemetryUnavailable = Boolean(fleetError);
 
-  const {data:ssxAccounts=[]}=useWorkspaceSsxAccounts(!!currentTenant&&isAdmin&&ssxEnabled);
+  const {
+    data: ssxAccounts = [],
+    isLoading: ssxAccountsLoading,
+    isError: ssxAccountsIsError,
+    error: ssxAccountsError,
+    refetch: refetchSsxAccounts,
+  } = useWorkspaceSsxAccounts(!!currentTenant && isAdmin && ssxEnabled);
   const accounts=ssxAccounts.filter(account=>account.migration_state==='ready');
 
   const pollMutation = useMutation({
     mutationFn: async () => {
       if (!ssxEnabled) throw new Error('Integração SSX em implantação');
       for (const acc of accounts) {
-        await supabase.functions.invoke('agvlog-pipeline-run', {
+        const { data, error } = await supabase.functions.invoke<PipelineRunResponse>('agvlog-pipeline-run', {
           body: {
             tenant_id: currentTenant?.id,
             integration_account_id: acc.id,
@@ -121,6 +140,11 @@ export default function FleetMap() {
             lookback_minutes: 43200,
           },
         });
+        if (error) throw error;
+        if (!data?.success) {
+          const details = data?.errors?.[0] || data?.needs_attention?.[0] || data?.details;
+          throw new Error([data?.error || `Pipeline ${data?.status || 'não concluído'}`, details].filter(Boolean).join(' — '));
+        }
       }
     },
     onSuccess: () => {
@@ -130,6 +154,10 @@ export default function FleetMap() {
       queryClient.invalidateQueries({ queryKey: ['workspace_fleet_snapshot'] });
       queryClient.invalidateQueries({ queryKey: ['tenant_health'] });
       void refetch();
+      toast.success('Diagnóstico SSX concluído com sucesso.');
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'Falha ao executar o diagnóstico SSX.');
     },
   });
 
@@ -223,7 +251,24 @@ export default function FleetMap() {
           }}>
             <RefreshCw className="h-4 w-4 mr-2" /> Recarregar
           </Button>
-          {isAdmin && ssxEnabled && accounts.length > 0 && (
+          {isAdmin && ssxEnabled && ssxAccountsLoading && (
+            <Button variant="secondary" size="sm" className="w-full" disabled>
+              <Radio className="h-4 w-4 mr-2 animate-spin" />
+              Carregando contas SSX...
+            </Button>
+          )}
+          {isAdmin && ssxEnabled && ssxAccountsIsError && (
+            <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+              <p>Não foi possível carregar as contas SSX.</p>
+              <p className="mt-1 text-muted-foreground">
+                {ssxAccountsError instanceof Error ? ssxAccountsError.message : 'Falha de consulta.'}
+              </p>
+              <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => void refetchSsxAccounts()}>
+                Tentar novamente
+              </Button>
+            </div>
+          )}
+          {isAdmin && ssxEnabled && !ssxAccountsLoading && !ssxAccountsIsError && accounts.length > 0 && (
             <Button variant="secondary" size="sm" className="w-full" onClick={() => pollMutation.mutate()} disabled={pollMutation.isPending}>
               <Radio className={`h-4 w-4 mr-2 ${pollMutation.isPending ? 'animate-spin' : ''}`} />
               {pollMutation.isPending ? 'Coletando...' : 'Diagnóstico SSX (manual)'}

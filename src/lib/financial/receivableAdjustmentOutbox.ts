@@ -27,7 +27,7 @@ export function createReceivableAdjustmentOutbox(deps:Dependencies){
   const promise=Promise.resolve().then(()=>deps.lock(key,async()=>{
    deps.assertContext(tenant,actor);const observedRaw=deps.storage.getItem(key);const found=pendingReceivableAdjustment(deps.storage,tenant,actor);if(deps.storage.getItem(key)!==observedRaw)throw unavailable();let row=found;const uncertain=found!==null;
    if(row&&parsed)throw new Error('Há um ajuste do recebível sem confirmação. Recupere o pedido existente antes de iniciar outra.');
-   if(!row){if(!parsed)throw new Error('Nenhum ajuste do recebível pendente para esta sessão.');row={version:1,tenantId:tenant,actorId:actor,expected:parsed.expected,payload:receivableAdjustmentCommandSchema.parse({version:1,tenant_id:tenant,request_id:deps.uuid(),receivable_id:parsed.receivable_id,action:parsed.action,kind:parsed.kind,adjustment_id:parsed.adjustment_id,effective_on:parsed.effective_on,amount_cents:parsed.amount_cents,expected_revision:parsed.expected_revision,reason:parsed.reason})};}
+   if(!row){if(!parsed)throw new Error('Nenhum ajuste do recebível pendente para esta sessão.');const {expected,...command}=parsed;row={version:1,tenantId:tenant,actorId:actor,expected,payload:receivableAdjustmentCommandSchema.parse({version:1,tenant_id:tenant,request_id:deps.uuid(),...command})};}
    const raw=found?observedRaw:JSON.stringify(row);
    if(raw===null)throw unavailable();
    if(!found){if(deps.storage.getItem(key)!==null)throw unavailable();deps.storage.setItem(key,raw);notify();}

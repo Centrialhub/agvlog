@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { Database } from '@/integrations/supabase/types';
+import type { Database, Tables } from '@/integrations/supabase/types';
 import { readCtePayloadRecipient } from '@/lib/fiscal/ctePayload';
 import { matchesCteMonitorFilters } from '@/lib/fiscal/cteListFilters';
 import { localDayBoundary } from '@/lib/listFilters';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { useTenant } from './useTenant';
 
 export const SEFAZ_STATUSES = [
@@ -100,6 +101,8 @@ export interface CteMonitorRow {
   hub_document_id?: string | null;
   emission_id?: string | null;
   invoice_numbers?: string | null;
+  cte_document_id?: string | null;
+  fiscal_document_id?: string | null;
 }
 
 
@@ -141,55 +144,55 @@ export function useCteMonitor(filters: CteMonitorFilters) {
     staleTime: 15_000,
     queryFn: async () => {
       if (!currentTenant) return [];
-      let q = supabase
-        .from('cte_documents')
-        .select('*')
-        .eq('tenant_id', currentTenant.id);
-
-
       const docNumber = nz(filters.docNumber);
-      if (docNumber) q = q.ilike('cte_number', `%${docNumber}%`);
       const payer = nz(filters.payer);
-      if (payer) q = q.ilike('payer_name', `%${payer}%`);
       const internal = nz(filters.internalNumber);
-      if (internal) q = q.ilike('internal_number', `%${internal}%`);
       const ref = nz(filters.referenceNumber);
-      if (ref) q = q.ilike('reference_number', `%${ref}%`);
       const protocol = nz(filters.protocolNumber);
-      if (protocol) q = q.ilike('protocol_number', `%${protocol}%`);
       const key = nz(filters.accessKey);
-      if (key) q = q.ilike('access_key', `%${key}%`);
       const plate = nz(filters.plate);
-      if (plate) q = q.ilike('vehicle_plate', `%${plate.replace(/\W/g, '').split('').join('%')}%`);
       const driver = nz(filters.driver);
-      if (driver) q = q.ilike('driver_name', `%${driver}%`);
       const series = nz(filters.series);
-      if (series) q = q.eq('cte_series', series);
       const branch = nz(filters.branch);
-      if (branch) q = q.ilike('company_branch', `%${branch}%`);
       const cg = nz(filters.companyGroup);
-      if (cg) q = q.ilike('company_group', `%${cg}%`);
       const pg = nz(filters.payerGroup);
-      if (pg) q = q.ilike('payer_group', `%${pg}%`);
 
-      if (filters.statuses && filters.statuses.length > 0) {
-        q = q.or(`sefaz_status.in.(${filters.statuses.join(',')}),access_key.not.is.null`);
-      }
-      if (filters.correctionLetter === 'yes') q = q.eq('correction_letter', true);
-      if (filters.correctionLetter === 'no') q = q.eq('correction_letter', false);
-
-      if (filters.processedStart) q = q.gte('processed_at', localDayBoundary(filters.processedStart));
-      if (filters.processedEnd) q = q.lt('processed_at', localDayBoundary(filters.processedEnd, true));
-      if (filters.issuedStart) q = q.or(`issued_at.gte.${localDayBoundary(filters.issuedStart)},and(issued_at.is.null,created_at.gte.${localDayBoundary(filters.issuedStart)})`);
-      if (filters.issuedEnd) q = q.or(`issued_at.lt.${localDayBoundary(filters.issuedEnd, true)},and(issued_at.is.null,created_at.lt.${localDayBoundary(filters.issuedEnd, true)})`);
-
-      const { data, error } = await q;
-      if (error) throw error;
+      const cteDocumentsPromise = fetchAllPostgrestPages<Tables<'cte_documents'>>((from, to) => {
+        let q = supabase
+          .from('cte_documents')
+          .select('*')
+          .eq('tenant_id', currentTenant.id);
+        if (docNumber) q = q.ilike('cte_number', `%${docNumber}%`);
+        if (payer) q = q.ilike('payer_name', `%${payer}%`);
+        if (internal) q = q.ilike('internal_number', `%${internal}%`);
+        if (ref) q = q.ilike('reference_number', `%${ref}%`);
+        if (protocol) q = q.ilike('protocol_number', `%${protocol}%`);
+        if (key) q = q.ilike('access_key', `%${key}%`);
+        if (plate) q = q.ilike('vehicle_plate', `%${plate.replace(/\W/g, '').split('').join('%')}%`);
+        if (driver) q = q.ilike('driver_name', `%${driver}%`);
+        if (series) q = q.eq('cte_series', series);
+        if (branch) q = q.ilike('company_branch', `%${branch}%`);
+        if (cg) q = q.ilike('company_group', `%${cg}%`);
+        if (pg) q = q.ilike('payer_group', `%${pg}%`);
+        if (filters.statuses && filters.statuses.length > 0) {
+          q = q.or(`sefaz_status.in.(${filters.statuses.join(',')}),access_key.not.is.null`);
+        }
+        if (filters.correctionLetter === 'yes') q = q.eq('correction_letter', true);
+        if (filters.correctionLetter === 'no') q = q.eq('correction_letter', false);
+        if (filters.processedStart) q = q.gte('processed_at', localDayBoundary(filters.processedStart));
+        if (filters.processedEnd) q = q.lt('processed_at', localDayBoundary(filters.processedEnd, true));
+        if (filters.issuedStart) q = q.or(`issued_at.gte.${localDayBoundary(filters.issuedStart)},and(issued_at.is.null,created_at.gte.${localDayBoundary(filters.issuedStart)})`);
+        if (filters.issuedEnd) q = q.or(`issued_at.lt.${localDayBoundary(filters.issuedEnd, true)},and(issued_at.is.null,created_at.lt.${localDayBoundary(filters.issuedEnd, true)})`);
+        return q
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to);
+      });
 
       // CT-es realmente transmitidos ao Hub Fiscal ficam em `fiscal_documents`
       // (document_type = 'outbound'). Sem esse merge o monitor não mostrava as
       // emissões reais — e por isso não havia como baixar PDF/XML de retorno.
-      const { data: outboundData, error: outErr } = await supabase
+      const outboundPromise = fetchAllPostgrestPages((from, to) => supabase
         .from('fiscal_documents')
         .select(
           'id, invoice_number, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
@@ -197,16 +200,24 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
         .eq('is_duplicate', false)
-        .eq('document_type', 'outbound');
-      
-      if (outErr) throw outErr;
-      const outbound = outboundData || [];
+        .eq('document_type', 'outbound')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to));
 
+      const [data, outbound] = await Promise.all([cteDocumentsPromise, outboundPromise]);
 
       const usedHubIds = new Set<string>();
+      const outboundByAccessKey = new Map<string, (typeof outbound)[number]>();
+      for (const document of outbound) {
+        if (document.access_key && !outboundByAccessKey.has(document.access_key)) {
+          // `outbound` is ordered newest-first, matching the old Array.find precedence.
+          outboundByAccessKey.set(document.access_key, document);
+        }
+      }
       const draftRows: CteMonitorRow[] = (data || []).map((r) => {
         // Tenta encontrar o vínculo real em fiscal_documents via access_key
-        const match = r.access_key ? outbound.find((o) => o.access_key === r.access_key) : null;
+        const match = r.access_key ? outboundByAccessKey.get(r.access_key) ?? null : null;
         if (match) usedHubIds.add(match.id);
         
         return {
@@ -217,6 +228,8 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           hub_document_id: match?.hub_document_id ?? null,
           emission_id: match?.emission_id ?? null,
           invoice_numbers: match?.invoice_number ?? r.invoice_numbers,
+          cte_document_id: r.id,
+          fiscal_document_id: match?.id ?? null,
           sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status, match.hub_document_id) : r.sefaz_status,
           sefaz_status_reason: match?.sefaz_message ?? r.sefaz_status_reason,
         } as CteMonitorRow;
@@ -269,6 +282,8 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           hub_document_id: d.hub_document_id ?? null,
           emission_id: d.emission_id ?? null,
           invoice_numbers: d.invoice_number ?? null,
+          cte_document_id: null,
+          fiscal_document_id: d.id,
           };
         });
 
@@ -282,7 +297,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 }
 
 /** Traduz status de `fiscal_documents` para o vocabulário do monitor SEFAZ. */
-function mapOutboundStatus(status?: string | null, sefaz?: string | null, hubId?: string | null): SefazStatus {
+export function mapOutboundStatus(status?: string | null, sefaz?: string | null, hubId?: string | null): SefazStatus {
   const s = (sefaz || '').toLowerCase();
   const st = (status || '').toLowerCase();
   if (st === 'cancelled' || s === 'cancelled') return 'cancelled';
@@ -290,11 +305,8 @@ function mapOutboundStatus(status?: string | null, sefaz?: string | null, hubId?
   // Cancelamento rejeitado mantém o documento fiscal autorizado e manejável.
   if (s === 'cancel_rejected' || s === 'cancel_error' || s.includes('cancel_rejeit')) return 'processed';
   if (st === 'authorized' || s === 'authorized') return 'processed';
-  if (st === 'rejected' || s === 'error' || s === 'rejected') {
-    // Se for rejeitado mas já tiver ID no hub, tratamos como 'processed' (autorizado) 
-    // para que a UI ofereça opções de manejo (como baixar arquivos ou cancelar novamente)
-    return hubId ? 'processed' : 'processed_error';
-  }
+  if (s === 'status_timeout') return hubId ? 'processed' : 'processed_error';
+  if (st === 'error' || st === 'rejected' || s === 'error' || s === 'rejected' || s.endsWith('_error')) return 'processed_error';
   if (st === 'transmitting' || s === 'processing') return 'processing';
   return 'pending';
 }
@@ -320,14 +332,15 @@ export function useCteSefazEvents(cteDocumentId: string | null) {
     enabled: !!cteDocumentId && !!currentTenant,
     queryFn: async () => {
       if (!cteDocumentId || !currentTenant) return [];
-      const { data, error } = await supabase
+      const data = await fetchAllPostgrestPages((from, to) => supabase
         .from('cte_sefaz_events')
         .select('*')
         .eq('cte_document_id', cteDocumentId)
         .eq('tenant_id', currentTenant.id)
-        .order('occurred_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as unknown as CteSefazEvent[];
+        .order('occurred_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to));
+      return data as unknown as CteSefazEvent[];
     },
   });
 }

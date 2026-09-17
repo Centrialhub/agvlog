@@ -37,7 +37,7 @@ const item = (resource: string, page: 1 | 2) => ({
   ...(resource === 'clients' ? { company_name: page === 1 ? 'Zulu' : 'Alfa', active: true } : {}),
   ...(resource === 'drivers' ? { name: page === 1 ? 'Zeca' : 'Ana', active: true } : {}),
   ...(resource === 'vehicles' ? { plate: page === 1 ? 'ZZZ9Z99' : 'AAA1A11', active: true } : {}),
-  ...(resource === 'operational_routes' ? { name: page === 1 ? 'Zona Sul' : 'Centro', active: true } : {}),
+  ...(resource === 'operational_routes' ? { name: page === 1 ? 'Zona Sul' : 'Centro', active: true, destinations: [] } : {}),
 });
 const response = (resource: string, page: 1 | 2) => ({
   version: 1,

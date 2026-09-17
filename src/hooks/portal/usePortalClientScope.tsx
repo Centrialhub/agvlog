@@ -23,14 +23,22 @@ const Ctx = createContext<ScopeContextValue | undefined>(undefined);
 
 export function PortalClientScopeProvider({ children }: { children: ReactNode }) {
   const { data: clients = [], isLoading } = useClientPortalAccess();
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [requestedClientId, setRequestedClientId] = useState<string | null>(null);
 
   const value = useMemo<ScopeContextValue>(() => {
+    const selectedClientId = clients.length === 1
+      ? clients[0].client_id
+      : requestedClientId && clients.some((client) => client.client_id === requestedClientId)
+        ? requestedClientId
+        : null;
     const selectedClient = selectedClientId
       ? clients.find((c) => c.client_id === selectedClientId) ?? null
       : null;
     const activeClients = selectedClient ? [selectedClient] : clients;
     const can = (perm: Permission) => activeClients.some((c) => Boolean(c[perm]));
+    const setSelectedClientId = (id: string | null) => {
+      setRequestedClientId(id && clients.some((client) => client.client_id === id) ? id : null);
+    };
     return {
       clients,
       selectedClientId,
@@ -40,7 +48,7 @@ export function PortalClientScopeProvider({ children }: { children: ReactNode })
       can,
       isLoading,
     };
-  }, [clients, selectedClientId, isLoading]);
+  }, [clients, requestedClientId, isLoading]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

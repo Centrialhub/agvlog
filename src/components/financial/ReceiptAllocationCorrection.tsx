@@ -11,12 +11,13 @@ export function ReceiptAllocationCorrection({tenant,actor,payment,amount,revisio
   const command=receiptCorrectionCommandSchema.parse(saved.command);if(saved.actor!==actor||command.tenant_id!==tenant||command.payment_id!==payment)throw new Error('scope');return {command,error:''};
  }catch{return {command:null,error:'Não foi possível recuperar a correção anterior. Não inicie outro pedido nesta sessão.'};}});
  const [pending,setPending]=useState<ReceiptCorrectionCommand|null>(restored.command),[preview,setPreview]=useState<ReceiptCorrectionCommand|null>(null);
- const [open,setOpen]=useState(!!restored.command||!!restored.error),[reason,setReason]=useState(''),[error,setError]=useState(restored.error),[busy,setBusy]=useState(false),[done,setDone]=useState(false);
+ const [open,setOpen]=useState(!!restored.command||!!restored.error),[reason,setReason]=useState(''),[error,setError]=useState(''),[recoveryError,setRecoveryError]=useState(restored.error),[busy,setBusy]=useState(false),[done,setDone]=useState(false);
  const live=useRef(true),sending=useRef(false);useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
- const refresh=()=>{for(const prefix of ['receivable-financial-context','receivables','finance-receivable-portfolio','finance-receivable-payments','client_invoices','closing-reports','closing-report','finance-receipt-movement-options','finance-account-period','finance-movement-receipts','finance-audit'])void qc.invalidateQueries({queryKey:[prefix]});};
+ const refresh=()=>{for(const prefix of ['receivable-financial-context','receivables','finance-receivable-portfolio','finance-receivable-payments','client_invoices','closing-reports','closing-report','finance-receipt-movement-options','finance-account-period','finance-movement-receipts','finance-audit'])void qc.invalidateQueries({queryKey:[prefix]});void qc.invalidateQueries({queryKey:['receivable-agreement-position',tenant,actor]});};
  function prepare(){const parsed=receiptCorrectionCommandSchema.safeParse({version:1,tenant_id:tenant,request_id:crypto.randomUUID(),payment_id:payment,expected_revision:revision,reason});
   if(!parsed.success){setError('Informe um motivo com pelo menos dez caracteres.');return;}setPreview(parsed.data);setError('');}
- async function submit(){const command=pending||preview;if(!command||sending.current||disabled||restored.error)return;const uncertain=!!pending;
+ const discardRecovery=()=>{setError('');try{sessionStorage.removeItem(key);setPending(null);setPreview(null);setRecoveryError('');}catch{setError('Não foi possível descartar a recuperação incompatível nesta sessão.');}};
+ async function submit(){const command=pending||preview;if(!command||sending.current||disabled||recoveryError)return;const uncertain=!!pending;
   try{sessionStorage.setItem(key,JSON.stringify({actor,command}));}catch{setError('Não foi possível preservar o pedido. Nenhuma correção foi enviada.');return;}
   sending.current=true;setBusy(true);setPending(command);setPreview(null);setError('');
   try{await correctReceiptAllocation(command);sessionStorage.removeItem(key);if(live.current){setPending(null);setDone(true);refresh();}}
@@ -25,16 +26,17 @@ export function ReceiptAllocationCorrection({tenant,actor,payment,amount,revisio
   finally{sending.current=false;if(live.current)setBusy(false);}
  }
  if(done)return <p role="status">Vínculo corrigido. O dinheiro registrado foi preservado.</p>;
- if(!eligible&&!pending&&!restored.error)return null;
+ if(!eligible&&!pending&&!recoveryError)return null;
  if(!open)return <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={()=>setOpen(true)}>Corrigir vínculo desta baixa</Button>;
  const frozen=pending||preview;
  return <section aria-label="Correção do vínculo da baixa" className="space-y-2 rounded border border-amber-600 p-3">
   <p>Esta correção retira {formatFinanceCents(String(amount))} da baixa deste título. O valor ficará disponível na entrada original para outra associação. Nenhuma saída de dinheiro será registrada.</p>
   {frozen?<><p>Motivo: {frozen.reason}</p>{pending&&<p role="status">Pedido preservado para recuperação.</p>}
-   <Button type="button" disabled={busy||disabled||!!restored.error} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma correção':'Confirmar correção do vínculo'}</Button>
+   <Button type="button" disabled={busy||disabled||!!recoveryError} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma correção':'Confirmar correção do vínculo'}</Button>
    {!pending&&<Button type="button" variant="outline" disabled={busy} onClick={()=>setPreview(null)}>Voltar à edição</Button>}</>:<>
    <label>Motivo da correção<Textarea maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)}/></label>
-   <Button type="button" disabled={disabled||!!restored.error} onClick={prepare}>Revisar correção do vínculo</Button></>}
+   <Button type="button" disabled={disabled||!!recoveryError} onClick={prepare}>Revisar correção do vínculo</Button></>}
+  {recoveryError&&<div role="alert"><p>{recoveryError} Novas correções permanecem bloqueadas até o descarte.</p><Button type="button" variant="outline" disabled={busy} onClick={discardRecovery}>Descartar recuperação incompatível</Button></div>}
   {error&&<p role="alert">{error}</p>}
  </section>;
 }

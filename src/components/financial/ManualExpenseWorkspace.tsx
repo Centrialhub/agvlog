@@ -13,6 +13,7 @@ import {manualExpenseCommandSchema,type ManualExpenseCommand} from '@/lib/financ
 import {payableMovementOptionSchema,type PayableMovementOption} from '@/lib/financial/payableMovementContract';
 import {financeError,formatFinanceCents,parseFinanceAmount} from '@/lib/financial/ledgerContract';
 import {ManualExpenseMovementPicker} from './ManualExpenseMovementPicker';
+import {removeSecureFiles} from '@/lib/secureUpload';
 const savedSchema=z.object({actor:z.string().uuid(),command:manualExpenseCommandSchema,choice:payableMovementOptionSchema.nullable(),centerName:z.string().optional()});
 type Saved=z.infer<typeof savedSchema>;
 export function ManualExpenseWorkspace({tenant,actor,onClose}:{tenant:string;actor:string;onClose:()=>void}){
@@ -20,35 +21,37 @@ export function ManualExpenseWorkspace({tenant,actor,onClose}:{tenant:string;act
  const [restored]=useState(()=>{try{const raw=sessionStorage.getItem(key);if(!raw)return {saved:null,error:''};const saved=savedSchema.parse(JSON.parse(raw));if(saved.actor!==actor||saved.command.tenant_id!==tenant||(saved.command.movement_id||null)!==(saved.choice?.id||null))throw new Error('scope');return {saved,error:''};}catch{return {saved:null,error:'Não foi possível recuperar a despesa anterior. Não crie outro pedido nesta sessão.'};}});
  const [pending,setPending]=useState<Saved|null>(restored.saved),[preview,setPreview]=useState<Saved|null>(null),[choice,setChoice]=useState<PayableMovementOption|null>(null);
  const [form,setForm]=useState({description:'',supplier:'',supplierName:'',category:'other',amount:'',due:'',competence:'',document:'',notes:'',method:'pix',reason:'',center:''});
- const [paid,setPaid]=useState(false),[file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(restored.error);
- const live=useRef(true),sending=useRef(false);useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
+ const [paid,setPaid]=useState(false),[file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false),[recoveryError,setRecoveryError]=useState(restored.error),[error,setError]=useState(restored.error);
+ const live=useRef(true),sending=useRef(false),orphan=useRef<string|null>(null);useEffect(()=>{live.current=true;return()=>{live.current=false;const path=orphan.current;if(path)void removeSecureFiles(tenant,'receipts',[path]);};},[tenant]);
  const frozen=pending||preview,suppliers=(clients.data||[]).filter(c=>c.is_supplier);
  const refresh=()=>{for(const prefix of ['finance-recorded-costs','finance-recorded-cost-summary','payables','payables_payments','finance-audit','finance-manual-expense-options','finance-payable-options','finance-options'])void qc.invalidateQueries({queryKey:[prefix]});};
  async function prepare(){
-  if(sending.current||restored.error)return;
+  if(sending.current||recoveryError)return;
   const amount=parseFinanceAmount(form.amount),supplier=suppliers.find(s=>s.id===form.supplier);
   if(paid&&(!choice||amount===null||BigInt(amount)>BigInt(choice.remaining_cents))){setError('Escolha uma saída registrada com valor disponível para esta despesa.');return;}
   const parsed=manualExpenseCommandSchema.safeParse({version:1,tenant_id:tenant,request_id:crypto.randomUUID(),supplier_name:supplier?.company_name||form.supplierName.trim()||'Despesa avulsa',...(form.supplier?{supplier_id:form.supplier}:{}),description:form.description,category:form.category,amount_cents:amount,...(form.center?{cost_center_id:form.center}:{}),...(form.due?{due_date:form.due}:{}),...(form.competence?{competence_date:form.competence}:{}),document_number:form.document,notes:form.notes,reason:form.reason,...(paid?{movement_id:choice?.id,method:form.method}:{})});
   if(!parsed.success){setError('Confira descrição, valor, datas e motivo com pelo menos cinco caracteres.');return;}
   sending.current=true;setBusy(true);setError('');
-  try{const command:ManualExpenseCommand=parsed.data;if(file){const path=await uploadPaymentAttachment(tenant,'payable',file);if(!path)throw new Error('upload failed');command.receipt_path=path;}if(live.current)setPreview({actor,command,choice:paid?choice:null,centerName:centers.fullData.find(c=>c.id===form.center)?.name});}
-  catch{if(live.current)setError('Não foi possível preparar o comprovante. A despesa não foi enviada.');}
+  try{const command:ManualExpenseCommand=parsed.data;if(file){const path=await uploadPaymentAttachment(tenant,'payable',file);if(!path)throw new Error('upload failed');orphan.current=path;command.receipt_path=path;}if(live.current)setPreview({actor,command,choice:paid?choice:null,centerName:centers.fullData.find(c=>c.id===form.center)?.name});}
+  catch{const path=orphan.current;orphan.current=null;if(path)await removeSecureFiles(tenant,'receipts',[path]).catch(()=>undefined);if(live.current)setError('Não foi possível preparar o comprovante. A despesa não foi enviada.');}
   finally{sending.current=false;if(live.current)setBusy(false);}
  }
- async function submit(){if(!frozen||sending.current||restored.error)return;const saved=frozen,uncertain=!!pending;
+ async function submit(){if(!frozen||sending.current||recoveryError)return;const saved=frozen,uncertain=!!pending;
   try{sessionStorage.setItem(key,JSON.stringify(saved));}catch{setError('Não foi possível preservar o pedido. A despesa não foi enviada.');return;}
-  sending.current=true;setBusy(true);setPending(saved);setPreview(null);setError('');
+  sending.current=true;setBusy(true);setPending(saved);setPreview(null);setError('');orphan.current=null;
   try{await recordManualExpense(saved.command);sessionStorage.removeItem(key);refresh();if(live.current)onClose();}
-  catch(cause){if(live.current){setError(financeError(cause));if(cause instanceof FinanceRejectedError&&!uncertain){try{sessionStorage.removeItem(key);setPending(null);refresh();}catch{/* Keep uncertain request. */}}}}
+  catch(cause){if(live.current){setError(financeError(cause));if(cause instanceof FinanceRejectedError&&!uncertain){const path=saved.command.receipt_path;try{sessionStorage.removeItem(key);setPending(null);if(path)await removeSecureFiles(tenant,'receipts',[path]);refresh();}catch{/* Keep uncertain request. */}}}}
   finally{sending.current=false;if(live.current)setBusy(false);}
  }
  const input=(field:keyof typeof form,label:string,type='text')=><label className="block">{label}<Input value={form[field]} type={type} onChange={e=>setForm({...form,[field]:e.target.value})}/></label>;
- return <Dialog open onOpenChange={open=>{if(!open&&!busy)onClose();}}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" onInteractOutside={e=>{if(busy)e.preventDefault();}}><DialogHeader><DialogTitle>Nova despesa avulsa</DialogTitle><DialogDescription>Registre a obrigação e, se já estiver paga, vincule a saída existente. Nenhum pagamento será executado.</DialogDescription></DialogHeader>
+ const discardPreview=async()=>{const path=orphan.current;orphan.current=null;if(path)await removeSecureFiles(tenant,'receipts',[path]).catch(()=>undefined);if(live.current)setPreview(null);};
+ function discardRecovery(){try{sessionStorage.removeItem(key);setRecoveryError('');setError('');setPending(null);setPreview(null);setChoice(null);setForm({description:'',supplier:'',supplierName:'',category:'other',amount:'',due:'',competence:'',document:'',notes:'',method:'pix',reason:'',center:''});setPaid(false);setFile(null);}catch{setError('Não foi possível descartar a recuperação incompatível. Reabra o formulário e tente novamente.');}}
+ return <Dialog open onOpenChange={open=>{if(!open&&!busy){void discardPreview().finally(onClose);}}}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" onInteractOutside={e=>{if(busy)e.preventDefault();}}><DialogHeader><DialogTitle>Nova despesa avulsa</DialogTitle><DialogDescription>Registre a obrigação e, se já estiver paga, vincule a saída existente. Nenhum pagamento será executado.</DialogDescription></DialogHeader>
   {frozen?<section className="space-y-3"><p className="font-semibold">{frozen.command.description} · {formatFinanceCents(frozen.command.amount_cents)}</p><p>{frozen.command.supplier_name}</p>
    {frozen.choice?<p>Saída já registrada: {frozen.choice.beneficiary_name} · {frozen.choice.account_name} · {frozen.choice.occurred_on.split('-').reverse().join('/')}. Nenhuma outra saída será criada.</p>:<p>Será criada uma conta a pagar pendente, sem movimentação de dinheiro.</p>}
    <p>Centro de custo: {frozen.command.cost_center_id?(frozen.centerName||frozen.command.cost_center_id):'Não informado'}</p><p>Motivo: {frozen.command.reason}</p>{frozen.command.receipt_path&&<p>Comprovante anexado para validação e preservação.</p>}{pending&&<p role="status">Pedido preservado. Retome a mesma despesa para confirmar o resultado.</p>}
-   <Button disabled={busy||!!restored.error} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma despesa':'Confirmar registro da despesa'}</Button>{!pending&&<Button variant="outline" onClick={()=>setPreview(null)}>Voltar à edição</Button>}
-  </section>:<fieldset disabled={busy||!!restored.error} className="space-y-3">
+   <Button disabled={busy||!!recoveryError} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma despesa':'Confirmar registro da despesa'}</Button>{!pending&&<Button variant="outline" onClick={()=>void discardPreview()}>Voltar à edição</Button>}
+  </section>:<fieldset disabled={busy||!!recoveryError} className="space-y-3">
    {input('description','Descrição')}{input('amount','Valor (R$)')}
    <label className="block">Categoria<select className="block h-10 w-full rounded border bg-background" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>{PAYABLE_CATEGORIES.map(c=><option key={c} value={c}>{PAYABLE_CATEGORY_LABELS[c]}</option>)}</select></label>
    <label className="block">Centro de custo<select className="block h-10 w-full rounded border bg-background" value={form.center} onChange={e=>setForm({...form,center:e.target.value})}><option value="">Sem centro de custo</option>{centers.fullData.filter(c=>c.active).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
@@ -60,6 +63,6 @@ export function ManualExpenseWorkspace({tenant,actor,onClose}:{tenant:string;act
    <label className="block">Comprovante (opcional)<Input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>
    <Button disabled={busy} onClick={()=>void prepare()}>{busy?'Preparando…':'Revisar despesa'}</Button>
   </fieldset>}
-  {error&&<p role="alert">{error}</p>}
+  {error&&<p role="alert">{error}</p>}{recoveryError&&<Button variant="outline" disabled={busy} onClick={discardRecovery}>Descartar recuperação incompatível</Button>}
  </DialogContent></Dialog>;
 }

@@ -7,8 +7,8 @@ on:
         description: Immutable preview/staging URL produced from the candidate commit
         required: true
         type: string
-      release_id:
-        description: Candidate SHA or immutable release identifier
+      candidate_sha:
+        description: Full 40-character commit SHA used to build the candidate
         required: true
         type: string
 
@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-candidate-${{ github.event.inputs.release_id }}
+  group: release-candidate-${{ github.event.inputs.candidate_sha }}
   cancel-in-progress: false
 
 jobs:
@@ -26,22 +26,36 @@ jobs:
     timeout-minutes: 45
     env:
       DEPLOY_SMOKE_URL: ${{ github.event.inputs.candidate_url }}
+      DEPLOY_EXPECTED_RELEASE: ${{ github.event.inputs.candidate_sha }}
       DEPLOY_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
       DEPLOY_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
       VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
       VITE_SUPABASE_PROJECT_ID: staging
-      VITE_APP_RELEASE: ${{ github.event.inputs.release_id }}
       E2E_BASE_URL: ${{ github.event.inputs.candidate_url }}
       E2E_ALLOW_REMOTE: "true"
       E2E_SKIP_WEBSERVER: "true"
       E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
     steps:
       - name: Checkout candidate commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.inputs.candidate_sha }}
+          persist-credentials: false
+
+      - name: Verify immutable candidate identity
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ github.event.inputs.candidate_sha }}
+        run: |
+          if [[ ! "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "candidate_sha must be a full lowercase commit SHA" >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .node-version
           cache: npm
@@ -51,6 +65,8 @@ jobs:
           npm ci
           npm audit --audit-level=high
           npm run lockfile:check
+          npm run repository:check
+          npm run supabase:release:check
 
       - name: Verify deployed security and hosted signup policy
         run: npm run smoke:deploy
@@ -66,9 +82,9 @@ jobs:
 
       - name: Upload hosted evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-candidate-${{ github.event.inputs.release_id }}
+          name: release-candidate-${{ github.event.inputs.candidate_sha }}
           path: |
             playwright-report/
             test-results/

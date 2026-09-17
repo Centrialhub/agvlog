@@ -1,0 +1,7 @@
+{
+  "archive": "docs/qa/20260910133352_finance_payroll_lifecycle_serialization.before-wrapper-fix.sql",
+  "old_sha256": "d596834f30bdfddcd8b2410c9ba3c1a7318129cebd1c3fc1185c40d1f7506311",
+  "file": "supabase/migrations/20260910133352_finance_payroll_lifecycle_serialization.sql",
+  "new_sha256": "2dbc81ea2638980cb3f9c5bd0ec5c8668807bb1a818288191a724d549aa52b6b",
+  "change": "Remove only unused adjacent label; retain access wrapper, lifecycle wrapper and all previous guards."
+}

@@ -11,6 +11,8 @@ import type {PendingStatement,StatementVerificationResult} from '@/lib/financial
 import {statementImportErrorMessage} from '@/lib/financial/statementImportContract';
 import type {StatementMapping} from '../../../supabase/functions/_shared/finance-statement-reader';
 import {formatFinanceCents} from '@/lib/financial/ledgerContract';
+import {useQuery} from '@tanstack/react-query';
+import {supabase} from '@/integrations/supabase/client';
 const initialMap:StatementMapping={header_row:0,sheet_index:0,delimiter:';',number_format:'br',date_format:'dmy',date_column:0,description_column:1,amount_column:2};
 const stageLabel={upload:'Preservar original',intake:'Registrar linhas',verify:'Conferir dados preservados no servidor',rejected:'Pedido rejeitado'};
 export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:{tenant:string;actor:string;onClose:()=>void;onImported:(result:StatementVerificationResult)=>void;initial?:{account:string;start:string;end:string}}){
@@ -26,6 +28,9 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
   },[loadPending]);
   async function readFile(next:File,nextMap=mapping){
     const current=++version.current;setBusy(true);setError('');setPrepared(null);setLayout(null);setFile(next);
+    if(/\.xls$/i.test(next.name)){
+      setFile(null);setError('Planilhas XLS legadas não podem ser importadas com segurança. Converta o arquivo para XLSX e tente novamente.');setBusy(false);return;
+    }
     if(/\.(pdf|jpe?g|png)$/i.test(next.name)){setBusy(false);return;}
     try{const result=await inspectStatementLayout(next,nextMap.delimiter||';',nextMap.sheet_index||0);
       if(active.current&&current===version.current){setLayout(result);setMapping(nextMap);
@@ -37,8 +42,9 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
   function updateMapping(next:StatementMapping){setPrepared(null);setMapping(next);}
   async function prepare(){
     if(!file||!account||!start||!end||start>end){setError('Selecione arquivo, conta e um período válido.');return;}
+    if(reason.trim().length<5){setError('A observação precisa ter ao menos cinco caracteres úteis.');return;}
     setBusy(true);setError('');
-    try{const result=await prepareStatementImport(file,{tenant,actor,account,start,end,reason},mapping);if(active.current)setPrepared(result);}
+    try{const result=await prepareStatementImport(file,{tenant,actor,account,start,end,reason:reason.trim()},mapping);if(active.current)setPrepared(result);}
     catch(cause){if(active.current)setError(statementImportErrorMessage(cause));}
     finally{if(active.current)setBusy(false);}
   }
@@ -54,22 +60,26 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
       onChange={e=>updateMapping({...mapping,[key]:e.target.value===''?undefined:Number(e.target.value)})}>
       {!required&&<option value="">Não disponível</option>}{(layout?.matrix[mapping.header_row]||[]).map((header,index)=><option key={index} value={index}>{index+1}. {String(header??'Sem título')}</option>)}</select></label>;
   return <Dialog open onOpenChange={open=>{if(!open&&!busy)onClose();}}><DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl" onInteractOutside={e=>{if(busy)e.preventDefault();}}>
-    <DialogHeader><DialogTitle>Importar e conferir extrato</DialogTitle><DialogDescription>Importação de lançamentos: OFX ou CSV. PDF, Excel e imagens podem ser preservados como arquivo de origem, mas não importam lançamentos. Conta, cobertura e saldos exigem conferência separada.</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>Importar e conferir extrato</DialogTitle><DialogDescription>Importação de lançamentos: OFX, CSV ou XLSX. Planilhas XLS legadas precisam ser convertidas para XLSX antes do uso. PDF e imagens podem ser preservados como arquivo de origem, mas não importam lançamentos. Conta, cobertura e saldos exigem conferência separada.</DialogDescription></DialogHeader>
     {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
     {!loaded&&<Button disabled={busy} onClick={()=>void loadPending().catch(()=>setError('Recuperação indisponível. Nenhuma importação foi enviada.'))}>Abrir recuperação</Button>}
     {loaded&&pending?<div className="space-y-3"><p className="font-medium">{pending.file_name} · {pending.command.rows.length} registros</p><p>Próxima etapa: {stageLabel[pending.phase]}</p>
-      {pending.phase==='upload'&&<label className="text-sm">Mesmo arquivo original, se necessário<Input type="file" accept=".csv,.xls,.xlsx,.ofx" disabled={busy} onChange={e=>setFile(e.target.files?.[0]||null)}/></label>}
+      {pending.phase==='upload'&&<label className="text-sm">Mesmo arquivo original, se necessário<Input type="file" accept=".csv,.xlsx,.ofx" disabled={busy} onChange={e=>setFile(e.target.files?.[0]||null)}/></label>}
       {pending.artifact&&<p role="status" className="rounded border p-3 text-sm">{uploadArtifactStatus(pending.artifact)}</p>}<p className="text-sm">O pedido e suas identificações foram preservados. Retomar não cria uma segunda importação.</p>
       <div className="flex gap-2">{pending.phase!=='rejected'&&<Button disabled={busy} onClick={()=>void run()}>Retomar importação</Button>}
         {['upload','rejected'].includes(pending.phase)&&!pending.uncertain&&<Button variant="outline" disabled={busy} onClick={()=>{
           setBusy(true);void workflow.abandon(tenant,actor).then(()=>loadPending()).catch(cause=>setError(cause instanceof Error?cause.message:'Pedido não descartado.')).finally(()=>setBusy(false));
         }}>Descartar pedido {pending.phase==='rejected'?'rejeitado':'não enviado'}</Button>}</div>
-    </div>:loaded&&<div className="space-y-4"><fieldset disabled={busy} className="space-y-3">
+    </div>:loaded&&<div className="space-y-4">
+      {accounts.isPending&&<p role="status">Carregando contas bancárias…</p>}
+      {accounts.isError&&<div role="alert" className="space-y-2 text-sm text-destructive"><p>Não foi possível consultar as contas bancárias. Nenhuma conta foi considerada ausente.</p><Button type="button" variant="outline" onClick={()=>void accounts.refetch()}>Tentar novamente</Button></div>}
+      <fieldset disabled={busy||accounts.isPending||accounts.isError} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-3"><label className="text-sm">Conta bancária<select aria-label="Conta do extrato" className="block h-10 w-full rounded border bg-background" value={account} onChange={e=>{setAccount(e.target.value);setPrepared(null);}}>
-        <option value="">Selecionar</option>{(accounts.data||[]).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+        <option value="">Selecionar</option>{(accounts.data||[]).filter(a=>a.account_type!=='cash').map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
         <label className="text-sm">Início do período<Input aria-label="Início do período" type="date" value={start} onChange={e=>{setStart(e.target.value);setPrepared(null);}}/></label>
         <label className="text-sm">Fim do período<Input aria-label="Fim do período" type="date" value={end} onChange={e=>{setEnd(e.target.value);setPrepared(null);}}/></label></div>
-      <label className="block text-sm">Arquivo original<Input aria-label="Arquivo original" type="file" accept=".csv,.xls,.xlsx,.ofx,.pdf,.jpg,.jpeg,.png" onChange={e=>{const selected=e.target.files?.[0];if(selected)void readFile(selected);}}/></label>
+      {account&&<AccountArtifactHistory key={`${tenant}:${account}`} tenant={tenant} account={account}/>} 
+      <label className="block text-sm">Arquivo original<Input aria-label="Arquivo original" type="file" accept=".csv,.xlsx,.ofx,.pdf,.jpg,.jpeg,.png" onChange={e=>{const selected=e.target.files?.[0];if(selected)void readFile(selected);}}/></label>
       {file&&<QuarantineFileUpload key={`${tenant}:${actor}:${account}:${version.current}`} tenant={tenant} actor={actor} account={account} file={file}/>}
       {!layout?.nativeOfx&&<label className="text-sm">Separador CSV<select className="block h-10 rounded border bg-background" value={mapping.delimiter} onChange={e=>{const next={...mapping,delimiter:e.target.value as StatementMapping['delimiter']};if(file)void readFile(file,next);else updateMapping(next);}}>
         <option value=";">Ponto e vírgula</option><option value=",">Vírgula</option><option value={'\t'}>Tabulação</option></select></label>}
@@ -95,7 +105,7 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
         <p className="text-xs text-muted-foreground">Use valor com sinal ou crédito/débito separados. Preencha identificador único apenas quando o banco fornecer essa identificação; descrição ou valor não servem como identificador.</p>
       </>}
       <label className="block text-sm">Observação da conferência<Input value={reason} onChange={e=>{setReason(e.target.value);setPrepared(null);}}/></label>
-      <Button variant="outline" disabled={!layout||!file||!/\.(ofx|csv)$/i.test(file.name)} onClick={()=>void prepare()}>Preparar prévia</Button>
+      <Button variant="outline" disabled={!layout||!file||!/\.(ofx|csv|xlsx)$/i.test(file.name)} onClick={()=>void prepare()}>Preparar prévia</Button>
     </fieldset>
     {prepared&&<div className="space-y-3 rounded border p-4"><p>{prepared.pending.command.rows.length} registros · Entradas {formatFinanceCents(prepared.totals.inflow_cents)} · Saídas {formatFinanceCents(prepared.totals.outflow_cents)}</p>
       <div className="max-h-52 overflow-auto text-sm">{prepared.pending.command.rows.slice(0,20).map((row,index)=><p key={index}>{row.posted_on} · {row.description} · {formatFinanceCents(row.amount_cents)}</p>)}</div>
@@ -106,3 +116,4 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
     <Button variant="ghost" disabled={busy} onClick={onClose}>Fechar</Button>
   </DialogContent></Dialog>;
 }
+function AccountArtifactHistory({tenant,account}:{tenant:string;account:string}){const [offset,setOffset]=useState(0),[snapshotAt,setSnapshotAt]=useState('');const q=useQuery({queryKey:['finance-account-artifacts',tenant,account,offset,snapshotAt],queryFn:async()=>{const {data,error}=await (supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>)('list_finance_account_artifacts_v1',{_tenant_id:tenant,_account_id:account,_offset:offset,_snapshot_at:snapshotAt||null});if(error)throw error;return data as {snapshot_at:string;total:number;next_offset:number|null;rows:Array<{artifact_id:string;state:string;original:{format:string;size_bytes:number}}>};},retry:false});return <details><summary>Arquivos preservados nesta conta</summary>{q.isPending&&<p>Consultando quarentena…</p>}{q.isError&&<p role="alert">Não foi possível consultar os arquivos preservados.</p>}{q.data&&<><p>{q.data.total} arquivo(s) localizável(is).</p>{q.data.rows.map(row=><p key={row.artifact_id}>{row.original.format.toUpperCase()} · {row.original.size_bytes} bytes · {row.state} · {row.artifact_id}</p>)}<div className="flex gap-2"><Button type="button" variant="outline" disabled={offset===0} onClick={()=>setOffset(Math.max(0,offset-30))}>Anteriores</Button><Button type="button" variant="outline" disabled={q.data.next_offset===null} onClick={()=>{setSnapshotAt(q.data!.snapshot_at);setOffset(q.data!.next_offset!);}}>Próximos</Button><Button type="button" variant="ghost" onClick={()=>{setOffset(0);setSnapshotAt('');void q.refetch();}}>Atualizar</Button></div></>}</details>}

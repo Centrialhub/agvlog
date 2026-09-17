@@ -5,7 +5,7 @@ import {useTenant} from '@/hooks/useTenant';
 import {useAuth} from '@/hooks/useAuth';
 import {supabase} from '@/integrations/supabase/client';
 import {financialError,parseFinancialContext,type FinancialCommandInput,type FinancialResult} from '@/lib/financial/receivableCommands';
-import {FINANCIAL_COMMAND_CHANGED,createFinancialOutbox,pendingFinancialCommand} from '@/lib/financial/receivableFinancialOutbox';
+import {FINANCIAL_COMMAND_CHANGED,createFinancialOutbox,discardPendingFinancialCommand,pendingFinancialCommand} from '@/lib/financial/receivableFinancialOutbox';
 export function useReceivableFinancial(receivable?:string){
  const {user}=useAuth();const {currentTenant}=useTenant();const actor=user?.id;const tenant=currentTenant?.id;
  const latest=useRef({actor,tenant});latest.current={actor,tenant};const alive=useRef(true);const busy=useRef(false);
@@ -30,5 +30,5 @@ export function useReceivableFinancial(receivable?:string){
   finally{try{await Promise.all(['receivable-financial-context','receivables','finance-receivable-portfolio','finance-receivable-payments','receivables_payments','client_invoices','client_invoice_detail','client-invoice-context','closing-reports','closing-report','closing-action-context','bank_transactions','bank_accounts','financial_obligations','financial_matches_suggested','finance-movements','finance-receipt-movement-options','finance-movement-receipts','finance-reconciliation-options','finance-automatic-reconciliation','finance-audit'].map(key=>client.invalidateQueries({queryKey:[key]})))}
    finally{void invalidateAccountReview(client,tenant);busy.current=false;if(alive.current)setPending(false);}}
  };
- return {query,isPending,pending:recovery.pending,recoveryError:recovery.error,submit:(input:FinancialCommandInput)=>run(()=>outbox.submit(tenant!,actor!,input)),recover:()=>run(()=>outbox.recover(tenant!,actor!))};
+ return {query,isPending,pending:recovery.pending,recoveryError:recovery.error,discardRecovery:()=>{if(!tenant||!actor)return;discardPendingFinancialCommand(window.localStorage,tenant,actor);window.dispatchEvent(new Event(FINANCIAL_COMMAND_CHANGED));},submit:(input:FinancialCommandInput)=>run(()=>outbox.submit(tenant!,actor!,input)),recover:()=>run(()=>outbox.recover(tenant!,actor!))};
 }

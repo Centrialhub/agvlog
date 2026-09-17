@@ -4,7 +4,7 @@ import { MovementEntryDialog } from '@/components/financial/MovementEntryDialog'
 import { FinanceRejectedError } from '@/lib/financial/ledgerClient';
 
 const mocks = vi.hoisted(() => ({ record: vi.fn() }));
-vi.mock('@/hooks/useFinancialPayments', () => ({ useBankAccounts: () => ({ data: [{ id: 'bank', name: 'Banco empresa' }] }) }));
+vi.mock('@/hooks/useFinancialPayments', () => ({ useBankAccounts: () => ({ data: [{ id: 'bank', name: 'Banco empresa',active:true},{id:'other-bank',name:'Banco secundário',active:true},{id:'inactive-bank',name:'Banco encerrado',active:false}] }) }));
 vi.mock('@/hooks/useDrivers', () => ({ useDrivers: () => ({ data: [{ id: 'driver', name: 'Motorista João' }] }) }));
 vi.mock('@/lib/financial/ledgerClient', async importOriginal => ({ ...await importOriginal<object>(), recordFinanceMovement: mocks.record }));
 const tenant = '10000000-0000-4000-8000-000000000001', actor = '20000000-0000-4000-8000-000000000001';
@@ -50,12 +50,13 @@ describe('movement entry recovery', () => {
     fireEvent.click(screen.getByRole('button',{name:'Reenviar mesmo pedido'}));await waitFor(()=>expect(done).toHaveBeenCalledOnce());
     expect(mocks.record.mock.calls[1][0]).toEqual(mocks.record.mock.calls[0][0]);expect(mocks.record.mock.calls[2][0]).toEqual(mocks.record.mock.calls[0][0]);
   });
-  it.each(['{broken',JSON.stringify({form:{amount:'500,00'},request:crypto.randomUUID()})])('preserves corrupt recovery data and prevents a new command (%s)',raw=>{
+  it.each(['{broken',JSON.stringify({form:{amount:'500,00'},request:crypto.randomUUID()})])('discards corrupt recovery data and enables a clean command (%s)',raw=>{
     const key=`finance-movement-draft:${tenant}:${actor}`;sessionStorage.setItem(key,raw);
     render(<MovementEntryDialog tenant={tenant} actor={actor} onClose={vi.fn()} onRecorded={vi.fn()}/>);
     expect(screen.getByRole('alert')).toHaveTextContent('Novos envios estão bloqueados');
     expect(screen.getByRole('button',{name:'Registrar movimentação'})).toBeDisabled();
-    expect(sessionStorage.getItem(key)).toBe(raw);expect(mocks.record).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(key)).toBe(raw);fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));
+    expect(screen.queryByText(/Novos envios estão bloqueados/)).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Registrar movimentação'})).toBeEnabled();expect(sessionStorage.getItem(key)).not.toBe(raw);expect(mocks.record).not.toHaveBeenCalled();
   });
 });
 
@@ -65,3 +66,7 @@ it('defaults a fresh send to the selected driver without replacing a restored dr
  render(<MovementEntryDialog tenant={tenant} actor={actor} initialDriver={{id:'another',name:'Outro motorista'}} onClose={vi.fn()} onRecorded={vi.fn()}/>);
  expect(screen.getByLabelText('Motorista beneficiário')).toHaveValue('driver');expect(screen.getByLabelText('Beneficiário / pagador')).toHaveValue('Motorista João');expect(screen.getByLabelText('Valor (R$)')).toHaveValue('500,00');
 });
+
+it('offers only active accounts for a new movement',()=>{render(<MovementEntryDialog tenant={tenant} actor={actor} onClose={vi.fn()} onRecorded={vi.fn()}/>);expect(screen.getByRole('option',{name:'Banco empresa'})).toBeInTheDocument();expect(screen.queryByRole('option',{name:'Banco encerrado'})).not.toBeInTheDocument();});
+
+it('requires an explicit account choice when a restored draft belongs to another account',()=>{const key=`finance-movement-draft:${tenant}:${actor}`;sessionStorage.setItem(key,JSON.stringify({request:null,form:{account:'other-bank',driver:'driver',amount:'500,00',date:'2026-01-01',description:'Despesa conferida',beneficiary:'Motorista João',reference:'',reason:'Registro anterior',nature:'driver_advance',direction:'out'}}));render(<MovementEntryDialog tenant={tenant} actor={actor} initialAccount="bank" onClose={vi.fn()} onRecorded={vi.fn()}/>);expect(screen.getByRole('alert')).toHaveTextContent('rascunho recuperado pertence a outra conta');expect(screen.getByRole('button',{name:'Registrar movimentação'})).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:'Usar conta atualmente selecionada'}));expect(screen.getByLabelText('Conta')).toHaveValue('bank');expect(screen.queryByText(/rascunho recuperado pertence a outra conta/)).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Registrar movimentação'})).toBeEnabled();expect(mocks.record).not.toHaveBeenCalled();});

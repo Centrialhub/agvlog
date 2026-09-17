@@ -168,13 +168,13 @@ it('matches city filters with or without accents', async () => {
 it('refreshes both billing lists and the summary immediately after importing an NF', async () => {
   const {result} = renderHook(() => ({cte: useBillingDocuments({}, 'cte'), nfse: useBillingDocuments({}, 'nfse'), summary: usePendingInvoices(), create: useCreateFiscalDocument()}), {wrapper: Wrapper});
   await waitFor(() => expect(result.current.cte.isSuccess && result.current.nfse.isSuccess).toBe(true));
-  await act(async () => {await result.current.create.mutateAsync({document_type: 'inbound', status: 'confirmed', invoice_number: '999', recipient_city: 'Janaúba', recipient_state: 'MG'});});
+  await act(async () => {await result.current.create.mutateAsync({document_type: 'inbound', status: 'confirmed', invoice_number: '999', issue_date: '2026-09-17', recipient: 'Cliente Janaúba', recipient_city: 'Janaúba', recipient_state: 'MG'});});
   await waitFor(() => {
     expect(result.current.cte.data).toHaveLength(1);
     expect(result.current.nfse.data).toHaveLength(0);
     expect(result.current.summary.data.count).toBe(1);
   });
-  await act(async () => {await result.current.create.mutateAsync({document_type: 'inbound', status: 'confirmed', invoice_number: '1000', recipient_city: 'Montes Claros', recipient_state: 'MG'});});
+  await act(async () => {await result.current.create.mutateAsync({document_type: 'inbound', status: 'confirmed', invoice_number: '1000', issue_date: '2026-09-17', recipient: 'Cliente Montes Claros', recipient_city: 'Montes Claros', recipient_state: 'MG'});});
   await waitFor(() => {
     expect(result.current.cte.data).toHaveLength(1);
     expect(result.current.nfse.data).toHaveLength(1);

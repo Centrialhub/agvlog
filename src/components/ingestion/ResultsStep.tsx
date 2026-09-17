@@ -480,7 +480,7 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
                   <span>PDF em segundo plano · {pdfJob.stage}</span>
                   <span className="font-mono">{pdfJob.pct}%</span>
                 </div>
-                <Progress value={pdfJob.pct} className="h-1.5" />
+                <Progress aria-label="Progresso da geração do PDF" aria-valuetext={`${pdfJob.pct}%`} value={pdfJob.pct} className="h-1.5" />
               </div>
             )}
 
@@ -546,7 +546,7 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
                         <span>{f.label}</span>
                         <span className="text-muted-foreground">{f.filled}/{f.total} ({pct}%)</span>
                       </div>
-                      <Progress value={pct} className="h-1.5" />
+                      <Progress aria-label="Progresso do processamento" aria-valuetext={`${pct}%`} value={pct} className="h-1.5" />
                     </div>
                   );
                 })}

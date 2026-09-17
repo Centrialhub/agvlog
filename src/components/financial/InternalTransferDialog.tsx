@@ -11,14 +11,15 @@ export function InternalTransferDialog({tenant,actor,onClose,onRecorded}:{tenant
  const [restored]=useState(()=>{try{const raw=sessionStorage.getItem(key);if(!raw)return {command:null,error:''};const saved=JSON.parse(raw),command=internalTransferCommandSchema.parse(saved.command);if(saved.actor!==actor||command.tenant_id!==tenant)throw new Error('scope');return {command,error:''};}catch{return {command:null,error:'Não foi possível recuperar o registro anterior. Não envie outro pedido nesta sessão.'};}});
  const [pending,setPending]=useState<InternalTransferCommand|null>(restored.command),[preview,setPreview]=useState<InternalTransferCommand|null>(null);
  const [form,setForm]=useState({source:'',destination:'',amount:'',debited:'',credited:'',sourceReference:'',destinationReference:'',reason:''});
- const [confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(restored.error);
+ const [confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[recoveryError,setRecoveryError]=useState(restored.error),[error,setError]=useState(restored.error);
  const live=useRef(true),sending=useRef(false);useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
  const frozen=pending||preview;
  function prepare(){
   const parsed=internalTransferCommandSchema.safeParse({version:1,tenant_id:tenant,request_id:crypto.randomUUID(),source_account_id:form.source,destination_account_id:form.destination,amount_cents:parseFinanceAmount(form.amount),debited_on:form.debited,credited_on:form.credited,source_reference:form.sourceReference.trim(),destination_reference:form.destinationReference.trim(),reason:form.reason,both_recorded:confirmed});
   if(!parsed.success){setError('Informe duas contas distintas, valor, datas da saída e da entrada, motivo e confirme que ambas já ocorreram.');return;}setError('');setPreview(parsed.data);
  }
- async function submit(){if(!frozen||sending.current||restored.error)return;const command=frozen,uncertain=!!pending;
+ function discardRecovery(){try{sessionStorage.removeItem(key);setRecoveryError('');setError('');setPending(null);setPreview(null);setForm({source:'',destination:'',amount:'',debited:'',credited:'',sourceReference:'',destinationReference:'',reason:''});setConfirmed(false);}catch{setError('Não foi possível descartar a recuperação incompatível. Reabra o diálogo e tente novamente.');}}
+ async function submit(){if(!frozen||sending.current||recoveryError)return;const command=frozen,uncertain=!!pending;
   try{sessionStorage.setItem(key,JSON.stringify({actor,command}));}catch{setError('Não foi possível preservar o pedido. Nenhum registro foi enviado.');return;}
   sending.current=true;setBusy(true);setPending(command);setPreview(null);setError('');
   try{await recordInternalTransfer(command);sessionStorage.removeItem(key);if(live.current)onRecorded();}
@@ -31,7 +32,7 @@ export function InternalTransferDialog({tenant,actor,onClose,onRecorded}:{tenant
   <DialogHeader><DialogTitle>Registrar transferência entre contas</DialogTitle><DialogDescription>Registre uma transferência já realizada entre contas da empresa. O sistema não movimenta dinheiro. Tarifas devem ser registradas como despesa separada.</DialogDescription></DialogHeader>
   {frozen?<section className="space-y-3"><p className="font-semibold">{formatFinanceCents(frozen.amount_cents)}</p><p>Saída: {accountName(frozen.source_account_id)} · {frozen.debited_on.split('-').reverse().join('/')}</p><p>Entrada: {accountName(frozen.destination_account_id)} · {frozen.credited_on.split('-').reverse().join('/')}</p><p>{frozen.reason}</p><p>Os dois registros serão vinculados. Cada lado ainda precisa de conferência no extrato da sua conta.</p>
    {pending&&<p role="status">Pedido preservado. Retome o mesmo registro para confirmar o resultado.</p>}
-   <Button disabled={busy||!!restored.error} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesmo registro':'Confirmar registro dos dois lados'}</Button>
+   <Button disabled={busy||!!recoveryError} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesmo registro':'Confirmar registro dos dois lados'}</Button>
    {!pending&&<Button variant="outline" onClick={()=>setPreview(null)}>Voltar à edição</Button>}
   </section>:<div className="space-y-3">
    {accounts.error&&<p role="alert">Não foi possível consultar as contas.</p>}
@@ -39,8 +40,9 @@ export function InternalTransferDialog({tenant,actor,onClose,onRecorded}:{tenant
    {input('amount','Valor transferido')}{input('debited','Data da saída','date')}{input('credited','Data da entrada','date')}
    {input('sourceReference','Referência bancária da saída (opcional)')}{input('destinationReference','Referência bancária da entrada (opcional)')}{input('reason','Motivo')}
    <label className="block"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> Confirmo que a saída e a entrada já ocorreram e ainda não foram registradas neste módulo.</label>
-   <Button disabled={!!restored.error||accounts.isPending||!!accounts.error} onClick={prepare}>Revisar transferência</Button>
+   <Button disabled={!!recoveryError||accounts.isPending||!!accounts.error} onClick={prepare}>Revisar transferência</Button>
   </div>}
   {error&&<p role="alert">{error}</p>}
+  {recoveryError&&<Button variant="outline" disabled={busy} onClick={discardRecovery}>Descartar recuperação incompatível</Button>}
  </DialogContent></Dialog>;
 }

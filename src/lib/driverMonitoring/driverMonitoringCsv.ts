@@ -1,14 +1,11 @@
 import type { DriverMonitorRow, ProgressUpdateRow, ForecastRow } from '@/hooks/useDriverMonitoring';
 import { STATUS_LABELS } from './driverMonitoringCalculator';
+import { csvSafeCell } from '@/lib/csvSafety';
 
 const dt = (v?: string | null) => (v ? v.slice(0, 10).split('-').reverse().join('/') : '');
 const tm = (v?: string | null) => (v ? v.slice(0, 5) : '');
-const esc = (v: unknown) => {
-  const s = v == null ? '' : String(v);
-  return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-};
 const toCsv = (rows: (string | number | null)[][]) =>
-  '\uFEFF' + rows.map((r) => r.map(esc).join(';')).join('\n');
+  '\uFEFF' + rows.map((r) => r.map(csvSafeCell).join(';')).join('\r\n');
 
 export function driversInRouteCsv(rows: DriverMonitorRow[]): string {
   const header = ['Motorista', 'Placa', 'Carga', 'Rota planejada', 'Total', 'Realizadas', 'Faltantes', 'Progresso %', 'Cidade atual', 'Próxima cidade', 'Prazo retorno', 'Previsão chegada', 'Status', 'Observação'];

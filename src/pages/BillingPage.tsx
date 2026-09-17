@@ -1178,7 +1178,7 @@ function IssuedCtesTable() {
       const blob = await hubFiscal.file(cte.hub_document_id, kind, { type: 'cte' });
       const objectUrl = URL.createObjectURL(blob);
       if (view) {
-        const win = window.open(objectUrl, '_blank');
+        const win = window.open(objectUrl, '_blank', 'noopener,noreferrer');
         if (!win) toast.warning('Pop-up bloqueado — use o botão de download.');
       } else {
         const a = document.createElement('a');

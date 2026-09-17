@@ -95,4 +95,12 @@ describe('mapOperationalEventToDriverEvent', () => {
     expect(mapped.label).toBe('Outra ocorrência');
     expect(mapped.code).toBe('');
   });
+
+  it.each([
+    ['client_refused', 'Cliente fechado ou recusa'],
+    ['return', 'Devolução'],
+  ])('classifies the operational alias %s as a finalizer', (eventType, label) => {
+    const mapped = mapOperationalEventToDriverEvent(event({ event_type: eventType }));
+    expect(mapped).toMatchObject({ type: 'finalizador', label });
+  });
 });

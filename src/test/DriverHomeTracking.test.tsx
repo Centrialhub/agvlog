@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DriverHome from '@/pages/driver/DriverHome';
+import { useDriverHomeVehiclePosition } from '@/hooks/useDriverHomeVehiclePosition';
 
 const mock = vi.hoisted(() => ({
   tenantId: '10000000-0000-4000-8000-000000000001',
@@ -35,6 +37,14 @@ const trip = {
 
 vi.mock('@/hooks/useTenant', () => ({
   useTenant: () => ({ currentTenant: { id: mock.tenantId, name: 'Tenant QA' } }),
+}));
+
+vi.mock('@/hooks/useAuth', () => ({
+  useAuth: () => ({ user: { id: '10000000-0000-4000-8000-000000000001' } }),
+}));
+
+vi.mock('@/hooks/useDriverPhysicalJourney', () => ({
+  useDriverPhysicalJourney: () => ({ data: null, isLoading: false }),
 }));
 
 vi.mock('@/hooks/useCurrentDriver', () => ({
@@ -150,6 +160,10 @@ function renderHome() {
   );
 }
 
+function hookWrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+
 beforeEach(() => {
   mock.positionShouldFail = true;
   mock.positionCalls = 0;
@@ -197,5 +211,20 @@ describe('driver home tracking', () => {
     expect(source).toContain('refetchInterval: 30_000');
     expect(source).toContain('refetchIntervalInBackground: false');
     expect(source).toContain('retry: false');
+  });
+
+  it('uses the trip tenant for vehicle telemetry during a shared journey', async () => {
+    mock.positionShouldFail = false;
+
+    const { result } = renderHook(
+      () => useDriverHomeVehiclePosition(mock.vehicleId, 'tenant-from-trip'),
+      { wrapper: hookWrapper },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mock.positionRpcArgs).toEqual([{
+      _tenant_id: 'tenant-from-trip',
+      _vehicle_id: mock.vehicleId,
+    }]);
   });
 });

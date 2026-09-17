@@ -27,17 +27,17 @@ export default function FinanceExpenses(){
 }
 function ExpenseWorkspace({tenant,actor}:{tenant:string;actor:string}){
   const [filters,setFilters]=useState(initial),[draft,setDraft]=useState(initial),[entry,setEntry]=useState(false);
-  const [selected,setSelected]=useState<ExpenseHistoryRow|null>(null),[notice,setNotice]=useState('');
+  const [selected,setSelected]=useState<ExpenseHistoryRow|null>(null),[notice,setNotice]=useState(''),[filterError,setFilterError]=useState('');
   const qc=useQueryClient(),query=useQuery({queryKey:['finance-expenses',tenant,actor,filters],retry:false,queryFn:()=>readExpenseHistory(tenant,filters)});
-  const page=query.isFetching||query.isError?undefined:query.data;
-  const selectedRow=page?.rows.find(row=>row.id===selected?.id);
+  const page=query.isError?undefined:query.data;
+  const selectedRow=query.isFetching?undefined:page?.rows.find(row=>row.id===selected?.id);
   return <div className="space-y-5"><div className="flex items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Gastos conferidos</h1>
     <p className="text-sm text-muted-foreground">Gastos registrados em lote, com categorias, comprovantes e utilização dos envios.</p></div><Button onClick={()=>setEntry(true)}>Conferir gastos em lote</Button></div>
-    {notice&&<p role="status">{notice}</p>}<LegacyCostInventory tenant={tenant} actor={actor}/>
-    <form className="flex flex-wrap items-end gap-3" onSubmit={e=>{e.preventDefault();setFilters({...draft,page:1});setSelected(null);}}>
+    {notice&&<p role="status">{notice}</p>}{filterError&&<p role="alert">{filterError}</p>}<LegacyCostInventory tenant={tenant} actor={actor}/>
+    <form noValidate className="flex flex-wrap items-end gap-3" onSubmit={e=>{e.preventDefault();if(draft.from&&draft.to&&draft.from>draft.to){setFilterError('A data inicial não pode ser posterior à data final.');return;}setFilterError('');setFilters({...draft,page:1});setSelected(null);}}>
       <label className="text-sm">Buscar<Input value={draft.search} onChange={e=>setDraft({...draft,search:e.target.value})} placeholder="Gasto, prestador ou documento"/></label>
-      <label className="text-sm">De<Input type="date" value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})}/></label>
-      <label className="text-sm">Até<Input type="date" value={draft.to} onChange={e=>setDraft({...draft,to:e.target.value})}/></label>
+      <label className="text-sm">De<Input type="date" max={draft.to||undefined} value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})}/></label>
+      <label className="text-sm">Até<Input type="date" min={draft.from||undefined} value={draft.to} onChange={e=>setDraft({...draft,to:e.target.value})}/></label>
       <label className="text-sm">Categoria<select className="block h-10 rounded border bg-background px-2" value={draft.category} onChange={e=>setDraft({...draft,category:e.target.value})}>
         <option value="">Todas</option>{Object.entries(expenseCategories).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
       <label className="text-sm">Origem<select className="block h-10 rounded border bg-background px-2" value={draft.context} onChange={e=>setDraft({...draft,context:e.target.value})}>
@@ -45,7 +45,7 @@ function ExpenseWorkspace({tenant,actor}:{tenant:string;actor:string}){
       <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={draft.missing_receipt} onChange={e=>setDraft({...draft,missing_receipt:e.target.checked})}/>Sem comprovante</label>
       <Button type="submit">Filtrar</Button>
     </form>
-    {query.isPending&&<p role="status">Carregando gastos…</p>}{query.error&&<p role="alert">{financeError(query.error)} <Button onClick={()=>void query.refetch()}>Atualizar</Button></p>}
+    {query.isPending&&<p role="status">Carregando gastos…</p>}{query.isFetching&&!query.isPending&&page&&<p role="status">Atualizando gastos…</p>}{query.error&&<p role="alert">{financeError(query.error)} <Button onClick={()=>void query.refetch()}>Atualizar</Button></p>}
     {page&&!query.error&&<><div className="grid gap-3 sm:grid-cols-4">{[['Gastos',expenseCostMoney(page.total_cents)],['Vinculado a envios',formatFinanceCents(page.allocated_cents)],
       ['Complementos gerados',expenseCostMoney(page.complement_cents)],['Sem comprovante',String(page.missing_receipt_count)]].map(([label,value])=><div key={label} className="rounded border p-4"><p className="text-sm">{label}</p><p className="text-xl font-semibold">{value}</p></div>)}</div>
       {!!page.cost_needs_review_count&&<p role="alert">{page.cost_needs_review_count} gasto(s) com origem de custo pendente de conferência. Totais afetados estão indisponíveis.</p>}

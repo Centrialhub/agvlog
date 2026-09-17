@@ -1,6 +1,6 @@
 # Renegociação do saldo aberto — contrato candidato
 
-Estado: desenho para implementação local; nenhuma API ou migração promovida. Base examinada: HEAD 7d362321, incluindo ajuste15046, previsão15916 e boundary121356 publicados. Requisito: plano financeiro linhas470–474. Não inclui juros, emissão fiscal nem alteração do nominal original.
+Estado atualizado em 2026-09-14: implementação local candidata em `20260914214752_finance_receivable_renegotiation.sql`, ainda não promovida. SHA-256 validado: `be1d0d96b3a0fcee3bf9b84b3dad067e19aabaf5da5a50f7a4c8beafd57ea05d`. Base original examinada: HEAD 7d362321, incluindo ajuste15046, previsão15916 e boundary121356. Requisito: plano financeiro linhas470–474. Não inclui juros, emissão fiscal nem alteração do nominal original.
 
 ## Modelo e invariantes
 
@@ -47,5 +47,12 @@ Implementação deverá envolver os writers canônicos em contexto transacional 
 3. Revisão do saldo restante com parcelas parcialmente liquidadas; estorno legado e estorno de versão antiga geram pendência não distribuída, sem esconder dívida.
 4. Carteira/páginas/previsão/fatura/fechamento e schemas reais; provar somas, vencimentos, cancelamento fiscal e ausência de dupla receita.
 5. Permissões tenant/actor/mixed driver, request replay, rollback integral, period guard; disputas nativas renegociação×baixa/crédito/cancelamento e reautorização após espera.
+
+## Evidência executada em 2026-09-14
+
+- PostgreSQL 17.11 nativo e descartável: 8/8 casos aprovados. Foram exercitados os três journals privados com RLS, seis wrappers autenticados, nove gatilhos, criação/replay/conflito, duas disputas concorrentes, revogação de membership durante lock, distribuição e estorno de dinheiro, crédito e desconto por parcela, revisão, revogação, paginação, imutabilidade, isolamento entre tenants e limite de 100 parcelas.
+- Regressões funcionais: 3 arquivos/7 testes aprovados (`financeReceivableRenegotiation`, outbox e painel de posição). ESLint sem avisos nos arquivos do fluxo, typecheck completo aprovado e `git diff --check` aprovado.
+- A primeira execução nativa comprovou que wrappers `SECURITY INVOKER` não podiam chamar helpers privados com `EXECUTE` revogado (`42501 permission denied for function receivable_agreement_context`). Os seis wrappers públicos foram corrigidos para `SECURITY DEFINER`, todos com `search_path=''`, `EXECUTE` revogado de `PUBLIC`, `anon` e `service_role`, grant somente a `authenticated` e rechecagem interna de usuário, empresa e papel. Os helpers privados continuam indisponíveis ao cliente.
+- Preflight remoto somente leitura: a candidata está ausente; os oito predecessores estão presentes; todos os trechos exatos de cash, credit, adjustment, portfolio e forecast que a migration substitui permanecem compatíveis. O histórico remoto termina em `20260914210507`. Nenhuma escrita, trigger ou função foi instalada no banco principal.
 
 Parcela comercial numerada em fatura não é substituto desse modelo. Retenções e juros são trabalhos separados; não entram como desconto ou perda automaticamente. Qualquer caminho ainda não integrado deve permanecer indisponível explicitamente na candidata até a promoção conjunta.

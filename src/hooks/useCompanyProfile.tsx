@@ -51,11 +51,17 @@ export function useUpdateCompanyProfile() {
       const { data: cur, error: e1 } = await supabase
         .from('tenants').select('settings').eq('id', currentTenant.id).maybeSingle();
       if (e1) throw e1;
+      if (!cur) throw new Error('Não foi possível localizar a empresa atual ou você não tem permissão para consultá-la.');
       const settings = { ...((cur?.settings as any) || {}) };
       settings.company = { ...(settings.company || {}), ...patch };
-      const { error } = await supabase
-        .from('tenants').update({ settings }).eq('id', currentTenant.id);
+      const { data: updated, error } = await supabase
+        .from('tenants')
+        .update({ settings })
+        .eq('id', currentTenant.id)
+        .select('id')
+        .maybeSingle();
       if (error) throw error;
+      if (!updated) throw new Error('A empresa não foi atualizada. Verifique sua permissão de administrador e tente novamente.');
       return settings.company as CompanyProfile;
     },
     onSuccess: () => {

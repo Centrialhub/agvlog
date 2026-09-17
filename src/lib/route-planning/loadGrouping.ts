@@ -68,7 +68,7 @@ function matchOperationalRoute(load: ConsolidationLoad, routes: OperationalRoute
     const dests = Array.isArray(r.destinations) ? r.destinations : [];
     return dests.some((destination) => normalizedDestinationCity(destination) === city);
   });
-  return matches[0] || null;
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function countOperationalMatches(load: ConsolidationLoad, routes: OperationalRouteLite[]): number {

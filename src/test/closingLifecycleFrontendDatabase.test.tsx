@@ -102,6 +102,6 @@ describe('closing lifecycle UI with real SQL transitions',{timeout:15000},()=>{
   const r=await draft();await closingAction(db,await closingActionPayload(db,r.report.id));render(<Story report={r.report.id}/>);await choose('mark_sent');
   expect(screen.getByText(/não envia e-mail ou mensagem/)).toBeInTheDocument();set('Destinatário informado','Financeiro');set('Canal informado','manual');
   fireEvent.click(screen.getByRole('button',{name:'Confirmar ação'}));await screen.findByText(/Pedido confirmado: Registrar envio/);expect(await stored(r.report.id)).toEqual({status:'sent',revision:2});
-  expect(new Set(mock.rpc.mock.calls.map(([name])=>name))).toEqual(new Set(['get_closing_report_action_context','apply_closing_report_action']));expect(mock.from).not.toHaveBeenCalled();
+  expect(new Set(mock.rpc.mock.calls.map(([name])=>name))).toEqual(new Set(['get_closing_report_action_context','get_finance_closing_receivable_agreement','apply_closing_report_action']));expect(mock.from).not.toHaveBeenCalled();
  });
 });

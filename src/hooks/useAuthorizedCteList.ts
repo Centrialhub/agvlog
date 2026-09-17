@@ -10,6 +10,7 @@ import {
   type LinkedNfeSourceRow,
   type MdfeLinkedNfeProduct,
 } from '@/lib/fiscal/mdfePredominantProduct';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 type ClientAddressFallback = Pick<
   Tables<'clients'>,
@@ -73,20 +74,17 @@ export function useAuthorizedCteList(loadId?: string | null) {
       // Isso evita perder CT-es antigos por causa do limite da consulta geral.
       let scopedDocumentIds: string[] | null = null;
       if (loadId) {
-        const { data: links, error: linksError } = await supabase
-          .from('cte_documents')
+        const links = await fetchAllPostgrestPages((from, to) => supabase.from('cte_documents')
           .select('id')
           .eq('tenant_id', currentTenant!.id)
-          .contains('load_ids', [loadId]);
-        if (linksError) throw linksError;
-        scopedDocumentIds = (links || []).map(link => link.id);
+          .contains('load_ids', [loadId])
+          .order('id').range(from, to));
+        scopedDocumentIds = links.map(link => link.id);
         if (!scopedDocumentIds.length) return [];
       }
 
       // 1. Buscamos em fiscal_documents (saída) que foram autorizados
-      let outboundQuery = supabase
-        .from('fiscal_documents')
-        .select(`
+      const outboundSelect = `
           id, 
           invoice_number, 
           access_key, 
@@ -108,18 +106,18 @@ export function useAuthorizedCteList(loadId?: string | null) {
           issue_date,
           weight_kg,
           hub_document_id
-        `)
-        .eq('tenant_id', currentTenant!.id)
-        .is('deleted_at', null)
-        .eq('document_type', 'outbound')
-        .eq('status', 'authorized')
-        .order('issue_date', { ascending: false });
-      outboundQuery = scopedDocumentIds
-        ? outboundQuery.in('id', scopedDocumentIds)
-        : outboundQuery.limit(100);
-      const { data: outbound, error } = await outboundQuery;
-
-      if (error) throw error;
+        `;
+      const outbound = scopedDocumentIds
+        ? await fetchAllPostgrestPages((from, to) => supabase.from('fiscal_documents').select(outboundSelect)
+          .eq('tenant_id', currentTenant!.id).is('deleted_at', null).eq('document_type', 'outbound')
+          .eq('status', 'authorized').in('id', scopedDocumentIds!).order('issue_date', { ascending: false }).order('id').range(from, to))
+        : await (async () => {
+          const { data, error } = await supabase.from('fiscal_documents').select(outboundSelect)
+            .eq('tenant_id', currentTenant!.id).is('deleted_at', null).eq('document_type', 'outbound')
+            .eq('status', 'authorized').order('issue_date', { ascending: false }).limit(100);
+          if (error) throw error;
+          return data || [];
+        })();
 
       // 2. Buscamos as emissões correspondentes para pegar o payload detalhado (e a chave se faltar)
       const documentIds = (outbound || []).map(document => document.id);

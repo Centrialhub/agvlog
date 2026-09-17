@@ -18,6 +18,7 @@ import {
 } from '@/lib/fiscal/mdfeStatus';
 import { getErrorMessage } from '@/lib/errors';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
+import { FiscalListPagination } from '@/components/fiscal/FiscalListPagination';
 
 const statusTone: Record<MdfeLifecycleStatus, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -32,6 +33,7 @@ const statusTone: Record<MdfeLifecycleStatus, string> = {
 
 const returnedLoad = (manifest: MdfeManifest) => Boolean(manifest.loads?.arrival_at) ||
   ['delivered', 'partial_delivery', 'returned', 'refused', 'failed'].includes(manifest.loads?.status || '');
+const TABLE_PAGE_SIZE = 50;
 
 const includesSearch = (manifest: MdfeManifest, search: string) => {
   const needle = search.trim().toLocaleLowerCase('pt-BR');
@@ -46,17 +48,25 @@ const includesSearch = (manifest: MdfeManifest, search: string) => {
 export default function Mdfe() {
   const navigate = useNavigate();
   const toast = useSonnerToast();
-  const { data: manifests = [], isLoading, isFetching, error, refetch } = useMdfeHistory();
+  const { data: manifestsData, isLoading, isFetching, error, refetch } = useMdfeHistory();
+  const manifests = useMemo(() => manifestsData ?? [], [manifestsData]);
   const syncMdfe = useSyncMdfe();
   const closeMdfe = useCloseMdfe();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'all' | MdfeLifecycleStatus>('all');
   const [fileBusy, setFileBusy] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => manifests.filter(manifest => {
     const lifecycle = normalizeMdfeStatus(manifest.status);
     return (status === 'all' || lifecycle === status) && includesSearch(manifest, search);
   }), [manifests, search, status]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / TABLE_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleManifests = useMemo(
+    () => filtered.slice((currentPage - 1) * TABLE_PAGE_SIZE, currentPage * TABLE_PAGE_SIZE),
+    [filtered, currentPage],
+  );
 
   const totals = useMemo(() => manifests.reduce((result, manifest) => {
     const lifecycle = normalizeMdfeStatus(manifest.status);
@@ -66,6 +76,7 @@ export default function Mdfe() {
     if (['rejected', 'provider_unknown'].includes(lifecycle)) result.attention += 1;
     return result;
   }, { total: 0, open: 0, closed: 0, attention: 0 }), [manifests]);
+  const totalsKnown = !isLoading && !error;
 
   const handleSync = async (manifest: MdfeManifest) => {
     try {
@@ -108,18 +119,18 @@ export default function Mdfe() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Manifestos</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{totals.total}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Em viagem</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-info">{totals.open}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Encerrados</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-success">{totals.closed}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Requer atenção</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-destructive">{totals.attention}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Manifestos</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{totalsKnown?totals.total:'—'}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Em viagem</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-info">{totalsKnown?totals.open:'—'}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Encerrados</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-success">{totalsKnown?totals.closed:'—'}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Requer atenção</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-destructive">{totalsKnown?totals.attention:'—'}</CardContent></Card>
       </div>
 
       <Card>
         <CardHeader className="gap-3 md:flex-row md:items-center md:justify-between">
           <div><CardTitle className="text-base">Consulta de manifestos</CardTitle><p className="mt-1 text-xs text-muted-foreground">A emissão de um novo MDF-e é feita dentro da carga correspondente.</p></div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9 sm:w-72" value={search} onChange={event => setSearch(event.target.value)} placeholder="Carga, chave, motorista ou placa" /></div>
-            <select aria-label="Filtrar por situação" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={status} onChange={event => setStatus(event.target.value as typeof status)}>
+            <div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9 sm:w-72" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Carga, chave, motorista ou placa" /></div>
+            <select aria-label="Filtrar por situação" className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={status} onChange={event => { setStatus(event.target.value as typeof status); setPage(1); }}>
               <option value="all">Todas as situações</option>
               {Object.entries(MDFE_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
@@ -130,6 +141,8 @@ export default function Mdfe() {
             <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm"><p>{getErrorMessage(error, 'Não foi possível carregar os MDF-es.')}</p><Button className="mt-3" size="sm" variant="outline" onClick={() => void refetch()}>Tentar novamente</Button></div>
           ) : isLoading ? (
             <p role="status" className="py-10 text-center text-sm text-muted-foreground">Carregando MDF-es…</p>
+          ) : filtered.length === 0 && manifests.length > 0 ? (
+            <div className="py-12 text-center"><Truck className="mx-auto mb-3 h-9 w-9 text-muted-foreground" /><p className="font-medium">Nenhum MDF-e corresponde aos filtros</p><p className="text-sm text-muted-foreground">Ajuste a busca ou a situação para consultar os outros manifestos.</p><Button className="mt-4" variant="outline" onClick={() => { setSearch(''); setStatus('all'); setPage(1); }}>Limpar filtros</Button></div>
           ) : filtered.length === 0 ? (
             <div className="py-12 text-center"><Truck className="mx-auto mb-3 h-9 w-9 text-muted-foreground" /><p className="font-medium">Nenhum MDF-e encontrado</p><p className="text-sm text-muted-foreground">Abra uma carga pronta para emitir o primeiro manifesto.</p><Button className="mt-4" variant="outline" onClick={() => navigate('/loads')}>Ir para cargas</Button></div>
           ) : (
@@ -137,7 +150,7 @@ export default function Mdfe() {
               <Table>
                 <TableHeader><TableRow><TableHead>Carga</TableHead><TableHead>MDF-e</TableHead><TableHead>Motorista / veículo</TableHead><TableHead>Situação</TableHead><TableHead>Datas</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {filtered.map(manifest => {
+                  {visibleManifests.map(manifest => {
                     const lifecycle = normalizeMdfeStatus(manifest.status);
                     return (
                       <TableRow key={manifest.id}>
@@ -157,6 +170,7 @@ export default function Mdfe() {
                   })}
                 </TableBody>
               </Table>
+              <FiscalListPagination page={currentPage} pageSize={TABLE_PAGE_SIZE} totalItems={filtered.length} onPageChange={setPage} />
             </div>
           )}
         </CardContent>

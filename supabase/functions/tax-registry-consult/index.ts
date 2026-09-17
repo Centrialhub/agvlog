@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { withFiscalCors } from '../_shared/fiscal-cors.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import {
-  buildCadastroEnvelope, digits, parseCadastroResponse, readCertificateBundle,
+  BRASIL_API_REGISTRY_SOURCE, brasilApiCnpjEndpoint, buildCadastroEnvelope, digits,
+  parseBrasilApiCnpjResponse, parseCadastroResponse, readCertificateBundle,
   registryEndpoint, sha256Hex, type LookupType, type RegistryEnvironment,
 } from '../_shared/tax-registry.ts';
 
@@ -56,7 +57,16 @@ Deno.serve(withFiscalCors(async (req) => {
     const rawValue = String(body.lookup_value || '');
     const lookupValue = lookupType === 'IE' ? rawValue.replace(/[^A-Za-z0-9]/g, '') : digits(rawValue);
     validateLookup(uf, lookupType, lookupValue, environment);
-    const endpoint = registryEndpoint(uf, environment);
+    let endpoint: string;
+    let usesSefazCadastro = true;
+    try {
+      endpoint = registryEndpoint(uf, environment);
+    } catch (error) {
+      const unsupportedUf = error instanceof Error && error.message === 'UF_SEM_ENDPOINT_CADASTRO_CONFIGURADO';
+      if (!unsupportedUf || environment !== 'production' || lookupType !== 'CNPJ') throw error;
+      endpoint = brasilApiCnpjEndpoint(lookupValue);
+      usesSefazCadastro = false;
+    }
 
     if (!body.force_refresh) {
       const cached = await readCache(context.admin, context.emitter.tenant_id, uf, lookupType, lookupValue);
@@ -68,49 +78,70 @@ Deno.serve(withFiscalCors(async (req) => {
       .eq('tenant_id', context.emitter.tenant_id).eq('emitter_id', emitterId)
       .eq('status', 'active').gt('valid_to', new Date().toISOString()).maybeSingle();
     if (certificateError || !certificate) throw new HttpError(409, 'CERTIFICADO_A1_ATIVO_NAO_ENCONTRADO');
-    const bundle = await readCertificateBundle(certificate.certificate_ciphertext);
-    const envelope = buildCadastroEnvelope(uf, lookupType, lookupValue);
     const started = Date.now();
     let responseText = '';
     let parsed: ReturnType<typeof parseCadastroResponse>;
     let resultStatus = 'error';
     let responseStatus = 0;
     try {
-      const client = Deno.createHttpClient({
-        cert: bundle.certificatePem,
-        key: bundle.privateKeyPem,
-      });
-      try {
+      if (usesSefazCadastro) {
+        const bundle = await readCertificateBundle(certificate.certificate_ciphertext);
+        const envelope = buildCadastroEnvelope(uf, lookupType, lookupValue);
+        const client = Deno.createHttpClient({
+          cert: bundle.certificatePem,
+          key: bundle.privateKeyPem,
+        });
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/CadConsultaCadastro4/consultaCadastro"',
+              'SOAPAction': 'http://www.portalfiscal.inf.br/nfe/wsdl/CadConsultaCadastro4/consultaCadastro',
+            },
+            body: envelope,
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+            client,
+          } as RequestInit & { client: Deno.HttpClient });
+          responseStatus = response.status;
+          responseText = await response.text();
+          if (!response.ok) throw new Error(`SEFAZ_HTTP_${response.status}`);
+        } finally {
+          client.close();
+        }
+        parsed = parseCadastroResponse(responseText);
+      } else {
         const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/CadConsultaCadastro4/consultaCadastro"',
-            'SOAPAction': 'http://www.portalfiscal.inf.br/nfe/wsdl/CadConsultaCadastro4/consultaCadastro',
-          },
-          body: envelope,
+          headers: { Accept: 'application/json', 'User-Agent': 'AGVLog-tax-registry/1.0' },
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-          client,
-        } as RequestInit & { client: Deno.HttpClient });
+        });
         responseStatus = response.status;
         responseText = await response.text();
-        if (!response.ok) throw new Error(`SEFAZ_HTTP_${response.status}`);
-      } finally {
-        client.close();
+        if (response.status === 404) {
+          parsed = { cStat: null, reason: 'CNPJ não localizado na base pública da Receita Federal', records: [] };
+        } else {
+          if (!response.ok) throw new Error(`CADASTRO_PUBLICO_HTTP_${response.status}`);
+          parsed = {
+            cStat: null,
+            reason: 'Dados públicos do CNPJ (Receita Federal via BrasilAPI)',
+            records: [parseBrasilApiCnpjResponse(JSON.parse(responseText))],
+          };
+        }
       }
-      parsed = parseCadastroResponse(responseText);
       resultStatus = parsed.records.length > 0 ? 'success'
         : parsed.cStat && [111, 112].includes(parsed.cStat) ? 'invalid_response'
         : 'not_found';
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Falha ao consultar SEFAZ';
-      const status = reason.includes('timeout') || reason.includes('SEFAZ_HTTP_5') ? 'unavailable' : 'error';
+      const status = reason.includes('timeout') || reason.includes('SEFAZ_HTTP_5') || reason.includes('CADASTRO_PUBLICO_HTTP_5') ? 'unavailable' : 'error';
       await writeQuery(context, {
         certificateId: certificate.id, uf, lookupType, lookupValue, endpoint,
         resultStatus: status, cStat: null, reason, responseText, durationMs: Date.now() - started,
       });
-      await context.admin.from('fiscal_certificates').update({
-        last_tested_at: new Date().toISOString(), last_test_error: reason,
-      }).eq('id', certificate.id).eq('tenant_id', context.emitter.tenant_id);
+      if (usesSefazCadastro) {
+        await context.admin.from('fiscal_certificates').update({
+          last_tested_at: new Date().toISOString(), last_test_error: reason,
+        }).eq('id', certificate.id).eq('tenant_id', context.emitter.tenant_id);
+      }
       throw new HttpError(status === 'unavailable' ? 503 : 502, reason);
     }
 
@@ -133,7 +164,7 @@ Deno.serve(withFiscalCors(async (req) => {
         tax_regime: record.taxRegime,
         economic_activity_code: record.economicActivityCode,
         official_address: record.address,
-        source: 'SEFAZ_CADCONSULTACADASTRO4',
+        source: usesSefazCadastro ? 'SEFAZ_CADCONSULTACADASTRO4' : BRASIL_API_REGISTRY_SOURCE,
         source_query_id: query.id,
         verified_at: new Date().toISOString(),
         raw_record: record.raw,
@@ -141,9 +172,11 @@ Deno.serve(withFiscalCors(async (req) => {
       if (error) throw error;
       profiles.push(profile);
     }
-    await context.admin.from('fiscal_certificates').update({
-      last_tested_at: new Date().toISOString(), last_test_error: null,
-    }).eq('id', certificate.id).eq('tenant_id', context.emitter.tenant_id);
+    if (usesSefazCadastro) {
+      await context.admin.from('fiscal_certificates').update({
+        last_tested_at: new Date().toISOString(), last_test_error: null,
+      }).eq('id', certificate.id).eq('tenant_id', context.emitter.tenant_id);
+    }
 
     return json(200, {
       query_id: query.id,
@@ -234,6 +267,7 @@ function publicProfile(profile: any) {
     tax_regime: profile.tax_regime,
     economic_activity_code: profile.economic_activity_code,
     official_address: profile.official_address,
+    source: profile.source,
     verified_at: profile.verified_at,
   };
 }

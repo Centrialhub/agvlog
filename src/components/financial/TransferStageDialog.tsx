@@ -11,7 +11,7 @@ export function TransferStageDialog({tenant,actor,mode,departure,onClose,onRecor
  const [restored]=useState(()=>{try{const raw=sessionStorage.getItem(key);if(!raw)return {command:null,error:''};const saved=JSON.parse(raw),command=transferStageCommandSchema.parse(saved.command);if(saved.actor!==actor||command.tenant_id!==tenant)throw new Error('scope');return {command,error:''};}catch{return {command:null,error:'Não foi possível recuperar a etapa anterior. Não envie outro pedido nesta sessão.'};}});
  const [pending,setPending]=useState<TransferStageCommand|null>(restored.command),[preview,setPreview]=useState<TransferStageCommand|null>(null);
  const [form,setForm]=useState({source:'',destination:'',amount:'',date:'',reference:'',reason:''});
- const [confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(restored.error);
+ const [confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[recoveryError,setRecoveryError]=useState(restored.error),[error,setError]=useState(restored.error);
  const live=useRef(true),sending=useRef(false);useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
  const frozen=pending||preview;
  function prepare(){
@@ -19,7 +19,8 @@ export function TransferStageDialog({tenant,actor,mode,departure,onClose,onRecor
    ...(mode==='depart'?{source_account_id:form.source,destination_account_id:form.destination,amount_cents:parseFinanceAmount(form.amount)}:{departure_id:departure?.id})});
   if(!parsed.success||(parsed.data.stage==='depart'&&parsed.data.source_account_id===parsed.data.destination_account_id)){setError('Confira contas distintas, valor, data e motivo. Confirme que esta etapa já ocorreu.');return;}setError('');setPreview(parsed.data);
  }
- async function submit(){if(!frozen||sending.current||restored.error)return;const command=frozen,uncertain=!!pending;
+ function discardRecovery(){try{sessionStorage.removeItem(key);setRecoveryError('');setError('');setPending(null);setPreview(null);setForm({source:'',destination:'',amount:'',date:'',reference:'',reason:''});setConfirmed(false);}catch{setError('Não foi possível descartar a recuperação incompatível. Reabra o diálogo e tente novamente.');}}
+ async function submit(){if(!frozen||sending.current||recoveryError)return;const command=frozen,uncertain=!!pending;
   try{sessionStorage.setItem(key,JSON.stringify({actor,command}));}catch{setError('Não foi possível preservar o pedido. Nenhum registro foi enviado.');return;}
   sending.current=true;setBusy(true);setPending(command);setPreview(null);setError('');
   try{await recordTransferStage(command);sessionStorage.removeItem(key);if(live.current)onRecorded();}
@@ -35,7 +36,7 @@ export function TransferStageDialog({tenant,actor,mode,departure,onClose,onRecor
    {frozen.stage==='depart'?<><p>{formatFinanceCents(frozen.amount_cents)} · {accountName(frozen.source_account_id)} → {accountName(frozen.destination_account_id)}</p><p>A entrada ficará pendente. Nenhum crédito será antecipado.</p></>:<p className="break-all">Transferência de origem: {frozen.departure_id}. O valor e a conta de destino serão os da saída original.</p>}
    <p>Data: {frozen.occurred_on.split('-').reverse().join('/')}</p><p>{frozen.reason}</p>
    {pending&&<p role="status">Pedido preservado para recuperação. Não crie outro registro para esta etapa.</p>}
-   <Button disabled={busy||!!restored.error} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma etapa':'Confirmar registro da etapa'}</Button>
+   <Button disabled={busy||!!recoveryError} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma etapa':'Confirmar registro da etapa'}</Button>
    {!pending&&<Button variant="outline" onClick={()=>setPreview(null)}>Voltar à edição</Button>}
   </section>:mode==='recover'?<p>Nenhuma etapa pendente de recuperação nesta sessão.</p>:<div className="space-y-3">
    {mode==='depart'?<>
@@ -45,8 +46,9 @@ export function TransferStageDialog({tenant,actor,mode,departure,onClose,onRecor
    </>:<p>{departure?.source_name} → {departure?.destination_name} · {departure&&formatFinanceCents(departure.amount_cents)}. Confirme somente se o valor integral chegou a esta conta. Divergências precisam de revisão.</p>}
    {input('date',mode==='depart'?'Data da saída':'Data da chegada','date')}{input('reference','Referência bancária (opcional)')}{input('reason','Motivo')}
    <label className="block"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/> {mode==='depart'?'Confirmo que o dinheiro já saiu e a saída ainda não foi registrada.':'Confirmo que o valor integral já chegou e a entrada ainda não foi registrada.'}</label>
-   <Button disabled={!!restored.error||(mode==='depart'&&(accounts.isPending||!!accounts.error))} onClick={prepare}>Revisar etapa</Button>
+   <Button disabled={!!recoveryError||(mode==='depart'&&(accounts.isPending||!!accounts.error))} onClick={prepare}>Revisar etapa</Button>
   </div>}
   {error&&<p role="alert">{error}</p>}
+  {recoveryError&&<Button variant="outline" disabled={busy} onClick={discardRecovery}>Descartar recuperação incompatível</Button>}
  </DialogContent></Dialog>;
 }

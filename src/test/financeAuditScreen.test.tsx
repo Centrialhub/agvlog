@@ -23,4 +23,12 @@ describe('finance audit workspace',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Filtrar'}));await waitFor(()=>expect(mocks.audit).toHaveBeenLastCalledWith(tenant,expect.objectContaining({actor_search:'Maria'})));
     first.unmount();mocks.audit.mockClear();mocks.role='driver';mount();expect(mocks.audit).not.toHaveBeenCalled();
   });
+  it('explains and blocks an inverted audit date range before querying',async()=>{
+    mount();await screen.findByText(/45 evento\(s\) no filtro/);
+    fireEvent.change(screen.getByLabelText('Até'),{target:{value:'2026-09-10'}});
+    fireEvent.change(screen.getByLabelText('De'),{target:{value:'2026-09-11'}});
+    expect(screen.getByRole('alert')).toHaveTextContent('A data inicial não pode ser posterior à data final');
+    expect(screen.getByRole('button',{name:'Filtrar'})).toBeDisabled();
+    expect(mocks.audit).toHaveBeenCalledTimes(1);
+  });
 });

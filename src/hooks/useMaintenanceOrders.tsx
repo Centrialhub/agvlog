@@ -51,9 +51,8 @@ export function useCreateMaintenanceOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: CreateMaintenanceOrderInput) => {
-      const num = `OS-${Date.now().toString(36).toUpperCase()}`;
       const { data, error } = await supabase.from('maintenance_orders').insert({
-        ...values, tenant_id: currentTenant!.id, order_number: num, created_by: user?.id,
+        ...values, tenant_id: currentTenant!.id, order_number: '', created_by: user?.id,
       }).select().single();
       if (error) throw error;
       return data;

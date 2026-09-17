@@ -25,5 +25,6 @@ export async function createLegacyIntegrityDatabase(){
  await db.exec(readFileSync('supabase/migrations/20260910142740_finance_legacy_adoption_inventory.sql','utf8'));
 
  await db.exec(readFileSync('supabase/migrations/20260910151011_finance_legacy_integrity_inventory.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20260917082838_cache_legacy_integrity_inventory.sql','utf8'));
  return db;
 }

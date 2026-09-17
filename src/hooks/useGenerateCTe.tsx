@@ -5,6 +5,7 @@ import { useAuth } from './useAuth';
 import type { Load } from './useLoads';
 import { calculateFreight, logFreightCalculation } from './useFreightCalculator';
 import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 
 interface GenerateCteOptions {
   load: Load;
@@ -171,7 +172,10 @@ export function useGenerateCTe() {
         totalPallets: totalPallets || load.total_pallet_count || 0,
       });
 
-      const freightValue = freightResult.success ? freightResult.value : 0;
+      if (!freightResult.success || !Number.isFinite(freightResult.value) || freightResult.value <= 0) {
+        throw new Error(freightResult.error || 'Não existe tabela de frete válida para esta carga. O CT-e não foi criado.');
+      }
+      const freightValue = freightResult.value;
       const breakdown = freightResult.breakdown;
 
       // ===== Diagnostic warnings to surface to the user =====
@@ -194,9 +198,6 @@ export function useGenerateCTe() {
       }
       if (missingContext.length > 0) {
         warnings.push(`Contexto incompleto: ${missingContext.join('; ')}`);
-      }
-      if (freightValue === 0 && !breakdown) {
-        warnings.push('Nenhuma tabela de frete ativa encontrada para este tenant — verifique cadastro em /freight');
       }
 
       const cteNumber = `CTE-${load.load_number}`;
@@ -229,7 +230,7 @@ export function useGenerateCTe() {
         freight_breakdown: breakdown ? breakdown as unknown as Json : null,
         product_summary: itemSummary,
         status: 'confirmed',
-        issue_date: new Date().toISOString().slice(0, 10),
+        issue_date: localDateInputValue(),
         cbs_base: freightValue > 0 ? freightValue : null,
         cbs_rate: cbsRate,
         cbs_value: cbsValue,

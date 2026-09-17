@@ -63,6 +63,7 @@ export function useCreatePayable() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: CreatePayableInput) => {
+      if (values.status === 'paid') throw new Error('Use a baixa financeira para marcar uma conta como paga.');
       const { data, error } = await supabase.from('payables').insert({
         ...values,
         tenant_id: currentTenant!.id,
@@ -71,7 +72,7 @@ export function useCreatePayable() {
       if (error) throw error;
       return data;
     },
-    onSuccess: async (data) => { await Promise.all([invalidateAccountReview(qc,data.tenant_id),qc.invalidateQueries({ queryKey: ['payables'] }),Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]),qc.invalidateQueries({ queryKey: ['finance-settlement-expense-context'] })]); },
+    onSuccess: async (data) => { await Promise.all([invalidateAccountReview(qc,data.tenant_id),qc.invalidateQueries({ queryKey: ['payables'] }),qc.invalidateQueries({queryKey:['finance-payable-portfolio',data.tenant_id]}),Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]),qc.invalidateQueries({ queryKey: ['finance-settlement-expense-context'] })]); },
   });
 }
 
@@ -83,13 +84,12 @@ export function useUpdatePayable() {
       const patch: TablesUpdate<'payables'> = { ...values, updated_at: new Date().toISOString() };
       if (!currentTenant) throw new Error('Selecione a empresa antes de atualizar.');
       if (values.status === 'approved' || values.approved_at !== undefined || values.approved_by !== undefined) throw new Error('A aprovação exige conferência de valor e revisão.');
-      if (values.status === 'paid' && !values.paid_at) {
-        patch.paid_at = new Date().toISOString();
-      }
+      if (values.status === 'paid') throw new Error('Use a baixa financeira para marcar uma conta como paga.');
+      if (values.status !== undefined && values.status !== 'paid') patch.paid_at = null;
       const { data, error } = await supabase.from('payables').update(patch).eq('tenant_id', currentTenant.id).eq('id', id).select().single();
       if (error) throw error;
       return data;
     },
-    onSuccess: async (data) => { await Promise.all([invalidateAccountReview(qc,data.tenant_id),qc.invalidateQueries({ queryKey: ['payables'] }),Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]),qc.invalidateQueries({ queryKey: ['finance-settlement-expense-context'] })]); },
+    onSuccess: async (data) => { await Promise.all([invalidateAccountReview(qc,data.tenant_id),qc.invalidateQueries({ queryKey: ['payables'] }),qc.invalidateQueries({queryKey:['finance-payable-portfolio',data.tenant_id]}),Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]),qc.invalidateQueries({ queryKey: ['finance-settlement-expense-context'] })]); },
   });
 }

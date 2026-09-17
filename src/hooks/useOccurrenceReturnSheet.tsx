@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { useAuth } from './useAuth';
-import { uploadSecureFile } from '@/lib/secureUpload';
+import { removeSecureFiles, uploadSecureFile } from '@/lib/secureUpload';
 
 export type ReturnSheetStatus = 'generated' | 'printed' | 'signed' | 'cancelled' | 'superseded';
 
@@ -147,12 +146,14 @@ export function useCancelReturnSheet() {
 
 export function useMarkReturnSheetPrinted() {
   const qc = useQueryClient();
+  const { currentTenant } = useTenant();
   return useMutation({
     mutationFn: async (returnSheetId: string) => {
-      const { error } = await supabase
-        .from('occurrence_return_sheets')
-        .update({ status: 'printed', printed_at: new Date().toISOString() })
-        .eq('id', returnSheetId);
+      if (!currentTenant?.id) throw new Error('Tenant ativo não encontrado.');
+      const { error } = await supabase.rpc('mark_occurrence_return_sheet_printed_v1' as never, {
+        _tenant_id: currentTenant.id,
+        _return_sheet_id: returnSheetId,
+      } as never);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -165,7 +166,6 @@ export function useMarkReturnSheetPrinted() {
 export function useUploadSignedProof() {
   const qc = useQueryClient();
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   return useMutation({
     mutationFn: async (params: {
       returnSheetId: string;
@@ -181,34 +181,24 @@ export function useUploadSignedProof() {
         file: params.file,
         kind: 'proof',
       });
-      const { error } = await supabase
-        .from('occurrence_return_sheets')
-        .update({
-          status: 'signed',
-          signed_at: new Date().toISOString(),
-          signed_proof_url: path,
-          receiver_name: params.receiverName ?? null,
-          receiver_document: params.receiverDocument ?? null,
-        })
-        .eq('id', params.returnSheetId);
-      if (error) throw error;
-
-      // history
-      const { data: sheet } = await supabase
-        .from('occurrence_return_sheets')
-        .select('tenant_id, occurrence_id')
-        .eq('id', params.returnSheetId)
-        .maybeSingle();
-      if (sheet) {
-        await supabase.from('occurrence_return_sheet_history').insert({
-          tenant_id: sheet.tenant_id,
-          return_sheet_id: params.returnSheetId,
-          occurrence_id: sheet.occurrence_id,
-          action: 'signed_proof_uploaded',
-          metadata: { path },
-          created_by: user?.id ?? null,
-        });
+      try {
+        const { error } = await supabase.rpc('attach_occurrence_return_sheet_signed_proof_v1' as never, {
+          _tenant_id: currentTenant.id,
+          _return_sheet_id: params.returnSheetId,
+          _path: path,
+          _receiver_name: params.receiverName ?? null,
+          _receiver_document: params.receiverDocument ?? null,
+        } as never);
+        if (error) throw error;
+      } catch (error) {
+        try {
+          await removeSecureFiles(currentTenant.id, 'occurrence-return-proofs', [path]);
+        } catch (cleanupError) {
+          throw new Error(`${error instanceof Error ? error.message : 'Falha ao vincular comprovante.'} A remoção compensatória também falhou: ${cleanupError instanceof Error ? cleanupError.message : 'erro desconhecido'}`);
+        }
+        throw error;
       }
+      // The database trigger appends history atomically with the signed update.
       return path;
     },
     onSuccess: () => {
@@ -228,13 +218,15 @@ export async function getSignedProofUrl(path: string): Promise<string | null> {
 
 export function useReturnSheetHistory(returnSheetId: string | null | undefined) {
   const { currentTenant } = useTenant();
+  const tenantId = currentTenant?.id ?? null;
   return useQuery({
-    queryKey: ['occurrence-return-sheets-history', returnSheetId],
-    enabled: !!returnSheetId && !!currentTenant?.id,
+    queryKey: ['occurrence-return-sheets-history', tenantId, returnSheetId],
+    enabled: !!returnSheetId && !!tenantId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('occurrence_return_sheet_history')
         .select('*')
+        .eq('tenant_id', tenantId!)
         .eq('return_sheet_id', returnSheetId!)
         .order('created_at', { ascending: false });
       if (error) throw error;

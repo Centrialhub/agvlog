@@ -37,6 +37,8 @@ export async function createActiveMovementOptionsDatabase(){
  const manual=load('20260910120756_finance_manual_expense_recording');const start=manual.indexOf('create function finance_private.manual_expense_movements(');if(start<0)throw new Error('manual_expense_movements');await db.exec(manual.slice(start));
  await db.exec(load('20260910182541_finance_movement_correction_foundation'));
  await db.exec(load('20260910184543_finance_active_movement_options'));
+ await db.exec(load('20260917072228_page_settlement_payment_link_history'));
+ await db.exec(load('20260917072951_stabilize_legacy_association_paging'));
  return db;
 }
 

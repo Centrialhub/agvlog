@@ -1,5 +1,5 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
@@ -11,7 +11,7 @@ import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { Plus, Route, Trash2, Edit } from 'lucide-react';
 import { useListFilters } from '@/hooks/useListFilters';
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
-import { matchesSearch } from '@/lib/listFilters';
+import { DataPagination } from '@/components/ui/data-pagination';
 import { RouteDialog } from '@/components/routes/RouteDialog';
 import { getWaypointTypeConfig } from '@/lib/routes/waypoints';
 import type { Tables } from '@/integrations/supabase/types';
@@ -27,86 +27,95 @@ export default function Routes() {
   const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'all', corridor: 'all' });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editRoute, setEditRoute] = useState<RouteTemplateView | null>(null);
+  const [page,setPage]=useState(1);const pageSize=25;
 
-  const { data: routes = [], isLoading } = useQuery({
-    queryKey: ['route_templates', currentTenant?.id],
+  const routesQuery = useQuery({
+    queryKey: ['route_templates', currentTenant?.id,filters.search,filters.status,filters.corridor,page],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('route_templates')
-        .select('*, geofences:corridor_geofence_id(name)')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      if (!currentTenant) return {rows:[],total:0};
+      let query=supabase.from('route_templates')
+        .select('*, geofences:corridor_geofence_id(name)',{count:'exact'})
+        .eq('tenant_id',currentTenant.id);
+      if(filters.search.trim())query=query.ilike('name',`%${filters.search.trim()}%`);
+      if(filters.status!=='all')query=query.eq('enabled',filters.status==='active');
+      if(filters.corridor==='yes')query=query.not('corridor_geofence_id','is',null);
+      if(filters.corridor==='no')query=query.is('corridor_geofence_id',null);
+      const from=(page-1)*pageSize;
+      const {data,error,count}=await query.order('created_at',{ascending:false}).order('id').range(from,from+pageSize-1);
+      if(error)throw error;return {rows:(data??[]) as RouteTemplateView[],total:count??0};
     },
     enabled: !!currentTenant,
   });
+  const routes = routesQuery.data?.rows ?? [], isLoading = routesQuery.isLoading;
+  const routeIds=routes.map(route=>route.id);
 
-  const { data: allWaypoints = [] } = useQuery({
-    queryKey: ['route_waypoints_all', currentTenant?.id],
+  const waypointsQuery = useQuery({
+    queryKey: ['route_waypoints_all', currentTenant?.id,routeIds],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('route_waypoints')
+      const {data,error}=await supabase.from('route_waypoints')
         .select('route_id, waypoint_type, label, waypoint_order')
-        .eq('tenant_id', currentTenant.id)
-        .order('waypoint_order');
-      if (error) throw error;
-      return data;
+        .eq('tenant_id',currentTenant.id).in('route_id',routeIds)
+        .order('waypoint_order').order('id').limit(1000);
+      if(error)throw error;return data??[];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant&&routeIds.length>0,
   });
+  const allWaypoints = waypointsQuery.data ?? [];
 
-  const { data: geofences = [] } = useQuery({
+  const geofencesQuery = useQuery({
     queryKey: ['geofences', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.from('geofences').select('id, name, category')
-        .eq('tenant_id', currentTenant.id).eq('enabled', true);
-      if (error) throw error;
-      return data;
+      const {data,error}=await supabase.from('geofences').select('id, name, category')
+        .eq('tenant_id',currentTenant.id).eq('enabled',true).order('name').order('id').limit(200);
+      if(error)throw error;return data??[];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant&&dialogOpen,
   });
+  const geofences = geofencesQuery.data ?? [];
 
-  const { data: pois = [] } = useQuery({
+  const poisQuery = useQuery({
     queryKey: ['pois', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.from('pois').select('id, name, category')
-        .eq('tenant_id', currentTenant.id);
-      if (error) throw error;
-      return data;
+      const {data,error}=await supabase.from('pois').select('id, name, category')
+        .eq('tenant_id',currentTenant.id).order('name').order('id').limit(200);
+      if(error)throw error;return data??[];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant&&dialogOpen,
   });
+  const pois = poisQuery.data ?? [];
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('route_templates').delete().eq('id', id);
+      if(!currentTenant)throw new Error('Empresa não selecionada.');
+      const { error } = await supabase.rpc('archive_route_template_v1' as never,{_tenant_id:currentTenant.id,_route_id:id} as never);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['route_templates'] });
       queryClient.invalidateQueries({ queryKey: ['route_waypoints_all'] });
-      toast.success('Rota removida');
+      toast.success('Rota arquivada; o histórico foi preservado');
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const { data: routeRuns = [] } = useQuery({
-    queryKey: ['route_runs_recent', currentTenant?.id],
+  const runsQuery = useQuery({
+    queryKey: ['route_runs_recent', currentTenant?.id,routeIds],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.from('route_runs').select('route_id, status')
+      const {data,error}=await supabase.from('route_runs').select('route_id, status')
         .eq('tenant_id', currentTenant.id)
-        .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString());
-      if (error) throw error;
-      return data;
+        .in('route_id',routeIds).gte('created_at',new Date(Date.now()-7*86400000).toISOString())
+        .order('created_at').order('id').limit(1000);
+      if(error)throw error;return data??[];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant&&routeIds.length>0,
   });
+  const routeRuns = runsQuery.data ?? [];
+  const readQueries=[routesQuery,waypointsQuery,geofencesQuery,poisQuery,runsQuery];
+  const readError=readQueries.find(query=>query.isError);
 
   const getRouteStats = (routeId: string) => {
     const runs = routeRuns.filter(run => run.route_id === routeId);
@@ -118,7 +127,10 @@ export default function Routes() {
   const getRouteWaypoints = (routeId: string) =>
     allWaypoints.filter(waypoint => waypoint.route_id === routeId);
 
-  const filteredRoutes = routes.filter(row => matchesSearch(filters.search, row.name, row.geofences?.name, ...getRouteWaypoints(row.id).map(point => point.label)) && (filters.status === 'all' || row.enabled === (filters.status === 'active')) && (filters.corridor === 'all' || Boolean(row.corridor_geofence_id) === (filters.corridor === 'yes')));
+  const filteredRoutes = routes;
+  const total=routesQuery.data?.total??0;const pageCount=Math.max(1,Math.ceil(total/pageSize));
+  useEffect(()=>{setPage(1);},[filters.search,filters.status,filters.corridor]);
+  useEffect(()=>{if(page>pageCount)setPage(pageCount);},[page,pageCount]);
 
   const renderWaypointSummary = (routeId: string) => {
     const wps = getRouteWaypoints(routeId);
@@ -164,10 +176,11 @@ export default function Routes() {
         { key: 'search', label: 'Buscar corredor', type: 'search', value: filters.search, onChange: value => setFilter('search', value), placeholder: 'Nome, cerca ou ponto da rota' },
         { key: 'status', label: 'Situação', value: filters.status, onChange: value => setFilter('status', value), options: [{ value: 'all', label: 'Todas' }, { value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Inativos' }] },
         { key: 'corridor', label: 'Cerca vinculada', value: filters.corridor, onChange: value => setFilter('corridor', value), options: [{ value: 'all', label: 'Todos' }, { value: 'yes', label: 'Com cerca' }, { value: 'no', label: 'Sem cerca' }] },
-      ]} onReset={resetFilters} activeCount={activeCount} resultCount={filteredRoutes.length} totalCount={routes.length} loading={isLoading} />
+      ]} onReset={()=>{setPage(1);resetFilters();}} activeCount={activeCount} resultCount={filteredRoutes.length} totalCount={total} loading={isLoading} />
+      {readError&&<Card><CardContent className="py-4" role="alert">Não foi possível carregar todos os dados dos corredores. Listas incompletas não serão tratadas como vazias. <Button variant="outline" onClick={()=>void Promise.all(readQueries.filter(query=>query.isError).map(query=>query.refetch()))}>Tentar novamente</Button></CardContent></Card>}
       {isLoading ? (
         <Card><CardContent className="py-8 text-center text-muted-foreground">Carregando...</CardContent></Card>
-      ) : filteredRoutes.length === 0 ? (
+      ) : readError ? null : filteredRoutes.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center py-12">
           <Route className="h-12 w-12 text-muted-foreground mb-4" />
           <p className="font-medium text-foreground">Nenhum corredor encontrado</p>
@@ -213,7 +226,7 @@ export default function Routes() {
                             <Button size="sm" variant="ghost" onClick={() => { setEditRoute(r); setDialogOpen(true); }}>
                               <Edit className="h-3 w-3" />
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover rota?', { title: 'Remover rota', confirmLabel: 'Remover' })) deleteMutation.mutate(r.id); }}>
+                            <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Arquivar rota e preservar todo o histórico?', { title: 'Arquivar rota', confirmLabel: 'Arquivar' })) deleteMutation.mutate(r.id); }}>
                               <Trash2 className="h-3 w-3 text-destructive" />
                             </Button>
                           </>
@@ -224,12 +237,13 @@ export default function Routes() {
                 })}
               </TableBody>
             </Table>
+            <DataPagination page={page} pageCount={pageCount} totalCount={total} start={total?(page-1)*pageSize+1:0} end={Math.min(page*pageSize,total)} onPageChange={setPage}/>
           </CardContent>
         </Card>
       )}
 
       <RouteDialog
-        open={dialogOpen}
+        open={dialogOpen&&!readError}
         onOpenChange={setDialogOpen}
         tenantId={currentTenant?.id}
         geofences={geofences}

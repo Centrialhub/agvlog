@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useEffect, useRef, useState } from 'react';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -13,11 +13,14 @@ import {
   useDriverSettlements, useGeneratePendingDriverSettlements,
   useDriverSettlementFilterOptions,
   SETTLEMENT_STATUS_LABEL, DriverSettlementStatus,
+  DriverSettlementSnapshotChangedError,
+  useDriverSettlementCollectionEpoch,
 } from '@/hooks/useDriverSettlements';
 import DriverSettlementDrawer from '@/components/financial/DriverSettlementDrawer';
 import NewManualSettlementDialog from '@/components/financial/NewManualSettlementDialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/hooks/useTenant';
+import type { DriverSettlementCursor } from '@/lib/financial/settlementListResponse';
 
 const fmtMoney = (v: number | null | undefined) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtNum = (v: number | null | undefined, d = 1) => (v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -36,6 +39,10 @@ function SettlementList() {
   const [status, setStatus] = useState<'all' | DriverSettlementStatus>('all');
   const [driverFilter, setDriverFilter] = useState('all');
   const [vehicleFilter, setVehicleFilter] = useState('all');
+  const [driverOptionSearch,setDriverOptionSearch]=useState('');
+  const [vehicleOptionSearch,setVehicleOptionSearch]=useState('');
+  const [driverOptionPage,setDriverOptionPage]=useState(1);
+  const [vehicleOptionPage,setVehicleOptionPage]=useState(1);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [onlyKmPending, setOnlyKmPending] = useState(false);
@@ -44,8 +51,20 @@ function SettlementList() {
   const [onlyNeedsRecalc, setOnlyNeedsRecalc] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 50;
+  const [snapshotAt, setSnapshotAt] = useState(() => new Date().toISOString());
+  const [pageCursors, setPageCursors] = useState<Record<number, NonNullable<DriverSettlementCursor> | null>>({ 1: null });
+  const [snapshotNotice, setSnapshotNotice] = useState('');
+  const collectionEpoch = useDriverSettlementCollectionEpoch();
+  const collectionEpochRef = useRef(collectionEpoch);
+  const invalidDateRange = Boolean(dateFrom && dateTo && dateFrom > dateTo);
+  const resetPaging = () => {
+    setPage(1);
+    setSnapshotAt(new Date().toISOString());
+    setPageCursors({ 1: null });
+    setSnapshotNotice('');
+  };
 
-  const { data: response, isLoading, isError, isFetching, refetch } = useDriverSettlements({
+  const { data: response, isLoading, isError, isFetching, error: listError } = useDriverSettlements({
     search,
     driver_id: driverFilter === 'all' ? null : driverFilter,
     vehicle_id: vehicleFilter === 'all' ? null : vehicleFilter,
@@ -58,20 +77,25 @@ function SettlementList() {
     only_needs_recalculation: onlyNeedsRecalc,
     page,
     page_size: pageSize,
+    snapshot_at: snapshotAt,
+    cursor: pageCursors[page] ?? null,
+    enabled: !invalidDateRange,
   });
-  const data = isError ? undefined : response;
+  useEffect(()=>{if(collectionEpochRef.current!==collectionEpoch){collectionEpochRef.current=collectionEpoch;resetPaging();}},[collectionEpoch]);
+  useEffect(()=>{if(listError instanceof DriverSettlementSnapshotChangedError){setSnapshotNotice(listError.message);setPage(1);setSnapshotAt(new Date().toISOString());setPageCursors({1:null});}},[listError]);
+  const data = isError || invalidDateRange ? undefined : response;
   const list = data?.items ?? [];
   const totalCount = data?.total_count ?? 0;
   const summary = data?.summary ?? null;
-  const filterQuery = useDriverSettlementFilterOptions();
-  const filterOpts = filterQuery.isError ? undefined : filterQuery.data;
+  const driverOptions = useDriverSettlementFilterOptions('drivers',driverOptionSearch,driverOptionPage);
+  const vehicleOptions = useDriverSettlementFilterOptions('vehicles',vehicleOptionSearch,vehicleOptionPage);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
 
-  const drivers = filterOpts?.drivers ?? [];
-  const vehicles = filterOpts?.vehicles ?? [];
+  const drivers = driverOptions.isError?[]:driverOptions.data?.rows??[];
+  const vehicles = vehicleOptions.isError?[]:vehicleOptions.data?.rows??[];
 
   const filtered = list;
 
@@ -89,25 +113,31 @@ function SettlementList() {
   const openSettlement = (id: string) => { setSelectedId(id); setDrawerOpen(true); };
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+    <div className="min-w-0 space-y-6 p-4 md:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2"><Wallet className="h-6 w-6" /> Acerto de Motoristas</h1>
           <p className="text-sm text-muted-foreground">Conferência financeira das viagens finalizadas</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" disabled={isFetching || filterQuery.isFetching} onClick={() => { void refetch(); void filterQuery.refetch(); }}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
-          <Button variant="outline" disabled={!data} onClick={() => setManualOpen(true)}>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Button className="min-h-11 w-full sm:w-auto" variant="outline" disabled={isFetching || driverOptions.isFetching||vehicleOptions.isFetching} onClick={() => { resetPaging(); void driverOptions.refetch();void vehicleOptions.refetch(); }}><RefreshCw aria-hidden="true" className="h-4 w-4 mr-1" /> Atualizar</Button>
+          <Button className="min-h-11 w-full sm:w-auto" variant="outline" disabled={!data} onClick={() => setManualOpen(true)}>
             <Plus className="h-4 w-4 mr-1" /> Novo acerto manual
           </Button>
-          <Button onClick={() => genPending.mutate()} disabled={!data || genPending.isPending}>
+          <Button className="min-h-11 w-full sm:w-auto" onClick={() => genPending.mutate()} disabled={!data || genPending.isPending}>
             Gerar / Recalcular pendentes
           </Button>
         </div>
       </div>
 
       {isError && <p role="alert">Não foi possível consultar os acertos. Os dados anteriores foram ocultados. Tente atualizar.</p>}
-      {filterQuery.isError && <p role="alert">Não foi possível consultar os filtros de motorista e veículo. Tente atualizar.</p>}
+      {snapshotNotice && <p role="status">{snapshotNotice}</p>}
+      {invalidDateRange && <p role="alert">A data inicial não pode ser posterior à data final. Corrija o intervalo para consultar os acertos.</p>}
+      {(driverOptions.isError||vehicleOptions.isError) && <p role="alert">Não foi possível consultar os filtros de motorista e veículo. Tente atualizar.</p>}
+      {genPending.data?.errors.length ? <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+        <p className="font-medium">O processamento terminou com {genPending.data.errors.length} falha(s). As viagens abaixo continuam pendentes:</p>
+        <ul className="mt-2 list-disc pl-5">{genPending.data.errors.map((error, index) => <li key={index}>{String(error)}</li>)}</ul>
+      </div> : null}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         {[
           { label: 'Pendentes', value: kpi.pending },
@@ -119,7 +149,7 @@ function SettlementList() {
           { label: 'Pago', value: fmtMoney(kpi.totalPaid) },
           { label: 'Resultado das rotas', value: fmtMoney(kpi.totalRouteResult) },
         ].map((k) => (
-          <Card key={k.label}><CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground">{k.label}</CardTitle></CardHeader>
+          <Card key={k.label}><CardHeader className="pb-2"><p className="text-xs font-medium text-muted-foreground">{k.label}</p></CardHeader>
             <CardContent className="text-lg font-semibold">{data ? k.value : '—'}</CardContent></Card>
         ))}
       </div>
@@ -129,9 +159,9 @@ function SettlementList() {
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <div className="lg:col-span-2 relative">
               <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-              <Input aria-label="Pesquisar acertos" className="pl-8" placeholder="Motorista, placa, rota, romaneio, nota…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} />
+              <Input aria-label="Pesquisar acertos" className="pl-8" placeholder="Motorista, placa, rota, romaneio, nota…" value={search} onChange={(e) => { resetPaging(); setSearch(e.target.value); }} />
             </div>
-            <Select value={status} onValueChange={value => { setPage(1); setStatus(value as 'all' | DriverSettlementStatus); }}>
+            <Select value={status} onValueChange={value => { resetPaging(); setStatus(value as 'all' | DriverSettlementStatus); }}>
               <SelectTrigger aria-label="Status do acerto"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos status</SelectItem>
@@ -140,36 +170,24 @@ function SettlementList() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={driverFilter} onValueChange={(v) => { setPage(1); setDriverFilter(v); }}>
-              <SelectTrigger aria-label="Motorista" disabled={!filterOpts}><SelectValue placeholder="Motorista" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos motoristas</SelectItem>
-                {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={vehicleFilter} onValueChange={(v) => { setPage(1); setVehicleFilter(v); }}>
-              <SelectTrigger aria-label="Veículo" disabled={!filterOpts}><SelectValue placeholder="Veículo" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos veículos</SelectItem>
-                {vehicles.map((v) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Input aria-label="Finalizada de" type="date" value={dateFrom} onChange={(e) => { setPage(1); setDateFrom(e.target.value); }} placeholder="De" />
-            <Input aria-label="Finalizada até" type="date" value={dateTo} onChange={(e) => { setPage(1); setDateTo(e.target.value); }} placeholder="Até" />
+            <div className="space-y-1"><Input aria-label="Buscar motorista do filtro" placeholder="Buscar motorista" value={driverOptionSearch} onChange={e=>{setDriverOptionSearch(e.target.value);setDriverOptionPage(1);}}/><Select value={driverFilter} onValueChange={(v) => { resetPaging(); setDriverFilter(v); }}><SelectTrigger aria-label="Motorista" disabled={!driverOptions.data}><SelectValue placeholder="Motorista" /></SelectTrigger><SelectContent><SelectItem value="all">Todos motoristas</SelectItem>{drivers.map((d) => <SelectItem key={d.id} value={d.id}>{d.label}</SelectItem>)}</SelectContent></Select><div className="flex gap-1"><Button type="button" size="sm" variant="outline" disabled={driverOptionPage===1} onClick={()=>setDriverOptionPage(p=>p-1)}>Anteriores</Button><Button type="button" size="sm" variant="outline" disabled={!driverOptions.data||driverOptionPage*50>=driverOptions.data.total} onClick={()=>setDriverOptionPage(p=>p+1)}>Mais</Button></div></div>
+            <div className="space-y-1"><Input aria-label="Buscar veículo do filtro" placeholder="Buscar placa" value={vehicleOptionSearch} onChange={e=>{setVehicleOptionSearch(e.target.value);setVehicleOptionPage(1);}}/><Select value={vehicleFilter} onValueChange={(v) => { resetPaging(); setVehicleFilter(v); }}><SelectTrigger aria-label="Veículo" disabled={!vehicleOptions.data}><SelectValue placeholder="Veículo" /></SelectTrigger><SelectContent><SelectItem value="all">Todos veículos</SelectItem>{vehicles.map((v) => <SelectItem key={v.id} value={v.id}>{v.label}</SelectItem>)}</SelectContent></Select><div className="flex gap-1"><Button type="button" size="sm" variant="outline" disabled={vehicleOptionPage===1} onClick={()=>setVehicleOptionPage(p=>p-1)}>Anteriores</Button><Button type="button" size="sm" variant="outline" disabled={!vehicleOptions.data||vehicleOptionPage*50>=vehicleOptions.data.total} onClick={()=>setVehicleOptionPage(p=>p+1)}>Mais</Button></div></div>
+            <Input aria-label="Finalizada de" type="date" value={dateFrom} onChange={(e) => { resetPaging(); setDateFrom(e.target.value); }} placeholder="De" />
+            <Input aria-label="Finalizada até" type="date" value={dateTo} onChange={(e) => { resetPaging(); setDateTo(e.target.value); }} placeholder="Até" />
           </div>
           <div className="flex flex-wrap gap-4 text-sm">
-            <Label className="flex items-center gap-2"><Checkbox checked={onlyKmPending} onCheckedChange={(v) => { setPage(1); setOnlyKmPending(Boolean(v)); }} /> KM pendente</Label>
-            <Label className="flex items-center gap-2"><Checkbox checked={onlyExpPending} onCheckedChange={(v) => { setPage(1); setOnlyExpPending(Boolean(v)); }} /> Despesa pendente</Label>
-            <Label className="flex items-center gap-2"><Checkbox checked={onlyNoFreight} onCheckedChange={(v) => { setPage(1); setOnlyNoFreight(Boolean(v)); }} /> Frete ausente</Label>
-            <Label className="flex items-center gap-2"><Checkbox checked={onlyNeedsRecalc} onCheckedChange={(v) => { setPage(1); setOnlyNeedsRecalc(Boolean(v)); }} /> Desatualizado</Label>
+            <Label className="flex items-center gap-2"><Checkbox checked={onlyKmPending} onCheckedChange={(v) => { resetPaging(); setOnlyKmPending(Boolean(v)); }} /> KM pendente</Label>
+            <Label className="flex items-center gap-2"><Checkbox checked={onlyExpPending} onCheckedChange={(v) => { resetPaging(); setOnlyExpPending(Boolean(v)); }} /> Despesa pendente</Label>
+            <Label className="flex items-center gap-2"><Checkbox checked={onlyNoFreight} onCheckedChange={(v) => { resetPaging(); setOnlyNoFreight(Boolean(v)); }} /> Frete ausente</Label>
+            <Label className="flex items-center gap-2"><Checkbox checked={onlyNeedsRecalc} onCheckedChange={(v) => { resetPaging(); setOnlyNeedsRecalc(Boolean(v)); }} /> Desatualizado</Label>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardContent className="pt-6">
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
+          <div>
+            <Table scrollLabel="Acertos de motoristas; deslize horizontalmente para ver todas as colunas" containerClassName="rounded-md border" className="min-w-[96rem]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Viagem / Rota</TableHead>
@@ -188,15 +206,16 @@ function SettlementList() {
                   <TableHead className="text-right">A pagar</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Pendências</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground">Carregando…</TableCell></TableRow>}
+                {isLoading && <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground"><span role="status">Carregando…</span></TableCell></TableRow>}
                 {!isLoading && data && filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">Nenhum acerto encontrado.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground py-8"><span role="status">Nenhum acerto encontrado.</span></TableCell></TableRow>
                 )}
                 {filtered.map(s => (
-                  <TableRow key={s.id} className="cursor-pointer hover:bg-accent" onClick={() => openSettlement(s.id)}>
+                  <TableRow key={s.id}>
                     <TableCell className="max-w-xs truncate">{s.route_name || `${s.route_origin ?? '—'} → ${s.route_destination ?? '—'}`}</TableCell>
                     <TableCell>{s.driver_name ?? '—'}</TableCell>
                     <TableCell>{s.vehicle_plate ?? '—'}</TableCell>
@@ -214,29 +233,38 @@ function SettlementList() {
                     <TableCell><Badge variant="outline">{SETTLEMENT_STATUS_LABEL[s.status as DriverSettlementStatus]}</Badge></TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {s.needs_recalculation && <Badge variant="destructive" className="text-[10px] flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Desatualizado</Badge>}
-                        {s.km_review_status === 'pending' && <Badge variant="secondary" className="text-[10px]">KM</Badge>}
-                        {Number(s.pending_expenses_total ?? 0) > 0 && <Badge variant="secondary" className="text-[10px]">Despesa</Badge>}
-                        {Number(s.total_freight_value ?? 0) === 0 && <Badge variant="secondary" className="text-[10px]">Sem frete</Badge>}
-                        {Number(s.loads_count ?? 0) === 0 && <Badge variant="secondary" className="text-[10px]">Sem rom.</Badge>}
-                        {Number(s.documents_count ?? 0) === 0 && <Badge variant="secondary" className="text-[10px]">Sem doc.</Badge>}
-                        {s.approved_with_exception && <Badge variant="outline" className="text-[10px]">Exceção</Badge>}
+                        {s.needs_recalculation && <Badge variant="destructive" className="flex min-h-5 items-center gap-1 text-xs"><AlertTriangle aria-hidden="true" className="h-3 w-3" />Desatualizado</Badge>}
+                        {s.km_review_status === 'pending' && <Badge variant="secondary" className="min-h-5 text-xs">KM</Badge>}
+                        {Number(s.pending_expenses_total ?? 0) > 0 && <Badge variant="secondary" className="min-h-5 text-xs">Despesa</Badge>}
+                        {Number(s.total_freight_value ?? 0) === 0 && <Badge variant="secondary" className="min-h-5 text-xs">Sem frete</Badge>}
+                        {Number(s.loads_count ?? 0) === 0 && <Badge variant="secondary" className="min-h-5 text-xs">Sem rom.</Badge>}
+                        {Number(s.documents_count ?? 0) === 0 && <Badge variant="secondary" className="min-h-5 text-xs">Sem doc.</Badge>}
+                        {s.approved_with_exception && <Badge variant="outline" className="min-h-5 text-xs">Exceção</Badge>}
                         {s.status === 'approved' && Number(s.total_paid_amount ?? 0) > 0 && Number(s.total_paid_amount ?? 0) < Number(s.driver_payable_amount ?? 0) && (
-                          <Badge variant="outline" className="text-[10px]">Pag. parcial</Badge>
+                          <Badge variant="outline" className="min-h-5 text-xs">Pag. parcial</Badge>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button type="button" variant="outline" size="sm" onClick={() => openSettlement(s.id)} aria-label={`Abrir acerto de ${s.driver_name ?? 'motorista não informado'}`}>
+                        Abrir
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
-          <div className="flex justify-between items-center mt-3 text-sm text-muted-foreground">
+          <div className="mt-3 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span>{data ? `${totalCount} acerto(s)` : 'Total indisponível'}</span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled={!data || isFetching || page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Anterior</Button>
               <span className="px-2 self-center">Página {page}</span>
-              <Button variant="outline" size="sm" disabled={!data || isFetching || page * pageSize >= totalCount} onClick={() => setPage(p => p + 1)}>Próxima</Button>
+              <Button variant="outline" size="sm" disabled={!data?.next_cursor || isFetching} onClick={() => {
+                if (!data?.next_cursor) return;
+                setPageCursors(current => ({ ...current, [page + 1]: data.next_cursor }));
+                setPage(current => current + 1);
+              }}>Próxima</Button>
             </div>
           </div>
         </CardContent>

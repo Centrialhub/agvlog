@@ -1,24 +1,27 @@
 import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {StatementImportDialog} from '@/components/financial/StatementImportDialog';
-const mocks=vi.hoisted(()=>({load:vi.fn(),run:vi.fn(),abandon:vi.fn(),inspect:vi.fn(),prepare:vi.fn()}));
-vi.mock('@/hooks/useFinancialPayments',()=>({useBankAccounts:()=>({data:[{id:'account',name:'Banco QA'}]})}));
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import type {ReactNode} from 'react';
+const mocks=vi.hoisted(()=>({load:vi.fn(),run:vi.fn(),abandon:vi.fn(),inspect:vi.fn(),prepare:vi.fn(),accountsError:false,accountsPending:false,refetchAccounts:vi.fn()}));
+vi.mock('@/hooks/useFinancialPayments',()=>({useBankAccounts:()=>({data:mocks.accountsError?undefined:[{id:'account',name:'Banco QA'}],isError:mocks.accountsError,isPending:mocks.accountsPending,refetch:mocks.refetchAccounts})}));
 vi.mock('@/lib/financial/statementImportStore',()=>({statementImportStore:{load:mocks.load}}));
 vi.mock('@/lib/financial/statementImportClient',()=>({statementImportWorkflow:()=>({run:mocks.run,abandon:mocks.abandon}),inspectStatementLayout:mocks.inspect,prepareStatementImport:mocks.prepare}));
 const tenant=crypto.randomUUID(),actor=crypto.randomUUID();
-const mount=()=>render(<StatementImportDialog tenant={tenant} actor={actor} onClose={vi.fn()} onImported={vi.fn()}/>);
-beforeEach(()=>{vi.clearAllMocks();mocks.load.mockResolvedValue(null);mocks.inspect.mockResolvedValue({matrix:[['Data','Descrição','Valor'],['01/01/2026','PIX','-500,00']],sheetNames:['CSV']});});
+const renderDialog=(dialog:ReactNode)=>render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}>{dialog}</QueryClientProvider>);
+const mount=()=>renderDialog(<StatementImportDialog tenant={tenant} actor={actor} onClose={vi.fn()} onImported={vi.fn()}/>);
+beforeEach(()=>{vi.clearAllMocks();mocks.accountsError=false;mocks.accountsPending=false;mocks.load.mockResolvedValue(null);mocks.inspect.mockResolvedValue({matrix:[['Data','Descrição','Valor'],['01/01/2026','PIX','-500,00']],sheetNames:['CSV']});});
 describe('statement import preparation and recovery UI',()=>{
   it('prefills the selected account and period without replacing an existing recovery request',async()=>{
     const initial={account:'account',start:'2026-09-01',end:'2026-09-10'};
-    const view=render(<StatementImportDialog tenant={tenant} actor={actor} initial={initial} onClose={vi.fn()} onImported={vi.fn()}/>);
+    const view=renderDialog(<StatementImportDialog tenant={tenant} actor={actor} initial={initial} onClose={vi.fn()} onImported={vi.fn()}/>);
     await screen.findByLabelText('Conta do extrato');
     expect(screen.getByLabelText('Conta do extrato')).toHaveValue('account');
     expect(screen.getByLabelText('Início do período')).toHaveValue(initial.start);
     expect(screen.getByLabelText('Fim do período')).toHaveValue(initial.end);
     view.unmount();
     mocks.load.mockResolvedValue({file_name:'anterior.csv',phase:'verify',uncertain:true,command:{rows:[{}]}});
-    render(<StatementImportDialog tenant={tenant} actor={actor} initial={initial} onClose={vi.fn()} onImported={vi.fn()}/>);
+    renderDialog(<StatementImportDialog tenant={tenant} actor={actor} initial={initial} onClose={vi.fn()} onImported={vi.fn()}/>);
     await screen.findByText(/anterior.csv/);
     expect(screen.queryByLabelText('Conta do extrato')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button',{name:'Retomar importação'}));
@@ -44,6 +47,27 @@ describe('statement import preparation and recovery UI',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Importar e conferir dados'}));
     await waitFor(()=>expect(mocks.run).toHaveBeenCalledWith(tenant,actor,pending,file));
   });
+  it('enables preview preparation for a readable Excel statement',async()=>{
+    mocks.inspect.mockResolvedValue({matrix:[['Data','Descrição','Valor'],[46023,'PIX recebido',500]],sheetNames:['Extrato']});
+    mocks.prepare.mockResolvedValue({pending:{command:{rows:[{posted_on:'2026-01-01',description:'PIX recebido',amount_cents:50000}]}},totals:{inflow_cents:'50000',outflow_cents:'0',net_cents:'50000'}});
+    const file=new File([new Uint8Array([0x50,0x4b,0x03,0x04])],'extrato.xlsx');mount();await screen.findByLabelText('Arquivo original');
+    fireEvent.change(screen.getByLabelText('Conta do extrato'),{target:{value:'account'}});
+    fireEvent.change(screen.getByLabelText('Início do período'),{target:{value:'2026-01-01'}});
+    fireEvent.change(screen.getByLabelText('Fim do período'),{target:{value:'2026-01-31'}});
+    fireEvent.change(screen.getByLabelText('Arquivo original'),{target:{files:[file]}});
+    const preview=await screen.findByRole('button',{name:'Preparar prévia'});await waitFor(()=>expect(preview).toBeEnabled());
+    fireEvent.click(preview);await waitFor(()=>expect(mocks.prepare).toHaveBeenCalledWith(file,expect.objectContaining({tenant,actor,account:'account',start:'2026-01-01',end:'2026-01-31'}),expect.objectContaining({sheet_index:0})));
+    expect(screen.getByText(/Importação de lançamentos: OFX, CSV ou XLSX/)).toBeInTheDocument();
+    expect(screen.getByText(/XLS legadas precisam ser convertidas para XLSX/)).toBeInTheDocument();
+  });
+  it('rejects legacy XLS before preview and asks for conversion to XLSX',async()=>{
+    mount();const input=await screen.findByLabelText('Arquivo original');
+    expect(input).toHaveAttribute('accept','.csv,.xlsx,.ofx,.pdf,.jpg,.jpeg,.png');
+    fireEvent.change(input,{target:{files:[new File([new Uint8Array([0xd0,0xcf,0x11,0xe0])],'extrato.xls')]}});
+    await screen.findByText(/XLS legadas não podem ser importadas com segurança/);
+    expect(mocks.inspect).not.toHaveBeenCalled();expect(mocks.prepare).not.toHaveBeenCalled();
+    expect(screen.getByRole('button',{name:'Preparar prévia'})).toBeDisabled();
+  });
   it('offers only recovery for an existing verification-stage request',async()=>{
     mocks.load.mockResolvedValue({file_name:'preservado.csv',phase:'verify',uncertain:false,command:{rows:[{}]}});
     mount();await screen.findByText('Próxima etapa: Conferir dados preservados no servidor');
@@ -63,5 +87,11 @@ describe('statement import preparation and recovery UI',()=>{
     mocks.load.mockRejectedValue(new Error('database unavailable'));mount();
     await screen.findByText(/Não foi possível abrir os pedidos preservados/);
     expect(screen.queryByLabelText('Arquivo original')).not.toBeInTheDocument();expect(mocks.run).not.toHaveBeenCalled();
+  });
+  it('shows account loading failures and lets the user retry without implying an empty catalog',async()=>{
+    mocks.accountsError=true;mount();await screen.findByText(/Não foi possível consultar as contas bancárias/);
+    expect(screen.getByLabelText('Conta do extrato')).toBeDisabled();
+    fireEvent.click(screen.getByRole('button',{name:'Tentar novamente'}));
+    expect(mocks.refetchAccounts).toHaveBeenCalledTimes(1);
   });
 });

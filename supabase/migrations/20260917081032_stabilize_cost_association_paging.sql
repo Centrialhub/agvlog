@@ -1,0 +1,41 @@
+create function finance_private.cost_association_page_revision(_tenant uuid,_kind text,_scope text,_search text) returns text
+language plpgsql stable security definer set search_path='' as $$declare names text[];name text;n bigint;x text;state text:=_kind||':'||_scope||':'||_search;begin
+ names:=case _kind
+  when 'maintenance_labor' then array['maintenance_orders','finance_expense_items','finance_expense_batches','clients','finance_maintenance_labor_links','finance_maintenance_labor_reversals']
+  when 'maintenance_direct_part' then array['maintenance_parts','maintenance_orders','finance_expense_items','finance_expense_batches','clients','finance_maintenance_direct_part_links','finance_maintenance_direct_part_reversals']
+  when 'stock_acquisition' then array['stock_movements','stock_items','finance_expense_items','finance_expense_batches','clients','finance_stock_acquisition_links','finance_stock_acquisition_reversals','finance_stock_acquisition_dependencies']
+  when 'stock_consumption' then array['maintenance_parts','maintenance_orders','stock_movements','stock_items','clients','finance_expense_items','finance_stock_acquisition_links','finance_stock_acquisition_reversals','finance_stock_acquisition_dependencies','finance_stock_consumption_attributions','finance_stock_consumption_lines','finance_stock_consumption_reversals']
+  else null end;
+ if names is null then raise exception 'finance_invalid_page_kind' using errcode='22023';end if;
+ foreach name in array names loop
+  if to_regclass('public.'||name) is null then state:=state||':'||name||':missing';continue;end if;
+  execute format('select count(*)::bigint,coalesce(max(xmin::text::bigint)::text,'''') from public.%I where tenant_id=$1',name) into n,x using _tenant;
+  state:=state||':'||name||':'||n::text||':'||x;
+ end loop;
+ return md5(state);
+end$$;
+revoke all on function finance_private.cost_association_page_revision(uuid,text,text,text) from public,anon,authenticated,service_role;
+
+alter function finance_private.maintenance_labor_context(uuid,uuid,integer,text) rename to maintenance_labor_context_unstable;
+alter function finance_private.maintenance_direct_part_context(uuid,uuid,integer,text) rename to maintenance_direct_part_context_unstable;
+alter function finance_private.stock_acquisition_context(uuid,uuid,integer,text) rename to stock_acquisition_context_unstable;
+alter function finance_private.stock_consumption_context(uuid,uuid,uuid,integer,text) rename to stock_consumption_context_unstable;
+
+create function finance_private.maintenance_labor_context(_tenant uuid,_order uuid,_page integer,_search text,_expected_revision text) returns jsonb language plpgsql stable security definer set search_path='' as $$declare revision text;begin revision:=finance_private.cost_association_page_revision(_tenant,'maintenance_labor',_order::text,_search);if _expected_revision is not null and _expected_revision<>revision then raise exception 'finance_page_changed' using errcode='40001';end if;return finance_private.maintenance_labor_context_unstable(_tenant,_order,_page,_search)||jsonb_build_object('revision',revision);end$$;
+create function finance_private.maintenance_direct_part_context(_tenant uuid,_part uuid,_page integer,_search text,_expected_revision text) returns jsonb language plpgsql stable security definer set search_path='' as $$declare revision text;begin revision:=finance_private.cost_association_page_revision(_tenant,'maintenance_direct_part',_part::text,_search);if _expected_revision is not null and _expected_revision<>revision then raise exception 'finance_page_changed' using errcode='40001';end if;return finance_private.maintenance_direct_part_context_unstable(_tenant,_part,_page,_search)||jsonb_build_object('revision',revision);end$$;
+create function finance_private.stock_acquisition_context(_tenant uuid,_inbound uuid,_page integer,_search text,_expected_revision text) returns jsonb language plpgsql stable security definer set search_path='' as $$declare revision text;begin revision:=finance_private.cost_association_page_revision(_tenant,'stock_acquisition',_inbound::text,_search);if _expected_revision is not null and _expected_revision<>revision then raise exception 'finance_page_changed' using errcode='40001';end if;return finance_private.stock_acquisition_context_unstable(_tenant,_inbound,_page,_search)||jsonb_build_object('revision',revision);end$$;
+create function finance_private.stock_consumption_context(_tenant uuid,_part uuid,_movement uuid,_page integer,_search text,_expected_revision text) returns jsonb language plpgsql stable security definer set search_path='' as $$declare revision text;begin revision:=finance_private.cost_association_page_revision(_tenant,'stock_consumption',_part::text||':'||_movement::text,_search);if _expected_revision is not null and _expected_revision<>revision then raise exception 'finance_page_changed' using errcode='40001';end if;return finance_private.stock_consumption_context_unstable(_tenant,_part,_movement,_page,_search)||jsonb_build_object('revision',revision);end$$;
+
+revoke all on function finance_private.maintenance_labor_context(uuid,uuid,integer,text,text),finance_private.maintenance_direct_part_context(uuid,uuid,integer,text,text),finance_private.stock_acquisition_context(uuid,uuid,integer,text,text),finance_private.stock_consumption_context(uuid,uuid,uuid,integer,text,text) from public,anon,authenticated,service_role;
+grant execute on function finance_private.maintenance_labor_context(uuid,uuid,integer,text,text),finance_private.maintenance_direct_part_context(uuid,uuid,integer,text,text),finance_private.stock_acquisition_context(uuid,uuid,integer,text,text),finance_private.stock_consumption_context(uuid,uuid,uuid,integer,text,text) to authenticated;
+
+drop function public.get_finance_maintenance_labor_context(uuid,uuid,integer,text);
+drop function public.get_finance_maintenance_direct_part_context(uuid,uuid,integer,text);
+drop function public.get_finance_stock_acquisition_context(uuid,uuid,integer,text);
+drop function public.get_finance_stock_consumption_context(uuid,uuid,uuid,integer,text);
+create function public.get_finance_maintenance_labor_context(_tenant_id uuid,_order_id uuid,_page integer default 1,_search text default '',_expected_revision text default null) returns jsonb language sql stable security invoker set search_path='' as $$select finance_private.maintenance_labor_context(_tenant_id,_order_id,_page,_search,_expected_revision)$$;
+create function public.get_finance_maintenance_direct_part_context(_tenant_id uuid,_part_id uuid,_page integer default 1,_search text default '',_expected_revision text default null) returns jsonb language sql stable security invoker set search_path='' as $$select finance_private.maintenance_direct_part_context(_tenant_id,_part_id,_page,_search,_expected_revision)$$;
+create function public.get_finance_stock_acquisition_context(_tenant_id uuid,_inbound_movement_id uuid,_page integer default 1,_search text default '',_expected_revision text default null) returns jsonb language sql stable security invoker set search_path='' as $$select finance_private.stock_acquisition_context(_tenant_id,_inbound_movement_id,_page,_search,_expected_revision)$$;
+create function public.get_finance_stock_consumption_context(_tenant_id uuid,_part_id uuid,_movement_id uuid,_page integer default 1,_search text default '',_expected_revision text default null) returns jsonb language sql stable security invoker set search_path='' as $$select finance_private.stock_consumption_context(_tenant_id,_part_id,_movement_id,_page,_search,_expected_revision)$$;
+revoke all on function public.get_finance_maintenance_labor_context(uuid,uuid,integer,text,text),public.get_finance_maintenance_direct_part_context(uuid,uuid,integer,text,text),public.get_finance_stock_acquisition_context(uuid,uuid,integer,text,text),public.get_finance_stock_consumption_context(uuid,uuid,uuid,integer,text,text) from public,anon,authenticated,service_role;
+grant execute on function public.get_finance_maintenance_labor_context(uuid,uuid,integer,text,text),public.get_finance_maintenance_direct_part_context(uuid,uuid,integer,text,text),public.get_finance_stock_acquisition_context(uuid,uuid,integer,text,text),public.get_finance_stock_consumption_context(uuid,uuid,uuid,integer,text,text) to authenticated;

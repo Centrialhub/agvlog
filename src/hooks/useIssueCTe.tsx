@@ -9,6 +9,8 @@ import type { Json, TablesInsert } from '@/integrations/supabase/types';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { requireHubEnvironment } from '../../supabase/functions/_shared/fiscal-environment';
 import { z } from 'zod';
+import { DefinitiveCteIssueError } from '@/lib/fiscal/cteIssueOutcome';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 
 type FiscalDocumentInsert = TablesInsert<'fiscal_documents'>;
 
@@ -77,7 +79,7 @@ export function useIssueCTe() {
           freight_value_original: freightValue,
           product_summary: (input.observations || '').slice(0, 500) || null,
           status: 'transmitting',
-          issue_date: new Date().toISOString().slice(0, 10),
+          issue_date: localDateInputValue(),
           cbs_base: freightValue > 0 ? freightValue : null,
           cbs_rate: cbsRate,
           cbs_value: cbsValue,
@@ -121,7 +123,7 @@ export function useIssueCTe() {
       });
       const status=String(hubResponse.hub?.document?.status||'').toLowerCase();
       if(['rejected','rejeitado','cancelled','error'].includes(status))
-        throw new Error(hubResponse.hub?.document?.message||'Documento fiscal recusado. Corrija os dados antes de uma nova emissão.');
+        throw new DefinitiveCteIssueError(hubResponse.hub?.document?.message||'Documento fiscal recusado. Corrija os dados antes de uma nova emissão.');
       return {fiscal_document_id:parsed.id,hub:hubResponse};
     },
     onSettled: () => {
@@ -160,22 +162,37 @@ export function useSyncCTe() {
 export function useCancelCTe() {
   const toast = useSonnerToast();
   const qc = useQueryClient();
+  const { currentTenant } = useTenant();
   return useMutation({
-    mutationFn: async (args: { fiscalDocumentId: string; justificativa: string }) => {
+    mutationFn: async (args: { fiscalDocumentId?: string; cteDocumentId?: string; justificativa: string }) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      if (!args.fiscalDocumentId && !args.cteDocumentId) throw new Error('CT-e sem referência local.');
       if (!args.justificativa || args.justificativa.trim().length < 15) {
         throw new Error('Justificativa deve ter no mínimo 15 caracteres.');
       }
-      const { data: doc } = await supabase
-        .from('fiscal_documents')
-        .select('id, hub_document_id, emission_id')
-        .eq('id', args.fiscalDocumentId)
-        .maybeSingle();
+      const fiscalResult = args.fiscalDocumentId ? await supabase
+        .from('fiscal_documents').select('id, hub_document_id, emission_id')
+        .eq('tenant_id', currentTenant.id).eq('id', args.fiscalDocumentId).maybeSingle() : { data: null, error: null };
+      if (fiscalResult.error) throw new Error(`Não foi possível consultar o CT-e: ${fiscalResult.error.message}`);
+      let doc = fiscalResult.data;
+      if (!doc?.hub_document_id && args.cteDocumentId) {
+        const emissionResult = await supabase.from('hub_fiscal_emissions')
+          .select('id, hub_document_id, fiscal_document_id')
+          .eq('tenant_id', currentTenant.id).eq('doc_type', 'cte').eq('cte_document_id', args.cteDocumentId)
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (emissionResult.error) throw new Error(`Não foi possível consultar a emissão do CT-e: ${emissionResult.error.message}`);
+        if (emissionResult.data?.hub_document_id) doc = {
+          id: emissionResult.data.fiscal_document_id ?? args.cteDocumentId,
+          hub_document_id: emissionResult.data.hub_document_id,
+          emission_id: emissionResult.data.id,
+        };
+      }
       if (!doc?.hub_document_id) throw new Error('CT-e ainda não transmitido');
       const res = await hubFiscal.cancel(
         doc.hub_document_id,
         args.justificativa.trim(),
         doc.emission_id || undefined,
-        args.fiscalDocumentId
+        args.fiscalDocumentId ?? undefined
       );
       if (res?.success === true) {
         // O proxy persiste o estado devolvido pelo Hub. Não sobrescrever aqui:

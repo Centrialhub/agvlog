@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto';
 import {beforeAll,afterAll,beforeEach,afterEach,it,expect} from 'vitest';
 import type {PGlite} from '@electric-sql/pglite';
 import {createFinanceLedgerDatabase,financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
-import {settlementMovementOptionsSchema} from '@/lib/financial/settlementMovementContract';
+import {settlementMovementHistorySchema,settlementMovementOptionsSchema} from '@/lib/financial/settlementMovementContract';
 let db:PGlite;const settlement=randomUUID(),payment=randomUUID();
 beforeAll(async()=>{
  db=await createFinanceLedgerDatabase();
@@ -20,6 +20,8 @@ beforeAll(async()=>{
  await db.exec(readFileSync('supabase/migrations/20260910130921_finance_settlement_movement_options.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260910131149_finance_settlement_link_audit.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260910132411_finance_settlement_link_reversals.sql','utf8'));
+ await db.exec('create view finance_private.active_movements as select * from finance_movements');
+ await db.exec(readFileSync('supabase/migrations/20260917072228_page_settlement_payment_link_history.sql','utf8'));
 });
 afterAll(()=>db.close());beforeEach(async()=>{await db.exec('begin');await db.query('insert into driver_settlements values($1,$2,$3)',[settlement,i.tenant,i.driver]);await db.query("insert into driver_settlement_payments values($1,$2,$3,100,'2026-01-01T20:00:00Z')",[payment,i.tenant,settlement]);});afterEach(()=>db.exec('rollback'));
 async function movement(description='Saída',date='2026-01-01',amount=10000,driver:string|null=i.driver){
@@ -27,6 +29,7 @@ async function movement(description='Saída',date='2026-01-01',amount=10000,driv
  const response=await financeAs<{r:{movement_id:string}}>(db,i.operator,'select record_finance_movement($1::jsonb) r',[JSON.stringify(payload)]);return response.rows[0].r.movement_id;
 }
 async function options(actor=i.operator,tenant=i.tenant,page=1){const r=await financeAs<{r:unknown}>(db,actor,'select get_finance_settlement_payment_movements($1,$2,$3) r',[tenant,payment,page]);return settlementMovementOptionsSchema.parse(r.rows[0].r);}
+async function history(page=1,actor=i.operator,tenant=i.tenant){const r=await financeAs<{r:unknown}>(db,actor,'select get_finance_settlement_payment_movement_history($1,$2,$3) r',[tenant,payment,page]);return settlementMovementHistorySchema.parse(r.rows[0].r);}
 it('lists only same driver/date and sufficient shared capacity, then displays immutable authorship',async()=>{
  const eligible=await movement();await movement('Outro dia','2026-01-02');await movement('Sem motorista','2026-01-01',10000,null);
  const allocated=await movement('Já utilizado');await db.query('insert into finance_expense_allocations values($1,$2,1)',[i.tenant,allocated]);
@@ -91,4 +94,16 @@ it('enforces one active link at the table boundary after removing the historical
  await expect(db.query('insert into finance_settlement_movement_links(tenant_id,settlement_id,payment_id,movement_id,amount_cents,created_by) values($1,$2,$3,$4,10000,$5)',[i.tenant,settlement,payment,second,i.operator])).rejects.toThrow('finance_settlement_payment_already_linked');
  await db.exec('rollback to savepoint guard_check; release savepoint guard_check');
  expect((await options()).history).toHaveLength(1);
+});
+it('keeps candidate responses bounded and pages link history independently',async()=>{
+ for(let n=0;n<22;n++){
+  const linked=await link(await movement(`Histórico ${n}`));
+  if(n<21)await reverse({version:1,tenant_id:i.tenant,request_id:randomUUID(),link_id:linked.link_id,reason:`Correção auditada do vínculo número ${n}`});
+ }
+ const candidates=await options();
+ expect(candidates.history).toHaveLength(20);expect(candidates.history_has_more).toBe(true);
+ const first=await history();expect(first.rows).toHaveLength(20);expect(first.has_more).toBe(true);
+ const second=await history(2);expect(second.rows).toHaveLength(2);expect(second.has_more).toBe(false);
+ expect(new Set([...first.rows,...second.rows].map(row=>row.id))).toHaveProperty('size',22);
+ await expect(history(1,i.driverUser)).rejects.toThrow('finance_access_denied');
 });

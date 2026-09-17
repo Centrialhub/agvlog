@@ -25,6 +25,7 @@ export async function installCompositionFixture(db:PGlite){
   await db.exec(`alter table public.load_items alter column id set default gen_random_uuid(),
     alter column quantity set default 0,${additions.map(c=>`add column ${c.column} ${c.type}${c.default===null?'':` default ${c.default}`}${c.nullable==='NO'?' not null':''}`).join(',')};
     alter table public.loads add column total_volume_m3 numeric;
+    alter table public.vehicles add column max_pallets numeric,add column max_weight_kg numeric;
     alter table public.fiscal_documents add column pallet_count integer default 0,add column product_summary text,add column deleted_at timestamptz;
     create table public.orders(id uuid primary key,tenant_id uuid);
     alter table public.load_items add foreign key(load_id) references public.loads(id) on delete cascade,
@@ -32,6 +33,12 @@ export async function installCompositionFixture(db:PGlite){
       add foreign key(order_id) references public.orders(id);
     alter table public.fiscal_documents add foreign key(load_id) references public.loads(id);
     alter table public.dispatch_stop_documents add foreign key(load_id) references public.loads(id) on delete set null;
+    create view public.current_load_items as select * from public.load_items;
+    alter table public.entity_audit_log rename column old_value to old_data;
+    alter table public.entity_audit_log rename column new_value to new_data;
+    alter table public.entity_audit_log add column created_at timestamptz not null default clock_timestamp();
+    create or replace function public._log_entity_audit(uuid,text,uuid,text,jsonb,jsonb,text) returns void language sql as $$
+      insert into public.entity_audit_log(tenant_id,entity_type,entity_id,action,old_data,new_data,source) values($1,$2,$3,$4,$5,$6,$7)$$;
   `);
   await db.exec(compositionLegacySql);
   for(const trigger of schema.triggers.filter(t=>t.table==='load_items'))await db.exec(trigger.definition+';');

@@ -26,6 +26,7 @@ import { useSortableData } from '@/hooks/useSortableData';
 import { calendarDay } from '@/lib/listFilters';
 import { fmtDateSafe } from '@/lib/utils/formatDate';
 import { Table, TableHead, TableHeader, TableRow, TableBody, TableCell } from '@/components/ui/table';
+import { csvSafeCell } from '@/lib/csvSafety';
 
 const TONE_CLASS: Record<string, string> = {
   default: 'bg-secondary text-secondary-foreground',
@@ -105,12 +106,39 @@ function activeFilterCount(f: CteSearchFilters) {
   return n;
 }
 
-function toCsv(rows: CteSearchRow[]) {
+// eslint-disable-next-line react-refresh/only-export-components
+export function validateCteSearchDates(filters: CteSearchFilters): string | null {
+  return filters.issueDateStart && filters.issueDateEnd && filters.issueDateStart > filters.issueDateEnd
+    ? 'A emissão inicial não pode ser posterior à emissão final.' : null;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function isCteCancellationAllowed(row: Pick<CteSearchRow, 'sefaz_status' | 'hub_document_id' | 'source'>) {
+  return ['processed', 'processed_error', 'authorized'].includes(row.sefaz_status)
+    && Boolean(row.hub_document_id) && row.source === 'hub';
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function isExactCteSelection(checked: Set<string>, ids: string[]) {
+  return ids.length > 0 && checked.size === ids.length && ids.every(id => checked.has(id));
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function reconcileCteSelection(checked: Set<string>, ids: string[]) {
+  const currentIds = new Set(ids);
+  return new Set([...checked].filter(id => currentIds.has(id)));
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function toCsv(rows: CteSearchRow[]) {
   const head = [
     'Status', 'Tipo', 'CT-e', 'Serie', 'Chave', 'Emissao', 'Pagador', 'Remetente',
     'Destinatario', 'Cidade', 'UF', 'Placa', 'Motorista', 'Notas', 'Frete', 'Carga',
   ];
-  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const esc = (value: unknown) => {
+    const safe = csvSafeCell(value);
+    return safe.startsWith('"') && safe.endsWith('"') ? safe : `"${safe.replace(/"/g, '""')}"`;
+  };
   const lines = rows.map((r) => [
     SEFAZ_STATUS_LABELS[r.sefaz_status as SefazStatus] ?? r.sefaz_status,
     CTE_TYPE_LABELS[r.cte_type as CteType] ?? r.cte_type,
@@ -132,12 +160,25 @@ export default function CteSearch() {
   const pollStatus = usePollCteStatus();
   const [draft, setDraft] = useState<CteSearchFilters>(DEFAULT_FILTERS);
   const [filters, setFilters] = useState<CteSearchFilters>(DEFAULT_FILTERS);
+  const [filterError, setFilterError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [cities, setCities] = useState<Array<[string, number]>>([]);
   const { data: rowsData = [], isLoading, isFetching, error: searchError, refetch } = useCteSearch(filters);
-  const { sortedItems: rows, requestSort, sortConfig } = useSortableData(rowsData);
+  const resultsReady = !isFetching && !searchError;
+  const { sortedItems: rows, requestSort, sortConfig } = useSortableData(resultsReady ? rowsData : []);
+  useEffect(() => {
+    if (!resultsReady || filters.recipientCity) return;
+    const counts = new Map<string, number>();
+    for (const row of rowsData) {
+      const city = (row.recipient_city || '').trim();
+      if (city) counts.set(city, (counts.get(city) || 0) + 1);
+    }
+    const next = [...counts.entries()].sort((left, right) => left[0].localeCompare(right[0], 'pt-BR')) as Array<[string, number]>;
+    setCities(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+  }, [filters.recipientCity, resultsReady, rowsData]);
 
   // Polling automático para documentos em cancelamento ou transmissão
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -179,12 +220,16 @@ export default function CteSearch() {
   function apply(next?: Partial<CteSearchFilters>) {
     const merged = { ...draft, ...(next ?? {}) };
     setDraft(merged);
+    const validationError = validateCteSearchDates(merged);
+    setFilterError(validationError || '');
+    if (validationError) return;
     setFilters(merged);
     setChecked(new Set());
   }
   function clear() {
     setDraft(DEFAULT_FILTERS);
     setFilters(DEFAULT_FILTERS);
+    setFilterError('');
     setChecked(new Set());
   }
 
@@ -209,16 +254,16 @@ export default function CteSearch() {
 
   const downloadableRows = useMemo(() => rows.filter(canDownloadCte), [rows]);
   const checkedRows = useMemo(() => rows.filter((r) => checked.has(r.id)), [rows, checked]);
-
-  const cities = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of rows) {
-      const c = (r.recipient_city || '').trim();
-      if (!c) continue;
-      map.set(c, (map.get(c) ?? 0) + 1);
-    }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
-  }, [rows]);
+  const downloadableIds = useMemo(() => downloadableRows.map(row => row.id).sort(), [downloadableRows]);
+  const downloadableIdsKey = downloadableIds.join('|');
+  const allDownloadableSelected = isExactCteSelection(checked, downloadableIds);
+  useEffect(() => {
+    setChecked(previous => {
+      const reconciled = reconcileCteSelection(previous, downloadableIdsKey ? downloadableIdsKey.split('|') : []);
+      if (reconciled.size === previous.size && [...reconciled].every(id => previous.has(id))) return previous;
+      return reconciled;
+    });
+  }, [downloadableIdsKey]);
 
   const totals = useMemo(() => {
     let freight = 0, cargo = 0, authorized = 0, downloadable = 0;
@@ -245,9 +290,7 @@ export default function CteSearch() {
     });
   }
   function toggleAll() {
-    setChecked((prev) =>
-      prev.size === downloadableRows.length ? new Set() : new Set(downloadableRows.map((r) => r.id)),
-    );
+    setChecked(allDownloadableSelected ? new Set() : new Set(downloadableRows.map((r) => r.id)));
   }
 
   async function bulkDownload(format: 'pdf' | 'xml') {
@@ -348,7 +391,7 @@ export default function CteSearch() {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline">{totals.count} registro(s)</Badge>
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={rows.length === 0}>
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={!resultsReady || rows.length === 0}>
             <TableIcon className="h-4 w-4" /> CSV
           </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
@@ -374,10 +417,10 @@ export default function CteSearch() {
             </Field>
           </div>
           <Field label="Emissão — Início" className="w-[150px]">
-            <Input type="date" value={draft.issueDateStart ?? ''} onChange={(e) => apply({ issueDateStart: e.target.value })} />
+            <Input type="date" max={draft.issueDateEnd || undefined} value={draft.issueDateStart ?? ''} onChange={(e) => apply({ issueDateStart: e.target.value })} />
           </Field>
           <Field label="Emissão — Fim" className="w-[150px]">
-            <Input type="date" value={draft.issueDateEnd ?? ''} onChange={(e) => apply({ issueDateEnd: e.target.value })} />
+            <Input type="date" min={draft.issueDateStart || undefined} value={draft.issueDateEnd ?? ''} onChange={(e) => apply({ issueDateEnd: e.target.value })} />
           </Field>
           <Field label="Cidade destino" className="w-[200px]">
             <select
@@ -390,6 +433,8 @@ export default function CteSearch() {
             </select>
           </Field>
         </div>
+
+        {filterError ? <p role="alert" className="text-sm text-destructive">{filterError}</p> : null}
 
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Período</span>
@@ -490,14 +535,18 @@ export default function CteSearch() {
         )}
       </Card>
 
-      {searchError && <Card role="alert" className="p-3 text-destructive">Não foi possível consultar os CT-e: {errorMessage(searchError)}. Tente atualizar a consulta.</Card>}
+      {searchError && <Card role="alert" className="p-3 text-destructive flex items-center justify-between gap-2">
+        <span>Não foi possível consultar os CT-e: {errorMessage(searchError)}.</span>
+        <Button size="sm" variant="outline" onClick={() => void refetch()}>Tentar novamente</Button>
+      </Card>}
+      {isFetching && !isLoading ? <Card role="status" className="p-3 text-muted-foreground">Atualizando a consulta; resultados e ações permanecerão indisponíveis até a confirmação.</Card> : null}
 
       {/* Totais */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="p-3"><p className="text-xs text-muted-foreground">CT-e encontrados</p><p className="text-2xl font-semibold">{totals.count}</p></Card>
-        <Card className="p-3"><p className="text-xs text-muted-foreground">Autorizados / com arquivo</p><p className="text-2xl font-semibold">{totals.authorized} / {totals.downloadable}</p></Card>
-        <Card className="p-3"><p className="text-xs text-muted-foreground">Total Frete</p><p className="text-2xl font-semibold">{BRL(totals.freight)}</p></Card>
-        <Card className="p-3"><p className="text-xs text-muted-foreground">Total Carga</p><p className="text-2xl font-semibold">{BRL(totals.cargo)}</p></Card>
+        <Card className="p-3"><p className="text-xs text-muted-foreground">CT-e encontrados</p><p className="text-2xl font-semibold">{resultsReady ? totals.count : '—'}</p></Card>
+        <Card className="p-3"><p className="text-xs text-muted-foreground">Autorizados / com arquivo</p><p className="text-2xl font-semibold">{resultsReady ? `${totals.authorized} / ${totals.downloadable}` : '—'}</p></Card>
+        <Card className="p-3"><p className="text-xs text-muted-foreground">Total Frete</p><p className="text-2xl font-semibold">{resultsReady ? BRL(totals.freight) : '—'}</p></Card>
+        <Card className="p-3"><p className="text-xs text-muted-foreground">Total Carga</p><p className="text-2xl font-semibold">{resultsReady ? BRL(totals.cargo) : '—'}</p></Card>
       </div>
 
       {/* Barra de download em lote */}
@@ -513,7 +562,7 @@ export default function CteSearch() {
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" onClick={toggleAll} disabled={bulkBusy}>
-              {checked.size === downloadableRows.length ? 'Limpar seleção' : `Selecionar todos com arquivo (${downloadableRows.length})`}
+              {allDownloadableSelected ? 'Limpar seleção' : `Selecionar todos com arquivo (${downloadableRows.length})`}
             </Button>
             <Button size="sm" onClick={() => bulkDownload('pdf')} disabled={bulkBusy}>
               <Download className="h-4 w-4" /> Baixar PDF único
@@ -532,8 +581,9 @@ export default function CteSearch() {
               <TableRow>
                 <TableHead className="px-3 py-2 w-8">
                   <Checkbox
-                    checked={downloadableRows.length > 0 && checked.size === downloadableRows.length}
+                    checked={allDownloadableSelected}
                     onCheckedChange={toggleAll}
+                    disabled={!resultsReady || downloadableRows.length === 0}
                     aria-label="Selecionar todos"
                   />
                 </TableHead>
@@ -551,8 +601,8 @@ export default function CteSearch() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>}
-              {!isLoading && rows.length === 0 && (
+              {isFetching && <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Carregando a consulta atual…</TableCell></TableRow>}
+              {!isFetching && !searchError && rows.length === 0 && (
                 <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                   Nenhum CT-e encontrado para os filtros informados.
 
@@ -566,7 +616,7 @@ export default function CteSearch() {
                       <Checkbox
                         checked={checked.has(r.id)}
                         onCheckedChange={() => toggleRow(r.id)}
-                        disabled={!has}
+                        disabled={!resultsReady || !has}
                         aria-label={`Selecionar ${cteLabel(r)}`}
                       />
                     </TableCell>
@@ -591,22 +641,22 @@ export default function CteSearch() {
                     <TableCell className="px-3 py-2 text-right text-xs">{BRL(r.freight_value)}</TableCell>
                     <TableCell className="px-3 py-2 text-right">
                       <div className="inline-flex gap-1">
-                        <Button size="sm" variant="ghost" title="Visualizar DACTE" disabled={!has} onClick={() => oneFile(r, 'pdf', true)}>
+                        <Button size="sm" variant="ghost" title="Visualizar DACTE" disabled={!resultsReady || !has} onClick={() => oneFile(r, 'pdf', true)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost" title="Baixar PDF" disabled={!has} onClick={() => oneFile(r, 'pdf')}>
+                        <Button size="sm" variant="ghost" title="Baixar PDF" disabled={!resultsReady || !has} onClick={() => oneFile(r, 'pdf')}>
                           <FileText className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost" title="Baixar XML" disabled={!has} onClick={() => oneFile(r, 'xml')}>
+                        <Button size="sm" variant="ghost" title="Baixar XML" disabled={!resultsReady || !has} onClick={() => oneFile(r, 'xml')}>
                           <FileDown className="h-4 w-4" />
                         </Button>
-                        {(r.sefaz_status === 'processed' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'authorized' || r.sefaz_status === 'rejected') && r.hub_document_id && r.source === 'hub' && (
+                        {isCteCancellationAllowed(r) && (
                           <Button 
                             size="sm" 
                             variant="ghost" 
                             className="text-destructive hover:text-destructive hover:bg-destructive/10" 
                             title="Cancelar CT-e" 
-                            disabled={cancelCte.isPending} 
+                            disabled={!resultsReady || cancelCte.isPending} 
                             onClick={() => handleCancel(r)}
                           >
                             <Ban className="h-4 w-4" />
@@ -617,7 +667,7 @@ export default function CteSearch() {
                             size="sm" 
                             variant="ghost" 
                             title="Consultar/recuperar operação"
-                            disabled={resendCte.isPending}
+                            disabled={!resultsReady || resendCte.isPending}
                             onClick={() => handleResend(r)}
                           >
                             <RefreshCw className="h-4 w-4" />
@@ -629,7 +679,7 @@ export default function CteSearch() {
                             variant="ghost" 
                             className="text-destructive hover:text-destructive hover:bg-destructive/10" 
                             title={r.hub_document_id ? "Remover rascunho (possui ID no Hub)" : "Excluir registro de erro"} 
-                            disabled={deleteCte.isPending} 
+                            disabled={!resultsReady || deleteCte.isPending} 
                             onClick={() => handleDelete(r)}
                           >
                             <Trash2 className="h-4 w-4" />

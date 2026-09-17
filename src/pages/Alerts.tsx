@@ -31,6 +31,7 @@ function ProcessButton() {
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
   const [running, setRunning] = useState(false);
+  const qc = useQueryClient();
 
   if (!isAdmin) return null;
 
@@ -43,6 +44,7 @@ function ProcessButton() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      await qc.invalidateQueries({ queryKey: ['alert_instances'] });
       toast.success(`Pipeline concluído: ${data.processed_vehicles || 0} veículos, ${data.total_inserted || 0} posições`);
     } catch (error: unknown) {
       toast.error(`Erro: ${errorMessage(error)}`);
@@ -91,7 +93,7 @@ function AlertInstancesSection() {
   const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', status: 'open', type: 'all' }, 'alert_');
   const statusFilter = filters.status;
 
-  const { data: instances = [], isLoading } = useQuery({
+  const { data: instances = [], isLoading, isError, error } = useQuery({
     queryKey: ['alert_instances', currentTenant?.id, statusFilter],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -113,6 +115,7 @@ function AlertInstancesSection() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alert_instances'] }); toast.success('Alerta reconhecido'); },
+    onError: (cause) => toast.error(`Não foi possível reconhecer o alerta: ${errorMessage(cause)}`),
   });
 
   const closeMutation = useMutation({
@@ -123,6 +126,7 @@ function AlertInstancesSection() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alert_instances'] }); toast.success('Alerta fechado'); },
+    onError: (cause) => toast.error(`Não foi possível fechar o alerta: ${errorMessage(cause)}`),
   });
 
   const ruleLabels: Record<string, string> = { overspeed: 'Excesso de velocidade', offline: 'Sem comunicação', geofence: 'Cerca virtual', idle: 'Ociosidade', long_stop: 'Parada prolongada', route_deviation: 'Desvio de rota' };
@@ -155,6 +159,8 @@ function AlertInstancesSection() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-destructive">Não foi possível consultar os alertas: {error instanceof Error ? error.message : 'erro desconhecido'}</TableCell></TableRow>
               ) : filteredInstances.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                   <Bell className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
@@ -206,7 +212,7 @@ function StaleFiscalDocsSection() {
   const { currentTenant } = useTenant();
   const cutoff = useMemoDate(7);
 
-  const { data: docs = [], isLoading } = useQuery({
+  const { data: docs = [], isLoading, isError, error } = useQuery({
     queryKey: ['stale_fiscal_docs_without_load', currentTenant?.id, cutoff],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -250,6 +256,8 @@ function StaleFiscalDocsSection() {
           <TableBody>
             {isLoading ? (
               <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow>
+            ) : isError ? (
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-destructive">Não foi possível consultar as notas paradas: {error instanceof Error ? error.message : 'erro desconhecido'}</TableCell></TableRow>
             ) : docs.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Nenhuma nota com mais de 7 dias pendente de romaneio/saída.</TableCell></TableRow>
             ) : docs.map((doc) => {
@@ -289,7 +297,7 @@ function AlertRulesSection() {
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { data: rules = [], isLoading } = useQuery({
+  const { data: rules = [], isLoading, isError, error } = useQuery({
     queryKey: ['alert_rules', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -309,6 +317,7 @@ function AlertRulesSection() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['alert_rules'] }),
+    onError: (cause) => toast.error(`Não foi possível alterar a regra: ${errorMessage(cause)}`),
   });
 
   const deleteMutation = useMutation({
@@ -319,6 +328,7 @@ function AlertRulesSection() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['alert_rules'] }); toast.success('Regra removida'); },
+    onError: (cause) => toast.error(`Não foi possível remover a regra: ${errorMessage(cause)}`),
   });
 
   return (
@@ -334,6 +344,8 @@ function AlertRulesSection() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow><TableCell colSpan={4} className="text-center py-8 text-destructive">Não foi possível carregar as regras: {error instanceof Error ? error.message : 'erro desconhecido'}</TableCell></TableRow>
               ) : rules.length === 0 ? (
                 <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhuma regra. Crie regras de alerta para monitorar offline, excesso de velocidade, etc.</TableCell></TableRow>
               ) : rules.map((r) => (
@@ -364,16 +376,38 @@ function NewRuleDialog({ open, onOpenChange, tenantId }: { open: boolean; onOpen
   const qc = useQueryClient();
   const [ruleType, setRuleType] = useState('offline');
   const [threshold, setThreshold] = useState('15');
+  const [geofenceId, setGeofenceId] = useState('');
   const [loading, setLoading] = useState(false);
+  const geofencesQuery = useQuery({
+    queryKey: ['alert-rule-geofences', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase.from('geofences').select('id,name').eq('tenant_id', tenantId).order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && !!tenantId,
+  });
+  const geofences = geofencesQuery.data ?? [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId) return;
+    const numericThreshold = Number(threshold);
+    if (ruleType !== 'geofence' && (!Number.isFinite(numericThreshold) || numericThreshold <= 0)) {
+      toast.error('O limite deve ser maior que zero.');
+      return;
+    }
+    if (ruleType === 'geofence' && !geofenceId) {
+      toast.error('Selecione a geofence monitorada.');
+      return;
+    }
     setLoading(true);
-    const params: Record<string, number> = {};
+    const params: Record<string, number | string> = {};
     if (ruleType === 'offline') params.threshold_minutes = parseInt(threshold);
     if (ruleType === 'overspeed') params.speed_limit_kmh = parseInt(threshold);
     if (ruleType === 'long_stop') params.threshold_minutes = parseInt(threshold);
+    if (ruleType === 'geofence') params.geofence_id = geofenceId;
 
     const { error } = await supabase.from('alert_rules').insert({ tenant_id: tenantId, rule_type: ruleType, params, enabled: true });
     if (error) toast.error(error.message);
@@ -404,12 +438,22 @@ function NewRuleDialog({ open, onOpenChange, tenantId }: { open: boolean; onOpen
           {ruleType !== 'geofence' && (
             <div className="space-y-2">
               <Label>{labels[ruleType]}</Label>
-              <Input type="number" value={threshold} onChange={e => setThreshold(e.target.value)} required />
+              <Input type="number" min="1" value={threshold} onChange={e => setThreshold(e.target.value)} required />
+            </div>
+          )}
+          {ruleType === 'geofence' && (
+            <div className="space-y-2">
+              <Label>Geofence monitorada</Label>
+              {geofencesQuery.isError ? <p role="alert" className="text-xs text-destructive">Não foi possível carregar as geofences: {geofencesQuery.error instanceof Error ? geofencesQuery.error.message : 'erro desconhecido'}.</p> : null}
+              <Select value={geofenceId} onValueChange={setGeofenceId}>
+                <SelectTrigger><SelectValue placeholder="Selecione a cerca" /></SelectTrigger>
+                <SelectContent>{geofences.map(geofence => <SelectItem key={geofence.id} value={geofence.id}>{geofence.name}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : 'Criar'}</Button>
+            <Button type="submit" disabled={loading || (ruleType === 'geofence' && (geofencesQuery.isLoading || geofencesQuery.isError))}>{loading ? 'Salvando...' : 'Criar'}</Button>
           </div>
         </form>
       </DialogContent>

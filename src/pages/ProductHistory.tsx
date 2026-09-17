@@ -17,7 +17,9 @@ import { usePagination } from '@/hooks/usePagination';
 import { DataPagination } from '@/components/ui/data-pagination';
 
 interface TimelineEvent {
+  key: string;
   at: string;
+  dateOnly?: boolean;
   kind: 'inbound' | 'pickup' | 'load' | 'stop' | 'event' | 'outbound';
   title: string;
   description?: string;
@@ -27,8 +29,12 @@ interface TimelineEvent {
   meta?: { quantity?: number; weight?: number; pallets?: number; value?: number };
 }
 
-function fmtDateTime(d?: string | null) {
+function fmtDateTime(d?: string | null, dateOnly = false) {
   if (!d) return '—';
+  if (dateOnly) {
+    const [year, month, day] = d.slice(0, 10).split('-');
+    return year && month && day ? `${day}/${month}/${year} (horário não informado)` : d;
+  }
   try { return format(new Date(d), 'dd/MM/yyyy HH:mm', { locale: ptBR }); } catch { return d; }
 }
 const KIND_META: Record<TimelineEvent['kind'], { label: string; icon: LucideIcon; color: string }> = {
@@ -42,12 +48,12 @@ const KIND_META: Record<TimelineEvent['kind'], { label: string; icon: LucideIcon
 
 export default function ProductHistory() {
   const { currentTenant } = useTenant();
-  const [product, setProduct] = useState('');
   const [productInput, setProductInput] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [openCombo, setOpenCombo] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [criteria, setCriteria] = useState<{ product: string; from: string; to: string } | null>(null);
+  const invalidPeriod = Boolean(from && to && from > to);
 
   // Autocomplete: distinct product descriptions
   const { data: suggestions = [] } = useQuery({
@@ -72,163 +78,22 @@ export default function ProductHistory() {
     enabled: !!currentTenant && productInput.length >= 2,
   });
 
-  const { data: timeline = [], isFetching, refetch } = useQuery({
-    queryKey: ['product-history', currentTenant?.id, product, from, to],
+  const { data: timeline = [], isFetching, isError, error: historyError, refetch } = useQuery({
+    queryKey: ['product-history', currentTenant?.id, criteria],
     queryFn: async (): Promise<TimelineEvent[]> => {
-      if (!currentTenant || !product) return [];
-
-      // 1) load_items matching product (with rich joins)
-      const q = supabase
-        .from('load_items')
-        .select(`
-          id, item_description, quantity, pallet_count, weight_kg, status, created_at,
-          fiscal_document_id, load_id,
-          fiscal_documents(invoice_number, issue_date, remitter, recipient, recipient_city, recipient_state, value, document_type, pickup_order_id),
-          loads(load_number, status, destination, actual_load_at, scheduled_load_at, trip_id,
-            drivers(name),
-            vehicles(plate, nickname)
-          )
-        `)
-        .eq('tenant_id', currentTenant.id)
-        .ilike('item_description', product);
-      const { data: items, error } = await q.limit(2000);
+      if (!currentTenant || !criteria) return [];
+      const { data, error } = await supabase.rpc('read_product_history_v1' as never, {
+        _tenant_id: currentTenant.id,
+        _product: criteria.product,
+        _from: criteria.from || null,
+        _to: criteria.to || null,
+      } as never);
       if (error) throw error;
-
-      const events: TimelineEvent[] = [];
-      const tripIds = new Set<string>();
-      const pickupIds = new Set<string>();
-
-      (items || []).forEach((r) => {
-        const fd = r.fiscal_documents;
-        const ld = r.loads;
-        if (fd?.pickup_order_id) pickupIds.add(fd.pickup_order_id);
-        if (ld?.trip_id) tripIds.add(ld.trip_id);
-
-        // Inbound NF
-        if (fd && fd.document_type === 'inbound') {
-          events.push({
-            at: (fd.issue_date || r.created_at) + (fd.issue_date ? 'T08:00:00' : ''),
-            kind: 'inbound',
-            title: `NF ${fd.invoice_number || '—'} — ${fd.remitter || 'Fornecedor'}`,
-            description: r.item_description,
-            responsible: fd.remitter || undefined,
-            destination: fd.recipient || undefined,
-            reference: fd.invoice_number || undefined,
-            meta: {
-              quantity: r.quantity ?? undefined,
-              weight: r.weight_kg ?? undefined,
-              pallets: r.pallet_count ?? undefined,
-              value: fd.value ?? undefined,
-            },
-          });
-        }
-
-        // Outbound CT-e
-        if (fd && fd.document_type === 'outbound') {
-          events.push({
-            at: (fd.issue_date || r.created_at) + (fd.issue_date ? 'T18:00:00' : ''),
-            kind: 'outbound',
-            title: `CT-e ${fd.invoice_number || '—'}`,
-            description: r.item_description,
-            destination: [fd.recipient, fd.recipient_city, fd.recipient_state].filter(Boolean).join(' • '),
-            reference: fd.invoice_number || undefined,
-            meta: { value: fd.value ?? undefined },
-          });
-        }
-
-        // Load assignment
-        if (ld) {
-          const at = ld.actual_load_at || ld.scheduled_load_at || r.created_at;
-          events.push({
-            at,
-            kind: 'load',
-            title: `Carga ${ld.load_number} • ${ld.status}`,
-            description: r.item_description,
-            destination: ld.destination || undefined,
-            responsible: [ld.drivers?.name, ld.vehicles?.plate].filter(Boolean).join(' • ') || undefined,
-            reference: ld.load_number,
-            meta: {
-              quantity: r.quantity ?? undefined,
-              weight: r.weight_kg ?? undefined,
-              pallets: r.pallet_count ?? undefined,
-            },
-          });
-        }
-      });
-
-      // 2) Pickup orders details
-      if (pickupIds.size > 0) {
-        const { data: pickups, error: pickupError } = await supabase
-          .from('pickup_orders')
-          .select('id, pickup_number, remitter_name, recipient_name, driver_name_snapshot, vehicle_plate_snapshot, pickup_at, status')
-          .in('id', Array.from(pickupIds))
-          .eq('tenant_id', currentTenant.id);
-        if (pickupError) throw pickupError;
-        (pickups || []).forEach((p) => {
-          if (!p.pickup_at) return;
-          events.push({
-            at: p.pickup_at,
-            kind: 'pickup',
-            title: `Coleta ${p.pickup_number} • ${p.status}`,
-            description: p.remitter_name ? `Remetente: ${p.remitter_name}` : undefined,
-            destination: p.recipient_name || undefined,
-            responsible: [p.driver_name_snapshot, p.vehicle_plate_snapshot].filter(Boolean).join(' • ') || undefined,
-            reference: p.pickup_number,
-          });
-        });
-      }
-
-      // 3) Trip stops + events (responsibles + dates)
-      if (tripIds.size > 0) {
-        const ids = Array.from(tripIds);
-        const [stopsResult, eventsResult] = await Promise.all([
-          supabase.from('dispatch_stops')
-            .select('dispatch_trip_id, stop_order, destination, planned_arrival_at, actual_arrival_at, actual_departure_at, status')
-            .in('dispatch_trip_id', ids)
-            .eq('tenant_id', currentTenant.id),
-          supabase.from('dispatch_events')
-            .select('dispatch_trip_id, event_type, event_at, notes')
-            .in('dispatch_trip_id', ids)
-            .eq('tenant_id', currentTenant.id),
-        ]);
-        if (stopsResult.error) throw stopsResult.error;
-        if (eventsResult.error) throw eventsResult.error;
-        (stopsResult.data || []).forEach((s) => {
-          const at = s.actual_arrival_at || s.planned_arrival_at;
-          if (!at) return;
-          events.push({
-            at,
-            kind: 'stop',
-            title: `Parada ${s.stop_order} — ${s.status || 'planejada'}`,
-            destination: s.destination || undefined,
-            description: s.actual_departure_at ? `Saída: ${fmtDateTime(s.actual_departure_at)}` : undefined,
-          });
-        });
-        (eventsResult.data || []).forEach((e) => {
-          events.push({
-            at: e.event_at,
-            kind: 'event',
-            title: e.event_type,
-            description: e.notes || undefined,
-          });
-        });
-      }
-
-      // Date filters
-      const fromTs = from ? new Date(from + 'T00:00:00').getTime() : null;
-      const toTs   = to   ? new Date(to   + 'T23:59:59').getTime() : null;
-      const filtered = events.filter(ev => {
-        if (!ev.at) return false;
-        const t = new Date(ev.at).getTime();
-        if (fromTs && t < fromTs) return false;
-        if (toTs && t > toTs) return false;
-        return true;
-      });
-
-      filtered.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-      return filtered;
+      if (!Array.isArray(data)) throw new Error('O servidor retornou um histórico de produto inválido.');
+      return data as unknown as TimelineEvent[];
     },
-    enabled: !!currentTenant && !!product && searched,
+    enabled: !!currentTenant && !!criteria,
+    retry: false,
   });
 
   const summary = useMemo(() => {
@@ -240,13 +105,14 @@ export default function ProductHistory() {
   }, [timeline]);
   const pagination = usePagination(timeline, {
     pageSize: 50,
-    resetKey: `${product}|${from}|${to}`,
+    resetKey: criteria ? `${criteria.product}|${criteria.from}|${criteria.to}` : '',
   });
 
   const handleSearch = () => {
-    setProduct(productInput.trim());
-    setSearched(true);
-    setTimeout(() => refetch(), 0);
+    if (invalidPeriod) return;
+    const next = { product: productInput.trim(), from, to };
+    if (criteria && JSON.stringify(criteria) === JSON.stringify(next)) void refetch();
+    else setCriteria(next);
   };
 
   return (
@@ -300,27 +166,31 @@ export default function ProductHistory() {
                 </Popover>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Período — De</Label>
-                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+                <Label htmlFor="product-history-from" className="text-xs">Período — De</Label>
+                <Input id="product-history-from" type="date" max={to || undefined} value={from} onChange={(e) => setFrom(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Período — Até</Label>
-                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+                <Label htmlFor="product-history-to" className="text-xs">Período — Até</Label>
+                <Input id="product-history-to" type="date" min={from || undefined} value={to} onChange={(e) => setTo(e.target.value)} />
               </div>
             </div>
+            {invalidPeriod && <p role="alert" className="mt-3 text-xs text-destructive">A data final deve ser igual ou posterior à inicial.</p>}
             <div className="flex gap-2 mt-4">
-              <Button onClick={handleSearch} disabled={!productInput.trim() || isFetching}>
+              <Button onClick={handleSearch} disabled={!productInput.trim() || invalidPeriod || isFetching}>
                 <Search className="h-4 w-4 mr-2" /> {isFetching ? 'Buscando...' : 'Buscar histórico'}
               </Button>
-              <Button variant="outline" onClick={() => { setProductInput(''); setProduct(''); setFrom(''); setTo(''); setSearched(false); }}>
+              <Button variant="outline" onClick={() => { setProductInput(''); setFrom(''); setTo(''); setCriteria(null); }}>
                 Limpar
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {searched && product && (
+        {criteria && (
           <>
+            {isError ? (
+              <Card><CardContent className="py-8 text-center text-sm text-destructive">Não foi possível carregar o histórico: {historyError instanceof Error ? historyError.message : 'erro desconhecido'} <Button variant="link" onClick={() => refetch()}>Tentar novamente</Button></CardContent></Card>
+            ) : <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Card><CardContent className="py-4"><div className="text-xs text-muted-foreground">Eventos no período</div><div className="text-2xl font-semibold">{summary.total}</div></CardContent></Card>
               <Card><CardContent className="py-4"><div className="text-xs text-muted-foreground">Destinos distintos</div><div className="text-2xl font-semibold">{summary.destinations}</div></CardContent></Card>
@@ -331,7 +201,7 @@ export default function ProductHistory() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="h-4 w-4" /> Linha do tempo — "{product}"
+                  <FileText className="h-4 w-4" /> Linha do tempo — "{criteria.product}"
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -343,18 +213,18 @@ export default function ProductHistory() {
                   </div>
                 ) : (
                   <ol className="relative border-l border-border ml-3 space-y-5">
-                    {pagination.items.map((ev, idx) => {
+                    {pagination.items.map((ev) => {
                       const meta = KIND_META[ev.kind];
                       const Icon = meta.icon;
                       return (
-                        <li key={idx} className="ml-6">
+                        <li key={ev.key} className="ml-6">
                           <span className={cn("absolute -left-3 flex h-6 w-6 items-center justify-center rounded-full text-white", meta.color)}>
                             <Icon className="h-3.5 w-3.5" />
                           </span>
                           <div className="rounded-lg border bg-card p-3">
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               <Badge variant="outline" className="text-[10px]">{meta.label}</Badge>
-                              <span className="text-xs text-muted-foreground">{fmtDateTime(ev.at)}</span>
+                              <span className="text-xs text-muted-foreground">{fmtDateTime(ev.at, ev.dateOnly)}</span>
                               {ev.reference && <Badge variant="secondary" className="font-mono text-[10px]">{ev.reference}</Badge>}
                             </div>
                             <div className="text-sm font-medium">{ev.title}</div>
@@ -384,6 +254,7 @@ export default function ProductHistory() {
               </CardContent>
               <DataPagination {...pagination} onPageChange={pagination.setPage} />
             </Card>
+            </>}
           </>
         )}
       </div>

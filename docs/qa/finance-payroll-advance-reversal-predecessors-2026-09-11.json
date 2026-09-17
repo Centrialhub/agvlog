@@ -1,0 +1,26 @@
+{
+  "functions": [
+    {
+      "signature": "finance_private.reverse_payable_link(jsonb)",
+      "prosrc_md5": "e6b93019c7354bf88aaa3bbb939d4a7c",
+      "prosecdef": true,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.reverse_payable_link(_payload jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare t uuid;request uuid;actor uuid:=auth.uid();actor_name text;reversal uuid;paid numeric;result jsonb;\n l public.finance_payable_movement_links%rowtype;p public.payables%rowtype;existing public.finance_commands%rowtype;\nbegin\n if jsonb_typeof(_payload) is distinct from 'object' then raise exception 'finance_invalid_payload' using errcode='22023';end if;\n t:=(_payload->>'tenant_id')::uuid;request:=(_payload->>'request_id')::uuid;\n if not finance_private.can_access(t) then raise exception 'finance_access_denied' using errcode='42501';end if;\n if request is null or _payload->>'version' is distinct from '1' or length(btrim(coalesce(_payload->>'reason',''))) not between 10 and 2000\n or exists(select 1 from jsonb_object_keys(_payload) k where k not in('version','tenant_id','request_id','link_id','reason')) then\n  raise exception 'finance_invalid_payload' using errcode='22023';end if;\n perform pg_advisory_xact_lock(hashtextextended(t::text||':finance',0));\n select * into existing from public.finance_commands where tenant_id=t and request_id=request;\n if found then\n  if existing.actor_id<>actor or existing.action<>'reverse_payable_link' or existing.payload<>_payload then raise exception 'finance_request_conflict' using errcode='23505';end if;\n  return existing.result;\n end if;\n select * into l from public.finance_payable_movement_links where id=(_payload->>'link_id')::uuid and tenant_id=t;\n if not found then raise exception 'finance_payable_link_not_found' using errcode='22023';end if; if l.origin<>'canonical' then raise exception 'finance_legacy_association_requires_own_reversal' using errcode='22023';end if;\n if exists(select 1 from public.finance_payable_link_reversals where link_id=l.id) then raise exception 'finance_payable_link_already_reversed' using errcode='22023';end if;\n select * into p from public.payables where id=l.payable_id and tenant_id=t for update;\n if not found then raise exception 'finance_payable_not_found' using errcode='22023';end if;\n if p.source_table='payroll_entries' then\n  perform 1 from public.payroll_entries e join public.payroll_periods period on period.id=e.payroll_period_id and period.tenant_id=t\n   where e.id=p.source_id and e.tenant_id=t and period.status='closed' for share of period;\n  if found then raise exception 'finance_payroll_closed_requires_reopening' using errcode='22023';end if;\n end if;\n select coalesce(nullif(raw_user_meta_data->>'full_name',''),email,actor::text) into actor_name from auth.users where id=actor;\n insert into public.finance_payable_link_reversals(tenant_id,link_id,created_by,actor_name,reason)\n values(t,l.id,actor,coalesce(actor_name,actor::text),btrim(_payload->>'reason')) returning id into reversal;\n select coalesce(sum(amount),0) into paid from finance_private.active_payable_payments where tenant_id=t and payable_id=p.id;\n update public.payables set paid_amount=paid,\n  status=case when p.status='cancelled' then 'cancelled' when paid<=0 then case when p.status in('paid','partial') then 'approved' else p.status end\n    when paid>=p.amount then 'paid' else 'partial' end,\n  paid_at=case when p.status='cancelled' then p.paid_at when paid>=p.amount then coalesce(p.paid_at,now()) else null end,updated_at=now()\n where id=p.id and tenant_id=t;\n result:=jsonb_build_object('version',1,'tenant_id',t,'request_id',request,'reversal_id',reversal,'link_id',l.id,'payment_id',l.payment_id,\n  'payable_id',p.id,'movement_id',l.movement_id,'released_cents',l.amount_cents::text);\n insert into public.finance_events(tenant_id,entity_type,entity_id,action,actor_id,actor_name,reason,before_data,after_data)\n values(t,'payable_payment',l.payment_id,'payable_link_reversed',actor,coalesce(actor_name,actor::text),btrim(_payload->>'reason'),to_jsonb(l),result||jsonb_build_object('manual_intervention',true));\n insert into public.finance_commands(tenant_id,request_id,actor_id,action,payload,result) values(t,request,actor,'reverse_payable_link',_payload,result);\n return result;\nend;\n$function$\n"
+    },
+    {
+      "signature": "reverse_finance_payable_link(jsonb)",
+      "prosrc_md5": "6906f3a1e22cdd0eec92ab981e9d7c83",
+      "prosecdef": false,
+      "provolatile": "v",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres}",
+      "definition": "CREATE OR REPLACE FUNCTION public.reverse_finance_payable_link(_payload jsonb)\n RETURNS jsonb\n LANGUAGE sql\n SET search_path TO ''\nAS $function$select finance_private.reverse_payable_link(_payload);$function$\n"
+    }
+  ]
+}

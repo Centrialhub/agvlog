@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { matchesSearch } from '@/lib/listFilters';
 import { Input } from '@/components/ui/input';
-import { CheckCircle2, Lock, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Lock, RefreshCw, XCircle } from 'lucide-react';
 import { useScopedAlerts } from '@/hooks/useAlertStore';
 import {
   PAYROLL_PERIOD_STATUS_LABELS,
@@ -12,6 +12,8 @@ import {
   useClosePayrollPeriod,
   useGeneratePayrollPeriod,
   usePayrollEntries,
+  usePayrollGenerationIssues,
+  useChangePayrollPeriodState,
 } from '@/hooks/usePayroll';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +24,7 @@ import { PayrollStatusBadge } from '@/components/financial/PayrollStatusBadge';
 import { payrollPaymentIssues, payrollPaymentLabels } from '@/lib/financial/payrollPaymentContract';
 import { getErrorMessage } from '@/lib/errors';
 import { formatPayrollCurrency } from './formatPayrollCurrency';
+import { payrollCarryoverInAmount } from '@/lib/financial/payrollCarryoverPresentation';
 
 type PeriodEntriesProps = { period: PayrollPeriod; onOpenEntry: (entry: PayrollEntry) => void };
 export function PeriodEntries(props: PeriodEntriesProps) {
@@ -34,6 +37,7 @@ function PeriodEntriesContent({ period, onOpenEntry }: PeriodEntriesProps) {
   const approve = useApprovePayrollPeriod();
   const close = useClosePayrollPeriod();
   const gen = useGeneratePayrollPeriod();
+  const issues=usePayrollGenerationIssues(period.id);const lifecycle=useChangePayrollPeriodState();
   const [search, setSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [page, setPage] = useState(1);
@@ -49,9 +53,11 @@ function PeriodEntriesContent({ period, onOpenEntry }: PeriodEntriesProps) {
     gross: acc.gross + Number(entry.gross_amount || 0),
     disc: acc.disc + Number(entry.discount_amount || 0),
     paid: acc.paid + Number(entry.already_paid_amount || 0),
+    carryoverIn: acc.carryoverIn + payrollCarryoverInAmount(entry),
+    carryoverOut: acc.carryoverOut + Number(entry.carryover_amount || 0),
     titlePaid: acc.titlePaid + Number(entry.payment_summary?.paid_via_titles || 0),
     toPay: acc.toPay + Number(entry.payment_summary?.remaining_amount ?? entry.amount_to_pay),
-  }), { gross: 0, disc: 0, paid: 0, titlePaid: 0, toPay: 0 }), [entries]);
+  }), { gross: 0, disc: 0, paid: 0, carryoverIn: 0, carryoverOut: 0, titlePaid: 0, toPay: 0 }), [entries]);
 
   const locked = period.status === 'approved' || period.status === 'closed' || period.status === 'cancelled';
 
@@ -68,7 +74,7 @@ function PeriodEntriesContent({ period, onOpenEntry }: PeriodEntriesProps) {
     const reason = await promptAction('Informe o motivo do fechamento da folha.', {
       title: 'Fechar folha',
       label: 'Motivo do fechamento',
-      required: false,
+      required: true,
     }) ?? undefined;
     if (reason === undefined) return;
     try { await close.mutateAsync({ period_id: period.id, reason }); toast.success('Folha fechada'); }
@@ -89,17 +95,23 @@ function PeriodEntriesContent({ period, onOpenEntry }: PeriodEntriesProps) {
       toast.error(getErrorMessage(mutationError, 'Não foi possível recalcular a folha.'));
     }
   };
+  const changeState=async(action:'cancel'|'reopen')=>{const reason=await promptAction(`Informe o motivo para ${action==='cancel'?'cancelar':'reabrir'} a folha.`,{title:action==='cancel'?'Cancelar folha':'Reabrir folha',label:'Motivo',required:true});if(!reason)return;try{await lifecycle.mutateAsync({periodId:period.id,action,reason});toast.success(action==='cancel'?'Folha cancelada':'Folha reaberta para recálculo');}catch(e){toast.error(getErrorMessage(e,'Não foi possível alterar a folha.'));}};
 
   if (error) return <p role="alert" className="text-destructive">Não foi possível conferir os pagamentos da folha. {getErrorMessage(error, 'Tente novamente.')}</p>;
   if (isLoading || isFetching) return <p role="status">Conferindo valores e pagamentos da folha… Aguarde a consulta para aprovar, recalcular ou fechar.</p>;
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">Pagamentos registrados nos títulos. A confirmação pelo extrato bancário é uma conferência separada.</p>
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+      {(issues.isPending||issues.isFetching)&&<p role="status">Conferindo pendências da geração…</p>}
+      {issues.isError&&<p role="alert">Não foi possível conferir as pendências. A aprovação permanece bloqueada. <Button type="button" variant="outline" onClick={()=>void issues.refetch()}>Tentar novamente</Button></p>}
+      {issues.data?.length?<section role="alert" className="rounded border border-amber-400 bg-amber-50 p-3 text-sm"><strong>Pendências da geração ({issues.data.length})</strong>{issues.data.map(issue=><p key={issue.id}>{issue.message}</p>)}<p>Resolva e recalcule antes de aprovar.</p></section>:null}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Funcionários</p><p className="text-lg font-bold">{entries.length}</p></CardContent></Card>
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Bruto</p><p className="text-lg font-bold">{formatPayrollCurrency(totals.gross)}</p></CardContent></Card>
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Descontos</p><p className="text-lg font-bold text-red-600">{formatPayrollCurrency(totals.disc)}</p></CardContent></Card>
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Pago antes da folha</p><p className="text-lg font-bold">{formatPayrollCurrency(totals.paid)}</p></CardContent></Card>
+        <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Saldo anterior</p><p className="text-lg font-bold text-blue-700">{formatPayrollCurrency(totals.carryoverIn)}</p></CardContent></Card>
+        <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">A transportar</p><p className="text-lg font-bold text-amber-700">{formatPayrollCurrency(totals.carryoverOut)}</p></CardContent></Card>
         <Card><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Pago pelos títulos</p><p className="text-lg font-bold">{formatPayrollCurrency(totals.titlePaid)}</p></CardContent></Card>
         <Card className="border-primary/50"><CardContent className="py-3 px-4"><p className="text-[10px] text-muted-foreground uppercase">Saldo a pagar</p><p className="text-lg font-bold text-primary">{formatPayrollCurrency(totals.toPay)}</p></CardContent></Card>
       </div>
@@ -108,8 +120,10 @@ function PeriodEntriesContent({ period, onOpenEntry }: PeriodEntriesProps) {
         <div className="flex items-center gap-2"><span className="text-sm font-medium">{period.period_name}</span><PayrollStatusBadge status={period.status} /></div>
         <div className="flex gap-2">
           {!locked && <Button size="sm" variant="outline" onClick={handleRegen} disabled={gen.isPending}><RefreshCw className="h-4 w-4 mr-1" /> Recalcular</Button>}
-          {!locked && <Button size="sm" onClick={handleApprove} disabled={approve.isPending || entries.length === 0}><CheckCircle2 className="h-4 w-4 mr-1" /> Aprovar</Button>}
+          {!locked && <Button size="sm" onClick={handleApprove} disabled={approve.isPending || entries.length === 0 || issues.isPending || issues.isFetching || issues.isError || !!issues.data?.length}><CheckCircle2 className="h-4 w-4 mr-1" /> Aprovar</Button>}
           {period.status === 'approved' && <Button size="sm" variant="secondary" onClick={handleClose} disabled={close.isPending}><Lock className="h-4 w-4 mr-1" /> Fechar</Button>}
+          {['draft','calculated','under_review','approved'].includes(period.status)&&<Button size="sm" variant="destructive" onClick={()=>void changeState('cancel')} disabled={lifecycle.isPending}><XCircle className="h-4 w-4 mr-1"/>Cancelar</Button>}
+          {period.status==='cancelled'&&<Button size="sm" variant="outline" onClick={()=>void changeState('reopen')} disabled={lifecycle.isPending}><RefreshCw className="h-4 w-4 mr-1"/>Reabrir</Button>}
         </div>
       </div>
 
@@ -124,12 +138,12 @@ function PeriodEntriesContent({ period, onOpenEntry }: PeriodEntriesProps) {
           <TableHeader><TableRow>
             <TableHead>Funcionário</TableHead><TableHead>Tipo</TableHead>
             <TableHead className="text-right">Bruto</TableHead><TableHead className="text-right">Descontos</TableHead>
-            <TableHead className="text-right">Pago antes da folha</TableHead><TableHead className="text-right">Pago pelos títulos</TableHead>
+            <TableHead className="text-right">Pago antes da folha</TableHead><TableHead className="text-right">Saldo anterior</TableHead><TableHead className="text-right">A transportar</TableHead><TableHead className="text-right">Pago pelos títulos</TableHead>
             <TableHead className="text-right">A pagar</TableHead><TableHead>Status</TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {isLoading ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
-              : filtered.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-sm text-muted-foreground">{entries.length ? 'Nenhum funcionário corresponde aos filtros' : 'Sem entradas'}</TableCell></TableRow>
+            {isLoading ? <TableRow><TableCell colSpan={10} className="text-center py-8 text-sm text-muted-foreground">Carregando...</TableCell></TableRow>
+              : filtered.length === 0 ? <TableRow><TableCell colSpan={10} className="text-center py-8 text-sm text-muted-foreground">{entries.length ? 'Nenhum funcionário corresponde aos filtros' : 'Sem entradas'}</TableCell></TableRow>
                 : visibleEntries.map(entry => (
                   <TableRow key={entry.id} className="hover:bg-muted/50">
                     <TableCell className="text-sm font-medium"><button type="button" className="text-left underline underline-offset-2" onClick={() => onOpenEntry(entry)}>{entry.employees?.name ?? entry.employee_id.slice(0, 8)}</button></TableCell>
@@ -137,6 +151,8 @@ function PeriodEntriesContent({ period, onOpenEntry }: PeriodEntriesProps) {
                     <TableCell className="text-right text-sm">{formatPayrollCurrency(Number(entry.gross_amount))}</TableCell>
                     <TableCell className="text-right text-sm text-red-600">{formatPayrollCurrency(Number(entry.discount_amount))}</TableCell>
                     <TableCell className="text-right text-sm">{formatPayrollCurrency(Number(entry.already_paid_amount))}</TableCell>
+                    <TableCell className="text-right text-sm text-blue-700">{formatPayrollCurrency(payrollCarryoverInAmount(entry))}</TableCell>
+                    <TableCell className="text-right text-sm text-amber-700">{formatPayrollCurrency(Number(entry.carryover_amount || 0))}</TableCell>
                     <TableCell className="text-right text-sm">{formatPayrollCurrency(Number(entry.payment_summary?.paid_via_titles ?? 0))}</TableCell>
                     <TableCell className="text-right text-sm font-bold">{formatPayrollCurrency(Number(entry.payment_summary?.remaining_amount ?? entry.amount_to_pay))}</TableCell>
                     <TableCell>

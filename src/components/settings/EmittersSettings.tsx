@@ -25,7 +25,7 @@ import {
 export default function EmittersSettings() {
   const { confirmAction } = useScopedAlerts();
   const isAdmin = useIsAdmin();
-  const { data: emitters = [], isLoading } = useEmitters();
+  const { data: emitters = [], isLoading, isError, error, refetch } = useEmitters();
   const [editing, setEditing] = useState<Partial<TenantEmitter> | null>(null);
   const [credsFor, setCredsFor] = useState<TenantEmitter | null>(null);
   const [certificateFor, setCertificateFor] = useState<TenantEmitter | null>(null);
@@ -49,11 +49,17 @@ export default function EmittersSettings() {
             Cadastre cada CNPJ próprio que emite documentos fiscais. Cada emitente tem sua própria conta no Hub Fiscal.
           </p>
         </div>
-        <Button onClick={() => setEditing({})}><Plus className="mr-2 h-4 w-4" />Novo emitente</Button>
+        <Button onClick={() => setEditing({})} disabled={isLoading || isError}><Plus className="mr-2 h-4 w-4" />Novo emitente</Button>
       </div>
 
       {isLoading ? (
         <Card><CardContent className="py-8 text-center text-muted-foreground">Carregando...</CardContent></Card>
+      ) : isError ? (
+        <Card><CardContent className="space-y-3 py-8 text-center">
+          <p className="font-medium text-destructive">Não foi possível carregar os emitentes fiscais.</p>
+          <p className="text-xs text-muted-foreground">{error instanceof Error ? error.message : 'Falha na consulta.'}</p>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button>
+        </CardContent></Card>
       ) : emitters.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center py-12">
           <Building2 className="h-12 w-12 text-muted-foreground mb-3" />
@@ -82,11 +88,11 @@ export default function EmittersSettings() {
                         <Star className="h-3 w-3" />
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => setCertificateFor(e)} title="Certificado A1 e consulta oficial">
-                      <ShieldCheck className="h-3 w-3" />
+                    <Button size="sm" variant="outline" onClick={() => setCertificateFor(e)} title="Configurar certificado A1 e consulta oficial">
+                      <ShieldCheck className="mr-1 h-3 w-3" />Certificado A1
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setCredsFor(e)} title="Credencial do Hub Fiscal">
-                      <Key className="h-3 w-3" />
+                    <Button size="sm" variant="outline" onClick={() => setCredsFor(e)} title="Configurar credencial do Hub Fiscal">
+                      <Key className="mr-1 h-3 w-3" />Hub Fiscal
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>
                       <Pencil className="h-3 w-3" />
@@ -145,7 +151,13 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
   const save = useSaveEmitter();
   const saveToken = useSaveHubCredentialToken();
   const saveMeta = useSaveHubCredential();
-  const { data: existingCreds = [] } = useHubCredentials(initial.id);
+  const {
+    data: existingCreds = [],
+    isLoading: credentialsLoading,
+    isError: credentialsError,
+    error: credentialsErrorDetail,
+    refetch: refetchCredentials,
+  } = useHubCredentials(initial.id);
   const [f, setF] = useState<EmitterForm>({
     branch_code: initial.branch_code || 'MATRIZ',
     cnpj: initial.cnpj || '',
@@ -178,6 +190,10 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
     setF((current) => ({ ...current, endereco: { ...current.endereco, [key]: value } }));
 
   const handleSave = async () => {
+    if (initial.id && (credentialsLoading || credentialsError)) {
+      toast.error(credentialsLoading ? 'Aguarde o carregamento das credenciais.' : 'Recarregue as credenciais antes de salvar.');
+      return;
+    }
     if (!f.cnpj || String(f.cnpj).replace(/\D/g, '').length !== 14) { toast.error('CNPJ inválido'); return; }
     if (!f.razao_social) { toast.error('Razão social é obrigatória'); return; }
     setSaving(true);
@@ -281,7 +297,18 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
             </p>
           </div>
 
-          {editing && existingCreds.length > 0 && (
+          {initial.id && credentialsLoading && (
+            <div className="col-span-6 text-sm text-muted-foreground">Carregando credenciais…</div>
+          )}
+          {initial.id && credentialsError && (
+            <div className="col-span-6 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+              <p className="font-medium text-destructive">Não foi possível carregar as credenciais do Hub Fiscal.</p>
+              <p className="mt-1 text-xs text-muted-foreground">{credentialsErrorDetail instanceof Error ? credentialsErrorDetail.message : 'Falha na consulta.'}</p>
+              <Button className="mt-2" variant="outline" size="sm" onClick={() => void refetchCredentials()}>Tentar novamente</Button>
+            </div>
+          )}
+
+          {editing && !credentialsLoading && !credentialsError && existingCreds.length > 0 && (
             <div className="col-span-6">
               <h5 className="text-xs font-semibold mb-2">Credenciais já salvas</h5>
               <div className="space-y-2">
@@ -378,10 +405,10 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
             )}
           </div>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button variant="secondary" onClick={handleTest} disabled={testing || !savedId} title={savedId ? 'Testar credencial do Hub Fiscal para este emitente' : 'Salve o emitente para habilitar o teste'}>
+          <Button variant="secondary" onClick={handleTest} disabled={testing || !savedId || credentialsLoading || credentialsError} title={savedId ? 'Testar credencial do Hub Fiscal para este emitente' : 'Salve o emitente para habilitar o teste'}>
             {testing ? 'Testando…' : 'Testar credencial'}
           </Button>
-          <Button onClick={handleSave} disabled={saving}>{editing ? 'Salvar' : 'Cadastrar'}</Button>
+          <Button onClick={handleSave} disabled={saving || (Boolean(initial.id) && (credentialsLoading || credentialsError))}>{editing ? 'Salvar' : 'Cadastrar'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -389,7 +416,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
 }
 
 function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClose: () => void }) {
-  const { data: creds = [] } = useHubCredentials(emitter.id);
+  const { data: creds = [], isLoading, isError, error, refetch } = useHubCredentials(emitter.id);
   const saveToken = useSaveHubCredentialToken();
   const saveMeta = useSaveHubCredential();
   const del = useDeleteHubCredential();
@@ -448,6 +475,13 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
           <p>É obrigatória uma credencial para o emitente e o ambiente selecionados. Sem ela, a operação é bloqueada; não há troca automática para produção ou token global.</p>
         </div>
 
+        {isError ? (
+          <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-center">
+            <p className="font-medium text-destructive">Não foi possível carregar as credenciais.</p>
+            <p className="mt-1 text-xs text-muted-foreground">{error instanceof Error ? error.message : 'Falha na consulta.'}</p>
+            <Button className="mt-3" variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button>
+          </div>
+        ) : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -459,9 +493,12 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
             </TableRow>
           </TableHeader>
           <TableBody>
-            {creds.length === 0 && (
+            {isLoading && (
+              <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-4">Carregando credenciais…</TableCell></TableRow>
+            )}
+            {!isLoading && creds.length === 0 && (
               <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-4">
-                Nenhuma credencial. Usará o token padrão do sistema.
+                Nenhuma credencial configurada para este emitente.
               </TableCell></TableRow>
             )}
             {creds.map(c => (
@@ -485,6 +522,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
             ))}
           </TableBody>
         </Table>
+        )}
 
         <div className="border-t pt-3 space-y-3">
           <h4 className="text-sm font-semibold">Adicionar credencial</h4>
@@ -555,7 +593,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
           </div>
           <Button
             size="sm"
-            disabled={saving || (form.mode === 'token' ? form.token.trim().length < 8 : !form.secret_name.trim())}
+            disabled={isLoading || isError || saving || (form.mode === 'token' ? form.token.trim().length < 8 : !form.secret_name.trim())}
             onClick={handleAdd}
           >
             <Plus className="h-3 w-3 mr-1" />Adicionar

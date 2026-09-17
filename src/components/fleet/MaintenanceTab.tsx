@@ -16,8 +16,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Wrench, AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
-import { format, isPast, addDays } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { getErrorMessage } from '@/lib/errors';
+import { localDateInputValue } from '@/lib/utils/formatDate';
 
 const MAINT_TYPES = [
   { value: 'preventive', label: 'Preventiva' },
@@ -49,7 +50,7 @@ interface Props {
 
 export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
   const toast = useSonnerToast();
-  const { data: items = [], isLoading } = useVehicleMaintenanceList(vehicleId);
+  const itemsQuery=useVehicleMaintenanceList(vehicleId);const items=itemsQuery.data??[],isLoading=itemsQuery.isLoading;
   const createMut = useCreateMaintenance();
   const updateMut = useUpdateMaintenance();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -67,16 +68,17 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
     notes: '',
   });
 
+  const today=localDateInputValue(),horizon=format(addDays(new Date(),7),'yyyy-MM-dd');
+  const alertDate=(m:typeof items[number])=>m.next_date||m.scheduled_date;
   const overdue = items.filter(m =>
     m.status === 'scheduled' && (
-      (m.scheduled_date && isPast(new Date(m.scheduled_date + 'T23:59:59'))) ||
+      (alertDate(m) && alertDate(m)!<today) ||
       (m.next_odometer && currentOdometer && currentOdometer >= m.next_odometer)
     )
   );
 
   const upcoming = items.filter(m =>
-    m.status === 'scheduled' && !overdue.find(o => o.id === m.id) &&
-    m.scheduled_date && !isPast(addDays(new Date(m.scheduled_date + 'T23:59:59'), -7))
+    m.status === 'scheduled' && !overdue.find(o => o.id === m.id) && !!alertDate(m) && alertDate(m)!>=today&&alertDate(m)!<=horizon
   );
 
   const handleSave = async () => {
@@ -105,7 +107,7 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
   const handleStatusChange = async (id: string, status: string) => {
     try {
       const updates: UpdateVehicleMaintenanceInput = { id, status };
-      if (status === 'completed') updates.completed_date = new Date().toISOString().slice(0, 10);
+      if (status === 'completed') updates.completed_date = localDateInputValue();
       await updateMut.mutateAsync(updates);
       toast.success('Status atualizado');
     } catch (error) {
@@ -116,6 +118,7 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
   return (
     <div className="space-y-4">
       {/* Alert cards */}
+      {itemsQuery.isError&&<Card><CardContent className="py-4" role="alert">Não foi possível carregar o histórico de manutenção. <Button variant="outline" onClick={()=>void itemsQuery.refetch()}>Tentar novamente</Button></CardContent></Card>}
       {(overdue.length > 0 || upcoming.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {overdue.length > 0 && (
@@ -168,7 +171,7 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-              ) : items.length === 0 ? (
+              ) : !itemsQuery.isError&&items.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma manutenção registrada</TableCell></TableRow>
               ) : items.map(m => {
                 const st = STATUS_CONFIG[m.status] || STATUS_CONFIG.scheduled;
