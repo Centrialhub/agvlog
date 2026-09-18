@@ -1,10 +1,11 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { componentTagger } from "lovable-tagger";
+import { publicRuntimeConfigIssues } from "./src/config/publicRuntimeConfig";
 
 const normalizedId = (id: string) => id.replace(/\\/g, "/");
 
@@ -92,7 +93,14 @@ const pwaDriverAssetManifest = (): Plugin => ({
 });
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const buildEnvironment = { ...loadEnv(mode, process.cwd(), "VITE_"), ...process.env };
+  const configurationIssues = publicRuntimeConfigIssues(buildEnvironment);
+  if (process.env.VERCEL === "1" && configurationIssues.length > 0) {
+    throw new Error(`Invalid Vercel public build configuration: ${configurationIssues.join(", ")}`);
+  }
+
+  return ({
   server: {
     host: "::",
     port: 8080,
@@ -117,4 +125,5 @@ export default defineConfig(({ mode }) => ({
       output: { manualChunks },
     },
   },
-}));
+  });
+});

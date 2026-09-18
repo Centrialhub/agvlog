@@ -13,6 +13,8 @@ describe("release observability contract", () => {
     const performance = read("src/lib/observability/performanceTelemetry.ts");
 
     expect(main).toContain("installGlobalErrorTelemetry()");
+    expect(main).toContain('import("./lib/observability/frontendTelemetry")');
+    expect(main).toContain("publicRuntimeConfigIssues(import.meta.env)");
     expect(telemetry).toContain('functions.invoke("frontend-error-report"');
     expect(telemetry).toContain('headers: { "x-correlation-id": correlationId }');
     expect(collector).toContain("payload_too_large");
