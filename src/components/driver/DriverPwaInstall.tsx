@@ -21,13 +21,11 @@ export function DriverPwaInstall(){
     const before=(event:Event)=>{event.preventDefault();setInstallPrompt(event as InstallPromptEvent);setDismissed(false);};
     const complete=()=>{setInstalled(true);setInstallPrompt(null);};
     const available=(event:Event)=>setUpdate((event as CustomEvent<{registration:ServiceWorkerRegistration}>).detail.registration);
-    const reload=()=>window.location.reload();
     window.addEventListener('beforeinstallprompt',before);
     window.addEventListener('appinstalled',complete);
     window.addEventListener('agvlog:pwa-update',available);
-    navigator.serviceWorker?.addEventListener('controllerchange',reload);
     return()=>{window.removeEventListener('beforeinstallprompt',before);window.removeEventListener('appinstalled',complete);
-      window.removeEventListener('agvlog:pwa-update',available);navigator.serviceWorker?.removeEventListener('controllerchange',reload);};
+      window.removeEventListener('agvlog:pwa-update',available);};
   },[]);
 
   if(update?.waiting)return <div role="status" className="flex items-center justify-between gap-2 bg-info/15 px-4 py-2 text-xs">

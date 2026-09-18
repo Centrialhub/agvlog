@@ -1,5 +1,6 @@
-import { lazy, Suspense, type PropsWithChildren } from "react";
+import { Suspense, type PropsWithChildren } from "react";
 import { Navigate, useLocation } from "react-router-dom";
+import { lazyWithNavigationRecovery as lazy } from "@/lib/navigation/lazyWithNavigationRecovery";
 import {FinanceAccessBoundary} from '@/components/financial/FinanceAccessBoundary';
 import {isFinancialPath} from '@/lib/financial/financeRoutes';
 

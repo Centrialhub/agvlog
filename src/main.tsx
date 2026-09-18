@@ -4,6 +4,18 @@ import "./index.css";
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || !import.meta.env.PROD) return;
+  let reloadingForControllerChange = false;
+  let controllerEstablished = Boolean(navigator.serviceWorker.controller);
+  const reloadForControllerChange = () => {
+    if (!controllerEstablished) {
+      controllerEstablished = true;
+      return;
+    }
+    if (reloadingForControllerChange) return;
+    reloadingForControllerChange = true;
+    window.location.reload();
+  };
+  navigator.serviceWorker.addEventListener('controllerchange', reloadForControllerChange);
   window.addEventListener('load', () => {
     void navigator.serviceWorker.register('/sw.js').then(registration => {
       const announceUpdate=()=>window.dispatchEvent(new CustomEvent('agvlog:pwa-update',{detail:{registration}}));

@@ -1,5 +1,6 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { lazyWithNavigationRecovery as lazy } from "@/lib/navigation/lazyWithNavigationRecovery";
 
 import {
   AuthRoute,
