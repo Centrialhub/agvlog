@@ -23,6 +23,7 @@ import { useDrivers } from '@/hooks/useDrivers';
 import { useClients } from '@/hooks/useClients';
 import { isPortalInviteEmail, PORTAL_PERMISSION_FIELDS, type CreatePortalInviteResponse, type PortalPermissionKey } from '@/lib/portal/portalAccessInvite';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { edgeFunctionErrorMessage } from '@/lib/supabase/edgeFunctionError';
 
 type AppRole = Enums<'app_role'>;
 type TeamRole = Extract<AppRole, 'admin' | 'operator' | 'driver'>;
@@ -140,7 +141,7 @@ export default function TeamManagement() {
       const { data: fnData, error: fnError } = await supabase.functions.invoke<EdgeUsersResponse>('list-tenant-members', {
         body: { tenant_id: currentTenant.id },
       });
-      if (fnError) throw fnError;
+      if (fnError) throw new Error(await edgeFunctionErrorMessage(fnError, 'Falha ao consultar membros'));
       if (fnData?.error) throw new Error(fnData.error);
       const list = fnData?.users || [];
       for (const u of list) emailMap.set(u.id, { email: u.email, full_name: u.full_name });
@@ -604,7 +605,7 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
         if (data?.error) throw new Error(data.error);
         setUserResults(data?.users || []);
       } catch (error: unknown) {
-        toast.error(errorMessage(error, 'Falha na busca de usuários'));
+        toast.error(await edgeFunctionErrorMessage(error, 'Falha na busca de usuários'));
       } finally { setSearching(false); }
     }, 300);
     return () => clearTimeout(handle);
@@ -659,7 +660,7 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
       setUserId(''); setPickedLabel(''); setUserQuery(''); setInviteName(''); setUserResults([]);
       setClientId(''); setAccessType('full'); setPerms({ can_download_documents: true });
     } catch (error: unknown) {
-      toast.error(errorMessage(error, 'Falha ao salvar acesso'));
+      toast.error(await edgeFunctionErrorMessage(error, 'Falha ao salvar acesso'));
     } finally { setLoading(false); }
   };
 
@@ -829,7 +830,7 @@ function InviteDialog({
       resetForm();
       onOpenChange(false);
     } catch (error: unknown) {
-      toast.error(errorMessage(error, 'Erro ao criar conta'));
+      toast.error(await edgeFunctionErrorMessage(error, 'Erro ao criar conta'));
     }
     setLoading(false);
   };
@@ -1010,7 +1011,7 @@ function EditMemberDialog({
       queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
       handleOpenChange(false);
     } catch (error: unknown) {
-      toast.error(errorMessage(error, 'Erro ao atualizar conta'));
+      toast.error(await edgeFunctionErrorMessage(error, 'Erro ao atualizar conta'));
     }
     setLoading(false);
   };
@@ -1026,7 +1027,7 @@ function EditMemberDialog({
       if (data?.error) throw new Error(data.error);
       toast.success('Link de redefinição solicitado.');
     } catch (error: unknown) {
-      toast.error(errorMessage(error, 'Erro ao enviar redefinição de senha'));
+      toast.error(await edgeFunctionErrorMessage(error, 'Erro ao enviar redefinição de senha'));
     } finally {
       setResettingPassword(false);
     }

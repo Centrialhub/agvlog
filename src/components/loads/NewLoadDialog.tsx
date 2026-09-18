@@ -15,8 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertTriangle, Eye, Loader2, Plus, Search, UserX, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Vehicle } from '@/hooks/useVehicles';
-import { getErrorMessage } from '@/lib/errors';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { canSelectDocumentForNewLoad, getNewLoadCreationErrorMessage } from '@/lib/loads/newLoadDocumentSelection';
 
 type DriverOption = { id: string; name: string; user_id: string | null };
 type AvailableFiscalDocument = {
@@ -213,7 +213,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     ? String(a.clients?.company_name || a.recipient || a.invoice_number || '').localeCompare(String(b.clients?.company_name || b.recipient || b.invoice_number || ''), 'pt-BR')
     : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()), [docSort, fiscalDocs]);
 
-  const selectableFilteredDocs = useMemo(() => filteredDocs, [filteredDocs]);
+  const selectableFilteredDocs = useMemo(() => filteredDocs.filter(canSelectDocumentForNewLoad), [filteredDocs]);
 
   const linkedFilteredDocs = useMemo(() => filteredDocs.filter(doc => doc.load_id), [filteredDocs]);
 
@@ -418,6 +418,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const applyDocSelection = (doc: AvailableFiscalDocument) => {
+    if (!canSelectDocumentForNewLoad(doc)) {
+      toast({
+        title: 'NF já vinculada',
+        description: 'Abra a carga atual e use a opção de mover ou replanejar a nota.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const autoFilledFields = getDocAutofillFields(doc);
     setSelectedDocIds(prev => {
       const next = new Set(prev);
@@ -473,6 +481,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       ].filter(Boolean).join('\n');
 
       const selectedDocIdList = Array.from(selectedDocIds);
+      const unavailableSelectedDoc = fiscalDocs.find(doc => selectedDocIds.has(doc.id) && !canSelectDocumentForNewLoad(doc));
+      if (unavailableSelectedDoc) {
+        removeDocSelection(unavailableSelectedDoc.id);
+        throw new Error('document_already_linked');
+      }
       const auditEvents = selectedDocIdList.map(docId => {
             const doc = fiscalDocs.find(document => document.id === docId);
             const autoFilledFields = docAutofillSnapshots[docId] || {};
@@ -539,9 +552,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       createRequestId.current = crypto.randomUUID();
       queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
       queryClient.invalidateQueries({ queryKey: ['load_items'] });
+      queryClient.invalidateQueries({ queryKey: ['new_load_available_fiscal_docs', currentTenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['new_load_linked_load_lookup', currentTenant?.id] });
       onCreated();
     } catch (error: unknown) {
-      toast({ title: 'Erro', description: getErrorMessage(error), variant: 'destructive' });
+      toast({ title: 'Erro ao criar carga', description: getNewLoadCreationErrorMessage(error), variant: 'destructive' });
     }
   };
 
@@ -600,7 +615,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           </div>
           {selectedDocIds.size > 0 && (
             <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[11px] text-muted-foreground">
-              Nota vinculada: ao criar, notas já roteirizadas sairão da carga antiga e entrarão nesta nova carga.
+              As notas selecionadas serão vinculadas a esta carga ao criar.
             </div>
           )}
           <div className="rounded-md border border-border bg-muted/30 p-3">
@@ -620,11 +635,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             ) : (
               <div className="max-h-28 space-y-1 overflow-y-auto pr-1">
                 {selectedDocs.map((doc) => {
-                  const linkedLoad = getLinkedLoad(doc);
                   return (
                     <div key={doc.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
                       <span className="min-w-0 truncate">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">{Number(doc.pallet_count) || 0} pal · {Number(doc.weight_kg) || 0} kg{doc.load_id ? ` · sai da ${linkedLoad?.load_number || 'atual'}` : ''}</span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{Number(doc.pallet_count) || 0} pal · {Number(doc.weight_kg) || 0} kg</span>
                     </div>
                   );
                 })}
@@ -728,7 +742,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     <AlertTriangle className="h-4 w-4" /> NF já vinculada a outra carga
                   </div>
                   <div className="text-center text-muted-foreground">
-                    A nota foi encontrada e pode ser reatribuída para a nova carga. Ela sairá da carga antiga ao criar.
+                    A nota foi encontrada, mas já pertence a outra carga. Abra a carga atual para mover ou replanejar a nota.
                   </div>
                   <div className="mt-2 flex flex-wrap justify-center gap-2">
                     {linkedFilteredDocs.map((doc) => {
@@ -745,7 +759,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 const isSelected = selectedDocIds.has(doc.id);
                 const isLinked = !!doc.load_id;
                 const linkedLoad = getLinkedLoad(doc);
-                const actionLabel = isSelected ? 'Selecionada para esta carga' : isLinked ? 'Será reatribuída' : 'Será puxada';
+                const actionLabel = isSelected ? 'Selecionada para esta carga' : isLinked ? 'Já vinculada' : 'Será puxada';
                 return (
                 <div key={doc.id} className="flex items-start gap-2 rounded-md border border-border px-2 py-2 hover:bg-muted/60">
                   <button
@@ -759,12 +773,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                       applyDocSelection(doc);
                       setPreviewDoc(doc);
                     }}
-                    className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                    disabled={isLinked}
+                    aria-label={isLinked ? `NF ${doc.invoice_number || 'sem número'} já vinculada à carga ${linkedLoad?.load_number || 'atual'}` : undefined}
+                    className="flex min-w-0 flex-1 items-start gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Checkbox checked={isSelected} className="mt-0.5" />
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
-                       <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · sai da carga ${linkedLoad?.load_number || 'atual'}` : ''}</span>
+                       <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · carga ${linkedLoad?.load_number || 'atual'}` : ''}</span>
                     </span>
                   </button>
                   <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${isSelected ? 'border-primary/30 bg-primary/10 text-primary' : isLinked ? 'border-warning/30 bg-warning/10 text-warning' : 'border-border bg-muted text-muted-foreground'}`}>
@@ -789,7 +805,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     <div className="text-xs font-medium">Pré-visualização da NF {previewDoc.invoice_number || '—'}</div>
                     <div className="text-[11px] text-muted-foreground">Confira os dados que serão preenchidos automaticamente.</div>
                   </div>
-                  <Button size="sm" onClick={() => applyDocSelection(previewDoc)}>Confirmar nota</Button>
+                  <Button size="sm" onClick={() => applyDocSelection(previewDoc)} disabled={!canSelectDocumentForNewLoad(previewDoc)}>Confirmar nota</Button>
                 </div>
                 {previewValidationIssues.length > 0 && (
                   <div className="space-y-1 rounded-md border border-warning/30 bg-warning/10 p-2">
@@ -832,11 +848,13 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                   const isSelected = selectedDocIds.has(doc.id);
                   const isLinked = !!doc.load_id;
                   const linkedLoad = getLinkedLoad(doc);
-                  const actionLabel = isSelected ? 'Selecionada para esta carga' : isLinked ? 'Será reatribuída' : 'Será puxada';
+                  const actionLabel = isSelected ? 'Selecionada para esta carga' : isLinked ? 'Já vinculada' : 'Será puxada';
                   return (
                     <button
                       key={doc.id}
                       type="button"
+                      disabled={isLinked}
+                      aria-label={isLinked ? `NF ${doc.invoice_number || 'sem número'} já vinculada à carga ${linkedLoad?.load_number || 'atual'}` : undefined}
                       onClick={() => {
                         if (isSelected) {
                           removeDocSelection(doc.id);
@@ -846,13 +864,13 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                         applyDocSelection(doc);
                         setPreviewDoc(doc);
                       }}
-                      className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60"
+                      className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <div className="flex items-start gap-3">
                         <Checkbox checked={isSelected} className="mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</div>
-                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · sai da carga ${linkedLoad?.load_number || 'atual'}` : ''}</div>
+                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · carga ${linkedLoad?.load_number || 'atual'}` : ''}</div>
                         </div>
                         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${isSelected ? 'border-primary/30 bg-primary/10 text-primary' : isLinked ? 'border-warning/30 bg-warning/10 text-warning' : 'border-border bg-muted text-muted-foreground'}`}>
                           {actionLabel}
