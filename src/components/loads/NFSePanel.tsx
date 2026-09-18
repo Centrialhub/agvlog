@@ -5,8 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Send, FileText, Loader2, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useNFSeList, useIssueNFSe } from '@/hooks/useNFSe';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
-import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
-import type { HubEnvironment } from '@/lib/fiscal/hubFiscalClient';
 
 interface Props {
   loadId: string;
@@ -20,8 +18,7 @@ interface Props {
 export default function NFSePanel({ loadId, loadNumber, destination, defaultClientName, defaultClientCnpj, freightTotal }: Props) {
   const notesQuery = useNFSeList({ loadId });
   const notes = notesQuery.data ?? [];
-  const [environment, setEnvironment] = useState<HubEnvironment>('production');
-  const issue = useIssueNFSe(environment);
+  const issue = useIssueNFSe();
   const [open, setOpen] = useState(false);
   const initialDocument = useMemo(() => ({
     cliente_nome: defaultClientName || '',
@@ -42,7 +39,6 @@ export default function NFSePanel({ loadId, loadNumber, destination, defaultClie
         </Button>
       </CardHeader>
       <CardContent>
-        <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issue.isPending} />
         {notesQuery.isLoading ? (
           <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground" role="status">
             <Loader2 className="h-4 w-4 animate-spin" /> Consultando NFS-e da carga…
@@ -82,9 +78,6 @@ export default function NFSePanel({ loadId, loadNumber, destination, defaultClie
 
         <NFSeFormDialog
           open={open}
-          environment={environment}
-          onEnvironmentChange={setEnvironment}
-          issuing={issue.isPending}
           onOpenChange={setOpen}
           loadId={loadId}
           initial={initialDocument}

@@ -28,8 +28,8 @@ import { hasInsuranceData } from '@/lib/fiscal/insuranceText';
 import { hasInsuranceProfile } from '@/lib/fiscal/insuranceProfile';
 import { Calculator, Save } from 'lucide-react';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
-import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
-import type { HubEnvironment, NFSeBatchResponse } from '@/lib/fiscal/hubFiscalClient';
+import type { NFSeBatchResponse } from '@/lib/fiscal/hubFiscalClient';
+import { PRODUCTION_HUB_ENVIRONMENT, type HubEnvironment } from '../../../supabase/functions/_shared/fiscal-environment';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -93,7 +93,7 @@ function isStoredBatchAttempt(value: unknown): value is BatchAttempt {
   const attempt = value as Partial<BatchAttempt>;
   if (attempt.schemaVersion !== 2 ||
     !['individual', 'unified'].includes(String(attempt.mode)) ||
-    !['sandbox', 'homologation', 'production'].includes(String(attempt.environment)) ||
+    attempt.environment !== PRODUCTION_HUB_ENVIRONMENT ||
     typeof attempt.requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(attempt.requestId) ||
     !Number.isInteger(attempt.sourceCount) || Number(attempt.sourceCount) < 1 ||
     !attempt.drafts || typeof attempt.drafts !== 'object') return false;
@@ -111,8 +111,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const { data: clients = [] } = useClients();
   const { data: emitters = [] } = useEmitters();
   const create = useCreateNFSe();
-  const [environment, setEnvironment] = useState<HubEnvironment>('production');
-  const issueBatch = useIssueNFSeBatch(environment);
+  const environment = PRODUCTION_HUB_ENVIRONMENT;
+  const issueBatch = useIssueNFSeBatch();
   const recalcFreight = useRecalculateInboundFreight();
   const { data: insuranceProfile } = useInsuranceProfile();
   const saveInsuranceProfile = useUpdateInsuranceProfile();
@@ -195,14 +195,13 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         if (isStoredBatchAttempt(stored)) {
           setBatchAttempt(stored);
           setEmissionMode(stored.mode);
-          setEnvironment(stored.environment);
           setStep(3);
         }
       } catch {
         sessionStorage.removeItem(batchStorageKey);
       }
     }
-  }, [open, batchStorageKey, setEnvironment]);
+  }, [open, batchStorageKey]);
 
   useEffect(() => {
     if (!open || emitterId) return;
@@ -708,8 +707,6 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             Selecione as notas, revise os valores e informe os dados fiscais antes de emitir.
           </DialogDescription>
         </DialogHeader>
-
-        <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issueBatch.isPending || create.isPending || !!batchAttempt} />
 
         {step === 1 && (
           <div className="space-y-4">

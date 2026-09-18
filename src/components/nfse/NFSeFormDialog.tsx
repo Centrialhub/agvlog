@@ -23,8 +23,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
-import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
-import type { HubEnvironment } from '../../../supabase/functions/_shared/fiscal-environment';
+import { PRODUCTION_HUB_ENVIRONMENT } from '../../../supabase/functions/_shared/fiscal-environment';
 import { resolveNFSeTomador } from '@/lib/fiscal/nfseTomador';
 import type { TomadorData } from '@/lib/fiscal/nfseTomador';
 import { consultOfficialTaxRegistry } from '@/lib/fiscal/taxRegistryClient';
@@ -96,9 +95,6 @@ interface NFSeFormState {
 }
 
 interface Props {
-  environment: HubEnvironment;
-  onEnvironmentChange: (environment: HubEnvironment) => void;
-  issuing?: boolean;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial?: Partial<NFSeDoc> | null;
@@ -169,7 +165,8 @@ const EMPTY_FORM: NFSeFormState = {
   related_cte_ids: [],
 };
 
-export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvironmentChange, issuing, initial, loadId, onSaved }: Props) {
+export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, onSaved }: Props) {
+  const environment = PRODUCTION_HUB_ENVIRONMENT;
   const toast = useSonnerToast();
   const create = useCreateNFSe();
   const update = useUpdateNFSe();
@@ -673,16 +670,9 @@ export default function NFSeFormDialog({ open, onOpenChange, environment, onEnvi
           <DialogTitle>{editing ? 'Editar NFS-e (RPS)' : 'Nova NFS-e (RPS)'}</DialogTitle>
         </DialogHeader>
 
-        <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-          <FiscalEnvironmentSelect
-            value={environment}
-            onChange={onEnvironmentChange}
-            disabled={issuing || create.isPending || update.isPending}
-          />
-          <p className="text-xs text-muted-foreground">
-            Ambiente para emitir nesta tela. Salvar o RPS cria um rascunho; para transmitir, use Emitir após salvar.
-          </p>
-        </div>
+        <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+          Salvar o RPS cria um rascunho; para transmitir, use Emitir após salvar.
+        </p>
 
         <Tabs defaultValue="gerais">
           <TabsList>

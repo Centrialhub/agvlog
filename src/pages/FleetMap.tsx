@@ -128,7 +128,7 @@ export default function FleetMap() {
 
   const pollMutation = useMutation({
     mutationFn: async () => {
-      if (!ssxEnabled) throw new Error('Integração SSX em implantação');
+      if (!ssxEnabled) throw new Error('Integração SSX não habilitada para esta empresa.');
       for (const acc of accounts) {
         const { data, error } = await supabase.functions.invoke<PipelineRunResponse>('agvlog-pipeline-run', {
           body: {
@@ -154,10 +154,10 @@ export default function FleetMap() {
       queryClient.invalidateQueries({ queryKey: ['workspace_fleet_snapshot'] });
       queryClient.invalidateQueries({ queryKey: ['tenant_health'] });
       void refetch();
-      toast.success('Diagnóstico SSX concluído com sucesso.');
+      toast.success('Sincronização SSX concluída com sucesso.');
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao executar o diagnóstico SSX.');
+      toast.error(error instanceof Error ? error.message : 'Falha ao sincronizar dados do SSX.');
     },
   });
 
@@ -271,7 +271,7 @@ export default function FleetMap() {
           {isAdmin && ssxEnabled && !ssxAccountsLoading && !ssxAccountsIsError && accounts.length > 0 && (
             <Button variant="secondary" size="sm" className="w-full" onClick={() => pollMutation.mutate()} disabled={pollMutation.isPending}>
               <Radio className={`h-4 w-4 mr-2 ${pollMutation.isPending ? 'animate-spin' : ''}`} />
-              {pollMutation.isPending ? 'Coletando...' : 'Diagnóstico SSX (manual)'}
+              {pollMutation.isPending ? 'Sincronizando...' : 'Sincronizar SSX'}
             </Button>
           )}
         </div>

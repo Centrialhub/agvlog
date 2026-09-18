@@ -355,7 +355,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
 
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter.cnpj),
-    environment: input.emitter.environment || 'sandbox',
+    environment: input.emitter.environment || 'production',
     externalId: input.externalId || undefined,
     payload: {
       modalidadeDeTransporte: '1', // 1=Rodoviário no contrato PlugNotas/Fiscal Hub

@@ -1,4 +1,4 @@
-import { AlertTriangle, Construction } from "lucide-react";
+import { AlertTriangle, LockKeyhole } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,13 +23,13 @@ export function IntegrationUnavailable({
   return (
     <div className="mx-auto flex min-h-[18rem] max-w-xl items-center p-4">
       <Alert variant={degraded ? "destructive" : "default"}>
-        {degraded ? <AlertTriangle className="h-4 w-4" /> : <Construction className="h-4 w-4" />}
-        <AlertTitle>{degraded ? "Verificação indisponível" : "Integração em implantação"}</AlertTitle>
+        {degraded ? <AlertTriangle className="h-4 w-4" /> : <LockKeyhole className="h-4 w-4" />}
+        <AlertTitle>{degraded ? "Verificação indisponível" : "Recurso indisponível"}</AlertTitle>
         <AlertDescription className="space-y-3">
           <p>
             {degraded
               ? `Não foi possível confirmar a disponibilidade de ${label}. A operação foi bloqueada por segurança.`
-              : `${label} está desativada para este tenant. Nenhuma sincronização, emissão ou cancelamento será executado.`}
+              : `${label} não está habilitada para esta empresa. Nenhuma sincronização, emissão ou cancelamento será executado.`}
           </p>
           {degraded && onRetry ? (
             <Button type="button" variant="outline" size="sm" onClick={onRetry}>

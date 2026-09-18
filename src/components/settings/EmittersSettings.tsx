@@ -175,7 +175,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
   const [cred, setCred] = useState({
     mode: 'token' as 'token' | 'secret_name',
     doc_scope: 'all' as HubFiscalCredential['doc_scope'],
-    environment: 'homologation' as HubFiscalCredential['environment'],
+    environment: 'production' as HubFiscalCredential['environment'],
     token: '',
     secret_name: '',
   });
@@ -184,6 +184,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
   const editing = !!savedId;
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<null | { ok: boolean; source?: string; scope?: string | null; message?: string }>(null);
+  const productionCredentials = existingCreds.filter(credential => credential.environment === 'production');
   const set = <K extends Exclude<keyof EmitterForm, 'endereco'>>(key: K, value: EmitterForm[K]) =>
     setF((current) => ({ ...current, [key]: value }));
   const setEnd = <K extends keyof TenantEmitter['endereco']>(key: K, value: TenantEmitter['endereco'][K]) =>
@@ -227,7 +228,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
   };
 
   const handleTest = async () => {
-    if (!savedId) { toast.info('Salve o emitente antes de testar a credencial.'); return; }
+    if (!savedId) { toast.info('Salve o emitente antes de verificar a conexão.'); return; }
     setTesting(true);
     setTestResult(null);
     try {
@@ -237,9 +238,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
           ok: true,
           source: res.source,
           scope: res.scope_matched,
-          message: res.source === 'default'
-            ? 'Nenhuma credencial específica encontrada — o proxy usaria o token padrão do Hub Fiscal.'
-            : `Credencial ${res.source === 'ciphertext' ? 'criptografada' : 'de segredo'} localizada (escopo: ${res.scope_matched || 'all'}).`,
+          message: `Conexão disponível para ${res.scope_matched || 'todos os documentos'}.`,
         });
       } else {
         setTestResult({ ok: false, message: res?.error?.message || 'Falha ao resolver credencial.' });
@@ -291,9 +290,9 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
           <div className="col-span-2"><Label>E-mail</Label><Input value={f.endereco?.email || ''} onChange={e => setEnd('email', e.target.value)} /></div>
 
           <div className="col-span-6 pt-4 border-t">
-            <h4 className="text-sm font-semibold mb-1">Credenciais do Hub Fiscal (opcional)</h4>
+            <h4 className="text-sm font-semibold mb-1">Credencial do Hub Fiscal</h4>
             <p className="text-xs text-muted-foreground mb-3">
-              Cada emitente pode usar uma conta própria no Hub Fiscal. Se não preencher, o sistema usará o token padrão <code>HUB_FISCAL_API_KEY</code>.
+              Configure a credencial usada nas emissões fiscais deste emitente.
             </p>
           </div>
 
@@ -308,15 +307,14 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
             </div>
           )}
 
-          {editing && !credentialsLoading && !credentialsError && existingCreds.length > 0 && (
+          {editing && !credentialsLoading && !credentialsError && productionCredentials.length > 0 && (
             <div className="col-span-6">
               <h5 className="text-xs font-semibold mb-2">Credenciais já salvas</h5>
               <div className="space-y-2">
-                {existingCreds.map(c => (
+                {productionCredentials.map(c => (
                   <div key={c.id} className="flex items-center justify-between rounded-md border p-2 text-xs">
                     <div className="flex items-center gap-2">
                       <Badge variant="outline">{c.doc_scope}</Badge>
-                      <span className="text-muted-foreground">{c.environment}</span>
                     </div>
                     <div className="font-mono">
                       {c.has_ciphertext
@@ -347,18 +345,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
               </SelectContent>
             </Select>
           </div>
-          <div className="col-span-2">
-            <Label>Ambiente</Label>
-            <Select value={cred.environment} onValueChange={v => setCred(s => ({ ...s, environment: v as typeof s.environment }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="production">Produção</SelectItem>
-                <SelectItem value="homologation">Homologação</SelectItem>
-                <SelectItem value="sandbox">Sandbox</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="col-span-2">
+          <div className="col-span-4">
             <Label>Modo</Label>
             <Select value={cred.mode} onValueChange={v => setCred(s => ({ ...s, mode: v as typeof s.mode }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -379,7 +366,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
                 placeholder="Cole o token deste CNPJ"
               />
               <p className="text-[11px] text-muted-foreground mt-1">
-                Criptografado com AES-GCM no backend e nunca devolvido para a tela.
+                A credencial é armazenada com segurança e nunca é exibida novamente.
               </p>
             </div>
           ) : (
@@ -405,8 +392,8 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
             )}
           </div>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button variant="secondary" onClick={handleTest} disabled={testing || !savedId || credentialsLoading || credentialsError} title={savedId ? 'Testar credencial do Hub Fiscal para este emitente' : 'Salve o emitente para habilitar o teste'}>
-            {testing ? 'Testando…' : 'Testar credencial'}
+          <Button variant="secondary" onClick={handleTest} disabled={testing || !savedId || credentialsLoading || credentialsError} title={savedId ? 'Verificar conexão com o Hub Fiscal' : 'Salve o emitente para verificar a conexão'}>
+            {testing ? 'Verificando…' : 'Verificar conexão'}
           </Button>
           <Button onClick={handleSave} disabled={saving || (Boolean(initial.id) && (credentialsLoading || credentialsError))}>{editing ? 'Salvar' : 'Cadastrar'}</Button>
         </DialogFooter>
@@ -429,12 +416,13 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
     enabled: boolean;
   }>({
     doc_scope: 'all',
-    environment: 'homologation',
+    environment: 'production',
     mode: 'token',
     token: '',
     secret_name: '',
     enabled: true,
   });
+  const productionCredentials = creds.filter(credential => credential.environment === 'production');
 
   const handleAdd = async () => {
     if (form.mode === 'token') {
@@ -469,10 +457,9 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
         </DialogHeader>
 
         <div className="rounded-md bg-muted/40 p-3 text-xs space-y-1">
-          <p><strong>Como funciona:</strong> cada emitente pode ter uma conta própria no Hub Fiscal.</p>
-          <p>Cole o token do Hub Fiscal aqui — ele é criptografado no backend com AES-GCM (chave <code>AGVLOG_ENCRYPTION_KEY</code>) antes de ir para o banco e nunca é devolvido para a tela.</p>
-          <p>Alternativa avançada: se você preferir guardar o token como variável de ambiente, use o modo <em>“Nome de segredo”</em> e informe apenas o nome (ex.: <code>HUB_FISCAL_KEY_FILIAL2</code>).</p>
-          <p>É obrigatória uma credencial para o emitente e o ambiente selecionados. Sem ela, a operação é bloqueada; não há troca automática para produção ou token global.</p>
+          <p>Cada emitente precisa de uma credencial ativa para transmitir documentos fiscais.</p>
+          <p>O token é armazenado com segurança e nunca é exibido novamente.</p>
+          <p>Também é possível informar o nome de um segredo já configurado no servidor.</p>
         </div>
 
         {isError ? (
@@ -486,7 +473,6 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
           <TableHeader>
             <TableRow>
               <TableHead>Escopo</TableHead>
-              <TableHead>Ambiente</TableHead>
               <TableHead>Fonte do token</TableHead>
               <TableHead>Status</TableHead>
               <TableHead></TableHead>
@@ -494,17 +480,16 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-4">Carregando credenciais…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-4">Carregando credenciais…</TableCell></TableRow>
             )}
-            {!isLoading && creds.length === 0 && (
-              <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-4">
+            {!isLoading && productionCredentials.length === 0 && (
+              <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-4">
                 Nenhuma credencial configurada para este emitente.
               </TableCell></TableRow>
             )}
-            {creds.map(c => (
+            {productionCredentials.map(c => (
               <TableRow key={c.id}>
                 <TableCell><Badge variant="outline">{c.doc_scope}</Badge></TableCell>
-                <TableCell>{c.environment}</TableCell>
                 <TableCell className="font-mono text-xs">
                   {c.has_ciphertext
                     ? <span>token salvo <span className="text-muted-foreground">({c.secret_hint || '••••'})</span></span>
@@ -542,18 +527,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Ambiente</Label>
-              <Select value={form.environment} onValueChange={v => setForm(s => ({ ...s, environment: v as typeof s.environment }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="production">Produção</SelectItem>
-                  <SelectItem value="homologation">Homologação</SelectItem>
-                <SelectItem value="sandbox">Sandbox</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2">
+            <div className="col-span-3">
               <Label>Modo</Label>
               <Select value={form.mode} onValueChange={v => setForm(s => ({ ...s, mode: v as typeof s.mode }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -574,7 +548,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
                   placeholder="Cole aqui o token deste CNPJ"
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Enviado por HTTPS ao backend, criptografado com AES-GCM e armazenado. Nunca é devolvido para a tela.
+                  A credencial é enviada com segurança, armazenada protegida e nunca é exibida novamente.
                 </p>
               </div>
             ) : (

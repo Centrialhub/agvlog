@@ -1,5 +1,6 @@
 export const HUB_ENVIRONMENTS = ['sandbox', 'homologation', 'production'] as const;
 export type HubEnvironment = typeof HUB_ENVIRONMENTS[number];
+export const PRODUCTION_HUB_ENVIRONMENT: HubEnvironment = 'production';
 export const HUB_DOCUMENT_SCOPES = ['all', 'nfse', 'cte', 'nfe', 'nfce', 'mdfe', 'nfcom'] as const;
 export type HubDocumentScope = typeof HUB_DOCUMENT_SCOPES[number];
 

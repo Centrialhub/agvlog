@@ -16,8 +16,6 @@ import { fetchCachedFiscalBlob } from '@/lib/fiscal/fiscalFileValidation';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
 import NFSeFromInvoicesDialog from '@/components/nfse/NFSeFromInvoicesDialog';
-import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
-import type { HubEnvironment } from '@/lib/fiscal/hubFiscalClient';
 import { FiscalListPagination } from '@/components/fiscal/FiscalListPagination';
 import { canCancelNFSeStatus, canRecoverNFSeStatus, isExactNFSeSelection, reconcileNFSeSelection, validateNFSeDateRange } from '@/lib/fiscal/nfseList';
 
@@ -62,8 +60,7 @@ export default function NFSePage() {
     () => isError ? EMPTY_NFSE_DOCS : queriedDocs ?? EMPTY_NFSE_DOCS,
     [isError, queriedDocs],
   );
-  const [environment, setEnvironment] = useState<HubEnvironment>('production');
-  const issue = useIssueNFSe(environment);
+  const issue = useIssueNFSe();
   const cancel = useCancelNFSe();
   const del = useDeleteNFSe();
   const sync = useSyncNFSeStatus();
@@ -255,10 +252,9 @@ export default function NFSePage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">NFS-e — Notas Fiscais de Serviço</h1>
-            <p className="text-sm text-muted-foreground">Emissão de RPS / NFS-e (estrutura preparada para integração fiscal)</p>
+            <p className="text-sm text-muted-foreground">Emissão, acompanhamento e gestão de RPS e NFS-e.</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
-            <FiscalEnvironmentSelect value={environment} onChange={setEnvironment} disabled={issue.isPending} />
             <Button variant="outline" onClick={() => sync.mutate({})} disabled={sync.isPending}>
               <RefreshCw className={`h-4 w-4 mr-1 ${sync.isPending ? 'animate-spin' : ''}`} /> Consultar status
             </Button>
@@ -484,9 +480,6 @@ export default function NFSePage() {
 
         <NFSeFormDialog
           open={formOpen}
-          environment={environment}
-          onEnvironmentChange={setEnvironment}
-          issuing={issue.isPending}
           onOpenChange={(next) => {
             setFormOpen(next);
             if (!next) setEditing(null);

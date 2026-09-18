@@ -215,7 +215,7 @@ export default function Drivers() {
 
   const syncMutation = useMutation({
     mutationFn: async ({ driverId, accountId }: { driverId: string; accountId: string }) => {
-      if (!ssxEnabled) throw new Error('Integração SSX em implantação');
+      if (!ssxEnabled) throw new Error('Integração SSX não habilitada para esta empresa.');
       const { data, error } = await supabase.functions.invoke('ssx-insert-person', {
         body: { tenant_id: currentTenant?.id, driver_id: driverId, integration_account_id: accountId },
       });
@@ -295,16 +295,16 @@ export default function Drivers() {
                 <TableHead>Veículo Vinculado</TableHead>
                 <TableHead>Usuário</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>{ssxEnabled ? 'SSX Sync' : 'SSX · Em implantação'}</TableHead>
+                {ssxEnabled && <TableHead>Sincronização SSX</TableHead>}
                 {isAdmin && <TableHead className="w-32">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6 + (ssxEnabled ? 1 : 0) + (isAdmin ? 1 : 0)} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : isError ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center">
+                  <TableCell colSpan={6 + (ssxEnabled ? 1 : 0) + (isAdmin ? 1 : 0)} className="py-8 text-center">
                     <div role="alert" className="flex flex-col items-center gap-3 text-destructive">
                       <span>Não foi possível carregar os motoristas: {errorMessage(error, 'erro inesperado')}.</span>
                       <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
@@ -314,7 +314,7 @@ export default function Drivers() {
                   </TableCell>
                 </TableRow>
               ) : filteredDrivers.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{activeCount ? 'Nenhum motorista corresponde aos filtros' : 'Nenhum motorista cadastrado'}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6 + (ssxEnabled ? 1 : 0) + (isAdmin ? 1 : 0)} className="text-center py-8 text-muted-foreground">{activeCount ? 'Nenhum motorista corresponde aos filtros' : 'Nenhum motorista cadastrado'}</TableCell></TableRow>
               ) : (
                 filteredDrivers.map(d => (
                   <TableRow key={d.id}>
@@ -379,7 +379,7 @@ export default function Drivers() {
                     <TableCell>
                       <Badge variant={d.active ? 'default' : 'secondary'}>{d.active ? 'Ativo' : 'Inativo'}</Badge>
                     </TableCell>
-                    <TableCell>{syncStatusBadge(d.provider_person_sync_status)}</TableCell>
+                    {ssxEnabled && <TableCell>{syncStatusBadge(d.provider_person_sync_status)}</TableCell>}
                     {isAdmin && (
                       <TableCell>
                         <div className="flex gap-1">

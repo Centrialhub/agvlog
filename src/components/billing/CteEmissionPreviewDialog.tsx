@@ -15,8 +15,7 @@ import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmitters, type TenantEmitter } from '@/hooks/useEmitters';
 import { useHubCredentials } from '@/hooks/useEmitters';
-import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
-import { selectScopedHubCredential, type HubEnvironment } from '../../../supabase/functions/_shared/fiscal-environment';
+import { PRODUCTION_HUB_ENVIRONMENT, selectScopedHubCredential } from '../../../supabase/functions/_shared/fiscal-environment';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useDrivers } from '@/hooks/useDrivers';
 import { useClients, type Client } from '@/hooks/useClients';
@@ -358,7 +357,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
 function toBuildInput(
   e: EditableCte,
   emitter: TenantEmitter | null | undefined,
-  environment: 'sandbox' | 'homologation' | 'production' = 'sandbox',
+  environment: 'sandbox' | 'homologation' | 'production' = PRODUCTION_HUB_ENVIRONMENT,
   clients: Client[] = [],
 ): BuildCtePayloadInput {
   // Completa lacunas das partes com o cadastro local (CNPJ, IE, endereço).
@@ -774,9 +773,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIdx, active?.recipientState, active?.icmsCst, bulkEditFiscal, emitterForActive?.id]);
 
-  // Ambiente e disponibilidade da credencial CT-e do emitente ativo
+  // A aplicação operacional emite somente em produção.
   const { data: activeCreds = [] } = useHubCredentials(emitterForActive?.id);
-  const [activeEnvironment, setActiveEnvironment] = useState<HubEnvironment>('homologation');
+  const activeEnvironment = PRODUCTION_HUB_ENVIRONMENT;
   const activeCteCred = useMemo(
     () => selectScopedHubCredential(activeCreds, 'cte', activeEnvironment),
     [activeCreds, activeEnvironment],
@@ -1019,12 +1018,6 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     preparedItems: EditableCte[];
   }> {
     const preparedItems = sourceItems.map(item => ({ ...item }));
-    // A validação fiscal oficial é exclusiva de produção, mas o autofill de
-    // endereço também precisa funcionar na homologação (ambiente padrão da
-    // prévia). A consulta cadastral continua sendo somente leitura.
-    if (!addressOnly && activeEnvironment !== 'production') {
-      return { errors: [], warnings: [], preparedItems };
-    }
     const errors: string[] = [];
     const warnings: string[] = [];
     const checked = new Map<string, Awaited<ReturnType<typeof consultOfficialTaxRegistry>>>();
@@ -1240,18 +1233,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
         </DialogHeader>
 
         <div className="flex items-center gap-2 text-xs">
-          <FiscalEnvironmentSelect value={activeEnvironment} onChange={setActiveEnvironment} disabled={transmitting} />
-          <Badge variant={activeEnvironment === 'production' ? 'default' : 'secondary'}>
-            {activeEnvironment === 'production' ? 'PRODUÇÃO' : activeEnvironment === 'homologation' ? 'HOMOLOGAÇÃO' : 'SANDBOX'}
-          </Badge>
           {!activeCteCred && emitterForActive && (
             <Badge variant="destructive">
-              Sem credencial CT-e neste ambiente — transmissão bloqueada
+              Sem credencial CT-e — transmissão bloqueada
             </Badge>
           )}
           {activeCteCred && (
             <span className="text-muted-foreground">
-              scope: {activeCteCred.doc_scope} · env: {activeCteCred.environment}
+              Credencial CT-e configurada
             </span>
           )}
           {autocompletingAddresses && (
@@ -1272,7 +1261,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 const em = selectActiveEmitterById(emitters, it.emitterId);
                 const isSimples = isSimpleTaxRegime(em);
                 const hasMismatch = isSimples && (it.icmsAliquota !== 0 || it.icmsBase !== 0 || it.icmsValor !== 0);
-                const ok = buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok && !hasMismatch;
+                const ok = buildCtePayload(toBuildInput(it, em, PRODUCTION_HUB_ENVIRONMENT, clients)).ok && !hasMismatch;
                 return (
                   <button
                     key={it.key}

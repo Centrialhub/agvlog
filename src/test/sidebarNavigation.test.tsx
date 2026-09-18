@@ -40,12 +40,12 @@ describe('sidebar navigation', () => {
     expect(searchNavigation('rastreamento').length).toBeGreaterThan(0);
     expect(searchNavigation('zzzz-nonexistent')).toHaveLength(0);
   });
-  it('opens the current group, marks its page and preserves capability restrictions', () => {
+  it('opens the current group, marks its page and hides unavailable capabilities', () => {
     const view = render(<MemoryRouter initialEntries={['/vehicles/123']}><TooltipProvider><SidebarNavigation query="" capabilityAvailable={() => false} /></TooltipProvider></MemoryRouter>);
     expect(screen.getByRole('link', { name: 'Veículos' })).toHaveAttribute('aria-current', 'page');
     view.rerender(<MemoryRouter initialEntries={['/vehicles/123']}><TooltipProvider><SidebarNavigation query="cte" capabilityAvailable={() => false} /></TooltipProvider></MemoryRouter>);
     expect(screen.queryByRole('link', { name: /CT-e/ })).not.toBeInTheDocument();
-    expect(screen.getAllByLabelText('Integração em implantação').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Integração em implantação')).not.toBeInTheDocument();
   });
   it('makes grouped links reachable when collapsed', () => {
     render(<MemoryRouter><TooltipProvider><SidebarNavigation collapsed query="" capabilityAvailable={() => true} /></TooltipProvider></MemoryRouter>);

@@ -787,7 +787,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
 
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter?.cnpj) || undefined,
-    environment: input.emitter?.environment || 'sandbox',
+    environment: input.emitter?.environment || 'production',
     externalId: input.externalId || undefined,
     // Regime tributário do emitente — o Hub usa isso para a "Classificação
     // Tributária do Serviço" do DACTE. Sem ele o Hub cai no cadastro da

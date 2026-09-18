@@ -1,6 +1,6 @@
 import { useEffect, useState, useId } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown, LockKeyhole, SearchX } from 'lucide-react';
+import { ChevronDown, SearchX } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { IntegrationCapability } from '@/hooks/useTenantCapabilities';
@@ -28,19 +28,12 @@ export function SidebarNavigation({ collapsed = false, query, capabilityAvailabl
   useEffect(() => {
     if (activeSectionId) setOpenSections(previous => ({ ...previous, [activeSectionId]: true }));
   }, [activeSectionId]);
-  const sections = searchNavigation(query).map(section=>({...section,items:section.items.filter(item=>(financeAvailable||!isFinancialPath(item.href))&&(!item.roles||item.roles.includes(currentRole||'')))})).filter(section=>section.items.length>0);
+  const sections = searchNavigation(query).map(section=>({...section,items:section.items.filter(item=>(financeAvailable||!isFinancialPath(item.href))&&(!item.roles||item.roles.includes(currentRole||''))&&(!item.capability||capabilityAvailable(item.capability)))})).filter(section=>section.items.length>0);
 
   function renderItem(item: NavigationItem) {
     const active = current?.item.href === item.href;
-    const disabled = item.capability && !capabilityAvailable(item.capability);
     const Icon = item.icon;
     const content = <><Icon aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{item.label}</span></>;
-    if (disabled) return (
-      <div key={item.href} aria-disabled="true" title="Integração em implantação"
-        className="flex min-h-10 items-center gap-2.5 rounded-md px-3 py-2 text-xs text-sidebar-foreground/50">
-        {content}<LockKeyhole aria-label="Integração em implantação" className="h-3.5 w-3.5 shrink-0" />
-      </div>
-    );
     return <Link key={item.href} to={item.href} onClick={() => { setPopover(null); onNavigate?.(); }} aria-current={active ? 'page' : undefined}
       className={cn('flex min-h-10 items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
         active ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-sm' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground')}>

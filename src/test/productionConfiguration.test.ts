@@ -477,4 +477,43 @@ describe("production configuration contract", () => {
       expect(config).toContain(header);
     }
   });
+
+  it("keeps fiscal operations pinned to production without an environment selector", () => {
+    const operationalSources = [
+      read("src", "pages", "NFSe.tsx"),
+      read("src", "components", "nfse", "NFSeFormDialog.tsx"),
+      read("src", "components", "nfse", "NFSeFromInvoicesDialog.tsx"),
+      read("src", "components", "loads", "NFSePanel.tsx"),
+      read("src", "components", "loads", "ManifestPanel.tsx"),
+      read("src", "components", "billing", "CteEmissionPreviewDialog.tsx"),
+      read("src", "components", "settings", "EmittersSettings.tsx"),
+    ].join("\n");
+
+    expect(operationalSources).not.toContain("FiscalEnvironmentSelect");
+    expect(operationalSources).not.toMatch(/>\s*(?:Homologação|Sandbox)\s*</i);
+    expect(operationalSources).toContain("PRODUCTION_HUB_ENVIRONMENT");
+    expect(read("src", "lib", "fiscal", "cteBuilder.ts")).toContain(
+      "input.emitter?.environment || 'production'",
+    );
+    expect(read("src", "lib", "fiscal", "mdfeBuilder.ts")).toContain(
+      "input.emitter.environment || 'production'",
+    );
+    const nfseHook = read("src", "hooks", "useNFSe.tsx");
+    expect(nfseHook).toContain("export function useIssueNFSe()");
+    expect(nfseHook).toContain("export function useIssueNFSeBatch()");
+    expect(nfseHook).toContain("const environment = PRODUCTION_HUB_ENVIRONMENT");
+  });
+
+  it("does not present disabled integrations as unfinished product features", () => {
+    const userFacingSources = [
+      read("src", "components", "layout", "SidebarNavigation.tsx"),
+      read("src", "components", "integrations", "IntegrationUnavailable.tsx"),
+      read("src", "pages", "Drivers.tsx"),
+      read("src", "pages", "FleetMap.tsx"),
+    ].join("\n");
+
+    expect(userFacingSources).not.toContain("Integração em implantação");
+    expect(userFacingSources).not.toContain("Diagnóstico SSX (manual)");
+    expect(userFacingSources).toContain("Sincronizar SSX");
+  });
 });

@@ -11,7 +11,7 @@ import { hubFiscal, type HubResponse, type NFSeBatchMode, type NFSeBatchResponse
 import { buildNFSeEmitPayload, type BuildNFSeInput } from '@/lib/fiscal/nfseBuilder';
 import { assertNFSeBatchRetryable } from '@/lib/fiscal/nfseBatchRetry';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
-import { requireHubEnvironment, selectScopedHubCredential, type HubEnvironment } from '../../supabase/functions/_shared/fiscal-environment';
+import { PRODUCTION_HUB_ENVIRONMENT, requireHubEnvironment, selectScopedHubCredential } from '../../supabase/functions/_shared/fiscal-environment';
 
 export interface NFSeItem {
   description?: string;
@@ -314,7 +314,7 @@ export function useUpdateNFSe() {
   });
 }
 
-export function useIssueNFSe(selectedEnvironment: HubEnvironment) {
+export function useIssueNFSe() {
   const toast = useSonnerToast();
   const qc = useQueryClient();
   return useMutation({
@@ -350,7 +350,7 @@ export function useIssueNFSe(selectedEnvironment: HubEnvironment) {
       }
 
       // 2. Se há emitente com credencial Hub Fiscal, roteia pelo proxy.
-      const environment = requireHubEnvironment(selectedEnvironment);
+      const environment = PRODUCTION_HUB_ENVIRONMENT;
       if (emitter) {
         const { data: creds, error: credentialsError } = await supabase
           .from('hub_fiscal_credentials')
@@ -452,7 +452,7 @@ export interface IssueNFSeBatchInput {
  * Issues already-created NFS-e drafts as one durable command. Draft creation is
  * deliberately separate; callers must retain requestId + document ids on retry.
  */
-export function useIssueNFSeBatch(selectedEnvironment: HubEnvironment) {
+export function useIssueNFSeBatch() {
   const qc = useQueryClient();
   return useMutation<NFSeBatchResponse, Error, IssueNFSeBatchInput>({
     mutationFn: async ({ mode, requestId, nfseDocumentIds }) => {
@@ -460,7 +460,7 @@ export function useIssueNFSeBatch(selectedEnvironment: HubEnvironment) {
       if (!requestId.trim() || uniqueIds.length === 0 || uniqueIds.length !== nfseDocumentIds.length) {
         throw new Error('Comando de emissão NFS-e em lote inválido.');
       }
-      const environment = requireHubEnvironment(selectedEnvironment);
+      const environment = PRODUCTION_HUB_ENVIRONMENT;
       const { data: rows, error: documentsError } = await supabase
         .from('nfse_documents').select('*').in('id', uniqueIds);
       if (documentsError) throw documentsError;

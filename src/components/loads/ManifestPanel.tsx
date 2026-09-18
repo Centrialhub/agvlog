@@ -27,9 +27,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FiscalEnvironmentSelect } from '@/components/fiscal/FiscalEnvironmentSelect';
 import {
-  selectScopedHubCredential, type HubEnvironment,
+  PRODUCTION_HUB_ENVIRONMENT, selectScopedHubCredential,
 } from '../../../supabase/functions/_shared/fiscal-environment';
 import type { EmitParams } from '@/lib/fiscal/hubFiscalClient';
 
@@ -39,7 +38,6 @@ interface Props {
 
 interface FormState {
   emitterId: string;
-  environment: HubEnvironment;
   vehicleTara: string;
   rntrc: string;
   ciot: string;
@@ -55,7 +53,6 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   emitterId: '',
-  environment: 'production',
   vehicleTara: '',
   rntrc: '',
   ciot: '',
@@ -145,8 +142,8 @@ export default function ManifestPanel({ load }: Props) {
     weight: ctes.reduce((total, document) => total + Number(document.cargo_weight || 0), 0),
   }), [ctes]);
   const credential = useMemo(
-    () => selectScopedHubCredential(credentials, 'mdfe', form.environment),
-    [credentials, form.environment],
+    () => selectScopedHubCredential(credentials, 'mdfe', PRODUCTION_HUB_ENVIRONMENT),
+    [credentials],
   );
 
   const initializationSignature = useMemo(() => JSON.stringify({
@@ -170,7 +167,6 @@ export default function ManifestPanel({ load }: Props) {
     const destinationIbge = digits(first?.recipient_city_ibge);
     setForm({
       emitterId: defaultEmitter?.id || '',
-      environment: 'production',
       vehicleTara: readVehicleTara(selectedVehicle?.tags),
       rntrc: digits(defaultEmitter?.rntrc || defaultEmitter?.endereco?.rntrc),
       ciot: digits(load.ciot),
@@ -228,7 +224,7 @@ export default function ManifestPanel({ load }: Props) {
       emitter: {
         cnpj: emitter.cnpj,
         name: emitter.razao_social,
-        environment: form.environment,
+        environment: PRODUCTION_HUB_ENVIRONMENT,
       },
       driver: { name: driver.name, cpf: driver.cpf || '' },
       vehicle: {
@@ -281,7 +277,7 @@ export default function ManifestPanel({ load }: Props) {
       await issueMdfe.mutateAsync({
         loadId: load.id,
         emitterId: emitter.id,
-        environment: form.environment,
+        environment: PRODUCTION_HUB_ENVIRONMENT,
         cteIds: ctes.map(document => document.id),
         snapshot: built.payload as EmitParams['body'],
       });
@@ -351,11 +347,10 @@ export default function ManifestPanel({ load }: Props) {
       <CardContent className="space-y-4">
         {manifest && !canRetry ? (
           <>
-            <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 text-sm md:grid-cols-4">
+            <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 text-sm md:grid-cols-3">
               <div><span className="text-xs text-muted-foreground">Número</span><p className="font-semibold">{manifest.document_number || manifest.manifest_number}</p></div>
               <div><span className="text-xs text-muted-foreground">Série</span><p className="font-semibold">{manifest.document_series || '—'}</p></div>
               <div><span className="text-xs text-muted-foreground">Protocolo</span><p className="break-all font-mono text-xs">{manifest.authorization_protocol || 'Aguardando'}</p></div>
-              <div><span className="text-xs text-muted-foreground">Ambiente</span><p className="font-semibold">{manifest.environment === 'production' ? 'Produção' : manifest.environment}</p></div>
             </div>
             {manifest.access_key && (
               <div className="rounded-md border p-3">
@@ -446,7 +441,7 @@ export default function ManifestPanel({ load }: Props) {
               </div>
             )}
 
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <Label>Emitente</Label>
                 <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={form.emitterId} onChange={event => update('emitterId', event.target.value)}>
@@ -454,11 +449,10 @@ export default function ManifestPanel({ load }: Props) {
                   {emitters.filter(item => item.active).map(item => <option key={item.id} value={item.id}>{item.razao_social}</option>)}
                 </select>
               </div>
-              <FiscalEnvironmentSelect value={form.environment} onChange={value => update('environment', value)} />
               <div className="rounded-md border p-3">
                 <p className="flex items-center gap-1 text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" /> Credencial MDF-e</p>
                 <p className={`mt-1 text-sm font-medium ${credential ? 'text-success' : 'text-destructive'}`}>
-                  {credential ? 'Configurada para este ambiente' : 'Não configurada'}
+                  {credential ? 'Configurada para emissão' : 'Não configurada'}
                 </p>
               </div>
             </div>
@@ -514,7 +508,7 @@ export default function ManifestPanel({ load }: Props) {
               <div className="text-right">
                 <Button onClick={handleIssue} disabled={!readyToIssue || issueMdfe.isPending}>
                   {issueMdfe.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Send className="mr-1 h-4 w-4" />}
-                  {form.environment === 'production' ? 'Emitir MDF-e em produção' : 'Emitir MDF-e'}
+                  Emitir MDF-e
                 </Button>
                 {!readyToIssue && <p className="mt-1 max-w-xl text-xs text-muted-foreground">Complete os campos pendentes, confirme credencial, CT-es autorizados, seguro e produto predominante.</p>}
               </div>
