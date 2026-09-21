@@ -26,6 +26,7 @@ import { Plus, ClipboardCheck, Play, AlertTriangle, CheckCircle, XCircle } from 
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format, parseISO } from 'date-fns';
 import { useIsAdmin } from '@/hooks/useTenant';
+import { getErrorMessage } from '@/lib/errors';
 
 const DEFAULT_ITEMS: Record<string, { key: string; label: string; required: boolean }[]> = {
   pre_trip: [
@@ -156,7 +157,7 @@ export default function Checklists() {
       <Card>
         <CardHeader><CardTitle className="text-base text-destructive">Não foi possível carregar os checklists</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">{sourceError instanceof Error ? sourceError.message : 'Falha na consulta dos dados necessários.'}</p>
+          <p className="text-sm text-muted-foreground">{getErrorMessage(sourceError, 'Falha na consulta dos dados necessários.')}</p>
           <Button variant="outline" size="sm" onClick={() => void Promise.all([refetchTemplates(), refetchExecutions(), refetchVehicles(), refetchEmployees()])}>Tentar novamente</Button>
         </CardContent>
       </Card>

@@ -87,7 +87,7 @@ export function useChecklistExecutions(checklistId?: string) {
       return await fetchAllPostgrestPages((from, to) => {
         let q = supabase
           .from('checklist_executions')
-          .select('*, operational_checklists(name, checklist_type), vehicles(plate), employees(name)')
+          .select('*, operational_checklists:operational_checklists!checklist_executions_tenant_checklist_fkey(name, checklist_type), vehicles:vehicles!checklist_executions_tenant_vehicle_fkey(plate), employees:employees!checklist_executions_tenant_employee_fkey(name)')
           .eq('tenant_id', currentTenant.id)
           .order('executed_at', { ascending: false })
           .order('id');

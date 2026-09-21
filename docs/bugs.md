@@ -12872,3 +12872,21 @@ Provável causa: A interface não espelhava as restrições já existentes no sc
 RESOLVIDO
 
 ###############
+
+Bug 1655
+
+Sintoma: A tela “Checklists” fica totalmente indisponível e exibe “Não foi possível carregar os checklists”, impedindo consultar templates, execuções e iniciar uma nova conferência.
+Provável causa: A consulta de `checklist_executions` embutia `operational_checklists` e `employees` sem identificar a relação. Depois da criação das chaves compostas por empresa, essas tabelas passaram a ter mais de uma relação válida e o PostgREST rejeita o embed como ambíguo. A correção seleciona explicitamente as relações compostas e seguras por `tenant_id` para template, veículo e funcionário.
+
+RESOLVIDO
+
+###############
+
+Bug 1656
+
+Sintoma: Quando uma das fontes da tela “Checklists” falha, a interface mostra somente “Falha na consulta dos dados necessários”, ocultando a mensagem estruturada enviada pelo PostgREST e dificultando identificar a consulta quebrada.
+Provável causa: A tela aceitava apenas instâncias nativas de `Error`, mas o cliente Supabase retorna erros estruturados com a propriedade `message`. A correção usa o extrator compartilhado que reconhece os dois formatos.
+
+RESOLVIDO
+
+###############
