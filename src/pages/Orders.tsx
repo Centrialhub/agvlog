@@ -20,6 +20,7 @@ import { getNextStatuses } from '@/lib/statusPipeline';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import FreightAuditDrawer from '@/components/freight/FreightAuditDrawer';
+import { normalizeOrderOptionalFields } from '@/lib/orders/orderFormNormalization';
 
 const n = (value: unknown) => (value ? Number(value) : 0);
 const numField = (label: string, value: string | number, onChange: (v: string) => void, opts?: { step?: string; prefix?: string; readOnly?: boolean }) => (
@@ -147,9 +148,9 @@ function OrderForm({ order, clients, onSave, onCancel, isSaving }: {
       toast({ title: 'Valores inválidos', description: 'Quantidades, custos, bases e alíquotas não podem ser negativos.', variant: 'destructive' });
       return;
     }
-    const out: Record<string, string | number | null> = { ...calculated };
+    let out: Record<string, string | number | null> = { ...calculated };
     numFields.forEach(k => { out[k] = out[k] ? Number(out[k]) : null; });
-    ['client_id', 'remitter', 'recipient', 'nf_series', 'issue_date', 'payment_plan', 'city', 'neighborhood'].forEach(k => { out[k] = out[k] || null; });
+    out = normalizeOrderOptionalFields(out);
     setSubmitting(true);
     try {
       await onSave(out as unknown as Partial<Order>);
