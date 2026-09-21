@@ -13136,3 +13136,12 @@ Provável causa: O contrato do frontend aceitava `snapshot_at` somente no format
 RESOLVIDO
 
 ###############
+
+Bug 1683 — menor, não corrigido nesta frente
+
+Sintoma: A execução isolada de `financePayrollScreen.test.tsx` falha antes de exercitar a tela porque sete cenários recebem `usePayrollGenerationIssues is not a function`.
+Provável causa: O mock de `@/hooks/usePayroll` nesse teste não acompanhou a inclusão do hook `usePayrollGenerationIssues`. É uma deficiência da suíte, sem reprodução na aplicação publicada, e foi deixada somente documentada para a frente de bugs menores.
+
+PENDENTE — encaminhado para bugs menores
+
+###############
