@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn() } }));
+
 import {
   parseOperationalEventPage,
   readAllOperationalEventPages,

@@ -89,7 +89,7 @@ interface RpcResponse {
   error: unknown;
 }
 
-const rpc = supabase.rpc as unknown as (
+const rpc = supabase.rpc.bind(supabase) as unknown as (
   name: 'list_operational_events_page_v1',
   args: OperationalEventPageRpcArgs,
 ) => PromiseLike<RpcResponse>;

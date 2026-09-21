@@ -12845,3 +12845,12 @@ Provável causa: Os dois diálogos de `Inventory` renderizavam `DialogContent` e
 RESOLVIDO
 
 ###############
+
+Bug 1652
+
+Sintoma: A tela “Eventos operacionais” permanece em consulta e termina com todos os indicadores, gráficos e a listagem indisponíveis, exibindo `Cannot read properties of undefined (reading 'rest')`; nenhuma ocorrência pode ser consultada.
+Provável causa: O leitor paginado guardava `supabase.rpc` em uma constante sem vinculá-la ao cliente Supabase. Ao executar a função destacada, o SDK perdia o receptor `this` usado para acessar seu transporte REST. A correção vincula explicitamente o método ao cliente e adiciona um teste que falha se o receptor do SDK for perdido novamente.
+
+RESOLVIDO
+
+###############
