@@ -13232,3 +13232,12 @@ Provável causa: `load_items` possui duas relações válidas com `fiscal_docume
 RESOLVIDO — RETESTE AUTENTICADO CONCLUÍDO
 
 ###############
+
+Bug 1693 — menor, não corrigido nesta frente
+
+Sintoma: As suítes isoladas `planningScreens.test.tsx` e `loadReallocationScreen.test.tsx` mantêm seis falhas: um cenário de recuperação da roteirização procura um texto de estado vazio que a tela atual não renderiza, e os cinco cenários de realocação recebem o bloqueio defensivo de dados parciais antes de exercitar suas expectativas.
+Provável causa: Os mocks/expectativas das telas não acompanharam os contratos atuais de carregamento e recuperação. A aplicação publicada foi testada separadamente: a roteirização carregou as 18 cargas e seus itens com HTTP 200 após o Bug 1692. Como a falha está na suíte e não houve reprodução de novo bloqueio operacional, foi deixada para a frente de bugs menores.
+
+PENDENTE — encaminhado para bugs menores
+
+###############
