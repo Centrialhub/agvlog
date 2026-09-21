@@ -13163,3 +13163,12 @@ Provável causa: As migrations recuperadas criam índices equivalentes a índice
 PENDENTE — encaminhado para bugs menores
 
 ###############
+
+Bug 1686 — menor, não corrigido nesta frente
+
+Sintoma: `productionConfiguration.test.ts` apresenta três falhas de contrato embora os fluxos críticos de convite e troca de empresa passem: exige o alias não utilizado `@supabase/supabase-js/cors` em todo `deno.json`, não reconhece `portal-download-file` no inventário de funções com `service_role` e ainda procura paginação `.range(...)` no hook fiscal que já utiliza a RPC paginada `get_fiscal_documents_page_v1`.
+Provável causa: As expectativas estáticas da suíte não acompanharam a evolução do inventário e dos contratos de paginação. Não houve reprodução dessas três falhas na aplicação publicada; foram deixadas somente documentadas para a frente de bugs menores.
+
+PENDENTE — encaminhado para bugs menores
+
+###############
