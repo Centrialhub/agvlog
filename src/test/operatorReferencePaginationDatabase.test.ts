@@ -84,6 +84,26 @@ describe('operator reference cursor reader database contract', { timeout: 30_000
     await setOperatorReferenceActor(db);
   });
 
+  it('treats escaped LIKE metacharacters as literal client search text', async () => {
+    await db.exec('reset role');
+    await db.query(`
+      insert into public.clients(
+        id, tenant_id, company_name, active, is_client, is_supplier, created_at, updated_at
+      ) values
+        ('33100000-0000-4000-8000-000000000201', $1, 'Cliente 100% literal', true, true, false, now(), now()),
+        ('33100000-0000-4000-8000-000000000202', $1, 'Cliente_com_sublinhado', true, true, false, now(), now()),
+        ('33100000-0000-4000-8000-000000000203', $1, E'Cliente \\\\ matriz', true, true, false, now(), now())
+    `, [ids.tenant]);
+    await setOperatorReferenceActor(db);
+
+    expect((await listOperatorClientsPage(db, { search: '\\%' })).items.map(row => row.company_name))
+      .toEqual(['Cliente 100% literal']);
+    expect((await listOperatorClientsPage(db, { search: '\\_' })).items.map(row => row.company_name))
+      .toEqual(['Cliente_com_sublinhado']);
+    expect((await listOperatorClientsPage(db, { search: '\\\\' })).items.map(row => row.company_name))
+      .toEqual(['Cliente \\ matriz']);
+  });
+
   it('binds the cursor to resource, tenant and active scope', async () => {
     const first = await listOperatorReferencePage(db, 'loads', false, 2);
     await db.exec('savepoint wrong_resource');

@@ -12726,3 +12726,12 @@ Bug 1609
 
 Sintoma: Depois de escolher um cliente em uma Região por Cliente, não é possível limpar a seleção para tornar o mapeamento genérico para todos os clientes; uma região específica existente também não pode ser convertida em genérica pela edição.
 Provável causa: O formulário suporta `client_id = null` e a tabela exibe esse caso como `*`, mas o `Select` de cliente contém somente clientes reais, sem item “Nenhum/Todos”. O estado vazio existe apenas antes da primeira seleção ou via importação e não pode ser restaurado pela interface.
+
+###############
+
+Bug 1639
+
+Sintoma: Na tela Clientes e Fornecedores, pesquisar literalmente `%` retorna todos os cadastros; `_` também funciona como curinga de um caractere e a barra invertida pode alterar o padrão, tornando impossível buscar esses símbolos de forma confiável.
+Provável causa: O frontend remove `%` e barra invertida antes de chamar `list_operator_clients_page_v1`, convertendo uma busca composta só por esses caracteres em busca vazia. O RPC aplica o texto recebido diretamente em `ILIKE`, no qual `%`, `_` e barra invertida possuem significado especial. A correção preserva o texto digitado e escapa os metacaracteres antes de enviá-lo ao leitor paginado.
+
+RESOLVIDO

@@ -97,8 +97,13 @@ export interface ClientPage {
   totalCount: number;
 }
 
-function safePostgrestSearch(input: string): string {
-  return input.trim().replace(/[,%()"\\]/g, ' ').replace(/\s+/g, ' ');
+export function literalOperatorClientSearch(input: string): string {
+  return input
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\\/g, '\\\\')
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_');
 }
 
 function applyClientKindFilter<T extends {
@@ -124,7 +129,7 @@ function applyClientKindFilter<T extends {
 export function useClientsPage({ page, pageSize, search = '', kind = 'all' }: ClientPageInput) {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
-  const normalizedSearch = safePostgrestSearch(search);
+  const normalizedSearch = literalOperatorClientSearch(search);
 
   return useQuery({
     queryKey: ['clients', 'page', currentTenant?.id, user?.id, page, pageSize, normalizedSearch, kind],

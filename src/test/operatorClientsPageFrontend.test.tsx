@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useClientsPage } from '@/hooks/useClients';
+import { literalOperatorClientSearch, useClientsPage } from '@/hooks/useClients';
 import { clearOperatorClientPageAnchors } from '@/lib/operator/operatorClientPagination';
 
 const mock = vi.hoisted(() => ({
@@ -60,6 +60,10 @@ function Story() {
 }
 
 describe('operator client registry frontend', () => {
+  it('escapes SQL LIKE metacharacters without discarding the literal search', () => {
+    expect(literalOperatorClientSearch('  Loja  %_\\ Centro  ')).toBe('Loja \\%\\_\\\\ Centro');
+  });
+
   it('renders the keyset RPC result without a direct Data API range read', async () => {
     render(<QueryClientProvider client={queryClient}><Story /></QueryClientProvider>);
     expect(await screen.findByText('Cliente completo — 1')).toBeInTheDocument();
