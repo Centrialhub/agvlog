@@ -12926,3 +12926,39 @@ Provável causa: As regras de título, custo, vínculo obrigatório de RH e conc
 RESOLVIDO
 
 ###############
+
+Bug 1661
+
+Sintoma: Ao abrir “Nova OS” em Ordens de Manutenção, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela recebem somente o título do diálogo.
+Provável causa: O diálogo renderizava `DialogContent` e `DialogTitle`, mas não fornecia o `DialogDescription` exigido pelo contrato acessível do componente Radix. A correção adiciona uma descrição objetiva do formulário de criação e edição.
+
+RESOLVIDO
+
+###############
+
+Bug 1662
+
+Sintoma: “Salvar” permanece habilitado em uma nova ordem de manutenção sem veículo, sem problema relatado ou com odômetro/custos negativos, embora esses dados sejam rejeitados somente depois do clique.
+Provável causa: As validações já protegiam o manipulador e o banco, mas não eram refletidas no estado do botão. A correção reutiliza as regras obrigatórias e numéricas para impedir a tentativa inválida antes do envio.
+
+RESOLVIDO
+
+###############
+
+Bug 1663
+
+Sintoma: Ao abrir “Nova Rota Operacional”, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e o objetivo do formulário não é anunciado por leitores de tela.
+Provável causa: O diálogo de rotas utilizava `DialogContent` e `DialogTitle`, mas não fornecia `DialogDescription`. A correção associa uma descrição que resume identificação, classificação e destinos da rota.
+
+RESOLVIDO
+
+###############
+
+Bug 1664
+
+Sintoma: Depois de preencher somente o nome, “Salvar” fica habilitado para uma rota ativa sem destinos; o envio alcança o banco e falha na restrição que exige destino, em vez de orientar e bloquear o usuário no formulário. O nome também era persistido com espaços nas extremidades.
+Provável causa: O estado do botão validava apenas o nome, enquanto a regra de destino existia somente no banco. A correção replica a regra no manipulador e no botão, considera mutações em andamento e normaliza o nome antes de persistir.
+
+RESOLVIDO
+
+###############

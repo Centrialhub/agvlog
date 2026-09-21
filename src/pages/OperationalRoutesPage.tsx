@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertTriangle, Plus, Pencil, RefreshCw, Trash2, Map as MapIcon, X } from 'lucide-react';
@@ -131,8 +131,12 @@ export default function OperationalRoutesPage() {
         toast.error('Informe o nome da rota');
         return;
       }
+      if (form.active && form.destinations.length === 0) {
+        toast.error('Adicione ao menos um destino para manter a rota ativa');
+        return;
+      }
       const values: Partial<OperationalRoute> & Pick<OperationalRoute, 'name'> = {
-        name: form.name,
+        name: form.name.trim(),
         description: form.description || null,
         classification: form.classification,
         region_name: form.region_name || null,
@@ -309,7 +313,10 @@ export default function OperationalRoutesPage() {
 
       <Dialog open={dialogOpen} onOpenChange={o => { if (!o) resetForm(); setDialogOpen(o); }}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>{editingId ? 'Editar Rota' : 'Nova Rota Operacional'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editingId ? 'Editar Rota' : 'Nova Rota Operacional'}</DialogTitle>
+            <DialogDescription>Defina a identificação, a classificação e os destinos atendidos pela rota operacional.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
             <div><Label>Nome *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ex: ROTA NORTE MG" /></div>
             <div className="grid grid-cols-2 gap-3">
@@ -347,7 +354,12 @@ export default function OperationalRoutesPage() {
 
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={resetForm}>Cancelar</Button>
-              <Button onClick={handleSave} disabled={!form.name.trim()}>Salvar</Button>
+              <Button onClick={handleSave} disabled={
+                createRoute.isPending
+                || updateRoute.isPending
+                || !form.name.trim()
+                || (form.active && form.destinations.length === 0)
+              }>Salvar</Button>
             </div>
           </div>
         </DialogContent>

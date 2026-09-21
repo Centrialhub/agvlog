@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -111,6 +111,9 @@ export default function MaintenanceOrdersPage() {
   }), [orders]);
 
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  const hasInvalidNumber = [form.odometer_km, form.parts_cost, form.labor_cost]
+    .some(value => value !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0));
+  const formInvalid = Boolean(maintenanceOrderRequiredFieldsError(form.vehicle_id, form.reported_problem)) || hasInvalidNumber;
 
   return (
     <div className="space-y-4">
@@ -160,7 +163,10 @@ export default function MaintenanceOrdersPage() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? `Editar ${editing.order_number}` : 'Nova OS'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editing ? `Editar ${editing.order_number}` : 'Nova OS'}</DialogTitle>
+            <DialogDescription>Registre o veículo, o problema relatado, custos e detalhes da ordem de manutenção.</DialogDescription>
+          </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">Veículo (obrigatório)</Label>
               <Select value={form.vehicle_id} onValueChange={v => setForm(f => ({ ...f, vehicle_id: v }))}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -192,7 +198,7 @@ export default function MaintenanceOrdersPage() {
           <div><Label className="text-xs">Serviços Executados</Label><Textarea rows={2} value={form.services_performed} onChange={e => setForm(f => ({ ...f, services_performed: e.target.value }))} /></div>
           <div className="flex justify-end gap-2 mt-3">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={createOrder.isPending || updateOrder.isPending}>Salvar</Button>
+            <Button onClick={handleSave} disabled={createOrder.isPending || updateOrder.isPending || formInvalid}>Salvar</Button>
           </div>
         </DialogContent>
       </Dialog>
