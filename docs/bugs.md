@@ -12836,3 +12836,12 @@ Provável causa: Os dois diálogos de `Stock` renderizavam `DialogContent` e `Di
 RESOLVIDO
 
 ###############
+
+Bug 1651
+
+Sintoma: Ao abrir “Novo Local” ou “Novo Movimento” no Inventário Logístico, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela recebem somente o título, sem contexto sobre o cadastro ou a movimentação.
+Provável causa: Os dois diálogos de `Inventory` renderizavam `DialogContent` e `DialogTitle`, mas omitiam o `DialogDescription` exigido pelo contrato acessível do componente Radix. A correção inclui descrições específicas para o cadastro de local e para a movimentação do inventário.
+
+RESOLVIDO
+
+###############

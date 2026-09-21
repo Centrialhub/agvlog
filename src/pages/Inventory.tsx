@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -176,11 +176,23 @@ export default function Inventory() {
         <div className="flex gap-2">
           <Dialog open={locDialog} onOpenChange={setLocDialog}>
             <DialogTrigger asChild><Button variant="outline"><MapPin className="h-4 w-4 mr-2" /> Novo Local</Button></DialogTrigger>
-            <DialogContent><DialogHeader><DialogTitle>Novo Local de Estoque</DialogTitle></DialogHeader><LocationForm onSave={handleLocationSave} onCancel={() => setLocDialog(false)} /></DialogContent>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Novo Local de Estoque</DialogTitle>
+                <DialogDescription>Cadastre a identificação e a descrição de um novo local físico do inventário.</DialogDescription>
+              </DialogHeader>
+              <LocationForm onSave={handleLocationSave} onCancel={() => setLocDialog(false)} />
+            </DialogContent>
           </Dialog>
           <Dialog open={movDialog} onOpenChange={setMovDialog}>
             <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" /> Novo Movimento</Button></DialogTrigger>
-            <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Registrar Movimento</DialogTitle></DialogHeader><MovementForm clients={clients} locations={locations} onSave={handleMovementSave} onCancel={() => setMovDialog(false)} /></DialogContent>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Registrar Movimento</DialogTitle>
+                <DialogDescription>Registre uma entrada, saída, transferência ou ajuste no inventário logístico.</DialogDescription>
+              </DialogHeader>
+              <MovementForm clients={clients} locations={locations} onSave={handleMovementSave} onCancel={() => setMovDialog(false)} />
+            </DialogContent>
           </Dialog>
         </div>
       </div>
