@@ -13145,3 +13145,21 @@ Provável causa: O mock de `@/hooks/usePayroll` nesse teste não acompanhou a in
 PENDENTE — encaminhado para bugs menores
 
 ###############
+
+Bug 1684
+
+Sintoma: A confirmação da importação de cargas, a criação/edição de monitoramentos de motorista, as conversas de motorista e evento e o histórico de posições de veículo falhavam inevitavelmente em produção, embora os respectivos fluxos já estivessem publicados no frontend.
+Provável causa: Sete RPCs exigidas pelo frontend (`apply_load_import_command`, `apply_driver_monitor_command`, quatro leitores de chat e `list_vehicle_position_history_v1`) existiam nas migrations do repositório, mas não no catálogo do banco de produção. Parte do monitoramento de motorista ainda estava em estado intermediário: correções posteriores de revisão e agenda haviam sido aplicadas sem o comando base. As migrations foram reconciliadas e aplicadas preservando os objetos já existentes. A verificação estrutural confirmou as sete funções, execução para `authenticated`, nenhuma execução para `anon` e nenhum nome ausente entre as 365 RPCs referenciadas pelo frontend. As 22 Edge Functions chamadas pelo código também foram conferidas contra as 47 funções ativas e nenhuma está ausente. O reteste completo pela interface aguarda somente uma nova autenticação, pois o token de renovação da sessão de teste expirou durante a troca de empresa.
+
+RESOLVIDO NO BACKEND — RETESTE AUTENTICADO PENDENTE
+
+###############
+
+Bug 1685 — menor, não corrigido nesta frente
+
+Sintoma: O advisor de desempenho do Supabase informa índices únicos duplicados nos escopos de chat de motorista e evento (`driver_chat_driver_scope` e `event_chat_event_scope`).
+Provável causa: As migrations recuperadas criam índices equivalentes a índices únicos que já existiam em produção (`drivers_tenant_id_id_uidx` e `operational_events_tenant_id_id_uidx`). O problema desperdiça armazenamento e custo de escrita, mas não bloqueia a operação. Foi deixado somente documentado para a frente de bugs menores.
+
+PENDENTE — encaminhado para bugs menores
+
+###############
