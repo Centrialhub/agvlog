@@ -12496,6 +12496,8 @@ Bug 1576
 Sintoma: Um clique duplo em “Salvar rascunho”, “Marcar como devolvido” ou “Salvar e gerar protocolo” pode criar dois protocolos distintos para a mesma devolução, cada um com numeração própria e itens duplicados.
 Provável causa: Os três botões continuam habilitados durante `createMut.isPending`, `submitProtocol` não possui trava local e `create_pallet_return_protocol` não recebe `request_id` nem aplica uma chave idempotente de criação. Duas mutations concorrentes consomem números e inserem transações válidas independentes.
 
+RESOLVIDO
+
 ###############
 
 Bug 1577
@@ -13005,6 +13007,24 @@ Bug 1669
 
 Sintoma: Em “Nova Falta”, “Salvar em apuração” e “Salvar e confirmar” permanecem habilitados com NF e item obrigatórios vazios (ou com NF composta apenas por espaços), permitindo iniciar uma tentativa que só é rejeitada depois do clique.
 Provável causa: A tela chamava `validateCase` apenas dentro de `submitNew`, não refletia o resultado no estado dos botões e a validação tratava qualquer string não vazia como NF válida. A correção reutiliza a validação durante a edição, normaliza a NF e bloqueia os botões enquanto o formulário for inválido ou a criação estiver em andamento.
+
+RESOLVIDO
+
+###############
+
+Bug 1670
+
+Sintoma: Em “Novo Lançamento” de devolução de paletes, os três comandos de gravação ficam habilitados sem fornecedor e sem item válido; além disso, cliques repetidos podem iniciar criações concorrentes do mesmo protocolo.
+Provável causa: As regras obrigatórias existiam somente dentro de `submitProtocol`, os botões ignoravam `createMut.isPending` e não havia trava síncrona local. A correção reflete fornecedor, data e itens no estado dos botões, normaliza o fornecedor e impede reentrada até a mutation terminar.
+
+RESOLVIDO
+
+###############
+
+Bug 1671
+
+Sintoma: Abrir a edição de um protocolo de paletes registra `Missing Description or aria-describedby` no navegador, e os diálogos de detalhe, cancelamento e comprovante usam a mesma estrutura inacessível.
+Provável causa: Os quatro `DialogContent` de `PalletReturns` possuíam título, mas nenhum `DialogDescription`. A correção associa a cada diálogo uma descrição específica de sua finalidade.
 
 RESOLVIDO
 

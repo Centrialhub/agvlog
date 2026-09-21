@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Boxes, Download, Upload, FileText, Plus, Trash2, CheckCircle2, XCircle, RefreshCw, Package, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/hooks/useTenant';
@@ -86,6 +86,7 @@ export default function PalletReturns() {
   const [plate, setPlate] = useState('');
   const [items, setItems] = useState<NewItem[]>([]);
   const [initialStatus, setInitialStatus] = useState<PalletProtocol['status']>('draft');
+  const createLock = useRef(false);
 
   const addItem = () => {
     const t = activeTypes[0];
@@ -94,6 +95,11 @@ export default function PalletReturns() {
   const removeItem = (i: number) => setItems((p) => p.filter((_, idx) => idx !== i));
 
   const totalNewItems = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+  const hasInvalidNewItems = items.length === 0 || items.some((item) =>
+    !item.code.trim() || !item.name.trim() || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0
+  );
+  const newProtocolInvalid = (!supplierId && !supplierName.trim()) || !issueDate || hasInvalidNewItems;
+  const generatedProtocolStatus = initialStatus === 'draft' ? 'returned' : initialStatus;
 
   const resetForm = () => {
     setSupplierId(''); setSupplierName(''); setReturnDate(''); setNotes('');
@@ -101,6 +107,7 @@ export default function PalletReturns() {
   };
 
   const submitProtocol = async (status: PalletProtocol['status']) => {
+    if (createLock.current || createMut.isPending) return;
     if (!supplierName.trim() && !supplierId) { toast({ title: 'Fornecedor obrigatório', variant: 'destructive' }); return; }
     if (!issueDate) { toast({ title: 'Data obrigatória', variant: 'destructive' }); return; }
     if (items.length === 0) { toast({ title: 'Adicione ao menos 1 item', variant: 'destructive' }); return; }
@@ -110,10 +117,11 @@ export default function PalletReturns() {
     if (status === 'confirmed' && !returnDate) { toast({ title: 'Data de devolução obrigatória para confirmar', variant: 'destructive' }); return; }
 
     const client = clients.find((candidate) => candidate.id === supplierId);
+    createLock.current = true;
     try {
       const res = await createMut.mutateAsync({
         supplier_id: supplierId || null,
-        supplier_name_snapshot: client?.company_name || supplierName,
+        supplier_name_snapshot: (client?.company_name || supplierName).trim(),
         issue_date: issueDate,
         returned_at: returnDate || null,
         status,
@@ -130,6 +138,8 @@ export default function PalletReturns() {
       resetForm();
     } catch (error: unknown) {
       toast({ title: 'Erro', description: errorMessage(error), variant: 'destructive' });
+    } finally {
+      createLock.current = false;
     }
   };
 
@@ -471,9 +481,9 @@ export default function PalletReturns() {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => submitProtocol('draft')}>Salvar rascunho</Button>
-              <Button variant="outline" onClick={() => submitProtocol('returned')}>Marcar como devolvido</Button>
-              <Button onClick={() => submitProtocol(initialStatus === 'draft' ? 'returned' : initialStatus)}>Salvar e gerar protocolo</Button>
+              <Button variant="outline" onClick={() => submitProtocol('draft')} disabled={newProtocolInvalid || createMut.isPending}>Salvar rascunho</Button>
+              <Button variant="outline" onClick={() => submitProtocol('returned')} disabled={newProtocolInvalid || createMut.isPending}>Marcar como devolvido</Button>
+              <Button onClick={() => submitProtocol(generatedProtocolStatus)} disabled={newProtocolInvalid || createMut.isPending || (generatedProtocolStatus === 'confirmed' && !returnDate)}>Salvar e gerar protocolo</Button>
             </div>
           </CardContent></Card>
         </TabsContent>
@@ -607,7 +617,10 @@ export default function PalletReturns() {
       {/* Detail dialog */}
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Protocolo {detail?.protocol_number}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Protocolo {detail?.protocol_number}</DialogTitle>
+            <DialogDescription>Consulte os dados, itens e histórico deste protocolo de devolução.</DialogDescription>
+          </DialogHeader>
           {detail && (
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-2">
@@ -638,7 +651,10 @@ export default function PalletReturns() {
 
       {/* Cancel */}
       <Dialog open={!!cancelTarget} onOpenChange={(o) => !o && setCancelTarget(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Cancelar protocolo</DialogTitle></DialogHeader>
+        <DialogContent><DialogHeader>
+          <DialogTitle>Cancelar protocolo</DialogTitle>
+          <DialogDescription>Informe o motivo para registrar o cancelamento deste protocolo.</DialogDescription>
+        </DialogHeader>
           <Textarea placeholder="Motivo do cancelamento" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCancelTarget(null)}>Voltar</Button>
@@ -649,7 +665,10 @@ export default function PalletReturns() {
 
       {/* Attach */}
       <Dialog open={!!attachTarget} onOpenChange={(o) => !o && setAttachTarget(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Anexar comprovante assinado</DialogTitle></DialogHeader>
+        <DialogContent><DialogHeader>
+          <DialogTitle>Anexar comprovante assinado</DialogTitle>
+          <DialogDescription>Identifique o recebedor e anexe a evidência assinada da devolução.</DialogDescription>
+        </DialogHeader>
           <div className="space-y-3">
             <div><Label>Recebedor</Label><Input value={receiverName} onChange={(e) => setReceiverName(e.target.value)} /></div>
             <div><Label>Data assinatura</Label><Input type="date" value={signatureDate} onChange={(e) => setSignatureDate(e.target.value)} /></div>
@@ -665,7 +684,10 @@ export default function PalletReturns() {
       {/* Edit */}
       <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Editar protocolo {editTarget?.protocol_number}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Editar protocolo {editTarget?.protocol_number}</DialogTitle>
+            <DialogDescription>Atualize os dados e itens do protocolo; a alteração ficará registrada no histórico.</DialogDescription>
+          </DialogHeader>
           {editTarget && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
