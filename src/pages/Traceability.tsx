@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -523,16 +523,17 @@ export default function Traceability() {
   }, [filteredRows, counts.fromObservation, counts.missingLoad]);
 
   const resetEventForm = () => setEventForm({ type: 'other', severity: 'medium', description: '' });
+  const eventFormInvalid = eventForm.description.trim().length < 5;
   const handleRegisterEvent = async () => {
     if (!selectedRow) return;
-    if (eventForm.description.trim().length < 5) {
+    if (eventFormInvalid) {
       toast({ title: 'Descrição insuficiente', description: 'Informe ao menos 5 caracteres.', variant: 'destructive' }); return;
     }
     try {
       await registerEvent.mutateAsync({
         event_type: eventForm.type,
         severity: eventForm.severity,
-        description: eventForm.description,
+        description: eventForm.description.trim(),
         financial_impact: 0,
         visible_to_client: false,
         client_action_required: false,
@@ -1181,7 +1182,10 @@ export default function Traceability() {
 
       <Dialog open={!!selectedRow} onOpenChange={open => !open && setSelectedRow(null)}>
         <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
-          <DialogHeader><DialogTitle>Detalhe da rastreabilidade</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Detalhe da rastreabilidade</DialogTitle>
+            <DialogDescription>Consulte o histórico do documento e registre ocorrências operacionais relacionadas.</DialogDescription>
+          </DialogHeader>
           {selectedRow && (
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-5">
@@ -1260,7 +1264,7 @@ export default function Traceability() {
                 <div className="grid gap-3 md:grid-cols-3">
                   <div><Label>Tipo</Label><Select disabled={!!registerEvent.pendingCommand} value={eventForm.type} onValueChange={type => setEventForm(f => ({ ...f, type }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="other">Outro</SelectItem><SelectItem value="partial_delivery">Entrega parcial</SelectItem><SelectItem value="client_refused">Recusa</SelectItem><SelectItem value="damaged">Avaria</SelectItem><SelectItem value="wrong_address">Endereço errado</SelectItem></SelectContent></Select></div>
                   <div><Label>Severidade</Label><Select disabled={!!registerEvent.pendingCommand} value={eventForm.severity} onValueChange={severity => setEventForm(f => ({ ...f, severity }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Baixa</SelectItem><SelectItem value="medium">Média</SelectItem><SelectItem value="high">Alta</SelectItem><SelectItem value="critical">Crítica</SelectItem></SelectContent></Select></div>
-                  <div className="flex items-end"><Button className="w-full" onClick={handleRegisterEvent} disabled={registerEvent.isPending || !!registerEvent.pendingCommand}>{registerEvent.isPending ? 'Registrando…' : 'Registrar'}</Button></div>
+                  <div className="flex items-end"><Button className="w-full" onClick={handleRegisterEvent} disabled={eventFormInvalid || registerEvent.isPending || !!registerEvent.pendingCommand}>{registerEvent.isPending ? 'Registrando…' : 'Registrar'}</Button></div>
                 </div>
                 <div className="mt-3"><Label>Descrição</Label><Textarea disabled={!!registerEvent.pendingCommand} value={eventForm.description} onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))} placeholder="Ex.: divergência encontrada durante a conferência..." /></div>
                 <p className="mt-2 text-xs text-muted-foreground">O registro da ocorrência não altera automaticamente o estado da carga, viagem ou documento.</p>
@@ -1276,6 +1280,7 @@ export default function Traceability() {
             <DialogTitle className="flex items-center gap-2">
               <Lightbulb className="h-5 w-5 text-info" /> Análise de padrões — Observações sem carga extraída
             </DialogTitle>
+            <DialogDescription>Analise observações recorrentes para identificar regras de extração de carga.</DialogDescription>
           </DialogHeader>
           {analyzerResult ? (
             <div className="space-y-4">

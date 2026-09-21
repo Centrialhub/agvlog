@@ -13047,3 +13047,21 @@ Provável causa: Esses três `DialogContent` de `DriverMonitoring` possuíam som
 RESOLVIDO
 
 ###############
+
+Bug 1674
+
+Sintoma: No detalhe da Rastreabilidade, “Registrar” permanece habilitado com a descrição da ocorrência vazia ou curta demais; a tentativa só é rejeitada depois do clique, e descrições válidas são enviadas com espaços nas extremidades.
+Provável causa: A regra mínima de cinco caracteres existia apenas dentro do manipulador e o payload reutilizava o texto bruto. A correção reflete a regra no estado do botão e persiste a descrição normalizada.
+
+RESOLVIDO
+
+###############
+
+Bug 1675
+
+Sintoma: Os diálogos de detalhe e de análise de padrões da Rastreabilidade não oferecem descrição acessível e podem registrar `Missing Description or aria-describedby` ao serem abertos.
+Provável causa: Os dois `DialogContent` possuíam título, mas nenhum `DialogDescription`. A correção associa uma descrição específica ao objetivo de cada diálogo.
+
+RESOLVIDO
+
+###############
