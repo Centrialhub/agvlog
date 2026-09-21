@@ -38,6 +38,7 @@ import {
 } from '@/lib/loads/loadAdvancedFilters';
 import { exportLoadsCSV, exportLoadsPDF } from '@/lib/loadsExport';
 import { getErrorMessage } from '@/lib/errors';
+import { selectLoadItemFiscalDocument } from '@/lib/loads/loadItemRelations';
 
 const STATUS_COLORS: Record<string, string> = {
   delivered: 'bg-success/10 text-success',
@@ -307,7 +308,7 @@ export default function Loads() {
 
       const { data: items, error: itemsError } = await supabase
         .from('load_items')
-        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, value, weight_kg, issue_date, product_summary)')
+        .select(`*, ${selectLoadItemFiscalDocument('invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, value, weight_kg, issue_date, product_summary')}`)
         .eq('load_id', loadId)
         .order('created_at');
       if (itemsError) throw itemsError;
@@ -365,7 +366,7 @@ export default function Loads() {
 
       const { data: items, error: itemsError } = await supabase
         .from('load_items')
-        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, value, weight_kg, issue_date, product_summary)')
+        .select(`*, ${selectLoadItemFiscalDocument('invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, value, weight_kg, issue_date, product_summary')}`)
         .in('load_id', loadIds)
         .order('created_at');
       if (itemsError) throw itemsError;

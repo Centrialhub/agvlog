@@ -13223,3 +13223,12 @@ Provável causa: `Orders.tsx` convertia `issue_date` vazia em `null`, mas deixav
 RESOLVIDO — RETESTE AUTENTICADO CONCLUÍDO
 
 ###############
+
+Bug 1692
+
+Sintoma: Os detalhes de qualquer carga exibem “Não foi possível carregar os itens da carga”, deixam totais e composição vazios e bloqueiam a validação necessária para roteirização, realocação e despacho. A consulta observada em produção retorna HTTP 300, código PostgREST `PGRST201`.
+Provável causa: `load_items` possui duas relações válidas com `fiscal_documents`: a FK legada pelo documento e a FK composta pelo tenant/documento. Três leitores do frontend pediam o relacionamento apenas como `fiscal_documents(...)`, então o PostgREST não conseguia escolher a relação. A correção centraliza e aplica explicitamente `fiscal_documents!load_items_fiscal_tenant_fkey(...)` no detalhe da carga, na roteirização e na impressão de romaneios, preservando também o isolamento por empresa. Foi adicionada regressão para o contrato da relação; o build de produção foi concluído com sucesso.
+
+CORRIGIDO — AGUARDANDO DEPLOY E RETESTE AUTENTICADO
+
+###############

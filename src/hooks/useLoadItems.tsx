@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useItemPreparationWrites } from './useItemPreparationWrites';
 import { PREPARATION_STATUSES, type ItemPreparationValues, type ItemPreparationExpected } from '@/lib/loads/itemPreparation';
+import { selectLoadItemFiscalDocument } from '@/lib/loads/loadItemRelations';
 
 export const ITEM_STATUSES = [
   'pending', 'waiting_conference', 'in_stock', 'picking',
@@ -61,7 +62,7 @@ export function useLoadItems(loadId: string | undefined) {
       if (!loadId) return [];
       const { data, error } = await supabase
         .from('load_items')
-        .select('*, orders(order_number, clients(company_name)), fiscal_documents(invoice_number, value, remitter, remitter_cnpj, recipient, recipient_city, recipient_state)')
+        .select(`*, orders(order_number, clients(company_name)), ${selectLoadItemFiscalDocument('invoice_number, value, remitter, remitter_cnpj, recipient, recipient_city, recipient_state')}`)
         .eq('load_id', loadId)
         .order('created_at', { ascending: true });
       if (error) throw error;

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import type { Tables } from '@/integrations/supabase/types';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { selectLoadItemFiscalDocument } from '@/lib/loads/loadItemRelations';
 
 export interface RoutingLoadItem {
   id: string;
@@ -98,7 +99,7 @@ export function usePendingLoadsForRouting() {
         const loadIdChunk = loadIds.slice(index, index + IN_FILTER_CHUNK);
         items.push(...await fetchAllPostgrestPages<RoutingLoadItemRow>((from, to) => supabase
           .from('load_items')
-          .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, client_id, supplier_id, value, weight_kg, issue_date)')
+          .select(`*, ${selectLoadItemFiscalDocument('invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, client_id, supplier_id, value, weight_kg, issue_date')}`)
           .in('load_id', loadIdChunk)
           .order('created_at', { ascending: true })
           .order('id', { ascending: true })
