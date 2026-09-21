@@ -8,6 +8,7 @@ import { clearDriverOfflineSnapshots } from '@/lib/driver/driverOfflineOutbox';
 import { clearDriverExpenseOfflineCaches } from '@/lib/driver/driverExpenseOfflineStore';
 import { clearTenantMembershipCache } from '@/lib/tenantMemberships';
 import type { User, Session } from '@supabase/supabase-js';
+import { isExpiredSessionError } from '@/lib/errors';
 
 interface AuthContextType {
   user: User | null;
@@ -115,7 +116,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         revision.current += 1;
         acceptSession(null);
       }
-    } catch {
+    } catch (error) {
+      if (isExpiredSessionError(error)) {
+        try {
+          const local = await supabase.auth.signOut({ scope: 'local' });
+          if (!local.error) {
+            if (revision.current === requestedRevision) {
+              revision.current += 1;
+              acceptSession(null);
+            }
+            return;
+          }
+        } catch { /* fall through to the visible logout failure */ }
+      }
       toast({ title: 'Não foi possível sair da conta', description: 'A saída não foi confirmada. Verifique a conexão e tente novamente.', variant: 'destructive' });
     }
   };

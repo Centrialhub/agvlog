@@ -17,5 +17,7 @@ describe('expired session during company switch', () => {
 
   it('explains that an expired session requires a new login', () => {
     expect(source).toContain('Sua sessão expirou. Saia e entre novamente para trocar de empresa.');
+    expect(source).toContain('Entrar novamente');
+    expect(source).toContain('void signOut()');
   });
 });

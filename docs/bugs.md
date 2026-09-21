@@ -12771,3 +12771,12 @@ Sintoma: Um administrador com acesso a AGV e LIRA seleciona a outra empresa e re
 Provável causa: `activateTenantId` persistia `set_active_tenant_context_v1` antes de descobrir que o refresh token do navegador havia expirado. A rotação do JWT falhava, a interface voltava para a empresa anterior, mas o contexto durável no banco permanecia alterado. A correção valida a sessão antes de persistir, restaura o contexto anterior se a rotação final falhar e informa explicitamente quando é necessário entrar novamente.
 
 RESOLVIDO
+
+###############
+
+Bug 1644
+
+Sintoma: Quando a troca de empresa detecta uma sessão expirada, a tela informa que o usuário deve sair e entrar novamente, mas oculta toda a aplicação — inclusive o botão “Sair” — e oferece somente “Tentar novamente”, que repete a mesma falha indefinidamente.
+Provável causa: `TenantProvider` substituía seus filhos pelo alerta genérico em qualquer erro de contexto e não tinha uma ação de reautenticação. Além disso, o logout global pode ser recusado pelo próprio refresh token inválido. A correção mostra “Entrar novamente” nesse caso e, se o servidor recusar o logout por sessão expirada, limpa a sessão irrecuperável localmente para retornar com segurança à autenticação.
+
+RESOLVIDO

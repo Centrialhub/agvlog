@@ -6,6 +6,7 @@ import { MEMBERSHIP_QUERY, TenantDataBoundary } from '@/components/auth/TenantDa
 import { readTenantMembershipCache, readTenantMemberships, readTenantSelection, saveTenantMembershipCache, saveTenantSelection, type Membership } from '@/lib/tenantMemberships';
 import {clearActiveTenantId,setActiveTenantId} from '@/lib/tenant/activeTenantContext';
 import {supabase} from '@/integrations/supabase/client';
+import { isExpiredSessionError } from '@/lib/errors';
 
 interface TenantContextType {
   currentTenant: Membership['tenants'] | null;
@@ -34,15 +35,13 @@ function tokenTenant(accessToken:string|undefined){
 }
 
 function tenantActivationErrorMessage(error:unknown){
-  const message=error instanceof Error?error.message:
-    typeof error==='object'&&error!==null&&'message' in error?String(error.message):'';
-  return /invalid refresh token|session expired|refresh_token_not_found/i.test(message)
+  return isExpiredSessionError(error)
     ? 'Sua sessão expirou. Saia e entre novamente para trocar de empresa.'
     : 'Não foi possível trocar a empresa ativa. Tente novamente.';
 }
 
 export function TenantProvider({ children }: { children: ReactNode }) {
-  const { user, session, loading: authLoading } = useAuth();
+  const { user, session, loading: authLoading, signOut } = useAuth();
   const online = useOnlineStatus();
   const actor = user?.id;
   const [selection, setSelection] = useState<{ actor: string; tenant: string } | null>(null);
@@ -191,7 +190,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           <button type="button" className="underline" disabled={query.isFetching} onClick={() => { void refetch(); }}>Tentar novamente</button>
         </div> : tenantContextError ? <div role="alert" className="m-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
           <p>{tenantContextError}</p>
-          {tenant?<button type="button" className="mt-2 underline" disabled={switchingTenant} onClick={()=>{void activateTenantId(tenant);}}>Tentar novamente</button>:null}
+          {isExpiredSessionError({message:tenantContextError})
+            ? <button type="button" className="mt-2 underline" onClick={()=>{void signOut();}}>Entrar novamente</button>
+            : tenant?<button type="button" className="mt-2 underline" disabled={switchingTenant} onClick={()=>{void activateTenantId(tenant);}}>Tentar novamente</button>:null}
         </div> : switchingTenant||tenantSynchronizationRequired ? <div role="status" className="p-6">Confirmando empresa ativa…</div> : children}
       </TenantDataBoundary>
     </TenantContext.Provider>

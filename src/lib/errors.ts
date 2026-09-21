@@ -6,3 +6,7 @@ export function getErrorMessage(error: unknown, fallback = 'Ocorreu um erro ines
   }
   return fallback;
 }
+
+export function isExpiredSessionError(error: unknown): boolean {
+  return /invalid refresh token|session expired|refresh_token_not_found|sessão expirou/i.test(getErrorMessage(error, ''));
+}
