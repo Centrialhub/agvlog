@@ -12753,3 +12753,12 @@ Sintoma: Abrir “Ativos e patrimônio” por link direto, favorito ou recarrega
 Provável causa: A rota funcional `/assets` usa o mesmo namespace da pasta de artefatos estáticos gerada pelo Vite e copiada de `public/assets`. Na hospedagem, o arquivo estático tem precedência sobre o fallback da SPA. A correção move a tela para `/asset-management`, atualiza a navegação e redireciona permanentemente o endereço antigo antes da resolução dos arquivos estáticos.
 
 RESOLVIDO
+
+###############
+
+Bug 1642
+
+Sintoma: Depois de a página “Ativos e patrimônio” abrir, a listagem termina em “Não foi possível carregar os patrimônios: erro desconhecido”, mesmo quando a empresa ainda não possui nenhum ativo.
+Provável causa: A consulta embutia `employees(name)` sem identificar a relação. A tabela `assets` possui duas chaves estrangeiras válidas para `employees` — a histórica por `responsible_employee_id` e a composta por empresa —, então o PostgREST rejeita o embed como ambíguo. Além disso, o erro retornado é um objeto com `message`, mas a interface aceitava apenas instâncias de `Error`, ocultando o diagnóstico. A correção escolhe explicitamente `assets_responsible_employee_id_fkey` e passa a extrair mensagens estruturadas com segurança.
+
+RESOLVIDO

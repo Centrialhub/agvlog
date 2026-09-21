@@ -32,7 +32,7 @@ export function useAssets() {
     queryFn: async () => {
       if (!currentTenant) return [];
       return fetchAllPostgrestPages((from, to) => supabase
-        .from('assets').select('*, employees(name)')
+        .from('assets').select('*, employees!assets_responsible_employee_id_fkey(name)')
         .eq('tenant_id', currentTenant.id)
         .order('name').order('id').range(from, to)) as Promise<Asset[]>;
     },

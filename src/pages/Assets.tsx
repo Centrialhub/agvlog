@@ -127,7 +127,7 @@ export default function Assets() {
         </TableRow></TableHeader>
         <TableBody>
           {isLoading ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-          : isError ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-destructive">Não foi possível carregar os patrimônios: {error instanceof Error ? error.message : 'erro desconhecido'}</TableCell></TableRow>
+          : isError ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-destructive">Não foi possível carregar os patrimônios: {getErrorMessage(error, 'erro desconhecido')}</TableCell></TableRow>
           : filtered.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum ativo</TableCell></TableRow>
           : filtered.map(a => (
             <TableRow key={a.id}>
