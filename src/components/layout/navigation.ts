@@ -92,7 +92,7 @@ export const navigationSections: NavigationSection[] = [
     { label: 'Ocorrências formais', href: '/incidents', icon: ShieldAlert, keywords: 'RH auditoria' },
     { label: 'Checklists', href: '/checklists', icon: ClipboardCheck },
     { label: 'Ordens de manutenção', href: '/maintenance-orders', icon: Wrench },
-    { label: 'Ativos e patrimônio', href: '/assets', icon: Archive },
+    { label: 'Ativos e patrimônio', href: '/asset-management', icon: Archive },
   ] },
   { id: 'registry', label: 'Cadastros e estoque', icon: Building2, items: [
     { label: 'Clientes e fornecedores', href: '/clients', icon: Building2 },

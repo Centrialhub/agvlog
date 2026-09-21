@@ -180,7 +180,7 @@ export function AppRoutes() {
       <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
       <Route path="/incidents" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
       <Route path="/payroll" element={<ProtectedRoute><Payroll /></ProtectedRoute>} />
-      <Route path="/assets" element={<ProtectedRoute><AssetsPage /></ProtectedRoute>} />
+      <Route path="/asset-management" element={<ProtectedRoute><AssetsPage /></ProtectedRoute>} />
       <Route path="/maintenance-orders" element={<ProtectedRoute><MaintenanceOrders /></ProtectedRoute>} />
       <Route path="/stock" element={<ProtectedRoute><StockPage /></ProtectedRoute>} />
       <Route path="/checklists" element={<ProtectedRoute><Checklists /></ProtectedRoute>} />

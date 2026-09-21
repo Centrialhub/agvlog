@@ -12744,3 +12744,12 @@ Sintoma: Na tela Ordens de Manutenção, clicar em “Salvar” com o formulári
 Provável causa: `MaintenanceOrders` validava apenas números negativos; veículo e problema relatado eram enviados como `null`. A tabela `maintenance_orders` também não exigia um objeto de manutenção nem uma descrição não vazia. A correção bloqueia o formulário, normaliza a descrição e adiciona restrições no banco para qualquer cliente ou integração.
 
 RESOLVIDO
+
+###############
+
+Bug 1641
+
+Sintoma: Abrir “Ativos e patrimônio” por link direto, favorito ou recarregar a página em `/assets` exibe o conteúdo JavaScript minificado de um chunk no lugar do sistema. A navegação interna pode mascarar a falha enquanto a sessão já está carregada.
+Provável causa: A rota funcional `/assets` usa o mesmo namespace da pasta de artefatos estáticos gerada pelo Vite e copiada de `public/assets`. Na hospedagem, o arquivo estático tem precedência sobre o fallback da SPA. A correção move a tela para `/asset-management`, atualiza a navegação e redireciona permanentemente o endereço antigo antes da resolução dos arquivos estáticos.
+
+RESOLVIDO

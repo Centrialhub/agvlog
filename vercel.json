@@ -12,6 +12,13 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/assets",
+      "destination": "/asset-management",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",
