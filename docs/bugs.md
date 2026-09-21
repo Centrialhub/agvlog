@@ -13127,3 +13127,12 @@ Provável causa: Havia duas falhas encadeadas. Primeiro, 63 clientes ainda conve
 RESOLVIDO
 
 ###############
+
+Bug 1682
+
+Sintoma: A tela “Auditoria financeira” ficava totalmente indisponível e mostrava “Não foi possível consultar a auditoria”, embora a API respondesse com os eventos e HTTP 200.
+Provável causa: O contrato do frontend aceitava `snapshot_at` somente no formato UTC terminado em `Z`, mas o PostgreSQL devolve o instante ISO válido com deslocamento explícito `+00:00`. O contrato agora aceita offsets ISO e possui regressão com o formato observado em produção.
+
+RESOLVIDO
+
+###############

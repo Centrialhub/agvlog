@@ -33,7 +33,7 @@ financeAuditActions.legacy_receivable_associated='Recebimento antigo associado m
 financeAuditActions.legacy_receivable_association_reversed='Associação de recebimento antigo desfeita';
 export interface FinanceAuditFilters{page:number;page_size:number;from:string;to:string;action:string;actor_id:string;actor_search:string;search:string;manual_only:boolean;snapshot_at:string}
 export const financeAuditSchema=z.object({version:z.literal(1),tenant_id:uuid,page:z.number().int().positive(),page_size:z.number().int().positive(),
-  total:z.number().int().nonnegative(),manual_count:z.number().int().nonnegative(),timezone:z.string().min(1),snapshot_at:z.string().datetime(),rows:z.array(z.object({
+  total:z.number().int().nonnegative(),manual_count:z.number().int().nonnegative(),timezone:z.string().min(1),snapshot_at:z.string().datetime({offset:true}),rows:z.array(z.object({
     id:uuid,tenant_id:uuid,entity_type:z.string(),entity_id:uuid,action:z.string(),actor_id:uuid,actor_name:z.string(),reason:z.string(),created_at:z.string(),manual_intervention:z.boolean(),
     decision:z.string().nullable(),row_id:uuid.nullable(),statement_name:z.string().nullable(),source_row:z.number().int().nullable(),
   }))});
