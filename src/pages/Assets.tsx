@@ -1,7 +1,7 @@
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { useListFilters } from '@/hooks/useListFilters';
 import { matchesSearch, filterOptions } from '@/lib/listFilters';
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAssets, useCreateAsset, useUpdateAsset, Asset, ASSET_CATEGORIES, ASSET_CATEGORY_LABELS, ASSET_STATUSES, ASSET_STATUS_LABELS } from '@/hooks/useAssets';
 import { useEmployees } from '@/hooks/useEmployees';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,16 +9,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Package, Edit } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { getErrorMessage } from '@/lib/errors';
+import { useTenant } from '@/hooks/useTenant';
+
+const NONE = '__none__';
 
 export default function Assets() {
   const toast = useSonnerToast();
+  const { currentTenant } = useTenant();
   const { data: assets = [], isLoading, isError, error } = useAssets();
   const { data: employees = [] } = useEmployees();
   const createAsset = useCreateAsset();
@@ -34,6 +38,18 @@ export default function Assets() {
     responsible_employee_id: '', current_location: '', branch: '', cost_center: '',
     supplier: '', acquisition_date: '', acquisition_cost: '', notes: '',
   });
+
+  useEffect(() => {
+    setDialogOpen(false);
+    setEditing(undefined);
+  }, [currentTenant?.id]);
+
+  const acquisitionCost = form.acquisition_cost.trim() === '' ? null : Number(form.acquisition_cost);
+  const assetFormInvalid = (
+    !form.asset_code.trim() ||
+    !form.name.trim() ||
+    (acquisitionCost !== null && (!Number.isFinite(acquisitionCost) || acquisitionCost < 0))
+  );
 
   const filtered = useMemo(() => assets.filter(asset =>
     matchesSearch(search, asset.name, asset.asset_code, asset.serial_number, asset.plate, asset.current_location) &&
@@ -62,11 +78,10 @@ export default function Assets() {
 
   const handleSave = async () => {
     if (!form.asset_code.trim() || !form.name.trim()) { toast.error('Código e nome obrigatórios'); return; }
-    const acquisitionCost = form.acquisition_cost ? Number(form.acquisition_cost) : 0;
-    if (!Number.isFinite(acquisitionCost) || acquisitionCost < 0) { toast.error('O custo de aquisição não pode ser negativo'); return; }
+    if (acquisitionCost !== null && (!Number.isFinite(acquisitionCost) || acquisitionCost < 0)) { toast.error('O custo de aquisição não pode ser negativo'); return; }
     const payload = {
-      asset_code: form.asset_code,
-      name: form.name,
+      asset_code: form.asset_code.trim(),
+      name: form.name.trim(),
       category: form.category,
       status: form.status,
       serial_number: form.serial_number || null,
@@ -83,7 +98,7 @@ export default function Assets() {
       notes: form.notes || null,
     };
     try {
-      if (editing) await updateAsset.mutateAsync({ id: editing.id, ...payload });
+      if (editing) await updateAsset.mutateAsync({ id: editing.id, expected_updated_at: editing.updated_at, ...payload });
       else await createAsset.mutateAsync(payload);
       setDialogOpen(false);
       toast.success(editing ? 'Ativo atualizado' : 'Ativo cadastrado');
@@ -146,7 +161,10 @@ export default function Assets() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? 'Editar Ativo' : 'Novo Ativo'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Editar Ativo' : 'Novo Ativo'}</DialogTitle>
+            <DialogDescription>Informe a identificação, situação, responsável e dados de aquisição do patrimônio.</DialogDescription>
+          </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">Código Patrimonial *</Label><Input value={form.asset_code} onChange={e => setForm(f => ({ ...f, asset_code: e.target.value }))} /></div>
             <div><Label className="text-xs">Nome *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
@@ -163,8 +181,8 @@ export default function Assets() {
             <div><Label className="text-xs">Marca</Label><Input value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} /></div>
             <div><Label className="text-xs">Modelo</Label><Input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} /></div>
             <div><Label className="text-xs">Responsável</Label>
-              <Select value={form.responsible_employee_id} onValueChange={v => setForm(f => ({ ...f, responsible_employee_id: v }))}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>{employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent></Select>
+              <Select value={form.responsible_employee_id || NONE} onValueChange={v => setForm(f => ({ ...f, responsible_employee_id: v === NONE ? '' : v }))}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent><SelectItem value={NONE}>Nenhum responsável</SelectItem>{employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent></Select>
             </div>
             <div><Label className="text-xs">Localização</Label><Input value={form.current_location} onChange={e => setForm(f => ({ ...f, current_location: e.target.value }))} /></div>
             <div><Label className="text-xs">Filial</Label><Input value={form.branch} onChange={e => setForm(f => ({ ...f, branch: e.target.value }))} /></div>
@@ -176,7 +194,7 @@ export default function Assets() {
           <div><Label className="text-xs">Observações</Label><Textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
           <div className="flex justify-end gap-2 mt-3">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={createAsset.isPending || updateAsset.isPending}>Salvar</Button>
+            <Button onClick={handleSave} disabled={assetFormInvalid || createAsset.isPending || updateAsset.isPending}>Salvar</Button>
           </div>
         </DialogContent>
       </Dialog>

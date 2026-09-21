@@ -8216,6 +8216,8 @@ Bug 1018
 Sintoma: Trocar a empresa ativa com um patrimônio aberto para edição permite salvar a ficha antiga enquanto a tela já está no contexto da empresa nova.
 Provável causa: `Assets` preserva `editing`, `form` e o diálogo durante a troca de tenant. `useUpdateAsset` executa o `UPDATE` somente por `id`, sem exigir o tenant ativo; um usuário administrador nas duas empresas continua autorizado pela RLS a modificar a linha antiga.
 
+RESOLVIDO
+
 ###############
 
 Bug 1019
@@ -8223,12 +8225,16 @@ Bug 1019
 Sintoma: Duas pessoas podem editar o mesmo patrimônio simultaneamente e ambas receber confirmação, mas a última gravação restaura silenciosamente nome, estado, responsável, localização, custo e demais campos antigos sobre as mudanças da primeira.
 Provável causa: O formulário envia um snapshot completo e `useUpdateAsset` condiciona a atualização apenas ao `id`. O `updated_at` lido não participa de comparação de versão, CAS ou rejeição de edição obsoleta.
 
+RESOLVIDO
+
 ###############
 
 Bug 1020
 
 Sintoma: Depois que um responsável é atribuído a um patrimônio, não é possível deixá-lo novamente sem responsável pela tela; o seletor só permite transferi-lo para outra pessoa.
 Provável causa: O `Select` de responsável contém exclusivamente os funcionários retornados e não oferece opção “Nenhum” nem controle de limpeza. Embora o payload converta string vazia em `null`, a interface não fornece um caminho para voltar a esse valor após a seleção.
+
+RESOLVIDO
 
 ###############
 
@@ -8250,6 +8256,8 @@ Bug 1023
 
 Sintoma: Deixar o custo de aquisição em branco registra R$ 0,00 em vez de “não informado”; limpar um custo existente também o transforma em zero, fazendo o valor total confundir ausência de dado com aquisição gratuita.
 Provável causa: `handleSave` converte `form.acquisition_cost` vazio diretamente para `0` e grava esse número em `acquisition_cost`, embora a coluna seja anulável e o formulário use vazio para representar ausência nos demais campos opcionais.
+
+RESOLVIDO
 
 ###############
 
@@ -13070,6 +13078,15 @@ Bug 1676
 
 Sintoma: Em “Nova Coleta”, “Criar Coleta” permanece habilitado sem motorista, veículo ou destinatário; uma data/hora inválida também pode gerar uma exceção de conversão antes do tratamento que apresenta o erro ao operador.
 Provável causa: As regras obrigatórias existiam somente no manipulador, o botão considerava apenas mutações em andamento e o horário era convertido com `toISOString` antes do bloco protegido. A correção reflete todos os requisitos no estado do botão e valida o timestamp antes da conversão.
+
+RESOLVIDO
+
+###############
+
+Bug 1677
+
+Sintoma: Em “Novo Ativo”, “Salvar” permanece habilitado sem código ou nome e com custo de aquisição inválido; o diálogo também não oferece descrição acessível.
+Provável causa: As validações existiam somente dentro do manipulador, o botão considerava apenas as mutações em andamento e o `DialogContent` possuía título sem `DialogDescription`. A correção reflete as regras obrigatórias e numéricas no botão e descreve o objetivo do formulário.
 
 RESOLVIDO
 

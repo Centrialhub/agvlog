@@ -22,7 +22,7 @@ export type Asset = Tables<'assets'> & {
 export type AssetMovement = Tables<'asset_movements'>;
 
 export type CreateAssetInput = Omit<TablesInsert<'assets'>, 'tenant_id' | 'created_by'>;
-export type UpdateAssetInput = TablesUpdate<'assets'> & { id: string };
+export type UpdateAssetInput = TablesUpdate<'assets'> & { id: string; expected_updated_at: string };
 export type CreateAssetMovementInput = Omit<TablesInsert<'asset_movements'>, 'tenant_id' | 'created_by'>;
 
 export function useAssets() {
@@ -57,13 +57,19 @@ export function useCreateAsset() {
 }
 
 export function useUpdateAsset() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: UpdateAssetInput) => {
+    mutationFn: async ({ id, expected_updated_at, ...values }: UpdateAssetInput) => {
       const { data, error } = await supabase.from('assets')
         .update({ ...values, updated_at: new Date().toISOString() })
-        .eq('id', id).select().single();
+        .eq('id', id)
+        .eq('tenant_id', currentTenant!.id)
+        .eq('updated_at', expected_updated_at)
+        .select()
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('Este ativo foi alterado por outra pessoa ou pertence a outra empresa. Atualize a lista antes de tentar novamente.');
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
