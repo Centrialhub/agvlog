@@ -13091,3 +13091,12 @@ Provável causa: As validações existiam somente dentro do manipulador, o botã
 RESOLVIDO
 
 ###############
+
+Bug 1678
+
+Sintoma: A tela “Canhotos” fica operacionalmente indisponível e exibe `Cannot read properties of undefined (reading 'rest')` nas regras de qualidade, observabilidade, filas, filtros, histórico de e-mails e canais por fornecedor.
+Provável causa: Quatro clientes do fluxo guardavam `supabase.rpc` em constantes sem vinculá-lo ao cliente Supabase. Ao executar o método destacado, o SDK perdia o receptor `this` necessário para acessar o transporte REST. A correção vincula explicitamente o método em operações, painel, canais e políticas de qualidade e adiciona regressão que cobre os quatro chamadores.
+
+RESOLVIDO
+
+###############

@@ -39,7 +39,7 @@ export type DeliveryReceiptOcrMatch=z.infer<typeof ocrSearchSchema>['rows'][numb
 
 interface RpcResponse{data:unknown;error:unknown}
 interface RpcBuilder extends PromiseLike<RpcResponse>{abortSignal:(signal:AbortSignal)=>PromiseLike<RpcResponse>}
-const rpc=supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>RpcBuilder;
+const rpc=supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>RpcBuilder;
 
 export async function getDeliveryReceiptOperations(tenant:string,actor:string,signal?:AbortSignal){
   const request=rpc('get_delivery_receipt_operations_v1',{_tenant_id:tenant});const {data,error}=await(signal?request.abortSignal(signal):request);

@@ -115,7 +115,7 @@ type ReceiptRpcArgs={
 };
 interface RpcResponse {data:unknown;error:unknown}
 interface RpcBuilder extends PromiseLike<RpcResponse>{abortSignal:(signal:AbortSignal)=>PromiseLike<RpcResponse>}
-const rpc=supabase.rpc as unknown as <Name extends keyof ReceiptRpcArgs>(name:Name,args:ReceiptRpcArgs[Name])=>RpcBuilder;
+const rpc=supabase.rpc.bind(supabase) as unknown as <Name extends keyof ReceiptRpcArgs>(name:Name,args:ReceiptRpcArgs[Name])=>RpcBuilder;
 
 export async function listDeliveryReceipts(tenant:string,actor:string,filters:DeliveryReceiptFilters,
   pagination:DeliveryReceiptPagination={},signal?:AbortSignal) {

@@ -104,7 +104,7 @@ type QualityPolicyRpcArgs = {
   };
 };
 interface RpcResponse { data: unknown; error: { code?: string; message?: string } | null }
-const rpc = supabase.rpc as unknown as <Name extends keyof QualityPolicyRpcArgs>(
+const rpc = supabase.rpc.bind(supabase) as unknown as <Name extends keyof QualityPolicyRpcArgs>(
   name: Name,
   args: QualityPolicyRpcArgs[Name],
 ) => PromiseLike<RpcResponse>;
