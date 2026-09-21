@@ -13029,3 +13029,21 @@ Provável causa: Os quatro `DialogContent` de `PalletReturns` possuíam título,
 RESOLVIDO
 
 ###############
+
+Bug 1672
+
+Sintoma: “Criar monitoramento” fica habilitado com total de entregas ou prazo de retorno negativos; o total inválido só recebe mensagem depois do clique e o prazo negativo chega ao comando como dado aparentemente válido.
+Provável causa: O estado do botão verificava apenas o nome do motorista, enquanto o manipulador validava somente o total positivo e não restringia `deadline` ao intervalo de 0 a 3650 exibido pelo campo. A correção centraliza as regras numéricas e as aplica tanto antes do comando quanto no estado do botão.
+
+RESOLVIDO
+
+###############
+
+Bug 1673
+
+Sintoma: Os diálogos de progresso diário, previsão de chegada e detalhe do monitoramento não oferecem descrição acessível e podem registrar `Missing Description or aria-describedby` ao serem abertos.
+Provável causa: Esses três `DialogContent` de `DriverMonitoring` possuíam somente `DialogTitle`; apenas o diálogo de criação/edição já fornecia `DialogDescription`. A correção associa uma descrição específica a cada fluxo.
+
+RESOLVIDO
+
+###############

@@ -170,6 +170,7 @@ async function openCreate(driverName: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Novo Monitoramento' }));
   const dialog = await screen.findByRole('dialog');
   fireEvent.change(within(dialog).getByLabelText('Motorista'), { target: { value: driverName } });
+  fireEvent.change(within(dialog).getByLabelText('Total entregas'), { target: { value: '1' } });
   return dialog;
 }
 

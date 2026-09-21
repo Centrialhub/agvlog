@@ -82,6 +82,9 @@ export default function DriverMonitoring() {
   const monitorCommand = useDriverMonitorCommand();
   const [monitorError, setMonitorError] = useState('');
   const [createForm, setCreateForm] = useState(emptyMonitorForm);
+  const monitorFormInvalid = !createForm.driver_name.trim()
+    || !Number.isInteger(createForm.total) || createForm.total <= 0
+    || !Number.isInteger(createForm.deadline) || createForm.deadline < 0 || createForm.deadline > 3650;
 
   const [progDlg, setProgDlg] = useState<DriverMonitorRow | null>(null);
   const progMut = useAddProgressUpdate();
@@ -186,8 +189,8 @@ export default function DriverMonitoring() {
     }
   };
   const saveMonitor = async () => {
-    if (!createForm.driver_name.trim() || !Number.isInteger(createForm.total) || createForm.total <= 0 || monitorCommand.pending) {
-      setMonitorError('Informe o motorista, ao menos uma entrega e recupere qualquer alteração pendente.');
+    if (monitorFormInvalid || monitorCommand.pending) {
+      setMonitorError('Informe o motorista, ao menos uma entrega e um prazo de retorno entre 0 e 3650 dias; recupere qualquer alteração pendente.');
       return;
     }
     setMonitorError('');
@@ -499,7 +502,7 @@ export default function DriverMonitoring() {
               </Button>
             ) : null}
             <Button onClick={() => void saveMonitor()}
-              disabled={monitorCommand.isPending || !!monitorCommand.pending || !createForm.driver_name.trim()}>
+              disabled={monitorCommand.isPending || !!monitorCommand.pending || monitorFormInvalid}>
               {monitorCommand.isPending ? 'Salvando…' : editRow ? 'Salvar alterações' : 'Criar monitoramento'}
             </Button>
           </DialogFooter>
@@ -509,7 +512,10 @@ export default function DriverMonitoring() {
       {/* Progress update */}
       <Dialog open={!!progDlg} onOpenChange={(o) => !o && setProgDlg(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Registrar Entregas do Dia — {progDlg?.driver_name_snapshot}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Registrar Entregas do Dia — {progDlg?.driver_name_snapshot}</DialogTitle>
+            <DialogDescription>Registre a posição e o progresso diário das entregas desta rota.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Data</Label><Input type="date" value={progForm.date} onChange={(e) => setProgForm({ ...progForm, date: e.target.value })} /></div>
@@ -531,7 +537,10 @@ export default function DriverMonitoring() {
       {/* Forecast */}
       <Dialog open={!!forecastDlg} onOpenChange={(o) => !o && setForecastDlg(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Atualizar Previsão de Chegada — {forecastDlg?.driver_name_snapshot}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Atualizar Previsão de Chegada — {forecastDlg?.driver_name_snapshot}</DialogTitle>
+            <DialogDescription>Informe a localização atual e a nova previsão de chegada do motorista.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Data</Label><Input type="date" value={forecastForm.forecast_date} onChange={(e) => setForecastForm({ ...forecastForm, forecast_date: e.target.value })} /></div>
@@ -552,7 +561,10 @@ export default function DriverMonitoring() {
       {/* Open monitor detail */}
       <Dialog open={!!openRow} onOpenChange={(o) => !o && setOpenRow(null)}>
         <DialogContent className="max-w-3xl">
-          <DialogHeader><DialogTitle>{openRow?.monitor_number} — {openRow?.driver_name_snapshot}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{openRow?.monitor_number} — {openRow?.driver_name_snapshot}</DialogTitle>
+            <DialogDescription>Consulte o progresso, a rota planejada e as atualizações diárias deste monitoramento.</DialogDescription>
+          </DialogHeader>
           {openRow && (
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-2 gap-3">
