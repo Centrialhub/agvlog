@@ -13218,8 +13218,8 @@ PENDENTE — encaminhado para bugs menores
 Bug 1691
 
 Sintoma: O formulário “Novo Pedido” habilita “Salvar” quando apenas o número obrigatório é informado, mas a criação falha em produção e o pedido não aparece na listagem. A resposta do backend é HTTP 400, código PostgreSQL `22007`, com `invalid input syntax for type date: ""`.
-Provável causa: `Orders.tsx` convertia `issue_date` vazia em `null`, mas deixava `promised_date` como string vazia. O PostgREST encaminhava `""` para a coluna `date`, e o PostgreSQL rejeitava toda criação quando a data prometida opcional não era preenchida. A correção centraliza a normalização dos campos opcionais e converte as duas datas vazias em `null`, preservando datas válidas. O teste cobre datas vazias e preenchidas.
+Provável causa: `Orders.tsx` convertia `issue_date` vazia em `null`, mas deixava `promised_date` como string vazia. O PostgREST encaminhava `""` para a coluna `date`, e o PostgreSQL rejeitava toda criação quando a data prometida opcional não era preenchida. A correção centraliza a normalização dos campos opcionais e converte as duas datas vazias em `null`, preservando datas válidas. O teste cobre datas vazias e preenchidas. Após o deploy do commit `37631a87`, o mesmo cenário criou `QA-ORDER-20260921` pela interface, com ambas as datas vazias, sem resposta HTTP de erro; o pedido apareceu na listagem como “Recebido”.
 
-CORRIGIDO — RETESTE EM PRODUÇÃO PENDENTE DE DEPLOY
+RESOLVIDO — RETESTE AUTENTICADO CONCLUÍDO
 
 ###############
