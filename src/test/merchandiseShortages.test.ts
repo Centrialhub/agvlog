@@ -50,6 +50,14 @@ describe('validateCase', () => {
     });
     expect(errs).toEqual([]);
   });
+  it('rejects an invoice made only of whitespace', () => {
+    const errs = validateCase({
+      occurrence_date: '2026-09-21',
+      invoice_number: '   ',
+      items: [{ product_description: 'Produto', quantity: 1, unit_cost: 1 }],
+    });
+    expect(errs.some(e => e.field === 'invoice_number')).toBe(true);
+  });
 });
 
 describe('validateFinalize', () => {

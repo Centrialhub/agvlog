@@ -83,7 +83,7 @@ export function validateCase(input: {
 }): ValidationError[] {
   const errors: ValidationError[] = [];
   if (!input.occurrence_date) errors.push({ field: 'occurrence_date', message: 'Data obrigatória' });
-  if (!input.invoice_number && !input.invoice_justification) {
+  if (!input.invoice_number?.trim() && !input.invoice_justification?.trim()) {
     errors.push({ field: 'invoice_number', message: 'NF obrigatória ou justificativa exigida' });
   }
   if (!input.items || input.items.length === 0) {

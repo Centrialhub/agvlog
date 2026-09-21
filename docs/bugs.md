@@ -12615,6 +12615,8 @@ Bug 1593
 Sintoma: Dois cliques rápidos em “Salvar em apuração” ou “Salvar e confirmar” podem criar duas faltas de mercadoria idênticas, com números diferentes, duplicando itens e valores mensais.
 Provável causa: Os dois botões continuam habilitados durante `createCase.isPending`, e `submitNew` pode disparar chamadas concorrentes. `create_merchandise_shortage_case` sempre consome um novo número e insere caso/itens sem chave de requisição, fingerprint, restrição natural ou outra proteção idempotente.
 
+RESOLVIDO
+
 ###############
 
 Bug 1594
@@ -12994,6 +12996,15 @@ Bug 1668
 
 Sintoma: “Criar” permanece habilitado com limite vazio, zero ou negativo e também para uma regra de geofence ainda sem cerca selecionada; essas combinações só são rejeitadas depois do clique.
 Provável causa: As validações existiam no manipulador, mas o botão considerava apenas carregamento e falha da consulta de geofences. A correção reflete os requisitos numéricos e de vínculo diretamente no estado do botão.
+
+RESOLVIDO
+
+###############
+
+Bug 1669
+
+Sintoma: Em “Nova Falta”, “Salvar em apuração” e “Salvar e confirmar” permanecem habilitados com NF e item obrigatórios vazios (ou com NF composta apenas por espaços), permitindo iniciar uma tentativa que só é rejeitada depois do clique.
+Provável causa: A tela chamava `validateCase` apenas dentro de `submitNew`, não refletia o resultado no estado dos botões e a validação tratava qualquer string não vazia como NF válida. A correção reutiliza a validação durante a edição, normaliza a NF e bloqueia os botões enquanto o formulário for inválido ou a criação estiver em andamento.
 
 RESOLVIDO
 

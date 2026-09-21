@@ -1,5 +1,5 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -74,8 +74,15 @@ export default function MerchandiseShortages() {
   const [items, setItems] = useState<ShortageItemInput[]>([
     { product_description: '', quantity_text: '', quantity: null, unit_cost: 0, total_amount: 0 },
   ]);
+  const createLock = useRef(false);
 
   const totalCase = useMemo(() => computeCaseTotal(items), [items]);
+  const newCaseErrors = useMemo(() => validateCase({
+    occurrence_date: form.occurrence_date,
+    invoice_number: form.invoice,
+    items,
+  }), [form.occurrence_date, form.invoice, items]);
+  const newCaseInvalid = newCaseErrors.length > 0;
 
   const updateItem = (i: number, patch: Partial<ShortageItemInput>) => {
     setItems(prev => prev.map((it, idx) => {
@@ -95,12 +102,9 @@ export default function MerchandiseShortages() {
   const removeItem = (i: number) => setItems(prev => prev.filter((_, idx) => idx !== i));
 
   const submitNew = async (finalize?: boolean) => {
-    const errs = validateCase({
-      occurrence_date: form.occurrence_date,
-      invoice_number: form.invoice,
-      items,
-    });
-    if (errs.length) { toast.error(errs[0].message); return; }
+    if (createLock.current || createCase.isPending) return;
+    if (newCaseErrors.length) { toast.error(newCaseErrors[0].message); return; }
+    createLock.current = true;
     try {
       await createCase.mutateAsync({
         occurrence_date: form.occurrence_date,
@@ -108,7 +112,7 @@ export default function MerchandiseShortages() {
         supplier_name_snapshot: form.supplier || null,
         driver_name_snapshot: form.driver || null,
         vehicle_plate_snapshot: form.plate || null,
-        invoice_number: form.invoice || null,
+        invoice_number: form.invoice.trim() || null,
         cte_number: form.cte || null,
         load_number: form.load || null,
         city: form.city || null,
@@ -123,6 +127,8 @@ export default function MerchandiseShortages() {
       setForm({ ...form, invoice: '', customer: '', observation: '' });
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      createLock.current = false;
     }
   };
 
@@ -372,8 +378,8 @@ export default function MerchandiseShortages() {
                 </div>
 
                 <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => submitNew(false)}>Salvar em apuração</Button>
-                  <Button onClick={() => submitNew(true)}>Salvar e confirmar</Button>
+                  <Button variant="outline" onClick={() => submitNew(false)} disabled={newCaseInvalid || createCase.isPending}>Salvar em apuração</Button>
+                  <Button onClick={() => submitNew(true)} disabled={newCaseInvalid || createCase.isPending}>Salvar e confirmar</Button>
                 </div>
               </CardContent>
             </Card>
