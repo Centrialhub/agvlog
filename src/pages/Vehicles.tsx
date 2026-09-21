@@ -16,6 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -392,6 +393,11 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{vehicle ? `Editar veículo ${vehicle.plate || ''}` : 'Novo veículo'}</DialogTitle>
+          <DialogDescription>
+            {vehicle
+              ? 'Revise os dados de identificação, operação e rastreamento do veículo.'
+              : 'Cadastre os dados de identificação, operação e rastreamento do novo veículo.'}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs defaultValue="ident">

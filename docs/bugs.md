@@ -12800,3 +12800,12 @@ Provável causa: O diálogo de pedidos em `Orders` renderiza `DialogContent` e `
 RESOLVIDO
 
 ###############
+
+Bug 1647
+
+Sintoma: Ao abrir os formulários “Novo veículo”, “Novo motorista” ou “Novo funcionário”, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela recebem apenas o título, sem contexto sobre cada cadastro.
+Provável causa: Os três diálogos de Frota e Pessoas renderizavam `DialogContent` e `DialogTitle`, mas omitiam o `DialogDescription` exigido pelo contrato acessível do componente Radix. A correção inclui descrições específicas para criação e edição em todos os três formulários.
+
+RESOLVIDO
+
+###############

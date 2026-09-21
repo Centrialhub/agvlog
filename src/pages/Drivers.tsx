@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -528,6 +528,11 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUser
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{driver ? 'Editar motorista' : 'Novo motorista'}</DialogTitle>
+          <DialogDescription>
+            {driver
+              ? 'Revise os dados pessoais, documentos e vínculos operacionais do motorista.'
+              : 'Cadastre os dados pessoais, documentos e vínculos operacionais do novo motorista.'}
+          </DialogDescription>
         </DialogHeader>
 
         <Tabs value={driverType} onValueChange={(value) => { if (isDriverType(value)) setDriverType(value); }} className="w-full">
