@@ -13100,3 +13100,12 @@ Provável causa: Quatro clientes do fluxo guardavam `supabase.rpc` em constantes
 RESOLVIDO
 
 ###############
+
+Bug 1679
+
+Sintoma: “Custódia de cargas” termina em “Não foi possível consultar as custódias”, e o mesmo defeito pode interromper comandos de ocorrência, exclusão de rascunho de rota, sincronização offline e consulta fiscal do aplicativo do motorista.
+Provável causa: Cinco clientes operacionais ainda destacavam `supabase.rpc` do objeto do SDK sem preservar seu receptor. A chamada perdia o `this` usado pelo transporte REST, repetindo a falha confirmada em Canhotos e Eventos Operacionais. A correção vincula o método ao cliente em todos os chamadores restantes e adiciona uma regressão abrangente.
+
+RESOLVIDO
+
+###############

@@ -58,7 +58,7 @@ export function fiscalSnapshotAsJson(snapshot: DriverDeliveryFiscalSnapshot): Js
 }
 
 type FiscalSnapshotRpcResult = PromiseLike<{ data: unknown; error: { message?: string } | null }>;
-const rpc = supabase.rpc as unknown as (
+const rpc = supabase.rpc.bind(supabase) as unknown as (
   name: string,
   args: Record<string, unknown>,
 ) => FiscalSnapshotRpcResult;

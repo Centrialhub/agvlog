@@ -74,7 +74,7 @@ type DraftRpcArgs = {
 };
 
 interface RpcResponse { data: unknown; error: unknown }
-const rpc = supabase.rpc as unknown as <Name extends keyof DraftRpcArgs>(
+const rpc = supabase.rpc.bind(supabase) as unknown as <Name extends keyof DraftRpcArgs>(
   name: Name,
   args: DraftRpcArgs[Name],
 ) => PromiseLike<RpcResponse>;

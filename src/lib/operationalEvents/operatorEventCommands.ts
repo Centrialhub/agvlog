@@ -128,7 +128,7 @@ type OperatorRpcArgs={
 };
 interface RpcResponse{data:unknown;error:unknown}
 interface RpcBuilder extends PromiseLike<RpcResponse>{abortSignal:(signal:AbortSignal)=>PromiseLike<RpcResponse>}
-const rpc=supabase.rpc as unknown as <Name extends keyof OperatorRpcArgs>(name:Name,args:OperatorRpcArgs[Name])=>RpcBuilder;
+const rpc=supabase.rpc.bind(supabase) as unknown as <Name extends keyof OperatorRpcArgs>(name:Name,args:OperatorRpcArgs[Name])=>RpcBuilder;
 export async function callOperatorEventRpc<Name extends keyof OperatorRpcArgs>(name:Name,args:OperatorRpcArgs[Name],signal?:AbortSignal){
  const request=rpc(name,args);return await (signal?request.abortSignal(signal):request);
 }

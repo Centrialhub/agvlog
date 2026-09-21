@@ -194,7 +194,7 @@ export function buildTripCargoDivergenceCommand(input: {
 }
 
 type RpcResult = PromiseLike<{ data: unknown; error: { message?: string; code?: string } | null }>;
-const rpc = supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => RpcResult;
+const rpc = supabase.rpc.bind(supabase) as unknown as (name: string, args: Record<string, unknown>) => RpcResult;
 
 function invalidResponse() {
   return new Error('O servidor retornou um dossiê de carga inválido. Atualize antes de continuar.');
