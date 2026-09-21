@@ -12762,3 +12762,12 @@ Sintoma: Depois de a página “Ativos e patrimônio” abrir, a listagem termin
 Provável causa: A consulta embutia `employees(name)` sem identificar a relação. A tabela `assets` possui duas chaves estrangeiras válidas para `employees` — a histórica por `responsible_employee_id` e a composta por empresa —, então o PostgREST rejeita o embed como ambíguo. Além disso, o erro retornado é um objeto com `message`, mas a interface aceitava apenas instâncias de `Error`, ocultando o diagnóstico. A correção escolhe explicitamente `assets_responsible_employee_id_fkey` e passa a extrair mensagens estruturadas com segurança.
 
 RESOLVIDO
+
+###############
+
+Bug 1643
+
+Sintoma: Um administrador com acesso a AGV e LIRA seleciona a outra empresa e recebe apenas “Não foi possível trocar a empresa ativa”; a tela não muda e, após entrar novamente, pode abrir inesperadamente na empresa cuja troca havia falhado.
+Provável causa: `activateTenantId` persistia `set_active_tenant_context_v1` antes de descobrir que o refresh token do navegador havia expirado. A rotação do JWT falhava, a interface voltava para a empresa anterior, mas o contexto durável no banco permanecia alterado. A correção valida a sessão antes de persistir, restaura o contexto anterior se a rotação final falhar e informa explicitamente quando é necessário entrar novamente.
+
+RESOLVIDO

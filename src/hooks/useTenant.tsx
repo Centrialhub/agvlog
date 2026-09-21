@@ -33,6 +33,14 @@ function tokenTenant(accessToken:string|undefined){
   }catch{return null;}
 }
 
+function tenantActivationErrorMessage(error:unknown){
+  const message=error instanceof Error?error.message:
+    typeof error==='object'&&error!==null&&'message' in error?String(error.message):'';
+  return /invalid refresh token|session expired|refresh_token_not_found/i.test(message)
+    ? 'Sua sessão expirou. Saia e entre novamente para trocar de empresa.'
+    : 'Não foi possível trocar a empresa ativa. Tente novamente.';
+}
+
 export function TenantProvider({ children }: { children: ReactNode }) {
   const { user, session, loading: authLoading } = useAuth();
   const online = useOnlineStatus();
@@ -123,14 +131,23 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
     switchingTenantRef.current=true;
     setSwitchingTenant(true);
-    await queryClient.cancelQueries();
-    setActiveTenantId(id);
     const realtime=supabase as typeof supabase&{removeAllChannels?:()=>Promise<unknown>};
-    void realtime.removeAllChannels?.();
+    let activationCommitted=false;
     try{
+      // Validate that this browser can still rotate its token before changing
+      // the durable tenant context. An expired refresh token must not leave the
+      // next login pointing at a company that this UI never finished opening.
+      const refresh=authClient?.refreshSession;
+      if(typeof refresh==='function'){
+        const validated=await refresh.call(authClient);
+        if(validated.error)throw validated.error;
+      }
+      await queryClient.cancelQueries();
+      setActiveTenantId(id);
+      void realtime.removeAllChannels?.();
       const activation=await supabase.rpc('set_active_tenant_context_v1',{_tenant_id:id});
       if(activation.error)throw activation.error;
-       const refresh=authClient?.refreshSession;
+       activationCommitted=true;
        if(typeof refresh==='function'){
          const renewed=await refresh.call(authClient);
          if(renewed.error)throw renewed.error;
@@ -145,11 +162,16 @@ export function TenantProvider({ children }: { children: ReactNode }) {
        return true;
     }catch(error){
       console.error('[useTenant] explicit tenant activation failed',error);
+      if(activationCommitted&&previousTenant){
+        setActiveTenantId(previousTenant);
+        const rollback=await supabase.rpc('set_active_tenant_context_v1',{_tenant_id:previousTenant});
+        if(rollback.error)console.error('[useTenant] tenant activation rollback failed',rollback.error);
+      }
       if(syncRevision.current===revision){
         switchingTenantRef.current=false;
         if(previousTenant)setActiveTenantId(previousTenant);else clearActiveTenantId();
         setSwitchingTenant(false);
-        setTenantContextError('Não foi possível trocar a empresa ativa. Tente novamente.');
+        setTenantContextError(tenantActivationErrorMessage(error));
       }
       return false;
     }
