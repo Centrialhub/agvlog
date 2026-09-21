@@ -72,6 +72,14 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
     }
   }, [open, pickup]);
 
+  const pickupTimestamp = Date.parse(pickupAt);
+  const pickupFormInvalid = (
+    driverId === NONE ||
+    vehicleId === NONE ||
+    !recipientName.trim() ||
+    !Number.isFinite(pickupTimestamp)
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const remitter = clients.find(c => c.id === remitterClientId);
@@ -90,6 +98,10 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
       toast({ title: 'Destinatário obrigatório', variant: 'destructive' });
       return;
     }
+    if (!Number.isFinite(pickupTimestamp)) {
+      toast({ title: 'Data e hora obrigatórias', variant: 'destructive' });
+      return;
+    }
 
     const payload: CreatePickupOrderInput = {
       remitter_client_id: remitter?.id || null,
@@ -100,7 +112,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
       driver_name_snapshot: driver.name,
       vehicle_id: vehicle.id,
       vehicle_plate_snapshot: vehicle.plate,
-      pickup_at: new Date(pickupAt).toISOString(),
+      pickup_at: new Date(pickupTimestamp).toISOString(),
       status,
       notes: notes.trim() || null,
     };
@@ -196,7 +208,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={createMut.isPending || updateMut.isPending}>
+            <Button type="submit" disabled={pickupFormInvalid || createMut.isPending || updateMut.isPending}>
               {pickup ? 'Salvar' : 'Criar Coleta'}
             </Button>
           </DialogFooter>

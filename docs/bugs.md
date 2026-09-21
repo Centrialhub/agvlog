@@ -13065,3 +13065,12 @@ Provável causa: Os dois `DialogContent` possuíam título, mas nenhum `DialogDe
 RESOLVIDO
 
 ###############
+
+Bug 1676
+
+Sintoma: Em “Nova Coleta”, “Criar Coleta” permanece habilitado sem motorista, veículo ou destinatário; uma data/hora inválida também pode gerar uma exceção de conversão antes do tratamento que apresenta o erro ao operador.
+Provável causa: As regras obrigatórias existiam somente no manipulador, o botão considerava apenas mutações em andamento e o horário era convertido com `toISOString` antes do bloco protegido. A correção reflete todos os requisitos no estado do botão e valida o timestamp antes da conversão.
+
+RESOLVIDO
+
+###############
