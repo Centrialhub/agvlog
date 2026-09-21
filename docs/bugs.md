@@ -12809,3 +12809,21 @@ Provável causa: Os três diálogos de Frota e Pessoas renderizavam `DialogConte
 RESOLVIDO
 
 ###############
+
+Bug 1648
+
+Sintoma: Clicar em “Novo Fornecedor” abre um formulário intitulado “Novo Cliente”, embora os controles internos estejam corretamente configurados como fornecedor. O título contraditório pode fazer o operador cancelar o cadastro ou duvidar de qual categoria será salva.
+Provável causa: `ClientFormDialog` usava textos fixos “Novo Cliente” e “Editar Cliente” sem considerar `defaultKind` nem os marcadores `is_client` e `is_supplier` do cadastro. A correção deriva o rótulo da entidade para criação e edição.
+
+RESOLVIDO
+
+###############
+
+Bug 1649
+
+Sintoma: Ao abrir o cadastro de cliente ou fornecedor, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela recebem somente o título, sem contexto sobre os dados do formulário.
+Provável causa: `ClientFormDialog` renderizava `DialogContent` e `DialogTitle`, mas omitia o `DialogDescription` exigido pelo contrato acessível do componente Radix. A correção inclui uma descrição dinâmica para criação e edição de clientes e fornecedores.
+
+RESOLVIDO
+
+###############

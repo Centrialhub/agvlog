@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import type { Client, CreateClientInput } from '@/hooks/useClients';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -243,11 +243,20 @@ export function ClientFormDialog({
     await onSave(payload);
   };
 
+  const entityLabel = client
+    ? client.is_supplier && client.is_client === false ? 'Fornecedor' : 'Cliente'
+    : defaultKind === 'supplier' ? 'Fornecedor' : 'Cliente';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{client ? `Editar Cliente — ${client.company_name}` : 'Novo Cliente'}</DialogTitle>
+          <DialogTitle>{client ? `Editar ${entityLabel} — ${client.company_name}` : `Novo ${entityLabel}`}</DialogTitle>
+          <DialogDescription>
+            {client
+              ? `Revise os dados cadastrais, tributários e comerciais deste ${entityLabel.toLowerCase()}.`
+              : `Cadastre os dados cadastrais, tributários e comerciais do novo ${entityLabel.toLowerCase()}.`}
+          </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="geral" className="w-full">
