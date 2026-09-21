@@ -13153,9 +13153,11 @@ PENDENTE — encaminhado para bugs menores
 Bug 1684
 
 Sintoma: A confirmação da importação de cargas, a criação/edição de monitoramentos de motorista, as conversas de motorista e evento e o histórico de posições de veículo falhavam inevitavelmente em produção, embora os respectivos fluxos já estivessem publicados no frontend.
-Provável causa: Sete RPCs exigidas pelo frontend (`apply_load_import_command`, `apply_driver_monitor_command`, quatro leitores de chat e `list_vehicle_position_history_v1`) existiam nas migrations do repositório, mas não no catálogo do banco de produção. Parte do monitoramento de motorista ainda estava em estado intermediário: correções posteriores de revisão e agenda haviam sido aplicadas sem o comando base. As migrations foram reconciliadas e aplicadas preservando os objetos já existentes. A verificação estrutural confirmou as sete funções, execução para `authenticated`, nenhuma execução para `anon` e nenhum nome ausente entre as 365 RPCs referenciadas pelo frontend. As 22 Edge Functions chamadas pelo código também foram conferidas contra as 47 funções ativas e nenhuma está ausente. O reteste completo pela interface aguarda somente uma nova autenticação, pois o token de renovação da sessão de teste expirou durante a troca de empresa.
+Provável causa: Sete RPCs exigidas pelo frontend (`apply_load_import_command`, `apply_driver_monitor_command`, quatro leitores de chat e `list_vehicle_position_history_v1`) existiam nas migrations do repositório, mas não no catálogo do banco de produção. Parte do monitoramento de motorista ainda estava em estado intermediário: correções posteriores de revisão e agenda haviam sido aplicadas sem o comando base. As migrations foram reconciliadas e aplicadas preservando os objetos já existentes. A verificação estrutural confirmou as sete funções, execução para `authenticated`, nenhuma execução para `anon` e nenhum nome ausente entre as 365 RPCs referenciadas pelo frontend. As 22 Edge Functions chamadas pelo código também foram conferidas contra as 47 funções ativas e nenhuma está ausente.
 
-RESOLVIDO NO BACKEND — RETESTE AUTENTICADO PENDENTE
+Reteste autenticado em produção (21/09/2026): `apply_driver_monitor_command` criou o monitoramento “TESTE QA CRITICO”, o painel atualizou os indicadores e o mesmo comando encerrou o registro como “Chegou”, sem erros. `list_vehicle_position_history_v1` carregou 28 pontos na timeline do veículo HDO5276, com HTTP 200. Depois da correção descrita no Bug 1689, as quatro RPCs de leitura de chat também passaram pela interface: a ocorrência exibiu seu contexto e histórico vazio, e o chat direto carregou uma mensagem legada sem enviar mensagem nova. Somente o reteste de importação de cargas permanece pendente por exigir um arquivo apropriado.
+
+RESOLVIDO NO BACKEND — RETESTE AUTENTICADO PARCIAL CONCLUÍDO
 
 ###############
 
@@ -13183,5 +13185,23 @@ Sintoma: Ao abrir “Nova Carga”, o filtro interno de notas fiscais pode reapa
 Provável causa: O estado do filtro de busca de notas é preservado entre aberturas do modal, apesar de os demais dados da nova carga iniciarem vazios. Isso não impede a criação — após limpar o filtro, a carga 1030 foi criada e apareceu na listagem, elevando o total filtrado de 17 para 18 —, mas confunde o operador e pode fazê-lo acreditar que existe conflito no novo cadastro. Foi deixado somente documentado para a frente de bugs menores.
 
 PENDENTE — encaminhado para bugs menores
+
+###############
+
+Bug 1688 — menor, não corrigido nesta frente
+
+Sintoma: A página de detalhes de qualquer veículo exibe “Dados indisponíveis: combustível” e a aba de combustível não consegue listar leituras, mesmo quando os demais dados de posição, viagens e paradas carregam normalmente.
+Provável causa: `VehicleDetails.tsx` pagina `fuel_readings` com `order('captured_at').order('id')`, mas a tabela de produção não possui coluna `id`; sua chave natural é composta pelo escopo/instante (`tenant_id`, `vehicle_id`, `captured_at`, além de `source_key`). A reprodução no veículo HDO5276 retornou HTTP 400, código PostgreSQL `42703`, com “column fuel_readings.id does not exist”. Como o defeito fica restrito à visualização de combustível e não impede cargas, rastreamento ou expedição, foi deixado somente documentado para a frente de bugs menores.
+
+PENDENTE — encaminhado para bugs menores
+
+###############
+
+Bug 1689
+
+Sintoma: Proprietários e administradores autenticados por e-mail/senha não conseguiam abrir o chat direto de motorista nem a conversa de uma ocorrência. A tela repetia “A política de acesso do servidor está desatualizada. Contate o administrador.”; as quatro RPCs de contexto/listagem retornavam HTTP 403 com `driver_chat_mfa_required`.
+Provável causa: As migrations recuperáveis de chat eram anteriores à decisão de produto que tornou e-mail/senha suficiente para todos os papéis. Quando essas migrations ausentes foram recuperadas em produção, elas foram aplicadas depois de `20260831164442_remove_authenticator_requirement.sql` e reintroduziram verificações de `aal2` em quatro helpers de `driver_chat_private`. A migration `20260921165707_restore_password_auth_chat_after_recovery.sql` recompõe os mesmos limites de identidade, tenant, papel e destinatário sem a exigência obsoleta de MFA. O teste de banco confirma leitura AAL1 para administrador, negação de cliente/anônimo e ausência de helpers AAL2. Em produção, o catálogo passou a registrar zero helpers de chat com `aal2`; a conversa da ocorrência carregou normalmente e o chat direto exibiu o histórico legado.
+
+RESOLVIDO
 
 ###############
