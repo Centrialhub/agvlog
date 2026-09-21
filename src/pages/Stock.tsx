@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -191,7 +191,15 @@ export default function Stock() {
 
       {/* Item Dialog */}
       <Dialog open={itemDialog} onOpenChange={setItemDialog}>
-        <DialogContent><DialogHeader><DialogTitle>{editingItem ? 'Editar Item' : 'Novo Item'}</DialogTitle></DialogHeader>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingItem ? 'Editar Item' : 'Novo Item'}</DialogTitle>
+            <DialogDescription>
+              {editingItem
+                ? 'Revise a identificação, a categoria e os limites de estoque do item.'
+                : 'Cadastre a identificação, a categoria e os limites de estoque do novo item.'}
+            </DialogDescription>
+          </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">Código</Label><Input value={itemForm.code} onChange={e => setItemForm(f => ({ ...f, code: e.target.value }))} /></div>
             <div><Label className="text-xs">Nome *</Label><Input value={itemForm.name} onChange={e => setItemForm(f => ({ ...f, name: e.target.value }))} /></div>
@@ -209,7 +217,13 @@ export default function Stock() {
 
       {/* Movement Dialog */}
       <Dialog open={movDialog} onOpenChange={setMovDialog}>
-        <DialogContent><DialogHeader><DialogTitle>Nova Movimentação</DialogTitle></DialogHeader>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova Movimentação</DialogTitle>
+            <DialogDescription>
+              Registre uma entrada, saída ou ajuste de saldo para um item do estoque.
+            </DialogDescription>
+          </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2"><Label className="text-xs">Item *</Label>
               <Select value={movForm.stock_item_id} onValueChange={v => setMovForm(f => ({ ...f, stock_item_id: v }))}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>

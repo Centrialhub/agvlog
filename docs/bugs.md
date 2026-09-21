@@ -12827,3 +12827,12 @@ Provável causa: `ClientFormDialog` renderizava `DialogContent` e `DialogTitle`,
 RESOLVIDO
 
 ###############
+
+Bug 1650
+
+Sintoma: Ao abrir “Novo Item” ou “Nova Movimentação” em Estoque e Almoxarifado, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela recebem apenas o título, sem explicar o objetivo do formulário.
+Provável causa: Os dois diálogos de `Stock` renderizavam `DialogContent` e `DialogTitle`, mas omitiam o `DialogDescription` exigido pelo contrato acessível do componente Radix. A correção inclui descrições específicas para o cadastro de item e para a movimentação de saldo.
+
+RESOLVIDO
+
+###############
