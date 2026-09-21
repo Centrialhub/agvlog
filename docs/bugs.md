@@ -13122,7 +13122,7 @@ RESOLVIDO
 Bug 1681
 
 Sintoma: A tela “Folha de pagamento” ficava totalmente bloqueada em “Não foi possível conferir os períodos da folha”; outras consultas e comandos financeiros podiam falhar pelo mesmo motivo.
-Provável causa: 63 clientes ainda convertiam `supabase.rpc` para tipos locais e chamavam o método sem preservar o receptor do SDK. A chamada perdia o transporte REST interno. Todas essas chamadas foram vinculadas ao cliente Supabase; a correção inclui folha, conciliação, contas, despesas, custos, fechamentos e alguns leitores/comandos operacionais que usavam o mesmo padrão. Um teste global agora impede que esse padrão inseguro volte ao código de produção.
+Provável causa: Havia duas falhas encadeadas. Primeiro, 63 clientes ainda convertiam `supabase.rpc` para tipos locais e chamavam o método sem preservar o receptor do SDK, perdendo o transporte REST interno. Depois de restaurar o transporte, o contrato da paginação rejeitava o `snapshot_at` válido devolvido pelo PostgreSQL com deslocamento `+00:00`. Todas essas chamadas foram vinculadas ao cliente Supabase e o contrato passou a aceitar timestamps ISO com offset explícito. A correção inclui folha, conciliação, contas, despesas, custos, fechamentos e alguns leitores/comandos operacionais que usavam o mesmo padrão. Testes de regressão impedem o retorno das duas falhas.
 
 RESOLVIDO
 
