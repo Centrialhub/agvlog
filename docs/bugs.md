@@ -12782,6 +12782,8 @@ Bug 1643
 Sintoma: Um administrador com acesso a AGV e LIRA seleciona a outra empresa e recebe apenas “Não foi possível trocar a empresa ativa”; a tela não muda e, após entrar novamente, pode abrir inesperadamente na empresa cuja troca havia falhado.
 Provável causa: `activateTenantId` persistia `set_active_tenant_context_v1` antes de descobrir que o refresh token do navegador havia expirado. A rotação do JWT falhava, a interface voltava para a empresa anterior, mas o contexto durável no banco permanecia alterado. A correção valida a sessão antes de persistir, restaura o contexto anterior se a rotação final falhar e informa explicitamente quando é necessário entrar novamente.
 
+Reteste em produção (21/09/2026): a sessão autenticada alternou AGV → LIRA → AGV sem logout ou erro; os indicadores mudaram de 19 cargas na AGV para 0 na LIRA e voltaram a 19 na AGV, confirmando a troca efetiva do contexto e dos dados.
+
 RESOLVIDO
 
 ###############
@@ -12790,6 +12792,8 @@ Bug 1644
 
 Sintoma: Quando a troca de empresa detecta uma sessão expirada, a tela informa que o usuário deve sair e entrar novamente, mas oculta toda a aplicação — inclusive o botão “Sair” — e oferece somente “Tentar novamente”, que repete a mesma falha indefinidamente.
 Provável causa: `TenantProvider` substituía seus filhos pelo alerta genérico em qualquer erro de contexto e não tinha uma ação de reautenticação. Além disso, o logout global pode ser recusado pelo próprio refresh token inválido. A correção mostra “Entrar novamente” nesse caso e, se o servidor recusar o logout por sessão expirada, limpa a sessão irrecuperável localmente para retornar com segurança à autenticação.
+
+Reteste em produção (21/09/2026): depois de uma nova autenticação, a troca de empresa completou nos dois sentidos sem cair novamente no estado de sessão expirada.
 
 RESOLVIDO
 
@@ -13168,6 +13172,15 @@ Bug 1686 — menor, não corrigido nesta frente
 
 Sintoma: `productionConfiguration.test.ts` apresenta três falhas de contrato embora os fluxos críticos de convite e troca de empresa passem: exige o alias não utilizado `@supabase/supabase-js/cors` em todo `deno.json`, não reconhece `portal-download-file` no inventário de funções com `service_role` e ainda procura paginação `.range(...)` no hook fiscal que já utiliza a RPC paginada `get_fiscal_documents_page_v1`.
 Provável causa: As expectativas estáticas da suíte não acompanharam a evolução do inventário e dos contratos de paginação. Não houve reprodução dessas três falhas na aplicação publicada; foram deixadas somente documentadas para a frente de bugs menores.
+
+PENDENTE — encaminhado para bugs menores
+
+###############
+
+Bug 1687 — menor, não corrigido nesta frente
+
+Sintoma: Ao abrir “Nova Carga”, o filtro interno de notas fiscais pode reaparecer preenchido com o número pesquisado em uma abertura anterior. No reteste, o modal abriu com `82585`, exibiu “NF já vinculada a outra carga” e exigiu “Limpar filtros” antes de seguir com um cenário limpo.
+Provável causa: O estado do filtro de busca de notas é preservado entre aberturas do modal, apesar de os demais dados da nova carga iniciarem vazios. Isso não impede a criação — após limpar o filtro, a carga 1030 foi criada e apareceu na listagem, elevando o total filtrado de 17 para 18 —, mas confunde o operador e pode fazê-lo acreditar que existe conflito no novo cadastro. Foi deixado somente documentado para a frente de bugs menores.
 
 PENDENTE — encaminhado para bugs menores
 
