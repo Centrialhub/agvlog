@@ -12854,3 +12854,21 @@ Provável causa: O leitor paginado guardava `supabase.rpc` em uma constante sem 
 RESOLVIDO
 
 ###############
+
+Bug 1653
+
+Sintoma: Ao abrir “Nova Ocorrência” ou “Salvar preset de filtros” em Eventos Operacionais, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela recebem somente o título, sem contexto sobre cada formulário.
+Provável causa: Os dois diálogos de `OperationalEvents` renderizavam `DialogContent` e `DialogTitle`, mas omitiam o `DialogDescription` exigido pelo contrato acessível do componente Radix. A correção inclui descrições específicas para o registro de ocorrência e para o preset de filtros.
+
+RESOLVIDO
+
+###############
+
+Bug 1654
+
+Sintoma: O formulário “Nova Ocorrência” mantém “Registrar” habilitado com a descrição vazia ou curta demais e permite informar impacto financeiro negativo, embora o contrato do comando recuse esses valores depois de iniciar a operação.
+Provável causa: A interface não espelhava as restrições já existentes no schema do comando — descrição normalizada com pelo menos 5 caracteres e impacto maior ou igual a zero. A correção valida antes da mutation, normaliza a descrição, limita o campo numérico e desabilita o envio enquanto os valores forem inválidos.
+
+RESOLVIDO
+
+###############

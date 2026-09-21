@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -763,9 +763,19 @@ export default function OperationalEvents() {
   }, [tableEvents]);
 
   const handleCreate = async () => {
+    const description = form.description.trim();
+    if (description.length < 5) {
+      toast({ title: 'Descrição obrigatória', description: 'Informe pelo menos 5 caracteres para registrar a ocorrência.', variant: 'destructive' });
+      return;
+    }
+    if (form.financial_impact < 0) {
+      toast({ title: 'Impacto financeiro inválido', description: 'O impacto financeiro não pode ser negativo.', variant: 'destructive' });
+      return;
+    }
     try {
       await createEvent.mutateAsync({
         ...form,
+        description,
         load_id: form.load_id || null,
         client_id: form.client_id || null,
         driver_id: form.driver_id || null,
@@ -850,7 +860,10 @@ export default function OperationalEvents() {
             <Button disabled={!!pendingCommand}><Plus className="h-4 w-4 mr-2" /> Nova Ocorrência</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Registrar Ocorrência</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Registrar Ocorrência</DialogTitle>
+              <DialogDescription>Registre o tipo, a severidade, os vínculos operacionais e o impacto da ocorrência.</DialogDescription>
+            </DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -895,11 +908,11 @@ export default function OperationalEvents() {
                   </Select>
                 </div>
               </div>
-              <div><Label>Descrição</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
-              <div><Label>Impacto Financeiro (R$)</Label><Input type="number" value={form.financial_impact} onChange={e => setForm(f => ({ ...f, financial_impact: parseFloat(e.target.value) || 0 }))} /></div>
+              <div><Label>Descrição *</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+              <div><Label>Impacto Financeiro (R$)</Label><Input type="number" min="0" value={form.financial_impact} onChange={e => setForm(f => ({ ...f, financial_impact: parseFloat(e.target.value) || 0 }))} /></div>
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-                <Button onClick={handleCreate} disabled={createEvent.isPending}>Registrar</Button>
+                <Button onClick={handleCreate} disabled={createEvent.isPending || form.description.trim().length < 5 || form.financial_impact < 0}>Registrar</Button>
               </div>
             </div>
           </DialogContent>
@@ -1709,6 +1722,7 @@ export default function OperationalEvents() {
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
               <DialogTitle>Salvar preset de filtros</DialogTitle>
+              <DialogDescription>Salve os filtros atuais para reutilizar esta consulta de ocorrências.</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
               <Label htmlFor="preset-name">Nome</Label>
