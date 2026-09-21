@@ -13109,3 +13109,12 @@ Provável causa: Cinco clientes operacionais ainda destacavam `supabase.rpc` do 
 RESOLVIDO
 
 ###############
+
+Bug 1680
+
+Sintoma: A tela “Controle de cargas” não carregava nenhuma carga e exibia “Não foi possível consultar o controle de cargas”, impedindo a consolidação operacional e financeira.
+Provável causa: O frontend em produção já dependia da RPC `list_load_control_page_v2`, porém a migration que cria e autoriza essa função havia permanecido somente no repositório e não constava no banco de produção. A migration versionada foi aplicada ao projeto Supabase, mantendo a função como `SECURITY INVOKER`, execução exclusiva de `authenticated` e validação explícita do tenant/operador. O reteste autenticado carregou 19 cargas, totais e paginação sem erros no navegador.
+
+RESOLVIDO
+
+###############
