@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertTriangle, Eye, Loader2, Plus, Search, UserX, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Vehicle } from '@/hooks/useVehicles';
@@ -566,7 +566,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nova Carga</Button>
       </DialogTrigger>
       <DialogContent className="flex max-w-5xl flex-col overflow-hidden p-0" style={{ height: modalHeight }}>
-        <DialogHeader className="shrink-0 border-b border-border px-5 py-4"><DialogTitle>Nova Carga</DialogTitle></DialogHeader>
+        <DialogHeader className="shrink-0 border-b border-border px-5 py-4">
+          <DialogTitle>Nova Carga</DialogTitle>
+          <DialogDescription>
+            Informe os dados operacionais e, se necessário, associe notas fiscais de entrada à nova carga.
+          </DialogDescription>
+        </DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
           <div className="flex-1 space-y-3 overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">

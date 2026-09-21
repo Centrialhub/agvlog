@@ -12780,3 +12780,14 @@ Sintoma: Quando a troca de empresa detecta uma sessão expirada, a tela informa 
 Provável causa: `TenantProvider` substituía seus filhos pelo alerta genérico em qualquer erro de contexto e não tinha uma ação de reautenticação. Além disso, o logout global pode ser recusado pelo próprio refresh token inválido. A correção mostra “Entrar novamente” nesse caso e, se o servidor recusar o logout por sessão expirada, limpa a sessão irrecuperável localmente para retornar com segurança à autenticação.
 
 RESOLVIDO
+
+###############
+
+Bug 1645
+
+Sintoma: Ao abrir o formulário “Nova Carga”, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela não recebem uma descrição do objetivo do diálogo.
+Provável causa: `NewLoadDialog` renderiza `DialogContent` e `DialogTitle`, mas não inclui o `DialogDescription` exigido pelo contrato acessível do componente Radix.
+
+RESOLVIDO
+
+###############
