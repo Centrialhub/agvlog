@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Wrench, Edit } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { getErrorMessage } from '@/lib/errors';
+import { maintenanceOrderRequiredFieldsError } from '@/lib/maintenanceOrderValidation';
 
 export default function MaintenanceOrdersPage() {
   const toast = useSonnerToast();
@@ -64,6 +65,11 @@ export default function MaintenanceOrdersPage() {
   };
 
   const handleSave = async () => {
+    const requiredFieldsError = maintenanceOrderRequiredFieldsError(form.vehicle_id, form.reported_problem);
+    if (requiredFieldsError) {
+      toast.error(requiredFieldsError);
+      return;
+    }
     const odometer = form.odometer_km ? Number(form.odometer_km) : null;
     const partsCost = form.parts_cost ? Number(form.parts_cost) : 0;
     const laborCost = form.labor_cost ? Number(form.labor_cost) : 0;
@@ -75,7 +81,7 @@ export default function MaintenanceOrdersPage() {
       vehicle_id: form.vehicle_id || null,
       maintenance_type: form.maintenance_type,
       priority: form.priority,
-      reported_problem: form.reported_problem || null,
+      reported_problem: form.reported_problem.trim(),
       diagnosis: form.diagnosis || null,
       supplier_vendor: form.supplier_vendor || null,
       responsible_employee_id: form.responsible_employee_id || null,
@@ -156,7 +162,7 @@ export default function MaintenanceOrdersPage() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? `Editar ${editing.order_number}` : 'Nova OS'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Veículo</Label>
+            <div><Label className="text-xs">Veículo (obrigatório)</Label>
               <Select value={form.vehicle_id} onValueChange={v => setForm(f => ({ ...f, vehicle_id: v }))}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>{vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.plate} {v.nickname ? `(${v.nickname})` : ''}</SelectItem>)}</SelectContent></Select>
             </div>
@@ -181,7 +187,7 @@ export default function MaintenanceOrdersPage() {
               <SelectContent>{MAINT_STATUSES.map(s => <SelectItem key={s} value={s}>{MAINT_STATUS_LABELS[s]}</SelectItem>)}</SelectContent></Select>
             </div>}
           </div>
-          <div><Label className="text-xs">Problema Relatado</Label><Textarea rows={2} value={form.reported_problem} onChange={e => setForm(f => ({ ...f, reported_problem: e.target.value }))} /></div>
+          <div><Label className="text-xs">Problema Relatado (obrigatório)</Label><Textarea rows={2} value={form.reported_problem} onChange={e => setForm(f => ({ ...f, reported_problem: e.target.value }))} /></div>
           <div><Label className="text-xs">Diagnóstico</Label><Textarea rows={2} value={form.diagnosis} onChange={e => setForm(f => ({ ...f, diagnosis: e.target.value }))} /></div>
           <div><Label className="text-xs">Serviços Executados</Label><Textarea rows={2} value={form.services_performed} onChange={e => setForm(f => ({ ...f, services_performed: e.target.value }))} /></div>
           <div className="flex justify-end gap-2 mt-3">

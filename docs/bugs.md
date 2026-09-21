@@ -12735,3 +12735,12 @@ Sintoma: Na tela Clientes e Fornecedores, pesquisar literalmente `%` retorna tod
 Provável causa: O frontend remove `%` e barra invertida antes de chamar `list_operator_clients_page_v1`, convertendo uma busca composta só por esses caracteres em busca vazia. O RPC aplica o texto recebido diretamente em `ILIKE`, no qual `%`, `_` e barra invertida possuem significado especial. A correção preserva o texto digitado e escapa os metacaracteres antes de enviá-lo ao leitor paginado.
 
 RESOLVIDO
+
+###############
+
+Bug 1640
+
+Sintoma: Na tela Ordens de Manutenção, clicar em “Salvar” com o formulário totalmente vazio cria uma OS aberta sem veículo, ativo ou problema relatado, contaminando indicadores, histórico operacional e inventários financeiros derivados.
+Provável causa: `MaintenanceOrders` validava apenas números negativos; veículo e problema relatado eram enviados como `null`. A tabela `maintenance_orders` também não exigia um objeto de manutenção nem uma descrição não vazia. A correção bloqueia o formulário, normaliza a descrição e adiciona restrições no banco para qualquer cliente ou integração.
+
+RESOLVIDO
