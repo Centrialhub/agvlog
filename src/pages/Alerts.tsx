@@ -15,7 +15,7 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { Bell, Eye, Plus, AlertTriangle, X, Play } from 'lucide-react';
@@ -421,7 +421,10 @@ function NewRuleDialog({ open, onOpenChange, tenantId }: { open: boolean; onOpen
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Nova Regra de Alerta</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Nova Regra de Alerta</DialogTitle>
+          <DialogDescription>Configure o evento monitorado e o limite que deve gerar novos alertas.</DialogDescription>
+        </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Tipo</Label>
@@ -453,7 +456,12 @@ function NewRuleDialog({ open, onOpenChange, tenantId }: { open: boolean; onOpen
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={loading || (ruleType === 'geofence' && (geofencesQuery.isLoading || geofencesQuery.isError))}>{loading ? 'Salvando...' : 'Criar'}</Button>
+            <Button type="submit" disabled={
+              loading
+              || (ruleType === 'geofence'
+                ? geofencesQuery.isLoading || geofencesQuery.isError || !geofenceId
+                : !Number.isFinite(Number(threshold)) || Number(threshold) <= 0)
+            }>{loading ? 'Salvando...' : 'Criar'}</Button>
           </div>
         </form>
       </DialogContent>

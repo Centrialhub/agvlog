@@ -12980,3 +12980,21 @@ Provável causa: O botão considerava somente a mutação em andamento, o limiar
 RESOLVIDO
 
 ###############
+
+Bug 1667
+
+Sintoma: Ao abrir “Nova Regra de Alerta”, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela recebem somente o título do diálogo.
+Provável causa: O formulário de regras utilizava `DialogContent` e `DialogTitle` sem um `DialogDescription`. A correção associa uma explicação curta sobre evento monitorado e limite.
+
+RESOLVIDO
+
+###############
+
+Bug 1668
+
+Sintoma: “Criar” permanece habilitado com limite vazio, zero ou negativo e também para uma regra de geofence ainda sem cerca selecionada; essas combinações só são rejeitadas depois do clique.
+Provável causa: As validações existiam no manipulador, mas o botão considerava apenas carregamento e falha da consulta de geofences. A correção reflete os requisitos numéricos e de vínculo diretamente no estado do botão.
+
+RESOLVIDO
+
+###############
