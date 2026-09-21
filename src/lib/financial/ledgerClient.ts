@@ -80,7 +80,7 @@ export async function readAutomaticReconciliationStatus(tenant:string,statement:
   if(result.tenant_id!==tenant||result.import_id!==statement)throw new Error('Conciliação fora do contexto.');return result;
 }
 async function rpc(name: string, args: Record<string, unknown>) {
-  const { data, error } = await (supabase.rpc as unknown as FinanceRpc)(name, args);
+  const { data, error } = await (supabase.rpc.bind(supabase) as unknown as FinanceRpc)(name, args);
   if (error) {
     // A PostgreSQL rejection rolled back the transaction; network/unknown
     // failures remain recoverable with the frozen request identity.
@@ -90,7 +90,7 @@ async function rpc(name: string, args: Record<string, unknown>) {
   return data;
 }
 export async function readFinanceAccess(tenant: string) {
-  const {data:value,error}=await(supabase.rpc as unknown as FinanceRpc)('get_finance_access',{_tenant_id:tenant});
+  const {data:value,error}=await(supabase.rpc.bind(supabase) as unknown as FinanceRpc)('get_finance_access',{_tenant_id:tenant});
   if(error){
     if(error.code==='PGRST202'||error.code==='42883')throw new FinanceUnavailableError();
     throw new Error(error.message);

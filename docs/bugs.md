@@ -13118,3 +13118,12 @@ Provável causa: O frontend em produção já dependia da RPC `list_load_control
 RESOLVIDO
 
 ###############
+
+Bug 1681
+
+Sintoma: A tela “Folha de pagamento” ficava totalmente bloqueada em “Não foi possível conferir os períodos da folha”; outras consultas e comandos financeiros podiam falhar pelo mesmo motivo.
+Provável causa: 63 clientes ainda convertiam `supabase.rpc` para tipos locais e chamavam o método sem preservar o receptor do SDK. A chamada perdia o transporte REST interno. Todas essas chamadas foram vinculadas ao cliente Supabase; a correção inclui folha, conciliação, contas, despesas, custos, fechamentos e alguns leitores/comandos operacionais que usavam o mesmo padrão. Um teste global agora impede que esse padrão inseguro volte ao código de produção.
+
+RESOLVIDO
+
+###############

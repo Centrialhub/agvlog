@@ -14,7 +14,7 @@ export async function prepareExpenseReceiptIntent(input:Input,actor:string){
   const raw=localStorage.getItem(key);let command:z.infer<typeof expenseReceiptIntentCommandSchema>;
   if(raw){command=expenseReceiptIntentCommandSchema.parse(JSON.parse(raw));if(Object.entries(input).some(([k,v])=>command[k as keyof Input]!==v))throw new Error('A preparação preservada não corresponde a este gasto.');}
   else{command=expenseReceiptIntentCommandSchema.parse({...input,version:1,request_id:crypto.randomUUID()});localStorage.setItem(key,JSON.stringify(command));}
-  const {data,error}=await (supabase.rpc as unknown as Rpc)('prepare_finance_expense_receipt_intent',{_payload:command});
+  const {data,error}=await (supabase.rpc.bind(supabase) as unknown as Rpc)('prepare_finance_expense_receipt_intent',{_payload:command});
   if(error)throw new Error('Preparação sem confirmação. Selecione novamente o arquivo para recuperar o mesmo pedido.');
   const result=expenseReceiptIntentResultSchema.parse(data);if(result.actor_id!==actor||Object.entries(command).some(([k,v])=>result[k as keyof typeof command]!==v))throw new Error('A preparação recebida pertence a outro pedido ou responsável.');
   return result;

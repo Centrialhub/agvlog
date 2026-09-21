@@ -2,7 +2,7 @@ import {supabase} from '@/integrations/supabase/client';
 import {z} from 'zod';
 import {customerCreditRefundCommandSchema,customerCreditRefundPreviewSchema,customerCreditRefundOptionsSchema,customerCreditRefundQuerySchema,type CustomerCreditRefundCommand,type CustomerCreditRefundQuery} from './customerCreditRefundContract';
 type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;
-const rpc:Rpc=(name,args)=>(supabase.rpc as unknown as Rpc)(name,args);
+const rpc:Rpc=(name,args)=>(supabase.rpc.bind(supabase) as unknown as Rpc)(name,args);
 export class CustomerCreditRefundChangedError extends Error{}
 export async function readCustomerCreditRefundOptions(tenant:string,actor:string,credit:string,query:CustomerCreditRefundQuery){const q=customerCreditRefundQuerySchema.parse(query),{data,error}=await rpc('get_finance_customer_credit_refund_options',{_tenant_id:tenant,_credit_id:credit,_query:q});if(error){if(typeof error==='object'&&'code' in error&&error.code==='40001')throw new CustomerCreditRefundChangedError('A consulta mudou. Reinicie a primeira página.');throw error;}const v=customerCreditRefundOptionsSchema.parse(data);if(v.tenant_id!==tenant||v.actor_id!==actor||v.credit_id!==credit||v.kind!==q.kind||v.search!==q.search||v.offset!==q.offset||v.limit!==q.limit||q.expected_revision&&v.revision!==q.expected_revision)throw Error('Consulta fora do crédito e sessão solicitados.');return v;}
 const reversalPendingSchema=z.object({version:z.literal(1),tenant_id:z.string().uuid(),actor_id:z.string().uuid(),refund_id:z.string().uuid(),request_id:z.string().uuid(),reason:z.string().trim().min(5).max(2000),uncertain:z.boolean()}).strict();

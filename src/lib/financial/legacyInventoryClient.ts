@@ -6,7 +6,7 @@ const section=z.object({page:z.number().int().positive(),page_size:z.literal(30)
 export const legacyInventorySchema=section.extend({version:z.literal(1),tenant_id:uuid,account_id:uuid,from:z.string(),to:z.string(),unknown_account:section.extend({scope:z.literal('tenant'),not_additive_across_accounts:z.literal(true)}),legacy_integration_status:z.literal('not_reviewed'),can_close:z.literal(false)});
 export type LegacyInventoryRow=z.infer<typeof row>;
 export async function readLegacyInventory(tenant:string,account:string,from:string,to:string,page:number){
- const {data,error}=await (supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>)('get_finance_legacy_adoption_inventory',{_tenant_id:tenant,_account_id:account,_from:from,_to:to,_page:page});
+ const {data,error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>)('get_finance_legacy_adoption_inventory',{_tenant_id:tenant,_account_id:account,_from:from,_to:to,_page:page});
  if(error)throw error;const result=legacyInventorySchema.parse(data);
  if(result.tenant_id!==tenant||result.account_id!==account||result.from!==from||result.to!==to||result.page!==page||result.unknown_account.page!==page||result.rows.some(item=>item.account_id!==account)||result.unknown_account.rows.some(item=>item.account_id!==null))throw new Error('Inventário fora do contexto da conta e período.');
  return result;

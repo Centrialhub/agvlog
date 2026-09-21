@@ -55,7 +55,7 @@ export default function Geofences() {
     queryKey: ['geofence_dashboard', currentTenant?.id,page,filters],
     queryFn: async () => {
       if (!currentTenant) return null;
-      const {data,error}=await (supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>)('get_geofence_dashboard_v1',{_tenant_id:currentTenant.id,_page:page,_page_size:PAGE_SIZE,_filters:filters});
+      const {data,error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>)('get_geofence_dashboard_v1',{_tenant_id:currentTenant.id,_page:page,_page_size:PAGE_SIZE,_filters:filters});
       if(error)throw error;return data as GeofenceDashboard;
     },
     enabled: !!currentTenant,

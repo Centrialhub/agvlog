@@ -62,7 +62,7 @@ export function statementImportWorkflow(assertContext:()=>void){
     originalReady:async row=>{
       if(row.upload_mode!=='quarantine_v2')return financeStatementOriginalReady(row.command);
       if(!row.artifact)return false;
-      const result=await (supabase.rpc as unknown as ArtifactRpc)('get_finance_upload_artifact',{_tenant_id:row.tenant,_artifact_id:row.artifact.artifact_id});
+      const result=await (supabase.rpc.bind(supabase) as unknown as ArtifactRpc)('get_finance_upload_artifact',{_tenant_id:row.tenant,_artifact_id:row.artifact.artifact_id});
       if(result.error)throw new Error('Não foi possível conferir o artefato preservado.');
       const artifact=uploadArtifactSchema.parse(result.data);
       if(artifact.artifact_id!==row.artifact.artifact_id||artifact.original.sha256!==row.command.file_hash||artifact.request_id!==row.command.request_id||artifact.tenant_id!==row.tenant||artifact.actor_id!==row.actor||artifact.source_id!==row.command.bank_account_id)throw new Error('Artefato fora do pedido preservado.');
@@ -70,7 +70,7 @@ export function statementImportWorkflow(assertContext:()=>void){
     },upload:uploadOriginal,intake:async row=>{
       if(row.upload_mode!=='quarantine_v2')return intakeFinanceStatement(row.command);
       const artifact=row.artifact;if(!artifact?.usable||!artifact.derivative)throw new Error('O arquivo permanece em quarentena; nenhuma importação foi enviada.');
-      const result=await (supabase.rpc as unknown as ArtifactRpc)('intake_finance_statement_artifact',{_payload:{...row.command,version:2,artifact_id:artifact.artifact_id,source_path:artifact.derivative.path}});
+      const result=await (supabase.rpc.bind(supabase) as unknown as ArtifactRpc)('intake_finance_statement_artifact',{_payload:{...row.command,version:2,artifact_id:artifact.artifact_id,source_path:artifact.derivative.path}});
       if(result.error)throw result.error;return result.data;
     },
     verify:async row=>{

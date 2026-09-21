@@ -45,7 +45,7 @@ export async function readReceivablePaymentInstallments(
   offset = 0,
   expectedRevision: string | null = null,
 ) {
-  const { data, error } = await (supabase.rpc as unknown as Rpc)(
+  const { data, error } = await (supabase.rpc.bind(supabase) as unknown as Rpc)(
     "get_finance_receivable_payment_installments",
     {
       _tenant_id: tenant,

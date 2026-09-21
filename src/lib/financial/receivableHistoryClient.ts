@@ -7,7 +7,7 @@ export class ReceivableHistoryChangedError extends Error{
 }
 export async function readReceivableHistory(request:ReceivableHistoryRequest){
  const input=receivableHistoryRequestSchema.parse(request);
- const {data,error}=await(supabase.rpc as unknown as Rpc)('get_finance_receivable_history',{
+ const {data,error}=await(supabase.rpc.bind(supabase) as unknown as Rpc)('get_finance_receivable_history',{
   _tenant_id:input.tenantId,_receivable_id:input.receivableId,_page:input.page,_expected_revision:input.expectedRevision,
  });
  if(error){

@@ -55,7 +55,7 @@ export default function CostCenters() {
     queryKey: ['legacy_cost_center_report', currentTenant?.id, periodStart, selectedCostCenter, page],
     queryFn: async () => {
       if (!currentTenant) return null;
-      const { data, error } = await (supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>)('get_legacy_cost_center_report_v1', {
+      const { data, error } = await (supabase.rpc.bind(supabase) as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>)('get_legacy_cost_center_report_v1', {
         _tenant_id: currentTenant.id,
         _from: periodStart,
         _cost_center: selectedCostCenter === 'all' ? null : selectedCostCenter,

@@ -17,7 +17,7 @@ export class TripCancellationRejected extends Error{}
 
 async function call(name:string,args:Record<string,unknown>){
 
- const {data,error}=await(supabase.rpc as unknown as Rpc)(name,args);
+ const {data,error}=await(supabase.rpc.bind(supabase) as unknown as Rpc)(name,args);
 
  if(error){if(/^(22|23|40|42|55)/.test(error.code||''))throw new TripCancellationRejected('O servidor recusou o cancelamento. Consulte novamente a viagem e seus impedimentos.');throw Error('Não foi possível confirmar a resposta. O pedido foi preservado para retomar.');}return data;
 

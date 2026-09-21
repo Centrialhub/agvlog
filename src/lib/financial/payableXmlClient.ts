@@ -2,7 +2,7 @@ import {supabase} from '@/integrations/supabase/client';
 import {readBlobBytes} from '@/lib/uploadPolicy';
 import {payableXmlArtifactSchema,payableXmlCommandSchema,payableXmlContextSchema,type PayableXmlCommand} from './payableXmlContract';
 type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;
-const rpc:Rpc=(name,args)=>(supabase.rpc as unknown as Rpc)(name,args);
+const rpc:Rpc=(name,args)=>(supabase.rpc.bind(supabase) as unknown as Rpc)(name,args);
 export const sendPayableXml=(command:PayableXmlCommand)=>rpc('record_finance_payable_xml',{_payload:payableXmlCommandSchema.parse(command)});
 export async function readPayableXmlContext(tenant:string,actor:string,id:string,offset=0,revision:string|null=null){const {data,error}=await rpc('get_finance_payable_xml_context',{_tenant_id:tenant,_payable_id:id,_offset:offset,_expected_revision:revision});if(error)throw error;const v=payableXmlContextSchema.parse(data);if(v.tenant_id!==tenant||v.actor_id!==actor||v.payable_id!==id||v.offset!==offset||(revision!==null&&v.history_revision!==revision))throw Error('Consulta XML fora da conta ou sessão atual.');return v;}
 export async function getPayableXmlLocator(tenant:string,link:string){const {data,error}=await rpc('get_finance_payable_xml_locator_v1',{_tenant_id:tenant,_link_id:link});if(error)throw error;if(!data||typeof data!=='object'||!('bucket' in data)||!('path' in data))throw Error('Localização do XML inválida.');return data as {bucket:string;path:string};}

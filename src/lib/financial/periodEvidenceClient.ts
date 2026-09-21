@@ -11,7 +11,7 @@ export const periodEvidenceCommandSchema=z.object({version:z.literal(1),tenant_i
 export type PeriodEvidenceCommand=z.infer<typeof periodEvidenceCommandSchema>;
 const resultSchema=z.object({version:z.literal(1),tenant_id:uuid,request_id:uuid,review_id:uuid,confirmed:z.literal(true),can_close:z.literal(false)});
 async function rpc(name:string,args:Record<string,unknown>){
- const {data,error}=await (supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:{message:string}|null}>)(name,args);
+ const {data,error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:{message:string}|null}>)(name,args);
  if(error)throw new Error(error.message);return data;
 }
 export async function readPeriodEvidence(tenant:string,account:string,from:string,to:string){

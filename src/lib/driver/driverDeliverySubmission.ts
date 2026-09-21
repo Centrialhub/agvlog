@@ -133,7 +133,7 @@ export async function listPendingDeliverySubmissions(
 }
 
 type FiscalConflictRpcResult=PromiseLike<{data:unknown;error:{message?:string}|null}>;
-const fiscalConflictRpc=supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>FiscalConflictRpcResult;
+const fiscalConflictRpc=supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>FiscalConflictRpcResult;
 
 export async function discardResolvedDeliverySubmission(
   tenantId:string,

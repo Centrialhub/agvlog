@@ -186,7 +186,7 @@ export function usePayrollGenerationIssues(periodId?:string){
 export function useChangePayrollPeriodState(){const qc=useQueryClient();const {currentTenant}=useTenant();const {user}=useAuth();return useMutation({mutationFn:async(input:{periodId:string;action:'cancel'|'reopen';reason:string})=>{
  if(input.reason.trim().length<5)throw new Error('Informe um motivo com pelo menos 5 caracteres.');if(!currentTenant||!user)throw new Error('Sessão não disponível.');
  const command={period_id:input.periodId,action:input.action,reason:input.reason.trim()};const pending=await prepareDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'change_payroll_period_state',entityId:input.periodId,payload:command});
- const {error}=await (supabase.rpc as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{error:{message:string}|null}>)('change_payroll_period_state_v2',{_period_id:input.periodId,_action:input.action,_reason:input.reason.trim(),_request_id:pending.requestId});if(error)throw new Error(error.message);acknowledgeDurableOperatorCommand(pending);
+ const {error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{error:{message:string}|null}>)('change_payroll_period_state_v2',{_period_id:input.periodId,_action:input.action,_reason:input.reason.trim(),_request_id:pending.requestId});if(error)throw new Error(error.message);acknowledgeDurableOperatorCommand(pending);
  },onSuccess:()=>{qc.invalidateQueries({queryKey:['payroll_periods']});qc.invalidateQueries({queryKey:['payroll_entries']});qc.invalidateQueries({queryKey:['payroll_generation_issues']});qc.invalidateQueries({queryKey:['payables']});}});}
 
 // ---------------- Manual item ops ----------------

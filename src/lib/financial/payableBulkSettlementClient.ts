@@ -4,7 +4,7 @@ import {payableBulkContextSchema,payableBulkItemsSchema,payableBulkResultSchema,
 type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{message:string;code?:string}|null}>;
 export class PayableBulkRejectedError extends Error{}
 async function rpc(name:string,args:Record<string,unknown>){
-  const {data,error}=await(supabase.rpc as unknown as Rpc)(name,args);
+  const {data,error}=await(supabase.rpc.bind(supabase) as unknown as Rpc)(name,args);
   if(error){if((/^(22|23|40|42|55)/.test(error.code??'')||error.code==='P0001')&&error.message.startsWith('finance_'))throw new PayableBulkRejectedError(error.message);throw new Error(error.message);}
   return data;
 }

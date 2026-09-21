@@ -14,7 +14,7 @@ type Rpc = (
   args: Record<string, unknown>,
 ) => Promise<{ data: unknown; error: unknown }>;
 const rpc: Rpc = (name, args) =>
-  (supabase.rpc as unknown as Rpc).call(supabase, name, args);
+  (supabase.rpc.bind(supabase) as unknown as Rpc)(name, args);
 const match = <
   T extends { tenant_id: string; actor_id: string; receivable_id: string },
 >(

@@ -179,7 +179,7 @@ type FinanceRpc = (
 ) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 
 async function legacyRpc(name: string, args: Record<string, unknown>) {
-  const { data, error } = await (supabase.rpc as unknown as FinanceRpc)(name, args);
+  const { data, error } = await (supabase.rpc.bind(supabase) as unknown as FinanceRpc)(name, args);
   if (error) throw new Error(error.message);
   return data;
 }

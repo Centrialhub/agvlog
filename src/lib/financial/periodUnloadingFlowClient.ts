@@ -12,7 +12,7 @@ export class PeriodUnloadingMoneyPackageChangedError extends Error{
 export async function readPeriodUnloadingFlow(request:PeriodUnloadingFlowRequest&{expectedMoneyPackageRevision:string}){
  const input=periodUnloadingFlowRequestSchema.parse(request);
  const expectedMoney=z.string().regex(/^[a-f0-9]{32}$/).parse(request.expectedMoneyPackageRevision);
- const {data,error}=await(supabase.rpc as unknown as Rpc)('get_finance_period_unloading_flow',{
+ const {data,error}=await(supabase.rpc.bind(supabase) as unknown as Rpc)('get_finance_period_unloading_flow',{
   _tenant_id:input.tenantId,_from:input.from,_to:input.to,_account_ids:input.accountIds,_supplier_id:input.supplierId,_page:input.page,_expected_revision:input.expectedRevision,
  });
  if(error){if(typeof error==='object'&&'code' in error&&error.code==='40001')throw new PeriodUnloadingFlowChangedError();throw error;}

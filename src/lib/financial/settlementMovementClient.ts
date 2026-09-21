@@ -3,7 +3,7 @@ import {settlementMovementCommandSchema,settlementMovementResultSchema,settlemen
 type Rpc=(name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{message:string;code?:string}|null}>;
 export class SettlementMovementRejectedError extends Error {}
 async function rpc(name:string,args:Record<string,unknown>){
- const {data,error}=await (supabase.rpc as unknown as Rpc)(name,args);
+ const {data,error}=await (supabase.rpc.bind(supabase) as unknown as Rpc)(name,args);
  if(error){if(['22023','23514','23505','40001','42501'].includes(error.code||''))throw new SettlementMovementRejectedError(error.message);throw new Error(error.message);}return data;
 }
 export async function linkSettlementMovement(command:SettlementMovementCommand){
