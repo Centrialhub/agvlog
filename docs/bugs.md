@@ -12791,3 +12791,12 @@ Provável causa: `NewLoadDialog` renderiza `DialogContent` e `DialogTitle`, mas 
 RESOLVIDO
 
 ###############
+
+Bug 1646
+
+Sintoma: Ao abrir “Novo Pedido” ou editar um pedido, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela recebem apenas o título, sem contexto sobre o formulário.
+Provável causa: O diálogo de pedidos em `Orders` renderiza `DialogContent` e `DialogTitle`, mas omite o `DialogDescription` exigido pelo contrato acessível do componente Radix.
+
+RESOLVIDO
+
+###############

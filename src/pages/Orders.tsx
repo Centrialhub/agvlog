@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -368,7 +368,14 @@ export default function Orders() {
             <Button><Plus className="h-4 w-4 mr-2" /> Novo Pedido</Button>
           </DialogTrigger>
           <DialogContent className="max-w-3xl">
-            <DialogHeader><DialogTitle>{editingOrder ? 'Editar Pedido' : 'Novo Pedido'}</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>{editingOrder ? 'Editar Pedido' : 'Novo Pedido'}</DialogTitle>
+              <DialogDescription>
+                {editingOrder
+                  ? 'Revise os dados operacionais, comerciais e fiscais do pedido.'
+                  : 'Cadastre os dados operacionais, comerciais e fiscais do novo pedido.'}
+              </DialogDescription>
+            </DialogHeader>
             <OrderForm order={editingOrder} clients={clients} onSave={handleSave}
               isSaving={createOrder.isPending || updateOrder.isPending}
               onCancel={() => { setDialogOpen(false); setEditingOrder(undefined); }} />
