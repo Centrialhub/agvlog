@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
@@ -103,10 +103,25 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenantId || !user || !name.trim() || (editRoute && !existingWaypointsQuery.isSuccess)) return;
+    if (!tenantId || !user) return;
+    if (!name.trim()) {
+      toast.error('Informe o nome da rota');
+      return;
+    }
+    if (editRoute && !existingWaypointsQuery.isSuccess) {
+      toast.error('Aguarde o carregamento completo dos pontos da rota');
+      return;
+    }
+    const thresholdPercent = Number(threshold);
     const outside = Number(outsideMin);
     const speed = speedLimit === '' ? null : Number(speedLimit);
-    if (!Number.isFinite(outside) || outside < 0 || (speed != null && (!Number.isFinite(speed) || speed < 0)) || waypoints.some(point => Number(point.estimated_duration_min ?? 0) < 0)) return;
+    if (!Number.isFinite(thresholdPercent) || thresholdPercent < 50 || thresholdPercent > 100
+      || !Number.isFinite(outside) || outside < 0
+      || (speed != null && (!Number.isFinite(speed) || speed < 0))
+      || waypoints.some(point => Number(point.estimated_duration_min ?? 0) < 0)) {
+      toast.error('Revise os limites de monitoramento e a duração dos pontos da rota');
+      return;
+    }
     setLoading(true);
     try {
       const payload = {
@@ -116,7 +131,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
         corridor_geofence_id: corridorId || null,
         start_poi_id: null,
         end_poi_id: null,
-        corridor_inside_ratio_threshold: parseInt(threshold) / 100,
+        corridor_inside_ratio_threshold: thresholdPercent / 100,
         allowed_outside_minutes: outside,
         route_speed_limit_kmh: speed,
         enabled,
@@ -158,6 +173,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
       <DialogContent className="max-w-2xl max-h-[90vh] p-0">
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle>{editRoute ? 'Editar Rota' : 'Nova Rota'}</DialogTitle>
+          <DialogDescription>Defina os pontos estratégicos e os limites usados para monitorar este corredor.</DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[calc(90vh-80px)]">
           <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-5">
@@ -214,7 +230,20 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
+              <Button type="submit" disabled={
+                loading
+                || !tenantId
+                || !user
+                || !name.trim()
+                || (editRoute != null && !existingWaypointsQuery.isSuccess)
+                || !Number.isFinite(Number(threshold))
+                || Number(threshold) < 50
+                || Number(threshold) > 100
+                || !Number.isFinite(Number(outsideMin))
+                || Number(outsideMin) < 0
+                || (speedLimit !== '' && (!Number.isFinite(Number(speedLimit)) || Number(speedLimit) < 0))
+                || waypoints.some(point => Number(point.estimated_duration_min ?? 0) < 0)
+              }>{loading ? 'Salvando...' : 'Salvar'}</Button>
             </div>
           </form>
         </ScrollArea>

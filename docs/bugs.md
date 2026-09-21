@@ -12962,3 +12962,21 @@ Provável causa: O estado do botão validava apenas o nome, enquanto a regra de 
 RESOLVIDO
 
 ###############
+
+Bug 1665
+
+Sintoma: Ao abrir “Nova Rota” em Corredores monitorados, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela não recebem contexto sobre pontos e limites do monitoramento.
+Provável causa: `RouteDialog` renderizava `DialogContent` e `DialogTitle`, mas não associava um `DialogDescription`. A correção inclui uma descrição do propósito do formulário.
+
+RESOLVIDO
+
+###############
+
+Bug 1666
+
+Sintoma: O diálogo de corredor mantém “Salvar” habilitado sem nome e com limites inválidos; limiar vazio ou fora de 50–100, tempo fora negativo, velocidade negativa e duração negativa de ponto podem alcançar o manipulador, que em parte retorna silenciosamente e em parte envia um limiar inválido.
+Provável causa: O botão considerava somente a mutação em andamento, o limiar não era validado no manipulador e as demais rejeições numéricas não davam retorno ao usuário. A correção valida e explica todos esses estados antes do envio e os reflete no botão.
+
+RESOLVIDO
+
+###############
