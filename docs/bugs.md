@@ -12908,3 +12908,21 @@ Provável causa: A validação de nome existia apenas dentro do manipulador, dep
 RESOLVIDO
 
 ###############
+
+Bug 1659
+
+Sintoma: Ao abrir “Nova Ocorrência” em Ocorrências Formais, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela recebem somente o título, sem contexto sobre o formulário.
+Provável causa: O diálogo de `Incidents` renderizava `DialogContent` e `DialogTitle`, mas omitia o `DialogDescription` exigido pelo contrato acessível do componente Radix. A correção inclui uma descrição do cadastro e da edição da ocorrência formal.
+
+RESOLVIDO
+
+###############
+
+Bug 1660
+
+Sintoma: O formulário de ocorrência formal mantém “Salvar” habilitado sem título e em outras combinações já conhecidas como inválidas; títulos válidos com espaços nas extremidades também são enviados sem normalização.
+Provável causa: As regras de título, custo, vínculo obrigatório de RH e conclusão de ocorrências graves encerradas eram verificadas somente depois do clique, enquanto o payload reutilizava o título bruto. A correção reflete todas essas regras no estado do botão e persiste o título após `trim`.
+
+RESOLVIDO
+
+###############

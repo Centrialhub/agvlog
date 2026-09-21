@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -95,6 +95,7 @@ export default function Incidents() {
     }
     const payload: CreateIncidentInput = {
       ...form,
+      title: form.title.trim(),
       employee_id: form.employee_id || null,
       vehicle_id: form.vehicle_id || null,
       client_id: form.client_id || null,
@@ -207,7 +208,10 @@ export default function Incidents() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? `Editar ${editing.incident_number}` : 'Nova Ocorrência'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editing ? `Editar ${editing.incident_number}` : 'Nova Ocorrência'}</DialogTitle>
+            <DialogDescription>Registre os dados, vínculos, custos e plano de ação da ocorrência formal.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2"><Label className="text-xs">Título *</Label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
@@ -266,7 +270,14 @@ export default function Incidents() {
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={createIncident.isPending || updateIncident.isPending}>Salvar</Button>
+            <Button onClick={handleSave} disabled={
+              createIncident.isPending
+              || updateIncident.isPending
+              || !form.title.trim()
+              || (form.estimated_cost !== '' && (!Number.isFinite(Number(form.estimated_cost)) || Number(form.estimated_cost) < 0))
+              || (form.category === 'hr' && !form.employee_id)
+              || (['resolved', 'closed'].includes(form.status) && ['high', 'critical'].includes(form.severity) && !form.conclusion.trim())
+            }>Salvar</Button>
           </div>
         </DialogContent>
       </Dialog>
