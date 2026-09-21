@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -85,7 +85,7 @@ export default function Checklists() {
     const items = DEFAULT_ITEMS[templateForm.checklist_type] || DEFAULT_ITEMS.pre_trip;
     try {
       await createChecklist.mutateAsync({
-        name: templateForm.name,
+        name: templateForm.name.trim(),
         checklist_type: templateForm.checklist_type,
         items,
         active: true,
@@ -257,7 +257,10 @@ export default function Checklists() {
       {/* Template Dialog */}
       <Dialog open={templateDialog} onOpenChange={setTemplateDialog}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Novo Template de Checklist</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Novo Template de Checklist</DialogTitle>
+            <DialogDescription>Crie um modelo com os itens padrão do tipo de checklist selecionado.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-3">
             <div><Label className="text-xs">Nome *</Label><Input value={templateForm.name} onChange={e => setTemplateForm(f => ({ ...f, name: e.target.value }))} placeholder="Checklist de Saída" /></div>
             <div><Label className="text-xs">Tipo</Label>
@@ -272,7 +275,7 @@ export default function Checklists() {
           </div>
           <div className="flex justify-end gap-2 mt-3">
             <Button variant="outline" onClick={() => setTemplateDialog(false)}>Cancelar</Button>
-            <Button onClick={handleCreateTemplate} disabled={createChecklist.isPending}>Criar</Button>
+            <Button onClick={handleCreateTemplate} disabled={createChecklist.isPending || !templateForm.name.trim()}>Criar</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -280,7 +283,10 @@ export default function Checklists() {
       {/* Execution Dialog */}
       <Dialog open={execDialog} onOpenChange={setExecDialog}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Executar: {selectedChecklist?.name}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Executar: {selectedChecklist?.name}</DialogTitle>
+            <DialogDescription>Confirme todos os itens e informe os vínculos operacionais antes de concluir o checklist.</DialogDescription>
+          </DialogHeader>
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div><Label className="text-xs">Veículo</Label>
               <Select value={execForm.vehicle_id} onValueChange={v => setExecForm(f => ({ ...f, vehicle_id: v }))}>

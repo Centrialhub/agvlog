@@ -12890,3 +12890,21 @@ Provável causa: A tela aceitava apenas instâncias nativas de `Error`, mas o cl
 RESOLVIDO
 
 ###############
+
+Bug 1657
+
+Sintoma: Ao abrir “Novo Template” ou o formulário de execução de checklist, o navegador registra o aviso de acessibilidade `Missing Description or aria-describedby` e leitores de tela recebem apenas o título, sem contexto sobre a criação ou a conferência.
+Provável causa: Os dois diálogos de `Checklists` renderizavam `DialogContent` e `DialogTitle`, mas omitiam o `DialogDescription` exigido pelo contrato acessível do componente Radix. A correção inclui descrições específicas para criação do modelo e execução da conferência.
+
+RESOLVIDO
+
+###############
+
+Bug 1658
+
+Sintoma: “Novo Template” mantém o botão “Criar” habilitado com o nome vazio e, para nomes válidos com espaços nas extremidades, grava o texto sem normalização.
+Provável causa: A validação de nome existia apenas dentro do manipulador, depois do clique, e o payload reutilizava o valor bruto. A correção desabilita o envio enquanto o nome normalizado estiver vazio e persiste o valor após `trim`.
+
+RESOLVIDO
+
+###############
