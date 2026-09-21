@@ -13155,9 +13155,9 @@ Bug 1684
 Sintoma: A confirmação da importação de cargas, a criação/edição de monitoramentos de motorista, as conversas de motorista e evento e o histórico de posições de veículo falhavam inevitavelmente em produção, embora os respectivos fluxos já estivessem publicados no frontend.
 Provável causa: Sete RPCs exigidas pelo frontend (`apply_load_import_command`, `apply_driver_monitor_command`, quatro leitores de chat e `list_vehicle_position_history_v1`) existiam nas migrations do repositório, mas não no catálogo do banco de produção. Parte do monitoramento de motorista ainda estava em estado intermediário: correções posteriores de revisão e agenda haviam sido aplicadas sem o comando base. As migrations foram reconciliadas e aplicadas preservando os objetos já existentes. A verificação estrutural confirmou as sete funções, execução para `authenticated`, nenhuma execução para `anon` e nenhum nome ausente entre as 365 RPCs referenciadas pelo frontend. As 22 Edge Functions chamadas pelo código também foram conferidas contra as 47 funções ativas e nenhuma está ausente.
 
-Reteste autenticado em produção (21/09/2026): `apply_driver_monitor_command` criou o monitoramento “TESTE QA CRITICO”, o painel atualizou os indicadores e o mesmo comando encerrou o registro como “Chegou”, sem erros. `list_vehicle_position_history_v1` carregou 28 pontos na timeline do veículo HDO5276, com HTTP 200. Depois da correção descrita no Bug 1689, as quatro RPCs de leitura de chat também passaram pela interface: a ocorrência exibiu seu contexto e histórico vazio, e o chat direto carregou uma mensagem legada sem enviar mensagem nova. Somente o reteste de importação de cargas permanece pendente por exigir um arquivo apropriado.
+Reteste autenticado em produção (21/09/2026): `apply_driver_monitor_command` criou o monitoramento “TESTE QA CRITICO”, o painel atualizou os indicadores e o mesmo comando encerrou o registro como “Chegou”, sem erros. `list_vehicle_position_history_v1` carregou 28 pontos na timeline do veículo HDO5276, com HTTP 200. Depois da correção descrita no Bug 1689, as quatro RPCs de leitura de chat também passaram pela interface: a ocorrência exibiu seu contexto e histórico vazio, e o chat direto carregou uma mensagem legada sem enviar mensagem nova. Por fim, `apply_load_import_command` importou pela interface a planilha sintética `qa-carga-importacao-20260921.xlsx`: a confirmação informou 1 carga nova, 0 documentos, 0 duplicados, 0 pendências e 0 erros. A carga `QA-IMPORT-20260921` apareceu persistida no controle com data 21/09/2026, faturado de R$ 123,45 e frete de R$ 12,34.
 
-RESOLVIDO NO BACKEND — RETESTE AUTENTICADO PARCIAL CONCLUÍDO
+RESOLVIDO — RETESTE AUTENTICADO CONCLUÍDO
 
 ###############
 
@@ -13203,5 +13203,14 @@ Sintoma: Proprietários e administradores autenticados por e-mail/senha não con
 Provável causa: As migrations recuperáveis de chat eram anteriores à decisão de produto que tornou e-mail/senha suficiente para todos os papéis. Quando essas migrations ausentes foram recuperadas em produção, elas foram aplicadas depois de `20260831164442_remove_authenticator_requirement.sql` e reintroduziram verificações de `aal2` em quatro helpers de `driver_chat_private`. A migration `20260921165707_restore_password_auth_chat_after_recovery.sql` recompõe os mesmos limites de identidade, tenant, papel e destinatário sem a exigência obsoleta de MFA. O teste de banco confirma leitura AAL1 para administrador, negação de cliente/anônimo e ausência de helpers AAL2. Em produção, o catálogo passou a registrar zero helpers de chat com `aal2`; a conversa da ocorrência carregou normalmente e o chat direto exibiu o histórico legado.
 
 RESOLVIDO
+
+###############
+
+Bug 1690 — menor, não corrigido nesta frente
+
+Sintoma: Após uma importação de planilha criar uma carga com sucesso, o resumo imediato informa “Cargas novas: 1”, mas a linha correspondente em “Últimas importações” exibe “Importados: 0”.
+Provável causa: A coluna histórica parece usar somente a contagem de itens/documentos importados (`new_items`) e não a quantidade de cargas novas registrada no `preview`. No reteste da planilha `qa-carga-importacao-20260921.xlsx`, a operação ficou como `completed`, sem erros, e a carga foi persistida corretamente; portanto a inconsistência é de apresentação/auditoria resumida e não bloqueia a operação. Foi deixada somente documentada para a frente de bugs menores.
+
+PENDENTE — encaminhado para bugs menores
 
 ###############
