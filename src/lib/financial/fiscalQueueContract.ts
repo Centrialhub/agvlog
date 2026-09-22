@@ -9,6 +9,10 @@ export const fiscalQueueSchema=z.object({version:z.literal(1),tenant_id:uuid,pag
   document_number:z.string().nullable(),fiscal_status:z.string(),attempts:count,automatic_failures:count,issue:z.string().nullable(),
   available_at:z.string(),created_at:z.string(),updated_at:z.string(),receivable_id:uuid.nullable(),
  }))});
+const fiscalQueueCursorSchema=z.object({observed_order:z.string().regex(/^\d+$/),observation_id:uuid}).strict();
+export const fiscalQueuePageSchema=fiscalQueueSchema.omit({page:true}).extend({
+ version:z.literal(2),cursor:fiscalQueueCursorSchema.nullable(),next_cursor:fiscalQueueCursorSchema.nullable(),has_more:z.boolean(),
+});
 export function fiscalQueueIssue(issue:string|null){
  if(!issue)return null;
  if(issue==='automatic_projection_retry')return 'Uma falha interrompeu esta tentativa. Uma nova tentativa foi programada.';

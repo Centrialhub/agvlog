@@ -13,6 +13,7 @@ export const movementSchema = z.object({
   amount_cents: z.number().int().positive().max(99999999999999), occurred_on: z.string(),
   description: z.string(), beneficiary_name: z.string(), beneficiary_document: z.string().nullable(),
   driver_id: z.string().uuid().nullable(), bank_reference: z.string().nullable(), receipt_path: z.string().nullable(),
+  cost_center_id: z.string().uuid().nullable().optional(), cost_center_name: z.string().nullable().optional(),
   created_by: z.string().uuid(), created_at: z.string(),
 }).superRefine((v,c)=>{if(v.voided!==(v.correction!==null)||(v.correction&&(v.correction.movement_id!==v.id||v.correction.tenant_id!==v.tenant_id)))c.addIssue({code:'custom',message:'Situação da movimentação inconsistente.'});});
 export const movementListSchema = z.object({
@@ -24,6 +25,7 @@ export const movementListSchema = z.object({
 export const movementResultSchema = z.object({
   version: z.literal(1), tenant_id: z.string().uuid(), request_id: z.string().uuid(),
   movement_id: z.string().uuid(), confirmed: z.literal(true),
+  cost_center_id: z.string().uuid().nullable().optional(), cost_center_name: z.string().nullable().optional(),
 });
 export type Movement = z.infer<typeof movementSchema>;
 export interface MovementFilters { page: number; page_size: number; search: string; from: string; to: string; direction: string; account_id: string; driver_id?: string }
@@ -31,7 +33,7 @@ export interface MovementCommand {
   version: 1; tenant_id: string; request_id: string; bank_account_id: string;
   direction: 'in' | 'out'; nature: keyof typeof movementNatures; amount_cents: number; occurred_on: string;
   description: string; beneficiary_name: string; beneficiary_document?: string;
-  driver_id?: string; bank_reference?: string; receipt_path?: string; reason: string;
+  driver_id?: string; bank_reference?: string; receipt_path?: string; reason: string; cost_center_id?: string;
 }
 export function parseFinanceAmount(value: string): number | null {
   const raw = value.trim().replace(/^R\$\s*/, '');

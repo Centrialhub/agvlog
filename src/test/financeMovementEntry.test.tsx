@@ -1,14 +1,18 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render as renderView, screen, waitFor } from '@testing-library/react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import type {ReactElement} from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MovementEntryDialog } from '@/components/financial/MovementEntryDialog';
 import { FinanceRejectedError } from '@/lib/financial/ledgerClient';
 
-const mocks = vi.hoisted(() => ({ record: vi.fn() }));
+const mocks = vi.hoisted(() => ({ record: vi.fn(), options:vi.fn() }));
 vi.mock('@/hooks/useFinancialPayments', () => ({ useBankAccounts: () => ({ data: [{ id: 'bank', name: 'Banco empresa',active:true},{id:'other-bank',name:'Banco secundário',active:true},{id:'inactive-bank',name:'Banco encerrado',active:false}] }) }));
 vi.mock('@/hooks/useDrivers', () => ({ useDrivers: () => ({ data: [{ id: 'driver', name: 'Motorista João' }] }) }));
-vi.mock('@/lib/financial/ledgerClient', async importOriginal => ({ ...await importOriginal<object>(), recordFinanceMovement: mocks.record }));
+vi.mock('@/lib/financial/ledgerClient', async importOriginal => ({ ...await importOriginal<object>(), recordFinanceMovement: mocks.record,readExpenseOptions:mocks.options }));
 const tenant = '10000000-0000-4000-8000-000000000001', actor = '20000000-0000-4000-8000-000000000001';
-beforeEach(() => { sessionStorage.clear(); vi.clearAllMocks(); });
+const center='50000000-0000-4000-8000-000000000001';
+function render(ui:ReactElement){return renderView(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}>{ui}</QueryClientProvider>);}
+beforeEach(() => { sessionStorage.clear(); vi.clearAllMocks(); mocks.options.mockResolvedValue({total:1,rows:[{id:center,label:'Manutenção da frota'}]}); });
 function fill() {
   fireEvent.change(screen.getByLabelText('Conta'), { target: { value: 'bank' } });
   fireEvent.change(screen.getByLabelText('Motorista beneficiário'), { target: { value: 'driver' } });
@@ -16,6 +20,37 @@ function fill() {
   fireEvent.change(screen.getByLabelText('Motivo da movimentação'), { target: { value: 'Despesas da viagem' } });
   fireEvent.change(screen.getByLabelText('Observação da conferência'), { target: { value: 'PIX conferido no banco' } });
 }
+async function selectCenter(){
+ fireEvent.click(screen.getByRole('button',{name:'Centro de custo: Selecionar'}));
+ fireEvent.click(await screen.findByRole('button',{name:'Manutenção da frota'}));
+}
+it('keeps the selected cost center in the draft and in an uncertain request after reopening',async()=>{
+ mocks.record.mockRejectedValueOnce(new Error('Resposta perdida')).mockResolvedValueOnce({confirmed:true});
+ const first=render(<MovementEntryDialog tenant={tenant} actor={actor} onClose={vi.fn()} onRecorded={vi.fn()}/>);
+ fill();await selectCenter();expect(mocks.options).toHaveBeenCalledWith(tenant,'centers','',null,1);
+ first.unmount();const done=vi.fn();
+ render(<MovementEntryDialog tenant={tenant} actor={actor} onClose={vi.fn()} onRecorded={done}/>);
+ expect(screen.getByRole('button',{name:'Centro de custo: Manutenção da frota'})).toBeEnabled();
+ fireEvent.click(screen.getByRole('button',{name:'Registrar movimentação'}));await screen.findByRole('alert');
+ expect(screen.getByRole('button',{name:'Centro de custo: Manutenção da frota'})).toBeDisabled();
+ fireEvent.click(screen.getByRole('button',{name:'Reenviar mesmo pedido'}));await waitFor(()=>expect(done).toHaveBeenCalledOnce());
+ expect(mocks.record.mock.calls[0][0]).toMatchObject({cost_center_id:center});expect(mocks.record.mock.calls[1][0]).toEqual(mocks.record.mock.calls[0][0]);
+});
+it('shows catalog errors and allows retrying the cost center search',async()=>{
+ mocks.options.mockRejectedValueOnce(new Error('offline'));
+ render(<MovementEntryDialog tenant={tenant} actor={actor} onClose={vi.fn()} onRecorded={vi.fn()}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Centro de custo: Selecionar'}));
+ fireEvent.click(await screen.findByRole('button',{name:'Tentar novamente'}));
+ expect(await screen.findByRole('button',{name:'Manutenção da frota'})).toBeEnabled();
+});
+it('replays a saved legacy request without adding a cost center to its payload',async()=>{
+ const key=`finance-movement-draft:${tenant}:${actor}`,request=crypto.randomUUID();
+ sessionStorage.setItem(key,JSON.stringify({request,form:{account:'bank',driver:'driver',amount:'500,00',date:'2026-01-01',description:'Despesa conferida',beneficiary:'Motorista João',reference:'',reason:'Registro anterior',nature:'driver_advance',direction:'out'}}));
+ mocks.record.mockResolvedValueOnce({confirmed:true});const done=vi.fn();
+ render(<MovementEntryDialog tenant={tenant} actor={actor} onClose={vi.fn()} onRecorded={done}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Reenviar mesmo pedido'}));await waitFor(()=>expect(done).toHaveBeenCalledOnce());
+ expect(mocks.record.mock.calls[0][0]).toMatchObject({request_id:request});expect(mocks.record.mock.calls[0][0]).not.toHaveProperty('cost_center_id');
+});
 describe('movement entry recovery', () => {
   it('keeps the exact request frozen after an uncertain reply and retries without generating a second ID', async () => {
     mocks.record.mockRejectedValueOnce(new Error('network unavailable')).mockResolvedValueOnce({ confirmed: true });

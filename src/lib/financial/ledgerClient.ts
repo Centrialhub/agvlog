@@ -169,6 +169,7 @@ export async function readFinanceMovements(tenant: string, filters: MovementFilt
 export async function recordFinanceMovement(command: MovementCommand) {
   const result = movementResultSchema.parse(await rpc('record_finance_movement', { _payload: command }));
   if (result.tenant_id !== command.tenant_id || result.request_id !== command.request_id) throw new Error('Finance command response mismatch');
+  if (command.cost_center_id && result.cost_center_id !== command.cost_center_id) throw new Error('Finance cost center response mismatch');
   return result;
 }
 export async function readExpenseOptions(tenant: string, kind: ExpenseOptionKind, search: string, trip: string | null, page: number) {

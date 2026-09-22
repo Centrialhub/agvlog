@@ -1,0 +1,5646 @@
+{
+  "date": "2026-09-22",
+  "project_id": "qcvnsdrbcchaxvawcngk",
+  "migration": {
+    "version": "20260922210823",
+    "name": "finance_production_rpc_compatibility"
+  },
+  "scope": {
+    "files": 457,
+    "literal_calls": 178,
+    "compatible_named_calls": 171,
+    "unresolved_arguments": 7,
+    "dynamic_name_calls": 35
+  },
+  "manual_verification": {
+    "remaining_literal_calls_compatible": 7,
+    "conditional_command_destinations_compatible": 21,
+    "evidence": "docs/qa/finance-production-manual-rpc-check-20260922.json"
+  },
+  "before": {
+    "missing_functions": 12,
+    "incompatible_signatures": 4,
+    "affected_calls": 17
+  },
+  "after": {
+    "missing_functions": 0,
+    "incompatible_signatures": 0,
+    "ambiguous_named_calls": 0,
+    "missing_authenticated_execute_or_schema_usage": 0
+  },
+  "validation": {
+    "local": {
+      "selected_files": 9,
+      "passed_tests": 23,
+      "new_database_tests": 10,
+      "fixture": "src/test/fixtures/financeProductionRpcSchema.json",
+      "limitations": "Schema-only snapshot with synthetic rows; not a full clone of constraints, triggers, RLS or lock contention."
+    },
+    "remote": {
+      "mode": "BEGIN READ ONLY; authenticated role with valid active tenant; ROLLBACK",
+      "checks": [
+        {
+          "rpc": "list_finance_expense_page_v2",
+          "status": "ok",
+          "row_count": 0
+        },
+        {
+          "rpc": "list_finance_statements_v2",
+          "status": "ok",
+          "row_count": 0
+        },
+        {
+          "rpc": "get_finance_receivables_page_v3",
+          "status": "ok",
+          "row_count": 1
+        },
+        {
+          "rpc": "list_finance_fiscal_queue_v2",
+          "status": "ok",
+          "row_count": 30
+        },
+        {
+          "rpc": "list_driver_expenses_for_review_v2",
+          "status": "ok",
+          "row_count": 1
+        },
+        {
+          "rpc": "list_available_loads_for_settlement_v2",
+          "status": "ok",
+          "row_count": 1
+        },
+        {
+          "rpc": "portal_list_financial_titles_v2",
+          "status": "ok",
+          "row_count": 0
+        },
+        {
+          "rpc": "get_finance_payroll_entry_page",
+          "status": "skipped_no_fixture",
+          "row_count": null
+        },
+        {
+          "rpc": "get_finance_settlement_expense_context_v2",
+          "status": "ok",
+          "row_count": 0
+        },
+        {
+          "rpc": "get_finance_payable_movements",
+          "status": "ok",
+          "row_count": 0
+        },
+        {
+          "rpc": "get_finance_payable_payment_history",
+          "status": "ok",
+          "row_count": 0
+        },
+        {
+          "rpc": "get_finance_legacy_reconciliation_summary",
+          "status": "ok",
+          "row_count": null
+        },
+        {
+          "rpc": "list_finance_legacy_reconciliation_rows.transactions",
+          "status": "ok",
+          "row_count": 0
+        },
+        {
+          "rpc": "list_finance_legacy_reconciliation_rows.obligations",
+          "status": "ok",
+          "row_count": 0
+        }
+      ],
+      "financial_data_written": false,
+      "frontend_deployed": false
+    }
+  },
+  "catalog": [
+    {
+      "call_id": 1,
+      "file": "src/lib/financial/accountOpeningClient.ts",
+      "line": 6,
+      "name": "get_finance_account_opening",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_account_opening(uuid,uuid,date,date)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_from",
+            "_to"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 2,
+      "file": "src/lib/financial/accountOpeningClient.ts",
+      "line": 7,
+      "name": "get_finance_account_opening_history",
+      "argument_names": [
+        "_account_id",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_account_opening_history(uuid,uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 3,
+      "file": "src/lib/financial/accountOpeningClient.ts",
+      "line": 8,
+      "name": "record_finance_account_opening",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "record_finance_account_opening(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 4,
+      "file": "src/lib/financial/accountOpeningClient.ts",
+      "line": 9,
+      "name": "reverse_finance_account_opening",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "reverse_finance_account_opening(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 5,
+      "file": "src/lib/financial/accountPeriodCloseClient.ts",
+      "line": 8,
+      "name": "preview_finance_account_period_close",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "preview_finance_account_period_close(uuid,uuid,date,date)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_from",
+            "_to"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 6,
+      "file": "src/lib/financial/accountPeriodCloseClient.ts",
+      "line": 11,
+      "name": "get_finance_account_period_history",
+      "argument_names": [
+        "_account_id",
+        "_limit",
+        "_offset",
+        "_snapshot_at",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_account_period_history(uuid,uuid,integer,integer,timestamp with time zone)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_offset",
+            "_limit",
+            "_snapshot_at"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 7,
+      "file": "src/lib/financial/accountPeriodEvidenceClient.ts",
+      "line": 5,
+      "name": "get_finance_account_period_evidence_page",
+      "argument_names": [
+        "_account_id",
+        "_closure_id",
+        "_dependency_offset",
+        "_limit",
+        "_movement_offset",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_account_period_evidence_page(uuid,uuid,uuid,integer,integer,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_closure_id",
+            "_movement_offset",
+            "_dependency_offset",
+            "_limit"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 8,
+      "file": "src/lib/financial/accountPeriodEvidenceClient.ts",
+      "line": 6,
+      "name": "get_finance_account_period_evidence",
+      "argument_names": [
+        "_account_id",
+        "_closure_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_account_period_evidence(uuid,uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_closure_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 9,
+      "file": "src/lib/financial/cashForecastComparisonClient.ts",
+      "line": 4,
+      "name": "get_finance_cash_forecast_comparison",
+      "argument_names": [
+        "_snapshot_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_cash_forecast_comparison(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_snapshot_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 10,
+      "file": "src/lib/financial/cashOpeningClient.ts",
+      "line": 9,
+      "name": "record_finance_cash_opening",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "record_finance_cash_opening(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 11,
+      "file": "src/lib/financial/cashPeriodClient.ts",
+      "line": 8,
+      "name": "get_finance_cash_period_counts",
+      "argument_names": [
+        "_account_id",
+        "_page",
+        "_period_end",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_cash_period_counts(uuid,uuid,date,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_period_end",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 12,
+      "file": "src/lib/financial/cashPeriodClient.ts",
+      "line": 9,
+      "name": "preview_finance_cash_period_close",
+      "argument_names": [
+        "_account_id",
+        "_count_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "preview_finance_cash_period_close(uuid,uuid,date,date,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_from",
+            "_to",
+            "_count_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 5,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 13,
+      "file": "src/lib/financial/costDispositionsClient.ts",
+      "line": 5,
+      "name": "get_finance_cost_dispositions",
+      "argument_names": [
+        "_expected_revision",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_cost_dispositions(uuid,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_page",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 14,
+      "file": "src/lib/financial/employeeAdvanceRegistrationClient.ts",
+      "line": 4,
+      "name": "record_finance_employee_advance",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "record_finance_employee_advance(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 15,
+      "file": "src/lib/financial/expenseArtifactClient.ts",
+      "line": 11,
+      "name": "get_finance_expense_receipt_artifacts",
+      "argument_names": [
+        "_expense_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_expense_receipt_artifacts(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_expense_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 16,
+      "file": "src/lib/financial/expenseArtifactClient.ts",
+      "line": 17,
+      "name": "attach_finance_expense_receipt_artifact",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "attach_finance_expense_receipt_artifact(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 17,
+      "file": "src/lib/financial/expenseBatchReceiptClient.ts",
+      "line": 17,
+      "name": "prepare_finance_expense_receipt_intent",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "prepare_finance_expense_receipt_intent(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 18,
+      "file": "src/lib/financial/expenseCancellationClient.ts",
+      "line": 6,
+      "name": "preview_finance_expense_cancellation",
+      "argument_names": [
+        "_expense_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "preview_finance_expense_cancellation(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_expense_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 19,
+      "file": "src/lib/financial/expenseCancellationClient.ts",
+      "line": 7,
+      "name": "cancel_finance_expense",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "cancel_finance_expense(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 20,
+      "file": "src/lib/financial/fiscalDashboardClient.ts",
+      "line": 4,
+      "name": "get_finance_fiscal_dashboard_summary",
+      "argument_names": [
+        "_client_id",
+        "_doc_type",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_fiscal_dashboard_summary(uuid,date,date,uuid,text)",
+          "input_names": [
+            "_tenant_id",
+            "_from",
+            "_to",
+            "_client_id",
+            "_doc_type"
+          ],
+          "anon_execute": false,
+          "default_count": 4,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 21,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 35,
+      "name": "list_finance_recorded_costs",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_recorded_costs(uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_filters"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 22,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 39,
+      "name": "record_finance_manual_expense",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "record_finance_manual_expense(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 23,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 43,
+      "name": "get_finance_manual_expense_movements",
+      "argument_names": [
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_manual_expense_movements(uuid,text,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_search",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 24,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 47,
+      "name": "get_finance_transfer_period_position",
+      "argument_names": [
+        "_account_id",
+        "_cutoff",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_transfer_period_position(uuid,uuid,date,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_cutoff",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 25,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 51,
+      "name": "record_finance_transfer_stage",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "record_finance_transfer_stage(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 26,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 55,
+      "name": "get_finance_pending_transfers",
+      "argument_names": [
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_pending_transfers(uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 27,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 59,
+      "name": "record_finance_internal_transfer",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "record_finance_internal_transfer(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 28,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 63,
+      "name": "get_finance_movement_receipt_trace",
+      "argument_names": [
+        "_movement_id",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_movement_receipt_trace(uuid,uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_movement_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 29,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 67,
+      "name": "correct_finance_receipt_allocation",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "correct_finance_receipt_allocation(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 30,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 71,
+      "name": "get_finance_receipt_movement_options",
+      "argument_names": [
+        "_account_id",
+        "_date",
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_receipt_movement_options(uuid,uuid,date,text,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_date",
+            "_search",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 5,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 31,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 75,
+      "name": "get_finance_account_period_review",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_account_period_review(uuid,uuid,date,date)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_from",
+            "_to"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 32,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 79,
+      "name": "get_finance_automatic_reconciliation_status",
+      "argument_names": [
+        "_import_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_automatic_reconciliation_status(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_import_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 33,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 93,
+      "name": "get_finance_access",
+      "argument_names": [
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_access(uuid)",
+          "input_names": [
+            "_tenant_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 34,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 102,
+      "name": "get_finance_native_statement_account",
+      "argument_names": [
+        "_import_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_native_statement_account(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_import_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 35,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 106,
+      "name": "list_finance_reconciliation_options",
+      "argument_names": [
+        "_import_id",
+        "_kind",
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_reconciliation_options(uuid,uuid,text,text,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_import_id",
+            "_kind",
+            "_search",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 36,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 110,
+      "name": "list_finance_reconciliation_history",
+      "argument_names": [
+        "_import_id",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_reconciliation_history(uuid,uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_import_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 37,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 114,
+      "name": "reverse_finance_bank_reconciliation",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "reverse_finance_bank_reconciliation(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 38,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 118,
+      "name": "get_finance_reconciliation_context",
+      "argument_names": [
+        "_bank_entry_ids",
+        "_movement_ids",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_reconciliation_context(uuid,uuid[],uuid[])",
+          "input_names": [
+            "_tenant_id",
+            "_movement_ids",
+            "_bank_entry_ids"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 39,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 123,
+      "name": "reconcile_finance_bank_group",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "reconcile_finance_bank_group(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 40,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 127,
+      "name": "list_finance_fiscal_queue_v2",
+      "argument_names": [
+        "_cursor_observation_id",
+        "_cursor_observed_order",
+        "_status",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_fiscal_queue_v2(uuid,text,bigint,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_status",
+            "_cursor_observed_order",
+            "_cursor_observation_id"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 41,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 133,
+      "name": "get_finance_payable_movements",
+      "argument_names": [
+        "_expected_revision",
+        "_page",
+        "_payable_id",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_payable_movements(uuid,uuid,text,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_payable_id",
+            "_search",
+            "_page",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 42,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 137,
+      "name": "apply_finance_payable_movement",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "apply_finance_payable_movement(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 43,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 141,
+      "name": "reverse_finance_payable_link",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "reverse_finance_payable_link(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 44,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 145,
+      "name": "get_finance_payable_payment_history",
+      "argument_names": [
+        "_expected_revision",
+        "_page",
+        "_payable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_payable_payment_history(uuid,uuid,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_payable_id",
+            "_page",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 45,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 149,
+      "name": "get_finance_payroll_entry_page",
+      "argument_names": [
+        "_entry_id",
+        "_page",
+        "_payment",
+        "_period_id",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_payroll_entry_page(uuid,uuid,integer,text,text,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_period_id",
+            "_page",
+            "_search",
+            "_payment",
+            "_entry_id"
+          ],
+          "anon_execute": false,
+          "default_count": 4,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 46,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 154,
+      "name": "get_finance_payroll_periods",
+      "argument_names": [
+        "_period_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_payroll_periods(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_period_id"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 47,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 159,
+      "name": "list_finance_audit_events",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_audit_events(uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_filters"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 48,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 164,
+      "name": "list_finance_movements",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_movements(uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_filters"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 49,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 171,
+      "name": "record_finance_movement",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "record_finance_movement(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 50,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 176,
+      "name": "get_finance_expense_options",
+      "argument_names": [
+        "_kind",
+        "_page",
+        "_search",
+        "_tenant_id",
+        "_trip_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_expense_options(uuid,text,text,uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_kind",
+            "_search",
+            "_trip_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 51,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 183,
+      "name": "record_finance_expense_batch",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "record_finance_expense_batch(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 52,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 190,
+      "name": "list_finance_expense_page_v2",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_expense_page_v2(uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_filters"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 53,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 194,
+      "name": "intake_finance_statement",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "intake_finance_statement(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 54,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 196,
+      "name": "review_finance_statement_identity",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "review_finance_statement_identity(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 55,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 201,
+      "name": "reverse_finance_identity_review",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "reverse_finance_identity_review(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 56,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 205,
+      "name": "list_finance_identity_candidates",
+      "argument_names": [
+        "_page",
+        "_row_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_identity_candidates(uuid,uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_row_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 57,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 209,
+      "name": "finance_statement_original_ready",
+      "argument_names": [
+        "_file_hash",
+        "_source_path",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "finance_statement_original_ready(uuid,text,text)",
+          "input_names": [
+            "_tenant_id",
+            "_file_hash",
+            "_source_path"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 58,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 213,
+      "name": "list_finance_statements_v2",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_statements_v2(uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_filters"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 59,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 217,
+      "name": "list_finance_statement_lines",
+      "argument_names": [
+        "_filters",
+        "_import_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_statement_lines(uuid,uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_import_id",
+            "_filters"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 60,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 222,
+      "name": "list_finance_statement_history_v1",
+      "argument_names": [
+        "_import_id",
+        "_page",
+        "_page_size",
+        "_snapshot_at",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_statement_history_v1(uuid,uuid,integer,integer,timestamp with time zone)",
+          "input_names": [
+            "_tenant_id",
+            "_import_id",
+            "_page",
+            "_page_size",
+            "_snapshot_at"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 61,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 228,
+      "name": "list_finance_expenses",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_expenses(uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_filters"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 62,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 233,
+      "name": "get_finance_payroll_period_page_v2",
+      "argument_names": [
+        "_filters",
+        "_page",
+        "_page_size",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_payroll_period_page_v2(uuid,integer,integer,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_page",
+            "_page_size",
+            "_filters"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 63,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 240,
+      "name": "get_finance_statement_original_locator_v1",
+      "argument_names": [
+        "_import_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_statement_original_locator_v1(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_import_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 64,
+      "file": "src/lib/financial/ledgerClient.ts",
+      "line": 242,
+      "name": "reassign_finance_statement_account_v1",
+      "argument_names": [
+        "_account_id",
+        "_import_id",
+        "_reason",
+        "_request_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 2,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "reassign_finance_statement_account_v1(uuid,uuid,uuid,text)",
+          "input_names": [
+            "_tenant_id",
+            "_import_id",
+            "_account_id",
+            "_reason"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": false,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        },
+        {
+          "signature": "reassign_finance_statement_account_v1(uuid,uuid,uuid,text,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_import_id",
+            "_account_id",
+            "_reason",
+            "_request_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 5,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 65,
+      "file": "src/lib/financial/legacyCostAssociationClient.ts",
+      "line": 7,
+      "name": "get_finance_legacy_expense_cost_context",
+      "argument_names": [
+        "_expense_id",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_legacy_expense_cost_context(uuid,uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_expense_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 66,
+      "file": "src/lib/financial/legacyCostAssociationClient.ts",
+      "line": 8,
+      "name": "get_finance_legacy_cost_inventory",
+      "argument_names": [
+        "_page",
+        "_source",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_legacy_cost_inventory(uuid,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_page",
+            "_source"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 67,
+      "file": "src/lib/financial/legacyCutReviewClient.ts",
+      "line": 6,
+      "name": "get_finance_legacy_cut_review",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_legacy_cut_review(uuid,uuid,date,date)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_from",
+            "_to"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 68,
+      "file": "src/lib/financial/legacyCutReviewClient.ts",
+      "line": 7,
+      "name": "get_finance_legacy_cut_manifest_page",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_page",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_legacy_cut_manifest_page(uuid,uuid,date,date,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_from",
+            "_to",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 69,
+      "file": "src/lib/financial/legacyCutReviewClient.ts",
+      "line": 8,
+      "name": "review_finance_legacy_cut",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "review_finance_legacy_cut(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 70,
+      "file": "src/lib/financial/legacyIntegrityClient.ts",
+      "line": 4,
+      "name": "get_finance_legacy_integrity_inventory",
+      "argument_names": [
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_legacy_integrity_inventory(uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 71,
+      "file": "src/lib/financial/legacyInventoryClient.ts",
+      "line": 9,
+      "name": "get_finance_legacy_adoption_inventory",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_page",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_legacy_adoption_inventory(uuid,uuid,date,date,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_from",
+            "_to",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 72,
+      "file": "src/lib/financial/legacyPayableAssociationClient.ts",
+      "line": 6,
+      "name": "get_finance_legacy_payable_association",
+      "argument_names": [
+        "_page",
+        "_payment_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": false,
+      "overload_count": 1,
+      "named_compatible_overloads": 0,
+      "diagnostic": "unresolved_arguments",
+      "candidates": [
+        {
+          "signature": "get_finance_legacy_payable_association(uuid,uuid,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_payment_id",
+            "_page",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 2,
+          "names_compatible": null,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 73,
+      "file": "src/lib/financial/legacyReceivableAssociationClient.ts",
+      "line": 6,
+      "name": "get_finance_legacy_receivable_association",
+      "argument_names": [
+        "_page",
+        "_payment_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": false,
+      "overload_count": 1,
+      "named_compatible_overloads": 0,
+      "diagnostic": "unresolved_arguments",
+      "candidates": [
+        {
+          "signature": "get_finance_legacy_receivable_association(uuid,uuid,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_payment_id",
+            "_page",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 2,
+          "names_compatible": null,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 74,
+      "file": "src/lib/financial/maintenanceCostContextClient.ts",
+      "line": 4,
+      "name": "get_finance_maintenance_cost_context",
+      "argument_names": [
+        "_order_id",
+        "_page",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_maintenance_cost_context(uuid,uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_order_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 75,
+      "file": "src/lib/financial/maintenanceDirectPartAssociationClient.ts",
+      "line": 7,
+      "name": "get_finance_maintenance_direct_part_context",
+      "argument_names": [
+        "_expected_revision",
+        "_page",
+        "_part_id",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_maintenance_direct_part_context(uuid,uuid,integer,text,text)",
+          "input_names": [
+            "_tenant_id",
+            "_part_id",
+            "_page",
+            "_search",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 76,
+      "file": "src/lib/financial/maintenanceLaborAssociationClient.ts",
+      "line": 7,
+      "name": "get_finance_maintenance_labor_context",
+      "argument_names": [
+        "_expected_revision",
+        "_order_id",
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_maintenance_labor_context(uuid,uuid,integer,text,text)",
+          "input_names": [
+            "_tenant_id",
+            "_order_id",
+            "_page",
+            "_search",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 77,
+      "file": "src/lib/financial/manualExpenseCancellationClient.ts",
+      "line": 6,
+      "name": "preview_finance_manual_expense_cancellation",
+      "argument_names": [
+        "_payable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "preview_finance_manual_expense_cancellation(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_payable_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 78,
+      "file": "src/lib/financial/manualExpenseCancellationClient.ts",
+      "line": 7,
+      "name": "cancel_finance_manual_expense",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "cancel_finance_manual_expense(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 79,
+      "file": "src/lib/financial/movementCorrectionPreviewClient.ts",
+      "line": 4,
+      "name": "preview_finance_movement_correction",
+      "argument_names": [
+        "_movement_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "preview_finance_movement_correction(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_movement_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 80,
+      "file": "src/lib/financial/movementVoidCommandClient.ts",
+      "line": 8,
+      "name": "void_finance_manual_movement",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "void_finance_manual_movement(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 81,
+      "file": "src/lib/financial/payableBulkSettlementClient.ts",
+      "line": 13,
+      "name": "get_finance_payable_bulk_context",
+      "argument_names": [
+        "_items",
+        "_movement_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_payable_bulk_context(uuid,uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_movement_id",
+            "_items"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 82,
+      "file": "src/lib/financial/payableBulkSettlementClient.ts",
+      "line": 18,
+      "name": "apply_finance_payable_bulk_movement",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "apply_finance_payable_bulk_movement(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 83,
+      "file": "src/lib/financial/payablePortfolioClient.ts",
+      "line": 6,
+      "name": "get_finance_payable_portfolio",
+      "argument_names": [
+        "_filters",
+        "_page",
+        "_revision",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_payable_portfolio(uuid,jsonb,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_filters",
+            "_page",
+            "_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 84,
+      "file": "src/lib/financial/periodEvidenceClient.ts",
+      "line": 18,
+      "name": "get_finance_statement_period_evidence",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_statement_period_evidence(uuid,uuid,date,date)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_from",
+            "_to"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 85,
+      "file": "src/lib/financial/periodEvidenceClient.ts",
+      "line": 22,
+      "name": "record_finance_period_evidence_review",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "record_finance_period_evidence_review(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 86,
+      "file": "src/lib/financial/periodMoneyPackageClient.ts",
+      "line": 6,
+      "name": "get_finance_period_money_package",
+      "argument_names": [
+        "_account_ids",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_period_money_package(uuid,date,date,uuid[])",
+          "input_names": [
+            "_tenant_id",
+            "_from",
+            "_to",
+            "_account_ids"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 87,
+      "file": "src/lib/financial/periodUnloadingFlowClient.ts",
+      "line": 15,
+      "name": "get_finance_period_unloading_flow",
+      "argument_names": [
+        "_account_ids",
+        "_expected_revision",
+        "_from",
+        "_page",
+        "_supplier_id",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_period_unloading_flow(uuid,date,date,uuid[],uuid,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_from",
+            "_to",
+            "_account_ids",
+            "_supplier_id",
+            "_page",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 88,
+      "file": "src/lib/financial/receivableHistoryClient.ts",
+      "line": 10,
+      "name": "get_finance_receivable_history",
+      "argument_names": [
+        "_expected_revision",
+        "_page",
+        "_receivable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_receivable_history(uuid,uuid,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_receivable_id",
+            "_page",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 89,
+      "file": "src/lib/financial/receivablePaymentInstallments.ts",
+      "line": 54,
+      "name": "get_finance_receivable_payment_installments",
+      "argument_names": [
+        "_expected_revision",
+        "_limit",
+        "_offset",
+        "_payment_id",
+        "_receivable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_receivable_payment_installments(uuid,uuid,uuid,integer,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_receivable_id",
+            "_payment_id",
+            "_offset",
+            "_limit",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 90,
+      "file": "src/lib/financial/receivablePaymentsClient.ts",
+      "line": 9,
+      "name": "get_finance_receivable_payments_page",
+      "argument_names": [
+        "_expected_revision",
+        "_page",
+        "_receivable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_receivable_payments_page(uuid,uuid,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_receivable_id",
+            "_page",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 91,
+      "file": "src/lib/financial/receivablePortfolioClient.ts",
+      "line": 4,
+      "name": "get_finance_receivable_portfolio_summary",
+      "argument_names": [
+        "_client_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_receivable_portfolio_summary(uuid,date,date,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_from",
+            "_to",
+            "_client_id"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 92,
+      "file": "src/lib/financial/receivablesPageClient.ts",
+      "line": 6,
+      "name": "get_finance_receivables_page_v3",
+      "argument_names": [
+        "_client_id",
+        "_cursor",
+        "_from",
+        "_origin",
+        "_search",
+        "_status",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_receivables_page_v3(uuid,text,text,uuid,date,date,jsonb,text)",
+          "input_names": [
+            "_tenant_id",
+            "_search",
+            "_status",
+            "_client_id",
+            "_from",
+            "_to",
+            "_cursor",
+            "_origin"
+          ],
+          "anon_execute": false,
+          "default_count": 7,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 93,
+      "file": "src/lib/financial/recordedCostOperationalCoverageClient.ts",
+      "line": 5,
+      "name": "get_finance_recorded_cost_operational_coverage",
+      "argument_names": [
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_recorded_cost_operational_coverage(uuid,date,date)",
+          "input_names": [
+            "_tenant_id",
+            "_from",
+            "_to"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 94,
+      "file": "src/lib/financial/recordedCostSummaryClient.ts",
+      "line": 4,
+      "name": "get_finance_recorded_cost_summary",
+      "argument_names": [
+        "_category",
+        "_cost_center",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_recorded_cost_summary(uuid,date,date,text,text)",
+          "input_names": [
+            "_tenant_id",
+            "_from",
+            "_to",
+            "_category",
+            "_cost_center"
+          ],
+          "anon_execute": false,
+          "default_count": 4,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 95,
+      "file": "src/lib/financial/settlementExpenseContextClient.ts",
+      "line": 6,
+      "name": "get_finance_settlement_expense_context_v2",
+      "argument_names": [
+        "_expected_revision",
+        "_page",
+        "_settlement_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_settlement_expense_context_v2(uuid,uuid,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_settlement_id",
+            "_page",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 96,
+      "file": "src/lib/financial/settlementMovementClient.ts",
+      "line": 11,
+      "name": "link_finance_settlement_payment",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "link_finance_settlement_payment(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 97,
+      "file": "src/lib/financial/settlementMovementClient.ts",
+      "line": 15,
+      "name": "get_finance_settlement_payment_movements",
+      "argument_names": [
+        "_page",
+        "_payment_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_settlement_payment_movements(uuid,uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_payment_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 98,
+      "file": "src/lib/financial/settlementMovementClient.ts",
+      "line": 19,
+      "name": "get_finance_settlement_payment_movement_history",
+      "argument_names": [
+        "_page",
+        "_payment_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_settlement_payment_movement_history(uuid,uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_payment_id",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 99,
+      "file": "src/lib/financial/settlementMovementClient.ts",
+      "line": 24,
+      "name": "reverse_finance_settlement_link",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "reverse_finance_settlement_link(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 100,
+      "file": "src/lib/financial/settlementPaymentClient.ts",
+      "line": 11,
+      "name": "record_finance_settlement_payment",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "record_finance_settlement_payment(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 101,
+      "file": "src/lib/financial/settlementPaymentClient.ts",
+      "line": 15,
+      "name": "get_finance_settlement_payment_candidates",
+      "argument_names": [
+        "_amount_cents",
+        "_page",
+        "_settlement_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_settlement_payment_candidates(uuid,uuid,bigint,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_settlement_id",
+            "_amount_cents",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 102,
+      "file": "src/lib/financial/statementCoverageClient.ts",
+      "line": 6,
+      "name": "get_finance_statement_coverage_review",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_statement_coverage_review(uuid,uuid,date,date)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_from",
+            "_to"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 103,
+      "file": "src/lib/financial/statementCoverageClient.ts",
+      "line": 7,
+      "name": "get_finance_statement_coverage_history",
+      "argument_names": [
+        "_account_id",
+        "_from",
+        "_page",
+        "_tenant_id",
+        "_to"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_statement_coverage_history(uuid,uuid,date,date,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_from",
+            "_to",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 104,
+      "file": "src/lib/financial/statementImportClient.ts",
+      "line": 66,
+      "name": "get_finance_upload_artifact",
+      "argument_names": [
+        "_artifact_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_upload_artifact(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_artifact_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 105,
+      "file": "src/lib/financial/statementImportClient.ts",
+      "line": 74,
+      "name": "intake_finance_statement_artifact",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "intake_finance_statement_artifact(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 106,
+      "file": "src/lib/financial/stockAcquisitionClient.ts",
+      "line": 7,
+      "name": "get_finance_stock_acquisition_context",
+      "argument_names": [
+        "_expected_revision",
+        "_inbound_movement_id",
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_stock_acquisition_context(uuid,uuid,integer,text,text)",
+          "input_names": [
+            "_tenant_id",
+            "_inbound_movement_id",
+            "_page",
+            "_search",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 107,
+      "file": "src/lib/financial/stockAcquisitionClient.ts",
+      "line": 11,
+      "name": "get_finance_stock_acquisition_inventory",
+      "argument_names": [
+        "_page",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_stock_acquisition_inventory(uuid,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_page",
+            "_search"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 108,
+      "file": "src/lib/financial/stockConsumptionClient.ts",
+      "line": 8,
+      "name": "get_finance_stock_consumption_context",
+      "argument_names": [
+        "_expected_revision",
+        "_movement_id",
+        "_page",
+        "_part_id",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_stock_consumption_context(uuid,uuid,uuid,integer,text,text)",
+          "input_names": [
+            "_tenant_id",
+            "_part_id",
+            "_movement_id",
+            "_page",
+            "_search",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 109,
+      "file": "src/lib/financial/stockConsumptionClient.ts",
+      "line": 9,
+      "name": "preview_finance_stock_consumption",
+      "argument_names": [
+        "_lines",
+        "_movement_id",
+        "_part_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "preview_finance_stock_consumption(uuid,uuid,uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_part_id",
+            "_movement_id",
+            "_lines"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 110,
+      "file": "src/lib/financial/unbilledFreightClient.ts",
+      "line": 7,
+      "name": "get_finance_unbilled_freight_summary",
+      "argument_names": [],
+      "arguments_complete": false,
+      "overload_count": 1,
+      "named_compatible_overloads": 0,
+      "diagnostic": "unresolved_arguments",
+      "candidates": [
+        {
+          "signature": "get_finance_unbilled_freight_summary(uuid,date,date,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_from",
+            "_to",
+            "_client_id"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 1,
+          "names_compatible": null,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 111,
+      "file": "src/lib/financial/unbilledFreightClient.ts",
+      "line": 8,
+      "name": "list_finance_unbilled_freight_origins",
+      "argument_names": [
+        "_page",
+        "_state"
+      ],
+      "arguments_complete": false,
+      "overload_count": 1,
+      "named_compatible_overloads": 0,
+      "diagnostic": "unresolved_arguments",
+      "candidates": [
+        {
+          "signature": "list_finance_unbilled_freight_origins(uuid,date,date,uuid,text,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_from",
+            "_to",
+            "_client_id",
+            "_state",
+            "_page"
+          ],
+          "anon_execute": false,
+          "default_count": 5,
+          "required_count": 1,
+          "names_compatible": null,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 112,
+      "file": "src/lib/financial/unloadingCancellationClient.ts",
+      "line": 7,
+      "name": "preview_finance_unloading_cancellation",
+      "argument_names": [
+        "_charge_id",
+        "_effective_on",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "preview_finance_unloading_cancellation(uuid,uuid,date)",
+          "input_names": [
+            "_tenant_id",
+            "_charge_id",
+            "_effective_on"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 113,
+      "file": "src/lib/financial/unloadingCancellationClient.ts",
+      "line": 8,
+      "name": "cancel_finance_unloading",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "cancel_finance_unloading(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 114,
+      "file": "src/lib/financial/unloadingCostCorrectionClient.ts",
+      "line": 6,
+      "name": "get_finance_unloading_cost_correction_context",
+      "argument_names": [
+        "_amount_cents",
+        "_charge_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_unloading_cost_correction_context(uuid,uuid,text)",
+          "input_names": [
+            "_tenant_id",
+            "_charge_id",
+            "_amount_cents"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 115,
+      "file": "src/lib/financial/unloadingCostCorrectionClient.ts",
+      "line": 7,
+      "name": "correct_finance_unloading_cost",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "correct_finance_unloading_cost(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 116,
+      "file": "src/lib/financial/unloadingOriginCorrectionClient.ts",
+      "line": 9,
+      "name": "get_finance_unloading_origin_correction_context",
+      "argument_names": [
+        "_charge_id",
+        "_proposal",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_unloading_origin_correction_context(uuid,uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_charge_id",
+            "_proposal"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 117,
+      "file": "src/lib/financial/unloadingOriginCorrectionClient.ts",
+      "line": 13,
+      "name": "correct_finance_unloading_origin",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "correct_finance_unloading_origin(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 118,
+      "file": "src/lib/financial/unloadingProjectionRepairClient.ts",
+      "line": 8,
+      "name": "get_finance_unloading_projection_repair_context",
+      "argument_names": [
+        "_charge_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_unloading_projection_repair_context(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_charge_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 119,
+      "file": "src/lib/financial/unloadingProjectionRepairCommandClient.ts",
+      "line": 9,
+      "name": "repair_finance_unloading_projection",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "repair_finance_unloading_projection(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 120,
+      "file": "src/components/financial/StatementImportDialog.tsx",
+      "line": 122,
+      "name": "list_finance_account_artifacts_v1",
+      "argument_names": [
+        "_account_id",
+        "_offset",
+        "_snapshot_at",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_account_artifacts_v1(uuid,uuid,integer,timestamp with time zone)",
+          "input_names": [
+            "_tenant_id",
+            "_account_id",
+            "_offset",
+            "_snapshot_at"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 121,
+      "file": "src/hooks/portal/usePortalFinancialTitles.ts",
+      "line": 26,
+      "name": "portal_list_financial_titles_v2",
+      "argument_names": [
+        "_client_id",
+        "_limit",
+        "_offset",
+        "_revision",
+        "_status",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "portal_list_financial_titles_v2(uuid,uuid,text[],integer,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_client_id",
+            "_status",
+            "_limit",
+            "_offset",
+            "_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 5,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 122,
+      "file": "src/hooks/useBankReconciliation.tsx",
+      "line": 211,
+      "name": "get_finance_legacy_reconciliation_summary",
+      "argument_names": [
+        "_bank_account_id",
+        "_period_end",
+        "_period_start",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_finance_legacy_reconciliation_summary(uuid,uuid,date,date)",
+          "input_names": [
+            "_tenant_id",
+            "_bank_account_id",
+            "_period_start",
+            "_period_end"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 123,
+      "file": "src/hooks/useBankReconciliation.tsx",
+      "line": 251,
+      "name": "list_finance_legacy_reconciliation_rows",
+      "argument_names": [
+        "_bank_account_id",
+        "_cursor",
+        "_direction",
+        "_kind",
+        "_period_end",
+        "_period_start",
+        "_search",
+        "_status",
+        "_tenant_id",
+        "_view"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_legacy_reconciliation_rows(uuid,uuid,date,date,text,text,text,text,text,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_bank_account_id",
+            "_period_start",
+            "_period_end",
+            "_kind",
+            "_view",
+            "_search",
+            "_status",
+            "_direction",
+            "_cursor"
+          ],
+          "anon_execute": false,
+          "default_count": 5,
+          "required_count": 5,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 124,
+      "file": "src/hooks/useBankReconciliation.tsx",
+      "line": 298,
+      "name": "list_finance_legacy_reconciliation_rows",
+      "argument_names": [
+        "_bank_account_id",
+        "_cursor",
+        "_direction",
+        "_kind",
+        "_period_end",
+        "_period_start",
+        "_search",
+        "_status",
+        "_tenant_id",
+        "_view"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_finance_legacy_reconciliation_rows(uuid,uuid,date,date,text,text,text,text,text,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_bank_account_id",
+            "_period_start",
+            "_period_end",
+            "_kind",
+            "_view",
+            "_search",
+            "_status",
+            "_direction",
+            "_cursor"
+          ],
+          "anon_execute": false,
+          "default_count": 5,
+          "required_count": 5,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 125,
+      "file": "src/hooks/useBillingEdi.tsx",
+      "line": 154,
+      "name": "register_doccob_export",
+      "argument_names": [],
+      "arguments_complete": false,
+      "overload_count": 1,
+      "named_compatible_overloads": 0,
+      "diagnostic": "unresolved_arguments",
+      "candidates": [
+        {
+          "signature": "register_doccob_export(uuid,uuid,uuid,uuid[],text,date,text,text,integer,numeric,integer,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_profile_id",
+            "_client_id",
+            "_client_invoice_ids",
+            "_file_name",
+            "_file_date",
+            "_generated_content",
+            "_content_hash",
+            "_record_count",
+            "_total_amount",
+            "_charge_count",
+            "_detail_count",
+            "_reprocess_reason"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 12,
+          "names_compatible": null,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 126,
+      "file": "src/hooks/useBillingEdi.tsx",
+      "line": 172,
+      "name": "mark_doccob_sent",
+      "argument_names": [
+        "_channel",
+        "_export_id",
+        "_sent_to",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "mark_doccob_sent(uuid,uuid,text,text)",
+          "input_names": [
+            "_tenant_id",
+            "_export_id",
+            "_channel",
+            "_sent_to"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 127,
+      "file": "src/hooks/useBillingEdi.tsx",
+      "line": 189,
+      "name": "mark_doccob_downloaded",
+      "argument_names": [
+        "_export_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "mark_doccob_downloaded(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_export_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 128,
+      "file": "src/hooks/useBillingEdi.tsx",
+      "line": 206,
+      "name": "cancel_doccob_export",
+      "argument_names": [
+        "_export_id",
+        "_reason",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "cancel_doccob_export(uuid,uuid,text)",
+          "input_names": [
+            "_tenant_id",
+            "_export_id",
+            "_reason"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 129,
+      "file": "src/hooks/useClientInvoiceLifecycle.ts",
+      "line": 20,
+      "name": "get_client_invoice_action_context",
+      "argument_names": [
+        "_invoice_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_client_invoice_action_context(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_invoice_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 130,
+      "file": "src/hooks/useClientInvoiceLifecycle.ts",
+      "line": 23,
+      "name": "get_client_invoice_creation_context",
+      "argument_names": [
+        "_draft",
+        "_report_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_client_invoice_creation_context(uuid,uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_report_id",
+            "_draft"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 131,
+      "file": "src/hooks/useClientInvoiceLifecycle.ts",
+      "line": 30,
+      "name": "get_client_invoice_creation_context",
+      "argument_names": [
+        "_draft",
+        "_report_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_client_invoice_creation_context(uuid,uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_report_id",
+            "_draft"
+          ],
+          "anon_execute": false,
+          "default_count": 2,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 132,
+      "file": "src/hooks/useClientInvoiceLifecycle.ts",
+      "line": 35,
+      "name": "apply_client_invoice_command",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "apply_client_invoice_command(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 133,
+      "file": "src/hooks/useClientInvoices.tsx",
+      "line": 96,
+      "name": "list_client_invoice_financials",
+      "argument_names": [
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_client_invoice_financials(uuid)",
+          "input_names": [
+            "_tenant_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 134,
+      "file": "src/hooks/useClientInvoices.tsx",
+      "line": 153,
+      "name": "filter_billable_fiscal_sources",
+      "argument_names": [
+        "_ids",
+        "_tenant",
+        "_type"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "filter_billable_fiscal_sources(uuid,text,uuid[])",
+          "input_names": [
+            "_tenant",
+            "_type",
+            "_ids"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 135,
+      "file": "src/hooks/useClientInvoices.tsx",
+      "line": 187,
+      "name": "filter_billable_fiscal_sources",
+      "argument_names": [
+        "_ids",
+        "_tenant",
+        "_type"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "filter_billable_fiscal_sources(uuid,text,uuid[])",
+          "input_names": [
+            "_tenant",
+            "_type",
+            "_ids"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 136,
+      "file": "src/hooks/useClosingDraftWrites.ts",
+      "line": 15,
+      "name": "create_closing_report_draft",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "create_closing_report_draft(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 137,
+      "file": "src/hooks/useClosingLifecycle.ts",
+      "line": 16,
+      "name": "get_closing_report_action_context",
+      "argument_names": [
+        "_report_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_closing_report_action_context(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_report_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 138,
+      "file": "src/hooks/useClosingLifecycle.ts",
+      "line": 21,
+      "name": "apply_closing_report_action",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "apply_closing_report_action(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 139,
+      "file": "src/hooks/useClosingReports.tsx",
+      "line": 157,
+      "name": "get_closing_report_sources",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_closing_report_sources(uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_filters"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 140,
+      "file": "src/hooks/useClosingReports.tsx",
+      "line": 185,
+      "name": "update_closing_report_trip_fields",
+      "argument_names": [
+        "_expected",
+        "_item_id",
+        "_patch",
+        "_report_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "update_closing_report_trip_fields(uuid,uuid,uuid,jsonb,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_report_id",
+            "_item_id",
+            "_expected",
+            "_patch"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 5,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 141,
+      "file": "src/hooks/useClosingSourcePreview.ts",
+      "line": 20,
+      "name": "get_closing_report_sources",
+      "argument_names": [
+        "_filters",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_closing_report_sources(uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_filters"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 142,
+      "file": "src/hooks/useDriverExpenseHistory.ts",
+      "line": 19,
+      "name": "list_driver_expenses",
+      "argument_names": [
+        "_offset",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_driver_expenses(uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_offset"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 143,
+      "file": "src/hooks/useDriverExpenseHistory.ts",
+      "line": 26,
+      "name": "list_driver_expense_sources",
+      "argument_names": [
+        "_offset",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_driver_expense_sources(uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_offset"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 144,
+      "file": "src/hooks/useDriverExpensesOperational.ts",
+      "line": 26,
+      "name": "get_expense_receipt_status",
+      "argument_names": [
+        "_receipt",
+        "_request_id",
+        "_source_id",
+        "_source_type",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_expense_receipt_status(uuid,uuid,text,uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_request_id",
+            "_source_type",
+            "_source_id",
+            "_receipt"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 5,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 145,
+      "file": "src/hooks/useDriverExpensesOperational.ts",
+      "line": 27,
+      "name": "create_driver_expense_command",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "create_driver_expense_command(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 146,
+      "file": "src/hooks/useDriverExpensesOperational.ts",
+      "line": 35,
+      "name": "list_driver_expense_sources",
+      "argument_names": [
+        "_offset",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_driver_expense_sources(uuid,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_offset"
+          ],
+          "anon_execute": false,
+          "default_count": 1,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 147,
+      "file": "src/hooks/useDriverExpensesOperational.ts",
+      "line": 44,
+      "name": "get_expense_creation_context",
+      "argument_names": [
+        "_source_id",
+        "_source_type",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_expense_creation_context(uuid,text,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_source_type",
+            "_source_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 148,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 131,
+      "name": "list_driver_settlements_v2",
+      "argument_names": [
+        "_cursor",
+        "_date_from",
+        "_date_to",
+        "_driver_id",
+        "_only_expense_pending",
+        "_only_km_pending",
+        "_only_needs_recalculation",
+        "_only_no_freight",
+        "_page_size",
+        "_search",
+        "_snapshot_at",
+        "_status",
+        "_tenant_id",
+        "_vehicle_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_driver_settlements_v2(uuid,text,uuid,uuid,text,date,date,boolean,boolean,boolean,boolean,timestamp with time zone,jsonb,integer)",
+          "input_names": [
+            "_tenant_id",
+            "_search",
+            "_driver_id",
+            "_vehicle_id",
+            "_status",
+            "_date_from",
+            "_date_to",
+            "_only_km_pending",
+            "_only_expense_pending",
+            "_only_no_freight",
+            "_only_needs_recalculation",
+            "_snapshot_at",
+            "_cursor",
+            "_page_size"
+          ],
+          "anon_execute": false,
+          "default_count": 13,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 149,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 169,
+      "name": "list_driver_settlement_filter_options",
+      "argument_names": [
+        "_expected_revision",
+        "_kind",
+        "_page",
+        "_page_size",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_driver_settlement_filter_options(uuid,text,text,integer,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_kind",
+            "_search",
+            "_page",
+            "_page_size",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 4,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 150,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 216,
+      "name": "generate_pending_driver_settlements",
+      "argument_names": [
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "generate_pending_driver_settlements(uuid)",
+          "input_names": [
+            "_tenant_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 151,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 246,
+      "name": "recalculate_manual_expense_settlement",
+      "argument_names": [
+        "_settlement_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "recalculate_manual_expense_settlement(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_settlement_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 152,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 253,
+      "name": "generate_driver_settlement",
+      "argument_names": [
+        "_dispatch_trip_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "generate_driver_settlement(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_dispatch_trip_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 153,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 274,
+      "name": "update_driver_settlement_status",
+      "argument_names": [
+        "_allow_exceptions",
+        "_new_status",
+        "_reason",
+        "_settlement_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "update_driver_settlement_status(uuid,text,text,boolean)",
+          "input_names": [
+            "_settlement_id",
+            "_new_status",
+            "_reason",
+            "_allow_exceptions"
+          ],
+          "anon_execute": true,
+          "default_count": 2,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 154,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 314,
+      "name": "update_driver_settlement_km_review",
+      "argument_names": [],
+      "arguments_complete": false,
+      "overload_count": 1,
+      "named_compatible_overloads": 0,
+      "diagnostic": "unresolved_arguments",
+      "candidates": [
+        {
+          "signature": "update_driver_settlement_km_review(uuid,numeric,text,text,numeric,numeric,text,text)",
+          "input_names": [
+            "_settlement_id",
+            "_audited_km",
+            "_km_status",
+            "_notes",
+            "_km_start",
+            "_km_end",
+            "_audited_start_location",
+            "_audited_end_location"
+          ],
+          "anon_execute": true,
+          "default_count": 4,
+          "required_count": 4,
+          "names_compatible": null,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 155,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 336,
+      "name": "settle_zero_driver_settlement",
+      "argument_names": [
+        "_reason",
+        "_settlement_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "settle_zero_driver_settlement(uuid,text)",
+          "input_names": [
+            "_settlement_id",
+            "_reason"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 156,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 390,
+      "name": "list_available_loads_for_settlement_v2",
+      "argument_names": [
+        "_driver_id",
+        "_expected_revision",
+        "_include_settlement_id",
+        "_page",
+        "_page_size",
+        "_search",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_available_loads_for_settlement_v2(uuid,uuid,text,uuid,integer,integer,text)",
+          "input_names": [
+            "_tenant_id",
+            "_driver_id",
+            "_search",
+            "_include_settlement_id",
+            "_page",
+            "_page_size",
+            "_expected_revision"
+          ],
+          "anon_execute": false,
+          "default_count": 6,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 157,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 429,
+      "name": "create_manual_driver_settlement",
+      "argument_names": [],
+      "arguments_complete": false,
+      "overload_count": 1,
+      "named_compatible_overloads": 0,
+      "diagnostic": "unresolved_arguments",
+      "candidates": [
+        {
+          "signature": "create_manual_driver_settlement(uuid,uuid,uuid,date,uuid[])",
+          "input_names": [
+            "_tenant_id",
+            "_driver_id",
+            "_vehicle_id",
+            "_reference_date",
+            "_load_ids"
+          ],
+          "anon_execute": true,
+          "default_count": 0,
+          "required_count": 5,
+          "names_compatible": null,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 158,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 447,
+      "name": "attach_loads_to_driver_settlement",
+      "argument_names": [
+        "_load_ids",
+        "_settlement_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "attach_loads_to_driver_settlement(uuid,uuid[])",
+          "input_names": [
+            "_settlement_id",
+            "_load_ids"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 159,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 467,
+      "name": "detach_load_from_driver_settlement",
+      "argument_names": [
+        "_load_id",
+        "_settlement_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "detach_load_from_driver_settlement(uuid,uuid)",
+          "input_names": [
+            "_settlement_id",
+            "_load_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 160,
+      "file": "src/hooks/useDriverSettlements.tsx",
+      "line": 487,
+      "name": "delete_driver_settlement",
+      "argument_names": [
+        "_reason",
+        "_settlement_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "delete_driver_settlement(uuid,text)",
+          "input_names": [
+            "_settlement_id",
+            "_reason"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 161,
+      "file": "src/hooks/useExpenseCreation.ts",
+      "line": 18,
+      "name": "get_expense_creation_context",
+      "argument_names": [
+        "_source_id",
+        "_source_type",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_expense_creation_context(uuid,text,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_source_type",
+            "_source_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 162,
+      "file": "src/hooks/useExpenseCreation.ts",
+      "line": 24,
+      "name": "get_expense_receipt_status",
+      "argument_names": [
+        "_receipt",
+        "_request_id",
+        "_source_id",
+        "_source_type",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_expense_receipt_status(uuid,uuid,text,uuid,jsonb)",
+          "input_names": [
+            "_tenant_id",
+            "_request_id",
+            "_source_type",
+            "_source_id",
+            "_receipt"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 5,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 163,
+      "file": "src/hooks/useExpenseCreation.ts",
+      "line": 25,
+      "name": "create_driver_expense_command",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "create_driver_expense_command(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 164,
+      "file": "src/hooks/useExpenseReview.ts",
+      "line": 15,
+      "name": "list_driver_expenses_for_review_v2",
+      "argument_names": [
+        "_cursor_expense_at",
+        "_cursor_id",
+        "_status",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "list_driver_expenses_for_review_v2(uuid,text,timestamp with time zone,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_status",
+            "_cursor_expense_at",
+            "_cursor_id"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 165,
+      "file": "src/hooks/useExpenseReview.ts",
+      "line": 25,
+      "name": "get_driver_expense_review_context",
+      "argument_names": [
+        "_expense_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_driver_expense_review_context(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_expense_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 166,
+      "file": "src/hooks/useExpenseReview.ts",
+      "line": 30,
+      "name": "review_driver_expense",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "review_driver_expense(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 167,
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 121,
+      "name": "generate_payroll_period",
+      "argument_names": [
+        "_include_drivers",
+        "_include_non_drivers",
+        "_period_end",
+        "_period_name",
+        "_period_start",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "generate_payroll_period(uuid,date,date,text,boolean,boolean)",
+          "input_names": [
+            "_tenant_id",
+            "_period_start",
+            "_period_end",
+            "_period_name",
+            "_include_drivers",
+            "_include_non_drivers"
+          ],
+          "anon_execute": false,
+          "default_count": 3,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 168,
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 145,
+      "name": "recalculate_payroll_entry",
+      "argument_names": [
+        "_entry_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "recalculate_payroll_entry(uuid)",
+          "input_names": [
+            "_entry_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 169,
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 165,
+      "name": "approve_payroll_period_v3",
+      "argument_names": [
+        "_period_id",
+        "_request_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "approve_payroll_period_v3(uuid,uuid)",
+          "input_names": [
+            "_period_id",
+            "_request_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 170,
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 193,
+      "name": "close_payroll_period_v2",
+      "argument_names": [
+        "_period_id",
+        "_reason",
+        "_request_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "close_payroll_period_v2(uuid,text,uuid)",
+          "input_names": [
+            "_period_id",
+            "_reason",
+            "_request_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 3,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 171,
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 208,
+      "name": "change_payroll_period_state_v2",
+      "argument_names": [
+        "_action",
+        "_period_id",
+        "_reason",
+        "_request_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "change_payroll_period_state_v2(uuid,text,text,uuid)",
+          "input_names": [
+            "_period_id",
+            "_action",
+            "_reason",
+            "_request_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 4,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 172,
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 221,
+      "name": "add_payroll_manual_item",
+      "argument_names": [
+        "_amount",
+        "_description",
+        "_entry_id",
+        "_nature",
+        "_reason"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "add_payroll_manual_item(uuid,text,text,numeric,text)",
+          "input_names": [
+            "_entry_id",
+            "_nature",
+            "_description",
+            "_amount",
+            "_reason"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 5,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 173,
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 244,
+      "name": "delete_payroll_entry_item",
+      "argument_names": [
+        "_item_id",
+        "_reason"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "delete_payroll_entry_item(uuid,text)",
+          "input_names": [
+            "_item_id",
+            "_reason"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 174,
+      "file": "src/hooks/usePayroll.tsx",
+      "line": 286,
+      "name": "create_employee_contract_v1",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "create_employee_contract_v1(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 175,
+      "file": "src/hooks/useReceivableFinancial.ts",
+      "line": 17,
+      "name": "get_receivable_financial_context",
+      "argument_names": [
+        "_receivable_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_receivable_financial_context(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_receivable_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 176,
+      "file": "src/hooks/useReceivableFinancial.ts",
+      "line": 22,
+      "name": "apply_receivable_financial_command",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "apply_receivable_financial_command(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 177,
+      "file": "src/hooks/useSettlementAdjustment.ts",
+      "line": 16,
+      "name": "get_driver_settlement_adjustment_context",
+      "argument_names": [
+        "_settlement_id",
+        "_tenant_id"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "get_driver_settlement_adjustment_context(uuid,uuid)",
+          "input_names": [
+            "_tenant_id",
+            "_settlement_id"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 2,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    },
+    {
+      "call_id": 178,
+      "file": "src/hooks/useSettlementAdjustment.ts",
+      "line": 21,
+      "name": "apply_driver_settlement_adjustment",
+      "argument_names": [
+        "_payload"
+      ],
+      "arguments_complete": true,
+      "overload_count": 1,
+      "named_compatible_overloads": 1,
+      "diagnostic": "named_candidate_only",
+      "candidates": [
+        {
+          "signature": "apply_driver_settlement_adjustment(jsonb)",
+          "input_names": [
+            "_payload"
+          ],
+          "anon_execute": false,
+          "default_count": 0,
+          "required_count": 1,
+          "names_compatible": true,
+          "authenticated_execute": true,
+          "authenticated_schema_usage": true
+        }
+      ]
+    }
+  ]
+}

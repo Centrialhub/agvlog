@@ -8,6 +8,7 @@ import {useTenant} from '@/hooks/useTenant';
 import {useAuth} from '@/hooks/useAuth';
 import type {Payable} from '@/hooks/usePayables';
 import {PayableMovementLink} from './PayableMovementLink';
+import {PayableAccountPayment} from './PayableAccountPayment';
 import {PayableLinkReversal} from './PayableLinkReversal';
 import {LegacyPayableAssociation} from './LegacyPayableAssociation';
 import {invalidateAccountReview} from '@/lib/financial/invalidateAccountReview';
@@ -22,6 +23,7 @@ export default function PayablePaymentDialog({payable,open,onOpenChange}:Props){
  const history=isFetching?[]:historyData?.rows??[];
  if(!payable)return null;
  function recorded(){
+  setPagination({payable:payable!.id,page:1});
   if(currentTenant)void invalidateAccountReview(qc,currentTenant.id);
   for(const key of ['payables','payables_payments','finance-payable-portfolio','payroll_entries','payroll_periods','payroll_period','finance-options','finance-payable-options','finance-expenses','finance-audit','finance-legacy-inventory','finance-settlement-expense-context'])void qc.invalidateQueries({queryKey:[key]});
  }
@@ -29,7 +31,7 @@ export default function PayablePaymentDialog({payable,open,onOpenChange}:Props){
   <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
    <DialogHeader><DialogTitle>Baixas — {payable.supplier_name}</DialogTitle><DialogDescription>Registre ou revise pagamentos vinculados a esta conta a pagar.</DialogDescription></DialogHeader>
    <p>Valor do título: <strong>{fmt(Number(payable.amount))}</strong></p>
-   <p className="text-sm text-muted-foreground">Use uma saída já registrada para dar baixa sem contar o dinheiro duas vezes. Se o envio ainda não estiver no sistema, <a href="/financial/movements" className="underline">registre a saída em Movimentações</a>.</p>
+   {open&&currentTenant&&user&&<PayableAccountPayment key={`account:${currentTenant.id}:${user.id}:${payable.id}`} tenant={currentTenant.id} actor={user.id} payable={payable.id} onRecorded={recorded}/>}
    {open&&currentTenant&&user&&<PayableMovementLink key={`${currentTenant.id}:${user.id}:${payable.id}`} tenant={currentTenant.id} actor={user.id} payable={payable.id} onRecorded={recorded}/>}
    {historyError?<p role="alert">Não foi possível carregar o histórico de baixas. <Button variant="link" disabled={isFetching} onClick={()=>void refetchHistory()}>Tentar histórico novamente</Button></p>:history.length>0&&<section aria-label="Histórico de baixas" className="border rounded p-3 space-y-2">
     <p className="font-medium">Histórico de baixas</p>

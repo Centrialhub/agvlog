@@ -1,4 +1,5 @@
 import {cleanup,fireEvent,render,screen} from '@testing-library/react';
+vi.mock('@/components/financial/PayableAccountPayment',()=>({PayableAccountPayment:()=>null}));
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {afterEach,it,expect,vi} from 'vitest';
 import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';

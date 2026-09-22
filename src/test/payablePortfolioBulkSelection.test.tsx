@@ -17,8 +17,34 @@ it('selects multiple eligible titles from the canonical portfolio and opens the 
   render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><PayablePortfolioWorkspace tenant={tenant} actor={actor}/></QueryClientProvider>);
   const action=await screen.findByRole('button',{name:'Baixar títulos selecionados (0)'});expect(action).toBeDisabled();
   await screen.findByText('Nota A');
-  fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar para baixa em lote — Nota A'}));
-  fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar para baixa em lote — Nota B'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota A'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota B'}));
   expect(screen.getByRole('button',{name:'Baixar títulos selecionados (2)'})).toBeEnabled();fireEvent.click(screen.getByRole('button',{name:'Baixar títulos selecionados (2)'}));
   expect(screen.getByText('Diálogo em lote com 2 títulos')).toBeInTheDocument();
+});
+it('selects unidentified beneficiaries for exclusion but not for bulk settlement',async()=>{
+  const base=await api.read();
+  api.read.mockResolvedValue({...base,rows:rows.map(row=>({...row,supplier_name:'  '}))});
+  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><PayablePortfolioWorkspace tenant={tenant} actor={actor}/></QueryClientProvider>);
+  await screen.findByText('Nota A');
+  expect(screen.getByRole('checkbox',{name:'Selecionar título — Nota A'})).toBeEnabled();fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota A'}));
+  expect(screen.getByRole('checkbox',{name:'Selecionar título — Nota B'})).toBeEnabled();
+  expect(screen.getByRole('button',{name:'Baixar títulos selecionados (0)'})).toBeDisabled();
+  expect(screen.getByRole('button',{name:'Excluir selecionados (1)'})).toBeEnabled();
+  expect(screen.getAllByText('Informe o favorecido para permitir baixa em lote.')).toHaveLength(2);
+});
+it('discards selected balances when the portfolio revision changes',async()=>{
+  const base=await api.read();api.read.mockReset().mockResolvedValueOnce({...base,total_titles:31}).mockRejectedValueOnce({code:'40001',message:'finance_payable_portfolio_changed'}).mockResolvedValue({...base,revision:'b'.repeat(32),rows:rows.map(row=>({...row,open_cents:'15000'}))});
+  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><PayablePortfolioWorkspace tenant={tenant} actor={actor}/></QueryClientProvider>);await screen.findByText('Nota A');fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota A'}));fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota B'}));fireEvent.click(screen.getByRole('button',{name:'Próximos títulos a pagar'}));
+  expect(await screen.findByText(/selecione novamente os títulos/)).toBeInTheDocument();expect(screen.getByRole('button',{name:'Baixar títulos selecionados (0)'})).toBeDisabled();
+});
+
+it('selects pending and cancelled titles and supports selecting the whole page',async()=>{
+  const base=await api.read();api.read.mockResolvedValue({...base,rows:[{...rows[0],status:'pending'},{...rows[1],status:'cancelled',open_cents:'0'}]});
+  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><PayablePortfolioWorkspace tenant={tenant} actor={actor}/></QueryClientProvider>);
+  await screen.findByText('Nota A');fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar todos desta página'}));
+  expect(screen.getByRole('checkbox',{name:'Selecionar título — Nota A'})).toBeChecked();
+  expect(screen.getByRole('checkbox',{name:'Selecionar título — Nota B'})).toBeChecked();
+  expect(screen.getByRole('button',{name:'Excluir selecionados (2)'})).toBeEnabled();
+  expect(screen.getByRole('button',{name:'Baixar títulos selecionados (0)'})).toBeDisabled();
 });

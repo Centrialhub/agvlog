@@ -26,3 +26,9 @@ export const payrollProjectionSchema=z.object({version:z.literal(1),tenant_id:z.
     employees:z.object({name:z.string().nullable(),doc_cpf:z.string().nullable(),branch:z.string().nullable(),department:z.string().nullable()}),
   }).passthrough()),
 });
+const payrollTotalsSchema=z.object({gross:amount,discount:amount,already_paid:amount,carryover_in:amount,carryover_out:amount,title_paid:amount,remaining:amount});
+export const payrollProjectionPageSchema=z.object({version:z.literal(2),tenant_id:z.string().uuid(),period_id:z.string().uuid(),
+ page:z.number().int().positive(),page_size:z.literal(50),search:z.string(),payment_filter:z.enum(['all','unpaid','partial','paid','review','cancelled']),
+ total:z.number().int().nonnegative(),filtered_total:z.number().int().nonnegative(),has_more:z.boolean(),totals:payrollTotalsSchema,
+ rows:payrollProjectionSchema.shape.rows.max(50),
+});

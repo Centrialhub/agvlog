@@ -5,18 +5,23 @@ import {z} from 'zod';
 import {expenseCancellationEventSchema} from './expenseCancellationContract';
 const uuid=z.string().uuid(),money=z.number().int().nonnegative().max(99999999999999),total=z.string().regex(/^\d+$/);
 export interface ExpenseFilters {page:number;page_size:number;from:string;to:string;search:string;category:string;context:string;missing_receipt:boolean;cost_center?:string}
+export const expenseCursorSchema=z.object({occurred_on:z.string(),created_at:z.string(),id:uuid}).strict();
+export type ExpenseCursor=z.infer<typeof expenseCursorSchema>;
+export interface ExpenseCursorFilters extends Omit<ExpenseFilters,'page'>{cursor:ExpenseCursor|null}
+const expenseHistoryRowSchema=z.object({cancelled:z.boolean(),cancellation:expenseCancellationEventSchema.nullable(),id:uuid,tenant_id:uuid,batch_id:uuid,category:z.string(),description:z.string(),amount_cents:money,coverage:expenseCostCoverageSchema.optional(),complement_cents:total.nullable().optional(),cost_origin:expenseCostOriginSchema.nullable().optional(),effective_amount_cents:total.nullable().optional(),occurred_on:z.string(),
+ supplier_name:z.string(),document_number:z.string().nullable(),receipt_path:z.string().nullable(),receipt_artifact_count:z.number().int().nonnegative().optional(),no_receipt_reason:z.string().nullable(),
+ context:z.string(),trip_id:uuid.nullable(),driver_id:uuid.nullable(),batch_description:z.string(),cost_center_name:z.string().nullable(),
+ allocated_cents:money,payable_id:uuid.nullable(),payable_status:z.string().nullable(),unloading_id:uuid.nullable(),receivable_id:uuid.nullable(),
+ unloading_origin:unloadingEffectiveOriginSchema.nullable().optional(),reimbursement_supplier_id:uuid.nullable(),reimbursement_supplier_name:z.string().nullable(),receivable_status:z.string().nullable(),
+ created_by:uuid,created_at:z.string(),allocations:z.array(z.object({movement_id:uuid,amount_cents:money,movement_amount_cents:money,beneficiary_name:z.string(),occurred_on:z.string(),bank_reference:z.string().nullable()})),
+ history:z.array(z.object({id:uuid,actor_id:uuid,actor_name:z.string(),action:z.string(),reason:z.string(),created_at:z.string()}))});
+const expenseSummarySchema=z.object({active_count:z.number().int().nonnegative(),cancelled_count:z.number().int().nonnegative(),historical_total_cents:total,cancelled_total_cents:total,total:z.number().int().nonnegative(),total_cents:total.nullable(),allocated_cents:total,complement_cents:total.nullable(),allocation_applied_cents:total.nullable().optional(),payment_applied_cents:total.nullable().optional(),gross_reserved_cents:total.nullable().optional(),residual_cents:total.nullable().optional(),driver_custody_cents:total.nullable().optional(),payment_recovery_cents:total.nullable().optional(),cost_needs_review_count:z.number().int().nonnegative().optional(),missing_receipt_count:z.number().int().nonnegative(),categories:z.array(z.object({category:z.string(),amount_cents:total.nullable(),item_count:z.number().int().nonnegative()})),cost_centers:z.array(z.object({cost_center_id:uuid.nullable(),cost_center_name:z.string().nullable(),amount_cents:total.nullable(),item_count:z.number().int().nonnegative()})).default([])});
 export const expenseHistorySchema=z.object({version:z.literal(1),tenant_id:uuid,page:z.number().int().positive(),page_size:z.number().int().positive().max(100),
   active_count:z.number().int().nonnegative(),cancelled_count:z.number().int().nonnegative(),historical_total_cents:total,cancelled_total_cents:total,total:z.number().int().nonnegative(),total_cents:total.nullable(),allocated_cents:total,complement_cents:total.nullable(),allocation_applied_cents:total.nullable().optional(),payment_applied_cents:total.nullable().optional(),gross_reserved_cents:total.nullable().optional(),residual_cents:total.nullable().optional(),driver_custody_cents:total.nullable().optional(),payment_recovery_cents:total.nullable().optional(),cost_needs_review_count:z.number().int().nonnegative().optional(),missing_receipt_count:z.number().int().nonnegative(),
   categories:z.array(z.object({category:z.string(),amount_cents:total.nullable(),item_count:z.number().int().nonnegative()})),
   cost_centers:z.array(z.object({cost_center_id:uuid.nullable(),cost_center_name:z.string().nullable(),amount_cents:total.nullable(),item_count:z.number().int().nonnegative()})).default([]),
-  rows:z.array(z.object({cancelled:z.boolean(),cancellation:expenseCancellationEventSchema.nullable(),id:uuid,tenant_id:uuid,batch_id:uuid,category:z.string(),description:z.string(),amount_cents:money,coverage:expenseCostCoverageSchema.optional(),complement_cents:total.nullable().optional(),cost_origin:expenseCostOriginSchema.nullable().optional(),effective_amount_cents:total.nullable().optional(),occurred_on:z.string(),
-    supplier_name:z.string(),document_number:z.string().nullable(),receipt_path:z.string().nullable(),receipt_artifact_count:z.number().int().nonnegative().optional(),no_receipt_reason:z.string().nullable(),
-    context:z.string(),trip_id:uuid.nullable(),driver_id:uuid.nullable(),batch_description:z.string(),cost_center_name:z.string().nullable(),
-    allocated_cents:money,payable_id:uuid.nullable(),payable_status:z.string().nullable(),unloading_id:uuid.nullable(),receivable_id:uuid.nullable(),
-    unloading_origin:unloadingEffectiveOriginSchema.nullable().optional(),reimbursement_supplier_id:uuid.nullable(),reimbursement_supplier_name:z.string().nullable(),receivable_status:z.string().nullable(),
-    created_by:uuid,created_at:z.string(),
-    allocations:z.array(z.object({movement_id:uuid,amount_cents:money,movement_amount_cents:money,beneficiary_name:z.string(),occurred_on:z.string(),bank_reference:z.string().nullable()})),
-    history:z.array(z.object({id:uuid,actor_id:uuid,actor_name:z.string(),action:z.string(),reason:z.string(),created_at:z.string()})),
-  })),
+  rows:z.array(expenseHistoryRowSchema),
 });
 export type ExpenseHistoryRow=z.infer<typeof expenseHistorySchema>['rows'][number];
+export const expenseHistoryPageSchema=z.object({version:z.literal(2),tenant_id:uuid,page_size:z.number().int().positive().max(100),cursor:expenseCursorSchema.nullable(),next_cursor:expenseCursorSchema.nullable(),has_more:z.boolean(),summary:expenseSummarySchema.nullable(),rows:z.array(expenseHistoryRowSchema)});
+export type ExpenseHistorySummary=z.infer<typeof expenseSummarySchema>;

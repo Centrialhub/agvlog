@@ -1,0 +1,240 @@
+{
+  "project": "qcvnsdrbcchaxvawcngk",
+  "date": "2026-09-22",
+  "notes": "Seven spread/adapter argument sets resolved from source, plus 21 explicit conditional command destinations. This checks named arguments and authenticated grants, not SQL execution of these existing commands.",
+  "results": [
+    {
+      "name": "associate_finance_legacy_expense_cost",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "associate_finance_legacy_payable_payment",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "associate_finance_legacy_receivable_payment",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "associate_finance_maintenance_direct_part",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "associate_finance_maintenance_labor",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "associate_finance_stock_acquisition",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "attribute_finance_stock_consumption",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "close_finance_account_period",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "close_finance_cash_period",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "create_manual_driver_settlement",
+      "args": [
+        "_tenant_id",
+        "_driver_id",
+        "_vehicle_id",
+        "_reference_date",
+        "_load_ids"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "get_finance_legacy_payable_association",
+      "args": [
+        "_tenant_id",
+        "_payment_id",
+        "_page",
+        "_expected_revision"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "get_finance_legacy_receivable_association",
+      "args": [
+        "_tenant_id",
+        "_payment_id",
+        "_page",
+        "_expected_revision"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "get_finance_unbilled_freight_summary",
+      "args": [
+        "_tenant_id",
+        "_from",
+        "_to",
+        "_client_id"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "list_finance_unbilled_freight_origins",
+      "args": [
+        "_tenant_id",
+        "_from",
+        "_to",
+        "_client_id",
+        "_state",
+        "_page"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "record_finance_cash_period_count",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "record_finance_statement_coverage_approval",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "register_doccob_export",
+      "args": [
+        "_tenant_id",
+        "_profile_id",
+        "_client_id",
+        "_client_invoice_ids",
+        "_file_name",
+        "_file_date",
+        "_generated_content",
+        "_content_hash",
+        "_record_count",
+        "_total_amount",
+        "_charge_count",
+        "_detail_count",
+        "_reprocess_reason"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "reopen_finance_account_period",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "reverse_finance_cash_period_count",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "reverse_finance_legacy_expense_cost_association",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "reverse_finance_legacy_payable_association",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "reverse_finance_legacy_receivable_association",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "reverse_finance_maintenance_direct_part_association",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "reverse_finance_maintenance_labor_association",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "reverse_finance_statement_coverage_approval",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "reverse_finance_stock_acquisition_association",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "reverse_finance_stock_consumption_attribution",
+      "args": [
+        "_payload"
+      ],
+      "compatible": 1
+    },
+    {
+      "name": "update_driver_settlement_km_review",
+      "args": [
+        "_settlement_id",
+        "_audited_km",
+        "_km_status",
+        "_notes",
+        "_km_start",
+        "_km_end",
+        "_audited_start_location",
+        "_audited_end_location"
+      ],
+      "compatible": 1
+    }
+  ]
+}

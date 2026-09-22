@@ -9,15 +9,17 @@ import { Label } from '@/components/ui/label';
 import { FinanceRejectedError, recordFinanceMovement } from '@/lib/financial/ledgerClient';
 import { financeError, parseFinanceAmount, type MovementCommand } from '@/lib/financial/ledgerContract';
 import { localDateInputValue } from '@/lib/utils/formatDate';
+import { FinanceOptionPicker } from './FinanceOptionPicker';
 
 const formSchema = z.object({ account: z.string(), driver: z.string(), amount: z.string(), date: z.string(),
+  center: z.object({id:z.string().uuid(),label:z.string()}).nullable().default(null),
   description: z.string(), beneficiary: z.string(), reference: z.string(), reason: z.string(),
   nature: z.enum(['driver_advance', 'payment', 'receipt', 'refund', 'customer_advance', 'other']), direction: z.enum(['in', 'out']),
 });
 type Form = z.infer<typeof formSchema>;
 const savedSchema = z.object({ form: formSchema, request: z.string().uuid().nullable() });
 function initialForm(initialAccount = '', initialDriver?: {id:string;name:string}): Form {
-  return { account: initialAccount, driver: initialDriver?.id ?? '', amount: '', date: localDateInputValue(), description: '',
+  return { account: initialAccount, center: null, driver: initialDriver?.id ?? '', amount: '', date: localDateInputValue(), description: '',
     beneficiary: initialDriver?.name ?? '', reference: '', reason: '', nature: 'driver_advance', direction: 'out' };
 }
 function restore(key: string, initialAccount = '', initialDriver?: {id:string;name:string}) {
@@ -54,6 +56,7 @@ export function MovementEntryDialog({ tenant, actor, onClose, onRecorded, initia
       nature: form.nature, amount_cents: amount, occurred_on: form.date, description: form.description,
       beneficiary_name: form.beneficiary, reason: form.reason,
       ...(form.driver ? { driver_id: form.driver } : {}),
+      ...(form.center ? { cost_center_id: form.center.id } : {}),
       ...(form.reference.trim() ? { bank_reference: form.reference.trim() } : {}),
     };
     try { await recordFinanceMovement(command); sessionStorage.removeItem(key); onRecorded(); }
@@ -87,13 +90,14 @@ export function MovementEntryDialog({ tenant, actor, onClose, onRecorded, initia
           {input('beneficiary', 'Beneficiário / pagador')}{input('amount', 'Valor (R$)')}<div><Label htmlFor="movement-date">Data da movimentação</Label><Input id="movement-date" type="date" max={localDateInputValue()} value={form.date} onChange={event=>field('date',event.target.value)} required/></div>
           {input('description', 'Motivo da movimentação')}{input('reference', 'Referência bancária / identificador do PIX')}
           {input('reason', 'Observação da conferência')}
+          <div className="sm:col-span-2"><FinanceOptionPicker tenant={tenant} actor={actor} kind="centers" label="Centro de custo" value={form.center} onChange={center=>field('center',center)}/><p className="mt-1 text-xs text-muted-foreground">Opcional. Selecione o centro de custo ao qual esta movimentação pertence.</p></div>
         </fieldset>
         {(accounts.error || drivers.error) && <p role="alert">Falha ao carregar contas ou motoristas. Reabra o formulário para atualizar os cadastros.</p>}
         {storageFailed && <p role="alert">Não foi possível preservar o pedido neste navegador. Habilite o armazenamento para registrar com recuperação segura.</p>}
         {recoveryError&&<><p role="alert">{recoveryError}</p><Button type="button" variant="outline" disabled={busy} onClick={discardRecovery}>Descartar recuperação incompatível</Button></>}
         {saved.request && <p role="status" className="text-sm text-muted-foreground">Pedido preservado. Reenviar usa a mesma referência e não cria uma segunda movimentação.</p>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Fechar e manter rascunho</Button>
+        <div className="flex flex-col-reverse gap-3 border-t pt-4 sm:flex-row sm:flex-wrap sm:justify-end"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Fechar e manter rascunho</Button>
           <Button type="submit" disabled={busy || storageFailed || !!recoveryError||accountMismatch}>{busy ? 'Confirmando…' : saved.request ? 'Reenviar mesmo pedido' : 'Registrar movimentação'}</Button></div>
       </form>
     </DialogContent>
