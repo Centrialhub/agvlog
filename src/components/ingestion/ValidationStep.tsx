@@ -14,6 +14,7 @@ import { Client } from '@/hooks/useClients';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import IngestionPreviewDialog from './IngestionPreviewDialog';
+import { DataPagination } from '@/components/ui/data-pagination';
 
 interface LoadOption {
   id: string;
@@ -38,12 +39,15 @@ interface ValidationStepProps {
 }
 
 type FilterMode = 'all' | 'errors' | 'warnings' | 'valid';
+const REVIEW_PAGE_SIZE = 25;
 
 export default function ValidationStep({
   docs, orders, clients, loads = [], onBack, onNext, onSaveDocsOnly, savingDocs,
   onUpdateDoc, onUpdateOrder, onRemoveDoc, onRemoveOrder,
 }: ValidationStepProps) {
   const [filter, setFilter] = useState<FilterMode>('all');
+  const [docPage, setDocPage] = useState(1);
+  const [orderPage, setOrderPage] = useState(1);
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -101,7 +105,7 @@ export default function ValidationStep({
 
   const missingExceeds = missingStats.total > 0 && missingStats.ratePct >= missingThreshold;
 
-  const validDocs = docs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable));
+  const validDocs = useMemo(() => docs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable)), [docs]);
 
   const totalErrors = docs.filter(d => d.hasErrors).length + orders.filter(o => o.hasErrors).length;
   const totalWarnings = docs.filter(d => d.hasWarnings && !d.hasErrors).length + orders.filter(o => o.hasWarnings && !o.hasErrors).length;
@@ -131,6 +135,15 @@ export default function ValidationStep({
     return list;
   };
 
+  const filteredDocs = filterDocs(docs);
+  const filteredOrders = filterOrders(orders);
+  const docPageCount = Math.max(1, Math.ceil(filteredDocs.length / REVIEW_PAGE_SIZE));
+  const orderPageCount = Math.max(1, Math.ceil(filteredOrders.length / REVIEW_PAGE_SIZE));
+  const currentDocPage = Math.min(docPage, docPageCount);
+  const currentOrderPage = Math.min(orderPage, orderPageCount);
+  const docStart = (currentDocPage - 1) * REVIEW_PAGE_SIZE;
+  const orderStart = (currentOrderPage - 1) * REVIEW_PAGE_SIZE;
+
   const handleClientMatch = (docIndex: number, clientId: string) => {
     const client = clients.find(c => c.id === clientId);
     onUpdateDoc(docIndex, {
@@ -159,7 +172,7 @@ export default function ValidationStep({
         ].map(f => (
           <button
             key={f.mode}
-            onClick={() => setFilter(f.mode)}
+            onClick={() => { setFilter(f.mode); setDocPage(1); setOrderPage(1); }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
               filter === f.mode ? 'border-primary bg-primary/10 text-primary' : `border-border bg-card ${f.color || 'text-muted-foreground'}`
             }`}
@@ -373,9 +386,9 @@ export default function ValidationStep({
         </TabsList>
 
         <TabsContent value="docs" className="space-y-2">
-          {filterDocs(docs).length === 0 ? (
+          {filteredDocs.length === 0 ? (
             <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Nenhum documento neste filtro</CardContent></Card>
-          ) : filterDocs(docs).map((doc) => {
+          ) : filteredDocs.slice(docStart, docStart + REVIEW_PAGE_SIZE).map((doc) => {
             const i = docs.indexOf(doc);
             return (
               <Card key={i} className={doc.hasErrors ? 'border-destructive/30' : doc.isDuplicate && !doc.isOrphanReusable ? 'border-destructive/20 opacity-60' : doc.isOrphanReusable ? 'border-success/30' : doc.hasWarnings ? 'border-warning/30' : ''}>
@@ -437,7 +450,7 @@ export default function ValidationStep({
                       )}
                     </div>
 
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => onRemoveDoc(i)}>
+                    <Button aria-label={`Remover NF ${doc.source.invoiceNumber || doc.fileName}`} variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => onRemoveDoc(i)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -445,12 +458,14 @@ export default function ValidationStep({
               </Card>
             );
           })}
+          <DataPagination page={currentDocPage} pageCount={docPageCount} totalCount={filteredDocs.length}
+            start={docStart + 1} end={Math.min(docStart + REVIEW_PAGE_SIZE, filteredDocs.length)} onPageChange={setDocPage} />
         </TabsContent>
 
         <TabsContent value="orders" className="space-y-2">
-          {filterOrders(orders).length === 0 ? (
+          {filteredOrders.length === 0 ? (
             <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Nenhum pedido neste filtro</CardContent></Card>
-          ) : filterOrders(orders).map((order) => {
+          ) : filteredOrders.slice(orderStart, orderStart + REVIEW_PAGE_SIZE).map((order) => {
             const i = orders.indexOf(order);
             return (
               <Card key={i} className={order.hasErrors ? 'border-destructive/30' : order.hasWarnings ? 'border-warning/30' : ''}>
@@ -502,7 +517,7 @@ export default function ValidationStep({
                       )}
                     </div>
 
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => onRemoveOrder(i)}>
+                    <Button aria-label={`Remover pedido ${order.source.orderNumber}`} variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => onRemoveOrder(i)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -510,6 +525,8 @@ export default function ValidationStep({
               </Card>
             );
           })}
+          <DataPagination page={currentOrderPage} pageCount={orderPageCount} totalCount={filteredOrders.length}
+            start={orderStart + 1} end={Math.min(orderStart + REVIEW_PAGE_SIZE, filteredOrders.length)} onPageChange={setOrderPage} />
         </TabsContent>
       </Tabs>
 

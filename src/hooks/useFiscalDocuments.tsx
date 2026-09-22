@@ -259,7 +259,7 @@ export function useFiscalDocuments() {
   });
 }
 
-export function useCreateFiscalDocument() {
+export function useCreateFiscalDocument({ deferRefetch = false }: { deferRefetch?: boolean } = {}) {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -301,7 +301,7 @@ export function useCreateFiscalDocument() {
     },
     onSuccess: () => {
       for (const key of ['fiscal_documents', 'billing_documents', 'pending_invoices_summary'])
-        void qc.invalidateQueries({ queryKey: [key] });
+        void qc.invalidateQueries({ queryKey: [key], refetchType: deferRefetch ? 'none' : 'active' });
     },
   });
 }

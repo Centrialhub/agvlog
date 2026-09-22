@@ -8,7 +8,7 @@ import NFSeFromInvoicesDialog from '@/components/nfse/NFSeFromInvoicesDialog';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { usePendingInvoices } from '@/hooks/usePendingInvoices';
-import { useCreateFiscalDocument } from '@/hooks/useFiscalDocuments';
+import { useCreateFiscalDocument, useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { isSameFiscalMunicipality } from '@/lib/fiscal/fiscalMunicipality';
 
 type Row = Record<string, unknown>;
@@ -180,6 +180,24 @@ it('refreshes both billing lists and the summary immediately after importing an 
     expect(result.current.nfse.data).toHaveLength(1);
     expect(result.current.summary.data.count).toBe(2);
   });
+});
+
+it('defers full-history reads during a batch and refreshes once when the batch finishes', async () => {
+  const {result} = renderHook(() => ({ documents: useFiscalDocuments(), create: useCreateFiscalDocument({deferRefetch: true}) }), {wrapper: Wrapper});
+  await waitFor(() => expect(result.current.documents.isSuccess).toBe(true));
+  const countReads = () => state.requests.filter(url => url.pathname.endsWith('/fiscal_documents') && url.searchParams.has('order')).length;
+  const initialReads = countReads();
+  const initialCount = result.current.documents.data!.length;
+  await act(async () => {
+    for (let index = 0; index < 3; index++) {
+      await result.current.create.mutateAsync({document_type: 'inbound', status: 'confirmed', invoice_number: String(9000 + index), issue_date: '2026-09-22', recipient: 'Cliente teste'});
+    }
+  });
+  expect(countReads()).toBe(initialReads);
+  expect(result.current.documents.data).toHaveLength(initialCount);
+  await act(async () => { await client.invalidateQueries({queryKey: ['fiscal_documents']}); });
+  await waitFor(() => expect(result.current.documents.data).toHaveLength(initialCount + 3));
+  expect(countReads()).toBe(initialReads + 1);
 });
 
 describe('municipality matching', () => {

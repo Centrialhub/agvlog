@@ -3,20 +3,25 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Camera, Loader2, ScanLine, Upload } from 'lucide-react';
+import { INGESTION_MAX_FILES } from '@/lib/ingestion/uploadLimits';
 
 interface UploadStepProps {
   onFiles: (files: FileList) => void;
   onOrtFiles: (files: FileList) => void;
   ortProcessing?: boolean;
+  readProgress?: { completed: number; total: number } | null;
 }
 
-export default function UploadStep({ onFiles, onOrtFiles, ortProcessing }: UploadStepProps) {
+export default function UploadStep({ onFiles, onOrtFiles, ortProcessing, readProgress }: UploadStepProps) {
+  const busy = Boolean(ortProcessing || readProgress);
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    if (busy) return;
     if (e.dataTransfer.files.length > 0) onFiles(e.dataTransfer.files);
-  }, [onFiles]);
+  }, [onFiles, busy]);
 
   const handleClick = () => {
+    if (busy) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
@@ -29,6 +34,7 @@ export default function UploadStep({ onFiles, onOrtFiles, ortProcessing }: Uploa
   };
 
   const handleOrtFile = (capture: boolean) => {
+    if (busy) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = !capture;
@@ -46,21 +52,28 @@ export default function UploadStep({ onFiles, onOrtFiles, ortProcessing }: Uploa
       <CardContent className="py-12">
         <Tabs defaultValue="files" className="space-y-4">
           <TabsList className="grid w-full max-w-md grid-cols-2 mx-auto">
-            <TabsTrigger value="files">XML / planilhas</TabsTrigger>
-            <TabsTrigger value="ort">Scan NF-e / ORT</TabsTrigger>
+            <TabsTrigger value="files" disabled={busy}>XML / planilhas</TabsTrigger>
+            <TabsTrigger value="ort" disabled={busy}>Scan NF-e / ORT</TabsTrigger>
           </TabsList>
 
           <TabsContent value="files">
             <div
+              role="button"
+              tabIndex={busy ? -1 : 0}
+              aria-disabled={busy}
+              aria-busy={busy}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }}
               className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 text-center cursor-pointer hover:border-primary/50 transition-colors"
               onDragOver={e => e.preventDefault()}
               onDrop={handleDrop}
               onClick={handleClick}
             >
-              <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">Arraste arquivos ou clique para selecionar</h3>
+              {readProgress ? <Loader2 className="h-12 w-12 text-primary mx-auto mb-4 animate-spin" /> : <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />}
+              <h3 className="text-lg font-medium mb-2" role="status">
+                {readProgress ? `Lendo arquivos: ${readProgress.completed} de ${readProgress.total}` : 'Arraste arquivos ou clique para selecionar'}
+              </h3>
               <p className="text-sm text-muted-foreground">
-                XML (NF-e) • CSV • Excel (.xlsx) • Múltiplos arquivos permitidos
+                XML (NF-e) • CSV • Excel (.xlsx) • até {INGESTION_MAX_FILES} arquivos, 10 MB cada e 50 MB por lote
               </p>
             </div>
           </TabsContent>

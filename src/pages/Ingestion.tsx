@@ -1,4 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
+import { INGESTION_READ_CONCURRENCY, ingestionSelectionError } from '@/lib/ingestion/uploadLimits';
 import { useSearchParams } from 'react-router-dom';
 import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow, ParsedNFe } from '@/lib/documentParsers';
 import {
@@ -167,13 +168,18 @@ export default function Ingestion() {
   const { data: operationalRoutes = [] } = useOperationalRoutes();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
-  const createDoc = useCreateFiscalDocument();
+  const createDoc = useCreateFiscalDocument({ deferRefetch: true });
   const createOrder = useCreateOrder();
   const createLoad = useCreateLoad();
   const itemPreparations = useItemPreparationWrites();
   const updateRoute = useUpdateOperationalRoute();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const refreshImportedDocuments = () => {
+    for (const key of ['fiscal_documents', 'billing_documents', 'pending_invoices_summary']) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  };
 
   // Learn city → persist to operational_routes destinations
   const handleLearnCity = useCallback((routeId: string, cityName: string) => {
@@ -205,6 +211,8 @@ export default function Ingestion() {
   const [executing, setExecuting] = useState(false);
   const [savingDocsOnly, setSavingDocsOnly] = useState(false);
   const [ortProcessing, setOrtProcessing] = useState(false);
+  const uploadLock = useRef(false);
+  const [readProgress, setReadProgress] = useState<{ completed: number; total: number } | null>(null);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
   const [ingestionReport, setIngestionReport] = useState<IngestionReport | null>(null);
   const [ortClientIds, setOrtClientIds] = useState<Array<string | null>>([]);
@@ -327,94 +335,101 @@ export default function Ingestion() {
   };
 
   const handleFiles = useCallback(async (fileList: FileList) => {
+    if (uploadLock.current) return;
     const files = Array.from(fileList);
+    if (files.length === 0) return;
+    const selectionError = ingestionSelectionError(files);
+    if (selectionError) {
+      toast({ title: 'Lote de importação inválido', description: selectionError, variant: 'destructive' });
+      return;
+    }
     const t0 = performance.now();
-
-    // Read ALL files in parallel (I/O bound) — huge speedup vs sequential await
-    const fileBuffers = await Promise.all(
-      files.map(async (file): Promise<IngestionFileBuffer> => {
+    uploadLock.current = true;
+    setReadProgress({ completed: 0, total: files.length });
+    try {
+      // Paint feedback before parsing and constructing indexes.
+      await new Promise(resolve => setTimeout(resolve, 0));
+      const readFile = async (file: File): Promise<IngestionFileBuffer> => {
         const name = file.name.toLowerCase();
         try {
           if (name.endsWith('.xml') || name.endsWith('.csv') || name.endsWith('.txt')) {
-            return { file, name, kind: name.endsWith('.xml') ? 'xml' : 'csv', text: await file.text(), buffer: null as ArrayBuffer | null };
+            return { file, name, kind: name.endsWith('.xml') ? 'xml' : 'csv', text: await file.text(), buffer: null };
           }
           if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-            return { file, name, kind: 'excel' as const, text: '', buffer: await file.arrayBuffer() };
+            return { file, name, kind: 'excel', text: '', buffer: await file.arrayBuffer() };
           }
-          return { file, name, kind: 'unknown' as const, text: '', buffer: null };
-        } catch (e: unknown) {
-          return { file, name, kind: 'error' as const, text: '', buffer: null, error: getErrorMessage(e, 'Erro de leitura') };
+          return { file, name, kind: 'unknown', text: '', buffer: null };
+        } catch (error) {
+          return { file, name, kind: 'error', text: '', buffer: null, error: getErrorMessage(error, 'Erro de leitura') };
         }
-      })
-    );
+      };
+      const indexes = buildValidationIndexes(existingDocs, clients);
+      const clientsByTaxId = new Map<string, typeof clients>();
+      for (const client of clients) {
+        const taxId = (client.tax_id || '').replace(/\D/g, '');
+        const matches = clientsByTaxId.get(taxId) || [];
+        matches.push(client);
+        clientsByTaxId.set(taxId, matches);
+      }
+      const docs: ValidatedDocument[] = [];
+      const orderRows: ParsedOrderRow[] = [];
 
-    // Build validation indexes ONCE (O(N+M) lookups instead of O(N*M))
-    const indexes = buildValidationIndexes(existingDocs, clients);
-
-    // Build a Map for client lookup once (used inside validateNFe via clients array — already O(n) per doc, so we keep clients but skip rebuilds)
-    const docs: ValidatedDocument[] = [];
-    const orderRows: ParsedOrderRow[] = [];
-
-    // Parse + validate (CPU bound, but sync and fast). Yield to UI between large batches.
-    const BATCH = 50;
-    for (let i = 0; i < fileBuffers.length; i++) {
-      const fb = fileBuffers[i];
-      if (fb.kind === 'xml') {
-        try {
-          const parsed = parseNFeXml(fb.text);
-          const validated = validateNFe(parsed, fb.file.name, existingDocs, clients, indexes);
-          
-          // Re-validate specifically for multi-branch branch congruence if multiple CNPJ matches exist
-          const cnpj = (parsed.recipientCnpj || '').replace(/\D/g, '');
-          if (cnpj) {
-            const matches = clients.filter(c => (c.tax_id || '').replace(/\D/g, '') === cnpj);
-            if (matches.length > 1) {
-              const city = (parsed.recipientCity || '').toUpperCase().trim();
-              const branchMatch = matches.find(c => (c.address_city || '').toUpperCase().trim() === city);
-              if (branchMatch) {
-                validated.matchedClientId = branchMatch.id;
-                validated.matchedClientName = branchMatch.company_name;
+      // Release raw buffers after each small batch and yield for browser input/painting.
+      for (let batchStart = 0; batchStart < files.length; batchStart += INGESTION_READ_CONCURRENCY) {
+        const fileBuffers = await Promise.all(
+          files.slice(batchStart, batchStart + INGESTION_READ_CONCURRENCY).map(readFile),
+        );
+        for (const fb of fileBuffers) {
+          try {
+            if (fb.kind === 'xml') {
+              const parsed = parseNFeXml(fb.text);
+              const validated = validateNFe(parsed, fb.file.name, existingDocs, clients, indexes);
+              const cnpj = (parsed.recipientCnpj || '').replace(/\D/g, '');
+              const matches = cnpj ? clientsByTaxId.get(cnpj) : undefined;
+              if (matches && matches.length > 1) {
+                const city = (parsed.recipientCity || '').toUpperCase().trim();
+                const branchMatch = matches.find(client => (client.address_city || '').toUpperCase().trim() === city);
+                if (branchMatch) {
+                  validated.matchedClientId = branchMatch.id;
+                  validated.matchedClientName = branchMatch.company_name;
+                }
               }
+              docs.push(validated);
+            } else if (fb.kind === 'excel' && fb.buffer) {
+              for (const row of parseExcelOrders(fb.buffer)) orderRows.push(row);
+            } else if (fb.kind === 'csv') {
+              for (const row of parseCsvOrders(fb.text)) orderRows.push(row);
+            } else {
+              throw new Error(fb.error || 'Formato não suportado. Selecione XML, CSV ou Excel.');
             }
+          } catch (error) {
+            docs.push({
+              source: createInvalidParsedNFe(), fileName: fb.file.name,
+              validations: [{ field: 'parse', message: 'Erro ao ler ' + (fb.kind === 'xml' ? 'XML: ' : 'arquivo: ') + getErrorMessage(error), severity: 'error' }],
+              hasErrors: true, hasWarnings: false,
+              matchedClientId: null, matchedClientName: null, isDuplicate: false,
+            });
           }
-          
-          docs.push(validated);
-        } catch (e: unknown) {
-          docs.push({
-            source: createInvalidParsedNFe(),
-            fileName: fb.file.name,
-            validations: [{ field: 'parse', message: `Erro ao ler XML: ${getErrorMessage(e)}`, severity: 'error' }],
-            hasErrors: true, hasWarnings: false,
-            matchedClientId: null, matchedClientName: null, isDuplicate: false,
-          });
         }
-      } else if (fb.kind === 'excel' && fb.buffer) {
-        orderRows.push(...parseExcelOrders(fb.buffer));
-      } else if (fb.kind === 'csv') {
-        orderRows.push(...parseCsvOrders(fb.text));
-      } else if (fb.kind === 'error') {
-        docs.push({
-          source: createInvalidParsedNFe(),
-          fileName: fb.file.name,
-          validations: [{ field: 'parse', message: `Erro ao ler arquivo: ${fb.error}`, severity: 'error' }],
-          hasErrors: true, hasWarnings: false,
-          matchedClientId: null, matchedClientName: null, isDuplicate: false,
-        });
+        setReadProgress({ completed: Math.min(batchStart + INGESTION_READ_CONCURRENCY, files.length), total: files.length });
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
-      // Yield to event loop every BATCH to keep UI responsive on huge uploads
-      if (i > 0 && i % BATCH === 0) {
-        await new Promise(r => setTimeout(r, 0));
-      }
+      const orders = validateOrderRows(orderRows, clients);
+      setValidatedDocs(docs);
+      setValidatedOrders(orders);
+      console.info('[Ingestion] files processed', { fileCount: files.length, durationMs: Math.round(performance.now() - t0) });
+      setStep(2);
+    } catch (error) {
+      console.error('[Ingestion] file processing failed', { fileCount: files.length });
+      toast({ title: 'Erro na leitura do lote', description: getErrorMessage(error), variant: 'destructive' });
+    } finally {
+      uploadLock.current = false;
+      setReadProgress(null);
     }
-
-    setValidatedDocs(docs);
-    setValidatedOrders(validateOrderRows(orderRows, clients));
-    const elapsed = Math.round(performance.now() - t0);
-    console.log(`[Ingestion] processed ${files.length} files in ${elapsed}ms`);
-    setStep(2);
-  }, [existingDocs, clients]);
+  }, [existingDocs, clients, toast]);
 
   const handleOrtFiles = useCallback(async (fileList: FileList) => {
+    if (uploadLock.current) return;
     const files = Array.from(fileList);
     // Limite razoável: PDFs muito grandes estouram o AI Gateway.
     const MAX_PER_FILE = 3 * 1024 * 1024; // 3 MB por arquivo (recomendação Gemini inline)
@@ -427,6 +442,7 @@ export default function Ingestion() {
       });
       return;
     }
+    uploadLock.current = true;
     setOrtProcessing(true);
     try {
       const payload = await Promise.all(files.map(async file => ({
@@ -526,6 +542,7 @@ export default function Ingestion() {
     } catch (e: unknown) {
       toast({ title: 'Erro ao ler NF-e/ORT', description: getErrorMessage(e), variant: 'destructive' });
     } finally {
+      uploadLock.current = false;
       setOrtProcessing(false);
     }
   }, [currentTenant?.id, existingDocs, reviewThreshold, toast]);
@@ -1050,6 +1067,7 @@ export default function Ingestion() {
     } catch (e: unknown) {
       toast({ title: 'Erro', description: getErrorMessage(e), variant: 'destructive' });
     } finally {
+      refreshImportedDocuments();
       setSavingDocsOnly(false);
     }
   };
@@ -1169,6 +1187,7 @@ export default function Ingestion() {
       }
     }
 
+    refreshImportedDocuments();
     if (savedCount > 0) {
       toast({
         title: `${savedCount} NF-e(s) salvas automaticamente`,
@@ -1474,6 +1493,7 @@ export default function Ingestion() {
     } catch (e: unknown) {
       toast({ title: 'Erro na execução', description: getErrorMessage(e), variant: 'destructive' });
     } finally {
+      refreshImportedDocuments();
       setExecuting(false);
     }
   };
@@ -1588,7 +1608,7 @@ export default function Ingestion() {
 
       {step === 0 && (
         <>
-          <UploadStep onFiles={handleFiles} onOrtFiles={handleOrtFiles} ortProcessing={ortProcessing} />
+          <UploadStep onFiles={handleFiles} onOrtFiles={handleOrtFiles} ortProcessing={ortProcessing} readProgress={readProgress} />
           {/* Pending NF-es without load */}
           {(() => {
             const pending = existingDocs.filter(d => !d.load_id && d.status !== 'cancelled');
