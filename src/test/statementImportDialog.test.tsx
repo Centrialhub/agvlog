@@ -3,6 +3,8 @@ import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {StatementImportDialog} from '@/components/financial/StatementImportDialog';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
+import {sicoobPixMatrix} from './helpers/sicoobPixFixture';
+import {detectSicoobPixLayout} from '../../supabase/functions/_shared/finance-sicoob-pix-layout';
 const mocks=vi.hoisted(()=>({load:vi.fn(),run:vi.fn(),abandon:vi.fn(),inspect:vi.fn(),prepare:vi.fn(),accountsError:false,accountsPending:false,refetchAccounts:vi.fn()}));
 vi.mock('@/hooks/useFinancialPayments',()=>({useBankAccounts:()=>({data:mocks.accountsError?undefined:[{id:'account',name:'Banco QA'}],isError:mocks.accountsError,isPending:mocks.accountsPending,refetch:mocks.refetchAccounts})}));
 vi.mock('@/lib/financial/statementImportStore',()=>({statementImportStore:{load:mocks.load}}));
@@ -12,6 +14,22 @@ const renderDialog=(dialog:ReactNode)=>render(<QueryClientProvider client={new Q
 const mount=()=>renderDialog(<StatementImportDialog tenant={tenant} actor={actor} onClose={vi.fn()} onImported={vi.fn()}/>);
 beforeEach(()=>{vi.clearAllMocks();mocks.accountsError=false;mocks.accountsPending=false;mocks.load.mockResolvedValue(null);mocks.inspect.mockResolvedValue({matrix:[['Data','Descrição','Valor'],['01/01/2026','PIX','-500,00']],sheetNames:['CSV']});});
 describe('statement import preparation and recovery UI',()=>{
+  it('fills Sicoob payment mapping and period without sending the file before review',async()=>{
+    const matrix=sicoobPixMatrix(),sicoobPix=detectSicoobPixLayout(matrix)!;
+    mocks.inspect.mockResolvedValue({matrix,sheetNames:['Extrato Pix'],sicoobPix});
+    const file=new File(['fixture'],'pix.xlsx');mount();
+    const input=await screen.findByLabelText('Arquivo original');
+    fireEvent.change(input,{target:{files:[file]}});
+    await screen.findByText(/Relatório de pagamentos Pix do Sicoob reconhecido/);
+    expect(screen.getByLabelText('Linha do cabeçalho')).toHaveValue(11);
+    expect(screen.getByLabelText('Coluna de descrição')).toHaveValue('2');
+    expect(screen.getByLabelText('Valor com sinal')).toHaveValue('');
+    expect(screen.getByLabelText('Débito separado')).toHaveValue('8');
+    expect(screen.getByLabelText('Início do período')).toHaveValue('2026-09-01');
+    expect(screen.getByLabelText('Fim do período')).toHaveValue('2026-09-08');
+    expect(screen.getByLabelText('Conta do extrato')).toHaveValue('');
+    expect(mocks.run).not.toHaveBeenCalled();expect(mocks.prepare).not.toHaveBeenCalled();
+  });
   it('prefills the selected account and period without replacing an existing recovery request',async()=>{
     const initial={account:'account',start:'2026-09-01',end:'2026-09-10'};
     const view=renderDialog(<StatementImportDialog tenant={tenant} actor={actor} initial={initial} onClose={vi.fn()} onImported={vi.fn()}/>);

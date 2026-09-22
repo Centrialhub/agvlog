@@ -34,6 +34,8 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
     if(/\.(pdf|jpe?g|png)$/i.test(next.name)){setBusy(false);return;}
     try{const result=await inspectStatementLayout(next,nextMap.delimiter||';',nextMap.sheet_index||0);
       if(active.current&&current===version.current){setLayout(result);setMapping(nextMap);
+        if('sicoobPix' in result&&result.sicoobPix){setMapping({...result.sicoobPix.mapping,sheet_index:nextMap.sheet_index??0,delimiter:nextMap.delimiter});
+          if(result.sicoobPix.period){setStart(result.sicoobPix.period.start);setEnd(result.sicoobPix.period.end);}}
         if(result.nativeOfx){const dates=[result.nativeOfx.period.start.date,result.nativeOfx.period.end.date,...result.nativeOfx.rows.map(row=>row.posted_on)].sort();setStart(dates[0]);setEnd(dates[dates.length-1]);}
         if('preview_error' in result&&typeof result.preview_error==='string')setError(result.preview_error);}}
     catch(cause){if(active.current&&current===version.current)setError(statementImportErrorMessage(cause));}
@@ -85,6 +87,7 @@ export function StatementImportDialog({tenant,actor,onClose,onImported,initial}:
         <option value=";">Ponto e vírgula</option><option value=",">Vírgula</option><option value={'\t'}>Tabulação</option></select></label>}
       {layout?.nativeOfx&&<div className="rounded border p-3 text-sm"><p>Dados lidos diretamente do OFX: banco {layout.nativeOfx.account.bank_id}, agência {layout.nativeOfx.account.branch_id||'não informada'}, conta {layout.nativeOfx.account.account_id}.</p>
         <p>Confira se correspondem à conta selecionada. A leitura do arquivo ainda não confirma a conta nem a cobertura completa do período.</p></div>}
+      {layout&&'sicoobPix' in layout&&layout.sicoobPix&&<p role="status" className="rounded border p-3 text-sm">Relatório de pagamentos Pix do Sicoob reconhecido. Cabeçalho, colunas e período preenchidos para conferência. Os valores serão importados como saídas, com validação da quantidade e do total do resumo. Este relatório contém apenas pagamentos Pix e não comprova a movimentação completa da conta.</p>}
       {layout&&!layout.nativeOfx&&<><div className="grid gap-3 sm:grid-cols-4">
         <label className="text-sm">Aba<select className="block h-10 w-full rounded border bg-background" value={mapping.sheet_index||0} onChange={e=>{if(file)void readFile(file,{...mapping,sheet_index:Number(e.target.value)});}}>
           {layout.sheetNames.map((name,index)=><option key={index} value={index}>{name}</option>)}</select></label>

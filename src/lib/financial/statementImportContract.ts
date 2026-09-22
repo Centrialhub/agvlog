@@ -27,6 +27,9 @@ export function statementImportErrorMessage(error:unknown):string{
   if(error instanceof z.ZodError)return 'A resposta não pôde ser validada. O pedido foi preservado; retome a mesma importação.';
   const message=error instanceof Error?error.message:'';
   const translations:Record<string,string>={invalid_date:'Data inválida para o formato selecionado.',invalid_excel_date:'Data numérica Excel inválida.',
+    sicoob_pix_invalid_summary:'O resumo do relatório Pix do Sicoob está ausente ou tem conteúdo inesperado. Baixe novamente o relatório original.',
+    sicoob_pix_summary_mismatch:'A quantidade ou o total dos pagamentos diverge do resumo do Sicoob. Confira se o arquivo está completo.',
+    sicoob_pix_payment_mapping:'Neste relatório Sicoob, use o cabeçalho reconhecido, data na primeira coluna e Valor como débito separado. O arquivo contém somente pagamentos Pix.',
     invalid_amount:'Valor incompatível com o formato escolhido ou com mais de duas casas decimais.',amount_out_of_range:'Valor fora do limite suportado.',
     invalid_mapping:'Revise as colunas e os formatos selecionados.',overlapping_columns:'As colunas de data, valor e saldo precisam ser distintas.',
     column_out_of_range:'Uma coluna selecionada não existe neste cabeçalho.',date_outside_period:'Há lançamento fora do período informado.',

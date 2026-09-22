@@ -11,13 +11,14 @@ import {financeStatementOriginalReady,intakeFinanceStatement} from './ledgerClie
 import {statementImportStore} from './statementImportStore';
 import {createStatementImportWorkflow} from './statementImportWorkflow';
 import {pendingStatementSchema,type PendingStatement} from './statementImportContract';
+import {detectSicoobPixLayout} from '../../../supabase/functions/_shared/finance-sicoob-pix-layout';
 export async function inspectStatementLayout(file:File,delimiter:string,sheet=0){
   if(!file.size||file.size>10485760)throw new Error('Selecione um extrato de até 10 MB.');
   const bytes=await readBlobBytes(file),type=statementFileType(file.name,bytes);if(!type)throw new Error('Use OFX, CSV UTF-8, XLS ou XLSX válido.');
   if(type.extension==='ofx'){const nativeOfx=readOfxStatement(bytes);return {matrix:[],sheetNames:['OFX'],nativeOfx};}
   if(type.extension==='csv')return {matrix:readStatementCsv(bytes,delimiter),sheetNames:['CSV']};
   const {readStatementWorkbook,statementWorkbookNames}=await import('../../../supabase/functions/finance-statement-verify/workbook');
-  try{const result=readStatementWorkbook(bytes,sheet);return {matrix:result.matrix,sheetNames:result.sheetNames};}
+  try{const result=readStatementWorkbook(bytes,sheet);return {matrix:result.matrix,sheetNames:result.sheetNames,sicoobPix:detectSicoobPixLayout(result.matrix)};}
   catch{return {matrix:[],sheetNames:statementWorkbookNames(bytes),preview_error:'Esta aba não pode ser lida como extrato. Selecione a aba correta ou revise o arquivo.'};}
 }
 export async function prepareStatementImport(file:File,context:{tenant:string;actor:string;account:string;start:string;end:string;reason:string},mapping:StatementMapping){

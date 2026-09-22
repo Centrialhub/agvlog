@@ -1,3 +1,4 @@
+import {detectSicoobPixLayout,sicoobPixSummary} from './finance-sicoob-pix-layout.ts';
 export interface StatementMapping {
   header_row:number;sheet_index?:number;delimiter?:';'|','|'\t';number_format:'br'|'decimal';date_format:'dmy'|'ymd'|'excel';
   date_column:number;description_column:number;amount_column?:number;credit_column?:number;debit_column?:number;
@@ -27,7 +28,7 @@ export function readStatementCsv(bytes:Uint8Array,delimiter:string):unknown[][] 
   if(quoted)return fail('truncated_csv');if(row.length||cell.length||closed)flush();
   return result;
 }
-function sourceDate(value:unknown,format:StatementMapping['date_format'],date1904:boolean):string{
+function sourceDate(value:unknown,format:StatementMapping['date_format'],date1904:boolean,withTime=false):string{
   if(format==='excel'){
     if(typeof value!=='number'||!Number.isFinite(value)||value<0||(!date1904&&Math.floor(value)===60))return fail('invalid_excel_date');
     const serial=Math.floor(value),base=Date.UTC(date1904?1904:1899,date1904?0:11,date1904?1:31);
@@ -35,7 +36,12 @@ function sourceDate(value:unknown,format:StatementMapping['date_format'],date190
     if(!Number.isFinite(date.getTime())||date.getUTCFullYear()<1900||date.getUTCFullYear()>9999)return fail('invalid_date');
     return date.toISOString().slice(0,10);
   }
-  const text=String(value??'').trim(),m=format==='dmy'?text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/):text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  let text=String(value??'').trim();
+  if(withTime&&format==='dmy'){
+    const timed=text.match(/^(\d{2}\/\d{2}\/\d{4}) ([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/);
+    if(!timed)return fail('invalid_date');text=timed[1];
+  }
+  const m=format==='dmy'?text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/):text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(!m)return fail('invalid_date');
   const year=Number(format==='dmy'?m[3]:m[1]),month=Number(m[2]),day=Number(format==='dmy'?m[1]:m[3]);
   const date=new Date(Date.UTC(year,month-1,day));
@@ -69,12 +75,17 @@ export function mapStatementMatrix(matrix:unknown[][],map:StatementMapping,perio
   if(new Set([map.date_column,...moneyColumns]).size!==moneyColumns.length+1)return fail('overlapping_columns');
   const width=matrix[map.header_row].length;
   if(columns.some(value=>Number(value)>=width))return fail('column_out_of_range');
+  const sicoob=detectSicoobPixLayout(matrix);
+  if(sicoob&&(map.header_row!==sicoob.mapping.header_row||map.date_column!==0||map.date_format!=='dmy'
+    ||map.debit_column!==8||map.amount_column!==undefined||map.credit_column!==undefined||map.balance_column!==undefined))return fail('sicoob_pix_payment_mapping');
+  const summary=sicoob?sicoobPixSummary(matrix,map.header_row):null;
+  if(sicoob&&!summary)return fail('sicoob_pix_invalid_summary');
   const rows:StatementSourceRow[]=[];let inflow=0n,outflow=0n,balanceRows=0;
-  for(let index=map.header_row+1;index<matrix.length;index++){
+  for(let index=map.header_row+1;index<(summary?.index??matrix.length);index++){
     const cells=matrix[index];if(cells.every(cell=>cell==null||String(cell).trim()===''))continue;
     if(cells.slice(width).some(cell=>cell!=null&&String(cell).trim()!==''))return fail(`extra_column:${index+1}`);
     try{
-      const posted=sourceDate(cells[map.date_column],map.date_format,date1904);
+      const posted=sourceDate(cells[map.date_column],map.date_format,date1904,!!sicoob);
       if(posted<period.start||posted>period.end)return fail('date_outside_period');
       const text=(column:number|undefined)=>column===undefined?null:String(cells[column]??'').trim()||null;
       let cents:number;
@@ -92,6 +103,7 @@ export function mapStatementMatrix(matrix:unknown[][],map:StatementMapping,perio
     if(rows.length>10000)return fail('too_many_rows');
   }
   if(!rows.length)return fail('no_transactions');
+  if(summary&&(rows.length!==summary.count||outflow!==BigInt(statementCents(summary.amount,'br'))))return fail('sicoob_pix_summary_mismatch');
   return {rows,net_cents:(inflow-outflow).toString(),inflow_cents:inflow.toString(),outflow_cents:outflow.toString(),balance_rows:balanceRows};
 }
 function normalizedRow(value:Record<string,unknown>){
