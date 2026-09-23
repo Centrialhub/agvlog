@@ -1,10 +1,10 @@
 // @vitest-environment node
+import { historicalSettlementExpenseContextSchema } from './helpers/historicalFinanceContracts';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {beforeAll,afterAll,beforeEach,afterEach,it,expect} from 'vitest';
 import type {PGlite} from '@electric-sql/pglite';
 import {createFinanceLedgerDatabase,financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
-import {settlementExpenseContextSchema} from '@/lib/financial/settlementExpenseContextContract';
 let db:PGlite;const settlement=randomUUID(),trip=randomUUID(),batch=randomUUID();
 beforeAll(async()=>{
  db=await createFinanceLedgerDatabase();await db.exec(`create table driver_settlements(id uuid,tenant_id uuid,dispatch_trip_id uuid,driver_id uuid);
@@ -24,7 +24,7 @@ async function expense(amount=50000,allocated=40000,payee='driver'){
  if(payable)await db.query("insert into payables values($1,$2,'pending','Favorecido QA',$3,'finance_expense_items',$4)",[payable,i.tenant,(amount-allocated)/100,id]);
  await db.query("insert into finance_commands(tenant_id,request_id,actor_id,action,payload,result) values($1,$2,$3,'record_expense_batch',$4::jsonb,$5::jsonb)",[i.tenant,randomUUID(),i.operator,JSON.stringify({items:[{id,payee_type:payee}]}),JSON.stringify({batch_id:batch})]);return {id,payable};
 }
-async function read(page=1,actor=i.operator,tenant=i.tenant){return settlementExpenseContextSchema.parse((await financeAs<{r:unknown}>(db,actor,'select get_finance_settlement_expense_context($1,$2,$3) r',[tenant,settlement,page])).rows[0].r);}
+async function read(page=1,actor=i.operator,tenant=i.tenant){return historicalSettlementExpenseContextSchema.parse((await financeAs<{r:unknown}>(db,actor,'select get_finance_settlement_expense_context($1,$2,$3) r',[tenant,settlement,page])).rows[0].r);}
 it('separates original cost, existing allocation and the remaining title without making another claim',async()=>{
  const e=await expense();await db.query('insert into payables_payments values($1,$2,30)',[i.tenant,e.payable]);
  expect(await read()).toMatchObject({total:1,total_cents:'50000',allocated_cents:'40000',payable_cents:'10000',paid_cents:'3000',outstanding_cents:'7000',needs_review_count:0,rows:[{id:e.id,payee_type:'driver'}]});

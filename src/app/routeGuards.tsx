@@ -19,6 +19,7 @@ const CLIENT_PORTAL_ROLES = new Set(["client", "owner", "admin", "operator"]);
 
 type ProtectedRouteProps = PropsWithChildren<{
   gate?: "internal" | "any";
+  roles?: string[];
 }>;
 
 export function PageLoader() {
@@ -104,11 +105,12 @@ export function CapabilityGate({
   return <>{children}</>;
 }
 
-function ProtectedContent({ children, gate }: Required<ProtectedRouteProps>) {
+function ProtectedContent({ children, gate, roles }: ProtectedRouteProps & { gate: "internal" | "any" }) {
   const { loading, currentRole } = useTenant();
   const {pathname}=useLocation();
 
   if (loading) return <FullPageLoader />;
+  if (roles && (!currentRole || !roles.includes(currentRole))) return <Navigate to="/" replace />;
 
   const isDriver = currentRole === "driver";
   if (isDriver && gate === "internal") return <Navigate to="/driver" replace />;
@@ -128,7 +130,7 @@ function ProtectedContent({ children, gate }: Required<ProtectedRouteProps>) {
   return page;
 }
 
-export function ProtectedRoute({ children, gate = "internal" }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, gate = "internal", roles }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
 
   if (loading) return <FullPageLoader />;
@@ -136,7 +138,7 @@ export function ProtectedRoute({ children, gate = "internal" }: ProtectedRoutePr
 
   return (
     <TenantProvider>
-      <ProtectedContent gate={gate}>{children ?? null}</ProtectedContent>
+      <ProtectedContent gate={gate} roles={roles}>{children ?? null}</ProtectedContent>
     </TenantProvider>
   );
 }

@@ -93,7 +93,7 @@ describe("tenant integration capabilities", () => {
     const routes = read("src/app/AppRoutes.tsx");
     const unavailable = read("src/components/integrations/IntegrationUnavailable.tsx");
     expect(routes).toContain('<CapabilityGate capability="fiscal">');
-    expect(unavailable).toContain("Integração em implantação");
+    expect(unavailable).toContain("Recurso indisponível");
     expect(unavailable).toContain("Nenhuma sincronização, emissão ou cancelamento será executado.");
   });
 });

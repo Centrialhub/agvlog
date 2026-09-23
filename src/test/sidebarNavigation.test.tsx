@@ -22,6 +22,7 @@ describe('sidebar navigation', () => {
     expect(isNavigationActive('/operations-control', '/operations')).toBe(false);
     expect(findNavigationPage('/vehicles/123')?.item.href).toBe('/vehicles');
     expect(findNavigationPage('/cte-monitor')?.item.href).toBe('/cte-hub');
+    expect(findNavigationPage('/help')?.item.label).toBe('Central de ajuda');
     const hrefs = navigationSections.flatMap(section => section.items.map(item => item.href));
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });

@@ -53,6 +53,7 @@ beforeAll(async()=>{
     $$;`);
   await db.query("select set_config('request.active_tenant',$1,false)",[i.tenant]);
   await db.exec(read('20260914205842_finance_payable_bulk_settlement'));
+  await db.exec(read('20260922205000_finance_payable_bulk_require_beneficiary'));
 },30000);
 
 beforeEach(async()=>{await db.exec('begin');await db.query("select set_config('request.active_tenant',$1,false)",[i.tenant]);});
@@ -140,6 +141,11 @@ describe('atomic payable bulk settlement',()=>{
     await expect(preview(m,proposal([p,other],[30000,20000]))).rejects.toThrow('finance_payable_bulk_beneficiary_mismatch');
     const driverTitle=await payable(200,'Fornecedor QA',i.tenant,i.driver);
     await expect(preview(m,proposal([p,driverTitle],[30000,20000]))).rejects.toThrow('finance_payment_driver_mismatch');
+    expect((await db.query('select count(*)::int n from payables_payments')).rows).toEqual([{n:0}]);
+  });
+  it('rejects a batch whose titles have no identifiable beneficiary',async()=>{
+    const m=await movement(),p=await payable(300,' '),q=await payable(200,'');
+    await expect(preview(m,proposal([p,q],[30000,20000]))).rejects.toThrow('finance_payable_bulk_beneficiary_missing');
     expect((await db.query('select count(*)::int n from payables_payments')).rows).toEqual([{n:0}]);
   });
 });

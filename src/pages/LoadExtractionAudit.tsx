@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { localDateInputValue } from '@/lib/utils/formatDate';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -22,6 +22,7 @@ import { AlertTriangle, Eye, FileSearch, Search, X, Copy, Check } from 'lucide-r
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { Json } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
+import { csvSafeCell } from '@/lib/csvSafety';
 
 interface AuditDoc {
   id: string;
@@ -57,6 +58,8 @@ export default function LoadExtractionAudit() {
   const [openDoc, setOpenDoc] = useState<AuditDoc | null>(null);
   const [copied, setCopied] = useState(false);
 
+  useEffect(()=>{setOpenDoc(null);setClientFilter(SENTINEL_ALL);setCopied(false);setSearch('');},[currentTenant?.id]);
+
   const { data: clients = [] } = useQuery({
     queryKey: ['audit-clients', currentTenant?.id],
     enabled: !!currentTenant?.id,
@@ -79,6 +82,8 @@ export default function LoadExtractionAudit() {
         .from('fiscal_documents')
         .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, issue_date, client_id, client_load_number, client_load_source, load_id')
         .eq('tenant_id', currentTenant!.id)
+        .is('deleted_at', null)
+        .in('document_type', ['nfe','inbound'])
         .is('client_load_number', null)
         .order('issue_date', { ascending: false })
         .limit(1000);
@@ -145,7 +150,7 @@ export default function LoadExtractionAudit() {
       observationOf(d).replace(/\s+/g, ' ').slice(0, 600),
     ]);
     const csv = [header, ...rows]
-      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .map(r => r.map(csvSafeCell).join(';'))
       .join('\n');
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);

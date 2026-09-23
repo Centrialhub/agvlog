@@ -5,12 +5,13 @@ const hook = readFileSync('src/hooks/useInventory.tsx','utf8');
 const page = readFileSync('src/pages/Inventory.tsx','utf8');
 const dashboard = readFileSync('src/pages/OperationsDashboard.tsx','utf8');
 const migration = readFileSync('supabase/migrations/20260917144600_add_inventory_summary.sql','utf8');
+const dashboardMigration = readFileSync('supabase/migrations/20260922005000_operations_dashboard_summary.sql','utf8');
 
 describe('bounded inventory screen reads',()=>{
   it('pages balances, movements and aging instead of exhausting PostgREST',()=>{
-    expect(hook).not.toContain('fetchAllPostgrestPages');
     expect(hook).toContain('INVENTORY_PAGE_SIZE = 50');
-    expect(hook.match(/\.range\(/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(hook).toContain("rpc('list_inventory_movements_page_v1'");
+    expect(hook).toContain("rpc('list_inventory_balances_page_v1'");
     expect(page.match(/<DataPagination/g)?.length).toBe(3);
     expect(page).toContain('Filtros aplicados no servidor ao histórico paginado.');
   });
@@ -20,6 +21,8 @@ describe('bounded inventory screen reads',()=>{
     expect(migration).toContain('limit 10');
     expect(hook).toContain("rpc('get_inventory_summary_v1'");
     expect(dashboard).toContain('inventorySummary?.stockByClient');
+    expect(dashboard).toContain('useOperationsDashboardSummary');
     expect(dashboard).not.toContain('useInventoryBalances');
+    expect(dashboardMigration).toContain("'low_stock'");
   });
 });

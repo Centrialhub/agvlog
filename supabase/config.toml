@@ -5,8 +5,8 @@ enable_signup = false
 enable_anonymous_sign_ins = false
 minimum_password_length = 12
 password_requirements = "lower_upper_letters_digits"
-site_url = "https://agvlog.lovable.app"
-additional_redirect_urls = ["https://agvlog.lovable.app/set-password"]
+site_url = "https://agvlogistica.vercel.app"
+additional_redirect_urls = ["https://agvlogistica.vercel.app/set-password"]
 
 [auth.sessions]
 timebox = "8h"

@@ -51,7 +51,7 @@ function SettlementList() {
   const [onlyNeedsRecalc, setOnlyNeedsRecalc] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 50;
-  const [snapshotAt, setSnapshotAt] = useState(() => new Date().toISOString());
+  const [snapshotAt, setSnapshotAt] = useState<string | undefined>();
   const [pageCursors, setPageCursors] = useState<Record<number, NonNullable<DriverSettlementCursor> | null>>({ 1: null });
   const [snapshotNotice, setSnapshotNotice] = useState('');
   const collectionEpoch = useDriverSettlementCollectionEpoch();
@@ -59,12 +59,12 @@ function SettlementList() {
   const invalidDateRange = Boolean(dateFrom && dateTo && dateFrom > dateTo);
   const resetPaging = () => {
     setPage(1);
-    setSnapshotAt(new Date().toISOString());
+    setSnapshotAt(undefined);
     setPageCursors({ 1: null });
     setSnapshotNotice('');
   };
 
-  const { data: response, isLoading, isError, isFetching, error: listError } = useDriverSettlements({
+  const { data: response, isLoading, isError, isFetching, error: listError, refetch: refetchSettlements } = useDriverSettlements({
     search,
     driver_id: driverFilter === 'all' ? null : driverFilter,
     vehicle_id: vehicleFilter === 'all' ? null : vehicleFilter,
@@ -82,13 +82,19 @@ function SettlementList() {
     enabled: !invalidDateRange,
   });
   useEffect(()=>{if(collectionEpochRef.current!==collectionEpoch){collectionEpochRef.current=collectionEpoch;resetPaging();}},[collectionEpoch]);
-  useEffect(()=>{if(listError instanceof DriverSettlementSnapshotChangedError){setSnapshotNotice(listError.message);setPage(1);setSnapshotAt(new Date().toISOString());setPageCursors({1:null});}},[listError]);
+  useEffect(()=>{if(listError instanceof DriverSettlementSnapshotChangedError){setSnapshotNotice(listError.message);setPage(1);setSnapshotAt(undefined);setPageCursors({1:null});}},[listError]);
   const data = isError || invalidDateRange ? undefined : response;
   const list = data?.items ?? [];
   const totalCount = data?.total_count ?? 0;
   const summary = data?.summary ?? null;
   const driverOptions = useDriverSettlementFilterOptions('drivers',driverOptionSearch,driverOptionPage);
   const vehicleOptions = useDriverSettlementFilterOptions('vehicles',vehicleOptionSearch,vehicleOptionPage);
+  useEffect(() => {
+    if (driverOptions.error instanceof DriverSettlementSnapshotChangedError && driverOptionPage > 1) setDriverOptionPage(1);
+  }, [driverOptionPage, driverOptions.error]);
+  useEffect(() => {
+    if (vehicleOptions.error instanceof DriverSettlementSnapshotChangedError && vehicleOptionPage > 1) setVehicleOptionPage(1);
+  }, [vehicleOptionPage, vehicleOptions.error]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -113,14 +119,14 @@ function SettlementList() {
   const openSettlement = (id: string) => { setSelectedId(id); setDrawerOpen(true); };
 
   return (
-    <div className="min-w-0 space-y-6 p-4 md:p-6">
+    <div className="min-w-0 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2"><Wallet className="h-6 w-6" /> Acerto de Motoristas</h1>
           <p className="text-sm text-muted-foreground">Conferência financeira das viagens finalizadas</p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <Button className="min-h-11 w-full sm:w-auto" variant="outline" disabled={isFetching || driverOptions.isFetching||vehicleOptions.isFetching} onClick={() => { resetPaging(); void driverOptions.refetch();void vehicleOptions.refetch(); }}><RefreshCw aria-hidden="true" className="h-4 w-4 mr-1" /> Atualizar</Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+          <Button className="min-h-11 w-full sm:w-auto" variant="outline" disabled={isFetching || driverOptions.isFetching||vehicleOptions.isFetching} onClick={() => { const needsExplicitRefetch = page === 1 && snapshotAt === undefined; resetPaging(); if (needsExplicitRefetch) void refetchSettlements(); if (driverOptionPage === 1) void driverOptions.refetch(); else setDriverOptionPage(1); if (vehicleOptionPage === 1) void vehicleOptions.refetch(); else setVehicleOptionPage(1); }}><RefreshCw aria-hidden="true" className="h-4 w-4 mr-1" /> Atualizar</Button>
           <Button className="min-h-11 w-full sm:w-auto" variant="outline" disabled={!data} onClick={() => setManualOpen(true)}>
             <Plus className="h-4 w-4 mr-1" /> Novo acerto manual
           </Button>
@@ -262,6 +268,7 @@ function SettlementList() {
               <span className="px-2 self-center">Página {page}</span>
               <Button variant="outline" size="sm" disabled={!data?.next_cursor || isFetching} onClick={() => {
                 if (!data?.next_cursor) return;
+                setSnapshotAt(data.snapshot_at);
                 setPageCursors(current => ({ ...current, [page + 1]: data.next_cursor }));
                 setPage(current => current + 1);
               }}>Próxima</Button>

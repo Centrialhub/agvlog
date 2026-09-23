@@ -4,7 +4,7 @@ import type { Json, Tables } from '@/integrations/supabase/types';
 import type { InvoiceCharge, InvoiceDetail } from '@/lib/clientInvoicePdf';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
-import {parseInvoiceList} from '@/lib/financial/clientInvoiceList';
+import {parseInvoicePage,type InvoicePageFilters} from '@/lib/financial/clientInvoiceList';
 import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
 
 export const INVOICE_STATUSES = ['draft', 'generated', 'sent', 'paid', 'cancelled'] as const;
@@ -85,19 +85,18 @@ export interface ClientInvoiceDetailData {
   details: Tables<'client_invoice_details'>[];
 }
 
-export function useClientInvoices() {
+export function useClientInvoices(filters:InvoicePageFilters={search:'',status:'all',client:'all'},page=1,revision:string|null=null) {
   const { currentTenant } = useTenant();
   const {user}=useAuth();
   return useQuery({
-    queryKey: ['client_invoices', currentTenant?.id, user?.id],
+    queryKey: ['client_invoices', currentTenant?.id, user?.id,filters,page,revision],
+    retry:false,
     queryFn: async ({signal}) => {
-      if(!currentTenant||!user)return {rows:[],truncated:false};
-      const [protectedResult,allRows]=await Promise.all([
-       supabase.rpc('list_client_invoice_financials',{_tenant_id:currentTenant.id}).abortSignal(signal),
-       fetchAllPostgrestPages((from,to)=>supabase.from('client_invoices').select('*, clients(company_name,tax_id)').eq('tenant_id',currentTenant.id).order('created_at',{ascending:false}).order('id').range(from,to).abortSignal(signal)),
-      ]);
-      if(protectedResult.error)throw protectedResult.error;const protectedList=parseInvoiceList(protectedResult.data,currentTenant.id,user.id),verified=new Map(protectedList.rows.map(row=>[row.id,row]));
-      return {rows:allRows.map(row=>verified.get(row.id)??{...row,received_amount:null,open_amount:null,requires_reconciliation:true}) as ClientInvoice[],truncated:false};
+      if(!currentTenant||!user)throw new Error('Selecione a empresa.');
+      const rpc=supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>{abortSignal:(signal:AbortSignal)=>PromiseLike<{data:unknown;error:{message:string}|null}>};
+      const {data,error}=await rpc('list_client_invoice_financial_page',{_tenant_id:currentTenant.id,_filters:filters,_page:page,_revision:revision}).abortSignal(signal);
+      if(error)throw new Error(error.message);
+      return parseInvoicePage(data,currentTenant.id,user.id,filters,page);
     },
     enabled: !!currentTenant&&!!user,
   });

@@ -19,7 +19,7 @@ beforeEach(async()=>{
   );
 });
 afterEach(async()=>db.exec('rollback'));
-afterAll(async()=>db.close());
+afterAll(async()=>db?.close());
 
 async function service<T=Record<string,unknown>>(sql:string,args:unknown[]=[]){
   await db.exec('savepoint service_call;set role service_role');

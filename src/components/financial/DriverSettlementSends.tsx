@@ -13,6 +13,9 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
 type Props={tenant:string;driver:{id:string;name:string}};
+function isDriverSettlementSendDateRangeValid(from:string,to:string){
+ return !from||!to||from<=to;
+}
 export function DriverSettlementSends({tenant,driver}:Props){
  const {user}=useAuth(),{currentTenant}=useTenant();
  if(!user||currentTenant?.id!==tenant)return <p role="alert">Selecione a empresa deste acerto para consultar os envios.</p>;
@@ -21,6 +24,7 @@ export function DriverSettlementSends({tenant,driver}:Props){
 export function DriverSettlementSendsWorkspace({tenant,actor,driver}:Props&{actor:string}){
  const [dates,setDates]=useState({from:'',to:''}),[filters,setFilters]=useState<MovementFilters>({page:1,page_size:30,search:'',from:'',to:'',direction:'out',account_id:'',driver_id:driver.id});
  const [entry,setEntry]=useState(false),[correction,setCorrection]=useState<string|null>(null),[notice,setNotice]=useState('');
+ const validDateRange=isDriverSettlementSendDateRangeValid(dates.from,dates.to);
  const cache=useQueryClient(),query=useQuery({queryKey:['finance-movements',tenant,actor,filters],queryFn:()=>readFinanceMovements(tenant,filters),retry:false});
  const data=query.isFetching||query.isError?undefined:query.data;
  return <section className="space-y-3" aria-label="Envios ao motorista">
@@ -28,11 +32,12 @@ export function DriverSettlementSendsWorkspace({tenant,actor,driver}:Props&{acto
   <p>Saídas registradas para {driver.name} nesta empresa, inclusive durante a viagem. A consulta reúne os envios deste motorista; não comprova vínculo exclusivo com este acerto. O registro não quita o acerto nem confirma conciliação pelo extrato.</p>
   <Button onClick={()=>setEntry(true)}>Registrar envio realizado</Button>
   {notice&&<p role="status">{notice}</p>}
-  <form className="flex flex-wrap gap-2" onSubmit={event=>{event.preventDefault();setFilters(old=>({...old,...dates,page:1}));}}>
+  <form className="flex flex-wrap gap-2" onSubmit={event=>{event.preventDefault();if(validDateRange)setFilters(old=>({...old,...dates,page:1}));}}>
    <div><Label htmlFor="driver-sends-from">Envios de</Label><Input id="driver-sends-from" type="date" value={dates.from} onChange={e=>setDates(old=>({...old,from:e.target.value}))}/></div>
    <div><Label htmlFor="driver-sends-to">Envios até</Label><Input id="driver-sends-to" type="date" value={dates.to} onChange={e=>setDates(old=>({...old,to:e.target.value}))}/></div>
-   <Button type="submit">Filtrar envios</Button>
+   <Button type="submit" disabled={!validDateRange}>Filtrar envios</Button>
   </form>
+  {!validDateRange&&<p role="alert">A data inicial dos envios deve ser anterior ou igual à data final.</p>}
   {query.isFetching&&<p role="status">Consultando envios…</p>}
   {query.error&&<p role="alert">{financeError(query.error)} <Button onClick={()=>void query.refetch()}>Atualizar envios</Button></p>}
   {data&&<><p>{data.total} registros · valor ativo: {formatFinanceCents(data.outflow_cents)} · originais invalidados: {formatFinanceCents(data.voided_outflow_cents)}</p>

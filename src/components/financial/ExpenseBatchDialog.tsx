@@ -100,7 +100,7 @@ function ScopedExpenseBatchDialog({tenant,actor,onClose,onRecorded}:{tenant:stri
         {error&&<p role="alert">{error}</p>}{restored.error&&<p role="alert">Não foi possível recuperar o lote preservado. O conteúdo original foi mantido e novos envios estão bloqueados. Confira o histórico antes de recuperar este pedido com o suporte.</p>}{storageFailed&&<p role="alert">Não foi possível preservar o rascunho neste navegador. O envio está bloqueado para evitar perda de rastreabilidade.</p>}
         {saved.request&&!busy&&<p role="status">Pedido preservado. Reenviar usa a mesma identificação e não cria um segundo lote.</p>}
         {review&&<p role="status">Revise os gastos e vínculos acima. Ao registrar, eventuais complementos entram em contas a pagar e cada descarga válida gera uma conta a receber do fornecedor da entrega.</p>}
-        <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy||uploadBusy} onClick={onClose}>Fechar e guardar rascunho</Button>
+        <div className="flex flex-col-reverse gap-3 border-t pt-4 sm:flex-row sm:flex-wrap sm:justify-end"><Button type="button" variant="outline" disabled={busy||uploadBusy} onClick={onClose}>Fechar e guardar rascunho</Button>
           {review||saved.request?<Button type="button" disabled={busy||uploadBusy||storageFailed||restored.error} onClick={()=>void submit()}>{busy?'Registrando…':saved.request?'Reenviar mesmo lote':'Registrar lote conferido'}</Button>
             :<Button type="button" disabled={locked||uploadBusy||storageFailed} onClick={check}>Revisar lote</Button>}</div>
       </div>

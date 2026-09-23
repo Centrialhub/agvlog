@@ -3,8 +3,15 @@ import {beforeEach,describe,expect,it,vi} from 'vitest';
 import type {PayrollPeriod} from '../hooks/usePayroll';
 const state=vi.hoisted(()=>({error:null as Error|null,rows:[] as unknown[],loading:false,fetching:false}));
 vi.mock('@/hooks/usePayroll',()=>({
- usePayrollEntries:()=>({data:state.rows,isLoading:state.loading,isFetching:state.fetching,error:state.error}),
+ usePayrollEntries:(_period:string,page=1,search='',payment='all',entryId:string|null=null)=>{
+  const all=state.rows as Array<Record<string,any>>;
+  const matching=all.filter(row=>(!entryId||row.id===entryId)&&(!search||[row.employees?.name,row.employee_id,row.employees?.department,row.employees?.branch].some(value=>String(value??'').toLowerCase().includes(search.toLowerCase())))&&(payment==='all'||row.payment_summary?.status===payment));
+  const rows=matching.slice((page-1)*50,page*50),sum=(pick:(row:Record<string,any>)=>number)=>String(all.reduce((total,row)=>total+pick(row),0));
+  return {data:{rows,total:all.length,filtered_total:matching.length,has_more:page*50<matching.length,totals:{gross:sum(row=>Number(row.gross_amount||0)),discount:sum(row=>Number(row.discount_amount||0)),already_paid:sum(row=>Number(row.already_paid_amount||0)),carryover_in:sum(row=>Number(row.source_summary?.payroll_carryover?.amount_cents||0)/100),carryover_out:sum(row=>Number(row.carryover_amount||0)),title_paid:sum(row=>Number(row.payment_summary?.paid_via_titles||0)),remaining:sum(row=>Number((row.payment_summary?.remaining_amount??row.amount_to_pay)||0))}},isLoading:state.loading,isFetching:state.fetching,error:state.error};
+ },
  useApprovePayrollPeriod:()=>({}),useClosePayrollPeriod:()=>({}),useGeneratePayrollPeriod:()=>({}),
+ usePayrollGenerationIssues:()=>({data:[],isPending:false,isFetching:false,isError:false,refetch:vi.fn()}),
+ useChangePayrollPeriodState:()=>({isPending:false,mutateAsync:vi.fn()}),
  PAYROLL_PERIOD_STATUS_LABELS:{approved:'Aprovada'},PAYROLL_PAYMENT_STATUS_LABELS:{},
 }));
 vi.mock('@/hooks/useAlertStore',()=>({useScopedAlerts:()=>({confirmAction:vi.fn(),promptAction:vi.fn()})}));

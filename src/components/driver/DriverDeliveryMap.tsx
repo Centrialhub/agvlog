@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css';
 import { MapAutoFit } from '@/components/maps/MapAutoFit';
 import { createTruckMarkerIcon, DEFAULT_BRAZIL_MAP_CENTER, L } from '@/lib/maps/leaflet';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 
 export type DeliveryPoint = {
   id: string;
@@ -44,12 +45,20 @@ export default function DriverDeliveryMap({
     setMounted(true);
     return () => setMounted(false);
   }, []);
+  const validStops = useMemo(
+    () => stops.filter((stop) => hasValidGeographicCoordinates(stop.lat, stop.lng)),
+    [stops],
+  );
+  const validVehicle = useMemo(
+    () => vehicle && hasValidGeographicCoordinates(vehicle.lat, vehicle.lng) ? vehicle : null,
+    [vehicle],
+  );
   const all = useMemo<[number, number][]>(() => [
-    ...stops.map((s) => ({ lat: s.lat, lng: s.lng })),
-    ...(vehicle ? [{ lat: vehicle.lat, lng: vehicle.lng }] : []),
-  ].map((point) => [point.lat, point.lng]), [stops, vehicle]);
+    ...validStops.map((s) => ({ lat: s.lat, lng: s.lng })),
+    ...(validVehicle ? [{ lat: validVehicle.lat, lng: validVehicle.lng }] : []),
+  ].map((point) => [point.lat, point.lng]), [validStops, validVehicle]);
   const center: [number, number] = all[0] ?? DEFAULT_BRAZIL_MAP_CENTER;
-  const routeLine: [number, number][] = stops.map((s) => [s.lat, s.lng]);
+  const routeLine: [number, number][] = validStops.map((s) => [s.lat, s.lng]);
 
   return (
     <div className="rounded-lg overflow-hidden border border-border" style={{ height }}>
@@ -63,7 +72,7 @@ export default function DriverDeliveryMap({
         {routeLine.length > 1 && (
           <Polyline positions={routeLine} pathOptions={{ color: '#2563eb', weight: 3, opacity: 0.6, dashArray: '6 6' }} />
         )}
-        {stops.map((s) => (
+        {validStops.map((s) => (
           <Marker key={s.id} position={[s.lat, s.lng]} icon={stopIcon(s)}>
             <Popup>
               <div className="text-xs">
@@ -75,11 +84,11 @@ export default function DriverDeliveryMap({
             </Popup>
           </Marker>
         ))}
-        {vehicle && (
-          <Marker position={[vehicle.lat, vehicle.lng]} icon={vehicleIcon()}>
+        {validVehicle && (
+          <Marker position={[validVehicle.lat, validVehicle.lng]} icon={vehicleIcon()}>
             <Popup>
               <div className="text-xs">
-                <p className="font-bold">{vehicle.plate || 'Meu veículo'}</p>
+                <p className="font-bold">{validVehicle.plate || 'Meu veículo'}</p>
                 <p className="text-muted-foreground">Posição atual</p>
               </div>
             </Popup>

@@ -4,6 +4,7 @@ import { useTenant } from './useTenant';
 import type { ShortageItemInput } from '@/lib/merchandiseShortages/shortageCalculator';
 import type { ShortageReportRow } from '@/lib/merchandiseShortages/shortageReportBuilder';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 
 export interface ShortageCaseRow {
   id: string;
@@ -138,6 +139,7 @@ export function useShortageItems(caseId: string | null | undefined) {
 }
 
 export interface CreateShortageInput {
+  request_id: string;
   occurrence_date: string;
   company_name_snapshot?: string | null;
   supplier_name_snapshot?: string | null;
@@ -188,6 +190,7 @@ export function useCreateShortageCase() {
 
 export function useUpdateShortageStatus() {
   const qc = useQueryClient();
+  const toast = useSonnerToast();
   return useMutation({
     mutationFn: async (args: { case_id: string; status: string; expected_revision: number; payload?: Record<string, unknown> }) => {
       const { error } = await supabase.rpc('update_merchandise_shortage_status', {
@@ -199,6 +202,15 @@ export function useUpdateShortageStatus() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['merchandise-shortage-cases'] });
+    },
+    onError: (error: unknown) => {
+      const message = typeof error === 'object' && error !== null && 'message' in error
+        ? String(error.message) : 'A alteração foi recusada.';
+      toast.error('Não foi possível atualizar a falta', {
+        description: message.includes('shortage_case_revision_changed')
+          ? 'Este caso foi alterado por outra pessoa. Atualize a lista e tente novamente.'
+          : message,
+      });
     },
   });
 }

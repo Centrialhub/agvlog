@@ -21,8 +21,10 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import FreightAuditDrawer from '@/components/freight/FreightAuditDrawer';
 import { normalizeOrderOptionalFields } from '@/lib/orders/orderFormNormalization';
+import { useTenant } from '@/hooks/useTenant';
 
 const n = (value: unknown) => (value ? Number(value) : 0);
+const NO_CLIENT = '__no_client__';
 const numField = (label: string, value: string | number, onChange: (v: string) => void, opts?: { step?: string; prefix?: string; readOnly?: boolean }) => (
   <div>
     <Label>{label}{opts?.readOnly ? ' (calculado)' : ''}</Label>
@@ -75,7 +77,7 @@ function OrderForm({ order, clients, onSave, onCancel, isSaving }: {
     destination: order?.destination || '',
     cargo_type: order?.cargo_type || '',
     quantity: order?.quantity || '',
-    pallet_count: order?.pallet_count || 0,
+    pallet_count: order?.pallet_count ?? '',
     weight_kg: order?.weight_kg || '',
     volume_m3: order?.volume_m3 || '',
     notes: order?.notes || '',
@@ -149,7 +151,7 @@ function OrderForm({ order, clients, onSave, onCancel, isSaving }: {
       return;
     }
     let out: Record<string, string | number | null> = { ...calculated };
-    numFields.forEach(k => { out[k] = out[k] ? Number(out[k]) : null; });
+    numFields.forEach(k => { out[k] = String(out[k] ?? '').trim() === '' ? null : Number(out[k]); });
     out = normalizeOrderOptionalFields(out);
     setSubmitting(true);
     try {
@@ -178,9 +180,12 @@ function OrderForm({ order, clients, onSave, onCancel, isSaving }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Cliente (Carga)</Label>
-              <Select value={form.client_id} onValueChange={v => set('client_id', v)}>
+              <Select value={form.client_id || NO_CLIENT} onValueChange={v => set('client_id', v === NO_CLIENT ? '' : v)}>
                 <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <SelectItem value={NO_CLIENT}>Nenhum</SelectItem>
+                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
             <div>
@@ -214,7 +219,7 @@ function OrderForm({ order, clients, onSave, onCancel, isSaving }: {
             <div><Label>Valor NF (R$)</Label><Input type="number" min="0" step="0.01" value={form.value} onChange={e => set('value', e.target.value)} /></div>
             <div><Label>Volume (m³)</Label><Input type="number" min="0" step="0.01" value={form.volume_m3} onChange={e => set('volume_m3', e.target.value)} /></div>
             <div><Label>Peso (kg)</Label><Input type="number" min="0" value={form.weight_kg} onChange={e => set('weight_kg', e.target.value)} /></div>
-            <div><Label>Paletes</Label><Input type="number" min="0" value={form.pallet_count} onChange={e => set('pallet_count', parseInt(e.target.value) || 0)} /></div>
+            <div><Label>Paletes</Label><Input type="number" min="0" value={form.pallet_count} onChange={e => set('pallet_count', e.target.value)} /></div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div><Label>Tipo Carga</Label><Input value={form.cargo_type} onChange={e => set('cargo_type', e.target.value)} /></div>
@@ -310,6 +315,8 @@ function OrderForm({ order, clients, onSave, onCancel, isSaving }: {
 }
 
 export default function Orders() {
+  const { currentRole } = useTenant();
+  const canManage = currentRole === 'owner' || currentRole === 'admin';
   const { data: orders = [], isLoading, isError, error } = useOrders();
   const { data: clients = [] } = useClients();
   const createOrder = useCreateOrder();
@@ -364,7 +371,7 @@ export default function Orders() {
           </h1>
           <p className="text-sm text-muted-foreground">{orders.length} pedidos</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={v => { setDialogOpen(v); if (!v) setEditingOrder(undefined); }}>
+        {canManage ? <Dialog open={dialogOpen} onOpenChange={v => { setDialogOpen(v); if (!v) setEditingOrder(undefined); }}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> Novo Pedido</Button>
           </DialogTrigger>
@@ -381,7 +388,7 @@ export default function Orders() {
               isSaving={createOrder.isPending || updateOrder.isPending}
               onCancel={() => { setDialogOpen(false); setEditingOrder(undefined); }} />
           </DialogContent>
-        </Dialog>
+        </Dialog> : null}
       </div>
 
       <ListFilterBar activeCount={activeCount} onReset={resetFilters} resultCount={filtered.length} totalCount={orders.length} loading={isLoading} fields={[
@@ -428,9 +435,9 @@ export default function Orders() {
                   <TableCell className="text-xs">{o.payer_type || '—'}</TableCell>
                   <TableCell><Badge variant="outline" className={statusColor(o.status)}>{ORDER_STATUS_LABELS[o.status] || o.status}</Badge></TableCell>
                   <TableCell className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => { setEditingOrder(o); setDialogOpen(true); }}>
+                    {canManage ? <Button variant="ghost" size="icon" onClick={() => { setEditingOrder(o); setDialogOpen(true); }}>
                       <Edit className="h-4 w-4" />
-                    </Button>
+                    </Button> : null}
                     {o.total_freight ? (
                       <Button variant="ghost" size="icon" onClick={() => setAuditOrderId(o.id)} title="Auditoria do frete">
                         <FileSearch className="h-4 w-4" />

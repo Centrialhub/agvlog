@@ -1,0 +1,534 @@
+{
+  "captured_at": "2026-09-23",
+  "columns": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "table": "finance_fiscal_observations",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "name": "tenant_id",
+      "type": "uuid",
+      "table": "finance_fiscal_observations",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "observed_order",
+      "type": "bigint",
+      "table": "finance_fiscal_observations",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "emission_id",
+      "type": "uuid",
+      "table": "finance_fiscal_observations",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "snapshot_hash",
+      "type": "text",
+      "table": "finance_fiscal_observations",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "snapshot",
+      "type": "jsonb",
+      "table": "finance_fiscal_observations",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "observed_by",
+      "type": "uuid",
+      "table": "finance_fiscal_observations",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "table": "finance_fiscal_observations",
+      "default": "clock_timestamp()",
+      "nullable": "NO"
+    },
+    {
+      "name": "observation_id",
+      "type": "uuid",
+      "table": "finance_fiscal_projection_jobs",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "tenant_id",
+      "type": "uuid",
+      "table": "finance_fiscal_projection_jobs",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "table": "finance_fiscal_projection_jobs",
+      "default": "'pending'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "attempts",
+      "type": "integer",
+      "table": "finance_fiscal_projection_jobs",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "issue",
+      "type": "text",
+      "table": "finance_fiscal_projection_jobs",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "table": "finance_fiscal_projection_jobs",
+      "default": "clock_timestamp()",
+      "nullable": "NO"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "table": "finance_fiscal_projection_jobs",
+      "default": "clock_timestamp()",
+      "nullable": "NO"
+    },
+    {
+      "name": "result",
+      "type": "jsonb",
+      "table": "finance_fiscal_projection_jobs",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "available_at",
+      "type": "timestamp with time zone",
+      "table": "finance_fiscal_projection_jobs",
+      "default": "clock_timestamp()",
+      "nullable": "NO"
+    },
+    {
+      "name": "automatic_failures",
+      "type": "integer",
+      "table": "finance_fiscal_projection_jobs",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "last_error_code",
+      "type": "text",
+      "table": "finance_fiscal_projection_jobs",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "id",
+      "type": "uuid",
+      "table": "payables",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "name": "tenant_id",
+      "type": "uuid",
+      "table": "payables",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "supplier_name",
+      "type": "text",
+      "table": "payables",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "supplier_id",
+      "type": "uuid",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "category",
+      "type": "text",
+      "table": "payables",
+      "default": "'other'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "amount",
+      "type": "numeric",
+      "table": "payables",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "due_date",
+      "type": "date",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "competence_date",
+      "type": "date",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "table": "payables",
+      "default": "'pending'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "vehicle_id",
+      "type": "uuid",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "driver_id",
+      "type": "uuid",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "dispatch_trip_id",
+      "type": "uuid",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "load_id",
+      "type": "uuid",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "document_number",
+      "type": "text",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "receipt_url",
+      "type": "text",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "created_by",
+      "type": "uuid",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "approved_by",
+      "type": "uuid",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "approved_at",
+      "type": "timestamp with time zone",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "paid_at",
+      "type": "timestamp with time zone",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "table": "payables",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "table": "payables",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "source_table",
+      "type": "text",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "source_id",
+      "type": "uuid",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "source_metadata",
+      "type": "jsonb",
+      "table": "payables",
+      "default": "'{}'::jsonb",
+      "nullable": "NO"
+    },
+    {
+      "name": "paid_amount",
+      "type": "numeric",
+      "table": "payables",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "source",
+      "type": "text",
+      "table": "payables",
+      "default": "'system'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "bank_account_id",
+      "type": "uuid",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "cost_center",
+      "type": "text",
+      "table": "payables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "id",
+      "type": "uuid",
+      "table": "receivables",
+      "default": "gen_random_uuid()",
+      "nullable": "NO"
+    },
+    {
+      "name": "tenant_id",
+      "type": "uuid",
+      "table": "receivables",
+      "default": null,
+      "nullable": "NO"
+    },
+    {
+      "name": "order_id",
+      "type": "uuid",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "fiscal_document_id",
+      "type": "uuid",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "load_id",
+      "type": "uuid",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "client_id",
+      "type": "uuid",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "amount",
+      "type": "numeric",
+      "table": "receivables",
+      "default": "0",
+      "nullable": "NO"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "table": "receivables",
+      "default": "'pending'::text",
+      "nullable": "NO"
+    },
+    {
+      "name": "due_date",
+      "type": "date",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "received_at",
+      "type": "timestamp with time zone",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "received_amount",
+      "type": "numeric",
+      "table": "receivables",
+      "default": "0",
+      "nullable": "YES"
+    },
+    {
+      "name": "invoice_number",
+      "type": "text",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "table": "receivables",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "table": "receivables",
+      "default": "now()",
+      "nullable": "NO"
+    },
+    {
+      "name": "created_by",
+      "type": "uuid",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "updated_by",
+      "type": "uuid",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "client_invoice_id",
+      "type": "uuid",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "closing_report_id",
+      "type": "uuid",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "cost_center",
+      "type": "text",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    },
+    {
+      "name": "cte_document_id",
+      "type": "uuid",
+      "table": "receivables",
+      "default": null,
+      "nullable": "YES"
+    }
+  ],
+  "functions": [
+    "CREATE OR REPLACE FUNCTION public.update_driver_settlement_km_review(_settlement_id uuid, _audited_km numeric, _km_status text, _notes text, _km_start numeric DEFAULT NULL::numeric, _km_end numeric DEFAULT NULL::numeric, _audited_start_location text DEFAULT NULL::text, _audited_end_location text DEFAULT NULL::text)\n RETURNS driver_settlements\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if (_audited_km is not null and _audited_km<0) or (_km_start is not null and _km_start<0) or (_km_end is not null and _km_end<0) then raise exception 'invalid_km_value'; end if;\n  if _km_start is not null and _km_end is not null and _km_end<_km_start then raise exception 'km_end_before_start'; end if;\n  if _km_status<>'pending' and _audited_km is null then raise exception 'audited_km_required'; end if;\n  return public.update_driver_settlement_km_review_unchecked_v1(_settlement_id,_audited_km,_km_status,_notes,_km_start,_km_end,_audited_start_location,_audited_end_location);\nend $function$\n;",
+    "CREATE OR REPLACE FUNCTION public.update_driver_settlement_status(_settlement_id uuid, _new_status text, _reason text DEFAULT NULL::text, _allow_exceptions boolean DEFAULT false)\n RETURNS driver_settlements\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if _allow_exceptions and length(btrim(coalesce(_reason,'')))=0 then raise exception 'reason_required'; end if;\n  return public.update_driver_settlement_status_unchecked_v1(_settlement_id,_new_status,nullif(btrim(_reason),''),_allow_exceptions);\nend $function$\n;",
+    "CREATE OR REPLACE FUNCTION public.create_manual_driver_settlement(_tenant_id uuid, _driver_id uuid, _vehicle_id uuid, _reference_date date, _load_ids uuid[])\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if exists(select 1 from unnest(_load_ids) x left join public.loads l on l.id=x and l.tenant_id=_tenant_id where l.id is null or l.driver_id is distinct from _driver_id) then\n    raise exception 'load_driver_mismatch';\n  end if;\n  return public.create_manual_driver_settlement_unchecked_v1(_tenant_id,_driver_id,_vehicle_id,_reference_date,_load_ids);\nend $function$\n;"
+  ],
+  "triggers": [
+    {
+      "table": "receivables",
+      "trigger": "CREATE TRIGGER a_unloading_receivable_source BEFORE DELETE OR UPDATE ON public.receivables FOR EACH ROW EXECUTE FUNCTION finance_private.guard_unloading_receivable_source()",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.guard_unloading_receivable_source()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare t uuid; rid uuid; r public.receivables%rowtype; c public.finance_unloading_charges%rowtype;\nbegin\n if tg_table_name='receivables' then\n  t:=old.tenant_id; rid:=old.id;\n else\n  t:=new.tenant_id; rid:=new.receivable_id;\n end if;\n -- Row-first legacy writers must never wait for the finance lock.\n if not pg_try_advisory_xact_lock(hashtextextended(t::text||':finance',0)) then\n  raise exception 'finance_unloading_source_busy' using errcode='40001';\n end if;\n if tg_table_name='receivables' then\n  if not exists(select 1 from public.finance_unloading_charges where tenant_id=t and receivable_id=rid) then\n   if tg_op='DELETE' then return old; else return new; end if;\n  end if;\n  if tg_op='DELETE' then raise exception 'finance_unloading_source_immutable' using errcode='55000'; end if;\n  if finance_private.consume_unloading_origin_ticket(to_jsonb(old),to_jsonb(new)) then return new;end if;\n  if new.id is distinct from old.id or new.tenant_id is distinct from old.tenant_id\n    or new.client_id is distinct from old.client_id or new.amount is distinct from old.amount\n    or new.client_invoice_id is distinct from old.client_invoice_id\n    or new.closing_report_id is distinct from old.closing_report_id\n    or to_jsonb(new)->'fiscal_document_id' is distinct from to_jsonb(old)->'fiscal_document_id'\n    or to_jsonb(new)->'cte_document_id' is distinct from to_jsonb(old)->'cte_document_id' then\n   if not finance_private.consume_unloading_repair_ticket(to_jsonb(old),to_jsonb(new)) then\n    raise exception 'finance_unloading_source_immutable' using errcode='55000';end if;\n  end if;\n  if (new.status in ('cancelled','invoiced') or old.status in ('cancelled','invoiced')) and new.status is distinct from old.status then\n   raise exception 'finance_unloading_status_requires_command' using errcode='55000';\n  end if;\n  return new;\n end if;\n if tg_table_name='finance_unloading_charges' then c:=new;\n else\n  select * into c from public.finance_unloading_charges where tenant_id=t and receivable_id=rid;\n  if not found then return new; end if;\n end if;\n begin\n  select * into r from public.receivables where tenant_id=t and id=rid for share nowait;\n exception when lock_not_available then\n  raise exception 'finance_unloading_source_busy' using errcode='40001';\n end;\n\n if tg_table_name='receivables_payments' then\n  declare origin jsonb;begin\n   origin:=finance_private.unloading_effective_origin(t,c.id);\n   if origin->>'verified' is distinct from 'true' or origin#>>'{effective,status}' is distinct from 'active' then raise exception 'finance_unloading_source_mismatch' using errcode='55000';end if;\n   c.supplier_id:=(origin#>>'{effective,supplier_id}')::uuid;c.amount_cents:=(origin#>>'{effective,amount_cents}')::bigint;\n  end;\n end if;\n if r.id is null or r.client_id is distinct from c.supplier_id or r.amount is null\n   or r.amount::text in ('NaN','Infinity','-Infinity') or r.amount*100 is distinct from c.amount_cents::numeric\n   or r.client_invoice_id is not null or r.closing_report_id is not null\n   or to_jsonb(r)->>'fiscal_document_id' is not null or to_jsonb(r)->>'cte_document_id' is not null\n   or r.status in ('cancelled','invoiced') then\n  raise exception 'finance_unloading_source_mismatch' using errcode='55000';\n end if;\n return new;\nend $function$\n"
+    },
+    {
+      "table": "receivables",
+      "trigger": "CREATE TRIGGER guard_receivable_ledger BEFORE INSERT OR DELETE OR UPDATE ON public.receivables FOR EACH ROW EXECUTE FUNCTION _guard_receivable_ledger()",
+      "definition": "CREATE OR REPLACE FUNCTION public._guard_receivable_ledger()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\ndeclare v_total numeric;v_has boolean;begin\r\n if tg_op='INSERT' then\r\n  if coalesce(new.received_amount,0)<>0 or new.status in('received','partial') then raise exception 'financial_versioned_command_required' using errcode='55000';end if;\r\n  return new;\r\n end if;\r\n select exists(select 1 from public.receivables_payments where tenant_id=old.tenant_id and receivable_id=old.id) into v_has; v_has:=v_has or exists(select 1 from finance_private.receivable_balance_adjustment_events where tenant_id=old.tenant_id and receivable_id=old.id); v_has:=v_has or exists(select 1 from finance_private.customer_credit_application_events where tenant_id=old.tenant_id and receivable_id=old.id);\r\n if tg_op='DELETE' then\r\n  if v_has or old.client_invoice_id is not null or exists(select 1 from public.closing_reports where tenant_id=old.tenant_id and receivable_id=old.id) then\r\n   raise exception 'financial_receivable_history_is_immutable' using errcode='55000';end if;return old;\r\n end if;\r\n if (new.id,new.tenant_id) is distinct from (old.id,old.tenant_id) or ((v_has or old.client_invoice_id is not null) and\r\n  (new.amount,new.client_id,new.client_invoice_id,new.closing_report_id) is distinct from (old.amount,old.client_id,old.client_invoice_id,old.closing_report_id)) then\r\n  raise exception 'financial_receivable_identity_is_immutable' using errcode='55000';end if;\r\n select coalesce(sum(p.amount),0) into v_total from public.receivables_payments p where p.tenant_id=old.tenant_id and p.receivable_id=old.id\r\n  and not exists(select 1 from public.receivable_payment_reversals rv where rv.tenant_id=p.tenant_id and rv.payment_id=p.id) and not exists(select 1 from public.finance_receipt_allocation_corrections correction where correction.tenant_id=p.tenant_id and correction.payment_id=p.id) and not exists(select 1 from public.finance_customer_credits credit where credit.tenant_id=p.tenant_id and credit.payment_id=p.id);\r\n select net into v_total from public._receivable_ledger_evidence(old.tenant_id,old.id); if coalesce(new.received_amount,0)<>v_total or v_total<0 or v_total>new.amount\r\n  or (new.status='received' and (v_total<=0 or v_total<>new.amount)) or (new.status='partial' and (v_total<=0 or v_total>=new.amount))\r\n  or (new.status in('pending','invoiced','cancelled') and v_total<>0) then\r\n  raise exception 'financial_ledger_requires_reconciliation' using errcode='55000';end if;\r\n return new;\r\nend;$function$\n"
+    },
+    {
+      "table": "receivables",
+      "trigger": "CREATE TRIGGER invalidate_legacy_integrity_cache AFTER INSERT OR DELETE OR UPDATE ON public.receivables FOR EACH ROW EXECUTE FUNCTION finance_private.invalidate_legacy_integrity_cache()",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.invalidate_legacy_integrity_cache()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n delete from finance_private.legacy_integrity_cache_state where tenant_id=case when tg_op='DELETE' then old.tenant_id else new.tenant_id end;\n if tg_op='UPDATE' and old.tenant_id is distinct from new.tenant_id then delete from finance_private.legacy_integrity_cache_state where tenant_id=old.tenant_id;end if;\n return null;\nend$function$\n"
+    },
+    {
+      "table": "receivables",
+      "trigger": "CREATE TRIGGER preserve_receivable_temporal_source_truncate BEFORE TRUNCATE ON public.receivables FOR EACH STATEMENT EXECUTE FUNCTION finance_private.preserve_receivable_temporal_history()",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.preserve_receivable_temporal_history()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin raise exception 'finance_receivable_temporal_history_immutable' using errcode='55000';end$function$\n"
+    },
+    {
+      "table": "receivables",
+      "trigger": "CREATE TRIGGER z_receivable_temporal_capture AFTER INSERT OR DELETE OR UPDATE ON public.receivables FOR EACH ROW EXECUTE FUNCTION finance_private.capture_receivable_temporal_version()",
+      "definition": "CREATE OR REPLACE FUNCTION finance_private.capture_receivable_temporal_version()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare source_tenant uuid;source_id uuid;actor uuid:=auth.uid();actor_label text;\nbegin\n if tg_op='DELETE' then source_tenant:=old.tenant_id;source_id:=old.id;\n else source_tenant:=new.tenant_id;source_id:=new.id;end if;\n if tg_op='UPDATE' and (old.tenant_id,old.id) is distinct from (new.tenant_id,new.id) then\n  raise exception 'finance_receivable_temporal_identity_immutable' using errcode='55000';end if;\n -- Capture all successful writers, including workers without an auth actor.\n -- Authorization remains with the original writer; this is not a write API.\n select coalesce(u.raw_user_meta_data->>'full_name',u.email) into actor_label from auth.users u where u.id=actor;\n insert into finance_private.receivable_temporal_versions(tenant_id,receivable_id,operation,old_data,new_data,old_payer_snapshot,new_payer_snapshot,actor_id,actor_name,actor_kind)\n values(source_tenant,source_id,tg_op,case when tg_op<>'INSERT' then to_jsonb(old) end,\n  case when tg_op<>'DELETE' then to_jsonb(new) end,\n  case when tg_op<>'INSERT' then (select jsonb_build_object('id',c.id,'tenant_id',c.tenant_id,'company_name',c.company_name) from public.clients c where c.tenant_id=source_tenant and c.id=old.client_id) end,\n  case when tg_op<>'DELETE' then (select jsonb_build_object('id',c.id,'tenant_id',c.tenant_id,'company_name',c.company_name) from public.clients c where c.tenant_id=source_tenant and c.id=new.client_id) end,\n  actor,actor_label,case when actor is null then 'system' else 'authenticated' end);\n return null;\nend$function$\n"
+    }
+  ]
+}

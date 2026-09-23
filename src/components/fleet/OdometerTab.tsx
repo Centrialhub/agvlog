@@ -11,6 +11,8 @@ import { Gauge, Plus, TrendingUp } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format } from 'date-fns';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useTenant } from '@/hooks/useTenant';
+import { canAdministerVehicle } from '@/lib/fleet/vehiclePermissions';
 
 const SOURCE_LABELS: Record<string, string> = {
   manual: 'Manual',
@@ -25,6 +27,8 @@ interface Props {
 
 export default function OdometerTab({ vehicleId }: Props) {
   const toast = useSonnerToast();
+  const { currentRole } = useTenant();
+  const canCreateReading = canAdministerVehicle(currentRole);
   const readingsQuery=useVehicleOdometerList(vehicleId);const readings=readingsQuery.data??[],isLoading=readingsQuery.isLoading;
   const createMut = useCreateOdometerReading();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -43,6 +47,7 @@ export default function OdometerTab({ vehicleId }: Props) {
     }));
 
   const handleSave = async () => {
+    if (!canCreateReading) { toast.error('Somente administradores podem registrar leituras'); return; }
     const value=Number(km);if(!Number.isFinite(value)||value<0){toast.error('Informe uma quilometragem válida e não negativa');return;}
     if(latest&&value<Number(latest.reading_km)){toast.error('A leitura não pode ser menor que o último odômetro registrado');return;}
     try {
@@ -110,9 +115,9 @@ export default function OdometerTab({ vehicleId }: Props) {
 
       <div className="flex justify-between items-center">
         <h3 className="text-sm font-medium text-foreground">Histórico de Leituras</h3>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>
+        {canCreateReading ? <Button size="sm" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Nova Leitura
-        </Button>
+        </Button> : <span className="text-xs text-muted-foreground">Inclusão restrita a administradores</span>}
       </div>
 
       <Card>
@@ -144,7 +149,7 @@ export default function OdometerTab({ vehicleId }: Props) {
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {canCreateReading && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Nova Leitura de Odômetro</DialogTitle></DialogHeader>
           <div className="space-y-4">
@@ -162,7 +167,7 @@ export default function OdometerTab({ vehicleId }: Props) {
             </div>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 }

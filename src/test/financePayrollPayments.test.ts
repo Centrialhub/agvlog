@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import type {PGlite} from '@electric-sql/pglite';
 import {afterAll,afterEach,beforeAll,beforeEach,describe,expect,it} from 'vitest';
 import {createFinanceLedgerDatabase,financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
-import {payrollProjectionSchema,payrollPeriodsProjectionSchema} from '../lib/financial/payrollPaymentContract';
+import {payrollProjectionPageSchema,payrollProjectionSchema,payrollPeriodsProjectionSchema} from '../lib/financial/payrollPaymentContract';
 
 let db:PGlite;
 const period='50000000-0000-4000-8000-000000000001';
@@ -32,6 +32,8 @@ beforeAll(async()=>{
  await db.exec('grant execute on function close_payroll_period(uuid,text) to authenticated');
  await db.exec(readFileSync('supabase/migrations/20260909235237_finance_legacy_rpc_boundary.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260910000731_finance_payroll_payment_projection.sql','utf8'));
+ await db.exec("alter table payroll_entries add column source_summary jsonb not null default '{}'::jsonb,add column carryover_amount numeric not null default 0;create view finance_private.active_payable_payments as select * from public.payables_payments;");
+ await db.exec(readFileSync('supabase/migrations/20260921141000_page_finance_payroll_entries.sql','utf8'));
 },30000);
 beforeEach(async()=>{await db.exec('begin');});afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
 async function read(){
@@ -40,6 +42,16 @@ async function read(){
 }
 async function pay(amount:string,tenant=i.tenant){await db.query('insert into payables_payments(tenant_id,payable_id,amount) values($1,$2,$3)',[tenant,title,amount]);}
 describe('payroll obligation and registered payments',()=>{
+ it('returns bounded server pages while preserving whole-period totals and server-side search',async()=>{
+  await db.query(`insert into employees(id,tenant_id,name) select gen_random_uuid(),$1,'Pessoa '||lpad(n::text,2,'0') from generate_series(1,54) n`,[i.tenant]);
+  await db.query(`insert into payroll_entries(id,tenant_id,payroll_period_id,employee_id,status,amount_to_pay,already_paid_amount,gross_amount,discount_amount)
+    select gen_random_uuid(),$1,$2,id,'approved',10,0,10,0 from employees where id<>$3`,[i.tenant,period,employee]);
+  const readPage=async(page:number,search='')=>payrollProjectionPageSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select get_finance_payroll_entry_page($1,$2,$3,$4,$5,$6) result',[i.tenant,period,page,search,'all',null])).rows[0].result);
+  const first=await readPage(1),second=await readPage(2);
+  expect(first).toMatchObject({total:55,filtered_total:55,has_more:true,totals:{gross:'1540.00'}});
+  expect(first.rows).toHaveLength(50);expect(second.rows).toHaveLength(5);expect(second.has_more).toBe(false);
+  const found=await readPage(1,'Pessoa 54');expect(found.filtered_total).toBe(1);expect(found.rows[0].employees.name).toBe('Pessoa 54');
+ });
  it('closes using the actual remaining balance and blocks unresolved payment inconsistencies',async()=>{
   await db.query("insert into tenant_memberships values($1,$2,'admin',true)",[i.tenant,i.operator]);
   await pay('300');

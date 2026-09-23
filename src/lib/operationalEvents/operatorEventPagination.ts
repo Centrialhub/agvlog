@@ -89,12 +89,11 @@ interface RpcResponse {
   error: unknown;
 }
 
-const rpc = supabase.rpc.bind(supabase) as unknown as (
-  name: 'list_operational_events_page_v1',
-  args: OperationalEventPageRpcArgs,
-) => PromiseLike<RpcResponse>;
-
 export async function callOperationalEventPage(args: OperationalEventPageRpcArgs): Promise<unknown> {
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
+    name: 'list_operational_events_page_v1',
+    args: OperationalEventPageRpcArgs,
+  ) => PromiseLike<RpcResponse>;
   const { data, error } = await rpc('list_operational_events_page_v1', args);
   if (error) throw error;
   return data;

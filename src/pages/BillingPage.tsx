@@ -37,6 +37,7 @@ import { DataPagination } from '@/components/ui/data-pagination';
 import { format } from 'date-fns';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { normalizeCity } from '@/lib/utils/normalizeCity';
+import { formatBillingIssueDate } from '@/lib/billingIssueDate';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
 import { CteEmissionPreviewDialog } from '@/components/billing/CteEmissionPreviewDialog';
 import { CancelCteDialog, type CancelCteTarget } from '@/components/billing/CancelCteDialog';
@@ -136,6 +137,11 @@ const DEFAULT_BILLING_PREFS: BillingPreferences = {
 };
 
 export default function Billing() {
+  const { currentTenant } = useTenant();
+  return <BillingWorkspace key={currentTenant?.id ?? 'none'} />;
+}
+
+function BillingWorkspace() {
   const toast = useSonnerToast();
   const [searchParams] = useSearchParams();
   const focusPending = searchParams.get('focus') === 'pending';
@@ -762,20 +768,11 @@ export default function Billing() {
                     .replace(/'/g, '&apos;');
                 };
 
-                const formatDate = (date: string | null) => {
-                  if (!date) return '';
-                  try {
-                    return format(new Date(date), 'dd/MM/yyyy');
-                  } catch {
-                    return date;
-                  }
-                };
-
                 let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<Notas>\n';
                 docsToExport.forEach(d => {
                   xml += '  <Nota>\n';
                   xml += `    <NF>${escape(d.invoice_number)}</NF>\n`;
-                  xml += `    <Emissao>${escape(formatDate(d.issue_date))}</Emissao>\n`;
+                  xml += `    <Emissao>${escape(formatBillingIssueDate(d.issue_date))}</Emissao>\n`;
                   xml += `    <Remetente>${escape(d.remitter)}</Remetente>\n`;
                   xml += `    <Destinatario>${escape(d.recipient || d.clients?.company_name)}</Destinatario>\n`;
                   xml += `    <CidadeDestino>${escape(d.recipient_city)}${d.recipient_state ? `/${escape(d.recipient_state)}` : ''}</CidadeDestino>\n`;
@@ -811,8 +808,21 @@ export default function Billing() {
                   : filteredDocs
                 ).map(d => d.id);
                 if (ids.length === 0) return;
-                const r = await recalcFreight.mutateAsync(ids);
-                toast.success(`Fretes recalculados: ${r.updated} atualizadas, ${r.skipped} ignoradas, ${r.failed} falhas`);
+                try {
+                  const r = await recalcFreight.mutateAsync(ids);
+                  const summary = `Fretes recalculados: ${r.updated} atualizadas, ${r.skipped} ignoradas, ${r.failed} falhas`;
+                  if (r.failed === 0) toast.success(summary);
+                  else {
+                    const affected = r.failedIds.slice(0, 10).join(', ');
+                    const suffix = r.failedIds.length > 10 ? ` e mais ${r.failedIds.length - 10}` : '';
+                    const message = `${summary}. NF-es afetadas: ${affected}${suffix}`;
+                    if (r.updated === 0) toast.error(message); else toast.warning(message);
+                  }
+                } catch (error) {
+                  toast.error('Não foi possível recalcular os fretes', {
+                    description: error instanceof Error ? error.message : 'Falha ao consultar NF-es ou grupos pagadores.',
+                  });
+                }
               }}
             >
               <Calculator className="h-4 w-4 mr-1" />
@@ -876,7 +886,7 @@ export default function Billing() {
                   <TableRow key={d.id} className="cursor-pointer" onClick={() => toggleDoc(d.id)}>
                     <TableCell><Checkbox checked={selectedDocIds.has(d.id)} /></TableCell>
                     <TableCell className="font-mono text-xs">{d.invoice_number || '—'}</TableCell>
-                    <TableCell className="text-sm">{d.issue_date ? format(new Date(d.issue_date), 'dd/MM/yyyy') : '—'}</TableCell>
+                    <TableCell className="text-sm">{formatBillingIssueDate(d.issue_date, '—')}</TableCell>
                     <TableCell className="text-sm truncate max-w-[220px]">{d.remitter || '—'}</TableCell>
                     <TableCell className="text-sm truncate max-w-[220px]">{d.recipient || d.clients?.company_name || '—'}</TableCell>
                     <TableCell className="text-sm">

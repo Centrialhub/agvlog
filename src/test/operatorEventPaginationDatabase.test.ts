@@ -85,6 +85,31 @@ describe('operator event cursor reader database contract', () => {
     expect(warehouse.items.every(row => row.event_type === 'missing_goods')).toBe(true);
   });
 
+  it('applies the resolved preset interval to resolved_at rather than created_at', async () => {
+    const [oldCreatedRecentResolution, recentCreatedOldResolution] = await addEvents(2);
+    await db.query(`update public.operational_events
+      set created_at = '2026-08-01T10:00:00Z', resolved_at = '2026-09-20T10:00:00Z'
+      where id = $1`, [oldCreatedRecentResolution]);
+    await db.query(`update public.operational_events
+      set created_at = '2026-09-20T10:00:00Z', resolved_at = '2026-09-01T10:00:00Z'
+      where id = $1`, [recentCreatedOldResolution]);
+
+    const result = await listOperatorEventPage(db, {
+      status: 'resolved',
+      search: 'paginada',
+      date_basis: 'resolved_at',
+      date_from: '2026-09-15T00:00:00Z',
+      date_to: '2026-09-22T23:59:59Z',
+    }, 10);
+
+    expect(result.items.map(row => row.id)).toEqual([oldCreatedRecentResolution]);
+  });
+
+  it('rejects unsupported date bases', async () => {
+    await expect(listOperatorEventPage(db, { status: 'all', date_basis: 'updated_at' }, 10))
+      .rejects.toThrow('operational_event_list_invalid_filters');
+  });
+
   it('rejects another tenant and never returns its rows', async () => {
     await addEvents(2);
     await addEvents(1, i.otherTenant);

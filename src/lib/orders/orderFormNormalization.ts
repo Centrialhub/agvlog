@@ -11,7 +11,7 @@ const nullableOrderFields = [
 ] as const;
 
 export function normalizeOrderOptionalFields<T extends Record<string, string | number | null>>(payload: T): T {
-  const normalized = { ...payload };
+  const normalized: Record<string, string | number | null> = { ...payload };
   for (const field of nullableOrderFields) normalized[field] = normalized[field] || null;
-  return normalized;
+  return normalized as T;
 }

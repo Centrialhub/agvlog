@@ -3,8 +3,10 @@
  * PostgREST requires the relationship to be explicit or it returns PGRST201.
  */
 export const LOAD_ITEM_FISCAL_DOCUMENT_RELATION =
-  'fiscal_documents!load_items_fiscal_tenant_fkey';
+  'fiscal_documents!load_items_fiscal_tenant_fkey' as const;
 
-export function selectLoadItemFiscalDocument(fields: string): string {
+export function selectLoadItemFiscalDocument<const Fields extends string>(
+  fields: Fields,
+): `${typeof LOAD_ITEM_FISCAL_DOCUMENT_RELATION}(${Fields})` {
   return `${LOAD_ITEM_FISCAL_DOCUMENT_RELATION}(${fields})`;
 }

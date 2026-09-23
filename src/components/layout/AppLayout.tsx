@@ -1,12 +1,14 @@
+import { FinanceWorkspace } from '@/components/financial/FinanceWorkspace';
+import { isFinancialPath } from '@/lib/financial/financeRoutes';
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/hooks/useTenant';
 import { useTenantCapabilities, type IntegrationCapability } from '@/hooks/useTenantCapabilities';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { LogOut, ChevronLeft, ChevronRight, Menu, Search, X } from 'lucide-react';
+import { LogOut, ChevronLeft, ChevronRight, Menu, Search, X, CircleHelp } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { SidebarNavigation } from './SidebarNavigation';
 import { IntegraLabsCredit } from '@/components/branding/IntegraLabsCredit';
@@ -182,8 +184,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <Menu className="h-5 w-5" />
           </Button>
           <PageBreadcrumbs />
+          <Button asChild type="button" variant="ghost" size="sm" className="ml-auto gap-2">
+            <Link to={`/help?from=${encodeURIComponent(location.pathname)}`} aria-label="Abrir central de ajuda">
+              <CircleHelp aria-hidden="true" className="h-4 w-4" /><span className="hidden sm:inline">Ajuda</span>
+            </Link>
+          </Button>
         </header>
-        <div className="p-4 md:p-6"><DocumentChangeRecoveryPanel /><ItemPreparationRecoveryPanel /><OperationOutcomeRecoveryPanel /><RedeliveryRecoveryPanel /><DocumentMetadataRecoveryPanel />{financeAvailable&&<><ClosingDraftRecoveryPanel /><ClosingLifecycleRecoveryPanel /><ReceivableFinancialRecoveryPanel /><ClientInvoiceRecoveryPanel /><ExpenseReviewRecoveryPanel /><ExpenseCreationRecoveryPanel /><SettlementAdjustmentRecoveryPanel /></>}<ChatRecoveryPanel />{children}</div>
+        <div className="p-4 md:p-6"><DocumentChangeRecoveryPanel /><ItemPreparationRecoveryPanel /><OperationOutcomeRecoveryPanel /><RedeliveryRecoveryPanel /><DocumentMetadataRecoveryPanel />{financeAvailable&&<><ClosingDraftRecoveryPanel /><ClosingLifecycleRecoveryPanel /><ReceivableFinancialRecoveryPanel /><ClientInvoiceRecoveryPanel /><ExpenseReviewRecoveryPanel /><ExpenseCreationRecoveryPanel /><SettlementAdjustmentRecoveryPanel /></>}<ChatRecoveryPanel />{isFinancialPath(location.pathname) ? <FinanceWorkspace>{children}</FinanceWorkspace> : children}</div>
       </main>
     </div>
   );

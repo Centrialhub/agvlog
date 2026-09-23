@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { isFreshPositionObservation } from '@/lib/positionTelemetry';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 
 export function useDriverHomeVehiclePosition(vehicleId?: string | null, tripTenantId?: string | null) {
   const { currentTenant } = useTenant();
@@ -19,7 +20,10 @@ export function useDriverHomeVehiclePosition(vehicleId?: string | null, tripTena
       });
       if (error) throw error;
       const observation = data?.[0] ?? null;
-      return isFreshPositionObservation(observation) ? observation : null;
+      if (!isFreshPositionObservation(observation)) return null;
+      const lat = Number(observation.lat);
+      const lng = Number(observation.lng);
+      return hasValidGeographicCoordinates(lat, lng) ? { ...observation, lat, lng } : null;
     },
     enabled: !!user && !!tenantId && !!vehicleId,
     staleTime: 15_000,

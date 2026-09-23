@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { localDateInputValue, localDateUtcRange } from '@/lib/utils/formatDate';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { APP_TIME_ZONE, optionalLocalDateUtcRange } from '@/lib/utils/formatDate';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,6 +34,12 @@ import type { Json, Tables } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
 import { resolvePositionTelemetry } from '@/lib/positionTelemetry';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
+import { useCivilDay } from '@/hooks/useCivilDay';
+import { vehicleDetailQueryFlags } from '@/lib/fleet/vehicleDetailQueryFlags';
+import { shouldMergeVehicleTrips } from '@/lib/fleet/tripConsolidation';
+import { fuelUnitLabel, summarizeFuelSeries } from '@/lib/fleet/fuelSeries';
+import { canAdministerVehicle } from '@/lib/fleet/vehiclePermissions';
 
 type Trip = Tables<'trips'>;
 type ConsolidatedTrip = Trip & { _merged_count: number; max_speed_kmh: number };
@@ -56,10 +62,16 @@ export default function VehicleDetails() {
   const toast = useSonnerToast();
   const { vehicleId } = useParams<{ vehicleId: string }>();
   const navigate = useNavigate();
-  const { currentTenant } = useTenant();
+  const { currentTenant, currentRole } = useTenant();
+  const canManagePois = canAdministerVehicle(currentRole);
+  const tenantTimeZone = currentTenant?.timezone || APP_TIME_ZONE;
+  const today = useCivilDay(tenantTimeZone);
   const queryClient = useQueryClient();
   const [activeTab,setActiveTab]=useState('overview');
   const [alertsPage,setAlertsPage]=useState(1),[geoEventsPage,setGeoEventsPage]=useState(1);
+  const [poiDialogStop, setPoiDialogStop] = useState<TripStopWithPoi | null>(null);
+  const [poiName, setPoiName] = useState('');
+  const [linkPoiId, setLinkPoiId] = useState('');
   const detailPageSize=30;
 
   const vehicleQuery = useQuery({
@@ -86,18 +98,20 @@ export default function VehicleDetails() {
     enabled: !!currentTenant && !!vehicleId,
   });
   const capabilities = capabilitiesQuery.data;
+  const detailQueryFlags = vehicleDetailQueryFlags(activeTab, !!poiDialogStop && canManagePois, capabilities?.fuel === true);
 
   const vehicleStateQuery = useVehicleState(vehicleId || null);
   const vehicleState = vehicleStateQuery.error ? undefined : vehicleStateQuery.data;
   const positionQuery = useVehiclePosition(vehicleId || null);
-  const positionLast = positionQuery.error ? undefined : positionQuery.data;
+  const positionLast = positionQuery.error || !hasValidGeographicCoordinates(positionQuery.data?.lat, positionQuery.data?.lng)
+    ? undefined
+    : positionQuery.data;
 
   // Today metrics for overview KPIs
   const todayMetricsQuery = useQuery({
-    queryKey: ['vehicle_today_metrics', currentTenant?.id, vehicleId],
+    queryKey: ['vehicle_today_metrics', currentTenant?.id, vehicleId, tenantTimeZone, today],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return null;
-      const today = localDateInputValue();
       const { data, error } = await supabase.from('metrics_daily').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId).eq('day', today).maybeSingle();
       if (error) throw error;
@@ -107,12 +121,21 @@ export default function VehicleDetails() {
   });
   const todayMetrics = todayMetricsQuery.data;
 
-  const today = localDateInputValue();
   const [historyDate, setHistoryDate] = useState(today);
-  const historyRange = useMemo(() => localDateUtcRange(historyDate), [historyDate]);
-  const historyQuery = useVehicleHistory(vehicleId || null, historyRange.from, historyRange.toExclusive);
+  const previousToday = useRef(today);
+  useEffect(() => {
+    setHistoryDate(current => current === previousToday.current ? today : current);
+    previousToday.current = today;
+  }, [today]);
+  const historyRange = useMemo(
+    () => optionalLocalDateUtcRange(historyDate, tenantTimeZone),
+    [historyDate, tenantTimeZone],
+  );
+  const historyQuery = useVehicleHistory(vehicleId || null, historyRange?.from, historyRange?.toExclusive, detailQueryFlags.history);
   const history = useMemo(
-    () => (historyQuery.error ? [] : (historyQuery.data ?? [])),
+    () => (historyQuery.error ? [] : (historyQuery.data ?? []).filter(
+      point => hasValidGeographicCoordinates(point.lat, point.lng),
+    )),
     [historyQuery.error, historyQuery.data],
   );
   const { isLoading: historyLoading } = historyQuery;
@@ -120,20 +143,20 @@ export default function VehicleDetails() {
   const tripsQuery = useQuery({
     queryKey: ['vehicle_trips', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
-      if (!currentTenant || !vehicleId) return [];
+      if (!currentTenant || !vehicleId || !historyRange) return [];
       return fetchAllPostgrestPages<Tables<'trips'>>((from, to) => supabase.from('trips').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
         .gte('start_at', historyRange.from).lt('start_at', historyRange.toExclusive)
         .order('start_at').order('id').range(from, to));
     },
-    enabled: !!currentTenant && !!vehicleId,
+    enabled: !!currentTenant && !!vehicleId && !!historyRange && detailQueryFlags.trips,
   });
-  const trips = tripsQuery.data ?? [];
+  const trips = useMemo(() => tripsQuery.data ?? [], [tripsQuery.data]);
 
   const stopsQuery = useQuery<TripStopWithPoi[]>({
     queryKey: ['vehicle_stops', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
-      if (!currentTenant || !vehicleId) return [];
+      if (!currentTenant || !vehicleId || !historyRange) return [];
       const data = await fetchAllPostgrestPages<Tables<'trip_stops'>>((from, to) => supabase.from('trip_stops').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
         .gte('start_at', historyRange.from).lt('start_at', historyRange.toExclusive)
@@ -151,7 +174,7 @@ export default function VehicleDetails() {
         pois: stop.poi_id && poiNames.has(stop.poi_id) ? { name: poiNames.get(stop.poi_id)! } : null,
       }));
     },
-    enabled: !!currentTenant && !!vehicleId,
+    enabled: !!currentTenant && !!vehicleId && !!historyRange && detailQueryFlags.stops,
   });
   const stops = stopsQuery.data ?? [];
 
@@ -184,29 +207,30 @@ export default function VehicleDetails() {
   const overspeedQuery = useQuery({
     queryKey: ['vehicle_overspeed', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
-      if (!currentTenant || !vehicleId) return [];
+      if (!currentTenant || !vehicleId || !historyRange) return [];
       return fetchAllPostgrestPages<Tables<'events'>>((from, to) => supabase.from('events').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
         .eq('event_type', 'overspeed').eq('source', 'engine')
         .gte('event_at', historyRange.from).lt('event_at', historyRange.toExclusive)
         .order('event_at').order('id').range(from, to));
     },
-    enabled: !!currentTenant && !!vehicleId,
+    enabled: !!currentTenant && !!vehicleId && !!historyRange && detailQueryFlags.overspeed,
   });
   const overspeedEvents = overspeedQuery.data ?? [];
 
   const fuelQuery = useQuery({
     queryKey: ['vehicle_fuel', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
-      if (!currentTenant || !vehicleId) return [];
+      if (!currentTenant || !vehicleId || !historyRange) return [];
       return fetchAllPostgrestPages<Tables<'fuel_readings'>>((from, to) => supabase.from('fuel_readings').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
         .gte('captured_at', historyRange.from).lt('captured_at', historyRange.toExclusive)
         .order('captured_at').order('id').range(from, to));
     },
-    enabled: !!currentTenant && !!vehicleId,
+    enabled: !!currentTenant && !!vehicleId && !!historyRange && detailQueryFlags.fuel,
   });
-  const fuelReadings = fuelQuery.data ?? [];
+  const fuelReadings = useMemo(() => fuelQuery.data ?? [], [fuelQuery.data]);
+  const fuelSeries = useMemo(() => summarizeFuelSeries(fuelReadings), [fuelReadings]);
 
   const poisQuery = useQuery({
     queryKey: ['pois', currentTenant?.id],
@@ -217,7 +241,7 @@ export default function VehicleDetails() {
       if (error) throw error;
       return data;
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && detailQueryFlags.pois,
   });
   const pois = poisQuery.data ?? [];
 
@@ -251,11 +275,7 @@ export default function VehicleDetails() {
 
     for (let i = 1; i < sorted.length; i++) {
       const next = sorted[i];
-      const currentEnd = current.end_at ? new Date(current.end_at).getTime() : new Date(current.start_at).getTime();
-      const nextStart = new Date(next.start_at).getTime();
-      const gap = (nextStart - currentEnd) / 60000;
-
-      if (gap < 5) {
+      if (shouldMergeVehicleTrips(current, next)) {
         current = {
           ...current,
           end_at: next.end_at && current.end_at
@@ -294,16 +314,18 @@ export default function VehicleDetails() {
 
   // Fuel chart data
   const fuelChartData = useMemo(() => {
+    if (!fuelSeries.comparable) return [];
     return fuelReadings.map((reading) => ({
       time: format(new Date(reading.captured_at), 'HH:mm'),
       value: reading.fuel_value,
     }));
-  }, [fuelReadings]);
+  }, [fuelReadings, fuelSeries.comparable]);
 
   // Save stop as POI
   const savePOIMutation = useMutation({
     mutationFn: async ({ lat, lng, name }: { lat: number; lng: number; name: string }) => {
       if (!currentTenant) throw new Error('No tenant');
+      if (!canManagePois) throw new Error('Somente administradores podem cadastrar POIs.');
       const dedupeKey = `${Math.round(lat * 1e4)}|${Math.round(lng * 1e4)}`;
       const { error } = await supabase.from('pois').upsert({
         tenant_id: currentTenant.id, lat, lng, name, category: 'manual', source: 'manual', dedupe_key: dedupeKey,
@@ -317,6 +339,7 @@ export default function VehicleDetails() {
   const linkPOIMutation = useMutation({
     mutationFn: async ({ stopId, poiId }: { stopId: string; poiId: string }) => {
       if (!currentTenant) throw new Error('Tenant ativo não encontrado.');
+      if (!canManagePois) throw new Error('Somente administradores podem vincular POIs.');
       const { data, error } = await supabase.from('trip_stops').update({ poi_id: poiId })
         .eq('id', stopId).eq('tenant_id', currentTenant.id).select('id').maybeSingle();
       if (error) throw error;
@@ -325,10 +348,6 @@ export default function VehicleDetails() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['vehicle_stops'] }); toast.success('POI vinculado'); },
     onError: (error: unknown) => toast.error(getErrorMessage(error)),
   });
-
-  const [poiDialogStop, setPoiDialogStop] = useState<TripStopWithPoi | null>(null);
-  const [poiName, setPoiName] = useState('');
-  const [linkPoiId, setLinkPoiId] = useState('');
 
   const detailFailures = [
     { name: 'capacidades', query: capabilitiesQuery },
@@ -428,8 +447,8 @@ export default function VehicleDetails() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="trips">Viagens ({tripsQuery.isError ? '—' : consolidatedTrips.length})</TabsTrigger>
-          <TabsTrigger value="stops">Paradas ({stopsQuery.isError ? '—' : stops.length})</TabsTrigger>
+          <TabsTrigger value="trips">Viagens ({tripsQuery.isError ? '—' : tripsQuery.data === undefined ? '…' : consolidatedTrips.length})</TabsTrigger>
+          <TabsTrigger value="stops">Paradas ({stopsQuery.isError ? '—' : stopsQuery.data === undefined ? '…' : stops.length})</TabsTrigger>
           <TabsTrigger value="speed">Velocidade</TabsTrigger>
           <TabsTrigger value="fuel">Combustível</TabsTrigger>
           <TabsTrigger value="maintenance">
@@ -470,7 +489,7 @@ export default function VehicleDetails() {
                 <CardContent><div className="text-3xl font-bold text-foreground">{currentTelemetry.speed != null ? <>{Math.round(currentTelemetry.speed)} <span className="text-sm font-normal text-muted-foreground">km/h</span></> : <span className="text-base font-normal text-muted-foreground">Indisponível</span>}</div></CardContent>
               </Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Clock className="h-4 w-4 text-primary" />Última Atualização</CardTitle></CardHeader>
-                <CardContent className="text-sm">{positionLast ? <><p className="font-medium">{format(new Date(positionLast.captured_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</p><p className="text-xs text-muted-foreground mt-1">{formatDistanceToNow(new Date(positionLast.captured_at), { addSuffix: true, locale: ptBR })}</p></> : <p className="text-muted-foreground text-xs">Sem dados</p>}</CardContent>
+                <CardContent className="text-sm">{currentTelemetry.capturedAt ? <><p className="font-medium">{format(new Date(currentTelemetry.capturedAt), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</p><p className="text-xs text-muted-foreground mt-1">{formatDistanceToNow(new Date(currentTelemetry.capturedAt), { addSuffix: true, locale: ptBR })}</p></> : <p className="text-muted-foreground text-xs">Data de captura indisponível</p>}</CardContent>
               </Card>
             </div>
             <div className="lg:col-span-2">
@@ -589,7 +608,7 @@ export default function VehicleDetails() {
               <p className="font-medium text-foreground mb-1">Sobre a detecção de viagens</p>
               <p>O modo <strong>basic</strong> estima viagens apenas por GPS (distância entre pontos), o que pode gerar fragmentação em áreas com sinal fraco ou pontos repetidos. Veículos com sensor de ignição ou odômetro produzem dados mais precisos.</p>
               {trips.length !== consolidatedTrips.length && (
-                <p className="mt-1">Viagens sobrepostas ou com intervalo {'<'} 5 min foram consolidadas automaticamente.</p>
+                <p className="mt-1">Registros sobrepostos produzidos pelo mesmo modo de detecção foram consolidados automaticamente.</p>
               )}
             </div>
           </div>
@@ -597,6 +616,7 @@ export default function VehicleDetails() {
 
         {/* Stops */}
         <TabsContent value="stops" className="space-y-4">
+          {!canManagePois && <p className="text-sm text-muted-foreground">A consulta de paradas está disponível. O gerenciamento de POIs é restrito a administradores.</p>}
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow><TableHead>Início</TableHead><TableHead>Duração</TableHead><TableHead>Classe</TableHead><TableHead>POI</TableHead><TableHead>Localização</TableHead><TableHead></TableHead></TableRow></TableHeader>
@@ -616,9 +636,9 @@ export default function VehicleDetails() {
                     <TableCell className="text-xs">{s.pois?.name || (s.poi_id ? 'Vinculado' : '—')}</TableCell>
                     <TableCell className="font-mono text-[10px]">{s.lat.toFixed(4)}, {s.lng.toFixed(4)}</TableCell>
                     <TableCell>
-                      <Button size="sm" variant="ghost" onClick={() => { setPoiDialogStop(s); setPoiName(''); setLinkPoiId(''); }}>
+                      {canManagePois && <Button aria-label="Gerenciar POI da parada" size="sm" variant="ghost" onClick={() => { setPoiDialogStop(s); setPoiName(''); setLinkPoiId(''); }}>
                         <Save className="h-3 w-3" />
-                      </Button>
+                      </Button>}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -626,7 +646,7 @@ export default function VehicleDetails() {
             </Table>
           </CardContent></Card>
 
-          <Dialog open={!!poiDialogStop} onOpenChange={(v) => !v && setPoiDialogStop(null)}>
+          {canManagePois && <Dialog open={!!poiDialogStop} onOpenChange={(v) => !v && setPoiDialogStop(null)}>
             <DialogContent className="max-w-sm">
               <DialogHeader><DialogTitle>Gerenciar POI</DialogTitle></DialogHeader>
               <div className="space-y-4">
@@ -659,7 +679,7 @@ export default function VehicleDetails() {
                 </div>
               </div>
             </DialogContent>
-          </Dialog>
+          </Dialog>}
         </TabsContent>
 
         {/* Speed with chart */}
@@ -759,20 +779,29 @@ export default function VehicleDetails() {
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Início do dia</CardTitle></CardHeader>
-                      <CardContent><div className="text-2xl font-bold text-foreground">{fuelReadings[0].fuel_value?.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">{fuelReadings[0].fuel_unit === 'liters' ? 'L' : '%'}</span></div></CardContent>
+                      <CardContent><div className="text-2xl font-bold text-foreground">{fuelReadings[0].fuel_value?.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">{fuelUnitLabel(fuelReadings[0].fuel_unit)}</span></div></CardContent>
                     </Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Fim do dia</CardTitle></CardHeader>
-                      <CardContent><div className="text-2xl font-bold text-foreground">{fuelReadings[fuelReadings.length - 1].fuel_value?.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">{fuelReadings[0].fuel_unit === 'liters' ? 'L' : '%'}</span></div></CardContent>
+                      <CardContent><div className="text-2xl font-bold text-foreground">{fuelReadings[fuelReadings.length - 1].fuel_value?.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">{fuelUnitLabel(fuelReadings[fuelReadings.length - 1].fuel_unit)}</span></div></CardContent>
                     </Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Variação</CardTitle></CardHeader>
                       <CardContent>
                         {(() => {
-                          const delta = fuelReadings[0].fuel_value - fuelReadings[fuelReadings.length - 1].fuel_value;
-                          return <div className={`text-2xl font-bold ${delta > 0 ? 'text-destructive' : 'text-success'}`}>{delta > 0 ? '-' : '+'}{Math.abs(delta).toFixed(1)}</div>;
+                          const delta = fuelSeries.difference;
+                          if (delta === null) return <div className="text-sm font-medium text-muted-foreground">Não comparável</div>;
+                          return <div className={`text-2xl font-bold ${delta > 0 ? 'text-destructive' : 'text-success'}`}>{delta > 0 ? '-' : '+'}{Math.abs(delta).toFixed(1)} <span className="text-sm">{fuelUnitLabel(fuelReadings[0].fuel_unit)}</span></div>;
                         })()}
                       </CardContent>
                     </Card>
                   </div>
+
+                  {!fuelSeries.comparable && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {fuelSeries.unavailableReason === 'mixed_units'
+                        ? 'As leituras usam unidades diferentes; a variação e o gráfico não podem ser comparados.'
+                        : 'A unidade das leituras não é reconhecida; a variação e o gráfico foram omitidos.'}
+                    </p>
+                  )}
 
                   {/* Fuel Chart */}
                   {fuelChartData.length > 0 && (
@@ -873,7 +902,9 @@ export default function VehicleDetails() {
                     ['Longitude', positionLast.lng.toFixed(6)],
                     ['Velocidade', positionLast.speed == null ? 'Indisponível' : `${Math.round(positionLast.speed)} km/h`],
                     ['Direção', positionLast.heading == null ? 'Indisponível' : `${Math.round(positionLast.heading)}°`],
-                    ['Capturada em', format(new Date(positionLast.captured_at), 'dd/MM/yyyy HH:mm:ss', { locale: ptBR })],
+                    ['Capturada em', currentTelemetry.capturedAt
+                      ? format(new Date(currentTelemetry.capturedAt), 'dd/MM/yyyy HH:mm:ss', { locale: ptBR })
+                      : 'Indisponível'],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-lg border border-border p-3">
                       <p className="text-xs text-muted-foreground">{label}</p>

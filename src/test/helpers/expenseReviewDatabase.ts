@@ -26,7 +26,7 @@ export async function installExpenseReviewFixture(db:PGlite){
   await db.exec('drop trigger if exists '+name+' on public.driver_expenses');await db.exec(baseline.match(new RegExp('CREATE TRIGGER '+name+' [^;]+;'))![0]);
  }
 }
-export async function createExpenseReviewDatabase(candidate=true){const value=await createInvoiceLifecycleDatabase();await installExpenseReviewFixture(value.db);if(candidate)await value.db.exec(expenseReviewSql());return value;}
+export async function createExpenseReviewDatabase(candidate=true){const value=await createInvoiceLifecycleDatabase();await installExpenseReviewFixture(value.db);if(candidate){await value.db.exec(expenseReviewSql());await value.db.exec(readFileSync('supabase/migrations/20260921140000_keyset_expense_review_list.sql','utf8'));}return value;}
 export async function expenseAdmin(db:PGlite){await db.query("update tenant_memberships set role='admin' where tenant_id=$1 and user_id=$2",[i.tenant,i.operator]);}
 export async function seedExpense(db:PGlite,trip:string,overrides:Record<string,unknown>={}){
  const row={tenant_id:i.tenant,dispatch_trip_id:trip,driver_id:i.driver,category:'food',amount:25,expense_at:'2026-08-30T12:00:00Z',payment_source:'driver',reimbursable:true,paid_with_advance:false,no_receipt:true,no_receipt_reason:'Comprovante indisponível em QA',...overrides};

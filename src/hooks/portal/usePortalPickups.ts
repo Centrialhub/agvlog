@@ -1,4 +1,4 @@
-import { localDayBoundary, localDayEnd } from '@/lib/listFilters';
+import { dateOnlyUtcRange } from '@/lib/utils/formatDate';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -7,6 +7,8 @@ import { assertPortalListPage, nextPortalListPage, PORTAL_LIST_PAGE_SIZE, type P
 
 export interface PortalPickup {
   id: string;
+  client_id: string | null;
+  can_cancel: boolean;
   pickup_number: string;
   remitter_name: string | null;
   remitter_cnpj: string | null;
@@ -21,7 +23,7 @@ export function usePortalPickups(filters?: { status?: string; start?: string; en
   const { currentTenant } = useTenant();
   const { selectedClientId } = usePortalClientScope();
   const qc = useQueryClient();
-  const queryKey = ['portal_pickups', currentTenant?.id, selectedClientId, filters] as const;
+  const queryKey = ['portal_pickups', currentTenant?.id, currentTenant?.timezone, selectedClientId, filters] as const;
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: null as PortalListPageParam | null,
@@ -31,8 +33,8 @@ export function usePortalPickups(filters?: { status?: string; start?: string; en
         _tenant_id: currentTenant.id,
         _client_id: selectedClientId ?? undefined,
         _status: filters?.status || undefined,
-        _start_date: filters?.start ? localDayBoundary(filters.start) : undefined,
-        _end_date: filters?.end ? localDayEnd(filters.end) : undefined,
+        _start_date: filters?.start ? dateOnlyUtcRange(filters.start, currentTenant.timezone).from : undefined,
+        _end_date: filters?.end ? new Date(Date.parse(dateOnlyUtcRange(filters.end, currentTenant.timezone).toExclusive) - 1).toISOString() : undefined,
         _page_size: PORTAL_LIST_PAGE_SIZE,
         _snapshot_at: pageParam?.snapshotAt,
         _cursor: pageParam?.cursor,
@@ -75,11 +77,13 @@ export function useCancelPortalPickup() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (pickup_id: string) => {
+    mutationFn: async (args: { pickup_id: string; reason: string; request_id: string }) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { error } = await supabase.rpc('cancel_client_pickup', {
+      const { error } = await supabase.rpc('cancel_client_pickup_v2', {
         _tenant_id: currentTenant.id,
-        _pickup_id: pickup_id,
+        _pickup_id: args.pickup_id,
+        _reason: args.reason,
+        _request_id: args.request_id,
       });
       if (error) throw error;
     },

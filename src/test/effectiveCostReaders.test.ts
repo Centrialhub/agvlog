@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { historicalSettlementExpenseContextSchema } from './helpers/historicalFinanceContracts';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {beforeAll,afterAll,beforeEach,afterEach,it,expect} from 'vitest';
@@ -7,7 +8,6 @@ import {installEffectiveCostReaderPredecessors,effectiveCostReadersSql,installEf
 import {financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
 import {recordedCostsSchema} from '@/lib/financial/recordedCostsContract';
 import {recordedCostSummarySchema} from '@/lib/financial/recordedCostSummaryContract';
-import {settlementExpenseContextSchema} from '@/lib/financial/settlementExpenseContextContract';
 import {payablePortfolioSchema} from '@/lib/financial/payablePortfolioContract';
 import {expenseHistorySchema} from '@/lib/financial/expenseHistoryContract';
 import {expenseCostOriginSchema} from '@/lib/financial/unloadingCostCorrectionContract';
@@ -61,7 +61,7 @@ it('builds and rebuilds the real settlement with effective cost120 and no additi
  const rows=()=>db.query<{amount:string,metadata:unknown}>("select amount,metadata from driver_settlement_items where settlement_id=$1 and source_table='finance_expense_items'",[settlement]);
  expect((await rows()).rows).toHaveLength(1);expect(Number((await rows()).rows[0].amount)).toBe(120);expect((await rows()).rows[0].metadata).toMatchObject({settlement_credit_created:false,reimbursable:false,expense_cost_version:{amount_cents:'12000'}});
  await db.query('select public._build_driver_settlement($1,$2)',[i.tenant,trip]);expect((await rows()).rows).toHaveLength(1);
- const view=(await db.query<{v:unknown}>('select get_finance_settlement_expense_context($1,$2) v',[i.tenant,settlement])).rows[0].v;settlementExpenseContextSchema.parse(view);expect(view).toMatchObject({total_cents:'12000',payable_cents:'12000',rows:[{amount_cents:'12000',cost_origin:{effective_amount_cents:'12000'}}]});
+ const view=(await db.query<{v:unknown}>('select get_finance_settlement_expense_context($1,$2) v',[i.tenant,settlement])).rows[0].v;historicalSettlementExpenseContextSchema.parse(view);expect(view).toMatchObject({total_cents:'12000',payable_cents:'12000',rows:[{amount_cents:'12000',cost_origin:{effective_amount_cents:'12000'}}]});
  expect((await db.query('select count(*)::int n from payables')).rows).toEqual([{n:1}]);expect((await db.query('select count(*)::int n from finance_movements')).rows).toEqual([{n:0}]);
 });
 it('includes an amended cost beyond page one in complete totals and server filters',async()=>{

@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { useAuth } from './useAuth';
-import { calculateFreight, logFreightCalculation } from './useFreightCalculator';
+import { calculateFreight } from './useFreightCalculator';
 import type { Json, TablesUpdate } from '@/integrations/supabase/types';
+import { readLoadFreightContext } from '@/lib/fiscalDocuments/loadFreightContext';
 
 /**
  * Recalculates the freight for a single CT-e (outbound fiscal_document) using
@@ -13,7 +13,6 @@ import type { Json, TablesUpdate } from '@/integrations/supabase/types';
  */
 export function useRecalculateCTeFreight() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const qc = useQueryClient();
 
   return useMutation({
@@ -39,16 +38,11 @@ export function useRecalculateCTeFreight() {
       let clientId = cte.client_id || null;
       let nfeTotalValue = 0;
       if (cte.load_id) {
-        const { data: nfeDocs, error: nfeDocsError } = await supabase
-          .from('fiscal_documents')
-          .select('client_id, value')
-          .eq('load_id', cte.load_id)
-          .eq('tenant_id', currentTenant.id)
-          .eq('document_type', 'inbound');
-        if (nfeDocsError) throw nfeDocsError;
-        nfeTotalValue = (nfeDocs || []).reduce((sum, document) => sum + (Number(document.value) || 0), 0);
+        const context = await readLoadFreightContext(currentTenant.id, cte.load_id);
+        const nfeDocs = context.documents;
+        nfeTotalValue = nfeDocs.reduce((sum, document) => sum + (Number(document.value) || 0), 0);
         if (!clientId) {
-          const referenceDocument = (nfeDocs || []).find((document) => document.client_id);
+          const referenceDocument = nfeDocs.find((document) => document.client_id);
           clientId = referenceDocument?.client_id || null;
         }
       }
@@ -98,19 +92,15 @@ export function useRecalculateCTeFreight() {
         ibs_value: newValue * ibsRate / 100,
         updated_at: new Date().toISOString(),
       };
-      const { error: upErr } = await supabase
-        .from('fiscal_documents')
-        .update(updatePayload)
-        .eq('id', cteId)
-        .eq('tenant_id', currentTenant.id);
+      const { error: upErr } = await supabase.rpc('update_fiscal_document_with_freight_v1' as never, {
+        _tenant_id: currentTenant.id,
+        _document_id: cteId,
+        _expected_updated_at: cte.updated_at,
+        _document_patch: {},
+        _freight_patch: updatePayload,
+        _breakdown: result.breakdown,
+      } as never);
       if (upErr) throw upErr;
-
-      // Upsert audit log (no duplicates per CT-e)
-      try {
-        await logFreightCalculation(currentTenant.id, cteId, 'cte', result.breakdown, user?.id);
-      } catch (e) {
-        console.warn('Falha ao registrar log de recálculo de frete', e);
-      }
 
       return { ok: true, value: newValue, breakdown: result.breakdown };
     },

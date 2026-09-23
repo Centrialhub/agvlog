@@ -7,13 +7,15 @@ import {useOnlineStatus} from '@/hooks/useOnlineStatus';
 import {useDriverExpenseSubmission,useOperationalDriverExpenseContext} from '@/hooks/useDriverExpensesOperational';
 import {creationError,type ExpenseCreationInput,type ExpenseFields} from '@/lib/financial/expenseCreationCommands';
 import {expenseCategoryLabels,expensePaymentLabels} from '@/lib/financial/expenseReviewCommands';
-import {localDateTimeInputValue} from '@/lib/utils/formatDate';
+import {localDateTimeInputToIso,localDateTimeInputValue} from '@/lib/utils/formatDate';
+import {useTenant} from '@/hooks/useTenant';
 
 interface Props {sourceId:string;onSaved:(message:string)=>void}
 export function DriverExpenseForm({sourceId,onSaved}:Props){
+ const {currentTenant}=useTenant(),timeZone=currentTenant?.timezone||'America/Sao_Paulo';
  const prefix=useId(),online=useOnlineStatus(),contextQuery=useOperationalDriverExpenseContext(sourceId),command=useDriverExpenseSubmission();
  const [file,setFile]=useState<File>(),[message,setMessage]=useState('');
- const [form,setForm]=useState({category:'fuel',amount:'',expense_at:localDateTimeInputValue(),payment_source:'driver',reimbursable:true,supplier_name:'',document_number:'',city:'',state:'',odometer:'',notes:''});
+ const [form,setForm]=useState({category:'fuel',amount:'',expense_at:localDateTimeInputValue(new Date(),timeZone),payment_source:'driver',reimbursable:true,supplier_name:'',document_number:'',city:'',state:'',odometer:'',notes:''});
  const field=(name:keyof typeof form,value:string|boolean)=>setForm(current=>({...current,[name]:value}));
  const textField=(name:'amount'|'expense_at'|'supplier_name'|'document_number'|'city'|'state'|'odometer',label:string,type='text')=><div><label htmlFor={prefix+name}>{label}</label><Input id={prefix+name} type={type} value={form[name]} onChange={event=>field(name,event.target.value)} inputMode={name==='amount'?'decimal':undefined}/></div>;
  const context=contextQuery.data?.context;const disabled=command.submit.isPending||contextQuery.isPending||!context?.can_create;
@@ -22,8 +24,8 @@ export function DriverExpenseForm({sourceId,onSaved}:Props){
    if(!context)throw contextQuery.error??new Error('Carregue o contexto da viagem.');if(!file)throw new Error('Fotografe ou selecione o comprovante da despesa.');
    if(!/^\d+(?:[.,]\d{1,2})?$/.test(form.amount.trim()))throw new Error('Informe um valor positivo com no máximo duas casas decimais.');
    const [whole,fraction='']=form.amount.trim().replace(',','.').split('.'),amountCents=Number(whole)*100+Number(fraction.padEnd(2,'0'));if(amountCents<=0)throw new Error('Informe um valor positivo.');
-   const expenseAt=new Date(form.expense_at);if(!Number.isFinite(expenseAt.getTime()))throw new Error('Informe a data e hora da despesa.');
-   const fields:ExpenseFields={category:form.category as ExpenseFields['category'],amount_cents:amountCents,expense_at:expenseAt.toISOString(),payment_source:form.payment_source as ExpenseFields['payment_source'],reimbursable:form.reimbursable,
+   const expenseAt=localDateTimeInputToIso(form.expense_at,timeZone);
+   const fields:ExpenseFields={category:form.category as ExpenseFields['category'],amount_cents:amountCents,expense_at:expenseAt,payment_source:form.payment_source as ExpenseFields['payment_source'],reimbursable:form.reimbursable,
     no_receipt:false,no_receipt_reason:null,notes:form.notes||null,supplier_name:form.supplier_name||null,document_number:form.document_number||null,city:form.city||null,state:form.state||null,odometer:form.odometer?Number(form.odometer):null,cost_center:null};
    const input:ExpenseCreationInput={source_type:'trip',source_id:sourceId,expected_revision:context.revision,fields,receipt:null};const result=await command.submit.mutateAsync({input,file});
    const notice=result.queued?result.message:'Despesa enviada e aguardando aprovação da equipe interna.';setMessage(notice);onSaved(notice);setFile(undefined);setForm(current=>({...current,amount:'',supplier_name:'',document_number:'',notes:''}));

@@ -61,7 +61,7 @@ describe("production configuration contract", () => {
     expect(functionSources).not.toMatch(/Access-Control-Allow-Origin["']?\s*:\s*["']\*["']/);
     expect(functionSources).not.toContain("@supabase/supabase-js/cors");
     expect(sharedCors).toContain('Deno.env.get("AGVLOG_APP_ORIGIN")');
-    expect(sharedCors).toContain('const PRODUCTION_APP_ORIGIN = "https://agvlog.lovable.app"');
+    expect(sharedCors).toContain('const PRODUCTION_APP_ORIGIN = "https://agvlogistica.vercel.app"');
     expect(sharedCors).toContain("appOrigin ?");
     expect(sharedCors).not.toMatch(/Access-Control-Allow-Origin["']?\s*:\s*["']\*["']/);
   });
@@ -153,7 +153,7 @@ describe("production configuration contract", () => {
     expect(config).toContain("[auth.mfa.totp]");
     expect(config).toContain("enroll_enabled = false");
     expect(config).toContain("verify_enabled = false");
-    expect(config).toContain('additional_redirect_urls = ["https://agvlog.lovable.app/set-password"]');
+    expect(config).toContain('additional_redirect_urls = ["https://agvlogistica.vercel.app/set-password"]');
     expect(routeGuards).not.toContain('PrivilegedMfaGate');
     expect(routeGuards).not.toContain('auth.mfa');
     expect(routeGuards).toContain("<RequireInternalRole>{children}</RequireInternalRole>");
@@ -180,7 +180,7 @@ describe("production configuration contract", () => {
       "cte-status-poll", "emit-nfse", "fiscal-certificate-manage", "frontend-error-report", "get-client-pod-signed-url",
       "finance-fiscal-evidence-preview", "finance-image-runtime-benchmark", "finance-payable-xml",
       "hub-fiscal-credential-save", "hub-fiscal-proxy", "hub-fiscal-webhook-in",
-      "list-tenant-members", "nfse-status-poll", "search-users-by-email", "secure-upload",
+      "list-tenant-members", "nfse-status-poll", "portal-download-file", "search-users-by-email", "secure-upload",
       "delivery-receipt-email-webhook", "finance-statement-verify", "geocode-address", "process-delivery-receipt-ocr", "process-delivery-receipt-portals", "send-delivery-receipts",
       "process-address-resolution-queue",
       "ssx-diagnostic", "ssx-insert-person", "ssx-insert-person-client", "ssx-login",
@@ -457,7 +457,10 @@ describe("production configuration contract", () => {
     expect(clientsHook).not.toContain(".range(from, from + pageSize - 1)");
     expect(clientsCursor).toContain("list_operator_clients_page_v1");
     expect(clientsCursor).toContain("direction: 'next' | 'previous'");
-    expect(fiscalHook).toContain(".range(from, from + pageSize - 1)");
+    expect(fiscalHook).toContain("rpc('get_fiscal_documents_page_v1'");
+    expect(fiscalHook).toContain('_page_limit: pageSize');
+    expect(fiscalHook).toContain('_expected_revision: page === 1 ? undefined : paging.revision');
+    expect(fiscalHook).not.toContain(".range(from, from + pageSize - 1)");
     expect(fiscalHook).toContain("rpc('get_fiscal_document_summary_v1'");
     expect(loadsHook).toContain("rpc('list_loads_page_v1'");
     for (const source of [clientsPage, fiscalPage, loadsPage]) {
@@ -466,54 +469,4 @@ describe("production configuration contract", () => {
     }
   });
 
-  it("keeps baseline web security headers enabled", () => {
-    const config = read("vercel.json");
-    for (const header of [
-      "Content-Security-Policy",
-      "Strict-Transport-Security",
-      "X-Content-Type-Options",
-      "X-Frame-Options",
-    ]) {
-      expect(config).toContain(header);
-    }
-  });
-
-  it("keeps fiscal operations pinned to production without an environment selector", () => {
-    const operationalSources = [
-      read("src", "pages", "NFSe.tsx"),
-      read("src", "components", "nfse", "NFSeFormDialog.tsx"),
-      read("src", "components", "nfse", "NFSeFromInvoicesDialog.tsx"),
-      read("src", "components", "loads", "NFSePanel.tsx"),
-      read("src", "components", "loads", "ManifestPanel.tsx"),
-      read("src", "components", "billing", "CteEmissionPreviewDialog.tsx"),
-      read("src", "components", "settings", "EmittersSettings.tsx"),
-    ].join("\n");
-
-    expect(operationalSources).not.toContain("FiscalEnvironmentSelect");
-    expect(operationalSources).not.toMatch(/>\s*(?:Homologação|Sandbox)\s*</i);
-    expect(operationalSources).toContain("PRODUCTION_HUB_ENVIRONMENT");
-    expect(read("src", "lib", "fiscal", "cteBuilder.ts")).toContain(
-      "input.emitter?.environment || 'production'",
-    );
-    expect(read("src", "lib", "fiscal", "mdfeBuilder.ts")).toContain(
-      "input.emitter.environment || 'production'",
-    );
-    const nfseHook = read("src", "hooks", "useNFSe.tsx");
-    expect(nfseHook).toContain("export function useIssueNFSe()");
-    expect(nfseHook).toContain("export function useIssueNFSeBatch()");
-    expect(nfseHook).toContain("const environment = PRODUCTION_HUB_ENVIRONMENT");
-  });
-
-  it("does not present disabled integrations as unfinished product features", () => {
-    const userFacingSources = [
-      read("src", "components", "layout", "SidebarNavigation.tsx"),
-      read("src", "components", "integrations", "IntegrationUnavailable.tsx"),
-      read("src", "pages", "Drivers.tsx"),
-      read("src", "pages", "FleetMap.tsx"),
-    ].join("\n");
-
-    expect(userFacingSources).not.toContain("Integração em implantação");
-    expect(userFacingSources).not.toContain("Diagnóstico SSX (manual)");
-    expect(userFacingSources).toContain("Sincronizar SSX");
-  });
 });

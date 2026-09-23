@@ -1,6 +1,6 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useEffect, useState, useMemo } from 'react';
-import { cloneRouteDestinations, useOperationalRoutes, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute, type OperationalRoute, type RouteDestination } from '@/hooks/useOperationalRoutes';
+import { cloneRouteDestinations, hasDuplicateRouteDestinations, useOperationalRoutes, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute, type OperationalRoute, type RouteDestination } from '@/hooks/useOperationalRoutes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -115,10 +115,14 @@ export default function OperationalRoutesPage() {
   };
 
   const addDest = () => {
-    if (newDest.trim()) {
-      setForm(f => ({ ...f, destinations: [...f.destinations, { name: newDest.trim() }] }));
-      setNewDest('');
+    const name = newDest.trim();
+    if (!name) return;
+    if (hasDuplicateRouteDestinations([...form.destinations, { name }])) {
+      toast.error('Esta cidade já foi adicionada à rota.');
+      return;
     }
+    setForm(f => ({ ...f, destinations: [...f.destinations, { name }] }));
+    setNewDest('');
   };
 
   const removeDest = (idx: number) => {

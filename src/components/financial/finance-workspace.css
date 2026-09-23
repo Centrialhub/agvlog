@@ -1,0 +1,110 @@
+/* Scoped to finance, including its portalled dialogs and drawers. */
+.finance-workspace,
+.finance-dialog,
+.finance-sheet {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+:is(.finance-workspace, .finance-dialog, .finance-sheet) :is(h1, h2, h3) {
+  text-wrap: balance;
+  line-height: 1.35;
+}
+
+:is(.finance-workspace, .finance-dialog, .finance-sheet) :where(p) {
+  line-height: 1.6;
+}
+
+:is(.finance-workspace, .finance-dialog, .finance-sheet) :is(button:not([role="checkbox"]):not([role="radio"]):not([role="switch"])) {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  height: auto;
+  min-height: 2.5rem;
+  padding-block: .5rem;
+}
+
+:is(.finance-workspace, .finance-dialog, .finance-sheet) :where(button svg) {
+  flex-shrink: 0;
+}
+
+/* Legacy confirmation panels often place actions directly beside each other. */
+:is(.finance-workspace, .finance-dialog, .finance-sheet) :where(button + button) {
+  margin-inline-start: .5rem;
+}
+:is(.finance-workspace, .finance-dialog, .finance-sheet) :where(.flex, .grid) > button + button {
+  margin-inline-start: 0;
+}
+
+:is(.finance-workspace, .finance-dialog, .finance-sheet) :where(label) {
+  line-height: 1.5;
+}
+:is(.finance-workspace, .finance-dialog, .finance-sheet) :where(label > input:not([type=checkbox]):not([type=radio]), label > select, label > textarea, label + input, label + select, label + textarea) {
+  margin-top: .375rem;
+}
+
+.finance-dialog.finance-dialog {
+  width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border-radius: .875rem;
+  padding: 1.5rem;
+}
+.finance-dialog > :first-child,
+.finance-sheet > :first-child {
+  padding-right: 2.75rem;
+}
+.finance-dialog > *, .finance-sheet > * {
+  min-width: 0;
+}
+.finance-sheet.finance-sheet {
+  max-width: 100vw;
+  max-height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.finance-dialog > button.absolute:last-child,
+.finance-sheet > button.absolute:last-child {
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.finance-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.finance-page-header > div:first-child { flex: 1 1 20rem; min-width: 0; }
+.finance-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  align-items: end;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: .75rem;
+  background: hsl(var(--muted) / .2);
+}
+.finance-filters > * { min-width: 0; }
+.finance-filters > label, .finance-filters > div { align-self: start; }
+.finance-filters :is(input:not([type=checkbox]), select) { width: 100%; min-width: 0; }
+.finance-filters label { font-size: .875rem; font-weight: 500; }
+.finance-workspace :where(.overflow-auto, .overflow-x-auto) > table { min-width: 44rem; }
+.finance-workspace :where(th) { background: hsl(var(--muted) / .45); white-space: nowrap; }
+.finance-workspace :where(td) { vertical-align: top; }
+.finance-workspace :where(td.text-right) { font-variant-numeric: tabular-nums; }
+.finance-workspace :is([role=tablist]) { max-width: 100%; height: auto; flex-wrap: wrap; gap: .25rem; }
+
+@media (max-width: 639px) {
+  .finance-dialog.finance-dialog { padding: 1rem; max-width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); }
+  .finance-sheet.finance-sheet { width: 100%; padding: 1rem; }
+  .finance-page-header > button, .finance-page-header > div:last-child:not(:first-child) { width: 100%; }
+  :is(.finance-workspace, .finance-dialog, .finance-sheet) :is(input, select, textarea) { font-size: 1rem; }
+}

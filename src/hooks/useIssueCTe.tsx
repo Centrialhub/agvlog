@@ -214,6 +214,7 @@ export function useCancelCTe() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      qc.invalidateQueries({ queryKey: ['cte_search'] });
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
       qc.invalidateQueries({queryKey:['finance-receivable-portfolio']});
       qc.invalidateQueries({queryKey:['finance-fiscal-dashboard-summary']});
@@ -227,6 +228,7 @@ export function useCancelCTe() {
       toast.error('Falha ao cancelar CT-e', { description: errorMessage(e) });
       // Uma recusa fiscal também pode atualizar sefaz_status no proxy.
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      qc.invalidateQueries({ queryKey: ['cte_search'] });
       qc.invalidateQueries({ queryKey: ['issued_ctes'] });
       qc.invalidateQueries({ queryKey: ['cte_monitor'] });
     },

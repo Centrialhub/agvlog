@@ -1,4 +1,4 @@
-import {useMemo,useState} from 'react';
+import {useMemo,useRef,useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {Link,useParams} from 'react-router-dom';
 import {format,parseISO} from 'date-fns';
@@ -55,12 +55,14 @@ function buildTimeline(history:OperatorPodHistory):TimelineItem[]{
 export default function PodHistory(){
  const {docId}=useParams<{docId:string}>();const {currentTenant}=useTenant();const {user}=useAuth();
  const [historyPage,setHistoryPage]=useState(1);
+ const paging=useRef<{snapshotAt:string;revision:string}|null>(null);
  const tenant=currentTenant?.id,actor=user?.id;
  const query=useQuery({queryKey:['pod-history',tenant,actor,docId],enabled:!!tenant&&!!actor&&!!docId,retry:false,
   queryFn:async({signal})=>{const {data,error}=await callOperatorEventRpc('get_operator_pod_history_v1',{_tenant_id:tenant!,_document_id:docId!},signal);
-   if(error)throw new Error(operationalEventReadError(error,'Não foi possível consultar o histórico canônico. Tente novamente.'));return parseOperatorPodHistory(data,tenant!,actor!,docId!);}});
+   if(error)throw new Error(operationalEventReadError(error,'Não foi possível consultar o histórico canônico. Tente novamente.'));const parsed=parseOperatorPodHistory(data,tenant!,actor!,docId!);
+   paging.current={snapshotAt:parsed.snapshot_at,revision:parsed.collection_revision};return parsed;}});
  const pageQuery=useQuery({queryKey:['pod-history-collections',tenant,actor,docId,historyPage],enabled:!!query.data&&historyPage>1,retry:false,
-  queryFn:async({signal})=>{const {data,error}=await callOperatorEventRpc('get_operator_pod_history_collections_v1',{_tenant_id:tenant!,_document_id:docId!,_page:historyPage,_page_size:25},signal);
+  queryFn:async({signal})=>{const anchor=paging.current;if(!anchor)throw new Error('Reinicie a consulta do histórico.');const {data,error}=await callOperatorEventRpc('get_operator_pod_history_collections_v1',{_tenant_id:tenant!,_document_id:docId!,_page:historyPage,_page_size:25,_snapshot_at:anchor.snapshotAt,_expected_revision:anchor.revision},signal);
    if(error)throw new Error(operationalEventReadError(error,'Não foi possível consultar esta página do histórico.'));return parseOperatorPodCollections(data,tenant!,docId!,historyPage);}});
  const history=useMemo(()=>query.data?(historyPage===1?query.data:pageQuery.data?{...query.data,...pageQuery.data}:undefined):undefined,[historyPage,pageQuery.data,query.data]);
  const timeline=useMemo(()=>history?buildTimeline(history):[],[history]);
@@ -68,7 +70,9 @@ export default function PodHistory(){
  if(!tenant||!actor||!docId)return <StateCard title="Histórico indisponível" detail="Entre com uma sessão válida, selecione a empresa e abra novamente a NF."/>;
  if(query.isPending)return <StateCard title="Carregando histórico canônico…" detail="Consultando resultados, tentativas e comprovantes auditados." loading/>;
  if(query.isError)return <StateCard title="Histórico indisponível" detail={operationalEventError(query.error)} retry={()=>void query.refetch()} loading={query.isFetching}/>;
- if(!history)return <StateCard title={pageQuery.isPending?'Carregando página do histórico…':'Histórico indisponível'} detail={pageQuery.isPending?'Consultando uma página limitada das trilhas auditadas.':'A página solicitada não pôde ser montada.'} loading={pageQuery.isPending}/>;
+ if(!history)return <StateCard title={pageQuery.isPending?'Carregando página do histórico…':'Histórico indisponível'}
+  detail={pageQuery.isPending?'Consultando uma página limitada das trilhas auditadas.':operationalEventError(pageQuery.error)}
+  retry={pageQuery.isError?()=>void pageQuery.refetch():undefined} back={historyPage>1?()=>setHistoryPage(page=>Math.max(1,page-1)):undefined} loading={pageQuery.isFetching}/>;
  const current=history.current_outcome;const currentAllocation=history.current_allocation;
 
  return <div className="space-y-4">
@@ -118,16 +122,16 @@ export default function PodHistory(){
     </div>}
    </CardContent></Card>
   </div>
-  {pageQuery.isError&&<Card role="alert"><CardContent className="p-4 text-sm">Não foi possível consultar esta página. <Button variant="outline" onClick={()=>void pageQuery.refetch()}>Tentar novamente</Button></CardContent></Card>}
   <div className="flex items-center justify-between"><Button variant="outline" disabled={historyPage===1||pageQuery.isFetching} onClick={()=>setHistoryPage(page=>page-1)}>Página anterior</Button>
-   <span className="text-sm">Página {historyPage}</span><Button variant="outline" disabled={pageQuery.isFetching||!Object.values(history.totals).some(total=>historyPage*history.page_size<total)} onClick={()=>setHistoryPage(page=>page+1)}>Próxima página</Button></div>
+   <span className="text-sm">Página {historyPage}</span><Button variant="outline" disabled={pageQuery.isFetching||historyPage*history.page_size>=Object.values(history.totals).reduce((sum,total)=>sum+total,0)} onClick={()=>setHistoryPage(page=>page+1)}>Próxima página</Button></div>
  </div>;
 }
 
 function Summary({label,value,detail}:{label:string;value:string;detail?:string}){return <div><p className="text-xs text-muted-foreground">{label}</p><p className="font-semibold">{value}</p>{detail&&<p className="text-xs text-muted-foreground">{detail}</p>}</div>}
-function StateCard({title,detail,retry,loading=false}:{title:string;detail:string;retry?:()=>void;loading?:boolean}){return <div className="space-y-4">
+function StateCard({title,detail,retry,back,loading=false}:{title:string;detail:string;retry?:()=>void;back?:()=>void;loading?:boolean}){return <div className="space-y-4">
  <Link to="/traceability" className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="mr-1 h-3 w-3"/>Voltar à rastreabilidade</Link>
  <Card role={retry?'alert':undefined}><CardContent className="flex flex-col items-center gap-3 p-8 text-center"><AlertCircle className="h-6 w-6 text-muted-foreground"/>
   <div><p className="font-medium">{title}</p><p className="text-sm text-muted-foreground">{detail}</p></div>
-  {retry&&<Button variant="outline" onClick={retry} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading?'animate-spin':''}`}/>Tentar novamente</Button>}
+  <div className="flex gap-2">{back&&<Button variant="outline" onClick={back} disabled={loading}>Página anterior</Button>}
+  {retry&&<Button variant="outline" onClick={retry} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading?'animate-spin':''}`}/>Tentar novamente</Button>}</div>
  </CardContent></Card></div>}

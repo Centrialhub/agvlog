@@ -8,9 +8,13 @@ export type DurableOperatorAction =
   | 'create_vehicle_fueling'
   | 'import_occurrence_report'
   | 'create_stock_movement'
+  | 'create_inventory_movement'
   | 'create_employee_contract'
   | 'save_route_template'
-  | 'change_payroll_period_state';
+  | 'delete_operational_route'
+  | 'change_payroll_period_state'
+  | 'approve_payroll_period'
+  | 'close_payroll_period';
 
 export interface DurableOperatorCommand {
   version: 1;
@@ -62,8 +66,9 @@ function parse(raw: string | null): DurableOperatorCommand | null {
     const value = JSON.parse(raw) as Partial<DurableOperatorCommand>;
     if (value.version !== 1 || typeof value.tenantId !== 'string' || typeof value.actorId !== 'string'
       || !['resolve_address', 'upsert_geofence', 'mutate_fleet_geofence', 'review_trip_cargo_divergence',
-        'create_pickup_order', 'create_vehicle_fueling', 'import_occurrence_report', 'create_stock_movement',
-        'create_employee_contract', 'save_route_template', 'change_payroll_period_state']
+        'create_pickup_order', 'create_vehicle_fueling', 'import_occurrence_report', 'create_stock_movement', 'create_inventory_movement',
+        'create_employee_contract', 'save_route_template', 'delete_operational_route', 'change_payroll_period_state',
+        'approve_payroll_period', 'close_payroll_period']
         .includes(String(value.action))
       || typeof value.entityId !== 'string' || typeof value.requestId !== 'string'
       || !/^[0-9a-f]{64}$/.test(String(value.payloadHash)) || typeof value.createdAt !== 'string'
@@ -144,4 +149,11 @@ export function acknowledgeDurableOperatorCommand(command: DurableOperatorComman
 export function readDurableOperatorCommand(input: Pick<DurableOperatorCommand,
   'tenantId' | 'actorId' | 'action' | 'entityId'>, dependencies: Pick<Dependencies, 'storage'> = {}) {
   return parse(requiredStorage(dependencies.storage).getItem(scopedKey(input)));
+}
+
+/** Errors that confirm the server rejected the command before committing it. */
+export function isDefinitiveOperatorCommandRejection(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = String((error as { code?: unknown }).code ?? '');
+  return /^(22|23)/.test(code) || ['42501', 'P0001'].includes(code);
 }

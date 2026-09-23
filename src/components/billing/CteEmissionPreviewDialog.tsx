@@ -23,7 +23,7 @@ import { useIssueCTe } from '@/hooks/useIssueCTe';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
 import { isSameFiscalMunicipality } from '@/lib/fiscal/fiscalMunicipality';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
-import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
+import { buildCtePayload, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
 import {
   suggestIcmsAliquota,
@@ -62,23 +62,8 @@ import {
   stateFromNfeAccessKey,
 } from '@/lib/fiscal/cteAddressAutocomplete';
 import { isDefinitiveCteIssueError } from '@/lib/fiscal/cteIssueOutcome';
+import { recalcIcms } from '@/lib/fiscal/ctePreviewIcms';
 
-/** Recalcula base/valor do ICMS respeitando o regime embutido (por dentro). */
-function recalcIcms(
-  freight: number,
-  aliq: number,
-  embutido: boolean,
-  isento: boolean,
-  providedBase?: number | null,
-): { base: number; valor: number } {
-  return computeIcmsAmounts({
-    freight: freight || 0,
-    aliq: Number(aliq) || 0,
-    embutido,
-    isento,
-    providedBase: providedBase ?? null,
-  });
-}
 
 interface DriverOpt {
   id: string;
@@ -559,6 +544,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const [items, setItems] = useState<EditableCte[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [transmitting, setTransmitting] = useState(false);
+  const [defaultsStatus,setDefaultsStatus]=useState<'loading'|'ready'|'error'>('loading');
+  const [defaultsError,setDefaultsError]=useState('');
+  const [defaultsRetry,setDefaultsRetry]=useState(0);
   const [autocompletingAddresses, setAutocompletingAddresses] = useState(false);
   const [addressAutocompleteErrors, setAddressAutocompleteErrors] = useState<string[]>([]);
   const [bulkEditPartes, setBulkEditPartes] = useState(false);
@@ -584,6 +572,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   useEffect(() => {
     if (!open) return undefined;
     let cancelled = false;
+    setDefaultsStatus('loading');
+    setDefaultsError('');
     const registry = clients.length > 0 ? buildClientIndex(clients) : null;
     
     const baseItems = groups.map((g) => {
@@ -604,11 +594,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       const patched = await Promise.all(
         baseItems.map(async (it) => {
           if (it.loadIds.length === 0) return it;
-          const { data } = await supabase.rpc('cte_defaults_for_group', {
+          const { data,error } = await supabase.rpc('cte_defaults_for_group', {
             p_load_ids: it.loadIds,
           });
+          if(error)throw error;
           const d = parseCteDefaults(data);
-          if (!d) return it;
+          if (!d) throw new Error('O servidor devolveu padrões de CT-e inválidos.');
           
           let updated = {
             ...it,
@@ -654,11 +645,16 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           ) as unknown as EditableCte;
         });
       });
-    })();
+      setDefaultsStatus('ready');
+    })().catch((error:unknown)=>{
+      if(cancelled)return;
+      setDefaultsStatus('error');
+      setDefaultsError(errorMessage(error));
+    });
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, groupsSignature, defaultEmitter?.id, clients.length]);
+  }, [open, groupsSignature, defaultEmitter?.id, clients.length, defaultsRetry]);
 
   const hasIncompleteInsurance = items.some(
     (it) => !it.insurerName || !it.insurerCnpj || !it.insurerPolicy,
@@ -1162,6 +1158,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   }, [open, activeEnvironment, incompleteAddressSignature, clients]);
 
   async function handleTransmitClick() {
+    if(defaultsStatus!=='ready'){
+      toast.error('A emissão está bloqueada até os padrões do grupo serem carregados.');
+      return;
+    }
     if (autocompletingAddresses) return;
     const localDestinations = items.filter((item) => {
       const emitter = selectActiveEmitterById(emitters, item.emitterId);
@@ -1231,6 +1231,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             Prévia editável — CT-e {activeIdx + 1} de {items.length}
           </DialogTitle>
         </DialogHeader>
+
+        {defaultsStatus==='loading'&&<Alert><RotateCw className="h-4 w-4 animate-spin"/><AlertDescription>Carregando padrões de motorista, veículo, emitente e partes...</AlertDescription></Alert>}
+        {defaultsStatus==='error'&&<Alert variant="destructive"><AlertCircle className="h-4 w-4"/><AlertDescription className="flex items-center justify-between gap-3"><span>Não foi possível carregar os padrões do grupo: {defaultsError}</span><Button type="button" size="sm" variant="outline" onClick={()=>setDefaultsRetry(value=>value+1)}>Tentar novamente</Button></AlertDescription></Alert>}
 
         <div className="flex items-center gap-2 text-xs">
           {!activeCteCred && emitterForActive && (
@@ -2158,7 +2161,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             </Button>
           </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          <Button disabled={!allValid || transmitting || autocompletingAddresses} onClick={handleTransmitClick}>
+          <Button disabled={!allValid || transmitting || autocompletingAddresses || defaultsStatus!=='ready'} onClick={handleTransmitClick}>
             {autocompletingAddresses ? (
               <><RotateCw className="h-4 w-4 mr-2 animate-spin" /> Completando endereços…</>
             ) : transmitting ? (

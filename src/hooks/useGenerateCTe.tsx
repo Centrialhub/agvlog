@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { useAuth } from './useAuth';
 import type { Load } from './useLoads';
-import { calculateFreight, logFreightCalculation } from './useFreightCalculator';
+import { calculateFreight } from './useFreightCalculator';
 import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
 import { localDateInputValue } from '@/lib/utils/formatDate';
+import { readLoadFreightContext } from '@/lib/fiscalDocuments/loadFreightContext';
 
 interface GenerateCteOptions {
   load: Load;
@@ -32,7 +32,6 @@ function isGenerateCteOptions(arg: Load | GenerateCteOptions): arg is GenerateCt
 
 export function useGenerateCTe() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const qc = useQueryClient();
 
   return useMutation({
@@ -66,6 +65,9 @@ export function useGenerateCTe() {
         if (error) throw error;
         emitter = data?.[0] || null;
       }
+      if (!emitter) {
+        throw new Error('Cadastre e ative um emitente antes de gerar o CT-e.');
+      }
 
       // Check if CT-e already exists for this load
       const { data: existing, error: checkError } = await supabase
@@ -74,6 +76,7 @@ export function useGenerateCTe() {
         .eq('load_id', load.id)
         .eq('document_type', 'outbound')
         .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null)
         .limit(1);
 
       if (checkError) throw checkError;
@@ -82,68 +85,36 @@ export function useGenerateCTe() {
         throw new Error('CT-e já existe para esta carga');
       }
 
-      // Fetch load_items (without invalid join)
-      const { data: loadItems, error: loadItemsError } = await supabase
-        .from('load_items')
-        .select('item_description, quantity, pallet_count, weight_kg, order_id')
-        .eq('load_id', load.id);
-      if (loadItemsError) throw loadItemsError;
-
-      // Fetch linked orders via load_orders for item summary
-      const { data: loadOrders, error: loadOrdersError } = await supabase
-        .from('load_orders')
-        .select('order_id')
-        .eq('load_id', load.id);
-      if (loadOrdersError) throw loadOrdersError;
-
-      let orderNames: string[] = [];
-      if (loadOrders && loadOrders.length > 0) {
-        const orderIds = loadOrders.map((loadOrder) => loadOrder.order_id);
-        const { data: orders, error: ordersError } = await supabase
-          .from('orders')
-          .select('order_number, clients(company_name)')
-          .in('id', orderIds);
-        if (ordersError) throw ordersError;
-        if (orders) {
-          orderNames = orders.map((order) => order.order_number || order.clients?.company_name || 'Pedido');
-        }
-      }
-
-      const itemDescriptions = (loadItems || [])
-        .map((loadItem) => loadItem.item_description)
-        .filter((d: string) => d && d.trim());
+      const context = await readLoadFreightContext(currentTenant.id, load.id);
+      const itemDescriptions = context.item_descriptions;
+      const orderNames = context.order_names;
 
       const itemSummary = [...itemDescriptions, ...orderNames]
         .filter(Boolean)
         .join(', ')
         .substring(0, 500) || `Carga ${load.load_number}`;
 
-      const totalPallets = (loadItems || []).reduce((sum, loadItem) => sum + (loadItem.pallet_count || 0), 0);
-      const totalWeight = (loadItems || []).reduce((sum, loadItem) => sum + (Number(loadItem.weight_kg) || 0), 0);
+      const totalPallets = context.total_pallets;
+      const totalWeight = context.total_weight;
+      const refDocs = context.documents;
+      if (!refDocs.length) throw new Error('A carga não possui NF-e vigente para gerar o CT-e.');
 
-      // Fetch NF-e total value for percentage-based freight
-      const { data: nfeDocs, error: nfeDocsError } = await supabase
-        .from('fiscal_documents')
-        .select('value')
-        .eq('load_id', load.id)
-        .eq('document_type', 'inbound')
-        .eq('tenant_id', currentTenant.id);
-      if (nfeDocsError) throw nfeDocsError;
-
-      const nfeTotalValue = (nfeDocs || []).reduce((sum, document) => sum + (Number(document.value) || 0), 0);
-
-      // Resolve client / payer group / destination context from NF-e docs
-      const { data: refDocs, error: refDocsError } = await supabase
-        .from('fiscal_documents')
-        .select('client_id, recipient_state, recipient_city, recipient_neighborhood, recipient')
-        .eq('load_id', load.id)
-        .eq('tenant_id', currentTenant.id)
-        .eq('document_type', 'inbound')
-        .limit(50);
-      if (refDocsError) throw refDocsError;
-
-      const refDoc = (refDocs || []).find((document) => document.client_id) || refDocs?.[0];
+      const clientIds = [...new Set(refDocs.map((document) => document.client_id).filter(Boolean))];
+      if (clientIds.length > 1) {
+        throw new Error('A carga possui NF-es de clientes diferentes. Separe a carga antes de gerar o CT-e.');
+      }
+      const destinations = new Set(refDocs.map((document) => [
+        document.recipient_cnpj?.replace(/\D/g, '') || '',
+        document.recipient?.trim().toLocaleUpperCase('pt-BR') || '',
+        document.recipient_city?.trim().toLocaleUpperCase('pt-BR') || '',
+        document.recipient_state?.trim().toLocaleUpperCase('pt-BR') || '',
+      ].join('|')));
+      if (destinations.size > 1) {
+        throw new Error('A carga possui NF-es com destinatários diferentes. Gere um CT-e por destinatário.');
+      }
+      const refDoc = refDocs.find((document) => document.client_id) || refDocs[0];
       const clientId = refDoc?.client_id || null;
+      const nfeTotalValue = refDocs.reduce((sum, document) => sum + (Number(document.value) || 0), 0);
 
       let payerGroup: string | null = null;
       if (clientId) {
@@ -208,17 +179,16 @@ export function useGenerateCTe() {
       const cbsValue = freightValue > 0 ? freightValue * cbsRate / 100 : null;
       const ibsValue = freightValue > 0 ? freightValue * ibsRate / 100 : null;
 
-      const insertPayload: TablesInsert<'fiscal_documents'> = {
-        tenant_id: currentTenant.id,
-        created_by: user?.id,
+      const insertPayload: Omit<TablesInsert<'fiscal_documents'>, 'tenant_id' | 'created_by'> = {
         document_type: 'outbound',
         invoice_number: cteNumber,
         load_id: load.id,
         client_id: clientId,
-        emitter_id: emitter?.id || null,
-        remitter: emitter?.razao_social || emitter?.nome_fantasia || currentTenant.name || 'Transportadora',
-        remitter_cnpj: emitter?.cnpj || null,
-        recipient: load.destination || 'Destino não informado',
+        emitter_id: emitter.id,
+        remitter: emitter.razao_social || emitter.nome_fantasia,
+        remitter_cnpj: emitter.cnpj,
+        recipient: refDoc.recipient,
+        recipient_cnpj: refDoc.recipient_cnpj,
         recipient_state: destState,
         recipient_city: destMunicipality,
         pallet_count: totalPallets || load.total_pallet_count || 0,
@@ -238,21 +208,18 @@ export function useGenerateCTe() {
         ibs_rate: ibsRate,
         ibs_value: ibsValue,
       };
-      const { data, error } = await supabase.from('fiscal_documents').insert(insertPayload).select().single();
+      if (!breakdown) throw new Error('O cálculo não retornou os dados de auditoria. O CT-e não foi criado.');
+      const { data, error } = await supabase.rpc('create_fiscal_document_with_freight_v1' as never, {
+        _tenant_id: currentTenant.id,
+        _document: insertPayload,
+        _breakdown: breakdown,
+      } as never);
 
       if (error) throw error;
-
-      // Audit trail of the freight rule selection
-      if (breakdown && data?.id) {
-        try {
-          await logFreightCalculation(currentTenant.id, data.id, 'cte', breakdown, user?.id);
-        } catch (e) {
-          console.warn('Falha ao registrar log de cálculo de frete', e);
-        }
-      }
+      const created = data as unknown as Tables<'fiscal_documents'>;
 
       return {
-        ...data,
+        ...created,
         _diagnostics: {
           warnings,
           missingContext,

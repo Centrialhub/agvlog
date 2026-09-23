@@ -1,6 +1,6 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useAuth } from '@/hooks/useAuth';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
@@ -23,9 +23,12 @@ import {
   prepareDurableOperatorCommand,
 } from '@/lib/operator/durableOperatorCommand';
 import 'leaflet/dist/leaflet.css';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 
 const PAGE_SIZE=30;
-type GeofenceDashboard={page:number;page_size:number;total:number;all_total:number;active_count:number;vehicles_inside:number;inside_truncated:boolean;positions_truncated:boolean;rows:EditableFleetGeofence[];inside_rows:Array<{vehicle_id:string;geofence_id:string;plate:string|null;geofence_name:string|null}>;positions:Array<{vehicle_id:string;lat:number;lng:number;captured_at:string;plate:string|null}>};
+type GeofenceDashboard={page:number;page_size:number;revision:string;total:number;all_total:number;active_count:number;vehicles_inside:number;inside_truncated:boolean;positions_truncated:boolean;rows:EditableFleetGeofence[];inside_rows:Array<{vehicle_id:string;geofence_id:string;plate:string|null;geofence_name:string|null}>;positions:Array<{vehicle_id:string;lat:number;lng:number;captured_at:string;plate:string|null}>};
+
+export class GeofenceDashboardSnapshotChangedError extends Error {}
 
 const CATEGORIES = [
   { value: 'base', label: 'Base / Garagem', icon: Building2, color: '#22c55e', defaultRadius: 250, description: 'Sua base de operações, garagem ou pátio' },
@@ -50,17 +53,20 @@ export default function Geofences() {
   const { filters, setFilter, resetFilters, activeCount: filterCount } = useListFilters({ search: '', category: 'all', status: 'all' });
   const [showHelp, setShowHelp] = useState(false);
   const [page,setPage]=useState(1);
+  const [collectionRevision,setCollectionRevision]=useState<string|null>(null);
+  const resetPaging=()=>{setPage(1);setCollectionRevision(null);};
 
   const dashboardQuery = useQuery({
-    queryKey: ['geofence_dashboard', currentTenant?.id,page,filters],
+    queryKey: ['geofence_dashboard', currentTenant?.id,page,filters,collectionRevision],
     queryFn: async () => {
       if (!currentTenant) return null;
-      const {data,error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>)('get_geofence_dashboard_v1',{_tenant_id:currentTenant.id,_page:page,_page_size:PAGE_SIZE,_filters:filters});
-      if(error)throw error;return data as GeofenceDashboard;
+      const {data,error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>)('get_geofence_dashboard_v1',{_tenant_id:currentTenant.id,_page:page,_page_size:PAGE_SIZE,_filters:filters,_expected_revision:collectionRevision});
+      if(error){const rpcError=error as {code?:string;message?:string};if(rpcError.code==='40001'||rpcError.message?.includes('geofence_dashboard_snapshot_changed'))throw new GeofenceDashboardSnapshotChangedError('As cercas mudaram durante a navegação. A lista foi atualizada.');throw error;}return data as GeofenceDashboard;
     },
     enabled: !!currentTenant,
   });
   const dashboard=dashboardQuery.data,geofences=dashboard?.rows??[],states=dashboard?.inside_rows??[],isLoading=dashboardQuery.isLoading;
+  useEffect(()=>{if(dashboardQuery.error instanceof GeofenceDashboardSnapshotChangedError)resetPaging();},[dashboardQuery.error]);
 
   const eventsQuery = useQuery({
     queryKey: ['geofence_events', currentTenant?.id],
@@ -79,6 +85,7 @@ export default function Geofences() {
   const events = eventsQuery.data ?? [];
 
   const positions=dashboard?.positions??[];
+  const validPositions=positions.filter(position=>hasValidGeographicCoordinates(position.lat,position.lng));
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
@@ -145,7 +152,14 @@ export default function Geofences() {
   const activeCount=dashboard?.active_count??0;
   const currentStates=states;
   const vehiclesInside=dashboard?.vehicles_inside??0;
-  const firstValidGeofence=geofences.find(f=>f.enabled&&f.center_lat!=null&&f.center_lng!=null);
+  const validGeofences=geofences.filter(f=>f.enabled&&f.center_lat!=null&&f.center_lng!=null&&
+    hasValidGeographicCoordinates(Number(f.center_lat),Number(f.center_lng)));
+  const firstValidGeofence=validGeofences[0];
+  const mapCenter: [number,number]=validPositions.length>0
+    ? [validPositions[0].lat,validPositions[0].lng]
+    : firstValidGeofence
+      ? [Number(firstValidGeofence.center_lat),Number(firstValidGeofence.center_lng)]
+      : [-14.235,-51.9253];
   const coreReadError=dashboardQuery.isError||eventsQuery.isError;
 
   return (
@@ -234,7 +248,7 @@ export default function Geofences() {
       )}
 
       {/* Map */}
-      {(positions.length > 0 || geofences.some((f) => f.center_lat != null && f.center_lng != null)) && (
+      {(validPositions.length > 0 || validGeofences.length > 0) && (
         <Card className="overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -245,18 +259,18 @@ export default function Geofences() {
           <CardContent className="p-0">
             <div className="h-[350px]">
               <MapContainer
-                center={positions.length > 0 ? [positions[0].lat, positions[0].lng] : [Number(firstValidGeofence?.center_lat) || -14.235, Number(firstValidGeofence?.center_lng) || -51.9253]}
-                zoom={positions.length > 0 ? 10 : 14}
+                center={mapCenter}
+                zoom={validPositions.length > 0 ? 10 : 14}
                 className="h-full w-full z-0"
               >
                 <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                {geofences.flatMap((f) => f.enabled && f.center_lat != null && f.center_lng != null && f.radius_m != null ? [
+                {validGeofences.flatMap((f) => f.radius_m != null ? [
                   <Circle key={f.id} center={[Number(f.center_lat), Number(f.center_lng)]} radius={Number(f.radius_m)}
                     pathOptions={{ color: getCategoryConfig(f.category || 'general').color, fillOpacity: 0.12 }}>
                     <Popup><strong>{f.name}</strong><br />Raio {Math.round(Number(f.radius_m))} m</Popup>
                   </Circle>,
                 ] : [])}
-                {positions.map((p) => (
+                {validPositions.map((p) => (
                   <CircleMarker key={p.vehicle_id} center={[p.lat, p.lng]} radius={6}
                     pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8 }}>
                     <Popup><strong>{p.plate}</strong></Popup>
@@ -305,10 +319,10 @@ export default function Geofences() {
             </CardHeader>
             <CardContent className="space-y-3">
               <ListFilterBar fields={[
-                { key: 'search', label: 'Buscar cerca', type: 'search', value: filters.search, onChange: value => {setPage(1);setFilter('search', value);}, placeholder: 'Nome ou categoria' },
-                { key: 'category', label: 'Categoria', value: filters.category, onChange: value => {setPage(1);setFilter('category', value);}, options: [{ value: 'all', label: 'Todas as categorias' }, ...CATEGORIES] },
-                { key: 'status', label: 'Monitoramento', value: filters.status, onChange: value => {setPage(1);setFilter('status', value);}, options: [{ value: 'all', label: 'Todos' }, { value: 'active', label: 'Ativo' }, { value: 'inactive', label: 'Pausado' }] },
-              ]} onReset={()=>{setPage(1);resetFilters();}} activeCount={filterCount} resultCount={filtered.length} totalCount={dashboard?.total??0} loading={isLoading} description="Filtros aplicados no servidor; mapa e ocupações mostram um recorte limitado." />
+                { key: 'search', label: 'Buscar cerca', type: 'search', value: filters.search, onChange: value => {resetPaging();setFilter('search', value);}, placeholder: 'Nome ou categoria' },
+                { key: 'category', label: 'Categoria', value: filters.category, onChange: value => {resetPaging();setFilter('category', value);}, options: [{ value: 'all', label: 'Todas as categorias' }, ...CATEGORIES] },
+                { key: 'status', label: 'Monitoramento', value: filters.status, onChange: value => {resetPaging();setFilter('status', value);}, options: [{ value: 'all', label: 'Todos' }, { value: 'active', label: 'Ativo' }, { value: 'inactive', label: 'Pausado' }] },
+              ]} onReset={()=>{resetPaging();resetFilters();}} activeCount={filterCount} resultCount={filtered.length} totalCount={dashboard?.total??0} loading={isLoading} description="Filtros aplicados no servidor; mapa e ocupações mostram um recorte limitado." />
               {filtered.map((g) => {
                 const config = getCategoryConfig(g.category || 'general');
                 const Icon = config.icon;
@@ -375,7 +389,7 @@ export default function Geofences() {
                   Nenhuma cerca encontrada para os filtros
                 </p>
               )}
-              <div className="flex items-center justify-between"><Button variant="outline" disabled={page===1||isLoading} onClick={()=>setPage(value=>value-1)}>Anterior</Button><span className="text-sm">Página {page} de {Math.max(1,Math.ceil((dashboard?.total??0)/PAGE_SIZE))}</span><Button variant="outline" disabled={page*PAGE_SIZE>=(dashboard?.total??0)||isLoading} onClick={()=>setPage(value=>value+1)}>Próxima</Button></div>
+              <div className="flex items-center justify-between"><Button variant="outline" disabled={page===1||isLoading} onClick={()=>page===2?resetPaging():setPage(value=>value-1)}>Anterior</Button><span className="text-sm">Página {page} de {Math.max(1,Math.ceil((dashboard?.total??0)/PAGE_SIZE))}</span><Button variant="outline" disabled={page*PAGE_SIZE>=(dashboard?.total??0)||isLoading} onClick={()=>{setCollectionRevision(current=>current??dashboard!.revision);setPage(value=>value+1);}}>Próxima</Button></div>
             </CardContent>
           </Card>
 

@@ -10,6 +10,8 @@ import { callOperatorEventRpc, operationalEventError, operationalEventReadError,
 import { createOperationalEventOutbox, OPERATIONAL_EVENT_COMMAND_CHANGED,
   pendingOperationalEventCommand } from '@/lib/operationalEvents/operatorEventOutbox';
 import { callOperationalEventPage, readAllOperationalEventPages } from '@/lib/operationalEvents/operatorEventPagination';
+import { APP_TIME_ZONE, datePickerInputValue } from '@/lib/utils/formatDate';
+import { operationalEventDateBounds } from '@/lib/operationalEvents/operationalEventDates';
 
 export const EVENT_TYPES = [
   'missing_goods', 'missing_goods_fractional', 'wrong_quantity', 'client_refused', 'no_order',
@@ -101,6 +103,7 @@ export interface OperationalEventsFilters {
   vehicleId?: string;     // 'all' or uuid
   dateFrom?: Date | null;
   dateTo?: Date | null;
+  dateBasis?: 'created_at' | 'resolved_at';
   driverId?: string;      // 'all' or uuid
   clientId?: string;      // 'all' or uuid
   loadId?: string;        // 'all' or uuid
@@ -111,7 +114,7 @@ export interface OperationalEventsFilters {
   responsibility?: 'all' | 'deposito' | 'transporte';
 }
 
-function operationalEventFilters(filters: OperationalEventsFilters): Record<string, unknown> {
+export function operationalEventFilters(filters: OperationalEventsFilters, timeZone = APP_TIME_ZONE): Record<string, unknown> {
   const result: Record<string, unknown> = { status: filters.status ?? 'all' };
   if (filters.type && filters.type !== 'all') result.type = filters.type;
   if (filters.severity && filters.severity !== 'all') result.severity = filters.severity;
@@ -122,16 +125,10 @@ function operationalEventFilters(filters: OperationalEventsFilters): Record<stri
   if (typeof filters.impactMin === 'number' && Number.isFinite(filters.impactMin)) result.impact_min = filters.impactMin;
   if (typeof filters.impactMax === 'number' && Number.isFinite(filters.impactMax)) result.impact_max = filters.impactMax;
   if (filters.hasImpact) result.has_impact = true;
-  if (filters.dateFrom) {
-    const value = new Date(filters.dateFrom);
-    value.setHours(0, 0, 0, 0);
-    result.date_from = value.toISOString();
-  }
-  if (filters.dateTo) {
-    const value = new Date(filters.dateTo);
-    value.setHours(23, 59, 59, 999);
-    result.date_to = value.toISOString();
-  }
+  const bounds = operationalEventDateBounds(filters.dateFrom, filters.dateTo, timeZone);
+  if (bounds.fromInclusive) result.date_from = bounds.fromInclusive;
+  if (bounds.toInclusive) result.date_to = bounds.toInclusive;
+  if (filters.dateBasis === 'resolved_at') result.date_basis = 'resolved_at';
   const search = filters.search?.trim();
   if (search) result.search = search;
   if (filters.responsibility && filters.responsibility !== 'all') result.responsibility = filters.responsibility;
@@ -143,11 +140,12 @@ function operationalEventFilters(filters: OperationalEventsFilters): Record<stri
  * para o Supabase. Otimizado para frotas grandes.
  * Busca textual continua no cliente sobre o resultado já reduzido.
  */
-export function useOperationalEventsFiltered(filters: OperationalEventsFilters) {
+export function useOperationalEventsFiltered(filters: OperationalEventsFilters, options: { enabled?: boolean } = {}) {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
-  const fromKey = filters.dateFrom ? filters.dateFrom.toISOString().slice(0, 10) : null;
-  const toKey = filters.dateTo ? filters.dateTo.toISOString().slice(0, 10) : null;
+  const timeZone = currentTenant?.timezone || APP_TIME_ZONE;
+  const fromKey = filters.dateFrom ? datePickerInputValue(filters.dateFrom) : null;
+  const toKey = filters.dateTo ? datePickerInputValue(filters.dateTo) : null;
   return useQuery({
     queryKey: [
       'operational_events_filtered',
@@ -164,13 +162,15 @@ export function useOperationalEventsFiltered(filters: OperationalEventsFilters) 
       filters.hasImpact ? 1 : 0,
       filters.search?.trim() ?? '',
       filters.responsibility ?? 'all',
+      filters.dateBasis ?? 'created_at',
       fromKey,
       toKey,
+      timeZone,
       user?.id,
     ],
     queryFn: async () => {
       if (!currentTenant || !user) return [];
-      const pageFilters = operationalEventFilters(filters);
+      const pageFilters = operationalEventFilters(filters, timeZone);
       const rows = await readAllOperationalEventPages(
         cursor => callOperationalEventPage({
           _tenant_id: currentTenant.id,
@@ -183,7 +183,7 @@ export function useOperationalEventsFiltered(filters: OperationalEventsFilters) 
       );
       return rows as unknown as OperationalEvent[];
     },
-    enabled: !!currentTenant && !!user,
+    enabled: (options.enabled ?? true) && !!currentTenant && !!user,
   });
 }
 

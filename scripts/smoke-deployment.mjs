@@ -8,7 +8,7 @@ if (targetUrl.protocol !== "https:" && process.env.DEPLOY_SMOKE_ALLOW_HTTP !== "
 }
 if (targetUrl.username || targetUrl.password) throw new Error("DEPLOY_SMOKE_URL must not contain credentials.");
 const origin = targetUrl.origin;
-const fetchOptions = () => ({ redirect: "follow", signal: AbortSignal.timeout(15_000) });
+const fetchOptions = () => ({ redirect: "error", signal: AbortSignal.timeout(15_000) });
 
 const page = await fetch(origin, fetchOptions());
 if (!page.ok) throw new Error(`Frontend returned HTTP ${page.status}`);
@@ -50,7 +50,15 @@ for (const scriptPath of new Set(scriptPaths)) {
     throw new Error(`Unsafe marker in deployed chunk: ${scriptUrl}`);
   }
   const sourceMap = await fetch(`${scriptUrl}.map`, fetchOptions());
-  if (sourceMap.ok) throw new Error(`Public source map is reachable: ${scriptUrl}.map`);
+  if (sourceMap.ok) {
+    // SPA rewrites can return index.html with HTTP 200 for a missing .map path.
+    // Only that HTML fallback is harmless; any other successful response is an
+    // unexpected public artifact and must block the candidate.
+    if (!sourceMap.headers.get("content-type")?.toLowerCase().includes("text/html")
+      || await sourceMap.text() !== html) {
+      throw new Error(`Public source map or unexpected artifact is reachable: ${scriptUrl}.map`);
+    }
+  }
 }
 
 const supabaseUrl = process.env.DEPLOY_SUPABASE_URL;

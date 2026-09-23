@@ -55,6 +55,7 @@ beforeAll(async()=>{
   await db.exec(readFileSync('supabase/migrations/20260910162008_add_ssx_tracking_reference_catalog.sql','utf8'));
   await db.exec(readFileSync('supabase/migrations/20260910150914_add_ssx_position_quarantine.sql','utf8'));
   await db.exec(readFileSync('supabase/migrations/20260910141506_workspace_fleet_snapshot.sql','utf8'));
+  await db.exec(readFileSync('supabase/migrations/20260921134000_filter_invalid_workspace_fleet_coordinates.sql','utf8'));
   await db.exec(readFileSync('supabase/migrations/20260910142232_synchronize_shared_master_projections.sql','utf8'));
   await db.exec(readFileSync('supabase/migrations/20260910152456_add_workspace_vehicle_position_reader.sql','utf8'));
   await db.exec(`
@@ -116,6 +117,18 @@ describe('shared master data foundation in PostgreSQL',()=>{
       const positions=(await db.query<{lat:number;lng:number}>(`select lat,lng from public.get_workspace_vehicle_position_v1('${b}','44000000-0000-4000-8000-000000000001')`)).rows;
       expect(positions).toEqual([{lat:-23.2,lng:-46.2}]);
     }finally{await db.exec('reset role;reset request.jwt.claim.sub');}
+  });
+
+  it('keeps the truck visible but hides invalid legacy coordinates from the workspace snapshot',async()=>{
+    await db.query(`update public.positions_last set lat=200 where tenant_id='${b}' and vehicle_id='44000000-0000-4000-8000-000000000002'`);
+    await db.exec(`set role authenticated;set request.jwt.claim.sub='${ub}'`);
+    try{
+      const rows=(await db.query<{lat:number|null;lng:number|null}>(`select lat,lng from public.list_workspace_fleet_snapshot_v1('${b}')`)).rows;
+      expect(rows).toEqual([{lat:null,lng:null}]);
+    }finally{
+      await db.exec('reset role;reset request.jwt.claim.sub');
+      await db.query(`update public.positions_last set lat=-23.2 where tenant_id='${b}' and vehicle_id='44000000-0000-4000-8000-000000000002'`);
+    }
   });
 
   it('creates and updates shared client projections in every workspace tenant',async()=>{

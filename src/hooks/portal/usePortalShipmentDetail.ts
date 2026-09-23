@@ -24,6 +24,8 @@ export interface ShipmentPermissions {
 }
 
 export interface ShipmentDocument {
+  id?: string;
+  client_id?: string | null;
   invoice_number?: string | null;
   public_status?: PublicShipmentStatus | null;
   status?: string | null;
@@ -48,6 +50,7 @@ export interface ShipmentDocument {
 }
 
 export interface ShipmentLoad {
+  id?: string | null;
   load_number?: string | null;
 }
 
@@ -69,6 +72,7 @@ export interface ShipmentOccurrence {
   id: string;
   event_type?: string | null;
   public_status?: string | null;
+  resolved_at?: string | null;
   created_at?: string | null;
   description?: string | null;
   client_action_required?: boolean | null;

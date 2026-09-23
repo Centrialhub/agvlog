@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import type { PortalTrackingItem } from '@/hooks/portal/usePortalTracking';
 import { MapAutoFit } from '@/components/maps/MapAutoFit';
 import { DEFAULT_BRAZIL_MAP_CENTER, L } from '@/lib/maps/leaflet';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -41,7 +42,7 @@ export default function PortalTrackingMap({
   selectedLoadId?: string | null;
 }) {
   const withPosition = useMemo(
-    () => items.filter((i) => typeof i.lat === 'number' && typeof i.lng === 'number'),
+    () => items.filter((i) => hasValidGeographicCoordinates(i.lat, i.lng)),
     [items],
   );
   const points = useMemo<[number, number][]>(

@@ -16,8 +16,8 @@ describe('settlement adjustment durable outbox',()=>{
  it('retains wrong acknowledgements and recovers the exact original body',async()=>{
   const {outbox,send}=setup();send.mockImplementationOnce(async p=>({data:{...ack(p),settlement_id:actor},error:null}));await expect(outbox.submit(tenant,actor,input)).rejects.toThrow('confirmação');const stored=pendingSettlementAdjustment(localStorage,tenant,actor)!;await outbox.recover(tenant,actor);expect(send.mock.calls[1][0]).toEqual(stored.payload);expect(localStorage.getItem(key)).toBeNull();
  });
- it('retains an uncertain request even if its later replay is denied',async()=>{
-  const {outbox,send}=setup();send.mockResolvedValueOnce({data:null,error:{message:'Resposta perdida'}});await expect(outbox.submit(tenant,actor,input)).rejects.toBeTruthy();const stored=localStorage.getItem(key);send.mockResolvedValueOnce({data:null,error:{code:'42501',message:'Revogado'}});await expect(outbox.recover(tenant,actor)).rejects.toBeTruthy();expect(localStorage.getItem(key)).toBe(stored);
+ it('descarta um pedido incerto quando a recuperação recebe rejeição definitiva',async()=>{
+  const {outbox,send}=setup();send.mockResolvedValueOnce({data:null,error:{message:'Resposta perdida'}});await expect(outbox.submit(tenant,actor,input)).rejects.toBeTruthy();expect(localStorage.getItem(key)).not.toBeNull();send.mockResolvedValueOnce({data:null,error:{code:'42501',message:'Revogado'}});await expect(outbox.recover(tenant,actor)).rejects.toBeTruthy();expect(localStorage.getItem(key)).toBeNull();
  });
  it('allows a fresh reviewed preview after a definite first rejection',async()=>{
   const {outbox,send}=setup();send.mockResolvedValueOnce({data:null,error:{code:'40001',message:'expense_context_changed'}});await expect(outbox.submit(tenant,actor,input)).rejects.toBeTruthy();expect(localStorage.getItem(key)).toBeNull();
@@ -30,6 +30,12 @@ describe('settlement adjustment durable outbox',()=>{
  });
  it('rejects corrupt scope and unknown storage versions before transmission',async()=>{
   const {outbox,send}=setup();localStorage.setItem(key.replace(':v1:',':v2:'),'{}');await expect(outbox.submit(tenant,actor,input)).rejects.toThrow('incompatível');localStorage.clear();localStorage.setItem(key,JSON.stringify({version:1,tenantId:actor,actorId:actor,createdAt:new Date().toISOString(),payload:{...input,version:1,tenant_id:tenant,actor_id:actor,request_id:request}}));await expect(outbox.recover(tenant,actor)).rejects.toThrow('incompatível');expect(send).not.toHaveBeenCalled();
+ });
+ it('descarta chaves incompatíveis do escopo e libera um novo ajuste',async()=>{
+  const {outbox,send}=setup();const legacy=key.replace(':v1:',':v9:');localStorage.setItem(legacy,'{corrompido');
+  await expect(outbox.submit(tenant,actor,input)).rejects.toThrow('incompatível');
+  await outbox.abandon(tenant,actor);expect(localStorage.getItem(legacy)).toBeNull();
+  await outbox.submit(tenant,actor,input);expect(send).toHaveBeenCalledTimes(1);expect(localStorage.getItem(key)).toBeNull();
  });
  it('keeps a committed result recoverable if the actor changes before the response arrives',async()=>{
   const {outbox,send,assertContext}=setup();send.mockImplementationOnce(async p=>{assertContext.mockImplementation(()=>{throw new Error('Sessão mudou');});return {data:ack(p),error:null};});await expect(outbox.submit(tenant,actor,input)).rejects.toThrow('Sessão mudou');expect(pendingSettlementAdjustment(localStorage,tenant,actor)?.payload.request_id).toBe(request);

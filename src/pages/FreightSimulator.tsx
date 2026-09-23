@@ -13,12 +13,13 @@ import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Calculator, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Calculator, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { calculateFreight, type FreightResult } from '@/hooks/useFreightCalculator';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { localDateInputValue } from '@/lib/utils/formatDate';
+import { deduplicateFreightDocuments } from '@/lib/freight/freightSimulatorDocuments';
 
 const NONE = '__none__';
 export default function FreightSimulator() {
@@ -62,7 +63,7 @@ export default function FreightSimulator() {
     return { startDate: toISO(start), endDate: toISO(today) };
   }, [periodFilter, customStart, customEnd]);
 
-  const { data: clients = [] } = useQuery({
+  const clientsQuery = useQuery({
     queryKey: ['suppliers-min-freight', tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -76,8 +77,9 @@ export default function FreightSimulator() {
     },
     enabled: !!tenantId,
   });
+  const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
 
-  const { data: regions = [] } = useQuery({
+  const regionsQuery = useQuery({
     queryKey: ['client-regions-min', tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -90,13 +92,14 @@ export default function FreightSimulator() {
     },
     enabled: !!tenantId,
   });
+  const regions = useMemo(() => regionsQuery.data ?? [], [regionsQuery.data]);
 
-  const { data: docs = [] } = useQuery({
+  const docsQuery = useQuery({
     queryKey: ['fiscal-docs-recent', tenantId, startDate, endDate, onlyValid, docTypeFilter],
     queryFn: async () => {
       const rows = await fetchAllPostgrestPages((from, to) => {
       let q = supabase.from('fiscal_documents')
-        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date, status, created_at')
+        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date, status, created_at, is_duplicate')
         .eq('tenant_id', tenantId!)
         .order('issue_date', { ascending: false, nullsFirst: false })
         .order('id').range(from, to);
@@ -107,26 +110,32 @@ export default function FreightSimulator() {
       if (onlyValid) {
         // Excluir status indesejados (cancelados/rejeitados/rascunhos)
         q = q.not('status', 'in', '(cancelled,canceled,rejected,denied,draft)');
+        q = q.eq('is_duplicate', false);
       }
       return q;
       });
       if (!onlyValid) return rows;
-      // Deduplicar por chave de acesso (ou nº+emitente quando faltar) — mantém o mais recente
-      const seen = new Map<string, (typeof rows)[number]>();
-      for (const r of rows) {
-        const key = r.access_key
-          || `${r.invoice_number || ''}|${r.remitter || ''}|${r.document_type || ''}`;
-        if (!key) continue;
-        const existing = seen.get(key);
-        if (!existing) { seen.set(key, r); continue; }
-        const a = new Date(r.created_at || r.issue_date || 0).getTime();
-        const b = new Date(existing.created_at || existing.issue_date || 0).getTime();
-        if (a > b) seen.set(key, r);
-      }
-      return Array.from(seen.values());
+      return deduplicateFreightDocuments(rows);
     },
     enabled: !!tenantId,
   });
+  const docs = useMemo(() => docsQuery.data ?? [], [docsQuery.data]);
+  const failedCatalogs = [
+    clientsQuery.isError ? 'fornecedores' : null,
+    regionsQuery.isError ? 'regiões' : null,
+    docsQuery.isError ? 'documentos fiscais' : null,
+  ].filter((label): label is string => !!label);
+  const catalogsPending = clientsQuery.isPending || regionsQuery.isPending || docsQuery.isPending;
+  const catalogsUnavailable = catalogsPending || failedCatalogs.length > 0;
+  const catalogsRefetching = clientsQuery.isFetching || regionsQuery.isFetching || docsQuery.isFetching;
+
+  const retryFailedCatalogs = async () => {
+    await Promise.all([
+      clientsQuery.isError ? clientsQuery.refetch() : Promise.resolve(),
+      regionsQuery.isError ? regionsQuery.refetch() : Promise.resolve(),
+      docsQuery.isError ? docsQuery.refetch() : Promise.resolve(),
+    ]);
+  };
 
   const uniquePayerGroups = useMemo(() => {
     const s = new Set<string>();
@@ -169,13 +178,18 @@ export default function FreightSimulator() {
 
   async function handleQuickSearch() {
     const term = quickSearch.trim();
-    if (!term || !tenantId) return;
+    if (!term || !tenantId || catalogsUnavailable) return;
     // Try local first
-    const local = filteredDocs.find((d) => {
+    const localMatches = filteredDocs.filter((d) => {
       const num = String(d.invoice_number || '');
       const key = String(d.access_key || '');
       return num === term || num.endsWith(term) || key.endsWith(term);
     });
+    if (localMatches.length > 1) {
+      toast.error(`Foram encontrados ${localMatches.length} documentos na lista. Informe a chave de acesso completa ou selecione o emitente correto.`);
+      return;
+    }
+    const local = localMatches[0];
     if (local) {
       loadFromDoc(local.id);
       toast.success(`Documento ${local.invoice_number || term} carregado`);
@@ -184,19 +198,26 @@ export default function FreightSimulator() {
     // Fallback: query DB ignoring period filter
     setQuickSearching(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date')
+        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date, status, created_at, is_duplicate')
         .eq('tenant_id', tenantId)
-        .or(`invoice_number.eq.${term},access_key.ilike.%${term}%`)
-        .limit(5);
+        .or(`invoice_number.eq.${term},access_key.ilike.%${term}%`);
+      if (docTypeFilter === 'cte') query = query.eq('document_type', 'outbound');
+      if (docTypeFilter === 'nfe') query = query.eq('document_type', 'inbound');
+      if (onlyValid) {
+        query = query.not('status', 'in', '(cancelled,canceled,rejected,denied,draft)');
+        query = query.eq('is_duplicate', false);
+      }
+      const { data, error } = await query.limit(20);
       if (error) throw error;
-      if (!data || data.length === 0) {
+      const candidates = onlyValid ? deduplicateFreightDocuments(data || []) : data || [];
+      if (candidates.length === 0) {
         toast.error('Nenhum documento encontrado com esse número/chave');
         return;
       }
-      if (data.length > 1) { toast.error(`Foram encontrados ${data.length} documentos. Informe a chave de acesso ou selecione o emitente correto na lista.`); return; }
-      const d = data[0];
+      if (candidates.length > 1) { toast.error(`Foram encontrados ${candidates.length} documentos. Informe a chave de acesso ou selecione o emitente correto na lista.`); return; }
+      const d = candidates[0];
       setDocId(d.id);
       setClientId(d.client_id || NONE);
       setTotalValue(String(d.value || 0));
@@ -220,8 +241,9 @@ export default function FreightSimulator() {
   }
 
   const handleSimulate = useCallback(async (silent = false) => {
-    if (!tenantId) return;
+    if (!tenantId || catalogsUnavailable) return;
     const generation = ++calculationGeneration.current;
+    setResult(null);
     setLoading(true);
     try {
       const region = regions.find((r) => r.id === regionId);
@@ -243,22 +265,31 @@ export default function FreightSimulator() {
       setResult(r);
       if (!silent && !r.success) toast.error(r.error || 'Falha no cálculo');
     } catch (error: unknown) {
+      if (generation === calculationGeneration.current) setResult(null);
       if (!silent) toast.error(error instanceof Error ? error.message : 'Erro inesperado');
     } finally {
       if (generation === calculationGeneration.current) setLoading(false);
     }
-  }, [toast, tenantId, regions, regionId, clientId, clients, payerGroup, destMunicipality, destState, vehicleType, totalValue, totalWeight, totalPallets, docs, docId]);
+  }, [toast, tenantId, catalogsUnavailable, regions, regionId, clientId, clients, payerGroup, destMunicipality, destState, vehicleType, totalValue, totalWeight, totalPallets, docs, docId]);
+
+  // A prévia só é válida para a combinação exata que a produziu. Além de
+  // ocultá-la, a geração invalida uma resposta antiga que ainda esteja em voo.
+  useEffect(() => {
+    calculationGeneration.current += 1;
+    setResult(null);
+    setLoading(false);
+  }, [tenantId, clientId, regionId, payerGroup, totalValue, totalWeight, totalPallets, destState, destMunicipality, docId]);
 
   // Auto-recalculate (debounced) when inputs change
   useEffect(() => {
-    if (!autoCalc || !tenantId) return undefined;
+    if (!autoCalc || !tenantId || catalogsUnavailable) return undefined;
     const hasMinInput =
       regionId !== NONE || payerGroup !== NONE || clientId !== NONE ||
       Number(totalValue) > 0 || Number(totalWeight) > 0 || Number(totalPallets) > 0;
     if (!hasMinInput) return undefined;
     const t = setTimeout(() => { handleSimulate(true); }, 400);
     return () => clearTimeout(t);
-  }, [autoCalc, tenantId, regionId, payerGroup, clientId, totalValue, totalWeight, totalPallets, destState, destMunicipality, vehicleType, handleSimulate]);
+  }, [autoCalc, tenantId, catalogsUnavailable, regionId, payerGroup, clientId, totalValue, totalWeight, totalPallets, destState, destMunicipality, vehicleType, handleSimulate]);
 
   return (
     <div className="space-y-4">
@@ -272,6 +303,23 @@ export default function FreightSimulator() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
+          {failedCatalogs.length > 0 && (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+              <div>
+                <div className="font-medium text-destructive">Não foi possível carregar os dados da simulação.</div>
+                <div className="text-muted-foreground">Indisponível: {failedCatalogs.join(', ')}. O cálculo foi bloqueado para não usar um contexto incompleto.</div>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => void retryFailedCatalogs()} disabled={catalogsRefetching}>
+                <RefreshCw className={cn('mr-2 h-4 w-4', catalogsRefetching && 'animate-spin')} />
+                Tentar novamente
+              </Button>
+            </div>
+          )}
+          {catalogsPending && failedCatalogs.length === 0 && (
+            <div role="status" className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+              Carregando fornecedores, regiões e documentos fiscais…
+            </div>
+          )}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <Label>Carregar de um Documento Fiscal (opcional)</Label>
@@ -287,6 +335,7 @@ export default function FreightSimulator() {
                     <button
                       key={opt.v}
                       type="button"
+                      disabled={catalogsUnavailable}
                       onClick={() => setPeriodFilter(opt.v)}
                       className={`px-2.5 py-1 rounded-sm transition-colors ${
                         periodFilter === opt.v
@@ -307,6 +356,7 @@ export default function FreightSimulator() {
                   <button
                     key={opt.v}
                     type="button"
+                    disabled={catalogsUnavailable}
                     onClick={() => setDocTypeFilter(opt.v)}
                     className={`px-2.5 py-1 rounded-sm transition-colors ${
                       docTypeFilter === opt.v
@@ -323,6 +373,7 @@ export default function FreightSimulator() {
                     type="checkbox"
                     className="h-3.5 w-3.5"
                     checked={onlyValid}
+                    disabled={catalogsUnavailable}
                     onChange={(e) => setOnlyValid(e.target.checked)}
                   />
                   Excluir cancelados/duplicados
@@ -332,9 +383,9 @@ export default function FreightSimulator() {
             {periodFilter === 'custom' && (
               <div className="flex items-center gap-2 text-xs">
                 <Label className="text-xs">De</Label>
-                <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="h-8 w-auto" />
+                <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="h-8 w-auto" disabled={catalogsUnavailable} />
                 <Label className="text-xs">Até</Label>
-                <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="h-8 w-auto" />
+                <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="h-8 w-auto" disabled={catalogsUnavailable} />
               </div>
             )}
             <div className="flex items-center gap-2">
@@ -344,12 +395,13 @@ export default function FreightSimulator() {
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleQuickSearch(); } }}
                 placeholder="Busca rápida por nº ou chave de acesso (Enter)…"
                 className="h-9"
+                disabled={catalogsUnavailable}
               />
               <Button
                 type="button"
                 variant="secondary"
                 onClick={handleQuickSearch}
-                disabled={quickSearching || !quickSearch.trim()}
+                disabled={catalogsUnavailable || quickSearching || !quickSearch.trim()}
                 className="shrink-0"
               >
                 {quickSearching ? 'Buscando…' : 'Localizar'}
@@ -363,6 +415,7 @@ export default function FreightSimulator() {
                   role="combobox"
                   aria-expanded={docPickerOpen}
                   className="w-full justify-between font-normal"
+                  disabled={catalogsUnavailable}
                 >
                   <span className="truncate text-left">
                     {(() => {
@@ -426,15 +479,17 @@ export default function FreightSimulator() {
                 </Command>
               </PopoverContent>
             </Popover>
-            <p className="text-[11px] text-muted-foreground">
-              {filteredDocs.length} documento(s) listado(s) — total carregado: {docs.length}
-            </p>
+            {!catalogsUnavailable && (
+              <p className="text-[11px] text-muted-foreground">
+                {filteredDocs.length} documento(s) listado(s) — total carregado: {docs.length}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Fornecedor</Label>
-              <Select value={clientId} onValueChange={setClientId}>
+              <Select value={clientId} onValueChange={setClientId} disabled={catalogsUnavailable}>
                 <SelectTrigger><SelectValue placeholder="Qualquer" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>Qualquer</SelectItem>
@@ -446,7 +501,7 @@ export default function FreightSimulator() {
             </div>
             <div>
               <Label>Região</Label>
-              <Select value={regionId} onValueChange={setRegionId}>
+              <Select value={regionId} onValueChange={setRegionId} disabled={catalogsUnavailable}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>—</SelectItem>
@@ -460,7 +515,7 @@ export default function FreightSimulator() {
             </div>
             <div>
               <Label>Grupo Pagador</Label>
-              <Select value={payerGroup} onValueChange={setPayerGroup}>
+              <Select value={payerGroup} onValueChange={setPayerGroup} disabled={catalogsUnavailable}>
                 <SelectTrigger><SelectValue placeholder="Auto da região" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>Auto da região</SelectItem>
@@ -475,15 +530,15 @@ export default function FreightSimulator() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>
               <Label>Valor NF (R$)</Label>
-              <Input type="number" value={totalValue} onChange={(e) => setTotalValue(e.target.value)} />
+              <Input type="number" min="0" step="0.01" value={totalValue} onChange={(e) => setTotalValue(e.target.value)} />
             </div>
             <div>
               <Label>Peso (kg)</Label>
-              <Input type="number" value={totalWeight} onChange={(e) => setTotalWeight(e.target.value)} />
+              <Input type="number" min="0" step="0.001" value={totalWeight} onChange={(e) => setTotalWeight(e.target.value)} />
             </div>
             <div>
               <Label>Pallets</Label>
-              <Input type="number" value={totalPallets} onChange={(e) => setTotalPallets(e.target.value)} />
+              <Input type="number" min="0" step="1" value={totalPallets} onChange={(e) => setTotalPallets(e.target.value)} />
             </div>
             <div>
               <Label>UF Destino</Label>
@@ -505,7 +560,7 @@ export default function FreightSimulator() {
               />
               Recalcular automaticamente ao alterar filtros
             </label>
-            <Button onClick={() => handleSimulate(false)} disabled={loading || !tenantId}>
+            <Button onClick={() => handleSimulate(false)} disabled={catalogsUnavailable || loading || !tenantId}>
               <Calculator className="h-4 w-4 mr-2" />
               {loading ? 'Calculando...' : 'Recalcular agora'}
             </Button>

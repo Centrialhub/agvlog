@@ -107,6 +107,7 @@ export default function MerchandiseShortages() {
     createLock.current = true;
     try {
       await createCase.mutateAsync({
+        request_id: crypto.randomUUID(),
         occurrence_date: form.occurrence_date,
         company_name_snapshot: form.company || null,
         supplier_name_snapshot: form.supplier || null,
@@ -140,27 +141,46 @@ export default function MerchandiseShortages() {
   const supplierFault = casesData.filter(c => c.shortage_type === 'supplier_fault' || c.responsible_party_type === 'supplier');
   const effectiveCases = casesData.filter(c => !['cancelled','not_shortage'].includes(c.status));
   const totalMonth = effectiveCases.reduce((a, c) => a + Number(c.total_amount || 0), 0);
-  const totalToCharge = casesData.reduce((a, c) => a + Number(c.amount_to_charge || 0), 0);
-  const totalWrittenOff = casesData.reduce((a, c) => a + Number(c.amount_written_off || 0), 0);
-  const totalReimbursed = casesData.reduce((a, c) => a + Number(c.amount_reimbursed || 0), 0);
+  const totalToCharge = effectiveCases.reduce((a, c) => a + Number(c.amount_to_charge || 0), 0);
+  const totalWrittenOff = effectiveCases.reduce((a, c) => a + Number(c.amount_written_off || 0), 0);
+  const totalReimbursed = effectiveCases.reduce((a, c) => a + Number(c.amount_reimbursed || 0), 0);
 
   // Import
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [previewFingerprint, setPreviewFingerprint] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const fileSelectionRef = useRef(0);
+  const importRequestRef = useRef<{ fingerprint: string; id: string } | null>(null);
 
   const handleFile = async (file: File | null) => {
+    const selection = ++fileSelectionRef.current;
+    setPreview(null);
+    setPreviewFingerprint(null);
+    importRequestRef.current = null;
     if (!file) return;
-    const buf = await file.arrayBuffer();
-    const digest = await crypto.subtle.digest('SHA-256', buf);
-    setPreviewFingerprint(Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join(''));
-    const p = parseShortageWorkbook(buf, file.name);
-    setPreview(p);
-    toast.info(`${p.validRows} linhas válidas em ${p.cases.length} casos`);
+    try {
+      const buf = await file.arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256', buf);
+      const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      const parsed = parseShortageWorkbook(buf, file.name);
+      if (selection !== fileSelectionRef.current) return;
+      setPreview(parsed);
+      setPreviewFingerprint(fingerprint);
+      toast.info(`${parsed.validRows} linhas válidas em ${parsed.cases.length} casos`);
+    } catch (error) {
+      if (selection !== fileSelectionRef.current) return;
+      setPreview(null);
+      setPreviewFingerprint(null);
+      toast.error(error instanceof Error ? error.message : 'Não foi possível ler a planilha de faltas.');
+    }
   };
 
   const commitImport = async () => {
     if (!preview || !previewFingerprint || !currentTenant?.id) return;
+    if (importRequestRef.current?.fingerprint !== previewFingerprint) {
+      importRequestRef.current = { fingerprint: previewFingerprint, id: crypto.randomUUID() };
+    }
+    const requestId = importRequestRef.current.id;
     setImporting(true);
     try {
       const importCases = preview.cases.map(c => ({
@@ -179,7 +199,7 @@ export default function MerchandiseShortages() {
       }));
       const { data, error } = await supabase.rpc('import_merchandise_shortage_batch_v1', {
         _tenant_id: currentTenant.id,
-        _request_id: crypto.randomUUID(),
+        _request_id: requestId,
         _file_name: preview.fileName,
         _row_count: preview.totalRows,
         _file_hash: previewFingerprint,
@@ -190,6 +210,7 @@ export default function MerchandiseShortages() {
       toast.success(result.replayed ? `Arquivo já importado (${result.imported_count ?? 0} casos)` : `Importados: ${result.imported_count ?? importCases.length}`);
       setPreview(null);
       setPreviewFingerprint(null);
+      importRequestRef.current = null;
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Falha ao importar faltas de mercadoria');
     } finally {
@@ -414,6 +435,7 @@ export default function MerchandiseShortages() {
                         <TableCell>{c.responsible_party_type ?? '-'}</TableCell>
                         <TableCell className="space-x-1">
                           <Select onValueChange={async (v) => {
+                            try {
                             const errs = validateFinalize(v, { responsible_party_type: c.responsible_party_type, responsible_driver_id: c.responsible_driver_id, responsible_supplier_id: c.responsible_supplier_id });
                             if (errs.length && v === 'closed') { toast.error(errs[0].message); return; }
                             if (v === 'cancelled') {
@@ -435,17 +457,20 @@ export default function MerchandiseShortages() {
                               await updateStatus.mutateAsync({ case_id: c.id, status: v, expected_revision: c.revision, payload });
                             }
                             toast.success('Status atualizado');
+                            } catch { /* o hook apresenta a causa e evita rejeição não tratada */ }
                           }}>
                             <SelectTrigger className="w-40"><SelectValue placeholder="Alterar status" /></SelectTrigger>
                             <SelectContent>
                               {STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                          {c.responsible_party_type === 'driver' && <Select value={c.responsible_driver_id || undefined} onValueChange={id => updateStatus.mutateAsync({ case_id: c.id, status: c.status, expected_revision: c.revision, payload: { responsible_driver_id: id } })}><SelectTrigger className="w-40"><SelectValue placeholder="Motorista" /></SelectTrigger><SelectContent>{drivers.map(driver => <SelectItem key={driver.id} value={driver.id}>{driver.name}</SelectItem>)}</SelectContent></Select>}
-                          {c.responsible_party_type === 'supplier' && <Select value={c.responsible_supplier_id || undefined} onValueChange={id => updateStatus.mutateAsync({ case_id: c.id, status: c.status, expected_revision: c.revision, payload: { responsible_supplier_id: id } })}><SelectTrigger className="w-40"><SelectValue placeholder="Fornecedor" /></SelectTrigger><SelectContent>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}</SelectContent></Select>}
+                          {c.responsible_party_type === 'driver' && <Select value={c.responsible_driver_id || undefined} onValueChange={id => { void updateStatus.mutateAsync({ case_id: c.id, status: c.status, expected_revision: c.revision, payload: { responsible_driver_id: id } }).catch(()=>undefined); }}><SelectTrigger className="w-40"><SelectValue placeholder="Motorista" /></SelectTrigger><SelectContent>{drivers.map(driver => <SelectItem key={driver.id} value={driver.id}>{driver.name}</SelectItem>)}</SelectContent></Select>}
+                          {c.responsible_party_type === 'supplier' && <Select value={c.responsible_supplier_id || undefined} onValueChange={id => { void updateStatus.mutateAsync({ case_id: c.id, status: c.status, expected_revision: c.revision, payload: { responsible_supplier_id: id } }).catch(()=>undefined); }}><SelectTrigger className="w-40"><SelectValue placeholder="Fornecedor" /></SelectTrigger><SelectContent>{clients.map(client => <SelectItem key={client.id} value={client.id}>{client.company_name}</SelectItem>)}</SelectContent></Select>}
                           <Select onValueChange={async (v) => {
+                            try {
                             await updateStatus.mutateAsync({ case_id: c.id, status: c.status, expected_revision: c.revision, payload: { responsible_party_type: v } });
                             toast.success('Responsável definido');
+                            } catch { /* o hook apresenta a causa e evita rejeição não tratada */ }
                           }}>
                             <SelectTrigger className="w-36"><SelectValue placeholder="Responsável" /></SelectTrigger>
                             <SelectContent>
@@ -502,7 +527,7 @@ export default function MerchandiseShortages() {
                   </TableRow></TableHeader>
                   <TableBody>
                     {RESPONSIBLES.map(r => {
-                      const items = casesData.filter(c => c.responsible_party_type === r);
+                      const items = effectiveCases.filter(c => c.responsible_party_type === r);
                       const tot = items.reduce((a, c) => a + Number(c.total_amount || 0), 0);
                       const cob = items.reduce((a, c) => a + Number(c.amount_to_charge || 0), 0);
                       const res = items.reduce((a, c) => a + Number(c.amount_reimbursed || 0), 0);
@@ -527,7 +552,7 @@ export default function MerchandiseShortages() {
             <Card>
               <CardHeader><CardTitle>Importar planilha legada</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <Input type="file" accept=".xlsx,.xls" onChange={e => handleFile(e.target.files?.[0] ?? null)} />
+                <Input type="file" accept=".xlsx,.xls" onChange={e => void handleFile(e.target.files?.[0] ?? null)} />
                 {preview && (
                   <div className="space-y-2 text-sm">
                     <div>Arquivo: {preview.fileName}</div>
@@ -539,6 +564,14 @@ export default function MerchandiseShortages() {
                 )}
                 <div className="border-t pt-3">
                   <h4 className="font-semibold mb-2">Últimas importações</h4>
+                  {imports.isPending ? (
+                    <div role="status" className="py-4 text-sm text-muted-foreground">Carregando últimas importações…</div>
+                  ) : imports.isError ? (
+                    <div role="alert" className="py-4 text-sm text-destructive flex items-center justify-between gap-3">
+                      <span>Não foi possível carregar as últimas importações: {imports.error.message}</span>
+                      <Button type="button" variant="outline" size="sm" onClick={() => void imports.refetch()}>Tentar novamente</Button>
+                    </div>
+                  ) : (
                   <Table>
                     <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Arquivo</TableHead><TableHead>Linhas</TableHead><TableHead>OK</TableHead><TableHead>Erros</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                     <TableBody>
@@ -552,8 +585,10 @@ export default function MerchandiseShortages() {
                           <TableCell>{b.status}</TableCell>
                         </TableRow>
                       ))}
+                      {(imports.data ?? []).length === 0 && <TableRow><TableCell colSpan={6} className="py-6 text-center text-muted-foreground">Nenhuma importação registrada.</TableCell></TableRow>}
                     </TableBody>
                   </Table>
+                  )}
                 </div>
               </CardContent>
             </Card>

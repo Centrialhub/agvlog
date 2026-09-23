@@ -8,14 +8,16 @@ export async function readCustomerCreditRefundOptions(tenant:string,actor:string
 const reversalPendingSchema=z.object({version:z.literal(1),tenant_id:z.string().uuid(),actor_id:z.string().uuid(),refund_id:z.string().uuid(),request_id:z.string().uuid(),reason:z.string().trim().min(5).max(2000),uncertain:z.boolean()}).strict();
 const reversalResultSchema=z.object({confirmed:z.literal(true),request_id:z.string().uuid(),reversal_id:z.string().uuid(),refund_id:z.string().uuid(),actor_id:z.string().uuid(),replayed:z.boolean()});
 const reversalKey=(tenant:string,actor:string,refund:string)=>`agvlog:customer-credit-refund-reversal:v1:${tenant}:${actor}:${refund}`;
+export function hasPendingCustomerCreditRefundReversal(tenant:string,actor:string,refund:string){return localStorage.getItem(reversalKey(tenant,actor,refund))!==null;}
+export function discardCustomerCreditRefundReversal(tenant:string,actor:string,refund:string){localStorage.removeItem(reversalKey(tenant,actor,refund));}
 export async function reverseCustomerCreditRefund(tenant:string,actor:string,refund:string,reason:string){
  const key=reversalKey(tenant,actor,refund);if(!navigator.locks?.request)throw Error('O navegador não oferece proteção para recuperar esta reversão.');
  return navigator.locks.request(key,{mode:'exclusive'},async()=>{let pending:z.infer<typeof reversalPendingSchema>|null=null;const stored=localStorage.getItem(key);if(stored){try{pending=reversalPendingSchema.parse(JSON.parse(stored));}catch{localStorage.removeItem(key);throw Error('O pedido de reversão salvo estava inválido e foi descartado. Tente novamente.');}}
   if(pending&&(pending.tenant_id!==tenant||pending.actor_id!==actor||pending.refund_id!==refund))throw Error('O pedido preservado pertence a outra reversão.');
   if(!pending)pending=reversalPendingSchema.parse({version:1,tenant_id:tenant,actor_id:actor,refund_id:refund,request_id:crypto.randomUUID(),reason:reason.trim(),uncertain:false});
-  const wasUncertain=pending.uncertain,marked=JSON.stringify({...pending,uncertain:true});localStorage.setItem(key,marked);
+  const marked=JSON.stringify({...pending,uncertain:true});localStorage.setItem(key,marked);
   const {data,error}=await rpc('reverse_finance_customer_credit_refund_v1',{_tenant_id:tenant,_refund_id:refund,_reason:pending.reason,_request_id:pending.request_id});
-  if(error){const definitive=typeof error==='object'&&error!==null&&'code' in error&&['22023','23505','42501','55000'].includes(String(error.code));if(definitive&&!wasUncertain&&localStorage.getItem(key)===marked)localStorage.removeItem(key);throw error;}
+  if(error){const definitive=typeof error==='object'&&error!==null&&'code' in error&&['22023','23505','42501','55000'].includes(String(error.code));if(definitive&&localStorage.getItem(key)===marked)localStorage.removeItem(key);throw error;}
   const result=reversalResultSchema.parse(data);if(result.request_id!==pending.request_id||result.refund_id!==refund||result.actor_id!==actor)throw Error('Confirmação de reversão fora do pedido preservado.');if(localStorage.getItem(key)===marked)localStorage.removeItem(key);return result;
  });
 }

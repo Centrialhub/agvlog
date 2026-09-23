@@ -14,6 +14,7 @@ import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { matchesSearch, filterOptions } from '@/lib/listFilters';
 import { cn } from '@/lib/utils';
 import PortalTrackingMap from '@/components/portal/PortalTrackingMap';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 
 const STATUS_LABEL: Record<string, string> = {
   planned: 'Planejada',
@@ -35,7 +36,7 @@ export default function PortalTracking() {
     [items, selectedClientId, search, status],
   );
 
-  const withPosition = filtered.filter((i) => typeof i.lat === 'number');
+  const withPosition = filtered.filter((i) => hasValidGeographicCoordinates(i.lat, i.lng));
   const canLive = can('can_view_vehicle_live');
 
   return (

@@ -30,6 +30,12 @@ beforeEach(async()=>{
    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);let data:unknown;
    if(name==='get_receivable_financial_context')data=(await operationRpc(db,'select get_receivable_financial_context($1,$2) result',[args._tenant_id,args._receivable_id])).rows[0].result;
    else if(name==='get_finance_receivable_payments_page')data=(await operationRpc(db,'select get_finance_receivable_payments_page($1,$2,$3,$4) result',[args._tenant_id,args._receivable_id,args._page,args._expected_revision])).rows[0].result;
+   else if(name==='get_finance_receivable_installment_position'){
+    const context=(await operationRpc<{result:Record<string,unknown>}>(db,'select get_receivable_financial_context($1,$2) result',[args._tenant_id,args._receivable_id])).rows[0].result;
+    const revision=(await db.query<{revision:string}>('select md5($1) revision',[`no-agreement:${args._tenant_id}:${args._receivable_id}:${context.revision}`])).rows[0].revision;
+    const open=String(context.open_cents);
+    data={version:1,tenant_id:args._tenant_id,actor_id:actor,verified:context.requires_reconciliation!==true,issue:context.requires_reconciliation===true?'finance_receivable_unverified':null,receivable_id:args._receivable_id,agreement_id:null,revision,status:'none',open_cents:open,scheduled_open_cents:'0',unallocated_open_cents:open,requires_reallocation:false,installments:[],history_count:0};
+   }
    else if(name==='apply_receivable_financial_command')data=(await operationRpc(db,'select apply_receivable_financial_command($1::jsonb) result',[JSON.stringify(args._payload)])).rows[0].result;
    else if(name==='get_finance_receipt_movement_options')data=(await operationRpc(db,'select get_finance_receipt_movement_options($1,$2,$3,$4,$5) result',[args._tenant_id,args._account_id,args._date,args._search,args._page])).rows[0].result;
    else if(name==='correct_finance_receipt_allocation')data=(await operationRpc(db,'select correct_finance_receipt_allocation($1::jsonb) result',[JSON.stringify(args._payload)])).rows[0].result;

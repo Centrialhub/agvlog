@@ -11,6 +11,6 @@ describe('pickup order form validation', () => {
     expect(source).toContain('!recipientName.trim()');
     expect(source).toContain('!Number.isFinite(pickupTimestamp)');
     expect(source).toContain('disabled={pickupFormInvalid || createMut.isPending || updateMut.isPending}');
-    expect(source).toContain('pickup_at: new Date(pickupTimestamp).toISOString()');
+    expect(source).toContain('pickup_at: localDateTimeInputToIso(pickupAt, tenantTimeZone)');
   });
 });

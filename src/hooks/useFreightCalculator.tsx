@@ -69,6 +69,16 @@ export interface FreightResult {
   error?: string;
 }
 
+export function freightMetricValidationError(input: Pick<FreightInput, 'totalValue' | 'totalWeight' | 'totalPallets'>): string | null {
+  const metrics = [
+    ['valor da nota', input.totalValue],
+    ['peso', input.totalWeight],
+    ['quantidade de paletes', input.totalPallets],
+  ] as const;
+  const invalid = metrics.find(([, value]) => !Number.isFinite(value) || value < 0);
+  return invalid ? `O ${invalid[0]} deve ser um número maior ou igual a zero` : null;
+}
+
 export function freightBreakdownToJson(breakdown: FreightBreakdown): Json {
   return {
     tableName: breakdown.tableName,
@@ -156,8 +166,9 @@ export function freightBreakdownFromJson(value: Json | null | undefined): Freigh
   };
 }
 
-export function computeSpecificity(table: Partial<FreightTable>, input: FreightInput): { score: number; matched: Record<string, string>; ignored: string[] } {
+export function computeSpecificity(table: Partial<FreightTable>, input: FreightInput): { score: number; eligible: boolean; matched: Record<string, string>; ignored: string[] } {
   let score = 0;
+  let eligible = true;
   const matched: Record<string, string> = {};
   const ignored: string[] = [];
 
@@ -167,6 +178,7 @@ export function computeSpecificity(table: Partial<FreightTable>, input: FreightI
       score += 10;
       matched[field] = tableVal;
     } else {
+      eligible = false;
       score -= 100; // mismatch = disqualify
       ignored.push(`${field}: table="${tableVal}" vs input="${inputVal || '(vazio)'}"`);
     }
@@ -178,6 +190,7 @@ export function computeSpecificity(table: Partial<FreightTable>, input: FreightI
       score += 5;
       matched[field] = tableVal;
     } else {
+      eligible = false;
       score -= 100;
       ignored.push(`${field}: table="${tableVal}" vs input="${inputVal || '(vazio)'}"`);
     }
@@ -199,7 +212,7 @@ export function computeSpecificity(table: Partial<FreightTable>, input: FreightI
   check('body_type', table.body_type, input.bodyType);
   check('ctrc_type', table.ctrc_type, input.ctrcType);
 
-  return { score, matched, ignored };
+  return { score, eligible, matched, ignored };
 }
 
 function computeFreightValue(table: FreightTable, input: FreightInput): FreightBreakdown['components'] {
@@ -228,6 +241,8 @@ function computeFreightValue(table: FreightTable, input: FreightInput): FreightB
 }
 
 export async function calculateFreight(input: FreightInput): Promise<FreightResult> {
+  const metricError = freightMetricValidationError(input);
+  if (metricError) return { success: false, value: 0, breakdown: null, error: metricError };
   const today = input.referenceDate?.slice(0, 10) || localDateInputValue();
 
   // ===== Auto-fallback: detect missing critical fields and substitute with UNKNOWN =====
@@ -294,12 +309,12 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
 
   // Score each table — using normalized input (missing fields treated as wildcards / null)
   const scored = valid.map((table) => {
-    const { score, matched, ignored } = computeSpecificity(table, normalizedInput);
-    return { table, score, matched, ignored };
+    const { score, eligible, matched, ignored } = computeSpecificity(table, normalizedInput);
+    return { table, score, eligible, matched, ignored };
   });
 
-  // Filter out disqualified (negative score means hard mismatch)
-  const qualified = scored.filter(s => s.score >= 0);
+  // Any explicit mismatch is terminal, independent of how many other criteria match.
+  const qualified = scored.filter(s => s.eligible);
 
   let chosen: typeof scored[0];
   let fallbackUsed = false;

@@ -1,7 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { Search, History, Package, Truck, FileText, MapPin, PackageOpen, ArrowDownToLine, ArrowUpFromLine, type LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +13,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { cn } from '@/lib/utils';
 import { usePagination } from '@/hooks/usePagination';
 import { DataPagination } from '@/components/ui/data-pagination';
+import { fmtDateTimeInTimeZone } from '@/lib/utils/formatDate';
 
 interface TimelineEvent {
   key: string;
@@ -29,13 +28,13 @@ interface TimelineEvent {
   meta?: { quantity?: number; weight?: number; pallets?: number; value?: number };
 }
 
-function fmtDateTime(d?: string | null, dateOnly = false) {
+function fmtDateTime(d?: string | null, dateOnly = false, timeZone = 'America/Sao_Paulo') {
   if (!d) return '—';
   if (dateOnly) {
     const [year, month, day] = d.slice(0, 10).split('-');
     return year && month && day ? `${day}/${month}/${year} (horário não informado)` : d;
   }
-  try { return format(new Date(d), 'dd/MM/yyyy HH:mm', { locale: ptBR }); } catch { return d; }
+  return fmtDateTimeInTimeZone(d, timeZone, d);
 }
 const KIND_META: Record<TimelineEvent['kind'], { label: string; icon: LucideIcon; color: string }> = {
   inbound:  { label: 'Entrada (NF-e)',     icon: ArrowDownToLine, color: 'bg-blue-500' },
@@ -224,7 +223,7 @@ export default function ProductHistory() {
                           <div className="rounded-lg border bg-card p-3">
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               <Badge variant="outline" className="text-[10px]">{meta.label}</Badge>
-                              <span className="text-xs text-muted-foreground">{fmtDateTime(ev.at, ev.dateOnly)}</span>
+                              <span className="text-xs text-muted-foreground">{fmtDateTime(ev.at, ev.dateOnly, currentTenant?.timezone)}</span>
                               {ev.reference && <Badge variant="secondary" className="font-mono text-[10px]">{ev.reference}</Badge>}
                             </div>
                             <div className="text-sm font-medium">{ev.title}</div>

@@ -14,13 +14,14 @@ vi.mock('@/components/financial/FiscalXmlUpload',()=>({default:()=>null}));
 vi.mock('@/components/financial/ReceivablePaymentDialog',()=>({default:()=>null}));
 vi.mock('@/hooks/useSonnerToast',()=>({useSonnerToast:()=>({})}));
 const row={id:'title',tenant_id:'tenant',description:'Frete da página',amount:10,received_amount:0,status:'pending',client_id:null,client_invoice_id:null,due_date:'2026-01-01',clients:null};
-beforeEach(()=>{vi.clearAllMocks();mock.portfolio.mockReturnValue({});mock.read.mockResolvedValue({rows:[row],page:1,page_size:50,total:1005,total_unfiltered:1005});});afterEach(cleanup);
+const next={created_at:'2026-01-02T00:00:00Z',id:'10000000-0000-4000-8000-000000000001'};
+beforeEach(()=>{vi.clearAllMocks();mock.portfolio.mockReturnValue({});mock.read.mockImplementation((_tenant,_filters,cursor)=>Promise.resolve({rows:[row],cursor,next_cursor:cursor?null:next,has_more:!cursor,page_size:50,total:1005,total_unfiltered:1005}));});afterEach(cleanup);
 function show(){render(<MemoryRouter><QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><Receivables/></QueryClientProvider></MemoryRouter>);}
 it('pages on the server and resets the page for a new filter without summing visible rows',async()=>{
  show();await screen.findByText('Frete da página');expect(screen.getByText('R$ 10.050,00')).toBeInTheDocument();
- fireEvent.click(screen.getByRole('button',{name:'Próximos títulos'}));await waitFor(()=>expect(mock.read).toHaveBeenCalledWith('tenant',expect.any(Object),2));
+ fireEvent.click(screen.getByRole('button',{name:'Próximos títulos'}));await waitFor(()=>expect(mock.read).toHaveBeenCalledWith('tenant',expect.any(Object),next));
  await screen.findByText('Frete da página');fireEvent.change(screen.getByLabelText('Buscar título'),{target:{value:'cliente'}});
- await waitFor(()=>expect(mock.read).toHaveBeenCalledWith('tenant',expect.objectContaining({search:'cliente'}),1));
+ await waitFor(()=>expect(mock.read).toHaveBeenCalledWith('tenant',expect.objectContaining({search:'cliente'}),null));
  expect(mock.portfolio).toHaveBeenLastCalledWith('tenant','actor',{from:null,to:null,client:null});expect(screen.getByText('R$ 10.050,00')).toBeInTheDocument();
 });
 it('does not display an empty successful result after a server error',async()=>{
@@ -33,13 +34,13 @@ it('coalesces rapid typing into one server search',async()=>{
  for(const value of ['c','cl','cli','cliente'])fireEvent.change(search,{target:{value}});
  expect(mock.read).not.toHaveBeenCalled();expect(screen.queryByText('Frete da página')).not.toBeInTheDocument();
  await waitFor(()=>expect(mock.read).toHaveBeenCalledTimes(1));
- expect(mock.read).toHaveBeenLastCalledWith('tenant',expect.objectContaining({search:'cliente'}),1);
+ expect(mock.read).toHaveBeenLastCalledWith('tenant',expect.objectContaining({search:'cliente'}),null);
 });
 
 it('keeps the current page and does not query an inverted due-date interval',async()=>{
  show();await screen.findByText('Frete da página');
  fireEvent.change(screen.getByLabelText('Vencimento até'),{target:{value:'2026-02-01'}});
- await waitFor(()=>expect(mock.read).toHaveBeenLastCalledWith('tenant',expect.objectContaining({to:'2026-02-01'}),1));
+ await waitFor(()=>expect(mock.read).toHaveBeenLastCalledWith('tenant',expect.objectContaining({to:'2026-02-01'}),null));
  mock.read.mockClear();
  fireEvent.change(screen.getByLabelText('Vencimento de'),{target:{value:'2026-02-02'}});
  expect(await screen.findByRole('alert')).toHaveTextContent('A data final deve ser igual ou posterior à inicial.');
@@ -50,7 +51,7 @@ it('keeps the current page and does not query an inverted due-date interval',asy
 
 it('sends the unloading origin filter to the server and resets pagination',async()=>{
  show();await screen.findByText('Frete da página');
- fireEvent.click(screen.getByRole('button',{name:'Próximos títulos'}));await waitFor(()=>expect(mock.read).toHaveBeenCalledWith('tenant',expect.any(Object),2));
+ fireEvent.click(screen.getByRole('button',{name:'Próximos títulos'}));await waitFor(()=>expect(mock.read).toHaveBeenCalledWith('tenant',expect.any(Object),next));
  await screen.findByText('Frete da página');
  // The shared PointerEvent shim omits MouseEvent.button; provide the real mouse fields.
  const pointer=new MouseEvent('pointerdown',{bubbles:true,button:0,ctrlKey:false});
@@ -66,5 +67,5 @@ it('sends the unloading origin filter to the server and resets pagination',async
  expect(option.closest('[role="option"]')).not.toBeNull();
  fireEvent.click(option);
  // fireEvent flushes the selection and query dispatch; no second asynchronous wait is needed.
- expect(mock.read).toHaveBeenLastCalledWith('tenant',expect.objectContaining({origin:'unloading'}),1);
+ expect(mock.read).toHaveBeenLastCalledWith('tenant',expect.objectContaining({origin:'unloading'}),null);
 });

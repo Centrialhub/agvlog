@@ -17,6 +17,8 @@ const mock = vi.hoisted(() => ({
   positionShouldFail: true,
   positionCalls: 0,
   positionRpcArgs: [] as Array<{ _tenant_id: string; _vehicle_id: string }>,
+  driverRefetch: vi.fn(),
+  tripRefetch: vi.fn(),
 }));
 
 const trip = {
@@ -35,6 +37,23 @@ const trip = {
   },
 };
 
+const currentDriverResult = {
+  data: { id: mock.driverId, name: 'Motorista QA', active: true, tenant_id: mock.tenantId },
+  isLoading: false,
+  isError: false,
+  error: null,
+  refetch: mock.driverRefetch,
+};
+
+const activeTripResult = {
+  data: trip,
+  isLoading: false,
+  isPending: false,
+  isError: false,
+  error: null,
+  refetch: mock.tripRefetch,
+};
+
 vi.mock('@/hooks/useTenant', () => ({
   useTenant: () => ({ currentTenant: { id: mock.tenantId, name: 'Tenant QA' } }),
 }));
@@ -48,21 +67,8 @@ vi.mock('@/hooks/useDriverPhysicalJourney', () => ({
 }));
 
 vi.mock('@/hooks/useCurrentDriver', () => ({
-  useCurrentDriver: () => ({
-    data: { id: mock.driverId, name: 'Motorista QA', active: true, tenant_id: mock.tenantId },
-    isLoading: false,
-    isError: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
-  useActiveTrip: () => ({
-    data: trip,
-    isLoading: false,
-    isPending: false,
-    isError: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
+  useCurrentDriver: () => currentDriverResult,
+  useActiveTrip: () => activeTripResult,
 }));
 
 vi.mock('@/hooks/useChecklistStatus', () => ({
@@ -129,6 +135,7 @@ vi.mock('@/integrations/supabase/client', () => {
         builder.not = () => builder;
         builder.order = () => builder;
         builder.limit = () => builder;
+        builder.range = () => builder;
         builder.maybeSingle = async () => responseFor(table);
         builder.then = (
           resolve: (value: { data: unknown; error: unknown }) => unknown,

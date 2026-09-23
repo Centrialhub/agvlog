@@ -37,12 +37,13 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { assertFiscalDocumentIdentity } from '@/lib/fiscalDocuments/fiscalDocumentIdentity';
+import { formatFiscalDocumentError } from '@/lib/fiscalDocuments/fiscalIdentity';
 import { FiscalDocumentSummaryCards } from '@/components/fiscal/FiscalDocumentSummaryCards';
 
 const PAGE_SIZE = 50;
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Falha inesperada no documento fiscal';
+  return formatFiscalDocumentError(error);
 }
 
 /* ─── Form ─── */

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,12 +22,11 @@ import {
   useReturnSheetHistory,
   canGenerateReturnSheet,
   getSignedProofUrl,
+  partitionReturnSheets,
   type ReturnSheet,
 } from '@/hooks/useOccurrenceReturnSheet';
 import { OccurrenceReturnSheetPreview } from '@/components/occurrences/OccurrenceReturnSheetPreview';
 import { downloadReturnSheetPdf, openReturnSheetPdfPrint } from '@/lib/occurrences/occurrenceReturnSheetPdf';
-import { useCompanyProfile } from '@/hooks/useCompanyProfile';
-import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 const sheetCompanyName = (sheet: ReturnSheet): string | undefined => {
   const name = sheet.company_snapshot.name;
@@ -40,8 +39,6 @@ export default function OccurrenceReturnSheetPage() {
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
-  const { data: companyProfile } = useCompanyProfile();
-  const companyInfo = toCompanyPdfInfo(companyProfile, currentTenant?.name);
 
   const occurrenceQuery = useQuery({
     queryKey: ['delivery-occurrence-detail', currentTenant?.id, occurrenceId],
@@ -60,10 +57,10 @@ export default function OccurrenceReturnSheetPage() {
   const occurrence = occurrenceQuery.data;
 
   const sheetsQuery = useReturnSheetsForOccurrence(occurrenceId);
-  const activeSheet = useMemo<ReturnSheet | null>(() => {
-    const list = sheetsQuery.data ?? [];
-    return (list.find((s) => ['generated', 'printed', 'signed'].includes(s.status)) ?? null) as ReturnSheet | null;
-  }, [sheetsQuery.data]);
+  const { activeSheet, displaySheet, historicalSheets } = useMemo(
+    () => partitionReturnSheets(sheetsQuery.data ?? []),
+    [sheetsQuery.data],
+  );
 
   const generateMut = useGenerateReturnSheet();
   const cancelMut = useCancelReturnSheet();
@@ -74,6 +71,11 @@ export default function OccurrenceReturnSheetPage() {
   const [regenReason, setRegenReason] = useState('');
   const [receiverName, setReceiverName] = useState('');
   const [receiverDoc, setReceiverDoc] = useState('');
+
+  useEffect(() => {
+    setReceiverName('');
+    setReceiverDoc('');
+  }, [activeSheet?.id, occurrenceId, currentTenant?.id]);
 
   const generation = canGenerateReturnSheet(occurrence);
 
@@ -112,10 +114,29 @@ export default function OccurrenceReturnSheetPage() {
         receiverDocument: receiverDoc || null,
       });
       toast.success('Folha assinada anexada');
+      setReceiverName('');
+      setReceiverDoc('');
     } catch (err) { toast.error((err as Error).message); }
   };
 
-  const historyQuery = useReturnSheetHistory(activeSheet?.id);
+  const openSignedReturnSheet = async (path: string) => {
+    const popup = window.open('', '_blank');
+    if (!popup) {
+      toast.error('O navegador bloqueou a nova janela. Permita pop-ups para este site e tente novamente.');
+      return;
+    }
+    popup.opener = null;
+    try {
+      const url = await getSignedProofUrl(path);
+      if (!url) throw new Error('Não foi possível gerar o link temporário da folha assinada.');
+      popup.location.href = url;
+    } catch (error) {
+      popup.close();
+      toast.error(error instanceof Error ? error.message : 'Não foi possível abrir a folha assinada.');
+    }
+  };
+
+  const historyQuery = useReturnSheetHistory(displaySheet?.id);
 
   if (occurrenceQuery.isLoading || sheetsQuery.isLoading) return <div className="p-6">Carregando...</div>;
   if (occurrenceQuery.isError || sheetsQuery.isError) {
@@ -182,39 +203,36 @@ export default function OccurrenceReturnSheetPage() {
         </Card>
       )}
 
-      {activeSheet && (
+      {displaySheet && (
         <>
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center justify-between">
-                <span>Folha {activeSheet.sheet_number}</span>
-                <Badge>{activeSheet.status}</Badge>
+                <span>Folha {displaySheet.sheet_number}</span>
+                <Badge>{displaySheet.status}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => downloadReturnSheetPdf(activeSheet, sheetCompanyName(activeSheet), companyInfo)}>
+                <Button size="sm" variant="outline" onClick={() => downloadReturnSheetPdf(displaySheet, sheetCompanyName(displaySheet))}>
                   <Download className="w-4 h-4 mr-1" /> Baixar PDF
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => openReturnSheetPdfPrint(activeSheet, sheetCompanyName(activeSheet), companyInfo)}>
+                <Button size="sm" variant="outline" onClick={() => openReturnSheetPdfPrint(displaySheet, sheetCompanyName(displaySheet))}>
                   <Printer className="w-4 h-4 mr-1" /> Imprimir
                 </Button>
-                {activeSheet.status === 'generated' && (
-                  <Button size="sm" variant="outline" onClick={() => printMut.mutate(activeSheet.id)}>
+                {displaySheet.status === 'generated' && (
+                  <Button size="sm" variant="outline" onClick={() => printMut.mutate(displaySheet.id)}>
                     Marcar como impressa
                   </Button>
                 )}
-                {activeSheet.signed_proof_url && (
-                  <Button size="sm" variant="outline" onClick={async () => {
-                    const url = await getSignedProofUrl(activeSheet.signed_proof_url!);
-                    if (url) window.open(url, '_blank', 'noopener,noreferrer'); else toast.error('Não foi possível abrir');
-                  }}>
+                {displaySheet.signed_proof_url && (
+                  <Button size="sm" variant="outline" onClick={() => void openSignedReturnSheet(displaySheet.signed_proof_url!)}>
                     Ver folha assinada
                   </Button>
                 )}
               </div>
 
-              {['generated', 'printed'].includes(activeSheet.status) && (
+              {['generated', 'printed'].includes(displaySheet.status) && (
                 <div className="border rounded p-3 space-y-2">
                   <div className="font-medium text-sm">Anexar folha assinada</div>
                   <div className="grid grid-cols-2 gap-2">
@@ -236,7 +254,7 @@ export default function OccurrenceReturnSheetPage() {
                 </div>
               )}
 
-              {activeSheet.status !== 'cancelled' && (
+              {activeSheet?.id === displaySheet.id && displaySheet.status !== 'cancelled' && (
                 <details className="border rounded p-3">
                   <summary className="text-sm cursor-pointer">Regerar / Cancelar folha</summary>
                   <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -262,7 +280,7 @@ export default function OccurrenceReturnSheetPage() {
             </CardContent>
           </Card>
 
-          <OccurrenceReturnSheetPreview sheet={activeSheet} />
+          <OccurrenceReturnSheetPreview sheet={displaySheet} />
 
           {historyQuery.isError && (
             <Alert variant="destructive">
@@ -290,14 +308,14 @@ export default function OccurrenceReturnSheetPage() {
         </>
       )}
 
-      {(sheetsQuery.data ?? []).length > 1 && (
+      {historicalSheets.length > 0 && (
         <Card>
           <CardHeader><CardTitle className="text-base">Versões anteriores</CardTitle></CardHeader>
           <CardContent className="text-xs space-y-1">
-            {(sheetsQuery.data ?? []).slice(1).map((s) => (
+            {historicalSheets.map((s) => (
               <div key={s.id} className="flex justify-between border-b py-1">
                 <span>v{s.version} · {s.sheet_number} · {s.status}</span>
-                <Button size="sm" variant="ghost" onClick={() => downloadReturnSheetPdf(s, sheetCompanyName(s), companyInfo)}>
+                <Button size="sm" variant="ghost" onClick={() => downloadReturnSheetPdf(s, sheetCompanyName(s))}>
                   <Download className="w-3 h-3 mr-1" /> PDF
                 </Button>
               </div>

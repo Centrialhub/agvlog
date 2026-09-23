@@ -8,15 +8,15 @@ import {expenseCategoryLabels,expensePaymentLabels} from '@/lib/financial/expens
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Textarea} from '@/components/ui/textarea';
-import {localDateTimeInputValue} from '@/lib/utils/formatDate';
+import {localDateTimeInputToIso,localDateTimeInputValue} from '@/lib/utils/formatDate';
 type Props={sourceType:'trip'|'settlement';sourceId:string;onConfirmed?:()=>void};
 export function ExpenseCreationForm(props:Props){
- const {currentTenant}=useTenant(),{user}=useAuth();return currentTenant&&user?<ScopedForm key={currentTenant.id+':'+user.id+':'+props.sourceType+':'+props.sourceId} {...props}/>:<p>Entre e selecione a empresa.</p>;
+ const {currentTenant}=useTenant(),{user}=useAuth();return currentTenant&&user?<ScopedForm key={currentTenant.id+':'+user.id+':'+props.sourceType+':'+props.sourceId} {...props} timeZone={currentTenant.timezone}/>:<p>Entre e selecione a empresa.</p>;
 }
-function ScopedForm({sourceType,sourceId,onConfirmed}:Props){
+function ScopedForm({sourceType,sourceId,onConfirmed,timeZone}:Props&{timeZone:string}){
  const command=useExpenseCreation(sourceType,sourceId),prefix=useId(),alive=useRef(true);
  const [preview,setPreview]=useState<ExpenseCreationContext|null>(null),[invalidated,setInvalidated]=useState(false),[message,setMessage]=useState(''),[preparing,setPreparing]=useState(false);
- const [form,setForm]=useState({category:'fuel',amount:'',expense_at:localDateTimeInputValue(),payment_source:'driver',reimbursable:true,supplier_name:'',document_number:'',city:'',state:'',odometer:'',cost_center:'',notes:'',no_receipt:false,no_receipt_reason:''});
+ const [form,setForm]=useState({category:'fuel',amount:'',expense_at:localDateTimeInputValue(new Date(),timeZone),payment_source:'driver',reimbursable:true,supplier_name:'',document_number:'',city:'',state:'',odometer:'',cost_center:'',notes:'',no_receipt:false,no_receipt_reason:''});
  const [file,setFile]=useState<File>();
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
  useEffect(()=>{if(!preview&&command.query.data)setPreview(command.query.data);},[preview,command.query.data]);
@@ -29,10 +29,10 @@ function ScopedForm({sourceType,sourceId,onConfirmed}:Props){
   try{
    if(!/^\d+(?:[.,]\d{1,2})?$/.test(form.amount.trim()))throw new Error('Informe um valor positivo com no máximo duas casas decimais.');
    const [whole,fraction='']=form.amount.trim().replace(',','.').split('.'),amount=Number(whole)*100+Number(fraction.padEnd(2,'0'));
-   const date=new Date(form.expense_at);if(!Number.isFinite(date.getTime()))throw new Error('Informe a data e hora da despesa.');
+   const expenseAt=localDateTimeInputToIso(form.expense_at,timeZone);
    const receipt=form.no_receipt?null:file?await describeExpenseReceipt(file):null;if(!alive.current)return;
    const fields:ExpenseFields={...form,category:form.category as ExpenseFields['category'],payment_source:form.payment_source as ExpenseFields['payment_source'],
-    amount_cents:amount,expense_at:date.toISOString(),odometer:form.odometer?Number(form.odometer):null,no_receipt_reason:form.no_receipt?form.no_receipt_reason:null};
+    amount_cents:amount,expense_at:expenseAt,odometer:form.odometer?Number(form.odometer):null,no_receipt_reason:form.no_receipt?form.no_receipt_reason:null};
    // The UI amount string is not part of the strict API contract.
    const {amount:unused,...rest}=fields as ExpenseFields&{amount:string};void unused;
    await command.submit({source_type:sourceType,source_id:sourceId,expected_revision:preview.revision,fields:rest,receipt},form.no_receipt?undefined:file);

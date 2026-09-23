@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_url:
-        description: Immutable preview/staging URL produced from the candidate commit
+        description: Immutable agvlogistica Vercel deployment URL produced from the candidate commit
         required: true
         type: string
       candidate_sha:
@@ -35,8 +35,24 @@ jobs:
       E2E_BASE_URL: ${{ github.event.inputs.candidate_url }}
       E2E_ALLOW_REMOTE: "true"
       E2E_SKIP_WEBSERVER: "true"
-      E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
     steps:
+      - name: Checkout trusted release policy
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Verify candidate URL belongs to this Vercel project
+        env:
+          CANDIDATE_URL: ${{ github.event.inputs.candidate_url }}
+        run: node scripts/check-release-candidate-url.mjs
+
       - name: Checkout candidate commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -54,12 +70,6 @@ jobs:
           fi
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version-file: .node-version
-          cache: npm
-
       - name: Frozen install and audit
         run: |
           npm ci
@@ -75,9 +85,13 @@ jobs:
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Hosted desktop/tablet/mobile journeys
+        env:
+          E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
         run: npm run e2e
 
       - name: Critical journeys three consecutive times
+        env:
+          E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
         run: npm run e2e:critical:3
 
       - name: Upload hosted evidence

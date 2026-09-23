@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { readCtePayloadRecipient, readCtePayloadInvoiceNumbers } from '@/lib/fiscal/ctePayload';
+import { readCtePayloadPayer, readCtePayloadRecipient, readCtePayloadInvoiceNumbers } from '@/lib/fiscal/ctePayload';
 import { matchesCteSearchFilters } from '@/lib/fiscal/cteListFilters';
-import { localDayBoundary } from '@/lib/listFilters';
+import { APP_TIME_ZONE, dateOnlyUtcRange } from '@/lib/utils/formatDate';
+import { containsIlikePattern, flexibleIdentifierIlikePattern } from '@/lib/supabase/ilike';
 import { useTenant } from './useTenant';
 
 export type TriState = 'all' | 'yes' | 'no';
@@ -114,17 +115,18 @@ function bool(v?: TriState) {
   return null;
 }
 /** Traduz status de `fiscal_documents` (saída) para o vocabulário SEFAZ do monitor. */
-export function mapSearchOutboundStatus(status?: string | null, sefaz?: string | null, hubId?: string | null): string {
+export function mapSearchOutboundStatus(status?: string | null, sefaz?: string | null, _hubId?: string | null): string {
   const s = (sefaz || '').toLowerCase();
   const st = (status || '').toLowerCase();
   if (st === 'cancelled' || s === 'cancelled') return 'cancelled';
+  if (st === 'cancel_pending' || s === 'cancel_pending') return 'cancel_pending';
   if (st === 'cancelling' || s === 'cancelling') return 'cancelling';
   if (s.includes('autoriz')) return 'processed';
   // Uma rejeição do evento de cancelamento não cancela o CT-e: ele continua
   // autorizado e deve permanecer disponível para uma nova tentativa.
   if (s === 'cancel_rejected' || s === 'cancel_error' || s.includes('cancel_rejeit')) return 'processed';
   if (s.includes('cancel')) return 'cancelled';
-  if (s === 'status_timeout') return hubId ? 'processed' : 'sefaz_error';
+  if (s === 'status_timeout') return 'sefaz_error';
   if (s.includes('rejeit') || s.includes('erro')) return 'sefaz_error';
   if (st === 'authorized') return 'processed';
   if (st === 'rejected' || st === 'error') return 'sefaz_error';
@@ -140,6 +142,11 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
     staleTime: 30_000,
     queryFn: async (): Promise<CteSearchRow[]> => {
       if (!currentTenant) return [];
+      const tenantTimezone = currentTenant.timezone || APP_TIME_ZONE;
+      const dayBoundary = (day: string, nextDay = false) => {
+        const range = dateOnlyUtcRange(day, tenantTimezone);
+        return nextDay ? range.toExclusive : range.from;
+      };
       let q = supabase
         .from('cte_documents')
         .select('*')
@@ -149,27 +156,27 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
       const f = filters;
 
       // Number filters run after enriching catalog rows with their original NF payload.
-      const internal = nz(f.internalNumber); if (internal) q = q.ilike('internal_number', `%${internal}%`);
-      const ref = nz(f.referenceNumber); if (ref) q = q.ilike('reference_number', `%${ref}%`);
-      const accessKey = nz(f.accessKey); if (accessKey) q = q.ilike('access_key', `%${accessKey.replace(/\D/g, '')}%`);
+      const internal = nz(f.internalNumber); if (internal) q = q.ilike('internal_number', containsIlikePattern(internal));
+      const ref = nz(f.referenceNumber); if (ref) q = q.ilike('reference_number', containsIlikePattern(ref));
+      const accessKey = nz(f.accessKey); if (accessKey) q = q.ilike('access_key', containsIlikePattern(accessKey.replace(/\D/g, '') || accessKey));
       const series = nz(f.series); if (series) q = q.eq('cte_series', series);
-      const remitter = nz(f.remitter); if (remitter) q = q.ilike('remitter', `%${remitter}%`);
-      const recipient = nz(f.recipient); if (recipient) q = q.ilike('recipient', `%${recipient}%`);
-      const city = nz(f.recipientCity); if (city) q = q.ilike('recipient_city', `%${city}%`);
-      const consignee = nz(f.consignee); if (consignee) q = q.ilike('consignee', `%${consignee}%`);
-      const payer = nz(f.payer); if (payer) q = q.ilike('payer_name', `%${payer}%`);
-      const payerGroup = nz(f.payerGroup); if (payerGroup) q = q.ilike('payer_group', `%${payerGroup}%`);
-      const driver = nz(f.driverName); if (driver) q = q.ilike('driver_name', `%${driver}%`);
-      const plate = nz(f.vehiclePlate); if (plate) q = q.ilike('vehicle_plate', `%${plate.replace(/\W/g, '').split('').join('%')}%`);
-      const trailer = nz(f.trailerPlate); if (trailer) q = q.ilike('trailer_plate', `%${trailer.replace(/\W/g, '').split('').join('%')}%`);
-      const ins = nz(f.insuranceCompany); if (ins) q = q.ilike('insurance_company', `%${ins}%`);
-      const contract = nz(f.contractNumber); if (contract) q = q.ilike('contract_number', `%${contract}%`);
-      const trip = nz(f.tripNumber); if (trip) q = q.ilike('trip_number', `%${trip}%`);
+      const remitter = nz(f.remitter); if (remitter) q = q.ilike('remitter', containsIlikePattern(remitter));
+      const recipient = nz(f.recipient); if (recipient) q = q.ilike('recipient', containsIlikePattern(recipient));
+      const city = nz(f.recipientCity); if (city) q = q.ilike('recipient_city', containsIlikePattern(city));
+      const consignee = nz(f.consignee); if (consignee) q = q.ilike('consignee', containsIlikePattern(consignee));
+      const payer = nz(f.payer); if (payer) q = q.ilike('payer_name', containsIlikePattern(payer));
+      const payerGroup = nz(f.payerGroup); if (payerGroup) q = q.ilike('payer_group', containsIlikePattern(payerGroup));
+      const driver = nz(f.driverName); if (driver) q = q.ilike('driver_name', containsIlikePattern(driver));
+      const plate = nz(f.vehiclePlate); if (plate) q = q.ilike('vehicle_plate', flexibleIdentifierIlikePattern(plate));
+      const trailer = nz(f.trailerPlate); if (trailer) q = q.ilike('trailer_plate', flexibleIdentifierIlikePattern(trailer));
+      const ins = nz(f.insuranceCompany); if (ins) q = q.ilike('insurance_company', containsIlikePattern(ins));
+      const contract = nz(f.contractNumber); if (contract) q = q.ilike('contract_number', containsIlikePattern(contract));
+      const trip = nz(f.tripNumber); if (trip) q = q.ilike('trip_number', containsIlikePattern(trip));
 
-      const romexp = nz(f.romexpNumber); if (romexp) q = q.ilike('romexp_number', `%${romexp}%`);
+      const romexp = nz(f.romexpNumber); if (romexp) q = q.ilike('romexp_number', containsIlikePattern(romexp));
 
-      if (f.issueDateStart) q = q.or(`issued_at.gte.${localDayBoundary(f.issueDateStart)},and(issued_at.is.null,created_at.gte.${localDayBoundary(f.issueDateStart)})`);
-      if (f.issueDateEnd) q = q.or(`issued_at.lt.${localDayBoundary(f.issueDateEnd, true)},and(issued_at.is.null,created_at.lt.${localDayBoundary(f.issueDateEnd, true)})`);
+      if (f.issueDateStart) q = q.or(`issued_at.gte.${dayBoundary(f.issueDateStart)},and(issued_at.is.null,created_at.gte.${dayBoundary(f.issueDateStart)})`);
+      if (f.issueDateEnd) q = q.or(`issued_at.lt.${dayBoundary(f.issueDateEnd, true)},and(issued_at.is.null,created_at.lt.${dayBoundary(f.issueDateEnd, true)})`);
 
       if (f.cteTypes && f.cteTypes.length > 0) q = q.in('cte_type', f.cteTypes);
       if (f.statuses && f.statuses.length > 0) q = q.or(`sefaz_status.in.(${f.statuses.join(',')}),access_key.not.is.null`);
@@ -223,7 +230,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           cte_number: (match ? receiptById.get(match.id)?.number : null) ?? r.cte_number ?? null,
           cte_series: (match ? receiptById.get(match.id)?.series : null) ?? r.cte_series ?? null,
           cte_type: r.cte_type ?? 'normal',
-          access_key: r.access_key ?? null,
+          access_key: r.access_key ?? match?.access_key ?? null,
           sefaz_status: match ? mapSearchOutboundStatus(match.status, match.sefaz_status, match.hub_document_id) : r.sefaz_status ?? 'pending',
           sefaz_status_reason: r.sefaz_status_reason ?? match?.sefaz_message ?? null,
           issued_at: r.issued_at || r.created_at,
@@ -249,6 +256,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         .filter((d) => !usedHubIds.has(d.id))
         .map((d): CteSearchRow => {
           const payloadRecipient = readCtePayloadRecipient(d.cte_payload);
+          const payloadPayer = readCtePayloadPayer(d.cte_payload);
           return {
           id: d.id,
           source: 'hub',
@@ -260,7 +268,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           sefaz_status_reason: d.sefaz_message ?? null,
           issued_at: d.issue_date ?? d.created_at ?? null,
           created_at: d.created_at,
-          payer_name: d.remitter ?? null,
+          payer_name: payloadPayer.name,
           remitter: d.remitter ?? null,
           recipient: payloadRecipient.name ?? d.recipient ?? null,
           recipient_city: payloadRecipient.city ?? d.recipient_city ?? null,
@@ -268,7 +276,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           vehicle_plate: null,
           driver_name: null,
           invoice_numbers: readCtePayloadInvoiceNumbers(d.cte_payload),
-          freight_value: Number(d.freight_value ?? d.value ?? 0),
+          freight_value: Number(d.freight_value ?? 0),
           cargo_value: Number(d.value ?? 0),
           hub_document_id: d.hub_document_id ?? null,
           emission_id: d.emission_id ?? null,
@@ -277,7 +285,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           };
         });
 
-      const filtered = [...draftRows, ...hubRows].filter(row => matchesCteSearchFilters(row, filters));
+      const filtered = [...draftRows, ...hubRows].filter(row => matchesCteSearchFilters(row, filters, tenantTimezone));
 
       return filtered.sort((a, b) => {
         const da = new Date(a.issued_at ?? a.created_at).getTime();

@@ -39,6 +39,7 @@ export async function createActiveMovementOptionsDatabase(){
  await db.exec(load('20260910184543_finance_active_movement_options'));
  await db.exec(load('20260917072228_page_settlement_payment_link_history'));
  await db.exec(load('20260917072951_stabilize_legacy_association_paging'));
+ await db.exec(load('20260922203000_snapshot_payable_movement_options'));
  return db;
 }
 

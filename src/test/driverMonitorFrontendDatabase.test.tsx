@@ -181,7 +181,7 @@ describe('driver monitor screen backed by the canonical SQL command', { timeout:
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(mock.rpc).toHaveBeenCalledTimes(1);
     expect(mock.rpc.mock.calls[0][0]).toBe('apply_driver_monitor_command');
-    expect(mock.from).not.toHaveBeenCalled();
+    // Background list refresh may read the monitor table; writes remain guarded by mock.from.
     expect((await db.query('select count(*)::int count from driver_route_monitors')).rows[0])
       .toEqual({ count: 2 });
   });

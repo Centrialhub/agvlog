@@ -51,6 +51,8 @@ async function installOperatorEventFixture(db:PGlite){
  const end=hardening.indexOf('$function$;',start)+'$function$;'.length;
  await db.exec(hardening.slice(start,end));
  await db.exec(readFileSync(podHistoryPagingMigration,'utf8'));
+ await db.exec(readFileSync('supabase/migrations/20260921190003_globally_page_operator_pod_timeline.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20260923142757_remove_ambiguous_operator_pod_history_overload.sql','utf8'));
 }
 
 export async function createOperatorEventDatabase(){

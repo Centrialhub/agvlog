@@ -23,7 +23,7 @@ function AuditWorkspace({tenant,actor}:{tenant:string;actor:string}){
   const invalidDateRange=!!draft.from&&!!draft.to&&draft.from>draft.to;
   return <div className="space-y-5"><div><h1 className="text-2xl font-semibold">Auditoria financeira</h1>
     <p className="text-sm text-muted-foreground">Ações do novo registro financeiro, com responsáveis e justificativas preservados. Inclui decisões revertidas.</p></div>
-    <form className="flex flex-wrap items-end gap-3" onSubmit={e=>{e.preventDefault();if(invalidDateRange)return;setFilters({...draft,page:1,snapshot_at:''});}}>
+    <form className="finance-filters" onSubmit={e=>{e.preventDefault();if(invalidDateRange)return;setFilters({...draft,page:1,snapshot_at:''});}}>
       <label className="text-sm">Responsável<Input value={draft.actor_search} maxLength={200} onChange={e=>setDraft({...draft,actor_search:e.target.value})} placeholder="Nome registrado no histórico"/></label>
       <label className="text-sm">Justificativa<Input value={draft.search} maxLength={200} onChange={e=>setDraft({...draft,search:e.target.value})}/></label>
       <label className="text-sm">De<Input type="date" max={draft.to||undefined} aria-invalid={invalidDateRange} value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})}/></label>
@@ -47,7 +47,7 @@ function AuditWorkspace({tenant,actor}:{tenant:string;actor:string}){
         <p className="mt-2 whitespace-pre-wrap text-sm">{row.reason}</p>
         <Button variant="ghost" onClick={()=>{const next={...filters,page:1,actor_id:row.actor_id,actor_search:'',snapshot_at:''};setActorName(row.actor_name);setDraft(next);setFilters(next);}}>Filtrar esta pessoa</Button>
       </article>)}{!data.rows.length&&<p>Nenhum evento neste filtro.</p>}</div>
-      <div className="flex items-center justify-between"><Button variant="outline" disabled={filters.page===1||query.isFetching} onClick={()=>setFilters({...filters,page:filters.page-1})}>Anterior</Button>
+      <div className="flex flex-wrap items-center justify-between gap-3"><Button variant="outline" disabled={filters.page===1||query.isFetching} onClick={()=>setFilters({...filters,page:filters.page-1})}>Anterior</Button>
         <span>Página {data.page} de {Math.max(1,Math.ceil(data.total/data.page_size))}</span><Button variant="outline" disabled={data.page*data.page_size>=data.total||query.isFetching} onClick={()=>setFilters({...filters,page:filters.page+1,snapshot_at:data.snapshot_at})}>Próxima</Button></div>
     </>}
   </div>;

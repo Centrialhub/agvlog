@@ -57,7 +57,7 @@ export function CostCenterManager() {
 
   const handleToggle = async (costCenter: CostCenter) => {
     try {
-      await toggleCostCenter({ id: costCenter.id, active: !costCenter.active });
+      await toggleCostCenter({ id: costCenter.id, active: !costCenter.active, expectedUpdatedAt: costCenter.updated_at });
     } catch {
       // The mutation reports the failure without creating an unhandled promise.
     }
@@ -66,7 +66,7 @@ export function CostCenterManager() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await deleteCostCenter(deleteTarget.id);
+      await deleteCostCenter({ id: deleteTarget.id, expectedUpdatedAt: deleteTarget.updated_at });
       setDeleteTarget(null);
     } catch {
       // Keep the dialog open so the user can choose to cancel or deactivate instead.

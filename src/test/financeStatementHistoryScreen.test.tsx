@@ -9,12 +9,13 @@ vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:actor}})}));
 vi.mock('@/hooks/useFinanceLedger',()=>({useFinanceAccess:()=>({data:mocks.access,isPending:false,error:null})}));
 vi.mock('@/lib/financial/ledgerClient',async original=>({...await original<object>(),readFinanceStatements:mocks.list,readFinanceStatementLines:mocks.lines,readFinanceStatementHistory:mocks.history}));
 vi.mock('@/components/financial/StatementImportDialog',()=>({StatementImportDialog:()=>null}));
-vi.mock('@/hooks/useFinancialPayments',()=>({useBankAccounts:()=>({data:[{id:'account-a',name:'Conta principal',account_type:'checking'}],isPending:false,isError:false,refetch:vi.fn()})}));
+vi.mock('@/hooks/useBankReconciliation',()=>({useBankAccounts:()=>({data:[{id:'account-a',name:'Conta principal',account_type:'checking',active:false}],isPending:false,isError:false,refetch:vi.fn()})}));
 const statement={id:crypto.randomUUID(),tenant_id:tenant,bank_account_id:crypto.randomUUID(),account_name:'Conta principal',file_name:'Janeiro.csv',file_hash:'a'.repeat(64),source_path:'',
   period_start:'2026-01-01',period_end:'2026-01-31',input_rows:2,created_at:'2026-02-01T12:00:00Z',source_verification:'rows_match',verification_report:{},counts:{new:1,ambiguous:1},identity_review_count:1};
 function mount(){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><FinanceStatements/></QueryClientProvider>);}
+const nextCursor={created_at:statement.created_at,id:statement.id};
 beforeEach(()=>{vi.clearAllMocks();mocks.role='operator';mocks.access=true;
-  mocks.list.mockResolvedValue({version:1,tenant_id:tenant,page:1,page_size:20,total:21,rows:[statement]});
+  mocks.list.mockImplementation((_tenant,_filters)=>Promise.resolve({version:2,tenant_id:tenant,cursor:_filters.cursor,next_cursor:_filters.cursor?null:nextCursor,has_more:!_filters.cursor,page_size:20,total:21,rows:[statement]}));
   mocks.lines.mockResolvedValue({version:1,tenant_id:tenant,import_id:statement.id,page:1,page_size:30,total:2,row_amount_total_cents:'-100000',rows:[],
     history:[{id:crypto.randomUUID(),actor_id:actor,actor_name:'Maria Financeiro',action:'source_checked',reason:'Conferência solicitada',created_at:'2026-02-01T12:00:00Z'}]});
   mocks.history.mockResolvedValue({version:1,tenant_id:tenant,import_id:statement.id,page:1,page_size:30,total:1,
@@ -31,15 +32,15 @@ describe('statement history preserves distinction between source checks and bank
   it('applies server filters only on submission and paginates the full result',async()=>{
     mount();await screen.findByText('Janeiro.csv');fireEvent.change(screen.getByLabelText('Buscar'),{target:{value:'100%'}});
     expect(mocks.list).toHaveBeenCalledTimes(1);fireEvent.click(screen.getByRole('button',{name:'Filtrar'}));
-    await waitFor(()=>expect(mocks.list).toHaveBeenLastCalledWith(tenant,expect.objectContaining({search:'100%',page:1})));
+    await waitFor(()=>expect(mocks.list).toHaveBeenLastCalledWith(tenant,expect.objectContaining({search:'100%',cursor:null})));
     fireEvent.click(await screen.findByRole('button',{name:'Próxima'}));
-    await waitFor(()=>expect(mocks.list).toHaveBeenLastCalledWith(tenant,expect.objectContaining({search:'100%',page:2})));
+    await waitFor(()=>expect(mocks.list).toHaveBeenLastCalledWith(tenant,expect.objectContaining({search:'100%',cursor:nextCursor})));
   });
   it('filters statements by the exact selected bank-account identifier',async()=>{
-    mount();await screen.findByText('Janeiro.csv');
+    mount();await screen.findByText('Janeiro.csv');expect(screen.getByRole('option',{name:'Conta principal (inativa)'})).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Conta bancária'),{target:{value:'account-a'}});
     fireEvent.click(screen.getByRole('button',{name:'Filtrar'}));
-    await waitFor(()=>expect(mocks.list).toHaveBeenLastCalledWith(tenant,expect.objectContaining({account_id:'account-a',page:1})));
+    await waitFor(()=>expect(mocks.list).toHaveBeenLastCalledWith(tenant,expect.objectContaining({account_id:'account-a',cursor:null})));
   });
   it('explains and blocks an inverted statement date range before querying',async()=>{
     mount();await screen.findByText('Janeiro.csv');

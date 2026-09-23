@@ -1,10 +1,11 @@
-import {invoiceListTotals} from '@/lib/financial/clientInvoiceList';
+import {useListFilters} from '@/hooks/useListFilters';
+import {DataPagination} from '@/components/ui/data-pagination';
 import {formatFinanceCents} from '@/lib/financial/ledgerContract';
 import {useAuth} from '@/hooks/useAuth';
 import {NewInvoiceWizard} from '@/components/financial/NewInvoiceWizard';
 import {ClientInvoiceLifecycleDialog} from '@/components/financial/ClientInvoiceLifecycleDialog';
 import {ReceivableFinancialDialog} from '@/components/financial/ReceivableFinancialDialog';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   useClientInvoices, useClientInvoiceDetail,
   INVOICE_STATUS_LABELS, type ClientInvoice, type InvoiceStatus,
@@ -49,31 +50,26 @@ function ClientInvoicesScreen() {
   const alive=useRef(true);useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
-  const {data:invoiceList,isLoading,error:listError}=useClientInvoices();
+  const {filters,setFilter}=useListFilters({search:'',status:'all',client:'all'},'invoice_');
+  const {search,status:statusFilter,client:clientFilter}=filters;
+  const setSearch=(value:string)=>setFilter('search',value),setStatusFilter=(value:string)=>setFilter('status',value),setClientFilter=(value:string)=>setFilter('client',value);
+  const filterKey=JSON.stringify(filters);
+  const [paging,setPaging]=useState({key:filterKey,page:1,revision:null as string|null});
+  const page=paging.key===filterKey?paging.page:1,revision=paging.key===filterKey?paging.revision:null;
+  const query=useClientInvoices(filters,page,revision),isLoading=query.isFetching,listError=query.error;
+  const invoiceList=query.isFetching||query.isError?undefined:query.data;
+  useEffect(()=>{if(listError?.message==='finance_invoice_list_changed')setPaging({key:filterKey,page:1,revision:null});},[listError,filterKey]);
   const invoices=invoiceList?.rows||EMPTY_INVOICES;
-  const balancesUnavailable=!!listError||!invoiceList||invoiceList.truncated||invoices.some(inv=>inv.requires_reconciliation);
+  const balancesUnavailable=!!listError||!invoiceList||invoiceList.invalid_count>0;
   const { data: clients = [] } = useClients();
   const [actionInvoice,setActionInvoice]=useState<ClientInvoice|null>(null);
   const [financialInvoice,setFinancialInvoice]=useState<ClientInvoice|null>(null);
 
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [clientFilter, setClientFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
   const [wizardOpen, setWizardOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return invoices.filter(inv => {
-      if (statusFilter !== 'all' && inv.status !== statusFilter) return false;
-      if (clientFilter !== 'all' && inv.client_id !== clientFilter) return false;
-      if (q && !inv.invoice_number.toLowerCase().includes(q) &&
-        !(inv.clients?.company_name || '').toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [invoices, search, statusFilter, clientFilter]);
-
-  const totals = useMemo(() => invoiceListTotals(invoices), [invoices]);
+  const filtered=invoices;
+  const totals=invoiceList?.totals??{open:null,overdue:null,sent:null,paid:null};
 
   const handleDownloadPdf = async (inv: ClientInvoice) => {
     try {
@@ -150,8 +146,8 @@ function ClientInvoicesScreen() {
       </div>
 
       {listError?<p role="alert">Falha ao consultar faturas: {errorMessage(listError)}</p>:null}
-      {invoiceList?.truncated?<p role="alert">Exibindo as 500 faturas mais recentes. Totais gerais indisponíveis nesta consulta limitada.</p>:null}
-      {invoices.some(inv=>inv.requires_reconciliation)?<p role="alert">Há vínculos financeiros divergentes. Confira as ações de fatura; totais não são exibidos até a conciliação.</p>:null}
+      <p>Indicadores de todas as faturas do filtro, calculados no servidor. A lista mostra até 30 por página.</p>
+      {invoiceList?.invalid_count?<p role="alert">Há vínculos financeiros divergentes. Confira as ações de fatura; totais não são exibidos até a conciliação.</p>:null}
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div className="flex flex-wrap gap-2">
@@ -221,6 +217,7 @@ function ClientInvoicesScreen() {
         </CardContent>
       </Card>
 
+      {invoiceList&&<DataPagination page={page} pageCount={Math.max(1,Math.ceil(invoiceList.total/30))} totalCount={invoiceList.total} start={invoiceList.total?(page-1)*30+1:0} end={Math.min(page*30,invoiceList.total)} onPageChange={next=>setPaging({key:filterKey,page:next,revision:invoiceList.revision})}/>}
       {wizardOpen&&<NewInvoiceWizard open={wizardOpen} onClose={() => setWizardOpen(false)} clients={clients} onGenerated={id => { setWizardOpen(false); setDetailId(id); }} />}
       {actionInvoice&&<ClientInvoiceLifecycleDialog invoiceId={actionInvoice.id} tenantId={actionInvoice.tenant_id} onClose={()=>setActionInvoice(null)}/>}
       {financialInvoice?.receivable_id&&<ReceivableFinancialDialog receivableId={financialInvoice.receivable_id} tenantId={financialInvoice.tenant_id} onClose={()=>setFinancialInvoice(null)}/>}

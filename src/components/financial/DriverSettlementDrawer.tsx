@@ -17,7 +17,7 @@ import {
   useDriverSettlement, useRegenerateDriverSettlement, useUpdateDriverSettlementStatus,
   useUpdateSettlementKmReview,
   useSettleZeroDriverSettlement,
-  SETTLEMENT_STATUS_LABEL, isLocked, DriverSettlementStatus,
+  SETTLEMENT_STATUS_LABEL, canApproveDriverSettlementWithException, canDeleteDriverSettlement, canEditSettlementComposition, getAllowedDriverSettlementTransitions, isLocked, DriverSettlementStatus,
   useDetachLoadFromSettlement,
   useDeleteDriverSettlement,
 } from '@/hooks/useDriverSettlements';
@@ -35,6 +35,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import type { Json } from '@/integrations/supabase/types';
+import { useTenant } from '@/hooks/useTenant';
 import type { JsonObject } from '@/lib/jsonTypes';
 
 const fmtMoney = (v: number | null | undefined) =>
@@ -64,6 +65,7 @@ interface Props { settlementId: string | null; open: boolean; onOpenChange: (o: 
 
 export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Props) {
   const { confirmAction } = useScopedAlerts();
+  const { currentRole } = useTenant();
   const { data, isLoading, isError, error, refetch } = useDriverSettlement(open ? settlementId : null);
   const regen = useRegenerateDriverSettlement();
   const updateStatus = useUpdateDriverSettlementStatus();
@@ -107,6 +109,9 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const hasPendingExpenses = (s?.pending_expenses_total ?? 0) > 0;
   const noFreight = (s?.total_freight_value ?? 0) === 0;
   const locked = s ? isLocked(s.status as DriverSettlementStatus) : false;
+  const canEditComposition = s ? canEditSettlementComposition(s.status as DriverSettlementStatus) : false;
+  const canDelete = s ? canDeleteDriverSettlement(currentRole, s.status as DriverSettlementStatus) : false;
+  const canApproveWithException = canApproveDriverSettlementWithException(currentRole);
   const needsRecalc = !!s?.needs_recalculation;
 
   const kmDiff = useMemo(() => {
@@ -141,6 +146,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const payableZero = Number(s?.driver_payable_amount ?? 0) === 0;
   const balanceZero = Number(s?.payment_balance ?? remaining) === 0;
   const canSettleZero = s?.status === 'approved' && (payableZero || balanceZero);
+  const canRecordNewPayment = !needsRecalc && (s?.status === 'approved' || s?.status === 'paid');
   const parsedKmStart = kmStart === '' ? null : Number(kmStart);
   const parsedKmEnd = kmEnd === '' ? null : Number(kmEnd);
   const parsedAuditedKm = auditedKm === '' ? null : Number(auditedKm);
@@ -152,17 +158,12 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
 
-  const allowedTransitions = (st: DriverSettlementStatus): DriverSettlementStatus[] => {
-    switch (st) {
-      case 'pending_review': return ['in_review'];
-      case 'in_review': return ['approved'];
-      case 'approved': return ['paid'];
-      case 'paid': return ['closed', 'reopened'];
-      case 'closed': return ['reopened'];
-      case 'reopened': return ['in_review', 'approved'];
-      default: return [];
-    }
-  };
+  useEffect(() => {
+    setApproveOpen(false); setExceptionReason('');
+    setZeroOpen(false); setZeroReason('');
+    setCloseOpen(false); setCloseReason('');
+    setDeleteOpen(false); setDeleteReason('');
+  }, [open, settlementId]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -230,11 +231,11 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
 
             <div className="flex flex-wrap gap-2">
               {(
-                <Button size="sm" variant="outline" onClick={() => { if (s.is_manual) regen.mutate({ manualSettlementId: s.id }); else if (s.dispatch_trip_id) regen.mutate(s.dispatch_trip_id); }} disabled={locked || regen.isPending || (!s.is_manual && !s.dispatch_trip_id)}>
+                <Button size="sm" variant="outline" onClick={() => { if (s.is_manual) regen.mutate({ manualSettlementId: s.id }); else if (s.dispatch_trip_id) regen.mutate(s.dispatch_trip_id); }} disabled={!canEditComposition || regen.isPending || (!s.is_manual && !s.dispatch_trip_id)}>
                   <RefreshCw className="h-4 w-4 mr-1" /> Recalcular
                 </Button>
               )}
-              {allowedTransitions(s.status as DriverSettlementStatus).map((next) => {
+              {getAllowedDriverSettlementTransitions(currentRole, s.status as DriverSettlementStatus).map((next) => {
                 if (next === 'paid') {
                   return (
                     <div key={next} className="flex gap-1">
@@ -255,9 +256,11 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                       <Button size="sm" onClick={() => updateStatus.mutate({ id: s.id, status: next })} disabled={updateStatus.isPending || needsRecalc}>
                         Aprovar
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setApproveOpen(true)} disabled={updateStatus.isPending || needsRecalc}>
-                        Aprovar c/ exceção
-                      </Button>
+                      {canApproveWithException && (
+                        <Button size="sm" variant="outline" onClick={() => setApproveOpen(true)} disabled={updateStatus.isPending || needsRecalc}>
+                          Aprovar c/ exceção
+                        </Button>
+                      )}
                     </div>
                   );
                 }
@@ -274,7 +277,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   </Button>
                 );
               })}
-              {!locked && (
+              {canDelete && (
                 <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto" onClick={() => setDeleteOpen(true)}>
                   <Trash2 className="h-4 w-4 mr-1" /> Excluir acerto
                 </Button>
@@ -294,7 +297,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               </TabsList>
 
               <TabsContent value="loads">
-                {s.is_manual && !locked && (
+                {s.is_manual && canEditComposition && (
                   <div className="flex justify-end mb-2">
                     <Button size="sm" variant="outline" onClick={() => setAttachOpen(true)}>
                       <Plus className="h-4 w-4 mr-1" /> Adicionar romaneio
@@ -303,7 +306,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 )}
                 <div className="rounded-md border">
                   <Table>
-                    <TableHeader><TableRow><TableHead>Romaneio</TableHead><TableHead>Origem</TableHead><TableHead>Destino</TableHead><TableHead>Peso</TableHead><TableHead>Status</TableHead>{s.is_manual && !locked && <TableHead className="w-10" />}</TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Romaneio</TableHead><TableHead>Origem</TableHead><TableHead>Destino</TableHead><TableHead>Peso</TableHead><TableHead>Status</TableHead>{s.is_manual && canEditComposition && <TableHead className="w-10" />}</TableRow></TableHeader>
                     <TableBody>
                       {loadItems.map(i => (
                         <TableRow key={i.id}>
@@ -312,7 +315,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                           <TableCell>{metadataText(i.metadata, 'destination')}</TableCell>
                           <TableCell>{i.quantity ? `${fmtNum(i.quantity, 0)} kg` : '—'}</TableCell>
                           <TableCell><Badge variant="outline">{metadataText(i.metadata, 'status')}</Badge></TableCell>
-                          {s.is_manual && !locked && (
+                          {s.is_manual && canEditComposition && (
                             <TableCell>
                               <Button
                                 size="icon"
@@ -331,7 +334,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                           )}
                         </TableRow>
                       ))}
-                      {loadItems.length === 0 && <TableRow><TableCell colSpan={s.is_manual && !locked ? 6 : 5} className="text-center text-muted-foreground">Sem cargas vinculadas</TableCell></TableRow>}
+                      {loadItems.length === 0 && <TableRow><TableCell colSpan={s.is_manual && canEditComposition ? 6 : 5} className="text-center text-muted-foreground">Sem cargas vinculadas</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>
@@ -366,7 +369,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   <div className="flex justify-end">
                     <Dialog open={expOpen} onOpenChange={setExpOpen}>
                       <DialogTrigger asChild>
-                        <Button size="sm" disabled={locked}><Plus className="h-4 w-4 mr-1" /> Nova despesa</Button>
+                        <Button size="sm" disabled={!canEditComposition}><Plus className="h-4 w-4 mr-1" /> Nova despesa</Button>
                       </DialogTrigger>
                       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
                         <DialogHeader><DialogTitle>Adicionar despesa manual</DialogTitle><DialogDescription>Registre o gasto neste acerto com comprovante ou justificativa.</DialogDescription></DialogHeader>
@@ -496,7 +499,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
 
               <TabsContent value="sends">{s.driver_id?<DriverSettlementSends key={`${s.tenant_id}:${s.driver_id}`} tenant={s.tenant_id} driver={{id:s.driver_id,name:s.drivers?.name ?? "Motorista"}}/>:<p role="alert">Este acerto não tem motorista identificado. Confira o cadastro antes de consultar ou registrar envios.</p>}</TabsContent>
               <TabsContent value="payments" className="space-y-3">
-                <Button variant="outline" disabled={needsRecalc} onClick={() => setPayOpen(true)}>Registrar ou retomar pagamento</Button>
+                <Button variant="outline" disabled={!canRecordNewPayment} onClick={() => setPayOpen(true)}>Registrar pagamento</Button>
                 <Button variant="outline" onClick={() => { setPaymentRecoveryOnly(true); setPayOpen(true); }}>Retomar pagamento anterior</Button>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div><div className="text-muted-foreground text-xs">A pagar</div><div className="font-semibold">{fmtMoney(s.driver_payable_amount)}</div></div>
@@ -580,7 +583,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             </Dialog>
 
             {/* Register payment */}
-            {payOpen && <SettlementPaymentDialog settlement={s.id} initialAmount={remaining} allowNew={!needsRecalc && !paymentRecoveryOnly} onClose={() => { setPayOpen(false); setPaymentRecoveryOnly(false); }}/>}
+            {payOpen && <SettlementPaymentDialog settlement={s.id} initialAmount={remaining} allowNew={canRecordNewPayment && !paymentRecoveryOnly} onClose={() => { setPayOpen(false); setPaymentRecoveryOnly(false); }}/>}
 
             {/* Settle without payment (zero balance) */}
             <Dialog open={zeroOpen} onOpenChange={setZeroOpen}>

@@ -37,13 +37,14 @@ beforeEach(async()=>{
  }catch(error){return {data:null,error};}});});
  mock.from.mockImplementation((table:string)=>{
   if(!['driver_settlements','driver_settlement_items','driver_settlement_events','driver_settlement_payments'].includes(table))throw new Error('Unexpected direct table '+table);
-  const filters:Record<string,unknown>={},actor=mock.actor,aal=mock.aal;let single=false;const result=queued(async()=>{try{
+  const filters:Record<string,unknown>={},actor=mock.actor,aal=mock.aal;let single=false,rangeFrom=0,rangeTo:number|null=null;const result=queued(async()=>{try{
    expect(filters.tenant_id).toBeTruthy();expect(filters[table==='driver_settlements'?'id':'settlement_id']).toBeTruthy();
    await adjustmentActor(db,actor,aal);if(mock.readError)return {data:null,error:{message:'Acerto indisponível QA'}};
-   const data=(await operationRpc<Record<string,unknown>>(db,'select * from '+table+' where tenant_id=$1 and '+(table==='driver_settlements'?'id':'settlement_id')+'=$2',[filters.tenant_id,filters[table==='driver_settlements'?'id':'settlement_id']])).rows;
+   const rows=(await operationRpc<Record<string,unknown>>(db,'select * from '+table+' where tenant_id=$1 and '+(table==='driver_settlements'?'id':'settlement_id')+'=$2',[filters.tenant_id,filters[table==='driver_settlements'?'id':'settlement_id']])).rows;
+   const data=rangeTo===null?rows:rows.slice(rangeFrom,rangeTo+1);
    return {data:single?(data[0]?{...data[0],drivers:{name:'Motorista QA'},vehicles:null}:null):data,error:null};
   }catch(error){return {data:null,error};}});
-  const builder={select:()=>builder,eq:(key:string,value:unknown)=>{filters[key]=value;return builder;},order:()=>builder,abortSignal:()=>builder,maybeSingle:()=>{single=true;return builder;},then:result.then};return builder;
+  const builder={select:()=>builder,eq:(key:string,value:unknown)=>{filters[key]=value;return builder;},order:()=>builder,range:(from:number,to:number)=>{rangeFrom=from;rangeTo=to;return builder;},abortSignal:()=>builder,maybeSingle:()=>{single=true;return builder;},then:result.then};return builder;
  });
 });
 afterEach(async()=>{cleanup();client.clear();await transport;await db.exec('rollback');localStorage.clear();vi.restoreAllMocks();});
@@ -83,6 +84,14 @@ describe('real settlement drawer with SQL, recovery and financial readers',{time
  });
  it('sends nothing if durable storage fails',async()=>{
   render(<Story source={await manualSettlement(db)}/>);await draft();vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('Quota');});fireEvent.click(screen.getByRole('button',{name:'Confirmar inclusão do ajuste'}));await screen.findByText(/Recuperação do ajuste indisponível/);expect(calls()).toHaveLength(0);
+ });
+ it('permite descartar uma recuperação local incompatível',async()=>{
+  localStorage.setItem('agvlog:settlement-adjustment:v9:'+i.tenant+':'+i.operator,'{inválido');
+  render(<Story source={await manualSettlement(db)} drawer={false}/>);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Recuperação do ajuste indisponível');
+  fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));
+  await screen.findByText('Recuperação incompatível descartada. Você já pode iniciar um novo ajuste.');
+  expect(localStorage.getItem('agvlog:settlement-adjustment:v9:'+i.tenant+':'+i.operator)).toBeNull();
  });
  it('keeps an acknowledgement for another settlement uncertain',async()=>{
   mock.wrong=true;render(<Story source={await manualSettlement(db)}/>);await draft();fireEvent.click(screen.getByRole('button',{name:'Confirmar inclusão do ajuste'}));await screen.findByText(/A confirmação não corresponde ao ajuste/);expect(pendingSettlementAdjustment(localStorage,i.tenant,i.operator)).not.toBeNull();

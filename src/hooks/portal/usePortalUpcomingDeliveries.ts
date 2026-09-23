@@ -36,5 +36,7 @@ export function usePortalUpcomingDeliveries(opts?: { clientId?: string | null; l
     },
     enabled: !!currentTenant && !!clientId,
     staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }

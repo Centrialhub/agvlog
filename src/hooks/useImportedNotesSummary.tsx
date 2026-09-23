@@ -4,6 +4,7 @@ import { useTenant } from './useTenant';
 import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
 import type { JsonObject } from '@/lib/jsonTypes';
 import { buildImportedAtFilter, normalizeImportedNoteFilters, validateImportedNoteFilters } from '@/lib/importedNotesFilters';
+import { csvSafeCell } from '@/lib/csvSafety';
 
 export type NoteOperationalStatus =
   | 'not_processed' | 'not_processed_redispatch' | 'processed'
@@ -126,6 +127,7 @@ export function resolveNoteStatus(row: Partial<ImportedNoteRow>): NoteOperationa
   const loadStatus = row.loads?.status;
   if (loadStatus === 'in_transit') return 'in_transit';
   if (loadStatus === 'delivered') return 'delivered';
+  if (loadStatus && ['partial_delivery', 'returned', 'refused', 'failed', 'cancelled', 'divergent'].includes(loadStatus)) return 'not_delivered';
   if (loadStatus && ['planned', 'assembling', 'ready', 'loading', 'loaded'].includes(loadStatus)) return 'processed';
   if (row.cte_id || row.load_id) return 'processed';
   if (row.imported_note_status === 'processed') return 'processed';
@@ -136,7 +138,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
   const { currentTenant } = useTenant();
   const filters = normalizeImportedNoteFilters(inputFilters);
   return useQuery({
-    queryKey: ['imported_notes_summary', currentTenant?.id, filters],
+    queryKey: ['imported_notes_summary', currentTenant?.id, currentTenant?.timezone, filters],
     enabled: !!currentTenant,
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -164,7 +166,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
       if (filters.dynamicLot) q = q.ilike('dynamic_lot', `%${filters.dynamicLot}%`);
       if (filters.issueFrom) q = q.gte('issue_date', filters.issueFrom);
       if (filters.issueTo) q = q.lte('issue_date', filters.issueTo);
-      const importedAtFilter = buildImportedAtFilter(filters);
+      const importedAtFilter = buildImportedAtFilter(filters, currentTenant.timezone);
       if (importedAtFilter) q = q.or(importedAtFilter);
       if (filters.remitter) q = q.ilike('remitter', `%${filters.remitter}%`);
       if (filters.invoiceNumber) q = q.ilike('invoice_number', `%${filters.invoiceNumber}%`);
@@ -211,6 +213,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
         const { data: outbound, error: outboundError } = await supabase
           .from('fiscal_documents')
           .select('id, access_key, invoice_number, freight_value, status, sefaz_status')
+          .eq('tenant_id', currentTenant.id)
           .in('id', outboundIds);
         if (outboundError) throw outboundError;
         for (const o of outbound || []) {
@@ -251,6 +254,7 @@ export function useImportedNotes(inputFilters: ImportedNoteFilters) {
         const { data: extra, error: extraNfseError } = await supabase
           .from('nfse_documents')
           .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
+          .eq('tenant_id', currentTenant.id)
           .in('id', missingNfseIds);
         if (extraNfseError) throw extraNfseError;
         for (const n of extra || []) {
@@ -339,11 +343,11 @@ export function exportImportedNotesCsv(
     'Valor Frete CIF','Valor Frete FOB','Data Emissão','Município Origem','UF Origem',
     'Município Destino','UF Destino','Valor Nota','Volume','Peso','Situação','Carga/Romaneio',
   ];
-  const fmt = (value: string | number | null | undefined) => value == null ? '' : String(value).replace(/"/g, '""');
+  const fmt = (value: string | number | null | undefined) => value == null ? '' : String(value);
   const dt = (value: string | null | undefined) => value ? new Date(value.length <= 10 ? value + 'T00:00:00' : value).toLocaleDateString('pt-BR') : '';
   const num = (value: number | null | undefined) => value == null ? '' : String(Number(value).toFixed(2)).replace('.', ',');
   const numW = (value: number | null | undefined) => value == null ? '' : String(Number(value).toFixed(3)).replace('.', ',');
-  const lines = [header.join(';')];
+  const lines = [header.map(csvSafeCell).join(';')];
   for (const r of rows) {
     lines.push([
       fmt(identity.company), fmt(identity.branch),
@@ -367,7 +371,7 @@ export function exportImportedNotesCsv(
       numW(r.weight_kg),
       fmt(NOTE_STATUS_LABELS[r.operational_status] ?? r.operational_status),
       fmt(r.loads?.load_number),
-    ].map(v => `"${v}"`).join(';'));
+    ].map(csvSafeCell).join(';'));
   }
   // BOM UTF-8
   return '\ufeff' + lines.join('\r\n');

@@ -71,6 +71,8 @@ export function useDispatchRoutePlan() {
     };
     const plannedStart=timestamp(payload.planned_start_at);
     if(!plannedStart)throw new Error('Informe o horário previsto de saída.');
+    const routeName=payload.route_name.trim();
+    if(!routeName)throw new Error('Informe um nome para a rota.');
     const invalidStopIndex=payload.stops.findIndex(stop=>{
       const verified=hasValidStopCoordinates(stop)&&['address_geocoded','map_selected'].includes(stop.location_source||'');
       return !verified&&(stop.location_exception_reason?.trim().length||0)<20;
@@ -110,7 +112,7 @@ export function useDispatchRoutePlan() {
           vehicle_id: payload.vehicle_id,
           driver_id: payload.driver_id,
           planned_start_at: plannedStart,
-          route_name: payload.route_name,
+          route_name: routeName,
           load_ids: payload.load_ids,
           stops,
           planning_draft_id: payload.planning_draft_id || null,

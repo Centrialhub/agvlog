@@ -2,17 +2,17 @@ import {z} from 'zod';
 const count=z.number().int().nonnegative(),uuid=z.string().uuid();
 export const fiscalQueueStatuses={pending:'Aguardando processamento',review:'Revisão necessária',applied:'Processado',superseded:'Substituído por estado mais recente'};
 export type FiscalQueueStatus=''|keyof typeof fiscalQueueStatuses;
-export const fiscalQueueSchema=z.object({version:z.literal(1),tenant_id:uuid,page:z.number().int().positive(),page_size:z.literal(30),
+const fiscalQueueCursorSchema=z.object({observed_order:z.string().regex(/^\d+$/),observation_id:uuid}).strict();
+export type FiscalQueueCursor=z.infer<typeof fiscalQueueCursorSchema>;
+export const fiscalQueueSchema=z.object({version:z.literal(2),tenant_id:uuid,page_size:z.literal(30),
  status_filter:z.enum(['','pending','review','applied','superseded']),total:count,scheduler_active:z.boolean(),
+ cursor:fiscalQueueCursorSchema.nullable(),next_cursor:fiscalQueueCursorSchema.nullable(),has_more:z.boolean(),
  counts:z.object({pending:count,review:count,applied:count,superseded:count}),rows:z.array(z.object({
   observation_id:uuid,tenant_id:uuid,status:z.enum(['pending','review','applied','superseded']),document_type:z.enum(['cte','nfse']),
   document_number:z.string().nullable(),fiscal_status:z.string(),attempts:count,automatic_failures:count,issue:z.string().nullable(),
   available_at:z.string(),created_at:z.string(),updated_at:z.string(),receivable_id:uuid.nullable(),
  }))});
-const fiscalQueueCursorSchema=z.object({observed_order:z.string().regex(/^\d+$/),observation_id:uuid}).strict();
-export const fiscalQueuePageSchema=fiscalQueueSchema.omit({page:true}).extend({
- version:z.literal(2),cursor:fiscalQueueCursorSchema.nullable(),next_cursor:fiscalQueueCursorSchema.nullable(),has_more:z.boolean(),
-});
+export const fiscalQueuePageSchema=fiscalQueueSchema;
 export function fiscalQueueIssue(issue:string|null){
  if(!issue)return null;
  if(issue==='automatic_projection_retry')return 'Uma falha interrompeu esta tentativa. Uma nova tentativa foi programada.';
@@ -34,3 +34,8 @@ export function fiscalQueueIssue(issue:string|null){
  if(issue.includes('existing_receivable')||issue.includes('origin'))return 'Confira o vínculo com a cobrança existente para evitar duplicidade.';
  return 'Confira os dados, valores e vínculos do documento fiscal. A projeção exige revisão.';
 }
+export const fiscalWorkQueueSchema=fiscalQueueSchema.extend({version:z.literal(3),current_only:z.boolean(),rows:z.array(fiscalQueueSchema.shape.rows.element.extend({
+ emission_id:uuid,cte_document_id:uuid.nullable(),fiscal_document_id:uuid.nullable(),nfse_document_id:uuid.nullable(),is_current:z.boolean(),assignment_revision:z.string().regex(/^[a-f0-9]{32}$/),
+ assignment:z.object({actor_id:uuid,actor_name:z.string(),due_on:z.string(),note:z.string()}).nullable(),
+}))});
+export type FiscalWorkRow=z.infer<typeof fiscalWorkQueueSchema>['rows'][number];

@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { portalErrorMessage } from '@/lib/portal/portalErrors';
+import { openSignedDownload } from '@/lib/portal/openSignedDownload';
 
 const STATUS_TONE: Record<string, string> = {
   pending: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
@@ -54,8 +55,7 @@ export default function PortalPods() {
 
   const handleDownload = async (id: string) => {
     try {
-      const url = await download.mutateAsync(id);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      await openSignedDownload(() => download.mutateAsync(id));
     } catch (error: unknown) {
       toast({ title: 'Erro ao baixar', description: portalErrorMessage(error, 'Não foi possível baixar o canhoto.'), variant: 'destructive' });
     }
@@ -79,7 +79,7 @@ export default function PortalPods() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
-          ) : error ? (
+          ) : error && !isFetchNextPageError ? (
             <div className="p-4 text-xs text-destructive flex items-center justify-between gap-3">
               <span>Erro ao carregar canhotos: {(error as Error).message}</span>
               <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
@@ -166,7 +166,7 @@ export default function PortalPods() {
           ))
         )}
       </div>
-      {(hasNextPage || isFetchNextPageError) && !error && (
+      {(hasNextPage || isFetchNextPageError) && (
         <div className="mt-4 text-center">
           <Button
             size="sm"

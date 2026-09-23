@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { DataPagination } from '@/components/ui/data-pagination';
 import { localDateInputValue } from '@/lib/utils/formatDate';
 import {
   useEdiProfiles, useEdiExports, useEligibleInvoicesForEdi, useRegisterEdiExport,
   useMarkEdiSent, useMarkEdiDownloaded, useCancelEdiExport, useSaveEdiProfile,
   fetchInvoicesBundle, type EligibleInvoice, type EdiProfile, type EdiExport, type EdiProfileDraft,
+  fetchEdiExportContent, EDI_HISTORY_PAGE_SIZE,
+  EDI_ELIGIBLE_PAGE_SIZE,
 } from '@/hooks/useBillingEdi';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
@@ -22,6 +25,7 @@ import { Download, FileText, Send, XCircle, Settings, RefreshCw } from 'lucide-r
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { generateDoccob } from '@/lib/doccob/doccobGenerator';
 import { validateDoccobExportInput, resolveFileName, validateFileName } from '@/lib/doccob/doccobValidator';
+import { isValidCnpj } from '@/lib/fiscal/insuranceValidation';
 import type { DoccobBuildInput, DoccobInvoiceInput, DoccobChargeInput, DoccobDetailInput } from '@/lib/doccob/doccobTypes';
 import type { Json, Tables } from '@/integrations/supabase/types';
 
@@ -46,9 +50,11 @@ function downloadText(fileName: string, content: string) {
 }
 
 export default function BillingEdi() {
+  const { currentTenant } = useTenant();
   const clientsQuery = useClients();const clients=clientsQuery.data??[];
   const profilesQuery = useEdiProfiles();const profiles=useMemo(()=>profilesQuery.data??[],[profilesQuery.data]);
-  const exportsQuery = useEdiExports();const exports_=exportsQuery.data??[],loadingExports=exportsQuery.isLoading;
+  const [historyPage,setHistoryPage]=useState(1);
+  const exportsQuery = useEdiExports(historyPage);const exports_=exportsQuery.data?.rows??[],loadingExports=exportsQuery.isLoading;
 
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [ediStatusFilter, setEdiStatusFilter] = useState<'all' | 'generated' | 'not_generated'>('not_generated');
@@ -56,21 +62,33 @@ export default function BillingEdi() {
   const [issueTo, setIssueTo] = useState('');
   const [dueFrom, setDueFrom] = useState('');
   const [dueTo, setDueTo] = useState('');
+  const [invoicePage,setInvoicePage]=useState(1);
+  const issuePeriodInvalid = Boolean(issueFrom && issueTo && issueFrom > issueTo);
+  const duePeriodInvalid = Boolean(dueFrom && dueTo && dueFrom > dueTo);
+  const invalidPeriod = issuePeriodInvalid || duePeriodInvalid;
 
-  const eligibleQuery = useEligibleInvoicesForEdi({
+  const eligibleFilters = {
     clientId: clientFilter === 'all' ? null : clientFilter,
     ediStatus: ediStatusFilter,
     issueFrom: issueFrom || null,
     issueTo: issueTo || null,
     dueFrom: dueFrom || null,
     dueTo: dueTo || null,
-  });
-  const eligible=useMemo(()=>eligibleQuery.data??[],[eligibleQuery.data]),isLoading=eligibleQuery.isLoading,refetch=eligibleQuery.refetch;
+    enabled: !invalidPeriod,
+  };
+  const eligibleQuery = useEligibleInvoicesForEdi(eligibleFilters,invoicePage);
+  const eligible=useMemo(()=>eligibleQuery.data?.rows??[],[eligibleQuery.data?.rows]),eligibleTotal=eligibleQuery.data?.total??0,isLoading=eligibleQuery.isLoading,refetch=eligibleQuery.refetch;
   const readError=clientsQuery.isError||profilesQuery.isError||eligibleQuery.isError||exportsQuery.isError;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [genOpen, setGenOpen] = useState(false);
   const [profileDlgOpen, setProfileDlgOpen] = useState(false);
+
+  useEffect(() => {
+    setGenOpen(false); setProfileDlgOpen(false); setSelected(new Set());
+    setClientFilter('all'); setIssueFrom(''); setIssueTo(''); setDueFrom(''); setDueTo(''); setHistoryPage(1);
+  }, [currentTenant?.id]);
+  useEffect(()=>{setInvoicePage(1);setSelected(new Set());},[clientFilter,ediStatusFilter,issueFrom,issueTo,dueFrom,dueTo,currentTenant?.id]);
 
   const toggle = (id: string) => setSelected(s => {
     const n = new Set(s);
@@ -89,10 +107,12 @@ export default function BillingEdi() {
     return ids.size === 1 ? Array.from(ids)[0] : null;
   }, [selectedInvoices]);
 
-  const clientProfile = useMemo(
-    () => profiles.find(p => p.enabled && p.client_id === singleClientId) ?? profiles.find(p => p.enabled && !p.client_id) ?? null,
-    [profiles, singleClientId],
-  );
+  const applicableProfiles = useMemo(() => {
+    const specific = singleClientId ? profiles.filter(profile => profile.enabled && profile.client_id === singleClientId) : [];
+    return specific.length > 0 ? specific : profiles.filter(profile => profile.enabled && !profile.client_id);
+  }, [profiles, singleClientId]);
+  const profileAmbiguous = applicableProfiles.length > 1;
+  const clientProfile = applicableProfiles.length === 1 ? applicableProfiles[0] : null;
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -144,19 +164,25 @@ export default function BillingEdi() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label htmlFor="billing-edi-issue-from">Emissão de</Label><Input id="billing-edi-issue-from" type="date" value={issueFrom} onChange={e => setIssueFrom(e.target.value)} /></div>
-              <div><Label htmlFor="billing-edi-issue-to">Emissão até</Label><Input id="billing-edi-issue-to" type="date" value={issueTo} onChange={e => setIssueTo(e.target.value)} /></div>
-              <div><Label htmlFor="billing-edi-due-from">Vencimento de</Label><Input id="billing-edi-due-from" type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)} /></div>
-              <div><Label htmlFor="billing-edi-due-to">Vencimento até</Label><Input id="billing-edi-due-to" type="date" value={dueTo} onChange={e => setDueTo(e.target.value)} /></div>
+              <div><Label htmlFor="billing-edi-issue-from">Emissão de</Label><Input id="billing-edi-issue-from" type="date" max={issueTo || undefined} value={issueFrom} onChange={e => setIssueFrom(e.target.value)} /></div>
+              <div><Label htmlFor="billing-edi-issue-to">Emissão até</Label><Input id="billing-edi-issue-to" type="date" min={issueFrom || undefined} value={issueTo} onChange={e => setIssueTo(e.target.value)} /></div>
+              <div><Label htmlFor="billing-edi-due-from">Vencimento de</Label><Input id="billing-edi-due-from" type="date" max={dueTo || undefined} value={dueFrom} onChange={e => setDueFrom(e.target.value)} /></div>
+              <div><Label htmlFor="billing-edi-due-to">Vencimento até</Label><Input id="billing-edi-due-to" type="date" min={dueFrom || undefined} value={dueTo} onChange={e => setDueTo(e.target.value)} /></div>
               <div className="flex flex-wrap items-end gap-2 md:col-span-2">
-                <Button variant="outline" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-2" /> Buscar</Button>
+                <Button variant="outline" disabled={invalidPeriod} onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-2" /> Buscar</Button>
                 <Button
-                  disabled={selectedInvoices.length === 0}
+                  disabled={selectedInvoices.length === 0 || profileAmbiguous}
                   onClick={() => setGenOpen(true)}
                 >
                   <FileText className="h-4 w-4 mr-2" /> Gerar DOCCOB ({selectedInvoices.length})
                 </Button>
               </div>
+              {profileAmbiguous && (
+                <p role="alert" className="text-sm text-destructive md:col-span-4">
+                  Existem {applicableProfiles.length} perfis DOCCOB ativos aplicáveis. Desative a duplicidade em Configurar perfis antes de gerar.
+                </p>
+              )}
+              {invalidPeriod ? <p role="alert" className="text-sm text-destructive md:col-span-4">A data inicial não pode ser posterior à data final.</p> : null}
             </CardContent>
           </Card>
 
@@ -195,17 +221,19 @@ export default function BillingEdi() {
                   ))}
                 </TableBody>
               </Table>
+              <DataPagination page={invoicePage} pageCount={Math.max(1,Math.ceil(eligibleTotal/EDI_ELIGIBLE_PAGE_SIZE))} totalCount={eligibleTotal} start={eligibleTotal?(invoicePage-1)*EDI_ELIGIBLE_PAGE_SIZE+1:0} end={Math.min(invoicePage*EDI_ELIGIBLE_PAGE_SIZE,eligibleTotal)} onPageChange={setInvoicePage}/>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="history">
-          <HistoryTab exports_={exports_} loading={loadingExports} failed={exportsQuery.isError} retry={()=>void exportsQuery.refetch()} />
+          <HistoryTab exports_={exports_} total={exportsQuery.data?.total??0} page={historyPage} setPage={setHistoryPage} loading={loadingExports} failed={exportsQuery.isError} retry={()=>void exportsQuery.refetch()} />
         </TabsContent>
       </Tabs>
 
       {genOpen && (
         <GenerateDialog
+          key={`generate:${currentTenant?.id ?? 'none'}`}
           open={genOpen}
           onClose={() => setGenOpen(false)}
           selectedInvoices={selectedInvoices}
@@ -216,14 +244,15 @@ export default function BillingEdi() {
       )}
 
       {profileDlgOpen && (
-        <ProfileDialog open={profileDlgOpen} onClose={() => setProfileDlgOpen(false)} clients={clients} profiles={profiles} />
+        <ProfileDialog key={`profile:${currentTenant?.id ?? 'none'}`} open={profileDlgOpen} onClose={() => setProfileDlgOpen(false)} clients={clients} profiles={profiles} />
       )}
     </div>
   );
 }
 
-function HistoryTab({ exports_, loading,failed,retry }: { exports_: EdiExport[]; loading: boolean;failed:boolean;retry:()=>void }) {
+function HistoryTab({ exports_,total,page,setPage,loading,failed,retry }: { exports_: EdiExport[];total:number;page:number;setPage:(page:number)=>void;loading:boolean;failed:boolean;retry:()=>void }) {
   const toast = useSonnerToast();
+  const {currentTenant}=useTenant();
   const markSent = useMarkEdiSent();
   const markDl = useMarkEdiDownloaded();
   const cancel = useCancelEdiExport();
@@ -232,8 +261,10 @@ function HistoryTab({ exports_, loading,failed,retry }: { exports_: EdiExport[];
   const [reason, setReason] = useState('');
 
   const redownload = async (ex: EdiExport) => {
-    if (!ex.generated_content) { toast.error('Arquivo sem conteúdo persistido'); return; }
-    downloadText(ex.file_name, ex.generated_content);
+    if(!currentTenant)return;
+    let content:string;
+    try{content=await fetchEdiExportContent(currentTenant.id,ex.id);}catch(error){toast.error(error instanceof Error?error.message:'Falha ao carregar o arquivo');return;}
+    downloadText(ex.file_name, content);
     try {
       await markDl.mutateAsync(ex.id);
     } catch (error) {
@@ -270,25 +301,26 @@ function HistoryTab({ exports_, loading,failed,retry }: { exports_: EdiExport[];
                 <TableCell><Badge variant={ex.status === 'cancelled' ? 'destructive' : ex.status === 'sent' ? 'default' : 'secondary'}>{ex.status}</Badge></TableCell>
                 <TableCell className="font-mono text-xs">{ex.content_hash?.slice(0, 8) || '—'}</TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Button size="icon" variant="ghost" title="Baixar" aria-label={`Baixar arquivo ${ex.file_name}`} disabled={!ex.generated_content} onClick={() => redownload(ex)}><Download aria-hidden="true" className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" title="Baixar" aria-label={`Baixar arquivo ${ex.file_name}`} onClick={() => redownload(ex)}><Download aria-hidden="true" className="h-4 w-4" /></Button>
                   <Button size="icon" variant="ghost" title="Marcar enviado" aria-label={`Marcar arquivo ${ex.file_name} como enviado`} disabled={ex.status === 'cancelled' || ex.status === 'sent'} onClick={() => {setSendId(ex.id);setSendTo('');setChannel('email');}}><Send aria-hidden="true" className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" title="Cancelar" aria-label={`Cancelar arquivo ${ex.file_name}`} disabled={ex.status === 'cancelled'} onClick={() => { setCancelId(ex.id); setReason(''); }}><XCircle aria-hidden="true" className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" title="Cancelar" aria-label={`Cancelar arquivo ${ex.file_name}`} disabled={ex.status === 'cancelled' || ex.status === 'sent'} onClick={() => { setCancelId(ex.id); setReason(''); }}><XCircle aria-hidden="true" className="h-4 w-4" /></Button>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        <DataPagination page={page} pageCount={Math.max(1,Math.ceil(total/EDI_HISTORY_PAGE_SIZE))} totalCount={total} start={total?(page-1)*EDI_HISTORY_PAGE_SIZE+1:0} end={Math.min(page*EDI_HISTORY_PAGE_SIZE,total)} onPageChange={setPage}/>
 
         <Dialog open={!!cancelId} onOpenChange={(o) => !o && setCancelId(null)}>
           <DialogContent>
             <DialogHeader><DialogTitle>Cancelar exportação</DialogTitle></DialogHeader>
             <div className="space-y-2">
               <Label htmlFor="billing-edi-cancel-reason">Motivo</Label>
-              <Textarea id="billing-edi-cancel-reason" value={reason} onChange={e => setReason(e.target.value)} placeholder="Explique o motivo do cancelamento" />
+              <Textarea id="billing-edi-cancel-reason" value={reason} onChange={e => setReason(e.target.value)} maxLength={1000} placeholder="Explique o motivo do cancelamento" />
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setCancelId(null)}>Voltar</Button>
-              <Button variant="destructive" disabled={!reason.trim()} onClick={async () => {
+              <Button variant="destructive" disabled={reason.trim().length < 5 || cancel.isPending} onClick={async () => {
                 try { await cancel.mutateAsync({ exportId: cancelId!, reason }); toast.success('Exportação cancelada'); setCancelId(null); }
                 catch (error: unknown) { toast.error(error instanceof Error ? error.message : 'Erro ao cancelar'); }
               }}>Confirmar cancelamento</Button>
@@ -331,18 +363,21 @@ function GenerateDialog({
   const [reading,setReading]=useState(false);
 
   const needsReprocess = selectedInvoices.some(i => i.edi_status === 'generated' || i.edi_status === 'sent' || i.edi_status === 'downloaded');
-  const resolvedName = resolveFileName(pattern, new Date(fileDate + 'T00:00:00'));
-  const nameIssue = validateFileName(pattern, resolvedName);
+  const parsedFileDate = /^\d{4}-\d{2}-\d{2}$/.test(fileDate) ? new Date(fileDate + 'T00:00:00') : null;
+  const validFileDate = !!parsedFileDate && !Number.isNaN(parsedFileDate.getTime()) && parsedFileDate.toISOString().slice(0, 10) === fileDate;
+  const resolvedName = validFileDate ? resolveFileName(pattern, parsedFileDate) : '';
+  const nameIssue = validFileDate ? validateFileName(pattern, resolvedName) : { level: 'error' as const, message: 'Data do arquivo obrigatória e válida.' };
 
   const handleGenerate = async () => {
     setErrors([]);
     if (!currentTenant) return;
+    if (!validFileDate) { setErrors(['Data do arquivo obrigatória e válida.']); return; }
     if (needsReprocess && !reprocessReason.trim()) {
       setErrors(['Motivo do reprocessamento é obrigatório.']);
       return;
     }
     if (nameIssue?.level === 'error') { setErrors([nameIssue.message]); return; }
-    if (!carrierCnpj.replace(/\D/g, '')) { setErrors(['CNPJ da transportadora obrigatório.']); return; }
+    if (!isValidCnpj(carrierCnpj)) { setErrors(['CNPJ da transportadora inválido — informe 14 dígitos válidos.']); return; }
 
     setReading(true);
     try {
@@ -409,7 +444,7 @@ function GenerateDialog({
     const errs = issues.filter(i => i.level === 'error');
     if (errs.length > 0) { setErrors(errs.map(e => e.message)); return; }
 
-      const built = generateDoccob(buildInput);
+      const built = await generateDoccob(buildInput);
       const payload = await register.mutateAsync({
         profileId: profile?.id || null,
         clientId: singleClientId,
@@ -492,7 +527,7 @@ function GenerateDialog({
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Fechar</Button>
           {result && <Button variant="outline" onClick={() => downloadText(result.fileName, result.content)}><Download className="h-4 w-4 mr-2" />Baixar novamente</Button>}
-          <Button onClick={handleGenerate} disabled={reading||register.isPending}>
+          <Button onClick={handleGenerate} disabled={!validFileDate||reading||register.isPending}>
             <FileText className="h-4 w-4 mr-2" /> Gerar TXT
           </Button>
         </DialogFooter>

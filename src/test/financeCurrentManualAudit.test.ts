@@ -1,17 +1,18 @@
 // @vitest-environment node
+import { historicalFinanceAuditSchema } from './helpers/historicalFinanceContracts';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {beforeAll,afterAll,beforeEach,afterEach,it,expect} from 'vitest';
 import {createCashForecastCollectorDatabase} from './helpers/cashForecastCollectorDatabase';
 import {financeIds as i,financeAs} from './helpers/financeLedgerDatabase';
-import {financeAuditSchema,financeAuditActions} from '@/lib/financial/financeAuditContract';
+import {financeAuditActions} from '@/lib/financial/financeAuditContract';
 let db:Awaited<ReturnType<typeof createCashForecastCollectorDatabase>>;
 const current=()=>readFileSync('supabase/migrations/20260911094523_finance_current_manual_audit_actions.sql','utf8');
 const actions=['unloading_cost_regularized','cost_disposition_return_recorded','unloading_open_complement_corrected','payable_approved_with_revision','cash_forecast_preserved','unloading_open_complement_extinguished'];
 beforeAll(async()=>{db=await createCashForecastCollectorDatabase();await db.exec(readFileSync('docs/qa/finance-manual-audit-predecessor-2026-09-11.sql','utf8'));},30000);
 beforeEach(async()=>{await db.exec('begin');});afterEach(async()=>db.exec('rollback'));afterAll(async()=>db?.close());
 async function seed(action:string,tenant=i.tenant){await db.query("insert into finance_events(tenant_id,entity_type,entity_id,action,actor_id,actor_name,reason,after_data) values($1,'expense_item',$2,$3,$4,'Responsavel QA','Conferencia registrada',$5)",[tenant,randomUUID(),action,i.operator,{}]);}
-async function query(filters:Record<string,unknown>={}){return financeAuditSchema.parse((await financeAs<{v:unknown}>(db,i.operator,'select list_finance_audit_events($1,$2) v',[i.tenant,filters])).rows[0].v);}
+async function query(filters:Record<string,unknown>={}){return historicalFinanceAuditSchema.parse((await financeAs<{v:unknown}>(db,i.operator,'select list_finance_audit_events($1,$2) v',[i.tenant,filters])).rows[0].v);}
 it('makes new manual events visible to the same manual filter and preserves actor/reason and old bank classifications',async()=>{
  for(const action of [...actions,'bank_reconciled_manually','bank_reconciled_automatically'])await seed(action);
  const before=await query({manual_only:true});expect(before.rows.map(x=>x.action)).toEqual(['bank_reconciled_manually']);

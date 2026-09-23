@@ -16,7 +16,7 @@ async function prepare(){
  fireEvent.change(screen.getByLabelText('Motivo do vínculo'),{target:{value:'Conferência do pagamento agrupado'}});
  fireEvent.click(screen.getByRole('button',{name:'Revisar vínculo'}));
 }
-beforeEach(()=>{vi.restoreAllMocks();sessionStorage.clear();api.read.mockReset();api.apply.mockReset();api.read.mockResolvedValue({version:1,tenant_id:tenant,payable_id:payable,page:1,total:1,payable_name:'Título fornecedor',payable_status:'approved',remaining_cents:'30000',can_apply:true,rows:[row]});});
+beforeEach(()=>{vi.restoreAllMocks();sessionStorage.clear();api.read.mockReset();api.apply.mockReset();api.read.mockResolvedValue({version:1,tenant_id:tenant,payable_id:payable,page_revision:'a'.repeat(32),page:1,total:1,payable_name:'Título fornecedor',payable_status:'approved',remaining_cents:'30000',can_apply:true,rows:[row]});});
 describe('link payable to an existing movement',()=>{
  it('requires review and explicit confirmation, preserving the chosen amount and recipient',async()=>{
   api.apply.mockResolvedValue({});const recorded=vi.fn();mount(recorded);await prepare();
@@ -45,6 +45,15 @@ describe('link payable to an existing movement',()=>{
   expect(screen.getByRole('button',{name:'Revisar vínculo'})).toBeDisabled();
   fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));
   expect(sessionStorage.getItem(key)).toBeNull();await screen.findByText('Saldo do título: R$ 300,00');
-  expect(screen.getByRole('button',{name:'Revisar vínculo'})).toBeEnabled();expect(api.apply).not.toHaveBeenCalled();
+  expect(screen.getByRole('button',{name:'Revisar vínculo'})).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:/Fornecedor QA · Banco QA/}));expect(screen.getByRole('button',{name:'Revisar vínculo'})).toBeEnabled();expect(api.apply).not.toHaveBeenCalled();
+ });
+ it('clears a choice when search or pagination changes and only reviews a row from the current page',async()=>{
+  const nextRow={...row,id:'40000000-0000-4000-8000-000000000002',beneficiary_name:'Fornecedor página 2'};
+  api.read.mockImplementation(async(_tenant:string,_payable:string,term:string,page:number)=>({version:1,tenant_id:tenant,payable_id:payable,page_revision:'a'.repeat(32),page,total:term?0:31,payable_name:'Título fornecedor',payable_status:'approved',remaining_cents:'30000',can_apply:true,rows:term?[]:page===1?[row]:[nextRow]}));
+  mount();fireEvent.click(screen.getByRole('button',{name:'Vincular saída já registrada'}));fireEvent.click(await screen.findByRole('button',{name:/Fornecedor QA · Banco QA/}));
+  expect(screen.getByText(/Envio selecionado: Fornecedor QA/)).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Próxima'}));
+  await screen.findByRole('button',{name:/Fornecedor página 2/});expect(screen.queryByText(/Envio selecionado: Fornecedor QA/)).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Revisar vínculo'})).toBeDisabled();
+  fireEvent.click(screen.getByRole('button',{name:/Fornecedor página 2/}));expect(screen.getByRole('button',{name:'Revisar vínculo'})).toBeEnabled();
+  fireEvent.change(screen.getByLabelText('Buscar saída'),{target:{value:'outra'}});fireEvent.click(screen.getByRole('button',{name:'Buscar'}));await screen.findByText('Nenhuma saída disponível.');expect(screen.getByRole('button',{name:'Revisar vínculo'})).toBeDisabled();
  });
 });

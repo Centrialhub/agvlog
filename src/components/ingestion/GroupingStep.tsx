@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ArrowLeft, CheckCircle, Loader2, MapPin, Truck, AlertTriangle, FileSearch, Printer, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { printRomaneioOverview, printRomaneioRoutes, type RomaneioDoc } from '@/lib/romaneioPrint';
+import { groupingDraftKey, restoreGroupingAssignments, type GroupingAssignment } from '@/lib/ingestion/groupingDraft';
 
 interface Vehicle {
   id: string;
@@ -31,16 +32,16 @@ interface OperationalRouteOption {
 }
 
 interface GroupingStepProps {
+  tenantId: string;
+  actorId: string;
   suggestions: LoadSuggestion[];
   vehicles: Vehicle[];
   drivers: Driver[];
   routes?: OperationalRouteOption[];
   executing: boolean;
   onBack: () => void;
-  onExecute: (assignments: Map<number, { vehicleId: string | null; driverId: string | null }>) => void;
+  onExecute: (assignments: Map<number, GroupingAssignment>) => void;
 }
-
-const STORAGE_KEY = 'ingestion_grouping_state';
 
 function findBestVehicle(
   pallets: number,
@@ -60,8 +61,8 @@ function findBestVehicle(
   return candidates[0] || null;
 }
 
-export default function GroupingStep({ suggestions, vehicles, drivers, executing, onBack, onExecute }: GroupingStepProps) {
-  const [assignments, setAssignments] = useState<Map<number, { vehicleId: string | null; driverId: string | null }>>(new Map());
+export default function GroupingStep({ tenantId, actorId, suggestions, vehicles, drivers, executing, onBack, onExecute }: GroupingStepProps) {
+  const [assignments, setAssignments] = useState<Map<number, GroupingAssignment>>(new Map());
   const [autoSuggested, setAutoSuggested] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -69,7 +70,27 @@ export default function GroupingStep({ suggestions, vehicles, drivers, executing
   const { toast } = useToast();
 
   const vehiclesWithCapacity = useMemo(() => vehicles.filter(v => (v.max_pallets || 0) > 0), [vehicles]);
-  const activeDrivers = drivers.filter(d => d.active);
+  const activeDrivers = useMemo(() => drivers.filter(d => d.active), [drivers]);
+  const storageKey = groupingDraftKey(tenantId, actorId);
+  const suggestionsSnapshot = useMemo(() => suggestions.map(s => ({
+    region: s.region,
+    routeName: s.routeName,
+    totalPallets: s.totalPallets,
+    totalWeight: s.totalWeight,
+    totalValue: s.totalValue,
+    docCount: s.documents.length,
+    orderCount: s.orders.length,
+    cities: [...new Set(s.documents.map(d => d.source.recipientCity).filter(Boolean))],
+    docs: s.documents.map(d => ({
+      invoiceNumber: d.source.invoiceNumber, recipientName: d.source.recipientName,
+      recipientCity: d.source.recipientCity, pallets: d.source.estimatedPallets,
+      weight: d.source.totalWeight, value: d.source.totalValue,
+    })),
+    orders: s.orders.map(o => ({
+      orderNumber: o.source.orderNumber, clientName: o.source.clientName,
+      destination: o.source.destination, pallets: o.source.palletCount, weight: o.source.weightKg,
+    })),
+  })), [suggestions]);
 
   // ──────────── Auto-save / restore ────────────
   const persistState = useCallback(() => {
@@ -77,54 +98,29 @@ export default function GroupingStep({ suggestions, vehicles, drivers, executing
       const serializable = {
         ts: Date.now(),
         assignments: Array.from(assignments.entries()).map(([k, v]) => [k, v]),
-        suggestionsSnapshot: suggestions.map(s => ({
-          region: s.region,
-          routeName: s.routeName,
-          totalPallets: s.totalPallets,
-          totalWeight: s.totalWeight,
-          totalValue: s.totalValue,
-          docCount: s.documents.length,
-          orderCount: s.orders.length,
-          cities: [...new Set(s.documents.map(d => d.source.recipientCity).filter(Boolean))],
-          docs: s.documents.map(d => ({
-            invoiceNumber: d.source.invoiceNumber,
-            recipientName: d.source.recipientName,
-            recipientCity: d.source.recipientCity,
-            pallets: d.source.estimatedPallets,
-            weight: d.source.totalWeight,
-            value: d.source.totalValue,
-          })),
-          orders: s.orders.map(o => ({
-            orderNumber: o.source.orderNumber,
-            clientName: o.source.clientName,
-            destination: o.source.destination,
-            pallets: o.source.palletCount,
-            weight: o.source.weightKg,
-          })),
-        })),
+        suggestionsSnapshot,
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+      localStorage.setItem(storageKey, JSON.stringify(serializable));
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
       // Storage full or unavailable
     }
-  }, [assignments, suggestions]);
+  }, [assignments, storageKey, suggestionsSnapshot]);
 
   // Restore assignments from localStorage on mount
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(storageKey);
       if (!raw) return;
-      const parsed = JSON.parse(raw);
-      // Only restore if less than 4 hours old and same number of suggestions
-      if (Date.now() - parsed.ts > 4 * 60 * 60 * 1000) return;
-      if (parsed.suggestionsSnapshot?.length !== suggestions.length) return;
-      const restored = new Map<number, { vehicleId: string | null; driverId: string | null }>();
-      for (const [k, v] of parsed.assignments) {
-        restored.set(Number(k), v as any);
-      }
-      if (restored.size > 0) {
+      const restored = restoreGroupingAssignments(
+        raw,
+        suggestionsSnapshot,
+        suggestions.length,
+        new Set(vehicles.map(vehicle => vehicle.id)),
+        new Set(activeDrivers.map(driver => driver.id)),
+      );
+      if (restored) {
         setAssignments(restored);
         setAutoSuggested(true); // Don't overwrite with auto
         toast({ title: 'Sessão restaurada', description: 'Agrupamento recuperado automaticamente.' });
@@ -132,8 +128,7 @@ export default function GroupingStep({ suggestions, vehicles, drivers, executing
     } catch {
       // Ignore
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeDrivers, storageKey, suggestions.length, suggestionsSnapshot, toast, vehicles]);
 
   // Auto-save on every assignment change
   useEffect(() => {
@@ -399,7 +394,7 @@ export default function GroupingStep({ suggestions, vehicles, drivers, executing
 
       <div className="flex gap-3 justify-between">
         <Button variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4 mr-2" /> Voltar</Button>
-        <Button onClick={() => { localStorage.removeItem(STORAGE_KEY); onExecute(assignments); }} disabled={executing || suggestions.length === 0}>
+        <Button onClick={() => { localStorage.removeItem(storageKey); onExecute(assignments); }} disabled={executing || suggestions.length === 0}>
           {executing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Executando...</> : <>Confirmar e Executar <CheckCircle className="h-4 w-4 ml-2" /></>}
         </Button>
       </div>

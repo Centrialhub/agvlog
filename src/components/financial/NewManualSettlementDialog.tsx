@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import LoadPicker from './LoadPicker';
-import { useCreateManualDriverSettlement, useDriverSettlementFilterOptions } from '@/hooks/useDriverSettlements';
+import { DriverSettlementSnapshotChangedError, useCreateManualDriverSettlement, useDriverSettlementFilterOptions } from '@/hooks/useDriverSettlements';
 import { localDateInputValue } from '@/lib/utils/formatDate';
+import { getErrorMessage } from '@/lib/errors';
 
 interface Props { open: boolean; onOpenChange: (o: boolean) => void; onCreated?: (id: string) => void; }
 
@@ -16,12 +17,27 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
   const drivers = driverOptions.data?.rows ?? [];
   const vehicles = vehicleOptions.data?.rows ?? [];
   const create = useCreateManualDriverSettlement();
+  const retryDrivers = () => {
+    if (driverOptions.error instanceof DriverSettlementSnapshotChangedError && driverPage > 1) setDriverPage(1);
+    else void driverOptions.refetch();
+  };
+  const retryVehicles = () => {
+    if (vehicleOptions.error instanceof DriverSettlementSnapshotChangedError && vehiclePage > 1) setVehiclePage(1);
+    else void vehicleOptions.refetch();
+  };
 
   const [driverId, setDriverId] = useState<string>('');
   const [vehicleId, setVehicleId] = useState<string>('__none__');
   const [refDate, setRefDate] = useState<string>(() => localDateInputValue());
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [availableLoads, setAvailableLoads] = useState<Array<{ id: string; driver_id: string | null; driver_name: string | null }>>([]);
+  const rememberAvailableLoads = useCallback((loads: Array<{ id: string; driver_id: string | null; driver_name: string | null }>) => {
+    setAvailableLoads(current => {
+      const byId = new Map(current.map(load => [load.id, load]));
+      loads.forEach(load => byId.set(load.id, load));
+      return Array.from(byId.values());
+    });
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -42,19 +58,22 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
   );
   useEffect(() => {
     if (!driverId && selectedDriverIds.length === 1) {
-      setDriverId(selectedDriverIds[0]);
+      const inferredDriverId = selectedDriverIds[0];
+      setSelectedIds(current => current.filter(id => availableLoads.find(load => load.id === id)?.driver_id === inferredDriverId));
+      setDriverId(inferredDriverId);
     }
-  }, [selectedDriverIds, driverId]);
+  }, [availableLoads, selectedDriverIds, driverId]);
 
   const mixedDrivers = selectedDriverIds.length > 1;
-  const canSubmit = !!driverId && selectedIds.length > 0 && !mixedDrivers && !create.isPending;
+  const hasUnknownSelection = selectedLoads.length !== selectedIds.length;
+  const canSubmit = !!driverId && selectedIds.length > 0 && !mixedDrivers && !hasUnknownSelection && !create.isPending;
   const disabledReason = !driverId && selectedIds.length === 0
     ? 'Selecione motorista e ao menos um romaneio'
     : !driverId
       ? 'Selecione o motorista'
       : selectedIds.length === 0
         ? 'Selecione ao menos um romaneio'
-        : mixedDrivers
+        : mixedDrivers || hasUnknownSelection
           ? 'Romaneios de motoristas diferentes'
           : '';
 
@@ -87,7 +106,11 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
                 {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{d.label}</SelectItem>)}
               </SelectContent>
             </Select>
-            <div className="flex gap-1"><Button type="button" size="sm" variant="outline" disabled={driverPage===1} onClick={()=>setDriverPage(p=>p-1)}>Anteriores</Button><Button type="button" size="sm" variant="outline" disabled={!driverOptions.data||driverPage*50>=driverOptions.data.total} onClick={()=>setDriverPage(p=>p+1)}>Mais</Button></div>
+            {driverOptions.isError ? (
+              <p role="alert" className="text-sm text-destructive">Não foi possível carregar os motoristas: {getErrorMessage(driverOptions.error)} <Button type="button" size="sm" variant="outline" onClick={retryDrivers}>Tentar carregar motoristas novamente</Button></p>
+            ) : driverOptions.isPending ? <p role="status" className="text-sm text-muted-foreground">Carregando motoristas…</p>
+              : drivers.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum motorista encontrado.</p> : null}
+            <div className="flex gap-1"><Button type="button" size="sm" variant="outline" disabled={driverOptions.isError||driverOptions.isFetching||driverPage===1} onClick={()=>setDriverPage(p=>p-1)}>Anteriores</Button><Button type="button" size="sm" variant="outline" disabled={driverOptions.isError||driverOptions.isFetching||!driverOptions.data||driverPage*50>=driverOptions.data.total} onClick={()=>setDriverPage(p=>p+1)}>Mais</Button></div>
           </div>
           <div className="md:col-span-4">
             <Label>Veículo</Label>
@@ -99,7 +122,11 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
                 {vehicles.map((v) => <SelectItem key={v.id} value={v.id}>{v.label}</SelectItem>)}
               </SelectContent>
             </Select>
-            <div className="flex gap-1"><Button type="button" size="sm" variant="outline" disabled={vehiclePage===1} onClick={()=>setVehiclePage(p=>p-1)}>Anteriores</Button><Button type="button" size="sm" variant="outline" disabled={!vehicleOptions.data||vehiclePage*50>=vehicleOptions.data.total} onClick={()=>setVehiclePage(p=>p+1)}>Mais</Button></div>
+            {vehicleOptions.isError ? (
+              <p role="alert" className="text-sm text-destructive">Não foi possível carregar os veículos: {getErrorMessage(vehicleOptions.error)} <Button type="button" size="sm" variant="outline" onClick={retryVehicles}>Tentar carregar veículos novamente</Button></p>
+            ) : vehicleOptions.isPending ? <p role="status" className="text-sm text-muted-foreground">Carregando veículos…</p>
+              : vehicles.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum veículo encontrado.</p> : null}
+            <div className="flex gap-1"><Button type="button" size="sm" variant="outline" disabled={vehicleOptions.isError||vehicleOptions.isFetching||vehiclePage===1} onClick={()=>setVehiclePage(p=>p-1)}>Anteriores</Button><Button type="button" size="sm" variant="outline" disabled={vehicleOptions.isError||vehicleOptions.isFetching||!vehicleOptions.data||vehiclePage*50>=vehicleOptions.data.total} onClick={()=>setVehiclePage(p=>p+1)}>Mais</Button></div>
           </div>
           <div className="md:col-span-3">
             <Label>Data de referência</Label>
@@ -115,7 +142,7 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
             driverId={driverId || null}
             selectedIds={selectedIds}
             onChange={setSelectedIds}
-            onLoadsChange={setAvailableLoads}
+            onLoadsChange={rememberAvailableLoads}
             lockedDriverId={driverId || null}
           />
           {mixedDrivers && (

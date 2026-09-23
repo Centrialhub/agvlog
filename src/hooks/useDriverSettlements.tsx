@@ -144,7 +144,12 @@ export function useDriverSettlements(filters: ListSettlementsFilters = {}) {
         _cursor: filters.cursor ?? undefined,
         _page_size: filters.page_size ?? 50,
       }).abortSignal(signal);
-      if (error) throw error;
+      if (error) {
+        if (error.code === '40001' || error.message.includes('settlement_snapshot_changed')) {
+          throw new DriverSettlementSnapshotChangedError('Os acertos mudaram durante a navegação. A lista foi atualizada desde a primeira página.');
+        }
+        throw error;
+      }
       return parseSettlementList(data, currentTenant.id);
     },
   });
@@ -164,11 +169,12 @@ export function useDriverSettlementFilterOptions(kind:'drivers'|'vehicles',searc
       const { data, error } = await supabase.rpc('list_driver_settlement_filter_options', { _tenant_id: currentTenant.id,_kind:kind,_search:search,_page:page,_page_size:50,_expected_revision:expected }).abortSignal(signal);
       if (error) {
         if (error.code === '40001' || error.message.includes('settlement_snapshot_changed')) {
-          throw new DriverSettlementSnapshotChangedError('Os acertos mudaram durante a navegação. A lista foi atualizada desde a primeira página.');
+          settlementFilterRevisions.delete(key);
+          throw new DriverSettlementSnapshotChangedError('As opções mudaram durante a navegação. A primeira página será atualizada.');
         }
         throw error;
       }
-      const result=parseSettlementFilterOptions(data,currentTenant.id,kind);if(expected&&result.revision!==expected)throw new Error('As opções mudaram.');if(page===1)settlementFilterRevisions.set(key,result.revision);return result;
+      const result=parseSettlementFilterOptions(data,currentTenant.id,kind);if(expected&&result.revision!==expected){settlementFilterRevisions.delete(key);throw new DriverSettlementSnapshotChangedError('As opções mudaram durante a navegação. A primeira página será atualizada.');}if(page===1)settlementFilterRevisions.set(key,result.revision);return result;
     },
   });
 }
@@ -359,6 +365,8 @@ export interface AvailableLoad {
   vehicle_plate: string | null;
 }
 
+const availableLoadRevisions = new Map<string, string>();
+
 export function useAvailableLoadsForSettlement(params: {
   driver_id?: string | null;
   search?: string | null;
@@ -374,17 +382,32 @@ export function useAvailableLoadsForSettlement(params: {
     enabled: !!currentTenant && enabled,
     queryFn: async () => {
       if (!currentTenant) return { rows: [] as AvailableLoad[], total: 0, page: 1, page_size };
+      const revisionKey = `${currentTenant.id}:${driver_id ?? ''}:${(search ?? '').trim()}:${include_settlement_id ?? ''}`;
+      const expectedRevision = page === 1 ? null : availableLoadRevisions.get(revisionKey);
+      if (page > 1 && !expectedRevision) {
+        throw new DriverSettlementSnapshotChangedError('Os romaneios disponíveis mudaram. Retorne à primeira página.');
+      }
       const { data, error } = await supabase.rpc('list_available_loads_for_settlement_v2' as never, {
         _tenant_id: currentTenant.id, _driver_id: driver_id, _search: (search ?? '').trim() || null,
         _include_settlement_id: include_settlement_id, _page: page, _page_size: page_size,
+        _expected_revision: expectedRevision,
       } as never);
       if (error) {
-        if (typeof error === 'object' && error !== null && 'code' in error && error.code === '40001') throw new DriverSettlementSnapshotChangedError('Os acertos mudaram. A lista foi atualizada desde a primeira página.');
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === '40001') {
+          availableLoadRevisions.delete(revisionKey);
+          throw new DriverSettlementSnapshotChangedError('Os romaneios disponíveis mudaram. A lista voltou à primeira página.');
+        }
         throw error;
       }
-      const result = data as unknown as { rows?: AvailableLoad[]; total?: number; page?: number; page_size?: number } | null;
+      const result = data as unknown as { rows?: AvailableLoad[]; total?: number; page?: number; page_size?: number; revision?: string } | null;
+      if (typeof result?.revision !== 'string' || !result.revision) throw new Error('Resposta de romaneios sem revisão de paginação.');
+      if (expectedRevision && result.revision !== expectedRevision) {
+        availableLoadRevisions.delete(revisionKey);
+        throw new DriverSettlementSnapshotChangedError('Os romaneios disponíveis mudaram. A lista voltou à primeira página.');
+      }
+      if (page === 1) availableLoadRevisions.set(revisionKey, result.revision);
       return { rows: Array.isArray(result?.rows) ? result.rows : [], total: Number(result?.total ?? 0),
-        page: Number(result?.page ?? page), page_size: Number(result?.page_size ?? page_size) };
+        page: Number(result?.page ?? page), page_size: Number(result?.page_size ?? page_size), revision: result.revision };
     },
   });
 }
@@ -498,4 +521,34 @@ export function isLocked(s: DriverSettlementStatus) {
   // Manual additions of expenses and adjustments are now allowed even when approved/paid
   // Only 'closed' should strictly lock everything.
   return s === 'closed';
+}
+
+export function canEditSettlementComposition(status: DriverSettlementStatus) {
+  return status === 'pending_review' || status === 'in_review' || status === 'reopened';
+}
+
+export function canDeleteDriverSettlement(role: string | null, status: DriverSettlementStatus) {
+  const isAdmin = role === 'owner' || role === 'admin';
+  if (status === 'paid' || status === 'closed') return isAdmin;
+  return isAdmin || role === 'operator';
+}
+
+export function canApproveDriverSettlementWithException(role: string | null) {
+  return role === 'owner' || role === 'admin';
+}
+
+export function getAllowedDriverSettlementTransitions(
+  role: string | null,
+  status: DriverSettlementStatus,
+): DriverSettlementStatus[] {
+  const isAdmin = role === 'owner' || role === 'admin';
+  switch (status) {
+    case 'pending_review': return ['in_review'];
+    case 'in_review': return ['approved', 'pending_review'];
+    case 'approved': return isAdmin ? ['paid', 'closed'] : ['paid'];
+    case 'paid': return isAdmin ? ['closed', 'reopened'] : ['closed'];
+    case 'closed': return isAdmin ? ['reopened'] : [];
+    case 'reopened': return ['in_review', 'approved'];
+    default: return [];
+  }
 }

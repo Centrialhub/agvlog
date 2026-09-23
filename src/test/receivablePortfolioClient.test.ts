@@ -13,5 +13,8 @@ it('rejects mismatched status counts, duplicate statuses and chart totals even w
  for(const override of [{invalid_titles:1502},{total_titles:1502},{status_rows:[summary.status_rows[0],summary.status_rows[0]]},{status_rows:[{...summary.status_rows[0],nominal_cents:'100',received_allocated_cents:'40',open_cents:'60'}]}])expect(receivablePortfolioSchema.safeParse({...summary,...override}).success).toBe(false);
 });
 it('uses São Paulo calendar dates, preserves explicit boundaries and removes all-period bounds',()=>{
- expect(portfolioFilters('7d','','','all',new Date('2026-09-10T01:00:00Z'))).toEqual({from:'2026-09-02',to:'2026-09-09',client:null});expect(portfolioFilters('all','','','all')).toEqual(filters);expect(portfolioFilters('30d','2026-01-01','2026-01-31','client')).toEqual({from:'2026-01-01',to:'2026-01-31',client:'client'});
+ expect(portfolioFilters('7d','','','all',new Date('2026-09-10T01:00:00Z'))).toEqual({from:'2026-09-03',to:'2026-09-09',client:null});
+ expect(portfolioFilters('30d','','','all',new Date('2026-09-10T01:00:00Z'))).toEqual({from:'2026-08-11',to:'2026-09-09',client:null});
+ expect(portfolioFilters('90d','','','all',new Date('2026-09-10T01:00:00Z'))).toEqual({from:'2026-06-12',to:'2026-09-09',client:null});
+ expect(portfolioFilters('all','','','all')).toEqual(filters);expect(portfolioFilters('30d','2026-01-01','2026-01-31','client')).toEqual({from:'2026-01-01',to:'2026-01-31',client:'client'});
 });

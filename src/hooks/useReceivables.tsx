@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {saveManualTitle} from '@/lib/financial/manualTitleCommand';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -19,41 +19,17 @@ export type Receivable = Tables<'receivables'> & {
   clients?: { company_name: string } | null;
 };
 
-export type CreateReceivableInput = Omit<TablesInsert<'receivables'>, 'tenant_id' | 'created_by'>;
-export type UpdateReceivableInput = TablesUpdate<'receivables'> & { id: string };
-
-export function useReceivables() {
-  const { currentTenant } = useTenant();
-  const {user}=useAuth();
-  return useQuery({
-    queryKey: ['receivables', currentTenant?.id,user?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('receivables')
-        .select('*, clients(company_name)')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant&&!!user?.id,
-  });
-}
+export type CreateReceivableInput = Omit<TablesInsert<'receivables'>, 'tenant_id' | 'created_by'> & {duplicate_reason?:string};
+export type UpdateReceivableInput = TablesUpdate<'receivables'> & { id: string; expected_updated_at:string };
 
 export function useCreateReceivable() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: CreateReceivableInput) => {
-      const { data, error } = await supabase.from('receivables').insert({
-        ...values,
-        tenant_id: currentTenant!.id,
-        created_by: user?.id,
-      }).select().single();
-      if (error) throw error;
-      return data;
+    mutationFn: async ({duplicate_reason='',...values}: CreateReceivableInput) => {
+      if(!currentTenant?.id||!user?.id)throw new Error('Sessão financeira indisponível.');
+      return await saveManualTitle(currentTenant.id,user.id,'receivable',values,null,null,duplicate_reason) as Receivable;
     },
     onSuccess: () => Promise.all(['receivables','finance-receivable-portfolio','finance-receivable-history'].map(key=>qc.invalidateQueries({queryKey:[key]}))),
   });
@@ -64,15 +40,10 @@ export function useUpdateReceivable() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: UpdateReceivableInput) => {
+    mutationFn: async ({id,expected_updated_at,...values}: UpdateReceivableInput) => {
       if(!currentTenant?.id||!user?.id)throw new Error('Sessão financeira indisponível.');
-      const { data, error } = await supabase.from('receivables').update({
-        ...values,
-        updated_by: user?.id,
-        updated_at: new Date().toISOString(),
-      }).eq('id', id).eq('tenant_id',currentTenant.id).select().single();
-      if (error) throw error;
-      return data;
+      if(!expected_updated_at)throw new Error('Reabra o título para conferir a revisão original.');
+      return await saveManualTitle(currentTenant.id,user.id,'receivable',values,id,expected_updated_at) as Receivable;
     },
     onSuccess: () => Promise.all(['receivables','finance-receivable-portfolio','finance-receivable-history'].map(key=>qc.invalidateQueries({queryKey:[key]}))),
   });

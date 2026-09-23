@@ -8,6 +8,7 @@ import type { RouteStopDraft } from '@/lib/route-planning/routePlanningTypes';
 import type { ResolvedLocation } from '@/lib/geocoding';
 import { LocationPicker } from '@/components/maps/LocationPicker';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { isValidRouteDuration, MAX_ROUTE_DURATION_MINUTES } from '@/lib/route-planning/timelineSimulation';
 
 interface Props {
   tenantId: string;
@@ -195,8 +196,9 @@ export default function StopDraftTable({ tenantId, stops, onMove, onUpdate }: Pr
               <Input
                 type="number"
                 min={0}
+                max={MAX_ROUTE_DURATION_MINUTES}
                 value={s.service_time_minutes}
-                onChange={(e) => onUpdate(s.id, { service_time_minutes: Number(e.target.value) || 0 })}
+                onChange={(e) => {const value=Number(e.target.value);if(isValidRouteDuration(value))onUpdate(s.id,{service_time_minutes:value});}}
                 className="h-7 w-16 text-xs text-right ml-auto"
               />
             </TableCell>

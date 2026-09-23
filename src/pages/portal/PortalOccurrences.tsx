@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { usePortalOccurrences, useCreatePortalOccurrence } from '@/hooks/portal/usePortalOccurrences';
@@ -18,6 +19,12 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { portalErrorMessage } from '@/lib/portal/portalErrors';
+import {
+  normalizePortalOccurrence,
+  PORTAL_OCCURRENCE_DESCRIPTION_MAX_LENGTH,
+  PORTAL_OCCURRENCE_EVENT_TYPE_MAX_LENGTH,
+  PORTAL_OCCURRENCE_MESSAGE_MAX_LENGTH,
+} from '@/lib/portal/portalRequestValidation';
 
 const SEVERITY_TONE: Record<string, string> = {
   low: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
@@ -27,15 +34,13 @@ const SEVERITY_TONE: Record<string, string> = {
 };
 
 export default function PortalOccurrences() {
+  const [searchParams] = useSearchParams();
   const { data: access = [] } = useClientPortalAccess();
   const { selectedClientId } = usePortalClientScope();
   const openableClients = access.filter(a => a.can_open_occurrences);
   const selectedClientCanOpen = selectedClientId
     ? openableClients.some((client) => client.client_id === selectedClientId)
     : openableClients.length > 0;
-  const canInteractWithVisibleOccurrences = selectedClientId
-    ? selectedClientCanOpen
-    : access.length > 0 && openableClients.length === access.length;
   const [severity, setSeverity] = useState<string>('all');
   const [resolved, setResolved] = useState<string>('all');
   const {
@@ -47,7 +52,25 @@ export default function PortalOccurrences() {
   });
   const restartOccurrences = restart;
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ client_id: '', event_type: '', severity: 'medium', description: '' });
+  const [form, setForm] = useState({
+    client_id: '', event_type: '', severity: 'medium', description: '',
+    load_id: '', fiscal_document_id: '', document_number: '',
+  });
+  const createRequestIdRef = useRef<string | null>(null);
+  const linkedDocumentHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    const fiscalDocumentId = searchParams.get('documentId');
+    if (!fiscalDocumentId || linkedDocumentHandledRef.current === fiscalDocumentId) return;
+    linkedDocumentHandledRef.current = fiscalDocumentId;
+    setForm((current) => ({
+      ...current,
+      client_id: searchParams.get('clientId') || current.client_id,
+      load_id: searchParams.get('loadId') || '',
+      fiscal_document_id: fiscalDocumentId,
+      document_number: searchParams.get('documentNumber') || '',
+    }));
+    setOpen(true);
+  }, [searchParams]);
   useEffect(() => {
     if (open && !form.client_id) {
       const preselect = selectedClientId && openableClients.some((client) => client.client_id === selectedClientId)
@@ -61,7 +84,7 @@ export default function PortalOccurrences() {
   const [threadId, setThreadId] = useState<string | null>(null);
 
   const submit = async () => {
-    if (!form.client_id || !form.event_type || !form.description) {
+    if (!form.client_id) {
       toast({ title: 'Preencha cliente, tipo e descrição', variant: 'destructive' });
       return;
     }
@@ -69,11 +92,21 @@ export default function PortalOccurrences() {
       toast({ title: 'Sem permissão para abrir ocorrência para este cliente', variant: 'destructive' });
       return;
     }
+    let normalizedForm: typeof form;
     try {
-      await createMut.mutateAsync(form);
+      normalizedForm = normalizePortalOccurrence(form);
+    } catch (error: unknown) {
+      toast({ title: 'Dados inválidos', description: error instanceof Error ? error.message : 'Revise os dados da ocorrência.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const requestId = createRequestIdRef.current ?? crypto.randomUUID();
+      createRequestIdRef.current = requestId;
+      await createMut.mutateAsync({ ...normalizedForm, request_id: requestId });
       toast({ title: 'Ocorrência registrada' });
+      createRequestIdRef.current = null;
       setOpen(false);
-      setForm({ client_id: '', event_type: '', severity: 'medium', description: '' });
+      setForm({ client_id: '', event_type: '', severity: 'medium', description: '', load_id: '', fiscal_document_id: '', document_number: '' });
     } catch (error: unknown) {
       toast({ title: 'Erro', description: portalErrorMessage(error, 'Não foi possível registrar a ocorrência.'), variant: 'destructive' });
     }
@@ -101,16 +134,21 @@ export default function PortalOccurrences() {
           </SelectContent>
         </Select>
         {selectedClientCanOpen && (
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) createRequestIdRef.current = null; setOpen(nextOpen); }}>
             <DialogTrigger asChild>
               <Button className="ml-auto"><Plus className="h-4 w-4 mr-2" />Abrir ocorrência</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Nova ocorrência</DialogTitle></DialogHeader>
+              {form.fiscal_document_id && (
+                <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  Vinculada à NF {form.document_number || form.fiscal_document_id.slice(0, 8)}.
+                </p>
+              )}
               <div className="space-y-3">
                 <div>
                   <Label>Cliente</Label>
-                  <Select value={form.client_id} onValueChange={(v) => setForm(f => ({ ...f, client_id: v }))}>
+                  <Select value={form.client_id} onValueChange={(v) => { createRequestIdRef.current = null; setForm(f => ({ ...f, client_id: v })); }}>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {openableClients.map(c => (
@@ -121,11 +159,11 @@ export default function PortalOccurrences() {
                 </div>
                 <div>
                   <Label>Tipo</Label>
-                  <Input value={form.event_type} onChange={e => setForm(f => ({ ...f, event_type: e.target.value }))} placeholder="ex.: avaria, atraso, divergência" />
+                  <Input maxLength={PORTAL_OCCURRENCE_EVENT_TYPE_MAX_LENGTH} value={form.event_type} onChange={e => { createRequestIdRef.current = null; setForm(f => ({ ...f, event_type: e.target.value })); }} placeholder="ex.: avaria, atraso, divergência" />
                 </div>
                 <div>
                   <Label>Gravidade</Label>
-                  <Select value={form.severity} onValueChange={(v) => setForm(f => ({ ...f, severity: v }))}>
+                  <Select value={form.severity} onValueChange={(v) => { createRequestIdRef.current = null; setForm(f => ({ ...f, severity: v })); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="low">Baixa</SelectItem>
@@ -137,7 +175,7 @@ export default function PortalOccurrences() {
                 </div>
                 <div>
                   <Label>Descrição</Label>
-                  <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={4} />
+                  <Textarea maxLength={PORTAL_OCCURRENCE_DESCRIPTION_MAX_LENGTH} value={form.description} onChange={e => { createRequestIdRef.current = null; setForm(f => ({ ...f, description: e.target.value })); }} rows={4} />
                 </div>
               </div>
               <DialogFooter>
@@ -154,7 +192,7 @@ export default function PortalOccurrences() {
 
       {isLoading ? (
         <div className="p-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
-      ) : error ? (
+      ) : error && !isFetchNextPageError ? (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive flex items-center justify-between gap-3">
           <span>Erro ao carregar ocorrências: {(error as Error).message}</span>
           <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
@@ -187,7 +225,7 @@ export default function PortalOccurrences() {
                     {format(new Date(o.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
                   </div>
                 </div>
-                {canInteractWithVisibleOccurrences && (
+                {o.can_reply && !o.resolved_at && (
                 <div className="mt-3 flex justify-end">
                   <Button size="sm" variant="outline" onClick={() => setThreadId(o.id)}>
                     <MessageSquare className="h-4 w-4 mr-2" /> Conversar
@@ -246,12 +284,20 @@ export function OccurrenceThreadDialog({
   } = usePortalOccurrenceMessages(occurrenceId);
   const replyMut = useReplyPortalOccurrence();
   const [text, setText] = useState('');
+  const requestIdRef = useRef<string | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    requestIdRef.current = null;
+  }, [occurrenceId]);
 
   const send = async () => {
     if (!occurrenceId || !text.trim()) return;
+    const requestId = requestIdRef.current ?? crypto.randomUUID();
+    requestIdRef.current = requestId;
     try {
-      await replyMut.mutateAsync({ occurrence_id: occurrenceId, message: text.trim() });
+      await replyMut.mutateAsync({ occurrence_id: occurrenceId, message: text.trim(), request_id: requestId });
+      requestIdRef.current = null;
       setText('');
     } catch (error: unknown) {
       toast({ title: 'Erro ao enviar', description: portalErrorMessage(error, 'Não foi possível enviar a mensagem.'), variant: 'destructive' });
@@ -259,7 +305,7 @@ export function OccurrenceThreadDialog({
   };
 
   return (
-    <Dialog open={!!occurrenceId} onOpenChange={(v) => { if (!v) { setText(''); onClose(); } }}>
+    <Dialog open={!!occurrenceId} onOpenChange={(v) => { if (!v) { requestIdRef.current = null; setText(''); onClose(); } }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Conversa da ocorrência</DialogTitle>
@@ -317,11 +363,12 @@ export function OccurrenceThreadDialog({
         <div className="flex items-end gap-2">
           <Textarea
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => { requestIdRef.current = null; setText(e.target.value); }}
             placeholder="Escreva uma mensagem..."
             rows={2}
+            maxLength={PORTAL_OCCURRENCE_MESSAGE_MAX_LENGTH}
           />
-          <Button onClick={send} disabled={!!messagesError || !text.trim() || replyMut.isPending}>
+          <Button aria-label="Enviar mensagem" onClick={send} disabled={!!messagesError || !text.trim() || replyMut.isPending}>
             {replyMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>

@@ -22,24 +22,26 @@ export interface Vehicle {
   renavam: string | null;
 }
 
-export function useVehicles() {
+export function useVehicles(options: { includeInactive?: boolean; enabled?: boolean } = {}) {
+  const { includeInactive = false, enabled = true } = options;
   const { currentTenant } = useTenant();
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['vehicles', currentTenant?.id, user?.id],
+    queryKey: ['vehicles', currentTenant?.id, includeInactive, user?.id],
     queryFn: async () => {
       if (!currentTenant || !user) return [];
       const rows = await readOperatorReferenceCatalog({
         tenantId: currentTenant.id,
         actorId: user.id,
         resource: 'vehicles',
+        includeInactive,
       });
       return (rows as unknown as Vehicle[]).sort((left, right) => (
         left.plate.localeCompare(right.plate, 'pt-BR') || left.id.localeCompare(right.id)
       ));
     },
-    enabled: !!currentTenant && !!user,
+    enabled: !!currentTenant && !!user && enabled,
     retry: false,
   });
 }

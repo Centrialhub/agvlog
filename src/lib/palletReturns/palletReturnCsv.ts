@@ -3,13 +3,16 @@ import type { PalletProtocol } from '@/hooks/usePalletReturns';
 const BOM = '\uFEFF';
 
 function esc(v: unknown): string {
-  const s = v == null ? '' : String(v);
-  if (/[";\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-  return s;
+  const raw = v == null ? '' : String(v);
+  const safe = /^[\t\r]/.test(raw) || /^\s*[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  if (/[";\r\n]/.test(safe)) return '"' + safe.replace(/"/g, '""') + '"';
+  return safe;
 }
 
 function fmtDate(v: string | null | undefined): string {
   if (!v) return '';
+  const civilDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (civilDate) return `${civilDate[3]}/${civilDate[2]}/${civilDate[1]}`;
   const d = new Date(v);
   if (isNaN(d.getTime())) return String(v);
   return d.toLocaleDateString('pt-BR');
@@ -38,7 +41,7 @@ export function protocolsToCsv(protocols: PalletProtocol[]): string {
 }
 
 export function rowsToCsv(headers: string[], rows: Array<Array<string | number | null | undefined>>): string {
-  const head = headers.join(';');
+  const head = headers.map(esc).join(';');
   const body = rows.map((r) => r.map(esc).join(';')).join('\n');
   return BOM + head + '\n' + body;
 }

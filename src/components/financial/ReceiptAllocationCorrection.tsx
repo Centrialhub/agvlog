@@ -17,12 +17,12 @@ export function ReceiptAllocationCorrection({tenant,actor,payment,amount,revisio
  function prepare(){const parsed=receiptCorrectionCommandSchema.safeParse({version:1,tenant_id:tenant,request_id:crypto.randomUUID(),payment_id:payment,expected_revision:revision,reason});
   if(!parsed.success){setError('Informe um motivo com pelo menos dez caracteres.');return;}setPreview(parsed.data);setError('');}
  const discardRecovery=()=>{setError('');try{sessionStorage.removeItem(key);setPending(null);setPreview(null);setRecoveryError('');}catch{setError('Não foi possível descartar a recuperação incompatível nesta sessão.');}};
- async function submit(){const command=pending||preview;if(!command||sending.current||disabled||recoveryError)return;const uncertain=!!pending;
+ async function submit(){const command=pending||preview;if(!command||sending.current||disabled||recoveryError)return;
   try{sessionStorage.setItem(key,JSON.stringify({actor,command}));}catch{setError('Não foi possível preservar o pedido. Nenhuma correção foi enviada.');return;}
   sending.current=true;setBusy(true);setPending(command);setPreview(null);setError('');
   try{await correctReceiptAllocation(command);sessionStorage.removeItem(key);if(live.current){setPending(null);setDone(true);refresh();}}
   catch(cause){if(live.current){setError(cause instanceof FinanceRejectedError?'A correção foi recusada. Atualize o título e confira o recebimento.':'Resposta não confirmada. Retome a mesma correção.');
-   if(cause instanceof FinanceRejectedError&&!uncertain){try{sessionStorage.removeItem(key);setPending(null);refresh();}catch{/* Preserve the request when cleanup fails. */}}}}
+   if(cause instanceof FinanceRejectedError){try{sessionStorage.removeItem(key);setPending(null);refresh();}catch{/* Preserve the request when cleanup fails. */}}}}
   finally{sending.current=false;if(live.current)setBusy(false);}
  }
  if(done)return <p role="status">Vínculo corrigido. O dinheiro registrado foi preservado.</p>;

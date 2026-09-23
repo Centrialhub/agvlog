@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { usePortalReports } from '@/hooks/portal/usePortalReports';
@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Loader2, Download, TruckIcon, AlertTriangle, ClipboardCheck, Clock } from 'lucide-react';
 import { PortalKpiCard } from '@/components/portal/PortalKpiCard';
 import { escapePortalCsvCell } from '@/lib/portalCsv';
-import { localDateInputValue } from '@/lib/utils/formatDate';
+import { APP_TIME_ZONE, trailingCivilDateRange } from '@/lib/utils/formatDate';
+import { useTenant } from '@/hooks/useTenant';
 
 function downloadCsv(name: string, rows: Array<Record<string, unknown>>) {
   if (!rows.length) return;
@@ -26,10 +27,17 @@ function downloadCsv(name: string, rows: Array<Record<string, unknown>>) {
 }
 
 export default function PortalReports() {
-  const today = localDateInputValue();
-  const ninetyAgo = localDateInputValue(new Date(Date.now() - 90 * 24 * 3600 * 1000));
-  const [start, setStart] = useState(ninetyAgo);
-  const [end, setEnd] = useState(today);
+  const { currentTenant } = useTenant();
+  const tenantTimeZone = currentTenant?.timezone || APP_TIME_ZONE;
+  const defaultRange = useMemo(() => trailingCivilDateRange(90, tenantTimeZone), [tenantTimeZone]);
+  const [start, setStart] = useState(defaultRange.start);
+  const [end, setEnd] = useState(defaultRange.end);
+
+  useEffect(() => {
+    setStart(defaultRange.start);
+    setEnd(defaultRange.end);
+  }, [defaultRange]);
+
   const { data, isLoading, error, refetch } = usePortalReports({ start, end });
   const invalidRange = !!start && !!end && start > end;
 
@@ -50,7 +58,7 @@ export default function PortalReports() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => { setStart(ninetyAgo); setEnd(today); }}
+          onClick={() => { setStart(defaultRange.start); setEnd(defaultRange.end); }}
         >
           Últimos 90 dias
         </Button>

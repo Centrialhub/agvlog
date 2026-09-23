@@ -8,7 +8,7 @@ vi.mock('@/lib/financial/ledgerClient',async original=>({...await original<objec
 const tenant=crypto.randomUUID(),actor=crypto.randomUUID(),statement=crypto.randomUUID(),group=crypto.randomUUID();
 const key=`finance-reconciliation-reversal:${tenant}:${actor}:${group}`;
 function mount(reversed=false){return render(<ReconciliationReversal tenant={tenant} actor={actor} group={group} reversed={reversed} onRecorded={()=>{}}/>);}
-beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();mock.reverse.mockResolvedValue({confirmed:true});
+beforeEach(()=>{vi.clearAllMocks();Object.defineProperty(navigator,'locks',{configurable:true,value:{request:(_key:string,work:()=>Promise<unknown>)=>work()}});sessionStorage.clear();localStorage.clear();mock.reverse.mockResolvedValue({confirmed:true});
  mock.history.mockResolvedValue({total:1,active_count:0,page:1,page_size:20,rows:[{id:group,tenant_id:tenant,bank_account_id:crypto.randomUUID(),direction:'out',amount_cents:'50000',method:'manual',actor_id:actor,actor_name:'Maria Financeiro',reason:'Conferência original do pagamento',account_evidence:'Agência e conta conferidas no original',created_at:'2026-09-09T12:00:00Z',evidence_issue:'source_changed',movement_count:1,bank_entry_count:1,movements:[],entries:[],reversal:{id:crypto.randomUUID(),actor_id:actor,actor_name:'João Gestor',reason:'Corrigida associação selecionada por engano',created_at:'2026-09-09T13:00:00Z'}}]});});
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 async function review(){fireEvent.click(screen.getByRole('button',{name:'Desfazer esta conciliação'}));fireEvent.change(screen.getByLabelText('Justificativa da reversão'),{target:{value:'Conciliação associada aos lançamentos incorretos'}});fireEvent.click(screen.getByRole('button',{name:'Revisar reversão'}));}
@@ -23,8 +23,8 @@ describe('reconciliation audit and reversal',()=>{
  it('requires review and recovers a lost reply even if the refreshed history already shows reversed',async()=>{
   mock.reverse.mockRejectedValueOnce(new Error('lost reply'));const first=mount();await review();expect(mock.reverse).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button',{name:'Confirmar reversão da conciliação'}));await screen.findByText(/Retome a mesma reversão/);
-  const command=JSON.parse(sessionStorage.getItem(key)!);first.unmount();mount(true);
-  fireEvent.click(screen.getByRole('button',{name:'Retomar mesma reversão'}));await waitFor(()=>expect(sessionStorage.getItem(key)).toBeNull());
+  const command=JSON.parse(localStorage.getItem(key)!);first.unmount();mount(true);
+  fireEvent.click(screen.getByRole('button',{name:'Retomar mesma reversão'}));await waitFor(()=>expect(localStorage.getItem(key)).toBeNull());
   expect(mock.reverse.mock.calls.map(([sent])=>sent)).toEqual([command,command]);
  });
  it('flags evidence contradicted after matching without hiding the original decision',async()=>{
@@ -40,7 +40,7 @@ describe('reconciliation audit and reversal',()=>{
  });
  it('lets the user discard a corrupt scoped reconciliation reversal',()=>{
   sessionStorage.setItem(key,'broken');mount();fireEvent.click(screen.getByRole('button',{name:'Descartar recuperação incompatível'}));
-  expect(sessionStorage.getItem(key)).toBeNull();expect(screen.getByRole('button',{name:'Desfazer esta conciliação'})).toBeInTheDocument();expect(mock.reverse).not.toHaveBeenCalled();
+  expect(localStorage.getItem(key)).toBeNull();expect(screen.getByRole('button',{name:'Desfazer esta conciliação'})).toBeInTheDocument();expect(mock.reverse).not.toHaveBeenCalled();
  });
  it('keeps an automatic decision identifiable when another import contests its reference',async()=>{
   const data=await mock.history();mock.history.mockResolvedValue({...data,active_count:1,rows:[{...data.rows[0],method:'automatic_reference',reversal:null,evidence_issue:'automatic_bank_reference_contested'}]});

@@ -46,12 +46,17 @@ const mock=vi.hoisted(()=>({rpc:vi.fn(),success:vi.fn(),error:vi.fn(),write:vi.f
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:i.tenant}})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:i.operator}})}));
 vi.mock('@/hooks/useSonnerToast',()=>({useSonnerToast:()=>({success:mock.success,error:mock.error})}));
-vi.mock('@/hooks/useLoads',()=>({useLoads:()=>useQuery({queryKey:['loads'],queryFn:async()=> (await db.query('select * from loads order by id')).rows})}));
+vi.mock('@/hooks/useLoads',()=>({useLoadsPage:({page,pageSize}:{page:number;pageSize:number})=>useQuery({
+  queryKey:['loads','page',page,pageSize],queryFn:async()=>{
+    const rows=(await db.query('select * from loads order by id')).rows;
+    return {rows:rows.slice((page-1)*pageSize,page*pageSize),totalCount:rows.length,statusCounts:{}};
+  },
+})}));
 vi.mock('@/hooks/useLoadItems',()=>({useLoadItems:(loadId:string)=>useQuery({queryKey:['load_items',loadId],enabled:!!loadId,
   queryFn:async()=> (await db.query('select * from load_items where load_id=$1 order by id',[loadId])).rows})}));
 vi.mock('@/hooks/useVehicles',()=>({useVehicles:()=>({data:[]})}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mock.rpc,from:()=>{
-  const query={select:()=>query,in:()=>Promise.resolve({data:[],error:null}),update:mock.write,delete:mock.write};return query;
+  const query={select:()=>query,in:()=>query,order:()=>query,range:()=>Promise.resolve({data:[],error:null}),update:mock.write,delete:mock.write};return query;
 }}}));
 let db:PGlite;let client:QueryClient;let trips:Awaited<ReturnType<typeof twoPlannedTrips>>;
 beforeAll(async()=>{db=await createReplanningDatabase();},30000);

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowLeft, ArrowRight, MapPin, Plus, X, Route, AlertTriangle, FileText, ArrowDownToLine, Search, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { useSonnerToast } from '@/hooks/useSonnerToast';
 
 interface RouteGroup {
   routeId: string | null;
@@ -47,6 +48,7 @@ function docKey(doc: ValidatedDocument): string {
 }
 
 export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLearnCity }: RoutingStepProps) {
+  const toast = useSonnerToast();
   const validDocs = useMemo(
     () => docs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable)),
     [docs],
@@ -384,9 +386,9 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
             try {
               setAdvancing(true);
               await onNext(groups);
-            } catch (e: any) {
+            } catch (e: unknown) {
               console.error('[RoutingStep] onNext failed:', e);
-              alert(`Erro ao avançar: ${e?.message || e}`);
+              toast.error(`Erro ao avançar: ${e instanceof Error ? e.message : String(e)}`);
             } finally {
               setAdvancing(false);
             }

@@ -42,18 +42,18 @@ const mock = vi.hoisted(() => ({ rpc: vi.fn(), success: vi.fn(), error: vi.fn(),
 vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: mock.tenant }) }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'actor' } }) }));
 vi.mock('@/hooks/useSonnerToast', () => ({ useSonnerToast:()=>({ success: mock.success, error: mock.error })}));
-vi.mock('@/hooks/useLoads', () => ({ useLoads: () => ({ data: [
+vi.mock('@/hooks/useLoads', () => ({ useLoadsPage: () => ({ data: { rows: [
   { id: 'source', tenant_id: 'tenant', load_number: '1001', status: 'loading', destination: 'Origem QA' },
   { id: 'target', tenant_id: 'tenant', load_number: '1002', status: 'loading', destination: 'Destino QA' },
   { id: 'started', tenant_id: 'tenant', load_number: '1003', status: 'in_transit' },
-] }) }));
+] , totalCount: 3, statusCounts: {} }, isFetching: false, refetch: vi.fn() }) }));
 vi.mock('@/hooks/useVehicles', () => ({ useVehicles: () => ({ data: [] }) }));
 vi.mock('@/hooks/useLoadItems', () => ({ useLoadItems: (loadId: string) => ({ data: loadId === 'source' ? [
   { id: 'item', tenant_id: 'tenant', load_id: 'source', fiscal_document_id: 'doc', item_description: 'Mercadoria QA',
     quantity: 1, pallet_count: 1, weight_kg: 10, fiscal_documents: { invoice_number: '123' } },
 ] : [], isLoading: false }) }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: mock.rpc, from: () => {
-  const query = { select: () => query, in: () => Promise.resolve({ data: [], error: null }), update: mock.write, delete: mock.write };
+  const query = { select: () => query, in: () => query, order: () => query, range: () => Promise.resolve({ data: [], error: null }), update: mock.write, delete: mock.write };
   return query;
 } } }));
 let client: QueryClient;

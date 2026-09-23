@@ -7,14 +7,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/hooks/useTenant';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Truck, MapPin, Package, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useEffect, useState } from 'react';
 import { type DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
-import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
 import {
   DriverHomeChecklistAlert,
   DriverHomeDeliveryMap,
@@ -22,10 +18,10 @@ import {
   DriverHomeQuickActions,
   DriverHomeVehiclePositionError,
 } from '@/components/driver/DriverHomePanels';
-import { TRIP_ACTIVE_STATUSES, tripStatusLabel, LOAD_ACTIVE_STATUSES } from '@/lib/status';
-import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
+import { TRIP_ACTIVE_STATUSES, LOAD_ACTIVE_STATUSES } from '@/lib/status';
+import { TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
 import { useDriverTripActions } from '@/hooks/useDriverTripActions';
-import { DRIVER_TRIP_SELECT, driverTripNeedsReconciliation, isDriverTripStarted, normalizeDriverTrip, resolveCanonicalTripLink, type DriverTrip } from '@/lib/driverTrip';
+import { DRIVER_TRIP_SELECT, normalizeDriverTrip, resolveCanonicalTripLink, type DriverTrip } from '@/lib/driverTrip';
 import { NextDestinationCard } from '@/components/driver/NextDestinationCard';
 import { getNextDriverStop, getPendingDriverStops, readDriverRouteSnapshot, saveDriverRouteSnapshot } from '@/lib/driver/offlineRouteSnapshot';
 import { driverOperationalSnapshotStore, type DriverOperationalSnapshot } from '@/lib/driver/driverOperationalOffline';
@@ -33,6 +29,8 @@ import {useDriverPhysicalJourney} from '@/hooks/useDriverPhysicalJourney';
 import { isStopTerminal } from '@/lib/status/stopStatus';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import type { DriverHomeAssignedLoad } from '@/lib/driver/driverHomeTypes';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
+import { DriverHomeTripLists } from '@/components/driver/DriverHomeTripLists';
 
 export default function DriverHome() {
   const driverQuery = useCurrentDriver();
@@ -217,7 +215,8 @@ export default function DriverHome() {
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
   const realMapStops: DeliveryPoint[] = realStops
-    .filter((stop) => stop.latitude != null && stop.longitude != null)
+    .filter((stop) => stop.latitude != null && stop.longitude != null &&
+      hasValidGeographicCoordinates(Number(stop.latitude), Number(stop.longitude)))
     .map((stop, index) => ({
       id: stop.id,
       name: stop.clients?.company_name || stop.destination || `Parada ${index + 1}`,
@@ -231,7 +230,8 @@ export default function DriverHome() {
       sequence: stop.stop_order ?? index,
     }));
   const realVehicle =
-    vehiclePos && vehiclePos.lat != null && vehiclePos.lng != null
+    vehiclePos && vehiclePos.lat != null && vehiclePos.lng != null &&
+      hasValidGeographicCoordinates(Number(vehiclePos.lat), Number(vehiclePos.lng))
       ? { lat: Number(vehiclePos.lat), lng: Number(vehiclePos.lng), plate: primaryTrip?.vehicles?.plate || '' }
       : null;
   const showRealMap = realMapStops.length > 0;
@@ -365,117 +365,13 @@ export default function DriverHome() {
         />
       )}
 
-      {standaloneLoads.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Cargas atribuídas ({standaloneLoads.length})
-          </p>
-          {standaloneLoads.map((load) => (
-            <Card key={load.id} className="border-l-4 border-l-warning">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-warning" />
-                    <span className="text-sm font-medium">Carga {load.load_number}</span>
-                  </div>
-                  <Badge variant="outline" className="text-[10px]">
-                    {LOAD_STATUS_LABELS[load.status as keyof typeof LOAD_STATUS_LABELS] || load.status}
-                  </Badge>
-                </div>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  {(load.origin || load.destination) && (
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="h-3 w-3" />
-                      <span>{load.origin || '—'}</span>
-                      <ArrowRight className="h-3 w-3" />
-                      <span>{load.destination || '—'}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-3">
-                    {load.vehicles?.plate && (
-                      <span className="flex items-center gap-1"><Truck className="h-3 w-3" />{load.vehicles.plate}</span>
-                    )}
-                    {(load.total_pallet_count ?? 0) > 0 && (
-                      <span>{load.total_pallet_count} pallets</span>
-                    )}
-                    {(load.total_weight_kg ?? 0) > 0 && (
-                      <span>{Number(load.total_weight_kg).toLocaleString('pt-BR')} kg</span>
-                    )}
-                  </div>
-                </div>
-                <p className="text-[10px] text-muted-foreground italic">
-                  Aguardando liberação da viagem pela equipe de operação.
-                </p>
-                <DriverLoadNotes
-                  loadId={load.id}
-                  loadNumber={load.load_number}
-                  vehiclePlate={load.vehicles?.plate}
-                  driverName={driver?.name}
-                />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {tripsToShow.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            Viagens ativas ({tripsToShow.length})
-          </p>
-          {tripsToShow.map((trip) => (
-            <Card key={trip.id} className="border-l-4 border-l-primary">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium">
-                      Carga {trip.loads?.load_number || '—'}
-                    </span>
-                  </div>
-                  <Badge variant="secondary" className="text-[10px]">
-                    {tripStatusLabel(trip.status)}
-                  </Badge>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
-                    <MapPin className="h-3 w-3" />
-                    <span>{trip.loads?.origin || '—'}</span>
-                    <ArrowRight className="h-3 w-3" />
-                    <span>{trip.loads?.destination || '—'}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Truck className="h-3 w-3" />
-                    <span>{trip.vehicles?.plate || 'Sem veículo'}</span>
-                  </div>
-                </div>
-
-                <Button
-                  size="sm"
-                  className="w-full"
-                  disabled={isStartingTrip || driverTripNeedsReconciliation(trip.status, trip.actual_start_at, trip.loads?.status)}
-                  onClick={() => accessTrip(trip.id, trip.status, trip.actual_start_at, trip.loads?.status, trip.tenant_id)}
-                >
-                  {driverTripNeedsReconciliation(trip.status, trip.actual_start_at, trip.loads?.status)
-                    ? 'Revisão operacional necessária'
-                    : isDriverTripStarted(trip.status, trip.actual_start_at)
-                    ? 'Acessar Viagem'
-                    : 'Iniciar Viagem'}
-                </Button>
-                {trip.loads?.id && (
-                  <DriverLoadNotes
-                    loadId={trip.loads.id}
-                    loadNumber={trip.loads.load_number}
-                    vehiclePlate={trip.vehicles?.plate}
-                    driverName={driver?.name}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <DriverHomeTripLists
+        standaloneLoads={standaloneLoads}
+        trips={tripsToShow}
+        driverName={driver?.name}
+        isStartingTrip={isStartingTrip}
+        onAccessTrip={(trip) => accessTrip(trip.id, trip.status, trip.actual_start_at, trip.loads?.status, trip.tenant_id)}
+      />
 
 
       {/* Delivery map com dados reais — só quando há paradas geolocalizadas na viagem. */}

@@ -25,6 +25,24 @@ export function calendarDay(value: string): string {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
 }
 
+export function calendarDayInTimeZone(value: string, timeZone: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return calendarDay(value);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  try {
+    return new Intl.DateTimeFormat('sv-SE', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+  } catch {
+    return '';
+  }
+}
+
+export function matchesDateRangeInTimeZone(value: string | null | undefined, from: string, to: string, timeZone: string): boolean {
+  if (!from && !to) return true;
+  if (!value) return false;
+  const day = calendarDayInTimeZone(value, timeZone);
+  return !!day && (!from || day >= from) && (!to || day <= to);
+}
+
 /** Exclusive upper bound also includes fractional seconds and daylight-saving changes. */
 export function localDayBoundary(day: string, nextDay = false): string {
   const date = new Date(day + 'T00:00:00');

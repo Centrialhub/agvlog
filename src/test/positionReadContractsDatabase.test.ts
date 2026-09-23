@@ -7,6 +7,14 @@ const migration = readFileSync(
   'supabase/migrations/20260901183111_harden_position_read_contracts.sql',
   'utf8',
 );
+const coordinateMigration = readFileSync(
+  'supabase/migrations/20260921135000_filter_invalid_vehicle_position_history.sql',
+  'utf8',
+);
+const timestampMigration = readFileSync(
+  'supabase/migrations/20260921135500_reject_invalid_latest_position_timestamps.sql',
+  'utf8',
+);
 
 const ids = {
   tenantA: '20000000-0000-4000-8000-000000000001',
@@ -209,6 +217,8 @@ beforeAll(async () => {
       ($4, $5, -24.0, -47.0, 40, 'moving', '2026-09-01T10:07:00Z')`,
     [ids.tenantA, ids.vehicleA, ids.vehicleA2, ids.tenantB, ids.vehicleB],
   );
+  await db.exec(coordinateMigration);
+  await db.exec(timestampMigration);
 });
 
 afterAll(async () => {
@@ -298,6 +308,22 @@ describe('position read privacy contract', () => {
       )`,
       [ids.tenantA, ids.vehicleA],
     ))).rejects.toThrow(/forbidden/i);
+  });
+
+  it('rejects new raw positions outside geographic bounds', async () => {
+    await expect(db.query(
+      `insert into public.positions_raw(id,tenant_id,vehicle_id,captured_at,lat,lng)
+       values('90000000-0000-4000-8000-000000000099',$1,$2,now(),200,-46)`,
+      [ids.tenantA, ids.vehicleA],
+    )).rejects.toThrow(/positions_raw_valid_coordinates_check/i);
+  });
+
+  it('rejects infinite timestamps in new latest positions', async () => {
+    await expect(db.query(
+      `insert into public.positions_last(tenant_id,vehicle_id,lat,lng,captured_at)
+       values($1,'50000000-0000-4000-8000-000000000099',-23,-46,'infinity')`,
+      [ids.tenantA],
+    )).rejects.toThrow(/positions_last_finite_captured_at_check/i);
   });
 
   it('enforces bounded arguments and least-privilege ACLs', async () => {

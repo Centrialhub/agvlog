@@ -21,6 +21,7 @@ vi.mock('@/hooks/useDriverSettlements',async(importOriginal)=>{
 });
 vi.mock('@/integrations/supabase/client',()=>({supabase:{from:()=>{throw new Error('Unexpected hosted financial access in local test');},storage:{from:()=>({createSignedUrl:mock.signed})}}}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'10000000-0000-4000-8000-000000000011'}})}));
+vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentRole:'admin'})}));
 vi.mock('@/hooks/useCostCenters',()=>({useCostCenters:()=>({data:[]})}));
 vi.mock('@/hooks/useBankReconciliation',()=>({useBankAccounts:()=>({data:[]})}));
 vi.mock('@/components/financial/AttachLoadsDialog',()=>({default:()=>null}));

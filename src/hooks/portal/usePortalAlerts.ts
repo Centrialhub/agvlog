@@ -46,5 +46,7 @@ export function usePortalAlerts(opts?: { clientId?: string | null; limit?: numbe
     },
     enabled: !!currentTenant && !!clientId,
     staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }

@@ -1,7 +1,7 @@
 import {supabase} from '@/integrations/supabase/client';
 import {employeeAdvancePaymentCommandSchema,employeeAdvancePaymentPreviewSchema,type EmployeeAdvancePaymentCommand} from './employeeAdvancePaymentContract';
 type Rpc=(name:string,args:Record<string,unknown>)=>Promise<{data:unknown;error:unknown}>;
-const rpc=supabase.rpc.bind(supabase) as unknown as Rpc;
+const rpc=((name: unknown, args: unknown) => (supabase.rpc.bind(supabase) as unknown as (name: unknown, args: unknown) => unknown)(name, args)) as unknown as Rpc;
 export async function readEmployeeAdvancePayment(tenant:string,actor:string,advance:string,movement:string|null,amount:string|null){
  const {data,error}=await rpc('preview_finance_employee_advance_payment',{_tenant_id:tenant,_advance_id:advance,_movement_id:movement,_amount_cents:amount});if(error)throw error;
  const value=employeeAdvancePaymentPreviewSchema.parse(data);if(value.tenant_id!==tenant||value.actor_id!==actor||value.advance_id!==advance||value.movement_id!==movement||value.amount_cents!==amount)throw Error('A conferência recebida não corresponde ao adiantamento e aos valores solicitados.');return value;

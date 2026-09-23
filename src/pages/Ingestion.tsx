@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
-import { INGESTION_READ_CONCURRENCY, ingestionSelectionError } from '@/lib/ingestion/uploadLimits';
 import { useSearchParams } from 'react-router-dom';
 import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow, ParsedNFe } from '@/lib/documentParsers';
 import {
@@ -43,7 +42,9 @@ import {
 } from '@/lib/ingestion/ortUtils';
 import { buildIngestionReport, createIngestionBatchId } from '@/lib/ingestion/report';
 import { normalizeNfeAccessKey } from '@/lib/fiscalDocuments/nfeAccessKey';
+import { formatFiscalDocumentError } from '@/lib/fiscalDocuments/fiscalIdentity';
 import { matchClientForFiscalDoc } from '@/lib/fiscalDocuments/clientMatcher';
+import { INGESTION_READ_CONCURRENCY, ingestionSelectionError, ortSelectionError } from '@/lib/ingestion/uploadLimits';
 
 import { supabase } from '@/integrations/supabase/client';
 import type { Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -86,7 +87,7 @@ interface IngestionFileBuffer {
 }
 
 function getErrorMessage(error: unknown, fallback = 'Erro inesperado'): string {
-  return error instanceof Error && error.message ? error.message : fallback;
+  return formatFiscalDocumentError(error,fallback);
 }
 
 function getResponseMessage(body: unknown): string | null {
@@ -334,6 +335,28 @@ export default function Ingestion() {
     if (error) throw error;
   };
 
+  const recordPostCreateAudits = async (
+    doc: ValidatedDocument,
+    fiscalDocumentId: string,
+    status: string,
+    freightBreakdown: FreightBreakdown | null,
+  ): Promise<string[]> => {
+    const warnings: string[] = [];
+    if (freightBreakdown?.tableId && currentTenant) {
+      try {
+        await logFreightCalculation(currentTenant.id, fiscalDocumentId, 'fiscal_document', freightBreakdown, user?.id);
+      } catch (error) {
+        warnings.push(`log de frete: ${getErrorMessage(error)}`);
+      }
+    }
+    try {
+      await recordOrtAudit(doc, fiscalDocumentId, status);
+    } catch (error) {
+      warnings.push(`auditoria ORT: ${getErrorMessage(error)}`);
+    }
+    return warnings;
+  };
+
   const handleFiles = useCallback(async (fileList: FileList) => {
     if (uploadLock.current) return;
     const files = Array.from(fileList);
@@ -431,13 +454,11 @@ export default function Ingestion() {
   const handleOrtFiles = useCallback(async (fileList: FileList) => {
     if (uploadLock.current) return;
     const files = Array.from(fileList);
-    // Limite razoável: PDFs muito grandes estouram o AI Gateway.
-    const MAX_PER_FILE = 3 * 1024 * 1024; // 3 MB por arquivo (recomendação Gemini inline)
-    const oversized = files.find(f => f.size > MAX_PER_FILE);
-    if (oversized) {
+    const selectionError = ortSelectionError(files);
+    if (selectionError) {
       toast({
-        title: 'Arquivo muito grande',
-        description: `"${oversized.name}" tem ${(oversized.size / 1024 / 1024).toFixed(1)} MB. Reduza a resolução do scan ou envie páginas separadas (máx. 3 MB por arquivo).`,
+        title: 'Lote de scan inválido',
+        description: selectionError,
         variant: 'destructive',
       });
       return;
@@ -869,7 +890,8 @@ export default function Ingestion() {
       };
       try {
         const { data, error } = await supabase.from('clients').insert(payload).select('id').single();
-        if (error || !data) return null;
+        if (error) throw new Error(`Falha ao cadastrar o destinatário ${recipientName || taxId || ''}: ${error.message}`);
+        if (!data) throw new Error(`O cadastro do destinatário ${recipientName || taxId || ''} não foi confirmado.`);
         autoCreatedCount++;
         if (cnpjDigits) autoCreatedByCnpj.set(cnpjDigits, data.id);
         if (ieKey) autoCreatedByIe.set(ieKey, data.id);
@@ -877,8 +899,8 @@ export default function Ingestion() {
         if (nameKey) autoCreatedByName.set(nameKey, data.id);
         clientsToSyncSsx.add(data.id);
         return data.id;
-      } catch {
-        return null;
+      } catch (error) {
+        throw error instanceof Error ? error : new Error('Falha inesperada ao cadastrar o destinatário da NF-e.');
       }
     };
 
@@ -909,6 +931,9 @@ export default function Ingestion() {
             if (!doc.matchedClientId) {
               const newId = await ensureClient(doc.source);
               if (newId) doc.matchedClientId = newId;
+              else if (doc.source.recipientCnpj || doc.source.recipientName) {
+                throw new Error(`O destinatário da NF ${doc.source.invoiceNumber} não pôde ser identificado ou cadastrado.`);
+              }
             }
             let freightValue: number | null = null;
             let freightBreakdown: FreightBreakdown | null = null;
@@ -1001,14 +1026,13 @@ export default function Ingestion() {
                 })(),
             });
 
-            if (freightValue && freightBreakdown?.tableId && currentTenant) {
-              await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
-            }
-
-            await recordOrtAudit(doc, created.id, loadId ? 'saved_and_linked' : 'saved');
+            const auditWarnings = await recordPostCreateAudits(
+              doc, created.id, loadId ? 'saved_and_linked' : 'saved', freightBreakdown,
+            );
 
             const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : '';
-            results.push(`✅ NF ${doc.source.invoiceNumber} salva${freightLabel}`);
+            const auditLabel = auditWarnings.length ? `; ⚠️ auditoria pendente (${auditWarnings.join(' | ')})` : '';
+            results.push(`✅ NF ${doc.source.invoiceNumber} salva${freightLabel}${auditLabel}`);
           }
         } catch (e: unknown) {
           results.push(`❌ NF ${doc.source.invoiceNumber}: ${getErrorMessage(e)}`);
@@ -1019,7 +1043,8 @@ export default function Ingestion() {
       setStep(5);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
-      const errorCount = results.filter(r => r.startsWith('❌')).length;
+      const documentSuccessCount = results.filter(r => r.startsWith('✅ NF ')).length;
+      const documentErrorCount = results.filter(r => r.startsWith('❌ NF ')).length;
       const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable));
       const matchedExisting = validDocsForReport.filter(d =>
         d.matchedClientId && !clientsToSyncSsx.has(d.matchedClientId)
@@ -1031,8 +1056,8 @@ export default function Ingestion() {
       const reportSaveDocs = buildIngestionReport({
         docs: validDocsForReport,
         ortReviewDocs,
-        savedCount: successCount,
-        errorCount,
+        savedCount: documentSuccessCount,
+        errorCount: documentErrorCount,
         autoCreatedCount: autoCreatedCount,
         matchedCount: matchedExisting,
         reviewThreshold,
@@ -1081,6 +1106,7 @@ export default function Ingestion() {
     // ── Auto-save valid docs to DB at grouping step so nothing is lost ──
     const validDocs = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate && !d._savedId);
     let savedCount = 0;
+    let auditWarningCount = 0;
     for (const doc of validDocs) {
       try {
         let freightValue: number | null = null;
@@ -1176,11 +1202,8 @@ export default function Ingestion() {
         doc._savedId = created.id;
         // mantém forma de pagamento detectada disponível em delivery_meta também aqui
 
-        if (freightValue && freightBreakdown?.tableId && currentTenant) {
-          await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
-        }
-
-        await recordOrtAudit(doc, created.id, 'auto_saved_for_grouping');
+        const auditWarnings = await recordPostCreateAudits(doc, created.id, 'auto_saved_for_grouping', freightBreakdown);
+        if (auditWarnings.length) auditWarningCount++;
         savedCount++;
       } catch {
         // Will still proceed to grouping
@@ -1191,7 +1214,9 @@ export default function Ingestion() {
     if (savedCount > 0) {
       toast({
         title: `${savedCount} NF-e(s) salvas automaticamente`,
-        description: 'Documentos salvos no banco. Mesmo que feche a página, não serão perdidos.',
+        description: auditWarningCount
+          ? `Documentos salvos; ${auditWarningCount} ficaram com auditoria pendente, sem alterar o resultado da importação.`
+          : 'Documentos salvos no banco. Mesmo que feche a página, não serão perdidos.',
       });
     }
 
@@ -1335,14 +1360,11 @@ export default function Ingestion() {
             });
             createdDocIds.set(getValidatedDocKey(doc), created.id);
 
-            if (freightValue && freightBreakdown?.tableId && currentTenant) {
-              await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
-            }
-
-            await recordOrtAudit(doc, created.id, 'imported_on_execute');
+            const auditWarnings = await recordPostCreateAudits(doc, created.id, 'imported_on_execute', freightBreakdown);
 
             const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : ' (sem tabela de frete)';
-            results.push(`✅ NF ${doc.source.invoiceNumber} importada${freightLabel}`);
+            const auditLabel = auditWarnings.length ? `; ⚠️ auditoria pendente (${auditWarnings.join(' | ')})` : '';
+            results.push(`✅ NF ${doc.source.invoiceNumber} importada${freightLabel}${auditLabel}`);
           } catch (e: unknown) {
             results.push(`❌ NF ${doc.source.invoiceNumber}: ${getErrorMessage(e)}`);
           }
@@ -1470,11 +1492,13 @@ export default function Ingestion() {
       const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable));
       const matchedExisting = validDocsForReport.filter(d => !!d.matchedClientId).length;
       const execLabel = `Execução completa de cargas${reprocessSuffix}`;
+      const documentSuccessCount = results.filter(r => r.startsWith('✅ NF ')).length;
+      const documentErrorCount = results.filter(r => r.startsWith('❌ NF ')).length;
       const reportExec = buildIngestionReport({
         docs: validDocsForReport,
         ortReviewDocs,
-        savedCount: successCount,
-        errorCount,
+        savedCount: documentSuccessCount,
+        errorCount: documentErrorCount,
         autoCreatedCount: 0,
         matchedCount: matchedExisting,
         reviewThreshold,
@@ -1714,6 +1738,8 @@ export default function Ingestion() {
       )}
       {step === 4 && (
         <GroupingStep
+          tenantId={currentTenant?.id ?? ''}
+          actorId={user?.id ?? ''}
           suggestions={suggestions}
           vehicles={vehicles}
           drivers={drivers}

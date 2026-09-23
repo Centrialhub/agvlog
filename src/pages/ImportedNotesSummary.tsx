@@ -525,7 +525,7 @@ export default function ImportedNotesSummary() {
                   </Button>
                 )}
                 {detailRow.cte_id && (
-                  <Button size="sm" variant="outline" onClick={() => navigate(`/cte-monitor?cte=${detailRow.cte_id}`)}>
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/cte-monitor?cteId=${encodeURIComponent(detailRow.cte_id!)}`)}>
                     <FileText className="h-4 w-4 mr-2" />Abrir CT-e
                   </Button>
                 )}

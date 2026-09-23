@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Drivers from '@/pages/Drivers';
@@ -128,11 +128,12 @@ describe('operator driver and vehicle registries', () => {
     mock.rpc.mockResolvedValue({ data: null, error: new Error('falha de leitura') });
     renderScreen(page);
 
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(`Não foi possível carregar os ${label}: falha de leitura.`);
+    const errorMessage = await screen.findByText(`Não foi possível carregar os ${label}: falha de leitura.`);
+    const alert = errorMessage.closest('[role="alert"]');
+    expect(alert).not.toBeNull();
     expect(screen.queryByText(new RegExp(`Nenhum ${label.slice(0, -1)}`))).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    fireEvent.click(within(alert as HTMLElement).getByRole('button', { name: 'Tentar novamente' }));
     await waitFor(() => expect(mock.rpc).toHaveBeenCalledTimes(3));
   });
 });

@@ -67,13 +67,14 @@ export default function IntegrationHealth() {
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: async (schedule: { enabled: boolean; pollMinutes: number; fullSyncHours: number }) => {
+    mutationFn: async (schedule: { enabled: boolean; pollMinutes: number; fullSyncHours: number; configurationUpdatedAt: string | null }) => {
       if (!currentTenant) throw new Error('Empresa não selecionada.');
       const { error } = await supabase.rpc('update_tracking_schedule_v1' as never, { _payload: {
         tenant_id: currentTenant.id,
         enabled: schedule.enabled,
         poll_interval_minutes: schedule.pollMinutes,
         full_sync_interval_hours: schedule.fullSyncHours,
+        expected_updated_at: schedule.configurationUpdatedAt,
       } } as never);
       if (error) throw error;
     },
@@ -121,14 +122,28 @@ export default function IntegrationHealth() {
     queryKey: ['ssx_mapping_conflicts', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const rows:SsxMappingConflict[]=[];
-      for(let offset=0;;offset+=200){
-        const { data, error } = await supabase.rpc('list_ssx_mapping_conflicts_v1' as never, {
-          _tenant_id: currentTenant.id,_status: 'open',_limit: 200,_offset: offset,
+      const rows: SsxMappingConflict[] = [];
+      type ConflictCursor = { due_at: string; first_observed_at: string; id: string };
+      let cursor: ConflictCursor | null = null;
+      let snapshotAt: string | null = null;
+      for (;;) {
+        const { data, error } = await supabase.rpc('list_ssx_mapping_conflicts_v2' as never, {
+          _tenant_id: currentTenant.id, _status: 'open', _limit: 200,
+          _cursor: cursor, _snapshot_at: snapshotAt,
         } as never);
         if (error) throw error;
-        const page=(Array.isArray(data)?data:[]) as SsxMappingConflict[];rows.push(...page);
-        if(page.length<200)return rows;
+        const page = data as unknown as {
+          items: SsxMappingConflict[];
+          next_cursor: ConflictCursor | null;
+          snapshot_at: string;
+        };
+        if (!page || !Array.isArray(page.items) || typeof page.snapshot_at !== 'string') {
+          throw new Error('Resposta inválida da fila de conflitos SSX.');
+        }
+        rows.push(...page.items);
+        if (!page.next_cursor) return rows;
+        cursor = page.next_cursor;
+        snapshotAt = page.snapshot_at;
       }
     },
     enabled: !!currentTenant && isAdmin && ssxEnabled,
@@ -186,6 +201,8 @@ export default function IntegrationHealth() {
         <CardContent>
           {tenantHealthError ? (
             <p role="alert" className="text-sm text-destructive">Não foi possível consultar a saúde do pipeline. Isso não significa que o cron esteja ausente.</p>
+          ) : tenantHealthLoading ? (
+            <p className="text-sm text-muted-foreground" role="status">Carregando dados do pipeline...</p>
           ) : tenant ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>

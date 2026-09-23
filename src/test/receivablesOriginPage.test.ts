@@ -5,9 +5,9 @@ import type {PGlite} from '@electric-sql/pglite';
 import {beforeAll,afterAll,beforeEach,afterEach,it,expect} from 'vitest';
 import {createPeriodUnloadingFlowDatabase} from './helpers/periodUnloadingFlowDatabase';
 import {operationIds as i,operationRpc} from './helpers/operationOutcomeDatabase';
-import {receivablesOriginPageSchema} from '@/lib/financial/receivablesPageContract';
+import {receivablesCursorPageSchema,receivablesOriginPageSchema,type ReceivablePageCursor} from '@/lib/financial/receivablesPageContract';
 let db:PGlite;
-beforeAll(async()=>{db=await createPeriodUnloadingFlowDatabase();await db.exec(readFileSync('supabase/migrations/20260911045009_finance_receivables_origin_filter.sql','utf8'));},30000);
+beforeAll(async()=>{db=await createPeriodUnloadingFlowDatabase();await db.exec(readFileSync('supabase/migrations/20260911045009_finance_receivables_origin_filter.sql','utf8'));await db.exec(readFileSync('supabase/migrations/20260921170450_keyset_receivables_page.sql','utf8'));},30000);
 beforeEach(async()=>{await db.exec('begin');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[i.operator]);});
 afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
 async function charge(amount=15000,day='2026-01-10',supplier?:string,twoDocuments=false){
@@ -23,6 +23,7 @@ async function charge(amount=15000,day='2026-01-10',supplier?:string,twoDocument
 }
 
 async function read(origin='all',page=1,client:string|null=null){return receivablesOriginPageSchema.parse((await operationRpc<{v:unknown}>(db,'select get_finance_receivables_page_by_origin($1,$2,$3,$4,$5,$6,$7,$8) v',[i.tenant,'','all',client,null,null,page,origin])).rows[0].v);}
+async function readV3(origin='all',cursor:ReceivablePageCursor|null=null){return receivablesCursorPageSchema.parse((await operationRpc<{v:unknown}>(db,'select get_finance_receivables_page_v3($1,$2,$3,$4,$5,$6,$7,$8) v',[i.tenant,'','all',null,null,null,cursor,origin])).rows[0].v);}
 it('finds the unloading charge across more than 1000 titles and filters before pagination',async()=>{
  const c=await charge();
  await db.query("insert into receivables(id,tenant_id,description,amount,status,received_amount,created_at,updated_at) select gen_random_uuid(),$1,'Outro QA '||n,10,'pending',0,clock_timestamp(),clock_timestamp() from generate_series(1,1005) n",[i.tenant]);
@@ -30,6 +31,14 @@ it('finds the unloading charge across more than 1000 titles and filters before p
  expect(await read('other',21)).toMatchObject({total:1005});expect((await read('other',21)).rows).toHaveLength(5);
  expect((await read('fiscal')).total).toBe(0);expect((await read('unloading',1,c.supplier)).total).toBe(1);
  expect((await db.query('select id from finance_movements')).rows).toHaveLength(0);
+});
+it('keeps the keyset boundary stable when a newer title is inserted and classifies only the requested origin',async()=>{
+ await charge();await db.query("insert into receivables(id,tenant_id,description,amount,status,received_amount,created_at,updated_at) select gen_random_uuid(),$1,'Carteira QA '||n,10,'pending',0,clock_timestamp(),clock_timestamp() from generate_series(1,105) n",[i.tenant]);
+ const first=await readV3('other');expect(first.rows).toHaveLength(50);expect(first.next_cursor).not.toBeNull();
+ await db.query("insert into receivables(id,tenant_id,description,amount,status,received_amount,created_at,updated_at)values(gen_random_uuid(),$1,'Título simultâneo',10,'pending',0,clock_timestamp()+interval '1 second',clock_timestamp())",[i.tenant]);
+ const second=await readV3('other',first.next_cursor);expect(second.rows).toHaveLength(50);expect(new Set([...first.rows,...second.rows].map(row=>row.id)).size).toBe(100);expect(second.rows.every(row=>row.origin_kind==='other')).toBe(true);
+ const definition=(await db.query<{body:string}>("select prosrc body from pg_proc where oid='finance_private.receivables_page_v3(uuid,text,text,uuid,date,date,jsonb,text)'::regprocedure")).rows[0].body;
+ expect(definition).toContain('limit 51');expect(definition).not.toContain('classified as materialized');
 });
 it('rejects unknown origins, another company supplier and mixed driver identity',async()=>{
  await expect(read('invented')).rejects.toThrow('finance_invalid_filters');

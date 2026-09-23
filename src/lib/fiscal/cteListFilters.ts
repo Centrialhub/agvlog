@@ -1,14 +1,17 @@
 import type { CteMonitorFilters, CteMonitorRow } from '@/hooks/useCteMonitor';
 import type { CteSearchFilters, CteSearchRow, TriState } from '@/hooks/useCteSearch';
-import { matchesDateRange, normalizeSearch } from '@/lib/listFilters';
+import { matchesDateRange, matchesDateRangeInTimeZone, normalizeSearch } from '@/lib/listFilters';
 
 const contains = (value: unknown, query?: string) => !query?.trim() || normalizeSearch(value).includes(normalizeSearch(query));
 const identifier = (value: unknown) => normalizeSearch(value).replace(/[^a-z0-9]/g, '');
 const containsIdentifier = (value: unknown, query?: string) => !query?.trim() || (identifier(query).length > 0 && identifier(value).includes(identifier(query)));
 const triState = (value: boolean | null | undefined, filter?: TriState) => !filter || filter === 'all' || value === (filter === 'yes');
+const dateRange = (value: string | null | undefined, from: string, to: string, timeZone?: string) => timeZone
+  ? matchesDateRangeInTimeZone(value, from, to, timeZone)
+  : matchesDateRange(value, from, to);
 
 /** Apply after merging sources: the status displayed must also be the status filtered. */
-export function matchesCteMonitorFilters(row: CteMonitorRow, filters: CteMonitorFilters): boolean {
+export function matchesCteMonitorFilters(row: CteMonitorRow, filters: CteMonitorFilters, timeZone?: string): boolean {
   return (!filters.statuses?.length || filters.statuses.includes(row.sefaz_status))
     && (contains(row.cte_number, filters.docNumber) || contains(row.invoice_numbers, filters.docNumber))
     && contains(row.payer_name, filters.payer)
@@ -23,11 +26,11 @@ export function matchesCteMonitorFilters(row: CteMonitorRow, filters: CteMonitor
     && contains(row.company_group, filters.companyGroup)
     && contains(row.payer_group, filters.payerGroup)
     && triState(row.correction_letter, filters.correctionLetter)
-    && matchesDateRange(row.processed_at, filters.processedStart ?? '', filters.processedEnd ?? '')
-    && matchesDateRange(row.issued_at, filters.issuedStart ?? '', filters.issuedEnd ?? '');
+    && dateRange(row.processed_at, filters.processedStart ?? '', filters.processedEnd ?? '', timeZone)
+    && dateRange(row.issued_at, filters.issuedStart ?? '', filters.issuedEnd ?? '', timeZone);
 }
 
-export function matchesCteSearchFilters(row: CteSearchRow, filters: CteSearchFilters): boolean {
+export function matchesCteSearchFilters(row: CteSearchRow, filters: CteSearchFilters, timeZone?: string): boolean {
   const searchable = [row.cte_number, row.access_key, row.remitter, row.recipient, row.payer_name, row.vehicle_plate, row.driver_name, row.invoice_numbers, row.recipient_city];
   return (!filters.text?.trim() || searchable.some(value => contains(value, filters.text)))
     && (!filters.statuses?.length || filters.statuses.includes(row.sefaz_status))
@@ -43,7 +46,7 @@ export function matchesCteSearchFilters(row: CteSearchRow, filters: CteSearchFil
     && containsIdentifier(row.trailer_plate, filters.trailerPlate) && contains(row.insurance_company, filters.insuranceCompany)
     && contains(row.contract_number, filters.contractNumber) && contains(row.trip_number, filters.tripNumber)
     && contains(row.invoice_numbers, filters.invoiceNumber) && contains(row.romexp_number, filters.romexpNumber)
-    && matchesDateRange(row.issued_at, filters.issueDateStart ?? '', filters.issueDateEnd ?? '')
+    && dateRange(row.issued_at, filters.issueDateStart ?? '', filters.issueDateEnd ?? '', timeZone)
     && triState(Boolean(row.hub_document_id || row.pdf_url || row.xml_url), filters.downloadable)
     && triState(row.is_voided, filters.voided) && triState(row.is_closed, filters.closed)
     && triState(row.is_compensated, filters.compensated) && triState(row.autonomous_freight, filters.autonomousFreight)

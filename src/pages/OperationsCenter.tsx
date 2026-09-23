@@ -7,6 +7,7 @@ import { resolvePositionTelemetry } from '@/lib/positionTelemetry';
 import { useTenant } from '@/hooks/useTenant';
 import { useFleetPositions } from '@/hooks/usePositions';
 import { fiscalDocRevenue, isVoidFiscalStatus } from '@/lib/fiscal/documentStatus';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 import { useFleetState } from '@/hooks/useVehiclesState';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useDrivers } from '@/hooks/useDrivers';
@@ -17,6 +18,7 @@ import { OperationsCenterAnalytics } from '@/components/operations/OperationsCen
 import { OperationsCenterActivity } from '@/components/operations/OperationsCenterActivity';
 import { LOAD_STATUS_LABELS } from '@/components/operations/operationsCenterPresentation';
 import type { OperationsCenterViewModel } from '@/components/operations/operationsCenterTypes';
+import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
 
 function requireExactCount(count: number | null, label: string): number {
   if (typeof count !== 'number' || !Number.isFinite(count) || count < 0) {
@@ -210,7 +212,7 @@ export default function OperationsCenter() {
         .from('dispatch_trips')
         .select('id, status, vehicle_id, driver_id, load_id, planned_start_at, actual_start_at', { count: 'exact' })
         .eq('tenant_id', currentTenant.id)
-        .in('status', ['planned', 'in_progress'])
+        .in('status', TRIP_ACTIVE_STATUSES)
         .limit(50);
       if (error) throw error;
       return { rows: data || [], total: requireExactCount(count, 'viagens ativas') };
@@ -274,7 +276,7 @@ export default function OperationsCenter() {
   }, [vehicles, stateMap, positionMap]);
 
   const vehiclesWithPosition = useMemo(() =>
-    enrichedVehicles.filter(e => e.lat != null && e.lng != null),
+    enrichedVehicles.filter(e => hasValidGeographicCoordinates(e.lat, e.lng)),
     [enrichedVehicles]
   );
   const mapPoints = useMemo<[number, number][]>(

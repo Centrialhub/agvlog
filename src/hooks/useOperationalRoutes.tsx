@@ -4,7 +4,9 @@ import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { readOperatorReferenceCatalog } from '@/lib/operator/operatorReferencePagination';
+import { acknowledgeDurableOperatorCommand, isDefinitiveOperatorCommandRejection, prepareDurableOperatorCommand } from '@/lib/operator/durableOperatorCommand';
 import { z } from 'zod';
+import { normalizeCity } from '@/lib/utils/normalizeCity';
 
 export type RouteDestination = string | {
   name: string;
@@ -27,6 +29,16 @@ export function cloneRouteDestinations(destinations: readonly RouteDestination[]
       ? { name: destination }
       : { ...destination, weekdays: destination.weekdays ? [...destination.weekdays] : destination.weekdays }
   ));
+}
+
+export function hasDuplicateRouteDestinations(destinations: readonly RouteDestination[]): boolean {
+  const seen = new Set<string>();
+  for (const destination of destinations) {
+    const key = normalizeCity(typeof destination === 'string' ? destination : destination.name);
+    if (key && seen.has(key)) return true;
+    if (key) seen.add(key);
+  }
+  return false;
 }
 
 const routeDestinationSchema = z.union([
@@ -134,6 +146,7 @@ export function useCreateOperationalRoute() {
       const name = values.name.trim();
       if (!name) throw new Error('Nome da rota é obrigatório.');
       if (values.active !== false && (!Array.isArray(values.destinations) || values.destinations.length === 0)) throw new Error('Uma rota ativa precisa de ao menos um destino.');
+      if (values.destinations && hasDuplicateRouteDestinations(values.destinations)) throw new Error('A mesma cidade não pode aparecer mais de uma vez na rota.');
       const { destinations, ...routeValues } = values;
       const payload: TablesInsert<'operational_routes'> = {
         ...routeValues,
@@ -160,6 +173,7 @@ export function useUpdateOperationalRoute() {
       if (!expectedUpdatedAt) throw new Error('Não foi possível identificar a revisão da rota. Atualize a lista e tente novamente.');
       if (typeof values.name === 'string') values.name = values.name.trim();
       if (values.active === true && Array.isArray(values.destinations) && values.destinations.length === 0) throw new Error('Uma rota ativa precisa de ao menos um destino.');
+      if (values.destinations && hasDuplicateRouteDestinations(values.destinations)) throw new Error('A mesma cidade não pode aparecer mais de uma vez na rota.');
       const { destinations, ...routeValues } = values;
       const payload: TablesUpdate<'operational_routes'> = {
         ...routeValues,
@@ -185,23 +199,40 @@ export function useUpdateOperationalRoute() {
 
 export function useDeleteOperationalRoute() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, expectedUpdatedAt }: { id: string; expectedUpdatedAt: string }) => {
       if (!currentTenant) throw new Error('Selecione uma empresa antes de excluir a rota.');
+      if (!user) throw new Error('Entre novamente antes de excluir a rota.');
       if (!expectedUpdatedAt) throw new Error('Não foi possível identificar a revisão da rota. Atualize a lista e tente novamente.');
-      const { data, error } = await supabase.rpc('delete_operational_route_v1' as never, {
-        _tenant_id: currentTenant.id,
-        _route_id: id,
-        _expected_updated_at: expectedUpdatedAt,
-      } as never);
-      if (error) {
-        if (error.code === '40001' || error.message.includes('operational_route_changed')) {
-          throw new Error('Esta rota foi alterada por outra pessoa. Atualize a lista antes de excluir.');
+      const command = await prepareDurableOperatorCommand({
+        tenantId: currentTenant.id,
+        actorId: user.id,
+        action: 'delete_operational_route',
+        entityId: id,
+        payload: { expectedUpdatedAt },
+      });
+      try {
+        const { data, error } = await supabase.rpc('delete_operational_route_v1' as never, {
+          _tenant_id: currentTenant.id,
+          _route_id: id,
+          _expected_updated_at: expectedUpdatedAt,
+          _request_id: command.requestId,
+        } as never);
+        if (error) {
+          if (error.code === '40001' || error.message.includes('operational_route_changed')) {
+            acknowledgeDurableOperatorCommand(command);
+            throw new Error('Esta rota foi alterada por outra pessoa. Atualize a lista antes de excluir.');
+          }
+          throw error;
         }
+        acknowledgeDurableOperatorCommand(command);
+        return data;
+      } catch (error) {
+        if (isDefinitiveOperatorCommandRejection(error)) acknowledgeDurableOperatorCommand(command);
         throw error;
       }
-      return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['operational_routes'] }),
   });

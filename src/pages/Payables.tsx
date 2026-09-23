@@ -1,4 +1,6 @@
 import {PayableApprovalDialog} from '@/components/financial/PayableApprovalDialog';
+import {ManualTitleRecovery} from '@/components/financial/ManualTitleRecovery';
+import {ApprovalPolicySettings} from '@/components/financial/ApprovalPolicySettings';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,6 +10,7 @@ import {
   useCreatePayable, useUpdatePayable,
   PAYABLE_STATUSES, PAYABLE_STATUS_LABELS,
   PAYABLE_CATEGORIES, PAYABLE_CATEGORY_LABELS, type Payable,
+  isPayableDirectlyEditable,
 } from '@/hooks/usePayables';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +56,7 @@ function PayablesWorkspace() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
+  const [duplicateReason,setDuplicateReason]=useState('');
   const [pendingReceipt, setPendingReceipt] = useState<File | null>(null);
   const [paymentPayable, setPaymentPayable] = useState<Payable | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
@@ -61,6 +65,7 @@ function PayablesWorkspace() {
   const originalPayable=useRef<Payable|null>(null);const xml=usePayableXmlSave(currentTenant!.id,user!.id);
 
   const resetForm = () => {
+    setDuplicateReason('');
     setForm({ ...emptyForm });
     setEditingId(null);originalPayable.current=null;
     setPendingReceipt(null);setSaveError('');
@@ -68,6 +73,7 @@ function PayablesWorkspace() {
   };
 
   const openEdit = (p: Payable) => {
+    if(!isPayableDirectlyEditable(p))throw new Error('Esta conta foi gerada por um processo operacional e deve ser corrigida na origem.');
     setEditingId(p.id);originalPayable.current=p;
     setOriginalStatus(p.status);
     setForm({
@@ -111,14 +117,12 @@ function PayablesWorkspace() {
       toast.error('Informe o fornecedor');
       return;
     }
-    if (!form.amount || Number(form.amount) <= 0) {
-      toast.error('Informe um valor válido');
-      return;
-    }
+    let amountCents:string;
+    try{amountCents=payableXmlMoney(form.amount);}catch{toast.error('Informe um valor positivo com no máximo duas casas decimais.');return;}
     saving.current=true;setSaveBusy(true);setSaveError('');const generation=request.current;
     try {
       if(pendingReceipt){
-        await xml.save(pendingReceipt,{supplier_name:form.supplier_name.trim(),category:form.category,description:form.description||null,amount_cents:payableXmlMoney(form.amount),due_date:form.due_date||null,competence_date:form.competence_date||null,document_number:form.document_number||null,status:form.status as 'pending'|'approved'|'paid'|'overdue'|'cancelled',notes:form.notes||null},originalPayable.current);
+        await xml.save(pendingReceipt,{supplier_name:form.supplier_name.trim(),category:form.category,description:form.description||null,amount_cents:amountCents,due_date:form.due_date||null,competence_date:form.competence_date||null,document_number:form.document_number||null,status:form.status as 'pending'|'approved'|'paid'|'overdue'|'cancelled',notes:form.notes||null},originalPayable.current);
         if(generation===request.current){toast.success('Conta salva com XML original preservado');resetForm();}return;
       }
       if(generation!==request.current)return;
@@ -126,7 +130,7 @@ function PayablesWorkspace() {
         supplier_name: form.supplier_name.trim(),
         category: form.category,
         description: form.description || null,
-        amount: Number(form.amount),
+        amount: Number(amountCents)/100,
         due_date: form.due_date || null,
         competence_date: form.competence_date || null,
         document_number: form.document_number || null,
@@ -135,11 +139,12 @@ function PayablesWorkspace() {
       };
       if (values.status === 'paid') throw new Error('Registre a baixa financeira para marcar esta conta como paga.');
       if (editingId) {
+        if(!originalPayable.current?.updated_at)throw new Error('A revisão original da conta não está disponível. Reabra o cadastro.');
         const {status,...fields}=values;
-        await updateMut.mutateAsync({ id: editingId, ...fields, ...(status!==originalStatus?{status}:{}) });
+        await updateMut.mutateAsync({ id: editingId,expected_updated_at:originalPayable.current.updated_at, ...fields, ...(status!==originalStatus?{status}:{}) });
         toast.success('Conta atualizada');
       } else {
-        await createMut.mutateAsync(values);
+        await createMut.mutateAsync({...values,duplicate_reason:duplicateReason});
         toast.success('Conta criada');
       }
       resetForm();
@@ -156,6 +161,7 @@ function PayablesWorkspace() {
       if(error)throw error;
       if(!data||data.id!==id||data.tenant_id!==currentTenant.id)throw new Error('Conta fora da empresa solicitada.');
       if(generation!==request.current)return;
+      if(action==='edit'&&!isPayableDirectlyEditable(data))throw new Error('Esta conta foi gerada por um processo operacional e deve ser corrigida na origem.');
       if(action==='edit')openEdit(data);else setPaymentPayable(data);
     }catch(error){if(generation===request.current)setDetailError(getErrorMessage(error,'Não foi possível abrir esta conta.'));}
     finally{if(generation===request.current)setDetailBusy(false);}
@@ -182,8 +188,10 @@ function PayablesWorkspace() {
 
       {xml.pending&&<section className="rounded border p-3"><p>Salvamento com XML sem confirmação: {xml.pending.payload.fields.supplier_name} · valor {Number(xml.pending.payload.fields.amount_cents)/100} · pedido {xml.pending.payload.request_id}.</p><p>Recupere o pedido original antes de criar outra conta.</p><Button disabled={xml.busy} onClick={()=>void xml.recover().then(()=>{resetForm();toast.success('Salvamento original confirmado');}).catch(()=>{})}>Recuperar salvamento com XML</Button></section>}
       {xml.error&&!dialogOpen&&<div role="alert"><p>{xml.error}</p>{!xml.pending&&<Button variant="outline" disabled={xml.busy} onClick={()=>void xml.discardUpload()}>Descartar XML abandonado</Button>}</div>}{xml.confirmed&&<p role="status">Conta {xml.confirmed} salva; XML original preservado.</p>}{xml.cacheWarning&&<p role="alert">{xml.cacheWarning}</p>}
+      {currentTenant&&user&&<ManualTitleRecovery tenant={currentTenant.id} actor={user.id} kind="payable" onRecorded={resetForm}/>}
       {detailBusy&&<p role="status">Abrindo conta selecionada…</p>}
       {detailError&&<p role="alert">{detailError}</p>}
+      {currentTenant&&user&&<ApprovalPolicySettings tenant={currentTenant.id} actor={user.id}/>}
       {currentTenant&&user&&<PayablePortfolioPanel tenant={currentTenant.id} actor={user.id} onOpen={(id,action)=>void openAccount(id,action)}/>}
 
       <Dialog open={dialogOpen} onOpenChange={o => { if(saving.current)return; if (!o) resetForm(); setDialogOpen(o); }}>
@@ -196,6 +204,7 @@ function PayablesWorkspace() {
           {editingId&&<PayableXmlHistory key={editingId} tenant={currentTenant!.id} actor={user!.id} payableId={editingId}/>}
           <fieldset disabled={saveBusy||xml.busy||!!xml.pending} className="space-y-4">
             {saveError&&<p role="alert">{saveError}</p>}
+            {!editingId&&saveError.includes('título semelhante')&&<label>Justificativa para outro título semelhante<Input value={duplicateReason} onChange={e=>setDuplicateReason(e.target.value)} maxLength={2000}/></label>}
             <div className="rounded-md border bg-muted/30 p-3">
               <FiscalXmlUpload perspective="payer" acceptedKind="nfe" onExtracted={applyXmlToForm} />
               {pendingReceipt&&<p className="text-sm">XML selecionado: {pendingReceipt.name}. Até 2 MB, NF-e. A leitura preenche os campos; o original será preservado privadamente ao salvar, sem comprovação fiscal ou antivírus.</p>}
@@ -222,7 +231,7 @@ function PayablesWorkspace() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div>
                 <Label htmlFor="payable-amount">Valor (R$) *</Label>
-                <Input id="payable-amount" type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
+                <Input id="payable-amount" type="number" min="0.01" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
               </div>
               <div>
                 <Label htmlFor="payable-due-date">Vencimento</Label>

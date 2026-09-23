@@ -136,24 +136,32 @@ export async function canonicalizeNFSeTomadorPostalAddress(
   const uf = normalizeUf(party.uf);
   const city = normalizeCityName(party.municipio);
   const street = String(party.endereco || '').trim();
-  if (!cep || !uf || !city || street.length < 3) {
+  const streetKey = comparableAddressText(street);
+  if (!cep || !uf || !city || streetKey.length < 3) {
     throw new Error('Endereço do tomador incompleto para validação postal.');
   }
 
   const exactResponse = await fetcher(`https://viacep.com.br/ws/${cep}/json/`);
   if (!exactResponse.ok) throw new Error('Não foi possível validar o CEP do tomador.');
-  const exact = await exactResponse.json() as ViaCepAddress;
-  if (!exact.erro && matchesTomadorMunicipality(exact, party)) return applyViaCepAddress(party, exact);
+  const exactPayload = await exactResponse.json();
+  if (!exactPayload || typeof exactPayload !== 'object' || Array.isArray(exactPayload)) {
+    throw new Error('O serviço postal retornou uma resposta inválida para o CEP do tomador.');
+  }
+  const exact = exactPayload as ViaCepAddress;
+  const exactStreet = comparableAddressText(exact.logradouro);
+  if (!exact.erro && normalizeCep(exact.cep) === cep && matchesTomadorMunicipality(exact, party)
+    && (!exactStreet || exactStreet === streetKey)) return applyViaCepAddress(party, exact);
 
   const searchResponse = await fetcher(
     `https://viacep.com.br/ws/${encodeURIComponent(uf)}/${encodeURIComponent(city)}/${encodeURIComponent(street)}/json/`,
   );
   if (!searchResponse.ok) throw new Error('Não foi possível localizar um CEP válido para o endereço do tomador.');
-  const candidates = await searchResponse.json() as ViaCepAddress[];
-  const streetKey = comparableAddressText(street);
-  const matches = (Array.isArray(candidates) ? candidates : []).filter(address =>
-    matchesTomadorMunicipality(address, party)
-    && comparableAddressText(address.logradouro).includes(streetKey),
+  const candidates = await searchResponse.json();
+  const matches = (Array.isArray(candidates) ? candidates : []).filter((address): address is ViaCepAddress =>
+    Boolean(address) && typeof address === 'object' && !Array.isArray(address)
+    && Boolean(normalizeCep(address.cep))
+    && matchesTomadorMunicipality(address, party)
+    && comparableAddressText(address.logradouro) === streetKey,
   );
   if (matches.length !== 1) {
     throw new Error('CEP do tomador não pertence ao município informado e não foi possível corrigi-lo de forma inequívoca.');

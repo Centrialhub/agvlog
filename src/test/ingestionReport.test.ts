@@ -137,7 +137,7 @@ describe('ingestion report', () => {
     expect(report).toMatchObject({
       totalDocs: 2,
       needsReviewDocs: 1,
-      clientsUnresolved: 0,
+      clientsUnresolved: 1,
       reviewThreshold: 0.82,
     });
     expect(coverage).toEqual({ cnpj: 1, ie: 1, im: 1, email: 1, phone: 2, address: 1, ibge: 1 });
@@ -174,7 +174,7 @@ describe('ingestion report', () => {
       generatedAt: new Date('2026-08-24T00:00:00.000Z'),
     });
 
-    expect(report.needsReviewDocs).toBe(2);
+    expect(report.needsReviewDocs).toBe(1);
     expect(report.reviewItems).toEqual([{
       invoiceNumber: 'ORT-1',
       fileName: 'ort.pdf',

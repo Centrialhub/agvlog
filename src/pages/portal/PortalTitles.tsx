@@ -34,6 +34,7 @@ export default function PortalTitles() {
   const { selectedClientId, clients, can } = usePortalClientScope();
   const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]['value']>('all');
   const [page, setPage] = useState(0);
+  const [revision, setRevision] = useState<string | undefined>();
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const limit = 50;
   const statuses = useMemo(() => STATUS_FILTERS.find((item) => item.value === filter)?.statuses, [filter]);
@@ -41,10 +42,18 @@ export default function PortalTitles() {
     status: statuses ? [...statuses] : undefined,
     limit,
     offset: page * limit,
+    revision: page > 0 ? revision : undefined,
   });
   const download = useDownloadPortalFinancialTitle();
 
-  useEffect(() => setPage(0), [selectedClientId, filter]);
+  useEffect(() => {
+    setPage(0);
+    setRevision(undefined);
+  }, [selectedClientId, filter]);
+
+  useEffect(() => {
+    if (page === 0 && data?.revision) setRevision(data.revision);
+  }, [data?.revision, page]);
 
   const handleDownload = async (titleId: string) => {
     setDownloadError(null);
@@ -65,6 +74,14 @@ export default function PortalTitles() {
   const canView = can('can_view_financial');
   const rows = data?.rows ?? [];
   const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / limit));
+  const revisionChanged = error instanceof Error && error.message.includes('financial_titles_revision_changed');
+
+  useEffect(() => {
+    if (!isLoading && !error && data && page >= pageCount) {
+      setPage(pageCount - 1);
+    }
+  }, [data, error, isLoading, page, pageCount]);
 
   return (
     <PortalSection title="Títulos" description="Cobranças, vencimentos e valores vinculados ao seu acesso.">
@@ -92,8 +109,17 @@ export default function PortalTitles() {
                 <div role="status" className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : error ? (
                 <div role="alert" className="space-y-3 p-5 text-center text-sm text-destructive">
-                  <p>Não foi possível carregar os títulos: {portalErrorMessage(error, 'Falha na consulta.')}</p>
-                  <Button size="sm" variant="outline" disabled={isFetching} onClick={() => { void refetch(); }}>
+                  <p>{revisionChanged
+                    ? 'A lista de títulos mudou enquanto você navegava. Volte ao início para consultar a versão atual.'
+                    : `Não foi possível carregar os títulos: ${portalErrorMessage(error, 'Falha na consulta.')}`}</p>
+                  <Button size="sm" variant="outline" disabled={isFetching} onClick={() => {
+                    if (revisionChanged) {
+                      setRevision(undefined);
+                      setPage(0);
+                    } else {
+                      void refetch();
+                    }
+                  }}>
                     {isFetching ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />} Tentar novamente
                   </Button>
                 </div>
@@ -144,9 +170,9 @@ export default function PortalTitles() {
 
           {downloadError && <p role="alert" className="text-sm text-destructive">{downloadError}</p>}
 
-          {total > limit && (
+          {(total > limit || page > 0) && (
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Página {page + 1} de {Math.ceil(total / limit)} · {total} título(s)</span>
+              <span className="text-xs text-muted-foreground">Página {page + 1} de {pageCount} · {total} título(s)</span>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>Anterior</Button>
                 <Button size="sm" variant="outline" disabled={(page + 1) * limit >= total} onClick={() => setPage((current) => current + 1)}>Próxima</Button>

@@ -6,9 +6,9 @@ import {
 
 /**
  * Exercita a mesma implementação usada em PendingDocsGrouping.tsx:
- * 1) match exato sobre substring
- * 2) escolha determinística quando >1 candidato (menor nome)
- * 3) sinaliza ambiguidade quando >1 candidato exato
+ * 1) correspondência exata normalizada
+ * 2) ausência de escolha arbitrária quando há mais de um candidato
+ * 3) ausência de aproximação fuzzy entre cidades distintas
  */
 const routes: OperationalRouteRef[] = [
   { id: 'r1', name: 'ROTA - ITABIRA', destinations: [{ name: 'Itabira' }] },
@@ -36,8 +36,7 @@ describe('route matcher', () => {
   it('sinaliza ambiguidade quando 2 rotas cobrem a mesma cidade', () => {
     const r = matchOperationalRoute('Coração de Jesus', routes);
     expect(r.ambiguous).toBe(true);
-    // determinístico: escolhe o menor nome
-    expect(r.matched?.name).toBe('MG-C. JESUS');
+    expect(r.matched).toBeNull();
   });
 
   it('não faz match fuzzy quando existe match exato (RIO não vaza para Rio Pardo)', () => {
@@ -51,11 +50,10 @@ describe('route matcher', () => {
     expect(matched).toBeNull();
   });
 
-  it('fallback fuzzy usa limite de palavra (VELHO não casa com "Porto Velho" sem match exato)', () => {
-    // Cidade "Porto Velho" — não há rota exata; fallback deve casar r6 (destino "Velho" existe como palavra inteira).
+  it('não associa Porto Velho ao destino distinto Velho', () => {
     const r = matchOperationalRoute('Porto Velho', routes);
     expect(r.exact).toBe(false);
-    expect(r.matched?.id).toBe('r6');
+    expect(r.matched).toBeNull();
   });
 
   it('fallback fuzzy NÃO casa quando token é apenas substring parcial de palavra', () => {

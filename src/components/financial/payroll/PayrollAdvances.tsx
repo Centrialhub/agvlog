@@ -62,7 +62,8 @@ export function AdvancesTable() {
 
 export function RegisterAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const toast = useSonnerToast();
-  const { data: employees = [] } = useEmployees();
+  const employeesQuery = useEmployees();
+  const employees = employeesQuery.data ?? [];
   const register = useRegisterEmployeeAdvance();
   const [employeeId, setEmployeeId] = useState('');
   const [amount, setAmount] = useState('');
@@ -74,7 +75,8 @@ export function RegisterAdvanceDialog({ open, onOpenChange }: { open: boolean; o
 
   const handle = async () => {
     const parsedAmount = parseFinanceAmount(amount.replace('.',','));
-    if (!employeeId || parsedAmount === null) { toast.error('Funcionário e valor obrigatórios'); return; }
+    if (employeesQuery.isError || employeesQuery.isPending || employeesQuery.isFetching) { toast.error('Aguarde a consulta de funcionários ou tente novamente.'); return; }
+    if (!employeeId || parsedAmount === null || !/^\d{4}-\d{2}-\d{2}$/.test(advanceDate)) { toast.error('Funcionário, valor e data são obrigatórios'); return; }
     try {
       await register.mutateAsync({
         employee_id: employeeId,
@@ -100,14 +102,16 @@ export function RegisterAdvanceDialog({ open, onOpenChange }: { open: boolean; o
         <fieldset disabled={register.isPending||!!register.pending||!!register.storageError} className="space-y-3">
           <div>
             <Label className="text-xs">Funcionário *</Label>
-            <Select value={employeeId} onValueChange={setEmployeeId}>
+            <Select disabled={employeesQuery.isPending || employeesQuery.isFetching || employeesQuery.isError} value={employeeId} onValueChange={setEmployeeId}>
               <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
               <SelectContent>{employees.map(employee => <SelectItem key={employee.id} value={employee.id}>{employee.name}{employee.driver_id ? ' — motorista' : ''}</SelectItem>)}</SelectContent>
             </Select>
+            {(employeesQuery.isPending || employeesQuery.isFetching) && <p role="status" className="text-xs text-muted-foreground">Consultando funcionários…</p>}
+            {employeesQuery.isError && <div role="alert" className="mt-1 flex items-center gap-2 text-xs text-destructive"><span>Não foi possível consultar os funcionários: {getErrorMessage(employeesQuery.error)}</span><Button type="button" size="sm" variant="outline" onClick={() => void employeesQuery.refetch()}>Tentar novamente</Button></div>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">Valor *</Label><Input type="number" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} /></div>
-            <div><Label className="text-xs">Data</Label><Input type="date" value={advanceDate} onChange={event => setAdvanceDate(event.target.value)} /></div>
+            <div><Label className="text-xs">Data *</Label><Input required type="date" value={advanceDate} onChange={event => setAdvanceDate(event.target.value)} /></div>
             <div><Label className="text-xs">Método</Label>
               <Select value={method} onValueChange={value=>setMethod(value as typeof method)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -124,7 +128,7 @@ export function RegisterAdvanceDialog({ open, onOpenChange }: { open: boolean; o
         {register.pending&&<section aria-label="Cadastro preservado"><p>Pedido {register.pending.payload.request_id} · funcionário {register.pending.payload.employee_id} · valor {formatFinanceCents(register.pending.payload.amount_cents)}</p><p>Motivo: {register.pending.payload.reason}</p><Button disabled={register.isPending} onClick={async()=>{try{await register.mutateAsync(null);toast.success('Cadastro confirmado; nenhum pagamento foi criado.');onOpenChange(false);}catch(error){toast.error(getErrorMessage(error,'O cadastro ainda não foi confirmado. Preserve o pedido original.'));}}}>Recuperar cadastro preservado</Button></section>}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handle} disabled={register.isPending||!!register.pending||!!register.storageError||reason.trim().length<10}>Registrar</Button>
+          <Button onClick={handle} disabled={register.isPending||!!register.pending||!!register.storageError||employeesQuery.isPending||employeesQuery.isFetching||employeesQuery.isError||!advanceDate||reason.trim().length<10}>Registrar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

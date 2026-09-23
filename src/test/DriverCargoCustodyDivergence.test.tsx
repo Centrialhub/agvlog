@@ -46,7 +46,7 @@ vi.mock('@/lib/driver/driverOperationalOffline', () => ({ driverOperationalSnaps
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn() } }));
 vi.mock('@/lib/driver/tripCargoCustody', async importOriginal => {
   const actual = await importOriginal<typeof import('@/lib/driver/tripCargoCustody')>();
-  return { ...actual, getTripCargoControl: mocks.getCargo, updateDriverTripCargo: mocks.updateCargo };
+  return { ...actual, getCompleteTripCargoControl: mocks.getCargo, updateDriverTripCargo: mocks.updateCargo };
 });
 
 const load = (id: string, loadId: string) => ({

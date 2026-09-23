@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { formatFinanceCents } from "@/lib/financial/ledgerContract";
-import { readReceivablePaymentInstallments } from "@/lib/financial/receivablePaymentInstallments";
+import { readReceivablePaymentInstallments, ReceivablePaymentInstallmentsChangedError } from "@/lib/financial/receivablePaymentInstallments";
 export function ReceivablePaymentInstallments({
   tenant,
   actor,
@@ -41,12 +41,18 @@ export function ReceivablePaymentInstallments({
     data = query.data;
   if (query.isPending || query.isFetching)
     return <p role="status">Consultando distribuição por parcela…</p>;
-  if (query.error)
+  if (query.error) {
+    const changed = query.error instanceof ReceivablePaymentInstallmentsChangedError;
+    const canReset = page.offset > 0 || page.revision !== null;
     return (
-      <p role="alert">
-        Não foi possível conferir a distribuição deste recebimento.
-      </p>
+      <div role="alert">
+        <p>{changed ? 'A distribuição mudou enquanto você navegava.' : 'Não foi possível conferir a distribuição deste recebimento.'}</p>
+        <Button variant="outline" onClick={() => { if (canReset) setPage({ offset: 0, revision: null }); else void query.refetch(); }}>
+          {canReset ? 'Voltar à primeira página das distribuições' : 'Tentar consultar distribuições novamente'}
+        </Button>
+      </div>
     );
+  }
   if (!data?.total)
     return (
       <p>Este recebimento não possui distribuição por parcela registrada.</p>

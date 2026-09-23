@@ -24,7 +24,7 @@ import { useClients } from '@/hooks/useClients';
 import { isPortalInviteEmail, PORTAL_PERMISSION_FIELDS, type CreatePortalInviteResponse, type PortalPermissionKey } from '@/lib/portal/portalAccessInvite';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { edgeFunctionErrorMessage } from '@/lib/supabase/edgeFunctionError';
-
+import { roleLabels, roleIcons, StatCard, RoleInfo } from '@/components/team/TeamSummaryCards';
 type AppRole = Enums<'app_role'>;
 type TeamRole = Extract<AppRole, 'admin' | 'operator' | 'driver'>;
 type DriverOption = Pick<Tables<'drivers'>, 'id' | 'name' | 'phone' | 'doc'>;
@@ -60,13 +60,6 @@ const errorMessage = (error: unknown, fallback: string) =>
 const isTeamRole = (role: string): role is TeamRole =>
   role === 'admin' || role === 'operator' || role === 'driver';
 
-const roleLabels: Record<string, string> = {
-  owner: 'Proprietário',
-  admin: 'Administrador',
-  operator: 'Operador',
-  client: 'Cliente',
-  driver: 'Motorista',
-};
 
 const roleBadgeVariant: Record<string, string> = {
   owner: 'bg-primary text-primary-foreground',
@@ -76,13 +69,6 @@ const roleBadgeVariant: Record<string, string> = {
   driver: 'bg-muted text-muted-foreground',
 };
 
-const roleIcons: Record<string, React.ReactNode> = {
-  owner: <ShieldCheck className="h-3.5 w-3.5" />,
-  admin: <ShieldCheck className="h-3.5 w-3.5" />,
-  operator: <UserCog className="h-3.5 w-3.5" />,
-  client: <Building2 className="h-3.5 w-3.5" />,
-  driver: <Truck className="h-3.5 w-3.5" />,
-};
 
 interface MemberRow {
   id: string;
@@ -105,6 +91,11 @@ export default function TeamManagement() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editMember, setEditMember] = useState<MemberRow | null>(null);
   const { filters, setFilter, resetFilters, activeCount } = useListFilters({ search: '', role: 'all', status: 'all' });
+
+  useEffect(() => {
+    setInviteOpen(false);
+    setEditMember(null);
+  }, [currentTenant?.id]);
 
   const { data: members = [], isLoading, isError, error: membersError, refetch: refetchMembers } = useQuery({
     queryKey: ['tenant_members', currentTenant?.id],
@@ -155,20 +146,16 @@ export default function TeamManagement() {
         profile_email: emailMap.get(m.user_id)?.email || null,
       }));
     },
-    enabled: !!currentTenant,
+    enabled: isAdmin && !!currentTenant,
   });
 
   // Drivers linked to users
-  const { data: drivers = [] } = useDrivers();
+  const { data: drivers = [] } = useDrivers({ enabled: isAdmin });
 
   const updateRoleMutation = useMutation({
-    mutationFn: async ({ id, role }: { id: string; role: TeamRole }) => {
+    mutationFn: async ({ id, role, expectedUpdatedAt }: { id: string; role: TeamRole; expectedUpdatedAt: string }) => {
       if (!currentTenant) throw new Error('Tenant ativo não encontrado.');
-      const { error } = await supabase
-        .from('tenant_memberships')
-        .update({ role, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .eq('tenant_id', currentTenant.id);
+      const { error } = await supabase.rpc('update_tenant_membership_v1' as never, { _membership_id: id, _expected_updated_at: expectedUpdatedAt, _role: role, _active: null } as never);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -179,13 +166,9 @@ export default function TeamManagement() {
   });
 
   const toggleActiveMutation = useMutation({
-    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+    mutationFn: async ({ id, active, expectedUpdatedAt }: { id: string; active: boolean; expectedUpdatedAt: string }) => {
       if (!currentTenant) throw new Error('Tenant ativo não encontrado.');
-      const { error } = await supabase
-        .from('tenant_memberships')
-        .update({ active, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .eq('tenant_id', currentTenant.id);
+      const { error } = await supabase.rpc('update_tenant_membership_v1' as never, { _membership_id: id, _expected_updated_at: expectedUpdatedAt, _role: null, _active: active } as never);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -329,7 +312,7 @@ export default function TeamManagement() {
                             <Select
                               value={m.role}
                               onValueChange={(role) => {
-                                if (isTeamRole(role)) updateRoleMutation.mutate({ id: m.id, role });
+                                if (isTeamRole(role)) updateRoleMutation.mutate({ id: m.id, role, expectedUpdatedAt: m.updated_at });
                               }}
                               disabled={updateRoleMutation.isPending}
                             >
@@ -365,7 +348,7 @@ export default function TeamManagement() {
                               <Button
                                 size="sm"
                                 variant={m.active ? 'ghost' : 'outline'}
-                                onClick={() => toggleActiveMutation.mutate({ id: m.id, active: !m.active })}
+                                onClick={() => toggleActiveMutation.mutate({ id: m.id, active: !m.active, expectedUpdatedAt: m.updated_at })}
                                 disabled={toggleActiveMutation.isPending}
                               >
                                 {m.active ? (
@@ -386,11 +369,12 @@ export default function TeamManagement() {
           )}
         </TabsContent>
         <TabsContent value="portal_access" className="mt-4">
-          <PortalAccessTab tenantId={currentTenant?.id} />
+          <PortalAccessTab key={currentTenant?.id} tenantId={currentTenant?.id} />
         </TabsContent>
       </Tabs>
 
       <InviteDialog
+        key={`invite:${currentTenant?.id ?? 'none'}`}
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         tenantId={currentTenant?.id}
@@ -398,6 +382,7 @@ export default function TeamManagement() {
       />
 
       <EditMemberDialog
+        key={`edit:${currentTenant?.id ?? 'none'}`}
         member={editMember}
         onOpenChange={(open) => { if (!open) setEditMember(null); }}
         tenantId={currentTenant?.id}
@@ -432,6 +417,7 @@ type PortalAccessRow = Pick<
   | 'can_request_pickup'
   | 'can_view_vehicle_live'
   | 'can_view_driver_contact'
+  | 'updated_at'
 >;
 
 function PortalAccessTab({ tenantId }: { tenantId?: string }) {
@@ -441,25 +427,28 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<PortalAccessRow | null>(null);
 
+  useEffect(() => { setOpen(false); setEditing(null); }, [tenantId]);
+
   const { data: rows = [], isLoading, isError, error } = useQuery({
     queryKey: ['client_portal_access_admin', tenantId],
     queryFn: async () => {
       if (!tenantId) return [] as PortalAccessRow[];
       return await fetchAllPostgrestPages((from, to) => supabase.from('client_portal_access')
-        .select('id, user_id, client_id, access_type, active, can_view_financial, can_download_documents, can_open_occurrences, can_request_pickup, can_view_vehicle_live, can_view_driver_contact')
+        .select('id, user_id, client_id, access_type, active, can_view_financial, can_download_documents, can_open_occurrences, can_request_pickup, can_view_vehicle_live, can_view_driver_contact, updated_at')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false }).order('id').range(from, to)) as PortalAccessRow[];
     },
     enabled: !!tenantId,
   });
 
-  const { data: clientCatalog = [] } = useClients();
+  const clientsQuery = useClients();
+  const clientCatalog = clientsQuery.data ?? [];
   const clients: ClientOption[] = clientCatalog.filter(client => client.active);
 
   const toggleActive = useMutation({
-    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+    mutationFn: async ({ id, active, expectedUpdatedAt }: { id: string; active: boolean; expectedUpdatedAt: string }) => {
       if (!tenantId) throw new Error('Tenant ativo não encontrado.');
-      const { error } = await supabase.from('client_portal_access').update({ active }).eq('id', id).eq('tenant_id', tenantId);
+      const { error } = await supabase.rpc('mutate_client_portal_access_v1' as never, { _access_id: id, _expected_updated_at: expectedUpdatedAt, _action: 'set_active', _active: active } as never);
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['client_portal_access_admin'] }); toast.success('Acesso atualizado'); },
@@ -467,9 +456,9 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, expectedUpdatedAt }: { id: string; expectedUpdatedAt: string }) => {
       if (!tenantId) throw new Error('Tenant ativo não encontrado.');
-      const { error } = await supabase.from('client_portal_access').delete().eq('id', id).eq('tenant_id', tenantId);
+      const { error } = await supabase.rpc('mutate_client_portal_access_v1' as never, { _access_id: id, _expected_updated_at: expectedUpdatedAt, _action: 'delete', _active: null } as never);
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['client_portal_access_admin'] }); toast.success('Acesso removido'); },
@@ -485,10 +474,11 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
           Convide clientes e fornecedores externos sem adicioná-los à equipe interna. O acesso fica limitado
           ao cliente, ao tipo de vínculo e às permissões escolhidas abaixo.
         </div>
-        <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}>
+        <Button size="sm" disabled={clientsQuery.isError || clientsQuery.isLoading} onClick={() => { setEditing(null); setOpen(true); }}>
           <Link2 className="h-4 w-4 mr-1" /> Novo acesso
         </Button>
       </div>
+      {clientsQuery.isError ? <div role="alert" className="flex items-center justify-between rounded-md border border-destructive/40 p-3 text-sm text-destructive">Não foi possível carregar os clientes disponíveis.<Button variant="outline" size="sm" onClick={() => void clientsQuery.refetch()}>Tentar novamente</Button></div> : null}
       <Card>
         <Table>
           <TableHeader>
@@ -520,7 +510,7 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
                   <TableCell><Badge variant={r.active ? 'default' : 'secondary'}>{r.active ? 'Ativo' : 'Inativo'}</Badge></TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button size="sm" variant="ghost" onClick={() => { setEditing(r); setOpen(true); }}><Pencil className="h-3 w-3" /></Button>
-                    <Button size="sm" variant="ghost" onClick={() => toggleActive.mutate({ id: r.id, active: !r.active })}>
+                    <Button size="sm" variant="ghost" onClick={() => toggleActive.mutate({ id: r.id, active: !r.active, expectedUpdatedAt: r.updated_at })}>
                       {r.active ? <Ban className="h-3 w-3 text-destructive" /> : <CheckCircle2 className="h-3 w-3 text-success" />}
                     </Button>
                     <Button
@@ -539,7 +529,7 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
                     >
                       <Link2 className="h-3 w-3" />
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover acesso?', { title: 'Remover acesso', confirmLabel: 'Remover' })) remove.mutate(r.id); }}>
+                    <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Remover acesso?', { title: 'Remover acesso', confirmLabel: 'Remover' })) remove.mutate({ id: r.id, expectedUpdatedAt: r.updated_at }); }}>
                       <AlertTriangle className="h-3 w-3 text-destructive" />
                     </Button>
                   </TableCell>
@@ -629,9 +619,19 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
         can_view_vehicle_live: !!perms.can_view_vehicle_live,
         can_view_driver_contact: !!perms.can_view_driver_contact,
       };
-      if (editing) {
-        const { error } = await supabase.from('client_portal_access').update(payload).eq('id', editing.id).eq('tenant_id', tenantId);
+      if (editing && !userId && canInvite) {
+        const { data, error } = await supabase.functions.invoke<CreatePortalInviteResponse>('create-team-member', {
+          body: { tenant_id: tenantId, email: inviteEmail, full_name: inviteName.trim() || inviteEmail, role: 'client', client_id: clientId, access_type: accessType, permissions: perms },
+        });
         if (error) throw error;
+        if (data?.error || !data?.success || !data.user_id) throw new Error(data?.error || 'Resposta inválida ao transferir o acesso externo.');
+        const transfer = await supabase.rpc('replace_portal_access_after_invite_v1' as never, { _old_access_id: editing.id, _expected_updated_at: editing.updated_at, _new_user_id: data.user_id } as never);
+        if (transfer.error) throw transfer.error;
+        toast.success(`Convite enviado e acesso transferido para ${data.email || inviteEmail}`);
+      } else if (editing) {
+        const { data, error } = await supabase.from('client_portal_access').update(payload).eq('id', editing.id).eq('tenant_id', tenantId).eq('updated_at', editing.updated_at).select('id').maybeSingle();
+        if (error) throw error;
+        if (!data) throw new Error('O acesso foi alterado por outra pessoa. Atualize a lista e tente novamente.');
         toast.success('Acesso atualizado');
       } else if (userId) {
         const insertPayload: TablesInsert<'client_portal_access'> = { ...payload, active: true };
@@ -763,31 +763,6 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
   );
 }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 py-3 px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted">{icon}</div>
-        <div>
-          <p className="text-xl font-bold text-foreground">{value}</p>
-          <p className="text-xs text-muted-foreground">{label}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function RoleInfo({ role, desc }: { role: string; desc: string }) {
-  return (
-    <div className="flex gap-2 rounded-md border p-3">
-      <div className="mt-0.5">{roleIcons[role]}</div>
-      <div>
-        <p className="font-medium text-foreground text-sm">{roleLabels[role]}</p>
-        <p className="text-xs text-muted-foreground">{desc}</p>
-      </div>
-    </div>
-  );
-}
 
 function InviteDialog({
   open,

@@ -98,23 +98,27 @@ export default function PortalDocuments() {
                   <TableRow key={d.id} className="cursor-pointer hover:bg-muted/40">
                     <TableCell className="uppercase text-xs">{d.document_type}</TableCell>
                     <TableCell className="font-mono">
-                      <Link to={`/portal/shipments/${d.id}`} className="hover:underline">
-                        {d.invoice_number || '—'}
-                      </Link>
+                      {d.document_type === 'mdfe' ? (d.invoice_number || '—') : (
+                        <Link to={`/portal/shipments/${d.id}`} className="hover:underline">
+                          {d.invoice_number || '—'}
+                        </Link>
+                      )}
                     </TableCell>
                     <TableCell>{fmtDateSafe(d.issue_date)}</TableCell>
                     <TableCell className="max-w-[180px] truncate">{d.remitter || '—'}</TableCell>
                     <TableCell className="max-w-[180px] truncate">{d.recipient || '—'}</TableCell>
                     <TableCell className="text-xs">{[d.recipient_city, d.recipient_state].filter(Boolean).join(' / ') || '—'}</TableCell>
                     {showFinancial && (
-                      <TableCell className="text-right font-mono">{d.value ? d.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</TableCell>
+                      <TableCell className="text-right font-mono">{d.value != null ? d.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</TableCell>
                     )}
                     <TableCell><Badge variant="outline">{d.status || '—'}</Badge></TableCell>
                     <TableCell>{d.has_pod && <FileCheck2 className="h-4 w-4 text-green-600" />}</TableCell>
                     <TableCell>
-                      <Link to={`/portal/shipments/${d.id}`} aria-label={`Abrir documento ${d.invoice_number || d.id}`}>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </Link>
+                      {d.document_type !== 'mdfe' && (
+                        <Link to={`/portal/shipments/${d.id}`} aria-label={`Abrir documento ${d.invoice_number || d.id}`}>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </Link>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

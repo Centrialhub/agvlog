@@ -3,7 +3,7 @@ import {readLegacyPayableAssociation,submitLegacyPayableAssociation,LegacyPayabl
 import {legacyPayablePendingSchema} from '@/lib/financial/legacyPayableAssociationContract';
 const rpc=vi.hoisted(()=>vi.fn());vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc}}));beforeEach(()=>rpc.mockReset());
 const tenant=crypto.randomUUID(),payment=crypto.randomUUID(),movement=crypto.randomUUID(),link=crypto.randomUUID();
-const pending=legacyPayablePendingSchema.parse({kind:'associate',command:{version:1,tenant_id:tenant,request_id:crypto.randomUUID(),payment_id:payment,movement_id:movement,revision:'source-1',reason:'Pagamento antigo conferido'}});
+const pending=legacyPayablePendingSchema.parse({kind:'associate',command:{version:1,tenant_id:tenant,request_id:crypto.randomUUID(),payment_id:payment,movement_id:movement,revision:'source-1',existing_payment_confirmed:true,reason:'Pagamento antigo conferido'}});
 const result={version:1,tenant_id:tenant,request_id:pending.command.request_id,payment_id:payment,payable_id:crypto.randomUUID(),movement_id:movement,link_id:link,origin:'legacy_adoption',amount_cents:'50000',bank_transaction_id:null,cash_created:false,payment_created:false,confirmed:true};
 it('associates existing IDs only and rejects a response creating cash or another payment',async()=>{
  rpc.mockResolvedValue({data:result,error:null});await submitLegacyPayableAssociation(pending);expect(rpc).toHaveBeenCalledWith('associate_finance_legacy_payable_payment',{_payload:pending.command});

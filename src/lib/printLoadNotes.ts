@@ -62,7 +62,7 @@ interface PrintableLoadDocument {
   recipient_state?: string | null;
 }
 
-export function printLoadNotesReport(load: PrintableLoad, documents: PrintableLoadDocument[]) {
+export function printLoadNotesReport(load: PrintableLoad, documents: PrintableLoadDocument[]): boolean {
   const docs = (documents || []).filter((document) => document.document_type === 'inbound');
   const total = docs.reduce((sum, document) => sum + Number(document.value || 0), 0);
   const delivered = docs.filter((document) => document.status === 'delivered').length;
@@ -173,11 +173,11 @@ export function printLoadNotesReport(load: PrintableLoad, documents: PrintableLo
 
   const w = window.open('', '_blank', 'width=1100,height=800');
   if (!w) {
-    alert('Permita pop-ups para gerar o relatório.');
-    return;
+    return false;
   }
   w.opener = null;
   w.document.open();
   w.document.write(html);
   w.document.close();
+  return true;
 }

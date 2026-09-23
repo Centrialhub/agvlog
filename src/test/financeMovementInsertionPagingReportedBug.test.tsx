@@ -1,0 +1,20 @@
+import {fireEvent,render,screen} from '@testing-library/react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {beforeEach,expect,it,vi} from 'vitest';
+import FinanceMovements from '@/pages/FinanceMovements';
+const mocks=vi.hoisted(()=>({filters:vi.fn()}));
+vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'10000000-0000-4000-8000-000000000001'},currentRole:'operator'})}));
+vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'20000000-0000-4000-8000-000000000001'}})}));
+vi.mock('@/hooks/useFinanceLedger',()=>({useFinanceAccess:()=>({isPending:false,error:null,data:true}),useFinanceMovements:(filters:{page:number})=>{mocks.filters(filters);return{isFetching:false,isError:false,error:null,data:{page:filters.page,page_size:50,total:120,active_count:120,voided_count:0,inflow_cents:'0',outflow_cents:'0',historical_inflow_cents:'0',historical_outflow_cents:'0',voided_inflow_cents:'0',voided_outflow_cents:'0',rows:[]}};}}));
+vi.mock('@/hooks/useFinancialPayments',()=>({useBankAccounts:()=>({isPending:false,error:null,data:[]})}));
+vi.mock('@/components/financial/MovementEntryDialog',()=>({MovementEntryDialog:({onRecorded}:{onRecorded:()=>void})=><button onClick={onRecorded}>Confirmar nova movimentação</button>}));
+vi.mock('@/components/financial/PendingTransfers',()=>({PendingTransfers:()=>null}));
+vi.mock('@/components/financial/AccountOpeningEntry',()=>({AccountOpeningEntry:()=>null}));
+vi.mock('@/components/financial/DriverAdvanceReturns',()=>({DriverAdvanceReturns:()=>null}));
+beforeEach(()=>vi.clearAllMocks());
+it('returns to the first page before refreshing after a new movement',()=>{
+ render(<QueryClientProvider client={new QueryClient()}><FinanceMovements/></QueryClientProvider>);
+ fireEvent.click(screen.getByRole('button',{name:'Próxima'}));expect(mocks.filters).toHaveBeenLastCalledWith(expect.objectContaining({page:2}));
+ fireEvent.click(screen.getByRole('button',{name:'Registrar movimentação'}));fireEvent.click(screen.getByRole('button',{name:'Confirmar nova movimentação'}));
+ expect(mocks.filters).toHaveBeenLastCalledWith(expect.objectContaining({page:1}));
+});

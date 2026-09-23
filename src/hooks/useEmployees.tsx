@@ -17,7 +17,7 @@ export type CreateEmployeeInput = Omit<TablesInsert<'employees'>, 'tenant_id' | 
 export type UpdateEmployeeInput = TablesUpdate<'employees'> & { id: string };
 export type CreateEmployeeDocumentInput = Omit<TablesInsert<'employee_documents'>, 'tenant_id' | 'created_by'>;
 
-export function useEmployees() {
+export function useEmployees(options: { enabled?: boolean } = {}) {
   const { currentTenant } = useTenant();
   return useQuery({
     queryKey: ['employees', currentTenant?.id],
@@ -26,7 +26,7 @@ export function useEmployees() {
       return await fetchAllPostgrestPages((from, to) => supabase.from('employees').select('*')
         .eq('tenant_id', currentTenant.id).order('name').order('id').range(from, to)) as Employee[];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && options.enabled !== false,
   });
 }
 

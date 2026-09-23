@@ -1,3 +1,4 @@
+import { FinanceSection } from '@/components/financial/FinanceSection';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CostDispositionsPanel } from '@/components/financial/CostDispositionsPanel';
@@ -40,9 +41,14 @@ const initial: Filters = {
   costCenter: 'all',
 };
 
-const navigationButtonClass = 'h-auto min-h-11 min-w-0 whitespace-normal';
+const navigationButtonClass = 'h-auto min-h-12 min-w-0 justify-start whitespace-normal px-4 py-3 text-left';
 
 export default function Financial() {
+  const { currentTenant } = useTenant();
+  return <FinancialWorkspace key={currentTenant?.id ?? 'none'} />;
+}
+
+function FinancialWorkspace() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -85,14 +91,14 @@ export default function Financial() {
 
   return (
     <div className="min-w-0 space-y-5">
-      <header className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <header className="flex min-w-0 flex-col gap-5">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold">Financeiro</h1>
           <p className="text-sm text-muted-foreground">
-            Carteira, custos registrados e títulos fiscais incorporados. Estes resumos não representam caixa conciliado ou fechamento.
+            Acompanhe valores a receber, obrigações e custos. Os resumos não representam caixa conciliado ou fechamento.
           </p>
         </div>
-        <nav aria-label="Navegação financeira" className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:flex lg:w-auto lg:flex-wrap">
+        <nav aria-label="Navegação financeira" className="grid w-full grid-cols-2 gap-2 xl:grid-cols-4">
           <Button className={navigationButtonClass} variant="outline" onClick={() => navigate('/receivables')}>Contas a receber</Button>
           <Button className={navigationButtonClass} variant="outline" onClick={() => navigate('/payables')}>Contas a pagar</Button>
           <Button className={navigationButtonClass} variant="outline" onClick={() => navigate('/payroll')}>Folha de pagamento</Button>
@@ -105,17 +111,19 @@ export default function Financial() {
       </header>
 
       <form
-        className="min-w-0 space-y-3 rounded border p-3"
+        aria-label="Filtros do resumo financeiro"
+        className="min-w-0 space-y-4 rounded-xl border bg-muted/20 p-4 sm:p-5"
         onSubmit={event => {
           event.preventDefault();
           apply();
         }}
       >
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <label className="min-w-0 space-y-1">
+        <h2 className="font-semibold">Filtrar resumo</h2>
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <label className="min-w-0 space-y-1 text-sm font-medium">
             Período
             <select
-              className="block min-h-10 w-full min-w-0 rounded border p-2"
+              className="block min-h-10 w-full min-w-0 rounded-md border bg-background p-2"
               value={draft.period}
               onChange={event => setDraft({ ...draft, period: event.target.value as Filters['period'] })}
             >
@@ -125,15 +133,15 @@ export default function Financial() {
               <option value="all">Todo o período</option>
             </select>
           </label>
-          <label className="min-w-0 space-y-1">
+          <label className="min-w-0 space-y-1 text-sm font-medium">
             Data inicial
             <Input className="min-h-10 min-w-0" type="date" value={draft.from} onChange={event => setDraft({ ...draft, from: event.target.value })} />
           </label>
-          <label className="min-w-0 space-y-1">
+          <label className="min-w-0 space-y-1 text-sm font-medium">
             Data final
             <Input className="min-h-10 min-w-0" type="date" min={draft.from || undefined} value={draft.to} onChange={event => setDraft({ ...draft, to: event.target.value })} />
           </label>
-          <div className="min-w-0 space-y-1">
+          <div className="min-w-0 space-y-1 text-sm font-medium">
             <span className="text-sm font-medium">Cliente — carteira e fiscal</span>
             <SearchableSelect
               ariaLabel="Cliente — carteira e fiscal"
@@ -145,10 +153,10 @@ export default function Financial() {
               className="min-h-10 min-w-0 text-sm"
             />
           </div>
-          <label className="min-w-0 space-y-1">
+          <label className="min-w-0 space-y-1 text-sm font-medium">
             Tipo fiscal
             <select
-              className="block min-h-10 w-full min-w-0 rounded border p-2"
+              className="block min-h-10 w-full min-w-0 rounded-md border bg-background p-2"
               value={draft.docType}
               onChange={event => setDraft({ ...draft, docType: event.target.value as Filters['docType'] })}
             >
@@ -157,10 +165,10 @@ export default function Financial() {
               <option value="nfse">NFS-e</option>
             </select>
           </label>
-          <label className="min-w-0 space-y-1">
+          <label className="min-w-0 space-y-1 text-sm font-medium">
             Categoria dos custos registrados
             <select
-              className="block min-h-10 w-full min-w-0 rounded border p-2"
+              className="block min-h-10 w-full min-w-0 rounded-md border bg-background p-2"
               value={draft.category}
               onChange={event => setDraft({ ...draft, category: event.target.value })}
             >
@@ -168,10 +176,10 @@ export default function Financial() {
               {Object.entries(recordedCostCategoryLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select>
           </label>
-          <label className="min-w-0 space-y-1">
+          <label className="min-w-0 space-y-1 text-sm font-medium">
             Centro de custo dos registros incorporados
             <select
-              className="block min-h-10 w-full min-w-0 rounded border p-2"
+              className="block min-h-10 w-full min-w-0 rounded-md border bg-background p-2"
               value={draft.costCenter}
               onChange={event => setDraft({ ...draft, costCenter: event.target.value })}
             >
@@ -199,8 +207,13 @@ export default function Financial() {
       {currentTenant && user && <PayablePortfolioPanel tenant={currentTenant.id} actor={user.id} onManage={() => navigate('/payables')} />}
       <RecordedCostSummary state={costs} onManage={() => navigate('/financial/recorded-expenses')} />
       <FiscalDashboardSummary state={fiscal} />
-      {currentTenant && user && <CostDispositionsPanel tenant={currentTenant.id} actor={user.id} />}
-      {currentTenant && user && <PeriodMoneyPackagePanel tenant={currentTenant.id} actor={user.id} />}
+      <FinanceSection title="Destinação de custos" description="Confira vínculos e valores que ainda precisam de destinação.">
+        {currentTenant && user && <CostDispositionsPanel tenant={currentTenant.id} actor={user.id} />}
+      </FinanceSection>
+      <FinanceSection title="Conferência do período" description="Consulte as evidências e os registros de fechamento.">
+        {currentTenant && user && <PeriodMoneyPackagePanel tenant={currentTenant.id} actor={user.id} />}
+      </FinanceSection>
+      <FinanceSection title="Fretes a faturar" description="Consulte a previsão de fretes com filtros próprios.">
       {currentTenant && user && (
         <UnbilledFreightPanel
           tenant={currentTenant.id}
@@ -208,6 +221,7 @@ export default function Financial() {
           clients={clients.map(client => ({ id: client.id, label: client.company_name }))}
         />
       )}
+      </FinanceSection>
     </div>
   );
 }

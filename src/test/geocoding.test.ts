@@ -40,4 +40,19 @@ describe('address-first location resolution', () => {
     }] }, error: null });
     await expect(geocodeAddress('tenant', 'Rua A, 10')).rejects.toThrow('resposta inválida');
   });
+
+  it('asks for a fresh review when the targeted address changed', async () => {
+    mocks.invoke.mockResolvedValue({ data: null, error: { context: new Response(null, { status: 409 }) } });
+    await expect(geocodeAddress('tenant', 'Rua A, 10', { type: 'client', id: 'client' }))
+      .rejects.toThrow('Atualize a fila');
+  });
+
+  it('explains when another reviewer resolved the address before a stale search', async () => {
+    mocks.invoke.mockResolvedValue({ data: null, error: { context: new Response(
+      JSON.stringify({ error: 'address_review_already_resolved' }),
+      { status: 409, headers: { 'content-type': 'application/json' } },
+    ) } });
+    await expect(geocodeAddress('tenant', 'Rua A, 10', { type: 'client', id: 'client' }))
+      .rejects.toThrow('já foi validado por outra pessoa');
+  });
 });

@@ -13,13 +13,19 @@ const trip = z.object({trip_id:id,tenant_id:id,trip_code:z.string(),trip_status:
   route_geometry_geojson:z.object({type:z.literal('LineString'),coordinates:z.array(z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90)])).min(2)}).nullable(),
   distance_from_route_meters:number,delay_minutes:number,stopped_minutes:number,average_speed_kmh:number,
   eta_next_stop_at:text,last_signal_at:text,last_signal_age_seconds:number,position_captured_at:text,
-  next_stop:stop.nullable(),previous_stops:z.array(stop),pending_stops:z.array(stop),
-  loads:z.array(z.object({id,code:text,documents_count:z.number().int().nonnegative(),total_weight:number}))});
+  next_stop:stop.nullable(),previous_stops:z.array(stop),previous_stops_total:z.number().int().nonnegative(),previous_stops_truncated:z.boolean(),
+  pending_stops:z.array(stop),pending_stops_total:z.number().int().nonnegative(),pending_stops_truncated:z.boolean(),
+  loads:z.array(z.object({id,code:text,documents_count:z.number().int().nonnegative(),total_weight:number})),
+  loads_total:z.number().int().nonnegative(),loads_truncated:z.boolean()});
 const alert = z.object({id,tenant_id:id,trip_id:id.nullable(),vehicle_id:id.nullable(),type:z.string(),severity,
-  title:z.string(),message:text,status:z.literal('open'),opened_at:z.string()});
+  title:z.string(),message:text,status:z.literal('open'),opened_at:z.string(),trip_code:text.optional(),trip_status:text.optional(),
+  vehicle_plate:text.optional(),driver_name:text.optional()});
 export function readTowerTrips(data: unknown, tenant: string): ActiveTripLive[] {
   const rows = z.array(trip).parse(data);
   if (rows.some(row => row.tenant_id !== tenant) || new Set(rows.map(row => row.trip_id)).size !== rows.length) throw new Error('Viagens incompatíveis com a empresa.');
+  if(rows.some(row=>row.previous_stops_truncated!==(row.previous_stops_total>row.previous_stops.length)
+    ||row.pending_stops_truncated!==(row.pending_stops_total>row.pending_stops.length)
+    ||row.loads_truncated!==(row.loads_total>row.loads.length)))throw new Error('Coleções da viagem incompatíveis com seus limites.');
   return rows.map(row => ({...row,next_stop:row.next_stop && {...row.next_stop,client_name:row.next_stop.client_name ?? 'Destino não informado'},
     previous_stops:row.previous_stops.map(s=>({...s,client_name:s.client_name??'Destino não informado'})),
     pending_stops:row.pending_stops.map(s=>({...s,client_name:s.client_name??'Destino não informado'}))}));
@@ -30,10 +36,12 @@ export function readTowerAlerts(data: unknown, tenant: string): TripAlert[] {
 }
 export function readTowerSnapshot(data: unknown, tenant: string) {
   const snapshot=z.object({version:z.literal(1),tenant_id:id,read_at:z.string(),trip_limit:z.number().int().positive(),
-    trip_total:z.number().int().nonnegative(),truncated:z.boolean(),trips:z.unknown(),alerts:z.unknown()}).parse(data);
+    trip_total:z.number().int().nonnegative(),truncated:z.boolean(),alert_limit:z.number().int().positive(),
+    alert_total:z.number().int().nonnegative(),alerts_truncated:z.boolean(),trips:z.unknown(),alerts:z.unknown()}).parse(data);
   if(snapshot.tenant_id!==tenant)throw new Error('Snapshot incompatível com a empresa.');
   const trips=readTowerTrips(snapshot.trips,tenant),alerts=readTowerAlerts(snapshot.alerts,tenant);
   if(snapshot.truncated!==(snapshot.trip_total>trips.length)||trips.length>snapshot.trip_limit)throw new Error('Limite do snapshot da torre incompatível.');
+  if(snapshot.alerts_truncated!==(snapshot.alert_total>alerts.length)||alerts.length>snapshot.alert_limit)throw new Error('Limite de alertas da torre incompatível.');
   return {...snapshot,trips,alerts};
 }
 export function requireRouteResult(result: { data: unknown; error: unknown }) {

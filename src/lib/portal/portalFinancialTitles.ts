@@ -34,6 +34,7 @@ const portalFinancialTitlesSchema = z.object({
   }),
   rows: z.array(portalFinancialTitleSchema),
   total: z.number().int().nonnegative(),
+  revision: z.string().min(1),
 });
 
 const portalFinancialTitleFileSchema = z.object({

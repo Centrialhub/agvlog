@@ -118,7 +118,7 @@ export default function TripDetailsDrawer({
         {/* Paradas */}
         {trip.previous_stops.length > 0 && (
           <section className="mt-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Concluídas ({trip.previous_stops.length})</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Concluídas ({trip.previous_stops_truncated?`${trip.previous_stops.length} de ${trip.previous_stops_total}`:trip.previous_stops.length})</h4>
             <ul className="space-y-1 text-xs">
               {trip.previous_stops.map((s) => (
                 <li key={s.id} className="flex justify-between text-muted-foreground">
@@ -127,12 +127,13 @@ export default function TripDetailsDrawer({
                 </li>
               ))}
             </ul>
+            {trip.previous_stops_truncated&&<p className="mt-1 text-[11px] text-warning">Histórico de paradas resumido neste painel.</p>}
           </section>
         )}
 
         {trip.pending_stops.length > 1 && (
           <section className="mt-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pendentes</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pendentes ({trip.pending_stops_truncated?`${trip.pending_stops.length} de ${trip.pending_stops_total}`:trip.pending_stops.length})</h4>
             <ul className="space-y-1 text-xs">
               {trip.pending_stops.map((s) => (
                 <li key={s.id} className="flex justify-between">
@@ -141,13 +142,14 @@ export default function TripDetailsDrawer({
                 </li>
               ))}
             </ul>
+            {trip.pending_stops_truncated&&<p className="mt-1 text-[11px] text-warning">Paradas pendentes resumidas neste painel e no mapa.</p>}
           </section>
         )}
 
         {/* Cargas */}
         {trip.loads.length > 0 && (
           <section className="mt-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Cargas</h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Cargas ({trip.loads_truncated?`${trip.loads.length} de ${trip.loads_total}`:trip.loads.length})</h4>
             <ul className="space-y-1 text-xs">
               {trip.loads.map((l) => (
                 <li key={l.id} className="flex justify-between">
@@ -156,6 +158,7 @@ export default function TripDetailsDrawer({
                 </li>
               ))}
             </ul>
+            {trip.loads_truncated&&<p className="mt-1 text-[11px] text-warning">Lista de cargas resumida neste painel.</p>}
           </section>
         )}
 

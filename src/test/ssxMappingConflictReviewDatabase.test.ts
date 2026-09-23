@@ -12,6 +12,10 @@ const indexMigration = readFileSync(
   'supabase/migrations/20260910223935_index_ssx_mapping_conflict_foreign_keys.sql',
   'utf8',
 );
+const reviewMigration = readFileSync(
+  'supabase/migrations/20260923140515_refresh_geocoding_cache_and_ssx_conflict_review.sql',
+  'utf8',
+);
 const id = {
   tenant: '10000000-0000-4000-8000-000000000001',
   otherTenant: '10000000-0000-4000-8000-000000000002',
@@ -57,6 +61,7 @@ beforeAll(async () => {
       $$select nullif(current_setting('test.active_tenant',true),'')::uuid$$;
     grant execute on function private.request_tenant_id() to authenticated,service_role;
     create table public.tenants(id uuid primary key);
+    create table public.address_geocoding_cache(id uuid primary key);
     create table public.tenant_memberships(tenant_id uuid,user_id uuid,role text,active boolean);
     create function public.is_tenant_operator_or_admin(_tenant uuid) returns boolean
       language sql stable security definer set search_path='' as $$
@@ -87,6 +92,7 @@ beforeAll(async () => {
   await db.exec(migration);
   await db.exec(activeTenantMigration);
   await db.exec(indexMigration);
+  await db.exec(reviewMigration);
 }, 30_000);
 
 afterAll(async () => db?.close());
@@ -185,5 +191,59 @@ describe('durable SSX mapping conflict review', () => {
       'idx_ssx_mapping_conflicts_resolved_by_fk',
       'idx_ssx_mapping_conflicts_resolved_vehicle_fk',
     ]);
+  });
+
+  it('pages tied conflict timestamps without losing rows when earlier rows disappear', async () => {
+    await db.exec(`
+      insert into public.provider_units(id,tenant_id,integration_account_id,external_code)
+      select gen_random_uuid(),'${id.tenant}','${id.account}','PAGE-' || n
+      from generate_series(1,205) n;
+      insert into public.ssx_mapping_conflicts(
+        tenant_id,integration_account_id,provider_unit_id,external_code,conflict_type,
+        due_at,first_observed_at
+      )
+      select '${id.tenant}','${id.account}',id,external_code,'mapping_conflict',
+        '2026-10-01T12:00:00Z','2026-09-23T12:00:00Z'
+      from public.provider_units where external_code like 'PAGE-%';
+    `);
+    const first = (await asRole('authenticated', id.user,
+      "select public.list_ssx_mapping_conflicts_v2($1,'open',200,null,null) result",
+      [id.tenant]))[0] as { result: { items: Array<{ id: string }>; next_cursor: unknown; snapshot_at: string } };
+    expect(first.result.items).toHaveLength(200);
+    await db.query('delete from public.ssx_mapping_conflicts where id=$1', [first.result.items[0].id]);
+    const second = (await asRole('authenticated', id.user,
+      "select public.list_ssx_mapping_conflicts_v2($1,'open',200,$2::jsonb,$3::timestamptz) result",
+      [id.tenant, JSON.stringify(first.result.next_cursor), first.result.snapshot_at]))[0] as {
+      result: { items: Array<{ id: string }>; next_cursor: unknown }
+    };
+    expect(second.result.items.length).toBeGreaterThan(0);
+    const ids = [...first.result.items, ...second.result.items].map(item => item.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toHaveLength(206);
+    expect(second.result.next_cursor).toBeNull();
+  });
+
+  it('replays one audited resolution after an uncertain response', async () => {
+    const unit = crypto.randomUUID();
+    const conflict = crypto.randomUUID();
+    const requestId = crypto.randomUUID();
+    await db.query('insert into public.provider_units values($1,$2,$3,$4)',
+      [unit, id.tenant, id.account, 'REPLAY-1']);
+    await db.query(`insert into public.ssx_mapping_conflicts
+      (id,tenant_id,integration_account_id,provider_unit_id,external_code,conflict_type,candidate_vehicle_ids)
+      values($1,$2,$3,$4,'REPLAY-1','ambiguous_plate_match',$5::uuid[])`,
+    [conflict, id.tenant, id.account, unit, [id.vehicleB]]);
+    const command = 'select public.resolve_ssx_mapping_conflict_v2($1,$2,$3,$4) result';
+    const args = [conflict, id.vehicleB, 'Documento conferido', requestId];
+    const first = await asRole('authenticated', id.user, command, args);
+    const replay = await asRole('authenticated', id.user, command, args);
+    expect(replay).toEqual(first);
+    expect((await db.query('select count(*)::int as n from public.vehicle_tracker_links where provider_unit_id=$1', [unit])).rows)
+      .toEqual([{ n: 1 }]);
+    await expect(asRole('authenticated', id.user, command,
+      [conflict, id.vehicleA, 'Documento conferido', requestId]))
+      .rejects.toThrow('resolution_request_mismatch');
+    await expect(asRole('authenticated', id.user, command, args, id.otherTenant))
+      .rejects.toMatchObject({ code: 'P0002' });
   });
 });

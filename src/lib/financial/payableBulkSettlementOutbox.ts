@@ -70,7 +70,7 @@ export function createPayableBulkSettlementOutbox(deps:Dependencies){
       deps.assertContext(tenant,actor);
       const observedRaw=deps.storage.getItem(key),found=pendingPayableBulkSettlement(deps.storage,tenant,actor);
       if(deps.storage.getItem(key)!==observedRaw)throw unavailable();
-      let row=found;const uncertain=found!==null;
+      let row=found;
       if(row&&parsed)throw new Error('Há uma baixa em lote sem confirmação. Recupere o pedido existente antes de iniciar outra.');
       if(!row){if(!parsed)throw new Error('Nenhuma baixa em lote pendente para esta sessão.');row={version:1,tenantId:tenant,actorId:actor,payload:parsed};}
       const raw=found?observedRaw:JSON.stringify(row);
@@ -88,7 +88,7 @@ export function createPayableBulkSettlementOutbox(deps:Dependencies){
         try{forget();}catch{/* A confirmed result remains confirmed; stored replay stays available. */}
         return result;
       }catch(error){
-        if(!uncertain&&deps.isDefinitive(error)){try{forget();}catch{/* Preserve storage if cleanup fails. */}}
+        if(deps.isDefinitive(error)){try{forget();}catch{/* Preserve storage if cleanup fails. */}}
         throw error;
       }
     }));

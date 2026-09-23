@@ -1,6 +1,6 @@
 import {invalidateAccountReview} from '@/lib/financial/invalidateAccountReview';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {saveManualTitle} from '@/lib/financial/manualTitleCommand';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -36,59 +36,33 @@ export const PAYABLE_CATEGORY_LABELS: Record<string, string> = {
 };
 
 export type Payable = Tables<'payables'>;
-export type CreatePayableInput = Omit<TablesInsert<'payables'>, 'tenant_id' | 'created_by'>;
-export type UpdatePayableInput = TablesUpdate<'payables'> & { id: string };
-
-export function usePayables() {
-  const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['payables', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('payables')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('due_date', { ascending: true, nullsFirst: false });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
-}
+export const isPayableDirectlyEditable=(payable:Pick<Payable,'source_table'|'source_id'>)=>payable.source_table===null&&payable.source_id===null;
+export type CreatePayableInput = Omit<TablesInsert<'payables'>, 'tenant_id' | 'created_by'> & {duplicate_reason?:string};
+export type UpdatePayableInput = Omit<TablesUpdate<'payables'>,'updated_at'> & { id: string; expected_updated_at: string };
 
 export function useCreatePayable() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: CreatePayableInput) => {
-      if (values.status === 'paid') throw new Error('Use a baixa financeira para marcar uma conta como paga.');
-      const { data, error } = await supabase.from('payables').insert({
-        ...values,
-        tenant_id: currentTenant!.id,
-        created_by: user?.id,
-      }).select().single();
-      if (error) throw error;
-      return data;
+    mutationFn: async ({duplicate_reason='',...values}: CreatePayableInput) => {
+      if(!currentTenant?.id||!user?.id)throw new Error('Sessão financeira indisponível.');
+      return await saveManualTitle(currentTenant.id,user.id,'payable',values,null,null,duplicate_reason) as Payable;
     },
     onSuccess: async (data) => { await Promise.all([invalidateAccountReview(qc,data.tenant_id),qc.invalidateQueries({ queryKey: ['payables'] }),qc.invalidateQueries({queryKey:['finance-payable-portfolio',data.tenant_id]}),Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]),qc.invalidateQueries({ queryKey: ['finance-settlement-expense-context'] })]); },
   });
 }
 
 export function useUpdatePayable() {
+  const {user}=useAuth();
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: UpdatePayableInput) => {
-      const patch: TablesUpdate<'payables'> = { ...values, updated_at: new Date().toISOString() };
-      if (!currentTenant) throw new Error('Selecione a empresa antes de atualizar.');
-      if (values.status === 'approved' || values.approved_at !== undefined || values.approved_by !== undefined) throw new Error('A aprovação exige conferência de valor e revisão.');
-      if (values.status === 'paid') throw new Error('Use a baixa financeira para marcar uma conta como paga.');
-      if (values.status !== undefined && values.status !== 'paid') patch.paid_at = null;
-      const { data, error } = await supabase.from('payables').update(patch).eq('tenant_id', currentTenant.id).eq('id', id).select().single();
-      if (error) throw error;
-      return data;
+    mutationFn: async ({id,expected_updated_at,...values}: UpdatePayableInput) => {
+      if(values.status==='approved'||'approved_at' in values||'approved_by' in values)throw new Error('A aprovação exige a conferência própria do valor e do favorecido.');
+      if(!currentTenant?.id||!user?.id)throw new Error('Sessão financeira indisponível.');
+      if(!expected_updated_at)throw new Error('Reabra a conta para conferir a revisão original.');
+      return await saveManualTitle(currentTenant.id,user.id,'payable',values,id,expected_updated_at) as Payable;
     },
     onSuccess: async (data) => { await Promise.all([invalidateAccountReview(qc,data.tenant_id),qc.invalidateQueries({ queryKey: ['payables'] }),qc.invalidateQueries({queryKey:['finance-payable-portfolio',data.tenant_id]}),Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]),qc.invalidateQueries({ queryKey: ['finance-settlement-expense-context'] })]); },
   });

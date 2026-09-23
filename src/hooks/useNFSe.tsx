@@ -316,9 +316,11 @@ export function useUpdateNFSe() {
 
 export function useIssueNFSe() {
   const toast = useSonnerToast();
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const deepHubError = (response: HubResponse): string | null => {
         const document = response.hub?.document;
         return (
@@ -335,17 +337,20 @@ export function useIssueNFSe() {
         .from('nfse_documents')
         .select('*')
         .eq('id', id)
+        .eq('tenant_id', currentTenant.id)
         .maybeSingle();
       if (dErr) throw dErr;
       if (!doc) throw new Error('NFS-e não encontrada');
 
       let emitter: TenantEmitter | null = null;
       if (doc.emitter_id) {
-        const { data: em } = await supabase
+        const { data: em, error: emitterError } = await supabase
           .from('tenant_emitters')
           .select('*')
           .eq('id', doc.emitter_id)
+          .eq('tenant_id', currentTenant.id)
           .maybeSingle();
+        if (emitterError) throw emitterError;
         emitter = em ? normalizeEmitter(em) : null;
       }
 
@@ -453,16 +458,18 @@ export interface IssueNFSeBatchInput {
  * deliberately separate; callers must retain requestId + document ids on retry.
  */
 export function useIssueNFSeBatch() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation<NFSeBatchResponse, Error, IssueNFSeBatchInput>({
     mutationFn: async ({ mode, requestId, nfseDocumentIds }) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
       const uniqueIds = [...new Set(nfseDocumentIds)];
       if (!requestId.trim() || uniqueIds.length === 0 || uniqueIds.length !== nfseDocumentIds.length) {
         throw new Error('Comando de emissão NFS-e em lote inválido.');
       }
       const environment = PRODUCTION_HUB_ENVIRONMENT;
       const { data: rows, error: documentsError } = await supabase
-        .from('nfse_documents').select('*').in('id', uniqueIds);
+        .from('nfse_documents').select('*').eq('tenant_id', currentTenant.id).in('id', uniqueIds);
       if (documentsError) throw documentsError;
       if (!rows || rows.length !== uniqueIds.length) throw new Error('Uma NFS-e do lote não foi encontrada.');
       // Uma rejeição definitiva pertence ao snapshot fiscal já transmitido.
@@ -474,7 +481,7 @@ export function useIssueNFSeBatch() {
       if (emitterIds.size !== 1) throw new Error('Todas as NFS-e do lote devem usar o mesmo emitente.');
       const emitterId = [...emitterIds][0];
       const { data: emitterRow, error: emitterError } = await supabase
-        .from('tenant_emitters').select('*').eq('id', emitterId).maybeSingle();
+        .from('tenant_emitters').select('*').eq('id', emitterId).eq('tenant_id', currentTenant.id).maybeSingle();
       if (emitterError) throw emitterError;
       if (!emitterRow) throw new Error('Emitente fiscal do lote não encontrado.');
       const emitter = normalizeEmitter(emitterRow);

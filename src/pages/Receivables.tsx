@@ -33,9 +33,11 @@ import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 import { getErrorMessage } from '@/lib/errors';
 import {useQuery} from '@tanstack/react-query';
 import {readReceivablesPage} from '@/lib/financial/receivablesPageClient';
+import type {ReceivablePageCursor} from '@/lib/financial/receivablesPageContract';
 import {useReceivablePortfolio,portfolioValue} from '@/hooks/useReceivablePortfolio';
 import {useTenant} from '@/hooks/useTenant';
 import {useAuth} from '@/hooks/useAuth';
+import {ManualTitleRecovery} from '@/components/financial/ManualTitleRecovery';
 
 export default function Receivables() {
   const {currentTenant}=useTenant();const {user}=useAuth();
@@ -62,15 +64,17 @@ function ReceivablesScreen() {
   const [appliedFilters,setAppliedFilters]=useState(filters);
   useEffect(()=>{if(!invalidDateRange)setAppliedFilters(filters);},[invalidDateRange,search,statusFilter,filters.client,filters.origin,filters.from,filters.to]);
   const filterKey=JSON.stringify(appliedFilters);
-  const [pagination,setPagination]=useState({key:'',page:1});
-  const page=pagination.key===filterKey?pagination.page:1;
-  const list=useQuery({queryKey:['receivables',currentTenant?.id,user?.id,'page',appliedFilters,page],queryFn:()=>readReceivablesPage(currentTenant!.id,appliedFilters,page),enabled:!!currentTenant&&!!user&&!searchPending,retry:false});
+  const [pagination,setPagination]=useState<{key:string;cursors:Array<ReceivablePageCursor|null>}>({key:'',cursors:[null]});
+  const cursors=pagination.key===filterKey?pagination.cursors:[null],cursor=cursors[cursors.length-1]??null,page=cursors.length;
+  const list=useQuery({queryKey:['receivables',currentTenant?.id,user?.id,'page',appliedFilters,cursor],queryFn:()=>readReceivablesPage(currentTenant!.id,appliedFilters,cursor),enabled:!!currentTenant&&!!user&&!searchPending,retry:false});
   const isLoading=searchPending||list.isPending||list.isFetching;
   const receivables=isLoading||list.isError?[]:list.data?.rows||[];
   const filtered=receivables;
   const portfolio=useReceivablePortfolio(currentTenant?.id,user?.id,{from:null,to:null,client:null});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expectedRevision,setExpectedRevision]=useState(''),[duplicateReason,setDuplicateReason]=useState(''),[saveError,setSaveError]=useState('');
+  const mayManage=['owner','admin'].includes(currentRole||'');
   const [form, setForm] = useState({
     description: '', client_id: '', amount: '', due_date: '', invoice_number: '', notes: '', status: 'pending',
   });
@@ -82,12 +86,15 @@ function ReceivablesScreen() {
   const manualStatusAllowed=!originPending&&!unloadingOrigin&&(!editingId||!!editedReceivable)&&!editedReceivable?.client_invoice_id&&!Number(editedReceivable?.received_amount||0)&&['pending','cancelled'].includes(form.status);
 
   const resetForm = () => {
+    setSaveError('');setDuplicateReason('');setExpectedRevision('');
     setForm({ description: '', client_id: '', amount: '', due_date: '', invoice_number: '', notes: '', status: 'pending' });
     setEditingId(null);
     setDialogOpen(false);
   };
 
   const openEdit = (r: Receivable) => {
+    if(!mayManage)return;
+    setExpectedRevision(r.updated_at);setSaveError('');
     setEditingId(r.id);
     setForm({
       description: r.description || '',
@@ -126,6 +133,7 @@ function ReceivablesScreen() {
   };
 
   const handleSave = async () => {
+    if(!mayManage)return;
     if(editingId&&originPending){toast.error('Confira a origem do título antes de salvar.');return;}
     const amount = Number(form.amount);
     if (!Number.isFinite(amount) || amount <= 0) { toast.error('O valor do título deve ser maior que zero.'); return; }
@@ -140,15 +148,17 @@ function ReceivablesScreen() {
         status: form.status,
       };
       if (editingId) {
-        await updateReceivable.mutateAsync(unloadingOrigin?{id:editingId,description:values.description,due_date:values.due_date,invoice_number:values.invoice_number,notes:values.notes}:{ id: editingId, ...values });
+        await updateReceivable.mutateAsync(unloadingOrigin?{id:editingId,expected_updated_at:expectedRevision,description:values.description,due_date:values.due_date,invoice_number:values.invoice_number,notes:values.notes}:{ id: editingId,expected_updated_at:expectedRevision, ...values });
         toast.success('Título atualizado');
       } else {
-        await createReceivable.mutateAsync(values);
+        await createReceivable.mutateAsync({...values,duplicate_reason:duplicateReason});
+        setPagination({key:filterKey,cursors:[null]});
         toast.success('Título criado');
       }
       resetForm();
     } catch (error) {
       const message=typeof error==='object'&&error!==null&&'message' in error?String(error.message):'';
+      setSaveError(message);
       toast.error(message.startsWith('finance_unloading_')?financialError(error):getErrorMessage(error, 'Não foi possível salvar o título.'));
     }
   };
@@ -164,16 +174,16 @@ function ReceivablesScreen() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <TrendingUp className="h-6 w-6 text-primary" /> Contas a Receber
           </h1>
           <p className="text-sm text-muted-foreground">Títulos financeiros vinculados a fretes e pedidos</p>
         </div>
-        <div className="flex gap-2">{currentTenant&&user&&<Button variant="outline" onClick={()=>setCreditOpen(true)}>Créditos de clientes</Button>}{currentTenant&&user&&<Button variant="outline" onClick={()=>setHistoryOpen(true)}>Histórico de alterações</Button>}<Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+        <div className="flex gap-2">{currentTenant&&user&&<Button variant="outline" onClick={()=>setCreditOpen(true)}>Créditos de clientes</Button>}{currentTenant&&user&&<Button variant="outline" onClick={()=>setHistoryOpen(true)}>Histórico de alterações</Button>}{mayManage&&<Button onClick={() => { resetForm(); setDialogOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Novo Título
-        </Button></div>
+        </Button>}</div>
       </div>
 
       {creditOpen&&currentTenant&&user&&<CustomerCreditDialog key={`${currentTenant.id}:${user.id}`} tenant={currentTenant.id} actor={user.id} onClose={()=>setCreditOpen(false)}/>}
@@ -206,11 +216,11 @@ function ReceivablesScreen() {
       ]} />
 
       {list.isError&&<p role="alert">Não foi possível consultar os títulos. A falha não significa ausência de contas a receber. <Button variant="link" onClick={()=>void list.refetch()}>Tentar novamente</Button></p>}
-      <div className="flex items-center gap-3"><Button variant="outline" disabled={isLoading||page===1} onClick={()=>setPagination({key:filterKey,page:page-1})}>Títulos anteriores</Button><span>Página {page} · até 50 títulos</span><Button variant="outline" disabled={isLoading||list.isError||page*50>=(list.data?.total||0)} onClick={()=>setPagination({key:filterKey,page:page+1})}>Próximos títulos</Button></div>
+      <div className="flex items-center gap-3"><Button variant="outline" disabled={isLoading||page===1} onClick={()=>setPagination({key:filterKey,cursors:cursors.slice(0,-1)})}>Títulos anteriores</Button><span>Página {page} · até 50 títulos</span><Button variant="outline" disabled={isLoading||list.isError||!list.data?.has_more||!list.data.next_cursor} onClick={()=>{if(list.data?.next_cursor)setPagination({key:filterKey,cursors:[...cursors,list.data.next_cursor]});}}>Próximos títulos</Button></div>
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <Table>
+          <Table scrollLabel="Resultados financeiros — role para ver todas as colunas">
             <TableHeader>
               <TableRow>
                 <TableHead>Descrição</TableHead>
@@ -262,6 +272,7 @@ function ReceivablesScreen() {
         </CardContent>
       </Card>
 
+      {currentTenant&&user&&mayManage&&<ManualTitleRecovery tenant={currentTenant.id} actor={user.id} kind="receivable" onRecorded={resetForm}/>}
       {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={o => { if (!o) resetForm(); setDialogOpen(o); }}>
         <DialogContent>
@@ -269,7 +280,7 @@ function ReceivablesScreen() {
             <DialogTitle>{editingId ? 'Editar Título' : 'Novo Título'}</DialogTitle>
             <DialogDescription>Informe os dados do título a receber, cliente, vencimento e valor.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4">{saveError&&<p role="alert">{saveError}</p>}{!editingId&&saveError.includes("título semelhante")&&<label>Justificativa para outro título semelhante<Input value={duplicateReason} onChange={e=>setDuplicateReason(e.target.value)} maxLength={2000}/></label>}
             {!editingId||(!originPending&&!unloadingOrigin)?<div className="rounded-md border bg-muted/30 p-3">
               <FiscalXmlUpload perspective="receiver" onExtracted={(d) => applyXmlToForm(d)} />
             </div>:null}

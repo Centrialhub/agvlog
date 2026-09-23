@@ -4,6 +4,14 @@ export const SETTLEMENT_ADJUSTMENT_CHANGED='agvlog:settlement-adjustment-changed
 const keyFor=(tenant:string,actor:string)=>'agvlog:settlement-adjustment:v1:'+tenant+':'+actor;
 const unavailable=()=>new Error('Recuperação do ajuste indisponível ou incompatível. Nenhum novo pedido foi enviado.');
 export interface PendingSettlementAdjustment {version:1;tenantId:string;actorId:string;createdAt:string;payload:SettlementAdjustmentCommand}
+export function discardPendingSettlementAdjustment(storage:Storage,tenant:string,actor:string){
+ try{
+  const suffix=':'+tenant+':'+actor,keys:string[]=[];
+  for(let index=0;index<storage.length;index++){const key=storage.key(index);if(key?.startsWith('agvlog:settlement-adjustment:')&&key.endsWith(suffix))keys.push(key);}
+  keys.forEach(key=>storage.removeItem(key));
+  return keys.length;
+ }catch{throw unavailable();}
+}
 export function pendingSettlementAdjustment(storage:Storage,tenant:string,actor:string):PendingSettlementAdjustment|null{
  try{
   for(let index=0;index<storage.length;index++){const key=storage.key(index);if(key?.startsWith('agvlog:settlement-adjustment:')&&key.endsWith(':'+tenant+':'+actor)&&key!==keyFor(tenant,actor))throw unavailable();}
@@ -17,16 +25,19 @@ export function createSettlementAdjustmentOutbox(deps:Dependencies){
  let inFlight:Promise<SettlementAdjustmentResult>|null=null;
  const run=(tenant:string,actor:string,input?:SettlementAdjustmentInput)=>{
   if(inFlight)return inFlight;const key=keyFor(tenant,actor);const work=deps.lock(key,async()=>{
-   deps.assertContext();let row=pendingSettlementAdjustment(deps.storage,tenant,actor);const uncertain=!!row;
+   deps.assertContext();let row=pendingSettlementAdjustment(deps.storage,tenant,actor);
    if(row&&input)throw new Error('Há um ajuste sem confirmação. Recupere o pedido existente antes de iniciar outro.');
    if(!row){if(!input)throw new Error('Nenhum ajuste pendente nesta sessão.');
     row={version:1,tenantId:tenant,actorId:actor,createdAt:new Date().toISOString(),payload:settlementAdjustmentCommandSchema.parse({...input,version:1,tenant_id:tenant,actor_id:actor,request_id:deps.uuid()})};
     try{deps.storage.setItem(key,JSON.stringify(row));}catch{throw unavailable();}deps.changed();}
    const forget=()=>{try{deps.storage.removeItem(key);}catch{/* exact durable replay remains safe */}deps.changed();};
    deps.assertContext();const {data,error}=await deps.send(row.payload);deps.assertContext();
-   if(error){const code=isRecord(error)?String(error.code??''):'';if(!uncertain&&(/^(22|23)/.test(code)||['40001','40P01','55P03','42501','55000'].includes(code)))forget();throw error;}
+   if(error){const code=isRecord(error)?String(error.code??''):'';if(/^(22|23)/.test(code)||['40001','40P01','55P03','42501','55000'].includes(code))forget();throw error;}
    const result=parseSettlementAdjustmentResult(data,row.payload);forget();return result;
   });inFlight=work;void work.finally(()=>{if(inFlight===work)inFlight=null;deps.changed();}).catch(()=>{});return work;
  };
- return {submit:(tenant:string,actor:string,input:SettlementAdjustmentInput)=>run(tenant,actor,input),recover:(tenant:string,actor:string)=>run(tenant,actor)};
+ const abandon=(tenant:string,actor:string)=>deps.lock(keyFor(tenant,actor),async()=>{
+  deps.assertContext();discardPendingSettlementAdjustment(deps.storage,tenant,actor);deps.changed();
+ });
+ return {submit:(tenant:string,actor:string,input:SettlementAdjustmentInput)=>run(tenant,actor,input),recover:(tenant:string,actor:string)=>run(tenant,actor),abandon};
 }

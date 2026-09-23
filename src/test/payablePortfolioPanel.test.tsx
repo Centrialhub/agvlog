@@ -1,7 +1,9 @@
 import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {afterEach,beforeEach,it,expect,vi} from 'vitest';
-import {PayablePortfolioWorkspace} from '@/components/financial/PayablePortfolioPanel';
+import {PayablePortfolioPanel,PayablePortfolioWorkspace} from '@/components/financial/PayablePortfolioPanel';
+import {MemoryRouter,useLocation} from 'react-router-dom';
+vi.mock('@/components/financial/FinanceAccessBoundary',()=>({FinanceAccessBoundary:({children}:{children:React.ReactNode})=>children}));
 const mock=vi.hoisted(()=>({read:vi.fn()}));vi.mock('@/lib/financial/payablePortfolioClient',()=>({readPayablePortfolio:mock.read}));
 const tenant=crypto.randomUUID(),actor=crypto.randomUUID(),revision='a'.repeat(32),filters={date_basis:'due_date',from:null,to:null,category:null,supplier_id:null,search:null,status:null,source:null};
 const row={source_id:crypto.randomUUID(),status:'cancelled',description:'Compra cancelada',supplier_id:null,supplier_name:'Fornecedor',due_on:null,created_on:'2026-09-01',date_in_range:false,origin:{source_table:'finance_expense_items',source_id:crypto.randomUUID()},declared_amount:'25.00',declared_paid:'0.00',payment_ids:[],issues:[],nominal_cents:'0',paid_cents:'0',open_cents:'0'};
@@ -16,7 +18,7 @@ it('rejects an inverted portfolio period locally and preserves the current page'
 
 it('opens an exact title on a later server page without loading the full collection',async()=>{
  const lastId=crypto.randomUUID(),onOpen=vi.fn();
- mock.read.mockResolvedValueOnce({...data,total_titles:1005,rows:[row]}).mockResolvedValueOnce({...data,page:2,total_titles:1005,rows:[{...row,source_id:lastId,description:'Conta da segunda página'}]});
+ mock.read.mockResolvedValueOnce({...data,total_titles:1005,rows:[row]}).mockResolvedValueOnce({...data,page:2,total_titles:1005,rows:[{...row,source_id:lastId,description:'Conta da segunda página',origin:{source_table:null,source_id:null}}]});
  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><PayablePortfolioWorkspace tenant={tenant} actor={actor} onOpen={onOpen}/></QueryClientProvider>);
  await screen.findByText('Compra cancelada');expect(screen.getByText('R$ 2.500,00')).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Próximos títulos a pagar'}));await screen.findByText('Conta da segunda página');
@@ -28,3 +30,10 @@ it('opens an exact title on a later server page without loading the full collect
 it('sends text, state, origin and category to the server as one global filter',async()=>{open();await screen.findByText('Compra cancelada');fireEvent.change(screen.getByLabelText('Buscar conta'),{target:{value:'nota 42'}});fireEvent.change(screen.getByLabelText('Situação da conta'),{target:{value:'partial'}});fireEvent.change(screen.getByLabelText('Origem da conta'),{target:{value:'manual'}});fireEvent.change(screen.getByLabelText('Categoria da conta'),{target:{value:'fuel'}});fireEvent.click(screen.getByRole('button',{name:'Consultar contas a pagar'}));await waitFor(()=>expect(mock.read).toHaveBeenLastCalledWith(tenant,{...filters,search:'nota 42',status:'partial',source:'manual',category:'fuel'},1,null));});
 
 it('labels the corrected payable nominal as current rather than original',async()=>{mock.read.mockResolvedValue({...data,rows:[{...row,status:'pending',description:'Custo corrigido de 150 para 120',declared_amount:'120.00',nominal_cents:'12000',expense_cost_version:{expense_id:row.origin.source_id,verified:true,amendment_id:crypto.randomUUID(),revision,amount_cents:'12000'}}]});open();await screen.findByText('Custo corrigido de 150 para 120');expect(screen.getByText('Valor declarado nesta consulta (R$): 120.00')).toBeInTheDocument();expect(screen.queryByText(/Valor original declarado/)).not.toBeInTheDocument();});
+it('restores shared filters and updates the URL when another filter is applied',async()=>{
+ function Address(){return <output aria-label="Endereço">{useLocation().search}</output>;}
+ render(<QueryClientProvider client={new QueryClient()}><MemoryRouter initialEntries={['/payables?payable_search=NF42&payable_status=pending']}><PayablePortfolioPanel tenant={tenant} actor={actor}/><Address/></MemoryRouter></QueryClientProvider>);
+ await waitFor(()=>expect(mock.read).toHaveBeenLastCalledWith(tenant,{...filters,search:'NF42',status:'pending'},1,null));
+ fireEvent.change(screen.getByLabelText('Buscar conta'),{target:{value:'NF43'}});fireEvent.click(screen.getByRole('button',{name:'Consultar contas a pagar'}));
+ await waitFor(()=>expect(screen.getByLabelText('Endereço')).toHaveTextContent('payable_search=NF43'));
+});

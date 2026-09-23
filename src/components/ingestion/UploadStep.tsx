@@ -91,7 +91,7 @@ export default function UploadStep({ onFiles, onOrtFiles, ortProcessing, readPro
                   <ScanLine className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium mb-2">Capturar NF-e ou ORT</h3>
                   <p className="text-sm text-muted-foreground mb-5">
-                    Use uma foto ou PDF legível. Campos não reconhecidos ficam pendentes para revisão; o sistema não completa dados fiscais por suposição.
+                    Use até 5 fotos ou PDFs legíveis, com no máximo 3 MB por arquivo e 8 MB após conversão. Campos não reconhecidos ficam pendentes para revisão.
                   </p>
                   <div className="flex flex-wrap justify-center gap-3">
                     <Button type="button" onClick={() => handleOrtFile(true)} className="gap-2">

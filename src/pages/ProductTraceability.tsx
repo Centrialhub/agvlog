@@ -51,6 +51,7 @@ interface TraceRow {
 }
 
 const DEFAULT_FILTERS = { product: '', supplier: '', invoiceNumber: '', driverId: 'all', plate: '', loadStatus: 'all', issueFrom: '', issueTo: '' };
+const escapeIlikeLiteral = (value: string) => value.replace(/[\\%_]/g, '\\$&');
 
 export default function ProductTraceability() {
   const { currentTenant } = useTenant();
@@ -86,12 +87,13 @@ export default function ProductTraceability() {
           loads!inner(load_number, status, destination, driver_id, vehicle_id,
             drivers(id, name), vehicles${f.plate.trim() ? '!inner' : ''}(plate, nickname))
         `).eq('tenant_id', currentTenant.id);
-        if (f.product.trim()) q = q.ilike('item_description', `%${f.product.trim()}%`);
+        if (filterDocument) q = q.is('fiscal_documents.deleted_at', null);
+        if (f.product.trim()) q = q.ilike('item_description', `%${escapeIlikeLiteral(f.product.trim())}%`);
         if (f.driverId !== 'all') q = q.eq('loads.driver_id', f.driverId);
         if (f.loadStatus !== 'all') q = q.eq('loads.status', f.loadStatus);
-        if (f.supplier.trim()) q = q.ilike('fiscal_documents.remitter', `%${f.supplier.trim()}%`);
-        if (f.invoiceNumber.trim()) q = q.ilike('fiscal_documents.invoice_number', `%${f.invoiceNumber.trim()}%`);
-        if (f.plate.trim()) q = q.ilike('loads.vehicles.plate', `%${f.plate.replace(/[^a-z0-9]/gi, '').split('').join('%')}%`);
+        if (f.supplier.trim()) q = q.ilike('fiscal_documents.remitter', `%${escapeIlikeLiteral(f.supplier.trim())}%`);
+        if (f.invoiceNumber.trim()) q = q.ilike('fiscal_documents.invoice_number', `%${escapeIlikeLiteral(f.invoiceNumber.trim())}%`);
+        if (f.plate.trim()) q = q.ilike('loads.vehicles.plate', `%${escapeIlikeLiteral(f.plate.replace(/[-\s]/g, ''))}%`);
         if (f.issueFrom) q = q.gte('fiscal_documents.issue_date', f.issueFrom);
         if (f.issueTo) q = q.lte('fiscal_documents.issue_date', f.issueTo);
         return q.order('created_at', { ascending: false }).order('id', { ascending: false }).range(pageFrom, pageTo);

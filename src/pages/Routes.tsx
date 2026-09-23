@@ -15,6 +15,7 @@ import { DataPagination } from '@/components/ui/data-pagination';
 import { RouteDialog } from '@/components/routes/RouteDialog';
 import { getWaypointTypeConfig } from '@/lib/routes/waypoints';
 import type { Tables } from '@/integrations/supabase/types';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 type RouteTemplateView = Tables<'route_templates'> & { geofences: { name: string } | null };
 
@@ -33,16 +34,12 @@ export default function Routes() {
     queryKey: ['route_templates', currentTenant?.id,filters.search,filters.status,filters.corridor,page],
     queryFn: async () => {
       if (!currentTenant) return {rows:[],total:0};
-      let query=supabase.from('route_templates')
-        .select('*, geofences:corridor_geofence_id(name)',{count:'exact'})
-        .eq('tenant_id',currentTenant.id);
-      if(filters.search.trim())query=query.ilike('name',`%${filters.search.trim()}%`);
-      if(filters.status!=='all')query=query.eq('enabled',filters.status==='active');
-      if(filters.corridor==='yes')query=query.not('corridor_geofence_id','is',null);
-      if(filters.corridor==='no')query=query.is('corridor_geofence_id',null);
-      const from=(page-1)*pageSize;
-      const {data,error,count}=await query.order('created_at',{ascending:false}).order('id').range(from,from+pageSize-1);
-      if(error)throw error;return {rows:(data??[]) as RouteTemplateView[],total:count??0};
+      const {data,error}=await supabase.rpc('list_operator_routes_page_v1' as never,{
+        _tenant_id:currentTenant.id,_search:filters.search.trim()||null,_status:filters.status,
+        _corridor:filters.corridor,_page:page,_page_limit:pageSize,
+      } as never) as unknown as {data:{rows?:RouteTemplateView[];total?:number}|null;error:{message:string}|null};
+      if(error)throw error;
+      return {rows:data?.rows??[],total:Number(data?.total) || 0};
     },
     enabled: !!currentTenant,
   });
@@ -53,11 +50,13 @@ export default function Routes() {
     queryKey: ['route_waypoints_all', currentTenant?.id,routeIds],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const {data,error}=await supabase.from('route_waypoints')
-        .select('route_id, waypoint_type, label, waypoint_order')
-        .eq('tenant_id',currentTenant.id).in('route_id',routeIds)
-        .order('waypoint_order').order('id').limit(1000);
-      if(error)throw error;return data??[];
+      return fetchAllPostgrestPages<Pick<Tables<'route_waypoints'>, 'route_id' | 'waypoint_type' | 'label' | 'waypoint_order'>>(async (from,to) => {
+        const {data,error}=await supabase.from('route_waypoints')
+          .select('route_id, waypoint_type, label, waypoint_order')
+          .eq('tenant_id',currentTenant.id).in('route_id',routeIds)
+          .order('route_id').order('waypoint_order').order('id').range(from,to);
+        return {data,error};
+      },500);
     },
     enabled: !!currentTenant&&routeIds.length>0,
   });
@@ -67,9 +66,11 @@ export default function Routes() {
     queryKey: ['geofences', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const {data,error}=await supabase.from('geofences').select('id, name, category')
-        .eq('tenant_id',currentTenant.id).eq('enabled',true).order('name').order('id').limit(200);
-      if(error)throw error;return data??[];
+      return fetchAllPostgrestPages<Pick<Tables<'geofences'>, 'id' | 'name' | 'category'>>(async (from,to) => {
+        const {data,error}=await supabase.from('geofences').select('id, name, category')
+          .eq('tenant_id',currentTenant.id).eq('enabled',true).order('name').order('id').range(from,to);
+        return {data,error};
+      },200);
     },
     enabled: !!currentTenant&&dialogOpen,
   });
@@ -79,9 +80,11 @@ export default function Routes() {
     queryKey: ['pois', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const {data,error}=await supabase.from('pois').select('id, name, category')
-        .eq('tenant_id',currentTenant.id).order('name').order('id').limit(200);
-      if(error)throw error;return data??[];
+      return fetchAllPostgrestPages<Pick<Tables<'pois'>, 'id' | 'name' | 'category'>>(async (from,to) => {
+        const {data,error}=await supabase.from('pois').select('id, name, category')
+          .eq('tenant_id',currentTenant.id).order('name').order('id').range(from,to);
+        return {data,error};
+      },200);
     },
     enabled: !!currentTenant&&dialogOpen,
   });
@@ -90,13 +93,15 @@ export default function Routes() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       if(!currentTenant)throw new Error('Empresa não selecionada.');
-      const { error } = await supabase.rpc('archive_route_template_v1' as never,{_tenant_id:currentTenant.id,_route_id:id} as never);
+      const { data, error } = await supabase.rpc('archive_route_template_v1' as never,{_tenant_id:currentTenant.id,_route_id:id} as never);
       if (error) throw error;
+      return data as unknown as { archived: boolean; already_archived?: boolean };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['route_templates'] });
       queryClient.invalidateQueries({ queryKey: ['route_waypoints_all'] });
-      toast.success('Rota arquivada; o histórico foi preservado');
+      if (result.archived) toast.success('Rota arquivada; o histórico foi preservado');
+      else toast.info('A rota já estava arquivada');
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -105,11 +110,13 @@ export default function Routes() {
     queryKey: ['route_runs_recent', currentTenant?.id,routeIds],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const {data,error}=await supabase.from('route_runs').select('route_id, status')
-        .eq('tenant_id', currentTenant.id)
-        .in('route_id',routeIds).gte('created_at',new Date(Date.now()-7*86400000).toISOString())
-        .order('created_at').order('id').limit(1000);
-      if(error)throw error;return data??[];
+      return fetchAllPostgrestPages<Pick<Tables<'route_runs'>, 'route_id' | 'status'>>(async (from,to) => {
+        const {data,error}=await supabase.from('route_runs').select('route_id, status')
+          .eq('tenant_id', currentTenant.id)
+          .in('route_id',routeIds).gte('created_at',new Date(Date.now()-7*86400000).toISOString())
+          .order('created_at').order('id').range(from,to);
+        return {data,error};
+      },500);
     },
     enabled: !!currentTenant&&routeIds.length>0,
   });
@@ -226,9 +233,11 @@ export default function Routes() {
                             <Button size="sm" variant="ghost" onClick={() => { setEditRoute(r); setDialogOpen(true); }}>
                               <Edit className="h-3 w-3" />
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Arquivar rota e preservar todo o histórico?', { title: 'Arquivar rota', confirmLabel: 'Arquivar' })) deleteMutation.mutate(r.id); }}>
-                              <Trash2 className="h-3 w-3 text-destructive" />
-                            </Button>
+                            {r.enabled && (
+                              <Button size="sm" variant="ghost" onClick={async () => { if (await confirmAction('Arquivar rota e preservar todo o histórico?', { title: 'Arquivar rota', confirmLabel: 'Arquivar' })) deleteMutation.mutate(r.id); }}>
+                                <Trash2 className="h-3 w-3 text-destructive" />
+                              </Button>
+                            )}
                           </>
                         )}
                       </TableCell>

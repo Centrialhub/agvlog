@@ -14,6 +14,8 @@ import { useDownloadPortalPod } from '@/hooks/portal/usePortalPods';
 import { useToast } from '@/hooks/use-toast';
 import type { PublicShipmentStatus } from '@/lib/portal/portalStatus';
 import { portalErrorMessage } from '@/lib/portal/portalErrors';
+import { openSignedDownload } from '@/lib/portal/openSignedDownload';
+import { isOpenPortalOccurrence } from '@/lib/portal/occurrenceStatus';
 import { fmtDateSafe, fmtDateTimeSafe } from '@/lib/utils/formatDate';
 
 const fmt = (d?: string | null) => fmtDateTimeSafe(d);
@@ -55,19 +57,27 @@ export default function PortalShipmentDetail() {
     can_view_driver_contact: false,
     can_view_vehicle_live: false,
   };
+  const openOccurrences = data.occurrences?.filter(isOpenPortalOccurrence) ?? [];
   const publicStatus: PublicShipmentStatus =
     (doc.public_status as PublicShipmentStatus) ??
     (data.proofs?.some(proof=>proof.has_file&&['uploaded','validated'].includes(proof.status||'')) ? 'pod_available'
-      : data.occurrences?.length > 0 ? 'exception'
+      : openOccurrences.length > 0 ? 'exception'
       : doc.status === 'delivered' ? 'pod_pending'
       : 'received');
 
   const firstPod = data.proofs?.find((proof) => proof.has_file);
+  const occurrenceParams = new URLSearchParams({
+    documentId: documentId || data.context?.document_id || '',
+    clientId: doc.client_id || '',
+    loadId: load?.id || '',
+    documentNumber: doc.invoice_number || '',
+  });
+  for (const [key, value] of occurrenceParams) if (!value) occurrenceParams.delete(key);
+  const occurrencePath = `/portal/occurrences?${occurrenceParams.toString()}`;
 
   const handleDownloadProof = async (proofId: string) => {
     try {
-      const url = await download.mutateAsync(proofId);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      await openSignedDownload(() => download.mutateAsync(proofId));
     } catch (error: unknown) {
       toast({ title: 'Erro ao baixar', description: portalErrorMessage(error, 'Não foi possível baixar o canhoto.'), variant: 'destructive' });
     }
@@ -87,7 +97,7 @@ export default function PortalShipmentDetail() {
                 {data.proofs?.length > 0 && (
                   <Badge variant="outline" className="text-[10px]"><ClipboardCheck className="h-3 w-3 mr-0.5" />{firstPod?'Canhoto disponível':'Canhoto pendente'}</Badge>
                 )}
-                {data.occurrences?.length > 0 && (
+                {openOccurrences.length > 0 && (
                   <Badge variant="destructive" className="text-[10px]"><AlertTriangle className="h-3 w-3 mr-0.5" />Ocorrência</Badge>
                 )}
               </div>
@@ -113,7 +123,7 @@ export default function PortalShipmentDetail() {
                   <Button size="sm" variant="outline"><Truck className="h-4 w-4 mr-1" /> Ver tracking</Button>
                 </Link>
               )}
-              <Link to="/portal/occurrences">
+              <Link to={occurrencePath}>
                 <Button size="sm" variant="outline"><MessageSquareWarning className="h-4 w-4 mr-1" /> Abrir ocorrência</Button>
               </Link>
             </div>

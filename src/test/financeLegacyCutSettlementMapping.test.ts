@@ -1,11 +1,12 @@
 // @vitest-environment node
 import {randomUUID} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {beforeAll,afterAll,beforeEach,afterEach,it,expect} from 'vitest';
 import {createClosedPeriodLateCompositionDatabase} from './helpers/closedPeriodLateCompositionDatabase';
 import {financeIds as i,financeAs} from './helpers/financeLedgerDatabase';
 import {legacyCutReviewSchema} from '@/lib/financial/legacyCutReviewContract';
 let db:Awaited<ReturnType<typeof createClosedPeriodLateCompositionDatabase>>;
-beforeAll(async()=>{db=await createClosedPeriodLateCompositionDatabase();await db.exec('alter table finance_settlement_movement_links drop constraint finance_settlement_movement_links_payment_id_key');},30000);
+beforeAll(async()=>{db=await createClosedPeriodLateCompositionDatabase();await db.exec(readFileSync('supabase/migrations/20260917075247_scope_and_page_legacy_cut_manifest.sql','utf8'));await db.exec('alter table finance_settlement_movement_links drop constraint finance_settlement_movement_links_payment_id_key');},30000);
 beforeEach(async()=>{await db.exec('begin');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[i.operator]);await db.query("update tenant_memberships set role='admin' where user_id=$1",[i.operator]);});afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
 const read=async()=>legacyCutReviewSchema.parse((await financeAs<{v:unknown}>(db,i.operator,'select get_finance_legacy_cut_review($1,$2,$3,$4) v',[i.tenant,i.account,'2026-01-01','2026-01-31'])).rows[0].v);
 async function seed(){const settlement=randomUUID(),payment=randomUUID(),link=randomUUID();await db.query("insert into driver_settlements(id,tenant_id,driver_id,status,driver_payable_amount) values($1,$2,$3,'approved',5)",[settlement,i.tenant,i.driver]);await db.query("insert into driver_settlement_payments(id,tenant_id,settlement_id,amount,paid_at) values($1,$2,$3,5,'2026-01-11T01:00:00Z')",[payment,i.tenant,settlement]);const movement=(await financeAs<{v:{movement_id:string}}>(db,i.operator,'select record_finance_movement($1) v',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),bank_account_id:i.account,direction:'out',nature:'driver_advance',driver_id:i.driver,amount_cents:500,occurred_on:'2026-01-10',description:'Saída para motorista',beneficiary_name:'Motorista QA',reason:'Pagamento do acerto conferido'}])).rows[0].v.movement_id;await db.query('insert into finance_settlement_movement_links(id,tenant_id,settlement_id,payment_id,movement_id,amount_cents,created_by) values($1,$2,$3,$4,$5,500,$6)',[link,i.tenant,settlement,payment,movement,i.operator]);return {settlement,payment,link,movement};}

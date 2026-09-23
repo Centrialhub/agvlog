@@ -1,0 +1,117 @@
+{
+  "date": "2026-09-23",
+  "project": "qcvnsdrbcchaxvawcngk",
+  "migration": {
+    "version": "20260923134704",
+    "name": "finance_approval_final_value_guard"
+  },
+  "reproduced_failures": [
+    "approval checked the previous rather than final amount",
+    "an approved amount could change while retaining approval under active limits",
+    "preparer identity could be replaced in a separate direct update",
+    "a second mounted reader could overwrite shared recovery ownership and clear another request"
+  ],
+  "remote_guard": {
+    "policy_rows": 0,
+    "checks_new_value": true,
+    "protects_approved_changes": true,
+    "immutable_preparer": true,
+    "anon_stamp": false,
+    "api_direct_guard": false,
+    "stamp_trigger": "CREATE TRIGGER stamp_payable_material_editor_v1 BEFORE INSERT OR UPDATE ON public.payables FOR EACH ROW EXECUTE FUNCTION stamp_payable_material_editor_v1()"
+  },
+  "read_only_smoke": {
+    "policy": {
+      "policy": {
+        "enabled": false,
+        "tenant_id": "6e874e6e-5bca-486d-9928-bef0646989c4",
+        "admin_limit_cents": null,
+        "operator_limit_cents": null,
+        "prevent_self_approval": false
+      },
+      "version": 1,
+      "revision": "c14188f941b8424ca3a1bd8efd1ea958",
+      "tenant_id": "6e874e6e-5bca-486d-9928-bef0646989c4",
+      "can_configure": true
+    },
+    "approval": {
+      "version": 1,
+      "actor_id": "3f886fb8-413e-4102-a00f-56085be56855",
+      "blockers": [],
+      "eligible": true,
+      "revision": "9aba5c13024e6465b1c63e8ae33b32c2",
+      "tenant_id": "6e874e6e-5bca-486d-9928-bef0646989c4",
+      "payable_id": "bd0a3273-7faf-4d71-a6c3-abaaf712adb3",
+      "can_approve": true,
+      "can_execute": true
+    }
+  },
+  "advisor_counts": {
+    "security": {
+      "rls_enabled_no_policy": 58,
+      "anon_security_definer_function_executable": 2,
+      "authenticated_security_definer_function_executable": 241,
+      "auth_insufficient_mfa_options": 1
+    },
+    "performance": {
+      "unindexed_foreign_keys": 211,
+      "auth_rls_initplan": 16,
+      "no_primary_key": 1,
+      "unused_index": 605,
+      "multiple_permissive_policies": 23,
+      "duplicate_index": 2,
+      "auth_db_connections_absolute": 1
+    }
+  },
+  "tests": {
+    "passed": 169,
+    "files": [
+      "financeAuditManualTitlesDatabase.test.ts",
+      "financeAuditInvoicePaginationDatabase.test.ts",
+      "financeAuditFiscalWorkDatabase.test.ts",
+      "financeApprovalPolicyDatabase.test.ts",
+      "financeDurableDecisions.test.ts",
+      "approvalPolicySettings.test.tsx",
+      "accountPeriodClosePanel.test.tsx",
+      "cashPeriodCloseReview.test.tsx",
+      "statementReconciliation.test.tsx",
+      "reconciliationHistory.test.tsx",
+      "billingEdiPaginationRender.test.tsx",
+      "clientInvoiceLifecycleFrontendDatabase.test.tsx",
+      "financeWorkspaceNavigationReportedBug.test.tsx",
+      "financeNavigationReportedBugs.test.ts",
+      "payablePortfolioPanel.test.tsx",
+      "payablePortfolioBulkSelection.test.tsx",
+      "payableApprovalUpdateGuard.test.tsx",
+      "payableAccountActionsDatabase.test.ts",
+      "payableAccountPayment.test.tsx",
+      "payableArchiveDialog.test.tsx",
+      "financeMovementCostCenterDatabase.test.ts",
+      "financeMovementCostCenterClient.test.ts",
+      "financeProductionRpcCompatibility.test.ts",
+      "payableRevisionApproval.test.ts",
+      "payableApprovalPanel.test.tsx",
+      "payableManualSource.test.tsx",
+      "payableMovementLink.test.tsx",
+      "receivablesPagedScreen.test.tsx",
+      "movementRecordingOrigin.test.ts",
+      "payableApprovalOutbox.test.ts",
+      "payableApprovalClient.test.ts"
+    ],
+    "scope": "targeted regression suite; not the complete repository test suite"
+  },
+  "checks": {
+    "typecheck": "passed",
+    "eslint_changed_files": "passed",
+    "build_check": "passed",
+    "supabase_release_check": "passed"
+  },
+  "production_data_mutated_for_tests": false,
+  "frontend_deployed": false,
+  "limitations": [
+    "No authenticated browser acceptance run",
+    "Synthetic SQL fixtures are not a full production database replica",
+    "Existing advisor warnings remain",
+    "Fiscal review items were not resolved by this recheck"
+  ]
+}

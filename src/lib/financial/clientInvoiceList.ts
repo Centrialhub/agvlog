@@ -22,6 +22,16 @@ export function parseInvoiceList(value:unknown,tenant:string,actor:string):{rows
 }
 
 export type InvoiceListTotals={open:string|null;overdue:string|null;sent:string|null;paid:string|null};
+export type InvoicePageFilters={search:string;status:string;client:string};
+const cents=z.string().regex(/^\d+$/).nullable();
+const pageSchema=z.object({version:z.literal(2),tenant_id:z.string().uuid(),actor_id:z.string().uuid(),page:z.number().int().positive(),page_size:z.literal(30),total:z.number().int().nonnegative(),invalid_count:z.number().int().nonnegative(),filters:z.object({search:z.string(),status:z.string(),client:z.string()}),revision:z.string().regex(/^[a-f0-9]{32}$/),truncated:z.literal(false),totals:z.object({open:cents,overdue:cents,sent:cents,paid:cents}),rows:z.array(rowSchema).max(30)});
+export function parseInvoicePage(value:unknown,tenant:string,actor:string,filters:InvoicePageFilters,page:number){
+ const result=pageSchema.parse(value);
+ if(result.page!==page||Object.keys(filters).some(key=>filters[key as keyof InvoicePageFilters]!==result.filters[key as keyof InvoicePageFilters]))throw new Error('Página de faturas fora do filtro.');
+ const validated=parseInvoiceList({version:1,tenant_id:result.tenant_id,actor_id:result.actor_id,truncated:false,rows:result.rows},tenant,actor);
+ if(result.invalid_count>result.total||Object.values(result.totals).some(value=>result.invalid_count>0?value!==null:value===null))throw new Error('Totais de faturas inconsistentes.');
+ return {...result,rows:validated.rows};
+}
 type TotalSource=Pick<ClientInvoice,'status'|'due_date'|'received_amount'|'open_amount'|'requires_reconciliation'>;
 export function invoiceListTotals(rows:readonly TotalSource[],now=new Date()):InvoiceListTotals{
  const unknown:InvoiceListTotals={open:null,overdue:null,sent:null,paid:null};

@@ -41,7 +41,7 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const isOnline = useOnlineStatus();
   useEffect(() => {
-    const titles: Record<string, string> = { '/driver': 'Início', '/driver/loads': 'Minhas cargas', '/driver/stops': 'Paradas', '/driver/deliveries': 'Entregas e coletas', '/driver/journey': 'Jornada', '/driver/expenses': 'Despesas', '/driver/checklist': 'Checklist', '/driver/events': 'Eventos', '/driver/issues': 'Ocorrências', '/driver/chat': 'Chat', '/driver/sync': 'Sincronização', '/driver/install':'Instalar aplicativo' };
+    const titles: Record<string, string> = { '/driver': 'Início', '/driver/loads': 'Minhas cargas', '/driver/stops': 'Paradas', '/driver/deliveries': 'Entregas e coletas', '/driver/journey': 'Jornada', '/driver/expenses': 'Despesas', '/driver/checklist': 'Checklist', '/driver/events': 'Eventos', '/driver/issues': 'Ocorrências', '/driver/chat': 'Chat', '/driver/sync': 'Sincronização', '/driver/install':'Instalar aplicativo', '/help': 'Central de ajuda' };
     document.title = (titles[location.pathname] ?? 'Detalhes da viagem') + ' · Motorista · AGVLog';
   }, [location.pathname]);
 

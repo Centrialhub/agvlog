@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Search } from 'lucide-react';
-import { useAvailableLoadsForSettlement } from '@/hooks/useDriverSettlements';
+import { DriverSettlementSnapshotChangedError, useAvailableLoadsForSettlement } from '@/hooks/useDriverSettlements';
 
 const fmtNum = (v: number | null | undefined, d = 0) =>
   (v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -27,19 +27,24 @@ interface Props {
 export default function LoadPicker({ driverId, includeSettlementId, selectedIds, onChange, onLoadsChange, lockedDriverId }: Props) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [driverId, includeSettlementId, search]);
-  const { data, isLoading } = useAvailableLoadsForSettlement({
+  const [pagingNotice, setPagingNotice] = useState('');
+  useEffect(() => { setPage(1); setPagingNotice(''); }, [driverId, includeSettlementId, search]);
+  const { data, isLoading, isFetching, isError, error, refetch } = useAvailableLoadsForSettlement({
     driver_id: driverId ?? null,
     search,
     include_settlement_id: includeSettlementId ?? null,
     page,
     page_size: 100,
   });
-  const loads = data?.rows ?? [];
+  const loads = useMemo(() => data?.rows ?? [], [data?.rows]);
   const total = data?.total ?? 0;
   const pageSize = data?.page_size ?? 100;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectableLoads = useMemo(
+    () => loads.filter(load => !lockedDriverId || !load.driver_id || load.driver_id === lockedDriverId),
+    [loads, lockedDriverId],
+  );
   // Notify parent when list changes
   useEffect(() => {
     if (onLoadsChange && loads.length > 0) {
@@ -51,10 +56,16 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
     else onChange([...selectedIds, id]);
   };
   const toggleAll = () => {
-    if (loads.every((l) => selectedSet.has(l.id))) onChange(selectedIds.filter((id) => !loads.find((l) => l.id === id)));
-    else onChange(Array.from(new Set([...selectedIds, ...loads.map((l) => l.id)])));
+    if (selectableLoads.every((load) => selectedSet.has(load.id))) onChange(selectedIds.filter((id) => !selectableLoads.some((load) => load.id === id)));
+    else onChange(Array.from(new Set([...selectedIds, ...selectableLoads.map((load) => load.id)])));
   };
-  const allSelected = loads.length > 0 && loads.every((l) => selectedSet.has(l.id));
+  const allSelected = selectableLoads.length > 0 && selectableLoads.every((load) => selectedSet.has(load.id));
+  useEffect(() => {
+    if (page > 1 && error instanceof DriverSettlementSnapshotChangedError) {
+      setPagingNotice(error.message);
+      setPage(1);
+    }
+  }, [error, page]);
 
   return (
     <div className="space-y-2">
@@ -63,15 +74,22 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
         <Input className="pl-8" placeholder="Buscar por número, origem, destino…" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
       <div className="text-xs text-muted-foreground">
-        {isLoading ? 'Carregando romaneios…' : `${total} romaneio(s) disponível(is) · ${selectedIds.length} selecionado(s)`}
+        {isError ? 'Romaneios indisponíveis.' : isLoading ? 'Carregando romaneios…' : `${total} romaneio(s) disponível(is) · ${selectedIds.length} selecionado(s)`}
       </div>
+      {pagingNotice && <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">{pagingNotice}</p>}
+      {isError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <span>Não foi possível consultar os romaneios elegíveis{error instanceof Error && error.message ? `: ${error.message}` : '.'}</span>
+          <Button type="button" size="sm" variant="outline" disabled={isFetching} onClick={() => void refetch()}>Tentar novamente</Button>
+        </div>
+      )}
       <div className="rounded-md border overflow-hidden">
         <div className="overflow-x-auto overflow-y-auto max-h-[45vh] min-h-[200px]">
           <Table>
             <TableHeader className="sticky top-0 bg-background z-30 shadow-sm">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-12 sticky left-0 bg-background z-40 border-r text-center">
-                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                  <Checkbox aria-label="Selecionar todos os romaneios disponíveis" checked={allSelected} disabled={selectableLoads.length === 0} onCheckedChange={toggleAll} />
                 </TableHead>
                 <TableHead className="whitespace-nowrap">Romaneio</TableHead>
                 <TableHead className="whitespace-nowrap">Data</TableHead>
@@ -85,7 +103,7 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
               </TableRow>
             </TableHeader>
             <TableBody>
-            {loads.length === 0 && !isLoading && (
+            {loads.length === 0 && !isLoading && !isError && (
               <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Nenhum romaneio disponível.</TableCell></TableRow>
             )}
             {loads.map((l) => (
@@ -100,6 +118,7 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                 >
                   <TableCell onClick={(e) => e.stopPropagation()} className="sticky left-0 bg-inherit z-20 border-r text-center">
                     <Checkbox
+                      aria-label={`Selecionar romaneio ${l.load_number ?? l.id}`}
                       checked={selectedSet.has(l.id)}
                       disabled={blocked}
                       onCheckedChange={() => { if (!blocked) toggle(l.id); }}
@@ -125,8 +144,8 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>Página {page} de {totalPages}</span>
         <div className="flex gap-2">
-          <Button type="button" size="sm" variant="outline" disabled={page <= 1 || isLoading} onClick={() => setPage(value => Math.max(1, value - 1))}>Anterior</Button>
-          <Button type="button" size="sm" variant="outline" disabled={page >= totalPages || isLoading} onClick={() => setPage(value => Math.min(totalPages, value + 1))}>Próxima</Button>
+          <Button type="button" size="sm" variant="outline" disabled={page <= 1 || isFetching || isError} onClick={() => setPage(value => Math.max(1, value - 1))}>Anterior</Button>
+          <Button type="button" size="sm" variant="outline" disabled={page >= totalPages || isFetching || isError} onClick={() => setPage(value => Math.min(totalPages, value + 1))}>Próxima</Button>
         </div>
       </div>
     </div>

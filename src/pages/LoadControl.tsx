@@ -32,9 +32,9 @@ import {
   buildSpreadsheetLoadImport, buildXmlLoadImport, loadImportError,
   type ImportPreview,
 } from '@/lib/loadImports/loadImportCommands';
-import type { ReactNode } from 'react';
 import { useBankAccounts } from '@/hooks/useBankReconciliation';
 import { loadPaymentError, parseMoneyCents } from '@/lib/loadPayments/loadPaymentCommands';
+import { REPORT_TITLES, Kpi } from '@/components/loads/LoadControlSummary';
 
 const brl = (value: number | string | null | undefined) => 'R$ ' + Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = (v?: string | null) => v ? v.slice(0, 10).split('-').reverse().join('/') : '—';
@@ -65,7 +65,8 @@ export default function LoadControl() {
   const regPay = useRegisterPayment();
   const bankAccountsQuery = useBankAccounts();
   const bankAccounts = (bankAccountsQuery.data || []).filter(account => account.active);
-  const { data: batches = [] } = useImportBatches();
+  const batchesQuery = useImportBatches();
+  const batches = batchesQuery.data ?? [];
 
   const loadedKpis = useMemo(() => {
     const acc = { total: rows.length, paid: 0, unpaid: 0, overdue: 0, billed: 0, freight: 0, open: 0, weight: 0, nfs: 0, ctes: 0 };
@@ -321,6 +322,14 @@ export default function LoadControl() {
           <Card>
             <CardHeader><CardTitle className="text-sm">Últimas importações</CardTitle></CardHeader>
             <CardContent className="p-0 overflow-auto">
+              {batchesQuery.isPending ? (
+                <div role="status" className="p-4 text-sm text-muted-foreground">Carregando últimas importações…</div>
+              ) : batchesQuery.isError ? (
+                <div role="alert" className="p-4 text-sm text-destructive flex items-center justify-between gap-3">
+                  <span>Não foi possível carregar as últimas importações: {batchesQuery.error.message}</span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void batchesQuery.refetch()}>Tentar novamente</Button>
+                </div>
+              ) : (
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Data</TableHead><TableHead>Arquivo</TableHead><TableHead>Tipo</TableHead>
@@ -338,8 +347,10 @@ export default function LoadControl() {
                       <TableCell><Badge variant="outline">{b.status}</Badge></TableCell>
                     </TableRow>
                   ))}
+                  {batches.length === 0 && <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">Nenhuma importação registrada.</TableCell></TableRow>}
                 </TableBody>
               </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -432,20 +443,6 @@ export default function LoadControl() {
   );
 }
 
-const REPORT_TITLES: Record<LoadReportKind, string> = {
-  summary: 'Resumo de Cargas Recebidas', detailed: 'Relatório Detalhado da Carga',
-  open: 'Cargas em Aberto', paid: 'Cargas Pagas',
-  by_client: 'Por Cliente', by_city: 'Por Cidade', unloading: 'Descargas',
-};
-
-function Kpi({ label, value, tone }: { label: string; value: ReactNode; tone?: 'warning' | 'destructive' }) {
-  return (
-    <Card><CardContent className="p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={`text-lg font-semibold ${tone === 'warning' ? 'text-amber-600' : tone === 'destructive' ? 'text-destructive' : ''}`}>{value}</div>
-    </CardContent></Card>
-  );
-}
 
 function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => void }) {
   const toast = useSonnerToast();

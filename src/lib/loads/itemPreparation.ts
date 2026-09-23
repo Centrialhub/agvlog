@@ -10,6 +10,13 @@ export interface ItemPreparationPayload {tenant_id:string;load_id:string;item_id
 export interface ItemPreparationResult {request_id:string;tenant_id:string;load_id:string;item_id:string;created:boolean;totals_recalculated:true;values:ItemPreparationExpected}
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fields=['order_id','item_description','quantity','pallet_count','weight_kg','volume_m3','status','notes'];
+export function validateManualItemCreation(values:ItemPreparationValues):void {
+ const identified=Boolean(values.order_id||values.item_description?.trim());
+ const hasPhysicalMeasure=[values.quantity,values.pallet_count,values.weight_kg,values.volume_m3]
+  .some(value=>typeof value==='number'&&Number.isFinite(value)&&value>0);
+ if(!identified)throw new Error('Informe um pedido ou uma descrição significativa para o item manual.');
+ if(!hasPhysicalMeasure)throw new Error('Informe quantidade, paletes, peso ou volume maior que zero para o item manual.');
+}
 export function isItemPreparationPayload(value:unknown):value is ItemPreparationPayload {
  if(!isRecord(value)||typeof value.tenant_id!=='string'||!uuid.test(value.tenant_id)||typeof value.load_id!=='string'||!uuid.test(value.load_id)
   ||!(value.item_id===null||typeof value.item_id==='string'&&uuid.test(value.item_id))||!isRecord(value.values)||!Object.keys(value.values).length)return false;

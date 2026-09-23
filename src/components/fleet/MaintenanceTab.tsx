@@ -16,9 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Wrench, AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { getErrorMessage } from '@/lib/errors';
 import { localDateInputValue } from '@/lib/utils/formatDate';
+import { maintenanceAlertDate, maintenanceAlertHorizon, maintenanceFormError } from '@/lib/fleet/maintenanceSchedule';
+import { useTenant } from '@/hooks/useTenant';
+import { canAdministerVehicle } from '@/lib/fleet/vehiclePermissions';
 
 const MAINT_TYPES = [
   { value: 'preventive', label: 'Preventiva' },
@@ -50,6 +53,8 @@ interface Props {
 
 export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
   const toast = useSonnerToast();
+  const { currentRole } = useTenant();
+  const canManageMaintenance = canAdministerVehicle(currentRole);
   const itemsQuery=useVehicleMaintenanceList(vehicleId);const items=itemsQuery.data??[],isLoading=itemsQuery.isLoading;
   const createMut = useCreateMaintenance();
   const updateMut = useUpdateMaintenance();
@@ -68,8 +73,8 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
     notes: '',
   });
 
-  const today=localDateInputValue(),horizon=format(addDays(new Date(),7),'yyyy-MM-dd');
-  const alertDate=(m:typeof items[number])=>m.next_date||m.scheduled_date;
+  const today=localDateInputValue(),horizon=maintenanceAlertHorizon(today);
+  const alertDate=(m:typeof items[number])=>maintenanceAlertDate(m);
   const overdue = items.filter(m =>
     m.status === 'scheduled' && (
       (alertDate(m) && alertDate(m)!<today) ||
@@ -82,12 +87,20 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
   );
 
   const handleSave = async () => {
+    if (!canManageMaintenance) { toast.error('Somente administradores podem registrar manutenções'); return; }
+    const validationError = maintenanceFormError({
+      description: form.description,
+      scheduledDate: form.scheduled_date,
+      nextDate: form.next_date,
+      nextOdometer: form.next_odometer,
+    });
+    if (validationError) { toast.error(validationError); return; }
     try {
       await createMut.mutateAsync({
         vehicle_id: vehicleId,
         maintenance_type: form.maintenance_type,
         category: form.category,
-        description: form.description,
+        description: form.description.trim(),
         scheduled_date: form.scheduled_date || null,
         odometer_at_service: form.odometer_at_service ? Number(form.odometer_at_service) : null,
         next_odometer: form.next_odometer ? Number(form.next_odometer) : null,
@@ -105,6 +118,7 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
   };
 
   const handleStatusChange = async (id: string, status: string) => {
+    if (!canManageMaintenance) { toast.error('Somente administradores podem atualizar manutenções'); return; }
     try {
       const updates: UpdateVehicleMaintenanceInput = { id, status };
       if (status === 'completed') updates.completed_date = localDateInputValue();
@@ -148,9 +162,9 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
 
       <div className="flex justify-between items-center">
         <h3 className="text-sm font-medium text-foreground">Histórico de Manutenção</h3>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>
+        {canManageMaintenance ? <Button size="sm" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Nova Manutenção
-        </Button>
+        </Button> : <span className="text-xs text-muted-foreground">Alterações restritas a administradores</span>}
       </div>
 
       <Card>
@@ -193,7 +207,7 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {m.status !== 'completed' && m.status !== 'cancelled' && (
+                      {canManageMaintenance && m.status !== 'completed' && m.status !== 'cancelled' && (
                         <div className="flex gap-1">
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-emerald-600" onClick={() => handleStatusChange(m.id, 'completed')}>
                             <CheckCircle2 className="h-3 w-3" />
@@ -210,7 +224,7 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
       </Card>
 
       {/* Add maintenance dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {canManageMaintenance && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Nova Manutenção</DialogTitle></DialogHeader>
           <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
@@ -232,7 +246,7 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
             </div>
             <div>
               <Label>Descrição</Label>
-              <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Ex: Troca de óleo 15W40 + filtros" />
+              <Input required value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Ex: Troca de óleo 15W40 + filtros" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>Data Agendada/Realizada</Label><Input type="date" value={form.scheduled_date} onChange={e => setForm(f => ({ ...f, scheduled_date: e.target.value }))} /></div>
@@ -253,7 +267,7 @@ export default function MaintenanceTab({ vehicleId, currentOdometer }: Props) {
             </div>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 }

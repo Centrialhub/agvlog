@@ -13,15 +13,20 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { classifyTelemetryFreshness, summarizeTelemetryFreshness } from '@/lib/telemetryFreshness';
-import { localDateInputValue } from '@/lib/utils/formatDate';
+import { APP_TIME_ZONE } from '@/lib/utils/formatDate';
+import { dashboardWeekStartFromCivilDay, readDashboardWeeklyMetrics } from '@/lib/dashboardMetrics';
+import { useCivilDay } from '@/hooks/useCivilDay';
 
 export default function Dashboard() {
   const { currentTenant } = useTenant();
+  const tenantTimeZone = currentTenant?.timezone || APP_TIME_ZONE;
+  const dashboardDay = useCivilDay(tenantTimeZone);
+  const weeklyFromDay = dashboardWeekStartFromCivilDay(dashboardDay);
   const navigate = useNavigate();
   const fleetStateQuery = useFleetState();
   const { data: fleetState = [], isLoading: fleetStateLoading, error: fleetStateError } = fleetStateQuery;
 
-  const { data: vehicleCount = 0 } = useQuery({
+  const vehicleCountQuery = useQuery({
     queryKey: ['dashboard_vehicles', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return 0;
@@ -32,8 +37,9 @@ export default function Dashboard() {
     },
     enabled: !!currentTenant,
   });
+  const vehicleCount = vehicleCountQuery.data ?? 0;
 
-  const { data: openAlerts = 0 } = useQuery({
+  const openAlertsQuery = useQuery({
     queryKey: ['dashboard_alerts', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return 0;
@@ -44,14 +50,14 @@ export default function Dashboard() {
     },
     enabled: !!currentTenant,
   });
+  const openAlerts = openAlertsQuery.data ?? 0;
 
-  const { data: todayMetrics } = useQuery({
-    queryKey: ['dashboard_metrics', currentTenant?.id],
+  const todayMetricsQuery = useQuery({
+    queryKey: ['dashboard_metrics', currentTenant?.id, tenantTimeZone, dashboardDay],
     queryFn: async () => {
       if (!currentTenant) return null;
-      const today = localDateInputValue();
       const { data, error } = await supabase.from('metrics_daily').select('km_estimated, trips_count, overspeed_events, stops_count, moving_time_seconds, stopped_time_seconds')
-        .eq('tenant_id', currentTenant.id).eq('day', today);
+        .eq('tenant_id', currentTenant.id).eq('day', dashboardDay);
       if (error) throw error;
       const totals = (data || []).reduce((acc, m) => ({
         km: acc.km + (m.km_estimated || 0),
@@ -64,31 +70,28 @@ export default function Dashboard() {
       return totals;
     },
     enabled: !!currentTenant,
+    refetchInterval: 60_000,
   });
+  const todayMetrics = todayMetricsQuery.data;
 
   // Last 7 days metrics for charts
-  const { data: weeklyMetrics = [] } = useQuery({
-    queryKey: ['dashboard_weekly', currentTenant?.id],
-    queryFn: async () => {
+  const weeklyMetricsQuery = useQuery({
+    queryKey: ['dashboard_weekly', currentTenant?.id, tenantTimeZone, dashboardDay],
+    queryFn: async ({ signal }) => {
       if (!currentTenant) return [];
-      const from = new Date();
-      from.setDate(from.getDate() - 6);
-      const { data, error } = await supabase.from('metrics_daily')
-        .select('day, vehicle_id, km_estimated, trips_count, overspeed_events, moving_time_seconds')
-        .eq('tenant_id', currentTenant.id)
-        .gte('day', from.toISOString().slice(0, 10))
-        .order('day');
-      if (error) throw error;
-      return data || [];
+      return readDashboardWeeklyMetrics(currentTenant.id, weeklyFromDay, signal);
     },
     enabled: !!currentTenant,
+    refetchInterval: 60_000,
   });
+  const weeklyMetrics = useMemo(() => weeklyMetricsQuery.data ?? [], [weeklyMetricsQuery.data]);
 
   // Km by vehicle (last 7 days)
-  const { data: vehiclesForChart = [] } = useVehicles();
+  const vehiclesQuery = useVehicles();
+  const vehiclesForChart = useMemo(() => vehiclesQuery.data ?? [], [vehiclesQuery.data]);
 
   // Recent alerts
-  const { data: recentAlerts = [] } = useQuery({
+  const recentAlertsQuery = useQuery({
     queryKey: ['dashboard_recent_alerts', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -101,10 +104,12 @@ export default function Dashboard() {
       return data || [];
     },
     enabled: !!currentTenant,
+    refetchInterval: 60_000,
   });
+  const recentAlerts = recentAlertsQuery.data ?? [];
 
   // Recent events (last 24h)
-  const { data: recentEvents = [] } = useQuery({
+  const recentEventsQuery = useQuery({
     queryKey: ['dashboard_recent_events', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -119,7 +124,21 @@ export default function Dashboard() {
       return data || [];
     },
     enabled: !!currentTenant,
+    refetchInterval: 60_000,
   });
+  const recentEvents = recentEventsQuery.data ?? [];
+
+  const supportingReadError = vehicleCountQuery.isError || openAlertsQuery.isError || todayMetricsQuery.isError
+    || weeklyMetricsQuery.isError || vehiclesQuery.isError || recentAlertsQuery.isError || recentEventsQuery.isError;
+  const retrySupportingReads = () => {
+    if (vehicleCountQuery.isError) void vehicleCountQuery.refetch();
+    if (openAlertsQuery.isError) void openAlertsQuery.refetch();
+    if (todayMetricsQuery.isError) void todayMetricsQuery.refetch();
+    if (weeklyMetricsQuery.isError) void weeklyMetricsQuery.refetch();
+    if (vehiclesQuery.isError) void vehiclesQuery.refetch();
+    if (recentAlertsQuery.isError) void recentAlertsQuery.refetch();
+    if (recentEventsQuery.isError) void recentEventsQuery.refetch();
+  };
 
   const reliableFleetState = useMemo(
     () => (fleetStateError ? [] : fleetState),
@@ -201,14 +220,29 @@ export default function Dashboard() {
         </Card>
       )}
 
+      {supportingReadError && (
+        <Card className="border-destructive/40 bg-destructive/5" role="alert">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Parte dos dados do Dashboard está indisponível. Os painéis afetados não exibem zeros como se fossem resultados válidos.
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={retrySupportingReads}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard title="Veículos" value={vehicleCount} subtitle="Cadastrados" icon={<Truck className="h-5 w-5" />} onClick={() => navigate('/vehicles')} />
-        <StatCard title="Online" value={fleetStateLoading || fleetStateError ? '—' : onlineCount} subtitle={fleetStateError ? 'Telemetria indisponível' : `≤ 25 min · ${telemetryStats.fresh} frescos`} icon={<TruckIcon className="h-5 w-5" />} variant="success" onClick={() => navigate('/fleet-map')} />
-        <StatCard title="Offline" value={fleetStateLoading || fleetStateError ? '—' : offlineCount} subtitle={fleetStateError ? 'Telemetria indisponível' : `> 25 min · ${unknownCount} sem dados`} icon={<Clock className="h-5 w-5" />} variant="destructive" onClick={() => navigate('/fleet-map')} />
-        <StatCard title="Alertas" value={openAlerts} subtitle="Abertos" icon={<AlertTriangle className="h-5 w-5" />} variant="warning" onClick={() => navigate('/alerts')} />
-        <StatCard title="Km hoje" value={todayMetrics ? Math.round(todayMetrics.km) : 0} subtitle="Via GPS" icon={<Route className="h-5 w-5" />} />
-        <StatCard title="Viagens hoje" value={todayMetrics?.trips || 0} subtitle="Detectadas" icon={<MapPin className="h-5 w-5" />} />
+        <StatCard title="Veículos" value={vehicleCountQuery.isPending || vehicleCountQuery.isError ? '—' : vehicleCount} subtitle={vehicleCountQuery.isError ? 'Consulta indisponível' : 'Cadastrados'} icon={<Truck className="h-5 w-5" />} onClick={() => navigate('/vehicles')} />
+        <StatCard title="Online" value={fleetStateLoading || fleetStateError || vehiclesQuery.isLoading || vehiclesQuery.isError ? '—' : onlineCount} subtitle={fleetStateError || vehiclesQuery.isError ? 'Consulta indisponível' : `≤ 25 min · ${telemetryStats.fresh} frescos`} icon={<TruckIcon className="h-5 w-5" />} variant="success" onClick={() => navigate('/fleet-map')} />
+        <StatCard title="Offline" value={fleetStateLoading || fleetStateError || vehiclesQuery.isLoading || vehiclesQuery.isError ? '—' : offlineCount} subtitle={fleetStateError || vehiclesQuery.isError ? 'Consulta indisponível' : `> 25 min · ${unknownCount} sem dados`} icon={<Clock className="h-5 w-5" />} variant="destructive" onClick={() => navigate('/fleet-map')} />
+        <StatCard title="Alertas" value={openAlertsQuery.isPending || openAlertsQuery.isError ? '—' : openAlerts} subtitle={openAlertsQuery.isError ? 'Consulta indisponível' : 'Abertos'} icon={<AlertTriangle className="h-5 w-5" />} variant="warning" onClick={() => navigate('/alerts')} />
+        <StatCard title="Km hoje" value={todayMetricsQuery.isPending || todayMetricsQuery.isError ? '—' : Math.round(todayMetrics?.km ?? 0)} subtitle={todayMetricsQuery.isError ? 'Consulta indisponível' : 'Via GPS'} icon={<Route className="h-5 w-5" />} />
+        <StatCard title="Viagens hoje" value={todayMetricsQuery.isPending || todayMetricsQuery.isError ? '—' : todayMetrics?.trips ?? 0} subtitle={todayMetricsQuery.isError ? 'Consulta indisponível' : 'Detectadas'} icon={<MapPin className="h-5 w-5" />} />
       </div>
 
       {/* Extra today KPIs */}
@@ -227,7 +261,11 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Atividade Diária (7 dias)</CardTitle></CardHeader>
           <CardContent>
-            {dailyChartData.length > 0 ? (
+            {weeklyMetricsQuery.isPending ? (
+              <DashboardLoading label="Carregando métricas semanais…" />
+            ) : weeklyMetricsQuery.isError ? (
+              <DashboardUnavailable label="Métricas semanais indisponíveis" onRetry={() => void weeklyMetricsQuery.refetch()} />
+            ) : dailyChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={dailyChartData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -251,7 +289,11 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Km por Veículo (7 dias)</CardTitle></CardHeader>
           <CardContent>
-            {vehicleKmData.length > 0 ? (
+            {weeklyMetricsQuery.isPending || vehiclesQuery.isLoading ? (
+              <DashboardLoading label="Carregando quilometragem por veículo…" />
+            ) : weeklyMetricsQuery.isError || vehiclesQuery.isError ? (
+              <DashboardUnavailable label="Quilometragem por veículo indisponível" onRetry={() => { void weeklyMetricsQuery.refetch();void vehiclesQuery.refetch(); }} />
+            ) : vehicleKmData.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={vehicleKmData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -276,7 +318,11 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-warning" />Alertas Recentes</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            {recentAlerts.length === 0 ? (
+            {recentAlertsQuery.isPending ? (
+              <DashboardLoading label="Carregando alertas recentes…" compact />
+            ) : recentAlertsQuery.isError ? (
+              <DashboardUnavailable label="Alertas recentes indisponíveis" onRetry={() => void recentAlertsQuery.refetch()} compact />
+            ) : recentAlerts.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Nenhum alerta</p>
             ) : recentAlerts.map((a) => (
               <div key={a.id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0">
@@ -294,7 +340,11 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Zap className="h-4 w-4 text-primary" />Eventos (24h)</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            {recentEvents.length === 0 ? (
+            {recentEventsQuery.isPending ? (
+              <DashboardLoading label="Carregando eventos recentes…" compact />
+            ) : recentEventsQuery.isError ? (
+              <DashboardUnavailable label="Eventos recentes indisponíveis" onRetry={() => void recentEventsQuery.refetch()} compact />
+            ) : recentEvents.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Nenhum evento nas últimas 24h</p>
             ) : recentEvents.map((ev) => (
               <div key={ev.id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0">
@@ -314,8 +364,10 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Clock className="h-4 w-4 text-destructive" />Veículos Offline</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            {fleetStateError ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Telemetria indisponível</p>
+            {fleetStateLoading || vehiclesQuery.isLoading ? (
+              <DashboardLoading label="Carregando veículos offline…" compact />
+            ) : fleetStateError || vehiclesQuery.isError ? (
+              <DashboardUnavailable label="Veículos offline indisponíveis" onRetry={() => { void fleetStateQuery.refetch();void vehiclesQuery.refetch(); }} compact />
             ) : offlineVehicles.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Nenhum veículo está offline</p>
             ) : offlineVehicles.map((state) => {
@@ -332,6 +384,19 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function DashboardLoading({ label, compact = false }: { label: string; compact?: boolean }) {
+  return <div role="status" className={`flex items-center justify-center text-sm text-muted-foreground ${compact ? 'py-4' : 'h-[250px]'}`}>{label}</div>;
+}
+
+function DashboardUnavailable({ label, onRetry, compact = false }: { label: string; onRetry: () => void; compact?: boolean }) {
+  return (
+    <div role="alert" className={`flex flex-col items-center justify-center gap-2 text-sm text-destructive ${compact ? 'py-4' : 'h-[250px]'}`}>
+      <span>{label}</span>
+      <Button type="button" size="sm" variant="outline" onClick={onRetry}>Tentar novamente</Button>
     </div>
   );
 }

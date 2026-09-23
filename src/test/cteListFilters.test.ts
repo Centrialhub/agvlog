@@ -41,4 +41,12 @@ describe('CT-e filters after merging local and Hub records', () => {
   it('does not return a canonical cancelled CT-e in an authorized search', () => {
     expect(matchesCteSearchFilters({ ...search, sefaz_status: 'cancelled' }, { statuses: ['processed'] })).toBe(false);
   });
+  it('applies the tenant calendar day instead of the browser calendar after merging', () => {
+    const previousTenantDay = '2026-08-30T03:30:00.000Z';
+    const selectedTenantDay = '2026-08-31T03:30:00.000Z';
+    const period = { issuedStart: '2026-08-30', issuedEnd: '2026-08-30' };
+    expect(matchesCteMonitorFilters({ ...monitor, issued_at: previousTenantDay }, period, 'America/Manaus')).toBe(false);
+    expect(matchesCteMonitorFilters({ ...monitor, issued_at: selectedTenantDay }, period, 'America/Manaus')).toBe(true);
+    expect(matchesCteSearchFilters({ ...search, issued_at: selectedTenantDay }, { issueDateStart: '2026-08-30', issueDateEnd: '2026-08-30' }, 'America/Manaus')).toBe(true);
+  });
 });

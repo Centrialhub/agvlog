@@ -52,8 +52,8 @@ export const deliveryReceiptFilterKinds=['driver','vehicle','supplier','trip','l
 export type DeliveryReceiptFilterKind=typeof deliveryReceiptFilterKinds[number];
 const filterKindSchema=z.enum(deliveryReceiptFilterKinds);
 const filterOptionsPageSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,kind:filterKindSchema,search:z.string(),
-  items:z.array(filterOptionSchema).max(50),has_more:z.boolean(),next_cursor_label:z.string().nullable(),next_cursor_value:z.string().nullable()}).strict();
-export interface DeliveryReceiptFilterCursor {label:string;value:string}
+  snapshot_id:id,items:z.array(filterOptionSchema).max(50),has_more:z.boolean(),next_cursor_label:z.string().nullable(),next_cursor_value:z.string().nullable()}).strict();
+export interface DeliveryReceiptFilterCursor {label:string;value:string;snapshotId:string}
 export interface DeliveryReceiptFilterOptionPage {items:DeliveryReceiptFilterOption[];hasMore:boolean;nextCursor:DeliveryReceiptFilterCursor|null}
 export interface DeliveryReceiptEmailDraft {
   supplierKey:string;
@@ -102,7 +102,7 @@ type ReceiptRpcArgs={
   list_delivery_receipts_v1:{_tenant_id:string;_filters:DeliveryReceiptFilters;_limit:number;_offset:number};
   get_delivery_receipt_filter_summary_v1:{_tenant_id:string};
   list_delivery_receipt_filter_options_v1:{_tenant_id:string;_kind:DeliveryReceiptFilterKind;_search:string|null;_limit:number;
-    _cursor_label:string|null;_cursor_value:string|null};
+    _cursor_label:string|null;_cursor_value:string|null;_snapshot_id:string|null};
   review_delivery_receipt_v1:{_tenant_id:string;_receipt_id:string;_decision:'validated'|'rejected';_reason:string|null;_expected_updated_at:string};
   receive_physical_delivery_receipt_v1:{_tenant_id:string;_receipt_id:string;_expected_updated_at:string};
   record_delivery_receipt_physical_status_v1:{_tenant_id:string;_receipt_id:string;_request_id:string;
@@ -115,7 +115,7 @@ type ReceiptRpcArgs={
 };
 interface RpcResponse {data:unknown;error:unknown}
 interface RpcBuilder extends PromiseLike<RpcResponse>{abortSignal:(signal:AbortSignal)=>PromiseLike<RpcResponse>}
-const rpc=supabase.rpc.bind(supabase) as unknown as <Name extends keyof ReceiptRpcArgs>(name:Name,args:ReceiptRpcArgs[Name])=>RpcBuilder;
+const rpc=((name: unknown, args: unknown) => (supabase.rpc.bind(supabase) as unknown as (name: unknown, args: unknown) => unknown)(name, args)) as unknown as <Name extends keyof ReceiptRpcArgs>(name:Name,args:ReceiptRpcArgs[Name])=>RpcBuilder;
 
 export async function listDeliveryReceipts(tenant:string,actor:string,filters:DeliveryReceiptFilters,
   pagination:DeliveryReceiptPagination={},signal?:AbortSignal) {
@@ -189,7 +189,7 @@ export async function listDeliveryReceiptFilterOptions(tenant:string,actor:strin
   search='',cursor:DeliveryReceiptFilterCursor|null=null,signal?:AbortSignal):Promise<DeliveryReceiptFilterOptionPage>{
   const normalizedSearch=search.trim();
   const request=rpc('list_delivery_receipt_filter_options_v1',{_tenant_id:tenant,_kind:kind,_search:normalizedSearch||null,_limit:25,
-    _cursor_label:cursor?.label??null,_cursor_value:cursor?.value??null});
+    _cursor_label:cursor?.label??null,_cursor_value:cursor?.value??null,_snapshot_id:cursor?.snapshotId??null});
   const {data,error}=await (signal?request.abortSignal(signal):request);
   if(error)throw error;
   const parsed=filterOptionsPageSchema.safeParse(data);
@@ -197,7 +197,7 @@ export async function listDeliveryReceiptFilterOptions(tenant:string,actor:strin
     throw new Error('Opções de filtro de canhotos incompatíveis com a consulta atual.');
   }
   const nextCursor=parsed.data.has_more&&parsed.data.next_cursor_label&&parsed.data.next_cursor_value
-    ?{label:parsed.data.next_cursor_label,value:parsed.data.next_cursor_value}:null;
+    ?{label:parsed.data.next_cursor_label,value:parsed.data.next_cursor_value,snapshotId:parsed.data.snapshot_id}:null;
   if(parsed.data.has_more&&!nextCursor)throw new Error('Cursor de opções de canhotos ausente.');
   return {items:parsed.data.items,hasMore:parsed.data.has_more,nextCursor};
 }

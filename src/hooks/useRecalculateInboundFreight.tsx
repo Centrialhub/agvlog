@@ -24,7 +24,7 @@ export function useRecalculateInboundFreight() {
   return useMutation({
     mutationFn: async (docIds: string[]) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      if (docIds.length === 0) return { updated: 0, skipped: 0, failed: 0 };
+      if (docIds.length === 0) return { updated: 0, skipped: 0, failed: 0, failedIds: [] as string[] };
 
       // Fetch docs in chunks (avoid IN() blowup)
       const chunk = 200;
@@ -55,7 +55,8 @@ export function useRecalculateInboundFreight() {
         (clients || []).forEach((client) => payerGroupByClient.set(client.id, client.payer_group || null));
       }
 
-      let updated = 0, skipped = 0, failed = 0;
+      let updated = 0, skipped = 0;
+      const failedIds = docIds.filter((id) => !docs.some((document) => document.id === id));
 
       for (const d of docs) {
         if (d.freight_overridden) { skipped++; continue; }
@@ -76,7 +77,7 @@ export function useRecalculateInboundFreight() {
           
           if (!result.success || !result.breakdown) { 
             console.warn(`[useRecalculateInboundFreight] Falha no cálculo para NF ${d.id}:`, result.error || 'Sem tabela compatível');
-            failed++; 
+            failedIds.push(d.id);
             continue; 
           }
 
@@ -91,18 +92,18 @@ export function useRecalculateInboundFreight() {
             })
             .eq('id', d.id)
             .eq('tenant_id', currentTenant.id);
-          if (upErr) { failed++; continue; }
+          if (upErr) { failedIds.push(d.id); continue; }
 
           try {
             await logFreightCalculation(currentTenant.id, d.id, 'nfe', result.breakdown, user?.id);
           } catch { /* non-blocking audit */ }
           updated++;
         } catch {
-          failed++;
+          failedIds.push(d.id);
         }
       }
 
-      return { updated, skipped, failed };
+      return { updated, skipped, failed: failedIds.length, failedIds };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['billing_documents'] });

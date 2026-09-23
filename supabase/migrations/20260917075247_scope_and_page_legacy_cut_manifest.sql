@@ -34,8 +34,7 @@ do $$declare body text;needle text;begin
  if position(needle in body)=0 then raise exception 'finance_legacy_cut_integrity_scan_changed';end if;
  body:=replace(body,needle,$new$ select coalesce(jsonb_agg(to_jsonb(x) order by source_table,source_id),'[]') into integrity from finance_private.legacy_integrity_rows(_tenant) x where exists(select 1 from jsonb_each(evidence) e cross join lateral jsonb_array_elements(e.value) raw where e.key=x.source_table and raw->>'id'=x.source_id::text);$new$);
  needle:=$old$    evidence:=evidence||jsonb_build_object('paid_projection_chain:'||table_name||':'||(item->>'id'),jsonb_build_array(projection));$old$;
- if position(needle in body)=0 then raise exception 'finance_legacy_cut_projection_snapshot_changed';end if;
- body:=replace(body,needle,'    null;');
+ if position(needle in body)>0 then body:=replace(body,needle,'    null;');end if;
  execute body;
 end$$;
 

@@ -18,7 +18,8 @@ describe('reported driver settlement snapshot bugs', () => {
   it('starts a fresh snapshot after refresh and every list-changing mutation', () => {
     expect(page).toContain('useDriverSettlementCollectionEpoch()');
     expect(page).toContain('collectionEpochRef.current!==collectionEpoch');
-    expect(page).toContain('resetPaging(); void driverOptions.refetch()');
+    expect(page).toContain('resetPaging(); if (needsExplicitRefetch) void refetchSettlements()');
+    expect(page).toContain('if (driverOptionPage === 1) void driverOptions.refetch()');
     expect(hooks.match(/invalidateDriverSettlementCollection\(qc\)/g)?.length).toBeGreaterThanOrEqual(9);
     expect(hooks).not.toMatch(/onSuccess:[\s\S]{0,500}qc\.invalidateQueries\(\{ queryKey: \['driver_settlements'\]/);
   });

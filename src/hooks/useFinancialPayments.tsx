@@ -33,13 +33,13 @@ export function useBankAccounts() {
   });
 }
 
-export function usePayablePayments(payableId: string | null,page=1) {
+export function usePayablePayments(payableId: string | null,page=1,expectedRevision:string|null=null) {
   const {currentTenant}=useTenant();
   return useQuery({
-    queryKey: ['payables_payments', payableId,currentTenant?.id,page],
+    queryKey: ['payables_payments', payableId,currentTenant?.id,page,expectedRevision],
     queryFn: async () => {
       if (!payableId||!currentTenant) throw new Error('Selecione a empresa e o título.');
-      return readPayablePaymentHistory(currentTenant.id,payableId,page);
+      return readPayablePaymentHistory(currentTenant.id,payableId,page,expectedRevision);
     },
     enabled: !!payableId&&!!currentTenant,
   });

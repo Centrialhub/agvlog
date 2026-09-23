@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,24 +31,30 @@ export function SsxMappingConflictReview({ conflicts }: { conflicts: SsxMappingC
   const toast = useSonnerToast();
   const [vehicleByConflict, setVehicleByConflict] = useState<Record<string, string>>({});
   const [reasonByConflict, setReasonByConflict] = useState<Record<string, string>>({});
+  const requestByConflict = useRef(new Map<string, { payload: string; id: string }>());
 
   const resolveMutation = useMutation({
-    mutationFn: async ({ conflictId, vehicleId, reason }: { conflictId: string; vehicleId: string; reason: string }) => {
-      const { error } = await supabase.rpc('resolve_ssx_mapping_conflict_v1' as never, {
+    mutationFn: async ({ conflictId, vehicleId, reason, requestId }: { conflictId: string; vehicleId: string; reason: string; requestId: string }) => {
+      const { error } = await supabase.rpc('resolve_ssx_mapping_conflict_v2' as never, {
         _conflict_id: conflictId,
         _vehicle_id: vehicleId,
         _reason: reason,
+        _request_id: requestId,
       } as never);
       if (error) throw error;
     },
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
+      requestByConflict.current.delete(variables.conflictId);
       toast.success('Conflito SSX resolvido e vínculo auditado.');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['ssx_mapping_conflicts', currentTenant?.id] }),
         queryClient.invalidateQueries({ queryKey: ['tracking-observability', currentTenant?.id] }),
       ]);
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : 'Não foi possível resolver o conflito SSX.'),
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível resolver o conflito SSX.');
+      void queryClient.invalidateQueries({ queryKey: ['ssx_mapping_conflicts', currentTenant?.id] });
+    },
   });
 
   if (conflicts.length === 0) return null;
@@ -94,7 +100,14 @@ export function SsxMappingConflictReview({ conflicts }: { conflicts: SsxMappingC
             <Button
               type="button"
               disabled={!selectedVehicle || reason.trim().length < 3 || resolveMutation.isPending}
-              onClick={() => resolveMutation.mutate({ conflictId: conflict.id, vehicleId: selectedVehicle, reason: reason.trim() })}
+              onClick={() => {
+                const trimmedReason = reason.trim();
+                const payload = JSON.stringify([selectedVehicle, trimmedReason]);
+                const previous = requestByConflict.current.get(conflict.id);
+                const requestId = previous?.payload === payload ? previous.id : crypto.randomUUID();
+                requestByConflict.current.set(conflict.id, { payload, id: requestId });
+                resolveMutation.mutate({ conflictId: conflict.id, vehicleId: selectedVehicle, reason: trimmedReason, requestId });
+              }}
             >Resolver vínculo</Button>
           </div>
           {conflict.candidate_vehicles.length === 0 ? <p role="alert" className="text-xs text-destructive">

@@ -3,7 +3,7 @@ import {
   Barcode, Bell, BookOpenCheck, Boxes, BriefcaseBusiness, Building2, Calculator,
   ChartColumn, ChartNoAxesCombined, CircleDollarSign, ClipboardCheck, ClipboardList,
   DatabaseZap, FileCheck2, FileInput, FileSearch, FileSpreadsheet, FileText,
-  FolderClock, Gauge, History, LayoutDashboard, Map, MapPinned, Navigation, Package,
+  FolderClock, Gauge, History, LayoutDashboard, LifeBuoy, Map, MapPinned, Navigation, Package,
   PackageCheck, PackageMinus, PackageOpen, Plug, Receipt, ReceiptText, Route,
   ScanLine, Settings, ShieldAlert, ShieldCheck, ShoppingCart, Sprout, Tags,
   Truck, Upload, UserCog, Users, Wallet, Warehouse, Waypoints, Wrench,
@@ -37,7 +37,7 @@ export const navigationSections: NavigationSection[] = [
   ] },
   { id: 'operations', label: 'Planejamento e cargas', icon: PackageCheck, items: [
     { label: 'Coletas', href: '/pickup-orders', icon: PackageOpen },
-    { label: 'Pedidos', href: '/orders', icon: ShoppingCart },
+    { label: 'Pedidos', href: '/orders', icon: ShoppingCart, roles: ['owner', 'admin'] },
     { label: 'Importação de documentos', href: '/ingestion', icon: Upload, keywords: 'NF XML arquivo' },
     { label: 'Cargas', href: '/loads', icon: PackageCheck },
     { label: 'Roteirização', href: '/route-planning', icon: Route },
@@ -115,7 +115,8 @@ export const navigationSections: NavigationSection[] = [
     { label: 'Auditoria de dados', href: '/data-audit', icon: DatabaseZap, roles: ['owner', 'admin'] },
   ] },
   { id: 'system', label: 'Sistema', icon: Settings, items: [
-    { label: 'Equipe e acessos', href: '/team', icon: UserCog },
+    { label: 'Central de ajuda', href: '/help', icon: LifeBuoy, keywords: 'ajuda suporte orientação guia' },
+    { label: 'Equipe e acessos', href: '/team', icon: UserCog, roles: ['owner', 'admin'] },
     { label: 'Integrações', href: '/integration-health', icon: Plug },
     { label: 'Configurações', href: '/settings', icon: Settings },
   ] },

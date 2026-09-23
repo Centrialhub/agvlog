@@ -15,7 +15,7 @@ import type { Waypoint } from '@/lib/routes/waypoints';
 import type { Json, Tables } from '@/integrations/supabase/types';
 import { getErrorMessage } from '@/lib/errors';
 import {useAuth} from '@/hooks/useAuth';
-import {acknowledgeDurableOperatorCommand,prepareDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
+import {acknowledgeDurableOperatorCommand,isDefinitiveOperatorCommandRejection,prepareDurableOperatorCommand,type DurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
 
 type RouteTemplate = Tables<'route_templates'>;
 type GeofenceOption = Pick<Tables<'geofences'>, 'id' | 'name' | 'category'>;
@@ -45,25 +45,32 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
 
   // Load existing waypoints when editing
   const existingWaypointsQuery = useQuery({
-    queryKey: ['route_waypoints', editRoute?.id],
+    queryKey: ['route_waypoints', tenantId, editRoute?.id],
     queryFn: async () => {
       if (!editRoute?.id) return [];
       const { data, error } = await supabase
         .from('route_waypoints')
         .select('*')
+        .eq('tenant_id', tenantId!)
         .eq('route_id', editRoute.id)
         .order('waypoint_order');
       if (error) throw error;
       return data;
     },
-    enabled: !!editRoute?.id && open,
+    enabled: !!tenantId && !!editRoute?.id && open,
   });
   // Reset form when dialog opens (only once per open)
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
+    setInitialized(false);
+    setWaypoints([]);
+  }, [open, editRoute?.id]);
+
+  useEffect(() => {
     if (!open) {
       setInitialized(false);
+      setWaypoints([]);
       return;
     }
     if (initialized) return;
@@ -109,7 +116,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
       return;
     }
     if (editRoute && !existingWaypointsQuery.isSuccess) {
-      toast.error('Aguarde o carregamento completo dos pontos da rota');
+      toast.error('Aguarde ou tente novamente a leitura dos pontos antes de salvar.');
       return;
     }
     const thresholdPercent = Number(threshold);
@@ -123,6 +130,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
       return;
     }
     setLoading(true);
+    let pending: DurableOperatorCommand | null = null;
     try {
       const payload = {
         tenant_id: tenantId,
@@ -150,7 +158,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
           notes: wp.notes || null,
           })),
         };
-      const pending=await prepareDurableOperatorCommand({tenantId,actorId:user.id,action:'save_route_template',entityId:editRoute?.id??'new',payload:command});
+      pending=await prepareDurableOperatorCommand({tenantId,actorId:user.id,action:'save_route_template',entityId:editRoute?.id??'new',payload:command});
       const { error } = await supabase.rpc('save_route_template_v1', {
         _payload: {...command,request_id:pending.requestId} as unknown as Json,
       });
@@ -163,6 +171,7 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
       queryClient.invalidateQueries({ queryKey: ['route_waypoints_all'] });
       onOpenChange(false);
     } catch (error: unknown) {
+      if (pending && isDefinitiveOperatorCommandRejection(error)) acknowledgeDurableOperatorCommand(pending);
       toast.error(getErrorMessage(error));
     }
     setLoading(false);
@@ -200,7 +209,18 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
             <Separator />
 
             {/* Waypoints */}
-            <WaypointEditor waypoints={waypoints} onChange={setWaypoints} pois={pois} geofences={geofences} />
+            {editRoute && existingWaypointsQuery.isError ? (
+              <div role="alert" className="rounded-md border border-destructive/30 p-4 text-sm text-destructive">
+                <p>Não foi possível carregar os pontos desta rota.</p>
+                <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void existingWaypointsQuery.refetch()}>
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : editRoute && existingWaypointsQuery.isLoading ? (
+              <p role="status" className="rounded-md border p-4 text-sm text-muted-foreground">Carregando pontos da rota...</p>
+            ) : (
+              <WaypointEditor waypoints={waypoints} onChange={setWaypoints} pois={pois} geofences={geofences} />
+            )}
 
             <Separator />
 

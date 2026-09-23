@@ -1,4 +1,5 @@
 import { useScopedAlerts } from '@/hooks/useAlertStore';
+import {useSearchParams} from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,8 @@ function saveBlob(blob: Blob, filename: string) {
 }
 
 export default function NFSePage() {
+  const [linkedParams,setLinkedParams]=useSearchParams();
+  const linkedId=linkedParams.get('nfseId');
   const { promptAction, confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const { data: queriedDocs, isLoading, isError, error, refetch, isFetching } = useNFSeList();
@@ -66,7 +69,7 @@ export default function NFSePage() {
   const sync = useSyncNFSeStatus();
   const resend = useResendNFSe();
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(linkedId ? '' : linkedParams.get('docNumber')||'');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [seriesFilter, setSeriesFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState('');
@@ -84,6 +87,7 @@ export default function NFSePage() {
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     return docs.filter(d => {
+      if(linkedId&&d.id!==linkedId)return false;
       if (statusFilter === 'issued' && !ISSUED_STATUSES.includes(d.status)) return false;
       if (statusFilter !== 'issued' && statusFilter !== 'all' && d.status !== statusFilter) return false;
       if (seriesFilter !== 'all' && (d.series || '') !== seriesFilter) return false;
@@ -93,7 +97,7 @@ export default function NFSePage() {
         .filter(Boolean).some(v => String(v).toLowerCase().includes(s))) return false;
       return true;
     });
-  }, [docs, search, statusFilter, seriesFilter, dateFrom, dateTo]);
+  }, [docs, search, statusFilter, seriesFilter, dateFrom, dateTo, linkedId]);
 
   const seriesOptions = useMemo(
     () => Array.from(new Set(docs.map(d => d.series || '').filter(Boolean))).sort(),
@@ -249,6 +253,7 @@ export default function NFSePage() {
 
   return (
     <div className="space-y-4 p-6">
+        {linkedId && <div role="status" className="flex items-center gap-3 rounded border p-3">Documento encaminhado pela fila fiscal.<Button variant="outline" onClick={()=>setLinkedParams(previous=>{const next=new URLSearchParams(previous);next.delete('nfseId');next.delete('docNumber');return next;})}>Ver todas as notas</Button></div>}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">NFS-e — Notas Fiscais de Serviço</h1>

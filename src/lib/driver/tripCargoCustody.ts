@@ -194,7 +194,7 @@ export function buildTripCargoDivergenceCommand(input: {
 }
 
 type RpcResult = PromiseLike<{ data: unknown; error: { message?: string; code?: string } | null }>;
-const rpc = supabase.rpc.bind(supabase) as unknown as (name: string, args: Record<string, unknown>) => RpcResult;
+const rpc = ((name: unknown, args: unknown) => (supabase.rpc.bind(supabase) as unknown as (name: unknown, args: unknown) => unknown)(name, args)) as unknown as (name: string, args: Record<string, unknown>) => RpcResult;
 
 function invalidResponse() {
   return new Error('O servidor retornou um dossiê de carga inválido. Atualize antes de continuar.');
@@ -246,6 +246,23 @@ export async function getTripCargoCollectionPage<C extends TripCargoCollection>(
   const items = z.array(tripCargoCollectionItemSchemas[collection]).safeParse(parsed.data.items);
   if (!items.success || new Set(items.data.map(item=>item.id)).size !== items.data.length) throw invalidResponse();
   return {page,pageSize,total:parsed.data.total_count,items:items.data} as TripCargoCollectionPage<C>;
+}
+
+export async function getCompleteTripCargoCollection<C extends TripCargoCollection>(tenantId:string,tripId:string,collection:C,total:number,first:TripCargoCollectionItems[C]){
+  const items=[...first] as Array<TripCargoCollectionItems[C][number]>;
+  for(let page=2;items.length<total;page+=1){const result=await getTripCargoCollectionPage(tenantId,tripId,collection,page,50,total);items.push(...result.items);}
+  if(items.length!==total)throw invalidResponse();return items as TripCargoCollectionItems[C];
+}
+
+export async function getCompleteTripCargoControl(tenantId:string,tripId:string):Promise<TripCargoSnapshot>{
+  const snapshot=await getTripCargoControl(tenantId,tripId);if(!snapshot.available)return snapshot;
+  const [loads,documents,seals,evidence,divergences]=await Promise.all([
+    getCompleteTripCargoCollection(tenantId,tripId,'loads',snapshot.collection_counts.loads,snapshot.loads),
+    getCompleteTripCargoCollection(tenantId,tripId,'documents',snapshot.collection_counts.documents,snapshot.documents),
+    getCompleteTripCargoCollection(tenantId,tripId,'seals',snapshot.collection_counts.seals,snapshot.seals),
+    getCompleteTripCargoCollection(tenantId,tripId,'evidence',snapshot.collection_counts.evidence,snapshot.evidence),
+    getCompleteTripCargoCollection(tenantId,tripId,'divergences',snapshot.collection_counts.divergences,snapshot.divergences),
+  ]);return snapshotSchema.parse({...snapshot,loads,documents,seals,evidence,divergences});
 }
 
 export type DriverTripCargoAction = 'accept' | 'start_loading' | 'confirm_cargo' | 'mark_departed' | 'resolve_seals' | 'mark_returned';

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem, type ItemStatus } from '@/hooks/useLoadItems';
+import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, loadItemDeleteExpected, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem, type ItemStatus } from '@/hooks/useLoadItems';
 import { useOrders } from '@/hooks/useOrders';
 import { useTenant } from '@/hooks/useTenant';
 import { useUserUiPreference } from '@/hooks/useUserUiPreference';
@@ -25,6 +25,7 @@ import { useLoadDocumentChanges } from '@/hooks/useLoadDocumentChanges';
 import { DocumentChangeDialog, type DocumentChangeSelection } from './DocumentChangeDialog';
 import { invalidateCompositionQueries } from '@/lib/loads/compositionMutation';
 import { PREPARATION_STATUSES } from '@/lib/loads/itemPreparation';
+import { validateManualItemCreation } from '@/lib/loads/itemPreparation';
 
 interface LoadItemsPanelProps {
   loadId: string;
@@ -63,7 +64,7 @@ function useDebouncedValue<T>(value: T, delay: number) {
 }
 
 export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWeight }: LoadItemsPanelProps) {
-  const { data: items = [], isLoading } = useLoadItems(loadId);
+  const { data: items = [], isLoading, isError: isItemsError, error: itemsError, refetch: refetchItems } = useLoadItems(loadId);
   const { data: orders = [] } = useOrders();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
@@ -73,7 +74,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const createItem = useCreateLoadItem();
   const deleteItem = useDeleteLoadItem();
   const updateItem = useUpdateLoadItem();
-  const documentBlocked = documentChanges.isPending || documentChanges.pending.length > 0 || !!documentChanges.recoveryError
+  const documentBlocked = isItemsError || documentChanges.isPending || documentChanges.pending.length > 0 || !!documentChanges.recoveryError
     || createItem.isPending || updateItem.isPending || !!createItem.pending?.length || !!createItem.recoveryError;
   const { toast } = useToast();
   const { preference: docPreference, isLoaded: isDocPreferenceLoaded, savePreference: saveDocPreference } = useUserUiPreference('load_items_doc_filters', defaultDocPreference);
@@ -127,6 +128,13 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     pallet_count: 0,
     weight_kg: 0,
   });
+  const manualItemInvalid = (() => {
+    try {
+      validateManualItemCreation({ order_id: form.order_id || undefined, item_description: form.item_description,
+        quantity: form.quantity, pallet_count: form.pallet_count, weight_kg: form.weight_kg });
+      return false;
+    } catch { return true; }
+  })();
   useEffect(() => {
     setDocumentSelection(null); setSelectedDocIds(new Set()); setAddOpen(false);
     setForm({ order_id: '', item_description: '', quantity: 0, pallet_count: 0, weight_kg: 0 });
@@ -301,10 +309,17 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       return;
     }
     try {
+      validateManualItemCreation({ order_id: form.order_id || undefined, item_description: form.item_description,
+        quantity: form.quantity, pallet_count: form.pallet_count, weight_kg: form.weight_kg });
+    } catch (error: unknown) {
+      toast({ title: 'Item manual inválido', description: getErrorMessage(error), variant: 'destructive' });
+      return;
+    }
+    try {
       await createItem.mutateAsync({
         load_id: loadId,
         order_id: form.order_id || null,
-        item_description: form.item_description || orders.find(o => o.id === form.order_id)?.order_number || 'Item',
+        item_description: form.item_description.trim() || orders.find(o => o.id === form.order_id)?.order_number || '',
         quantity: form.quantity,
         pallet_count: form.pallet_count,
         weight_kg: form.weight_kg,
@@ -324,7 +339,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       return;
     }
     try {
-      await deleteItem.mutateAsync(item.id);
+      await deleteItem.mutateAsync({ id: item.id, expected: loadItemDeleteExpected(item) });
       await invalidateCompositionQueries(qc);
       toast({ title: 'Item manual removido da carga' });
     } catch (error: unknown) {
@@ -351,6 +366,13 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
 
   return (
     <Card>
+      {isItemsError && (
+        <div className="m-4 flex flex-wrap items-center gap-3 rounded-md border border-destructive/40 p-3 text-sm" role="alert">
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+          <span>Não foi possível carregar a composição da carga: {getErrorMessage(itemsError)}</span>
+          <Button size="sm" variant="outline" onClick={() => void refetchItems()}>Tentar novamente</Button>
+        </div>
+      )}
       <DocumentChangeDialog api={documentChanges} loadId={loadId} selection={documentSelection}
         onClose={() => setDocumentSelection(null)} onFailure={message => toast({ title: 'Alteração não confirmada', description: message, variant: 'destructive' })}
         onConfirmed={result => {
@@ -472,7 +494,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                 )}
                 <div className="flex shrink-0 gap-2 justify-end border-t border-border pt-3">
                   <Button variant="outline" onClick={() => setAddOpen(false)}>Cancelar</Button>
-                  <Button onClick={handleAdd} disabled={createItem.isPending || documentBlocked}>{mode === 'note' ? 'Puxar NF(s)' : 'Adicionar'}</Button>
+                  <Button onClick={handleAdd} disabled={createItem.isPending || documentBlocked || (mode === 'manual' && manualItemInvalid)}>{mode === 'note' ? 'Puxar NF(s)' : 'Adicionar'}</Button>
                 </div>
               </div>
             </DialogContent>
@@ -482,7 +504,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
 
       <CardContent className="space-y-4">
         {/* Capacity indicators */}
-        {(vehicleMaxPallets || vehicleMaxWeight) && (
+        {!isItemsError && (vehicleMaxPallets || vehicleMaxWeight) && (
           <div className="grid grid-cols-2 gap-4">
             {vehicleMaxPallets && (
               <div className="space-y-1">
@@ -555,6 +577,8 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
           <TableBody>
             {isLoading ? (
               <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-4">Carregando...</TableCell></TableRow>
+            ) : isItemsError ? (
+              <TableRow><TableCell colSpan={8} className="text-center text-destructive py-4">Composição indisponível. Recarregue antes de alterar a carga.</TableCell></TableRow>
             ) : filteredItems.length === 0 ? (
               <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-4">Nenhum item encontrado</TableCell></TableRow>
             ) : itemsPagination.items.map(item => (

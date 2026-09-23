@@ -31,8 +31,10 @@ export default function OperationsControl() {
   const { isLoading, dataUpdatedAt, refetch, isFetching } = tripQuery;
   const trips = tripQuery.isError ? [] : tripQuery.data?.trips ?? [];
   const alerts = alertQuery.isError ? [] : alertQuery.data?.alerts ?? [];
-  const tripCount = tripQuery.isPending || tripQuery.isError ? '—' : trips.length;
-  const alertCount = alertQuery.isPending || alertQuery.isError ? '—' : alerts.length;
+  const tripCount = tripQuery.isPending || tripQuery.isError ? '—' : tripQuery.data?.trip_total??trips.length;
+  const tripsTruncated=!tripQuery.isError&&!!tripQuery.data?.truncated;
+  const alertsTruncated=!alertQuery.isError&&!!alertQuery.data?.alerts_truncated;
+  const alertCount = alertQuery.isPending || alertQuery.isError ? '—' : alertQuery.data?.alert_total??alerts.length;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedTrip = trips.find(t => t.trip_id === selectedId) ?? null;
   const setSelectedTrip = (trip: ActiveTripLive | null) => setSelectedId(trip?.trip_id ?? null);
@@ -100,7 +102,7 @@ export default function OperationsControl() {
         </div>
         <div className="flex items-center gap-3 ml-auto text-xs">
           <Metric label="Viagens ativas" value={tripCount} />
-          <Metric label="Alertas críticos" value={alertQuery.isPending || alertQuery.isError ? '—' : criticalCount} tone={criticalCount > 0 ? 'text-red-600' : ''} />
+          <Metric label="Alertas críticos" value={alertQuery.isPending || alertQuery.isError ? '—' : alertsTruncated?`${criticalCount}+`:criticalCount} tone={criticalCount > 0 ? 'text-red-600' : ''} />
           <Metric label="Última consulta válida" value={!tripQuery.isError && lastUpdateAge != null ? `${lastUpdateAge}s atrás` : '—'} />
           <Button size="sm" variant="ghost" aria-label="Atualizar torre" onClick={() => { void refetch(); }} disabled={isFetching}>
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching || alertQuery.isFetching ? 'animate-spin' : ''}`} />
@@ -118,6 +120,7 @@ export default function OperationsControl() {
       </div>
       {tripQuery.isError && <p role="alert" className="p-3 text-destructive">Não foi possível consultar as viagens. Dados anteriores ocultados; use Atualizar torre para tentar novamente.</p>}
       {alertQuery.isError && <p role="alert" className="p-3 text-destructive">Não foi possível consultar os alertas. Não é possível afirmar que não há alertas abertos.</p>}
+      {tripsTruncated&&<p role="status" className="border-b bg-warning/10 px-3 py-2 text-xs text-warning">Exibindo {trips.length} de {tripQuery.data!.trip_total} viagens ativas. O mapa, a lista e os KPIs por situação representam somente este lote; o cálculo em massa foi bloqueado para evitar uma execução parcial.</p>}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
@@ -128,7 +131,7 @@ export default function OperationsControl() {
             ) : tripQuery.isError ? (
               <p className="py-2 text-center text-xs text-destructive">Indicadores indisponíveis.</p>
             ) : (
-              <KpiCards trips={trips} />
+              <KpiCards trips={trips} totalCount={tripQuery.data?.trip_total} truncated={tripsTruncated} />
             )}
           </div>
 
@@ -141,22 +144,22 @@ export default function OperationsControl() {
             ) : alertQuery.isError ? (
               <p className="py-2 text-center text-xs text-destructive">Alertas indisponíveis.</p>
             ) : (
-              <AlertsPanel alerts={alerts} trips={trips} onSelectTrip={setSelectedTrip} />
+              <AlertsPanel alerts={alerts} trips={trips} totalCount={tripQuery.data?.alert_total??alerts.length} truncated={alertsTruncated} onSelectTrip={setSelectedTrip} />
             )}
           </div>
 
           <div className="flex-1 overflow-hidden flex flex-col">
             <div className="px-3 pt-2 pb-1 flex items-center justify-between">
               <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Viagens ({tripCount})
+                Viagens ({tripsTruncated?`${trips.length} de ${tripCount}`:tripCount})
               </h3>
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-6 text-[10px] px-2"
                 onClick={handleCalculateAll}
-                disabled={calculatingAll || trips.length === 0}
-                title="Calcular rotas OSRM para todas as viagens"
+                disabled={calculatingAll || trips.length === 0 || tripsTruncated}
+                title={tripsTruncated?'Cálculo em massa indisponível enquanto o snapshot estiver truncado':'Calcular rotas OSRM para todas as viagens'}
               >
                 <Route className={`h-3 w-3 mr-1 ${calculatingAll ? 'animate-spin' : ''}`} />
                 {calculatingAll ? 'Calculando…' : 'Calcular todas'}

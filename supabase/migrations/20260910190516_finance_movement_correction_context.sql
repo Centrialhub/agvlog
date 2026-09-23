@@ -97,7 +97,7 @@ end$$;
 revoke all on function finance_private.movement_correction_graph(uuid,uuid) from public,anon,authenticated,service_role;
 
 create function finance_private.movement_correction_readiness() returns jsonb language plpgsql stable security definer set search_path='' as $$
-declare missing text[]:='{}';required record;found boolean;facts jsonb:='[]';p record;begin
+declare missing text[]:='{}';required record;found boolean;facts jsonb:='[]';p record;dependency_definition text;begin
  for required in select * from(values
  ('finance_expense_allocations','a_finance_active_movement_reference','finance_private.guard_active_financial_movement_reference()',23,false),
  ('finance_payable_movement_links','a_finance_active_movement_reference','finance_private.guard_active_financial_movement_reference()',23,false),
@@ -147,7 +147,12 @@ declare missing text[]:='{}';required record;found boolean;facts jsonb:='[]';p r
  ('finance_private.legacy_cut_settlement_evidence(uuid,uuid)','settlement_movement_voided')
  ) r(signature,token) loop
  select q.oid,q.prosecdef,q.proconfig,q.proacl,md5(replace(q.prosrc,E'\r\n',E'\n')) source_hash,pg_get_functiondef(q.oid) definition into p from pg_catalog.pg_proc q where q.oid=to_regprocedure(required.signature);
- if p.oid is null or position(required.token in p.definition)=0 or (required.signature='finance_private.check_payable_payment_insert()' and p.source_hash is distinct from '8dffa1b366291f565e438b07803bab8d') then missing:=array_append(missing,'definition:'||required.signature);end if;
+ dependency_definition:=null;
+ if required.signature='finance_private.legacy_cut_manifest(uuid,uuid,date,date)'
+    and to_regprocedure('finance_private.legacy_cut_manifest_core(uuid,uuid,date,date)') is not null then
+  dependency_definition:=pg_get_functiondef(to_regprocedure('finance_private.legacy_cut_manifest_core(uuid,uuid,date,date)'));
+ end if;
+ if p.oid is null or (position(required.token in p.definition)=0 and position(required.token in coalesce(dependency_definition,''))=0) or (required.signature='finance_private.check_payable_payment_insert()' and p.source_hash is distinct from '8dffa1b366291f565e438b07803bab8d') then missing:=array_append(missing,'definition:'||required.signature);end if;
  facts:=facts||jsonb_build_array(jsonb_build_object('signature',required.signature,'definition_hash',md5(p.definition),'security_definer',p.prosecdef,'config',to_jsonb(p.proconfig),'acl',to_jsonb(p.proacl)));
  end loop;
  if not coalesce(finance_private.account_period_guards_ready(),false) then missing:=array_append(missing,'period_guards');end if;

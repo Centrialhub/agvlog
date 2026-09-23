@@ -1,0 +1,221 @@
+{
+  "date": "2026-09-23",
+  "project": "qcvnsdrbcchaxvawcngk",
+  "migrations": [
+    {
+      "version": "20260923132052",
+      "name": "finance_audit_manual_title_commands"
+    },
+    {
+      "version": "20260923132100",
+      "name": "finance_audit_invoice_pagination"
+    },
+    {
+      "version": "20260923132108",
+      "name": "finance_audit_fiscal_work_queue"
+    },
+    {
+      "version": "20260923132117",
+      "name": "finance_configurable_approval_limits"
+    }
+  ],
+  "read_only_smoke": {
+    "invoice_page": {
+      "page": 1,
+      "total": 0,
+      "totals": {
+        "open": "0",
+        "paid": "0",
+        "sent": "0",
+        "overdue": "0"
+      },
+      "filters": {
+        "client": "all",
+        "search": "",
+        "status": "all"
+      },
+      "version": 2,
+      "actor_id": "3f886fb8-413e-4102-a00f-56085be56855",
+      "revision": "3ac2c11931ebcd7d9022ffd132164891",
+      "page_size": 30,
+      "tenant_id": "6e874e6e-5bca-486d-9928-bef0646989c4",
+      "truncated": false,
+      "invalid_count": 0
+    },
+    "fiscal_current": {
+      "total": 155,
+      "counts": {
+        "review": 155,
+        "applied": 37,
+        "pending": 0,
+        "superseded": 0
+      },
+      "cursor": null,
+      "version": 3,
+      "has_more": true,
+      "page_size": 30,
+      "tenant_id": "6e874e6e-5bca-486d-9928-bef0646989c4",
+      "next_cursor": {
+        "observation_id": "96b0ea68-9e2b-4017-adb6-671f2b9a4e4e",
+        "observed_order": "166"
+      },
+      "current_only": true,
+      "status_filter": "review",
+      "scheduler_active": true
+    },
+    "fiscal_history": {
+      "total": 173,
+      "counts": {
+        "review": 173,
+        "applied": 61,
+        "pending": 0,
+        "superseded": 2
+      },
+      "cursor": null,
+      "version": 3,
+      "has_more": true,
+      "page_size": 30,
+      "tenant_id": "6e874e6e-5bca-486d-9928-bef0646989c4",
+      "next_cursor": {
+        "observation_id": "235f30c3-c150-44e6-a9fe-12413dde9673",
+        "observed_order": "174"
+      },
+      "current_only": false,
+      "status_filter": "review",
+      "scheduler_active": true
+    },
+    "approval_policy": {
+      "policy": {
+        "enabled": false,
+        "tenant_id": "6e874e6e-5bca-486d-9928-bef0646989c4",
+        "admin_limit_cents": null,
+        "operator_limit_cents": null,
+        "prevent_self_approval": false
+      },
+      "version": 1,
+      "revision": "c14188f941b8424ca3a1bd8efd1ea958",
+      "tenant_id": "6e874e6e-5bca-486d-9928-bef0646989c4",
+      "can_configure": true
+    },
+    "payable_approval": {
+      "eligible": true,
+      "can_execute": true,
+      "blockers": [],
+      "version": 1
+    }
+  },
+  "public_rpc_privileges": [
+    {
+      "signature": "assign_finance_fiscal_review(jsonb)",
+      "security_definer": false,
+      "anon": false,
+      "authenticated": true
+    },
+    {
+      "signature": "get_finance_approval_policy(uuid)",
+      "security_definer": false,
+      "anon": false,
+      "authenticated": true
+    },
+    {
+      "signature": "list_client_invoice_financial_page(uuid,jsonb,integer,text)",
+      "security_definer": false,
+      "anon": false,
+      "authenticated": true
+    },
+    {
+      "signature": "list_finance_fiscal_work_queue(uuid,text,bigint,uuid,boolean)",
+      "security_definer": false,
+      "anon": false,
+      "authenticated": true
+    },
+    {
+      "signature": "save_finance_approval_policy(jsonb)",
+      "security_definer": false,
+      "anon": false,
+      "authenticated": true
+    },
+    {
+      "signature": "save_finance_manual_title(jsonb)",
+      "security_definer": false,
+      "anon": false,
+      "authenticated": true
+    }
+  ],
+  "security_advisors": [
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "count": 58,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy"
+    },
+    {
+      "name": "anon_security_definer_function_executable",
+      "level": "WARN",
+      "count": 2,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable"
+    },
+    {
+      "name": "authenticated_security_definer_function_executable",
+      "level": "WARN",
+      "count": 241,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable"
+    },
+    {
+      "name": "auth_insufficient_mfa_options",
+      "level": "WARN",
+      "count": 1,
+      "remediation": "https://supabase.com/docs/guides/auth/auth-mfa"
+    }
+  ],
+  "performance_advisors": [
+    {
+      "name": "unindexed_foreign_keys",
+      "count": 211,
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "count": 16,
+      "level": "WARN",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan"
+    },
+    {
+      "name": "no_primary_key",
+      "count": 1,
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0004_no_primary_key"
+    },
+    {
+      "name": "unused_index",
+      "count": 605,
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "count": 23,
+      "level": "WARN",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies"
+    },
+    {
+      "name": "duplicate_index",
+      "count": 2,
+      "level": "WARN",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0009_duplicate_index"
+    },
+    {
+      "name": "auth_db_connections_absolute",
+      "count": 1,
+      "level": "INFO",
+      "remediation": "https://supabase.com/docs/guides/deployment/going-into-prod"
+    }
+  ],
+  "limits": [
+    "Nenhum título, pagamento ou atribuição real criado para teste.",
+    "Sem publicação do frontend.",
+    "A amostra remota consultada não possui faturas; 501 e 10.000 faturas foram testadas com dados sintéticos.",
+    "As 155 revisões fiscais dependem da correção e comprovação na origem."
+  ]
+}

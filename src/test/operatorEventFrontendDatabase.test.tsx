@@ -48,7 +48,9 @@ beforeEach(async()=>{
     if(mock.delayPod){mock.delayPod=false;await new Promise<void>(resolve=>{mock.release=resolve;});}
     data=await podHistory(db,String(args._document_id));
     if(mock.podEmpty){const row=data as Record<string,unknown>;data={...row,document:{...(row.document as Record<string,unknown>),updated_at:null},
-      arrival_without_outcome:false,attempts:[],outcomes:[],proofs:[],allocations:[],occurrences:[]};}
+      current_outcome:null,current_allocation:null,arrival_without_outcome:false,
+      totals:{attempts:0,outcomes:0,proofs:0,allocations:0,occurrences:0},
+      attempts:[],outcomes:[],proofs:[],allocations:[],occurrences:[]};}
    }else throw new Error('Unexpected operator RPC '+name);
    if(mock.lost===name.replace('_operational_event_v1','') as 'create'|'resolve'){mock.lost=null;throw new Error('Resposta perdida após confirmação no banco');}
    return data;

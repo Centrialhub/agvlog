@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Database, Json } from '@/integrations/supabase/types';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { calculateDriverStatus, calculateProgressPercent, calculateRemainingDeliveries, type DriverMonitorStatus } from '@/lib/driverMonitoring/driverMonitoringCalculator';
 import type {
   ParsedDriverMonitoringWorkbook,
@@ -25,6 +26,8 @@ type DriverMonitorQueryRow = DriverMonitorDbRow & {
   vehicles: { plate: string } | null;
   loads: { load_number: string; external_load_number: string | null } | null;
 };
+type ProgressUpdateQueryRow = Database['public']['Tables']['driver_route_progress_updates']['Row'] & { drivers:{name:string}|null };
+type ForecastQueryRow = Database['public']['Tables']['driver_arrival_forecasts']['Row'] & { drivers:{name:string}|null };
 
 function toStringArray(value: Json | null | undefined): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
@@ -105,7 +108,7 @@ export interface DriverMonitoringFilters {
   startedTo?: string | null;
 }
 
-function toRow(m: DriverMonitorQueryRow): DriverMonitorRow {
+function toRow(m: DriverMonitorQueryRow,timeZone:string): DriverMonitorRow {
   const completed = Number(m.completed_deliveries || 0);
   const total = Number(m.total_deliveries || 0);
   const remaining = calculateRemainingDeliveries(total, completed);
@@ -144,7 +147,7 @@ function toRow(m: DriverMonitorQueryRow): DriverMonitorRow {
       remaining_cities: toStringArray(m.remaining_cities),
       current_city: m.current_city,
       notes: m.notes,
-    }, []),
+    }, [], new Date(), timeZone),
     last_update_at: m.last_update_at,
     notes: m.notes,
     revision: m.revision,
@@ -153,12 +156,35 @@ function toRow(m: DriverMonitorQueryRow): DriverMonitorRow {
 }
 
 export const DRIVER_MONITOR_PAGE_SIZE=50;
+export function matchesDriverMonitorStatusFilters(row:DriverMonitorRow,filters:DriverMonitoringFilters){
+  if(filters.status&&row.status!==filters.status)return false;
+  if(filters.onlyDelayed&&row.status!=='delayed')return false;
+  if(filters.onlyNoUpdate&&row.status!=='no_update')return false;
+  return true;
+}
 export function useDriverMonitorsList(filters: DriverMonitoringFilters = {},page=1) {
   const { currentTenant } = useTenant();
   return useQuery({
     queryKey: ['driver-monitors', currentTenant?.id, filters,page],
     enabled: !!currentTenant?.id,
     queryFn: async () => {
+      const hasDerivedStatusFilter=!!filters.status||!!filters.onlyDelayed||!!filters.onlyNoUpdate;
+      if(hasDerivedStatusFilter){
+        const all=await fetchAllPostgrestPages<DriverMonitorQueryRow>(async(from,to)=>{
+          let query=supabase.from('driver_route_monitors')
+            .select('*, drivers:driver_route_monitors_driver_tenant_fk(name), vehicles:driver_route_monitors_vehicle_tenant_fk(plate), loads:driver_route_monitors_load_tenant_fk(load_number, external_load_number)')
+            .eq('tenant_id',currentTenant!.id);
+          if(filters.driverId)query=query.eq('driver_id',filters.driverId);if(filters.vehicleId)query=query.eq('vehicle_id',filters.vehicleId);
+          if(filters.loadId)query=query.eq('load_id',filters.loadId);if(filters.currentCity)query=query.ilike('current_city',`%${filters.currentCity}%`);
+          if(filters.nextCity)query=query.ilike('next_city',`%${filters.nextCity}%`);if(filters.plate)query=query.ilike('vehicle_plate_snapshot',`%${filters.plate}%`);
+          if(filters.startedFrom)query=query.gte('started_at',filters.startedFrom);if(filters.startedTo)query=query.lte('started_at',filters.startedTo);
+          const {data,error}=await query.order('created_at',{ascending:false}).order('id',{ascending:false}).range(from,to);
+          return {data:(data??[]) as DriverMonitorQueryRow[],error};
+        },500);
+        const matched=all.map(row=>toRow(row,currentTenant!.timezone)).filter(row=>matchesDriverMonitorStatusFilters(row,filters));
+        const start=(page-1)*DRIVER_MONITOR_PAGE_SIZE;
+        return {rows:matched.slice(start,start+DRIVER_MONITOR_PAGE_SIZE),total:matched.length};
+      }
       let q = supabase.from('driver_route_monitors')
           .select('*, drivers:driver_route_monitors_driver_tenant_fk(name), vehicles:driver_route_monitors_vehicle_tenant_fk(plate), loads:driver_route_monitors_load_tenant_fk(load_number, external_load_number)',{count:'exact'})
           .eq('tenant_id', currentTenant!.id);
@@ -170,14 +196,33 @@ export function useDriverMonitorsList(filters: DriverMonitoringFilters = {},page
         if (filters.plate) q = q.ilike('vehicle_plate_snapshot', `%${filters.plate}%`);
         if (filters.startedFrom) q = q.gte('started_at', filters.startedFrom);
         if (filters.startedTo) q = q.lte('started_at', filters.startedTo);
-      if(filters.status)q=q.eq('status',filters.status);
-      if(filters.onlyDelayed)q=q.eq('status','delayed');
-      if(filters.onlyNoUpdate)q=q.eq('status','no_update');
       const from=(page-1)*DRIVER_MONITOR_PAGE_SIZE;
       const {data,error,count}=await q.order('created_at',{ascending:false}).order('id',{ascending:false})
         .range(from,from+DRIVER_MONITOR_PAGE_SIZE-1);
       if(error)throw error;
-      return {rows:((data??[]) as DriverMonitorQueryRow[]).map(toRow),total:count??0};
+      return {rows:((data??[]) as DriverMonitorQueryRow[]).map(row=>toRow(row,currentTenant!.timezone)),total:count??0};
+    },
+  });
+}
+
+export function useDriverMonitorsReport(filters: DriverMonitoringFilters = {}) {
+  const { currentTenant } = useTenant();
+  return useQuery({
+    queryKey: ['driver-monitors-report', currentTenant?.id, filters],
+    enabled: !!currentTenant?.id,
+    queryFn: async () => {
+      const data=await fetchAllPostgrestPages<DriverMonitorQueryRow>(async(from,to)=>{
+        let q=supabase.from('driver_route_monitors')
+          .select('*, drivers:driver_route_monitors_driver_tenant_fk(name), vehicles:driver_route_monitors_vehicle_tenant_fk(plate), loads:driver_route_monitors_load_tenant_fk(load_number, external_load_number)')
+          .eq('tenant_id',currentTenant!.id);
+        if(filters.driverId)q=q.eq('driver_id',filters.driverId);if(filters.vehicleId)q=q.eq('vehicle_id',filters.vehicleId);
+        if(filters.loadId)q=q.eq('load_id',filters.loadId);if(filters.currentCity)q=q.ilike('current_city',`%${filters.currentCity}%`);
+        if(filters.nextCity)q=q.ilike('next_city',`%${filters.nextCity}%`);if(filters.plate)q=q.ilike('vehicle_plate_snapshot',`%${filters.plate}%`);
+        if(filters.startedFrom)q=q.gte('started_at',filters.startedFrom);if(filters.startedTo)q=q.lte('started_at',filters.startedTo);
+        const {data,error}=await q.order('created_at',{ascending:false}).order('id',{ascending:false}).range(from,to);
+        return {data:(data??[]) as DriverMonitorQueryRow[],error};
+      },500);
+      return data.map(row=>toRow(row,currentTenant!.timezone)).filter(row=>matchesDriverMonitorStatusFilters(row,filters));
     },
   });
 }
@@ -188,15 +233,14 @@ export function useMonitorUpdates(monitorId: string | null | undefined) {
     queryKey: ['driver-monitor-updates', currentTenant?.id, monitorId],
     enabled: !!monitorId && !!currentTenant?.id,
     queryFn: async () => {
-      const {data,error}=await supabase.from('driver_route_progress_updates')
-        .select('*, drivers:driver_route_progress_updates_driver_tenant_fk(name)')
-        .eq('monitor_id', monitorId!)
-        .eq('tenant_id', currentTenant!.id)
-        .order('update_date', { ascending: false })
-        .order('id', { ascending: false })
-        .limit(200);
-      if(error)throw error;
-      return (data??[]).map(({ drivers, ...row }): ProgressUpdateRow => ({
+      const data=await fetchAllPostgrestPages<ProgressUpdateQueryRow>(async(from,to)=>{
+        const {data,error}=await supabase.from('driver_route_progress_updates')
+          .select('*, drivers:driver_route_progress_updates_driver_tenant_fk(name)')
+          .eq('monitor_id', monitorId!).eq('tenant_id', currentTenant!.id)
+          .order('update_date', { ascending: false }).order('id', { ascending: false }).range(from,to);
+        return {data:(data??[]) as ProgressUpdateQueryRow[],error};
+      },500);
+      return data.map(({ drivers, ...row }): ProgressUpdateRow => ({
         ...row,
         driver_name: drivers?.name ?? null,
       }));
@@ -210,12 +254,18 @@ export function useMonitorForecasts(monitorIds: string[] = []) {
     queryKey: ['driver-arrival-forecasts', monitorIds, currentTenant?.id],
     enabled: !!currentTenant?.id&&monitorIds.length>0,
     queryFn: async () => {
-      const {data,error}=await supabase.from('driver_arrival_forecasts')
-          .select('*, drivers:driver_arrival_forecasts_driver_tenant_fk(name)')
-          .eq('tenant_id', currentTenant!.id).in('monitor_id',monitorIds)
-          .order('forecast_date',{ascending:false}).order('id',{ascending:false}).limit(200);
-      if(error)throw error;
-      return (data??[]).map(({ drivers, ...row }): ForecastRow => ({
+      const uniqueIds=[...new Set(monitorIds)],all:ForecastQueryRow[]=[];
+      for(let start=0;start<uniqueIds.length;start+=100){
+        const ids=uniqueIds.slice(start,start+100);
+        all.push(...await fetchAllPostgrestPages<ForecastQueryRow>(async(from,to)=>{
+          const {data,error}=await supabase.from('driver_arrival_forecasts')
+            .select('*, drivers:driver_arrival_forecasts_driver_tenant_fk(name)')
+            .eq('tenant_id', currentTenant!.id).in('monitor_id',ids)
+            .order('forecast_date',{ascending:false}).order('id',{ascending:false}).range(from,to);
+          return {data:(data??[]) as ForecastQueryRow[],error};
+        },500));
+      }
+      return all.map(({ drivers, ...row }): ForecastRow => ({
         ...row,
         driver_name: drivers?.name ?? null,
       }));

@@ -3,6 +3,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { requireActiveTenant } from '../_shared/active-tenant.ts';
 import { isCronRequest } from '../_shared/cron-auth.ts';
 import { assessNominatimCandidate, type NominatimResult } from '../_shared/geocoding-quality.ts';
+import { candidatesFromCache, GEOCODING_PROVIDER_LIMIT } from '../_shared/geocoding-cache.ts';
 
 type ProviderResult = NominatimResult & {
   lat?: string;
@@ -69,7 +70,7 @@ Deno.serve(async (req) => {
     let tenantId = String(body.tenant_id || '');
     let address = typeof body.address === 'string' ? body.address.trim().replace(/\s+/g, ' ') : '';
     let structuredAddress: StructuredAddress | null = null;
-    const limit = Math.min(5, Math.max(1, Number(body.limit) || 5));
+    const limit = Math.min(GEOCODING_PROVIDER_LIMIT, Math.max(1, Number(body.limit) || GEOCODING_PROVIDER_LIMIT));
     const provider = Deno.env.get('GEOCODING_PROVIDER') || 'nominatim';
     const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const hasEntityTarget = body.entity_type !== undefined || body.entity_id !== undefined;
@@ -127,46 +128,50 @@ Deno.serve(async (req) => {
     }
     if (address.length < 8 || address.length > 500 || !UUID.test(tenantId)) return json({ error: 'invalid_address' }, 400);
     const addressHash = await sha256(address.toLocaleLowerCase('pt-BR'));
+    const entityAddressIsCurrent = async () => {
+      if (!hasEntityTarget) return true;
+      const entityTable = body.entity_type === 'client' ? 'clients' : 'dispatch_stops';
+      const { data: entity, error: entityError } = await admin.from(entityTable)
+        .select('canonical_address_id').eq('tenant_id', tenantId).eq('id', body.entity_id).maybeSingle();
+      if (entityError) throw new Error('entity_lookup_failed');
+      if (typeof entity?.canonical_address_id !== 'string') return false;
+      const { data: canonical, error: canonicalError } = await admin.from('canonical_addresses')
+        .select('address_hash').eq('tenant_id', tenantId).eq('id', entity.canonical_address_id).maybeSingle();
+      if (canonicalError) throw new Error('canonical_address_lookup_failed');
+      return canonical?.address_hash === addressHash;
+    };
+    if (!await entityAddressIsCurrent()) return json({ error: 'address_snapshot_changed' }, 409);
+    // The cache key hashes `address`, so the provider must see that same snapshot.
+    if (hasEntityTarget) structuredAddress = null;
     const recordEntityCandidates = async (candidates: unknown[]) => {
       if (cron) return;
       const entityType = body.entity_type;
       if ((entityType !== 'client' && entityType !== 'dispatch_stop')
         || typeof body.entity_id !== 'string' || !UUID.test(body.entity_id)) return;
-      const entityTable = entityType === 'client' ? 'clients' : 'dispatch_stops';
-      const { data: entity, error: entityError } = await admin.from(entityTable).select('id,canonical_address_id')
-        .eq('tenant_id', tenantId).eq('id', body.entity_id).maybeSingle();
-      if (entityError) throw new Error('entity_lookup_failed');
-      if (!entity?.id || typeof entity.canonical_address_id !== 'string') return;
-      const { data: canonical, error: canonicalError } = await admin.from('canonical_addresses').select('address_hash')
-        .eq('tenant_id', tenantId).eq('id', entity.canonical_address_id).maybeSingle();
-      if (canonicalError) throw new Error('canonical_address_lookup_failed');
-      if (canonical?.address_hash !== addressHash) return;
-      const status = candidates.length === 1 ? 'pending' : candidates.length > 1 ? 'ambiguous' : 'error';
-      const queueResult = await admin.from('address_resolution_queue').upsert({
-          tenant_id: tenantId, entity_type: entityType, entity_id: entity.id,
-          canonical_address_id: entity.canonical_address_id,
-          address_snapshot: address, address_hash: addressHash, status, candidates,
-          attempts: 1, last_error: candidates.length === 0 ? 'no_candidates' : null,
-          processed_at: candidates.length > 0 ? new Date().toISOString() : null,
-          next_attempt_at: new Date(Date.now() + (candidates.length > 0 ? 0 : 60_000)).toISOString(),
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'tenant_id,entity_type,entity_id' });
-      const entityResult = entityType === 'client'
-        ? await admin.from('clients').update({ address_geocode_status: status === 'error' ? 'error' : status })
-          .eq('tenant_id', tenantId).eq('id', entity.id).eq('canonical_address_id', entity.canonical_address_id)
-        : { error: null };
-      if (queueResult.error || entityResult.error) throw new Error('entity_candidates_persistence_failed');
+      const { error } = await admin.rpc('record_address_entity_candidates_v1', {
+        _tenant_id: tenantId,
+        _entity_type: entityType,
+        _entity_id: body.entity_id,
+        _address_snapshot: address,
+        _address_hash: addressHash,
+        _candidates: candidates,
+      });
+      if (error?.message?.includes('address_review_already_resolved')) throw new Error('address_review_already_resolved');
+      if (error?.code === '40001' || error?.code === '23514') throw new Error('address_snapshot_changed');
+      if (error) throw new Error('entity_candidates_persistence_failed');
     };
     const { data: cached } = await admin.from('address_geocoding_cache')
       .select('id,candidates,hit_count').eq('tenant_id', tenantId).eq('address_hash', addressHash)
       .eq('provider', provider).gt('expires_at', new Date().toISOString()).maybeSingle();
-    if (cached && Array.isArray(cached.candidates)) {
+    const cachedCandidates = candidatesFromCache(cached?.candidates, limit);
+    if (cached && cachedCandidates) {
+      if (!await entityAddressIsCurrent()) return json({ error: 'address_snapshot_changed' }, 409);
       await admin.from('address_geocoding_cache').update({
         hit_count: (Number((cached as { hit_count?: unknown }).hit_count) || 0) + 1,
         last_used_at: new Date().toISOString(),
       }).eq('id', cached.id);
       await recordEntityCandidates(cached.candidates);
-      return json({ query: address, provider, candidates: cached.candidates, cache: 'hit' });
+      return json({ query: address, provider, candidates: cachedCandidates, cache: 'hit' });
     }
 
     const { data: quota, error: quotaError } = await admin.rpc('consume_geocoding_quota_v1', {
@@ -192,7 +197,7 @@ Deno.serve(async (req) => {
     endpoint.searchParams.set('format', 'jsonv2');
     endpoint.searchParams.set('addressdetails', '1');
     endpoint.searchParams.set('countrycodes', 'br');
-    endpoint.searchParams.set('limit', String(limit));
+    endpoint.searchParams.set('limit', String(GEOCODING_PROVIDER_LIMIT));
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8_000);
@@ -227,21 +232,26 @@ Deno.serve(async (req) => {
         provider, provider_type: item.addresstype || item.type || null, quality: quality.quality,
       }];
     });
-    await admin.from('address_geocoding_cache').upsert({
-      tenant_id: tenantId,
-      address_hash: addressHash,
-      normalized_address: address,
-      provider,
-      candidates,
-      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      last_used_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'tenant_id,address_hash,provider' });
+    if (!await entityAddressIsCurrent()) return json({ error: 'address_snapshot_changed' }, 409);
+    if (candidates.length > 0) {
+      await admin.from('address_geocoding_cache').upsert({
+        tenant_id: tenantId,
+        address_hash: addressHash,
+        normalized_address: address,
+        provider,
+        candidates,
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        last_used_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'tenant_id,address_hash,provider' });
+    }
 
     await recordEntityCandidates(candidates);
-    return json({ query: address, provider, candidates, cache: 'miss' });
+    return json({ query: address, provider, candidates: candidates.slice(0, limit), cache: 'miss' });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return json({ error: 'geocoding_timeout' }, 504);
+    if (error instanceof Error && error.message === 'address_review_already_resolved') return json({ error: 'address_review_already_resolved' }, 409);
+    if (error instanceof Error && error.message === 'address_snapshot_changed') return json({ error: 'address_snapshot_changed' }, 409);
     console.error('[geocode-address]', error);
     return json({ error: 'geocoding_failed' }, 500);
   }

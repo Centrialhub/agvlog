@@ -5,6 +5,7 @@ import {createCanonicalCompanyCompatibilityDatabase} from './helpers/canonicalCo
 const opened:Array<Awaited<ReturnType<typeof createCanonicalCompanyCompatibilityDatabase>>>=[];
 const original=readFileSync('supabase/migrations/20260910211000_canonical_destination_geocoding_idempotency.sql','utf8');
 const compatible=readFileSync('supabase/rollouts/20260911032601_canonical_destination_geocoding_policy_compat.sql','utf8');
+const assistedCandidateValidation=readFileSync('supabase/migrations/20260922016000_validate_assisted_address_candidate.sql','utf8');
 const a='10000000-0000-4000-8000-000000000001',b='10000000-0000-4000-8000-000000000002',actor='20000000-0000-4000-8000-000000000001',stop='30000000-0000-4000-8000-000000000001';
 async function fixture(){const db=await createCanonicalCompanyCompatibilityDatabase();opened.push(db);return db;}
 async function claim(db:typeof opened[number],tenant:string,header=tenant){await db.query("select set_config('request.jwt.claim.sub',$1,true),set_config('request.jwt.claims',$2,true),set_config('request.headers',$3,true)",[actor,JSON.stringify({role:'authenticated',active_tenant_id:tenant}),JSON.stringify({'x-agvlog-tenant-id':header})]);}
@@ -23,4 +24,21 @@ it('places current authorization after every command wait and before every repla
  for(const {prosrc} of bodies){const wait=prosrc.indexOf('perform pg_advisory_xact_lock');const replay=prosrc.indexOf('return v_existing.response');const check=prosrc.indexOf('auth.uid() is distinct from v_actor',wait);expect(check).toBeGreaterThan(wait);expect(check).toBeLessThan(replay);expect(prosrc.lastIndexOf('auth.uid() is distinct from v_actor')).toBeLessThan(prosrc.indexOf('insert into public.operator_command_ledger'));}
  const resolve=bodies.find(x=>x.proname==='resolve_address_queue_item_v2')!.prosrc;
  expect(resolve.indexOf('auth.uid() is distinct from v_actor',resolve.indexOf('for update;'))).toBeLessThan(resolve.indexOf('update public.canonical_addresses'));
+});
+
+it('accepts only an assisted selection that exactly matches a locked queue candidate',async()=>{
+ const db=await fixture();await db.exec(compatible);await db.exec(assistedCandidateValidation);
+ await db.query('insert into tenants values($1)',[a]);await db.query('insert into auth.users values($1)',[actor]);
+ await db.query("insert into tenant_memberships values($1,$2,true,'admin')",[a,actor]);
+ await db.query("insert into dispatch_stops(id,tenant_id,dispatch_trip_id,destination) values($1,$2,gen_random_uuid(),'Rua Teste, 123, Sao Paulo, SP')",[stop,a]);
+ const queue=(await db.query<{id:string}>('select id from address_resolution_queue where tenant_id=$1',[a])).rows[0].id;
+ const candidate={label:'Endereco QA',latitude:-23.55,longitude:-46.63,provider:'qa-existing-result',accuracy_m:20,confidence:0.95};
+ await db.query('update address_resolution_queue set candidates=$2::jsonb where id=$1',[queue,JSON.stringify([candidate])]);
+ await claim(db,a);
+ const payload={tenant_id:a,request_id:'50000000-0000-4000-8000-000000000010',queue_id:queue,
+   ...candidate,selection_kind:'assisted_candidate'};
+ await expect(call(db,'select resolve_address_queue_item_v2($1::jsonb)',[JSON.stringify({...payload,
+   request_id:'50000000-0000-4000-8000-000000000011',provider:'invented'})])).rejects.toMatchObject({code:'22023'});
+ const result=(await call(db,'select resolve_address_queue_item_v2($1::jsonb) result',[JSON.stringify(payload)])).rows[0];
+ expect(result).toHaveProperty('result.ok',true);
 });

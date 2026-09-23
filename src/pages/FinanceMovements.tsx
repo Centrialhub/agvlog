@@ -43,7 +43,7 @@ function MovementWorkspace({ tenant, actor }: { tenant: string; actor: string })
   const accounts=useBankAccounts();
   const query = useFinanceMovements(filters, true), qc = useQueryClient(); const page = query.isFetching||query.isError?undefined:query.data;
   return <div className="space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Movimentações registradas</h1>
+    <div className="finance-page-header"><div><h1 className="text-2xl font-semibold">Movimentações registradas</h1>
       <p className="text-sm text-muted-foreground">Envios e recebimentos declarados, antes da conferência do extrato.</p></div>
       <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={()=>setStatementEntry(true)}>Importar extrato</Button><Button variant="outline" onClick={() => setBatchEntry(true)}>Conferir gastos em lote</Button><Button onClick={() => setEntry(true)}>Registrar movimentação</Button></div></div>
     <Button variant="outline" onClick={()=>setTransferEntry(true)}>Registrar transferência entre contas</Button>
@@ -51,7 +51,7 @@ function MovementWorkspace({ tenant, actor }: { tenant: string; actor: string })
     <AccountOpeningEntry tenant={tenant} actor={actor}/>
     <DriverAdvanceReturns tenant={tenant} actor={actor}/>
     {notice && <p role="status">{notice}</p>}
-    <form className="flex flex-wrap items-end gap-3" onSubmit={e => { e.preventDefault(); if(draft.from&&draft.to&&draft.from>draft.to){setNotice('A data inicial não pode ser posterior à data final.');return;}setNotice('');setFilters({ ...draft, page: 1 }); }}>
+    <form className="finance-filters" onSubmit={e => { e.preventDefault(); if(draft.from&&draft.to&&draft.from>draft.to){setNotice('A data inicial não pode ser posterior à data final.');return;}setNotice('');setFilters({ ...draft, page: 1 }); }}>
       <div className="min-w-56 flex-1"><Label htmlFor="movement-search">Buscar</Label><Input id="movement-search" value={draft.search} placeholder="Beneficiário, descrição ou referência" onChange={e => setDraft({ ...draft, search: e.target.value })} /></div>
       <div><Label htmlFor="movement-from">De</Label><Input id="movement-from" type="date" max={draft.to||undefined} value={draft.from} onChange={e => setDraft({ ...draft, from: e.target.value })} /></div>
       <div><Label htmlFor="movement-to">Até</Label><Input id="movement-to" type="date" min={draft.from||undefined} value={draft.to} onChange={e => setDraft({ ...draft, to: e.target.value })} /></div>
@@ -63,7 +63,7 @@ function MovementWorkspace({ tenant, actor }: { tenant: string; actor: string })
     {query.error && <div role="alert"><p>{financeError(query.error)}</p><Button onClick={() => void query.refetch()}>Atualizar</Button></div>}
     {page && !query.error && <>
       <MovementListTotals page={page}/>
-      <div className="rounded-lg border"><Table><TableHeader><TableRow>
+      <div className="rounded-lg border"><Table scrollLabel="Resultados financeiros — role para ver todas as colunas"><TableHeader><TableRow>
         <TableHead>Data</TableHead><TableHead>Beneficiário / motivo</TableHead><TableHead>Conta</TableHead><TableHead>Natureza</TableHead><TableHead>Referência</TableHead><TableHead className="text-right">Valor original</TableHead>
       </TableRow></TableHeader><TableBody>{page.rows.map(row => <TableRow key={row.id}>
         <TableCell className="whitespace-nowrap">{row.occurred_on.split('-').reverse().join('/')}</TableCell>
@@ -72,15 +72,15 @@ function MovementWorkspace({ tenant, actor }: { tenant: string; actor: string })
         <TableCell className="text-xs">{row.bank_reference || 'Não informada'}<Button variant="link" className="block px-0" onClick={()=>setReceiptTrace(row.id)}>Vínculos com recebíveis</Button><Button variant="link" className="block px-0" aria-label={`Corrigir ou excluir registro de ${row.description}`} onClick={()=>setCorrectionMovement(row.id)}>Corrigir ou excluir registro</Button></TableCell>
         <TableCell className="text-right whitespace-nowrap">{row.direction === 'out' ? '−' : '+'} {formatFinanceCents(row.amount_cents)}</TableCell>
       </TableRow>)}{!page.rows.length && <TableRow><TableCell colSpan={6} className="py-8 text-center">Nenhuma movimentação neste filtro.</TableCell></TableRow>}</TableBody></Table></div>
-      <div className="flex items-center justify-between"><Button variant="outline" disabled={filters.page === 1 || query.isFetching} onClick={() => setFilters({ ...filters, page: filters.page - 1 })}>Anterior</Button>
+      <div className="flex flex-wrap items-center justify-between gap-3"><Button variant="outline" disabled={filters.page === 1 || query.isFetching} onClick={() => setFilters({ ...filters, page: filters.page - 1 })}>Anterior</Button>
         <span className="text-sm">Página {page.page} de {Math.max(1, Math.ceil(page.total / page.page_size))}</span>
         <Button variant="outline" disabled={page.page * page.page_size >= page.total || query.isFetching} onClick={() => setFilters({ ...filters, page: filters.page + 1 })}>Próxima</Button></div>
     </>}
     {correctionMovement&&<MovementCorrectionDialog key={`${tenant}:${actor}:${correctionMovement}`} tenant={tenant} actor={actor} movementId={correctionMovement} onClose={()=>setCorrectionMovement(null)}/>}
     {receiptTrace&&<MovementReceiptTrace key={receiptTrace} tenant={tenant} actor={actor} movement={receiptTrace} onClose={()=>setReceiptTrace(null)}/>}
-    {transferEntry&&<InternalTransferDialog tenant={tenant} actor={actor} onClose={()=>setTransferEntry(false)} onRecorded={()=>{setTransferEntry(false);setNotice('Transferência registrada nos dois lados. Confira cada conta no respectivo extrato.');void invalidateAccountReview(qc,tenant);for(const prefix of ['finance-movements','finance-audit','finance-reconciliation-options','finance-automatic-reconciliation'])void qc.invalidateQueries({queryKey:[prefix]});}}/>}
+    {transferEntry&&<InternalTransferDialog tenant={tenant} actor={actor} onClose={()=>setTransferEntry(false)} onRecorded={()=>{setTransferEntry(false);setFilters(current=>({...current,page:1}));setNotice('Transferência registrada nos dois lados. Confira cada conta no respectivo extrato.');void invalidateAccountReview(qc,tenant);for(const prefix of ['finance-movements','finance-audit','finance-reconciliation-options','finance-automatic-reconciliation'])void qc.invalidateQueries({queryKey:[prefix]});}}/>}
     {entry && <MovementEntryDialog tenant={tenant} actor={actor} onClose={() => setEntry(false)} onRecorded={() => {
-      setEntry(false); setNotice('Movimentação registrada. A composição e a conferência bancária são etapas separadas.');
+      setEntry(false);setFilters(current=>({...current,page:1}));setNotice('Movimentação registrada. A composição e a conferência bancária são etapas separadas.');
       void invalidateAccountReview(qc,tenant);void qc.invalidateQueries({ queryKey: ['finance-movements', tenant, actor] });
     }} />}
     {batchEntry&&<ExpenseBatchDialog tenant={tenant} actor={actor} onClose={()=>setBatchEntry(false)} onRecorded={()=>{

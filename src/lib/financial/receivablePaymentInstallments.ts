@@ -37,6 +37,12 @@ type Rpc = (
   name: string,
   args: Record<string, unknown>,
 ) => Promise<{ data: unknown; error: unknown }>;
+export class ReceivablePaymentInstallmentsChangedError extends Error {
+  constructor() {
+    super('A distribuição mudou durante a paginação.');
+    this.name = 'ReceivablePaymentInstallmentsChangedError';
+  }
+}
 export async function readReceivablePaymentInstallments(
   tenant: string,
   actor: string,
@@ -56,7 +62,13 @@ export async function readReceivablePaymentInstallments(
       _expected_revision: expectedRevision,
     },
   );
-  if (error) throw error;
+  if (error) {
+    const candidate = error as { code?: unknown; message?: unknown };
+    if (candidate?.code === '40001' || String(candidate?.message ?? '').includes('finance_agreement_history_changed')) {
+      throw new ReceivablePaymentInstallmentsChangedError();
+    }
+    throw error;
+  }
   const value = schema.parse(data);
   if (
     value.tenant_id !== tenant ||

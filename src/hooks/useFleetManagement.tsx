@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
-import {acknowledgeDurableOperatorCommand,prepareDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
+import {acknowledgeDurableOperatorCommand,isDefinitiveOperatorCommandRejection,prepareDurableOperatorCommand,readDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
 import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
 
 /* ─── Types ─── */
@@ -98,7 +99,8 @@ export function useCreateFueling() {
   const { currentTenant } = useTenant();
   const {user}=useAuth();
   const qc = useQueryClient();
-  return useMutation({
+  const [, setPendingRevision] = useState(0);
+  const mutation = useMutation({
     mutationFn: async (values: CreateVehicleFuelingInput) => {
       if(!user)throw new Error('Usuário não autenticado');
       const payload = {
@@ -106,17 +108,32 @@ export function useCreateFueling() {
         tenant_id: currentTenant!.id,
       };
       const pending=await prepareDurableOperatorCommand({tenantId:currentTenant!.id,actorId:user.id,action:'create_vehicle_fueling',entityId:'new',payload});
-      const { data, error } = await supabase.rpc('create_vehicle_fueling_with_odometer_v1', {
-        _payload: {...payload,request_id:pending.requestId},
-      });
-      if (error) throw error;
+      let data;
+      try {
+        const result = await supabase.rpc('create_vehicle_fueling_with_odometer_v1', {
+          _payload: {...payload,request_id:pending.requestId},
+        });
+        if (result.error) throw result.error;
+        data = result.data;
+      } catch (error) {
+        if (isDefinitiveOperatorCommandRejection(error)) acknowledgeDurableOperatorCommand(pending);
+        setPendingRevision(value => value + 1);
+        throw error;
+      }
       acknowledgeDurableOperatorCommand(pending);
+      setPendingRevision(value => value + 1);
       return data as Tables<'vehicle_fueling'>;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['vehicle_fueling'] });
       qc.invalidateQueries({ queryKey: ['vehicle_odometer'] });
     },
+  });
+  const pendingCommand = currentTenant && user ? readDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'create_vehicle_fueling',entityId:'new'}) : null;
+  return Object.assign(mutation, {
+    pendingCommand,
+    recoverPending: () => pendingCommand ? mutation.mutateAsync(pendingCommand.payload as CreateVehicleFuelingInput) : Promise.reject(new Error('Nenhum abastecimento pendente.')),
+    discardPending: () => { if (pendingCommand) acknowledgeDurableOperatorCommand(pendingCommand); setPendingRevision(value => value + 1); },
   });
 }
 
@@ -131,7 +148,7 @@ export function useVehicleOdometerList(vehicleId?: string) {
         .from('vehicle_odometer')
         .select('*')
         .eq('tenant_id', currentTenant.id)
-        .order('recorded_at', { ascending: false }).order('id');
+        .order('recorded_at', { ascending: false }).order('id', { ascending: false });
       if (vehicleId) q = q.eq('vehicle_id', vehicleId);
       return q;};
       return await fetchAllPostgrestPages((from,to)=>makeQuery().range(from,to)) as VehicleOdometer[];
@@ -160,32 +177,47 @@ export function useCreateOdometerReading() {
 }
 
 /* ─── Consumption calculation ─── */
+type ConsumptionFueling = Pick<VehicleFueling, 'fueled_at' | 'is_full_tank' | 'odometer_km' | 'liters' | 'total_cost'>;
+
+export function calculateConsumptionHistory(fuelings: ConsumptionFueling[]) {
+  const sorted = [...fuelings].sort((a, b) => new Date(a.fueled_at).getTime() - new Date(b.fueled_at).getTime());
+  const consumption: { date: string; km: number; liters: number; kmPerLiter: number; costPerKm: number | null }[] = [];
+  let previousFull: ConsumptionFueling | null = null;
+  let intervalLiters = 0;
+  let intervalCost = 0;
+
+  for (const fueling of sorted) {
+    if (!previousFull) {
+      if (fueling.is_full_tank && fueling.odometer_km != null) previousFull = fueling;
+      continue;
+    }
+    intervalLiters += Number(fueling.liters || 0);
+    intervalCost += Number(fueling.total_cost || 0);
+    if (!fueling.is_full_tank || fueling.odometer_km == null) continue;
+
+    const km = Number(fueling.odometer_km) - Number(previousFull.odometer_km);
+    if (km > 0 && intervalLiters > 0) {
+      consumption.push({
+        date: fueling.fueled_at,
+        km,
+        liters: intervalLiters,
+        kmPerLiter: km / intervalLiters,
+        costPerKm: intervalCost > 0 ? intervalCost / km : null,
+      });
+    }
+    previousFull = fueling;
+    intervalLiters = 0;
+    intervalCost = 0;
+  }
+
+  const totalKm = consumption.reduce((sum, item) => sum + item.km, 0);
+  const totalLiters = consumption.reduce((sum, item) => sum + item.liters, 0);
+  return { consumption, avgKmPerLiter: totalLiters > 0 ? totalKm / totalLiters : null };
+}
+
 export function useConsumptionHistory(vehicleId?: string) {
   const query=useVehicleFuelingList(vehicleId);const fuelings=query.data??[];
-
-  // Calculate km/l between consecutive full-tank fuelings
-  const consumption = fuelings
-    .filter(f => f.is_full_tank && f.odometer_km)
-    .sort((a, b) => new Date(a.fueled_at).getTime() - new Date(b.fueled_at).getTime())
-    .map((f, i, arr) => {
-      if (i === 0) return null;
-      const prev = arr[i - 1];
-      const km = Number(f.odometer_km!) - Number(prev.odometer_km!);
-      const liters = Number(f.liters);
-      if (km <= 0 || liters <= 0) return null;
-      return {
-        date: f.fueled_at,
-        km,
-        liters,
-        kmPerLiter: km / liters,
-        costPerKm: f.total_cost ? Number(f.total_cost) / km : null,
-      };
-    })
-    .filter(Boolean) as { date: string; km: number; liters: number; kmPerLiter: number; costPerKm: number | null }[];
-
-  const avgKmPerLiter = consumption.length > 0
-    ? consumption.reduce((s, c) => s + c.kmPerLiter, 0) / consumption.length
-    : null;
+  const { consumption, avgKmPerLiter } = calculateConsumptionHistory(fuelings);
 
   return { consumption, avgKmPerLiter, fuelings,isLoading:query.isLoading,isError:query.isError,error:query.error,refetch:query.refetch };
 }

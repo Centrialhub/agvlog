@@ -29,7 +29,7 @@ declare const Deno: {
 // This repository is deployed at this exact public origin. Keep the environment
 // override so previews/self-hosted environments can opt in explicitly, while the
 // production deployment remains fail-closed if the secret is ever missing.
-const PRODUCTION_APP_ORIGIN = "https://agvlog.lovable.app";
+const PRODUCTION_APP_ORIGIN = "https://agvlogistica.vercel.app";
 
 function readAllowedOrigin(): string | undefined {
   const configured = Deno.env.get("AGVLOG_APP_ORIGIN")?.trim() || PRODUCTION_APP_ORIGIN;
@@ -64,6 +64,7 @@ export const corsHeaders: Readonly<Record<string, string>> = Object.freeze({
   ...(appOrigin ? { "Access-Control-Allow-Origin": appOrigin } : {}),
   "Access-Control-Allow-Headers": DEFAULT_ALLOWED_HEADERS,
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Expose-Headers": "Content-Disposition",
   "Access-Control-Max-Age": "86400",
   Vary: "Origin",
 });

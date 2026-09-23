@@ -28,6 +28,7 @@ import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { getErrorMessage } from '@/lib/errors';
 import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
+import { PendingCommandRecovery } from '@/components/operator/PendingCommandRecovery';
 
 export default function Employees() {
   const toast = useSonnerToast();
@@ -498,6 +499,7 @@ function ContractTab({ employeeId, contracts }: { employeeId: string; contracts:
   };
   return (
     <div className="space-y-3">
+      {create.pendingCommand && <PendingCommandRecovery subject="uma criação de contrato" onRecover={create.recoverPending} onDiscard={create.discardPending} />}
       <div className="flex justify-between items-center">
         <p className="text-sm font-medium">Contratos ({contracts.length})</p>
         <Button size="sm" onClick={() => setShowNew(v => !v)}>{showNew ? 'Cancelar' : 'Novo contrato ativo'}</Button>

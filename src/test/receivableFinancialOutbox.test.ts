@@ -19,11 +19,11 @@ describe('durable receivable-financial browser outbox',()=>{
   await expect(outbox.submit(tenant,actor,input)).rejects.toThrow('confirmação');const pending=pendingFinancialCommand(localStorage,tenant,actor)!;
   await outbox.recover(tenant,actor);expect(send.mock.calls[1][0]).toEqual(pending.payload);expect(localStorage.getItem(key)).toBeNull();
  });
- it('removes a first definitely rejected command but preserves a previously uncertain request on rejection',async()=>{
+ it('remove rejeições definitivas tanto no primeiro envio quanto na recuperação',async()=>{
   const {outbox,send}=setup();send.mockResolvedValue({data:null,error:{code:'40001',message:'closing_action_context_changed'}});
   await expect(outbox.submit(tenant,actor,input)).rejects.toMatchObject({code:'40001'});expect(localStorage.getItem(key)).toBeNull();
   send.mockResolvedValueOnce({data:null,error:{message:'Conexão perdida'}});await expect(outbox.submit(tenant,actor,input)).rejects.toMatchObject({message:'Conexão perdida'});
-  const stored=localStorage.getItem(key);await expect(outbox.recover(tenant,actor)).rejects.toMatchObject({code:'40001'});expect(localStorage.getItem(key)).toBe(stored);
+  expect(localStorage.getItem(key)).not.toBeNull();await expect(outbox.recover(tenant,actor)).rejects.toMatchObject({code:'40001'});expect(localStorage.getItem(key)).toBeNull();
  });
  it('coalesces overlapping retries into a single transmission',async()=>{
   let release:()=>void=()=>{};const wait=new Promise<void>(resolve=>{release=resolve;});const {outbox,send}=setup(vi.fn(async p=>{await wait;return {data:ack(p),error:null};}));

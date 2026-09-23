@@ -1,8 +1,8 @@
 import { Card } from '@/components/ui/card';
 import type { ActiveTripLive } from '@/lib/controlTower/types';
 
-export default function KpiCards({ trips }: { trips: ActiveTripLive[] }) {
-  const total = trips.length;
+export default function KpiCards({ trips,totalCount,truncated=false }: { trips: ActiveTripLive[];totalCount?:number;truncated?:boolean }) {
+  const total = totalCount??trips.length;
   const normal = trips.filter((t) => t.state === 'normal' || t.state === 'arriving' || t.state === 'at_stop').length;
   const delayed = trips.filter((t) => t.state === 'delayed').length;
   const offRoute = trips.filter((t) => t.state === 'off_route').length;
@@ -11,11 +11,11 @@ export default function KpiCards({ trips }: { trips: ActiveTripLive[] }) {
 
   const items = [
     { label: 'Viagens ativas', value: total, tone: 'text-foreground' },
-    { label: 'Normais', value: normal, tone: 'text-emerald-500' },
-    { label: 'Atrasados', value: delayed, tone: 'text-orange-500' },
-    { label: 'Fora da rota', value: offRoute, tone: 'text-red-600' },
-    { label: 'Parados', value: stopped, tone: 'text-yellow-500' },
-    { label: 'Sem sinal', value: noSignal, tone: 'text-muted-foreground' },
+    { label: truncated?'Normais no lote':'Normais', value: normal, tone: 'text-emerald-500' },
+    { label: truncated?'Atrasados no lote':'Atrasados', value: delayed, tone: 'text-orange-500' },
+    { label: truncated?'Fora da rota no lote':'Fora da rota', value: offRoute, tone: 'text-red-600' },
+    { label: truncated?'Parados no lote':'Parados', value: stopped, tone: 'text-yellow-500' },
+    { label: truncated?'Sem sinal no lote':'Sem sinal', value: noSignal, tone: 'text-muted-foreground' },
   ];
 
   return (

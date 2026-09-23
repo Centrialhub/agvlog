@@ -7,28 +7,29 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useListFilters } from '@/hooks/useListFilters';
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { matchesSearch } from '@/lib/listFilters';
-import { calendarDay } from '@/lib/listFilters';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FileText, Route, Clock, AlertTriangle, Gauge, TrendingUp, MapPin, Download } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { reportsDefaultPeriod } from '@/lib/reports/reportDateRange';
 
 export default function Reports() {
   const { currentTenant } = useTenant();
-  const defaults = useMemo(() => { const date = new Date(); date.setDate(date.getDate() - 7); return { from: calendarDay(date.toISOString()), to: calendarDay(new Date().toISOString()), search: '' }; }, []);
+  const defaults = useMemo(() => ({ ...reportsDefaultPeriod(), search: '' }), []);
   const { filters: { from, to, search }, setFilter, resetFilters, activeCount } = useListFilters(defaults);
 
-  const { data: allMetrics = [], isLoading } = useQuery({
+  const { data: allMetrics = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['reports_metrics', currentTenant?.id, from, to],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.from('metrics_daily')
+      return fetchAllPostgrestPages((rangeFrom, rangeTo) => supabase.from('metrics_daily')
         .select('*, vehicles(plate, nickname)')
         .eq('tenant_id', currentTenant.id)
         .gte('day', from || '1900-01-01').lte('day', to || '9999-12-31')
-        .order('day', { ascending: false });
-      if (error) throw error;
-      return data;
+        .order('day', { ascending: false })
+        .order('vehicle_id', { ascending: true })
+        .range(rangeFrom, rangeTo));
     },
     enabled: !!currentTenant,
   });
@@ -96,6 +97,28 @@ export default function Reports() {
     a.click();
     URL.revokeObjectURL(url);
   }, [byVehicle, from, to]);
+
+  if (isError) {
+    return (
+      <div className="animate-fade-in space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <FileText className="h-6 w-6 text-primary" /> Relatórios
+          </h1>
+          <p className="text-sm text-muted-foreground">KPIs e ranking da frota por período</p>
+        </div>
+        <Card role="alert" className="border-destructive/40 bg-destructive/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Não foi possível consultar as métricas. Os indicadores não representam um período sem atividade.
+            </div>
+            <Button variant="outline" onClick={() => void refetch()}>Tentar novamente</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in space-y-6">

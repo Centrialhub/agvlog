@@ -6,7 +6,7 @@ import { uploadSecureFile } from '@/lib/secureUpload';
 import type { Json, Tables } from '@/integrations/supabase/types';
 import { localDateInputValue } from '@/lib/utils/formatDate';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
-import { protocolDedupeKey } from '@/lib/palletReturns/palletReturnImporter';
+import { palletImportRequestId, protocolDedupeKey } from '@/lib/palletReturns/palletReturnImporter';
 
 export interface PalletType {
   id: string;
@@ -141,6 +141,7 @@ export function usePalletProtocols(filters: PalletFilters = {}) {
 }
 
 export interface CreateProtocolInput {
+  request_id: string;
   supplier_id?: string | null;
   supplier_name_snapshot: string;
   issue_date: string;
@@ -245,14 +246,22 @@ export function useUpsertPalletType() {
   return useMutation({
     mutationFn: async (input: Partial<PalletType> & { code: string; name: string }) => {
       if (!currentTenant) throw new Error('no_tenant');
+      const code = normalizePalletTypeCode(input.code);
+      const name = input.name.trim();
+      if (!code || !name) throw new Error('Código e nome do tipo de palete são obrigatórios.');
+      const existingTypes = await fetchAllPostgrestPages((from, to) => supabase.from('pallet_types')
+        .select('id, code').eq('tenant_id', currentTenant.id).order('id').range(from, to));
+      if (existingTypes.some((row) => row.id !== input.id && normalizePalletTypeCode(row.code) === code)) {
+        throw new Error(`Já existe um tipo de palete com o código ${code}.`);
+      }
       if (input.id) {
         const { error } = await supabase.from('pallet_types').update({
-          name: input.name, color: input.color, description: input.description, is_active: input.is_active ?? true, updated_by: user?.id,
+          code, name, color: input.color, description: input.description, is_active: input.is_active ?? true, updated_by: user?.id,
         }).eq('id', input.id).eq('tenant_id', currentTenant.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from('pallet_types').insert({
-          tenant_id: currentTenant.id, code: input.code, name: input.name,
+          tenant_id: currentTenant.id, code, name,
           color: input.color, description: input.description, is_active: input.is_active ?? true, created_by: user?.id, updated_by: user?.id,
         });
         if (error) throw error;
@@ -261,6 +270,8 @@ export function useUpsertPalletType() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pallet_types'] }),
   });
 }
+
+export const normalizePalletTypeCode = (code: string): string => code.trim().toUpperCase();
 
 export function usePalletHistory(protocolId?: string | null) {
   const { currentTenant } = useTenant();
@@ -282,10 +293,12 @@ export function useImportPalletReturns() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { fileName: string; parsedList: Array<{ supplier: string; issueDate: string; items: Array<{ code: string; name: string; quantity: number }>; totalDeclared?: number | null }>; asStatus: 'confirmed' | 'returned' }) => {
+    mutationFn: async (input: { fileName: string; parsedList: Array<{ supplier: string; issueDate: string; items: Array<{ code: string; name: string; quantity: number }>; totalDeclared?: number | null }>; localErrors: Array<{ supplier: string; date: string; reason: string }>; asStatus: 'confirmed' | 'returned' }) => {
       if (!currentTenant) throw new Error('no_tenant');
       const { data: batch, error: bErr } = await supabase.from('pallet_return_import_batches').insert({
-        tenant_id: currentTenant.id, file_name: input.fileName, row_count: input.parsedList.length, status: 'processing', created_by: user?.id,
+        tenant_id: currentTenant.id, file_name: input.fileName,
+        row_count: input.parsedList.length + input.localErrors.length,
+        status: 'processing', created_by: user?.id,
       }).select().single();
       if (bErr) throw bErr;
 
@@ -300,7 +313,7 @@ export function useImportPalletReturns() {
       };
 
       let imported = 0, unmatched = 0;
-      const errors: Array<{ supplier: string; date: string; reason: string }> = [];
+      const errors: Array<{ supplier: string; date: string; reason: string }> = [...input.localErrors];
       for (const p of input.parsedList) {
         try {
           const client = findClient(p.supplier);
@@ -318,9 +331,12 @@ export function useImportPalletReturns() {
           ) === importedKey);
           if (duplicate) { errors.push({ supplier: p.supplier, date: p.issueDate, reason: 'duplicate' }); continue; }
 
+          const requestId = await palletImportRequestId(currentTenant.id, importedKey);
+
           const { error: rpcErr } = await supabase.rpc('create_pallet_return_protocol', {
             _tenant_id: currentTenant.id,
             _payload: {
+              request_id: requestId,
               supplier_id: client?.id ?? null,
               supplier_name_snapshot: p.supplier,
               issue_date: p.issueDate,

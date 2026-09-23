@@ -44,5 +44,7 @@ export function usePortalSummary(opts?: { clientId?: string | null; startDate?: 
     },
     enabled: !!currentTenant,
     staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }

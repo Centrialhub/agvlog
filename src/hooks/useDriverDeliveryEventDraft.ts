@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { validateUploadFile } from '@/lib/uploadPolicy';
 import type { ReceiptScanResult } from '@/lib/driver/receiptScan';
 import { getDriverDeliveryEvent } from '@/components/driver/deliveries/driverDeliveryEvents';
@@ -20,6 +20,12 @@ export function useDriverDeliveryEventDraft() {
   const [boletoNote, setBoletoNote] = useState('');
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const photoPreviewsRef = useRef(photoPreviews);
+  photoPreviewsRef.current = photoPreviews;
+
+  useEffect(() => () => {
+    photoPreviewsRef.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
 
   const reset = () => {
     setReceiverName('');

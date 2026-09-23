@@ -13,7 +13,10 @@ import { Plus, Fuel, TrendingUp, DollarSign, Gauge } from 'lucide-react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { format } from 'date-fns';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { localDateTimeInputValue } from '@/lib/utils/formatDate';
+import { APP_TIME_ZONE, localDateTimeInputToIso, localDateTimeInputValue } from '@/lib/utils/formatDate';
+import { PendingCommandRecovery } from '@/components/operator/PendingCommandRecovery';
+import { useTenant } from '@/hooks/useTenant';
+import { canAdministerVehicle } from '@/lib/fleet/vehiclePermissions';
 
 const FUEL_TYPES = [
   { value: 'diesel', label: 'Diesel' },
@@ -29,12 +32,15 @@ interface Props {
 
 export default function FuelingTab({ vehicleId }: Props) {
   const toast = useSonnerToast();
+  const { currentRole, currentTenant } = useTenant();
+  const tenantTimeZone = currentTenant?.timezone || APP_TIME_ZONE;
+  const canCreateFueling = canAdministerVehicle(currentRole);
   const { consumption, avgKmPerLiter, fuelings,isLoading,isError,error,refetch } = useConsumptionHistory(vehicleId);
   const createMut = useCreateFueling();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const [form, setForm] = useState({
-    fueled_at: localDateTimeInputValue(),
+    fueled_at: localDateTimeInputValue(new Date(), tenantTimeZone),
     liters: '',
     price_per_liter: '',
     fuel_type: 'diesel',
@@ -53,10 +59,17 @@ export default function FuelingTab({ vehicleId }: Props) {
   })), [consumption]);
 
   const handleSave = async () => {
+    if (!canCreateFueling) {
+      toast.error('Somente administradores podem registrar abastecimentos');
+      return;
+    }
     const liters = Number(form.liters);
     const pricePerLiter = form.price_per_liter === '' ? null : Number(form.price_per_liter);
     const odometerKm = form.odometer_km === '' ? null : Number(form.odometer_km);
-    const fueledAt=new Date(form.fueled_at);
+    let fueledAtIso: string;
+    try { fueledAtIso = localDateTimeInputToIso(form.fueled_at, tenantTimeZone); }
+    catch { toast.error('Informe uma data e hora válida para o abastecimento');return; }
+    const fueledAt=new Date(fueledAtIso);
 
     if (!Number.isFinite(liters) || liters <= 0) {
       toast.error('Informe uma quantidade de litros maior que zero');
@@ -77,7 +90,7 @@ export default function FuelingTab({ vehicleId }: Props) {
     try {
       await createMut.mutateAsync({
         vehicle_id: vehicleId,
-        fueled_at: new Date(form.fueled_at).toISOString(),
+        fueled_at: fueledAtIso,
         liters,
         price_per_liter: pricePerLiter,
         fuel_type: form.fuel_type,
@@ -88,7 +101,7 @@ export default function FuelingTab({ vehicleId }: Props) {
       } as any);
       toast.success('Abastecimento registrado');
       setDialogOpen(false);
-      setForm({ fueled_at: localDateTimeInputValue(), liters: '', price_per_liter: '', fuel_type: 'diesel', odometer_km: '', station_name: '', is_full_tank: true, notes: '' });
+      setForm({ fueled_at: localDateTimeInputValue(new Date(), tenantTimeZone), liters: '', price_per_liter: '', fuel_type: 'diesel', odometer_km: '', station_name: '', is_full_tank: true, notes: '' });
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -145,9 +158,9 @@ export default function FuelingTab({ vehicleId }: Props) {
 
       <div className="flex justify-between items-center">
         <h3 className="text-sm font-medium text-foreground">Registro de Abastecimentos</h3>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>
+        {canCreateFueling ? <Button size="sm" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Novo Abastecimento
-        </Button>
+        </Button> : <span className="text-xs text-muted-foreground">Inclusão restrita a administradores</span>}
       </div>
 
       <Card>
@@ -186,15 +199,16 @@ export default function FuelingTab({ vehicleId }: Props) {
       </Card>
 
       {/* Add fueling dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {canCreateFueling && <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Novo Abastecimento</DialogTitle>
             <DialogDescription>Registre combustível, custo e leitura do odômetro do veículo.</DialogDescription>
           </DialogHeader>
+          {createMut.pendingCommand && <PendingCommandRecovery subject="um abastecimento" onRecover={createMut.recoverPending} onDiscard={createMut.discardPending} />}
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div><Label htmlFor="fueling-date">Data/Hora</Label><Input id="fueling-date" type="datetime-local" max={localDateTimeInputValue()} value={form.fueled_at} onChange={e => setForm(f => ({ ...f, fueled_at: e.target.value }))} /></div>
+              <div><Label htmlFor="fueling-date">Data/Hora ({tenantTimeZone})</Label><Input id="fueling-date" type="datetime-local" max={localDateTimeInputValue(new Date(), tenantTimeZone)} value={form.fueled_at} onChange={e => setForm(f => ({ ...f, fueled_at: e.target.value }))} /></div>
               <div>
                 <Label htmlFor="fueling-type">Combustível</Label>
                 <Select value={form.fuel_type} onValueChange={v => setForm(f => ({ ...f, fuel_type: v }))}>
@@ -225,7 +239,7 @@ export default function FuelingTab({ vehicleId }: Props) {
             </div>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { usePortalPickups, useRequestPortalPickup, useCancelPortalPickup } from '@/hooks/portal/usePortalPickups';
@@ -18,12 +18,19 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Loader2, X } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { ListFilterBar } from '@/components/ui/list-filter-bar';
 import { matchesSearch } from '@/lib/listFilters';
 import { portalErrorMessage } from '@/lib/portal/portalErrors';
+import { localDateTimeInputValue } from '@/lib/utils/formatDate';
+import { useTenant } from '@/hooks/useTenant';
+import {
+  futurePortalPickupIso,
+  normalizePortalPickupCancellationReason,
+  PORTAL_PICKUP_CANCELLATION_REASON_MAX_LENGTH,
+  PORTAL_PICKUP_NOTES_MAX_LENGTH,
+  PORTAL_PICKUP_RECIPIENT_MAX_LENGTH,
+} from '@/lib/portal/portalRequestValidation';
 
 const STATUS_TONE: Record<string, string> = {
   pendente: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
@@ -33,15 +40,14 @@ const STATUS_TONE: Record<string, string> = {
 };
 
 export default function PortalPickups() {
+  const { currentTenant } = useTenant();
+  const tenantTimeZone = currentTenant?.timezone || 'America/Sao_Paulo';
   const { data: access = [] } = useClientPortalAccess();
   const { selectedClientId } = usePortalClientScope();
   const requestableClients = access.filter(a => a.can_request_pickup);
   const selectedClientCanRequest = selectedClientId
     ? requestableClients.some((client) => client.client_id === selectedClientId)
     : requestableClients.length > 0;
-  const canCancelVisiblePickups = selectedClientId
-    ? selectedClientCanRequest
-    : access.length > 0 && requestableClients.length === access.length;
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -57,6 +63,8 @@ export default function PortalPickups() {
   const filteredPickups = pickups.filter(row => matchesSearch(search, row.pickup_number, row.remitter_name, row.recipient_name, row.notes));
   const [open, setOpen] = useState(false);
   const [cancelPickupId, setCancelPickupId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const cancelRequestIdRef = useRef<string | null>(null);
   const [form, setForm] = useState({ client_id: '', pickup_at: '', recipient_name: '', notes: '' });
   // Pré-selecionar cliente quando escopo estiver reduzido a um único cliente
   useEffect(() => {
@@ -72,11 +80,22 @@ export default function PortalPickups() {
   const { toast } = useToast();
 
   const handleCancel = async () => {
-    if (!cancelPickupId || !canCancelVisiblePickups) return;
+    if (!cancelPickupId) return;
+    let reason: string;
     try {
-      await cancelMut.mutateAsync(cancelPickupId);
+      reason = normalizePortalPickupCancellationReason(cancelReason);
+    } catch (error: unknown) {
+      toast({ title: 'Informe o motivo', description: error instanceof Error ? error.message : undefined, variant: 'destructive' });
+      return;
+    }
+    try {
+      const requestId = cancelRequestIdRef.current ?? crypto.randomUUID();
+      cancelRequestIdRef.current = requestId;
+      await cancelMut.mutateAsync({ pickup_id: cancelPickupId, reason, request_id: requestId });
       toast({ title: 'Coleta cancelada' });
+      cancelRequestIdRef.current = null;
       setCancelPickupId(null);
+      setCancelReason('');
     } catch (error: unknown) {
       toast({ title: 'Erro ao cancelar', description: portalErrorMessage(error, 'Não foi possível cancelar a coleta.'), variant: 'destructive' });
     }
@@ -92,11 +111,12 @@ export default function PortalPickups() {
       return;
     }
     try {
+      const pickupAt = futurePortalPickupIso(form.pickup_at, Date.now(), tenantTimeZone);
       await requestMut.mutateAsync({
         client_id: form.client_id,
-        pickup_at: new Date(form.pickup_at).toISOString(),
-        recipient_name: form.recipient_name || undefined,
-        notes: form.notes || undefined,
+        pickup_at: pickupAt,
+        recipient_name: form.recipient_name.trim() || undefined,
+        notes: form.notes.trim() || undefined,
       });
       toast({ title: 'Coleta solicitada' });
       setOpen(false);
@@ -138,16 +158,16 @@ export default function PortalPickups() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Data/Hora da coleta</Label>
-                  <Input type="datetime-local" value={form.pickup_at} onChange={e => setForm(f => ({ ...f, pickup_at: e.target.value }))} />
+                  <Label>Data/Hora da coleta ({tenantTimeZone})</Label>
+                  <Input type="datetime-local" min={localDateTimeInputValue(new Date(), tenantTimeZone)} value={form.pickup_at} onChange={e => setForm(f => ({ ...f, pickup_at: e.target.value }))} />
                 </div>
                 <div>
                   <Label>Destinatário (opcional)</Label>
-                  <Input value={form.recipient_name} onChange={e => setForm(f => ({ ...f, recipient_name: e.target.value }))} />
+                  <Input maxLength={PORTAL_PICKUP_RECIPIENT_MAX_LENGTH} value={form.recipient_name} onChange={e => setForm(f => ({ ...f, recipient_name: e.target.value }))} />
                 </div>
                 <div>
                   <Label>Observações</Label>
-                  <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+                  <Textarea maxLength={PORTAL_PICKUP_NOTES_MAX_LENGTH} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
                 </div>
               </div>
               <DialogFooter>
@@ -166,7 +186,7 @@ export default function PortalPickups() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
-          ) : error ? (
+          ) : error && !isFetchNextPageError ? (
             <div className="p-4 text-xs text-destructive flex items-center justify-between gap-3">
               <span>Erro ao carregar coletas: {(error as Error).message}</span>
               <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
@@ -191,7 +211,9 @@ export default function PortalPickups() {
                 {filteredPickups.map(p => (
                   <TableRow key={p.id}>
                     <TableCell className="font-mono">#{p.pickup_number}</TableCell>
-                    <TableCell>{p.pickup_at && format(new Date(p.pickup_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</TableCell>
+                    <TableCell>{p.pickup_at && new Intl.DateTimeFormat('pt-BR', {
+                      timeZone: tenantTimeZone, dateStyle: 'short', timeStyle: 'short',
+                    }).format(new Date(p.pickup_at))}</TableCell>
                     <TableCell className="max-w-[200px] truncate">{p.remitter_name || '—'}</TableCell>
                     <TableCell className="max-w-[180px] truncate">{p.recipient_name || '—'}</TableCell>
                     <TableCell>{p.linked_docs_count || 0}</TableCell>
@@ -199,11 +221,11 @@ export default function PortalPickups() {
                       <Badge variant="outline" className={STATUS_TONE[p.status] || ''}>{p.status}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {p.status === 'pendente' && canCancelVisiblePickups && (
+                      {p.status === 'pendente' && p.can_cancel && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => setCancelPickupId(p.id)}
+                          onClick={() => { cancelRequestIdRef.current = null; setCancelPickupId(p.id); }}
                           disabled={cancelMut.isPending}
                           title="Cancelar coleta"
                           aria-label={`Cancelar coleta ${p.pickup_number}`}
@@ -239,7 +261,7 @@ export default function PortalPickups() {
           )}
         </CardContent>
       </Card>
-      <AlertDialog open={!!cancelPickupId} onOpenChange={(nextOpen) => { if (!nextOpen) setCancelPickupId(null); }}>
+      <AlertDialog open={!!cancelPickupId} onOpenChange={(nextOpen) => { if (!nextOpen) { cancelRequestIdRef.current = null; setCancelPickupId(null); setCancelReason(''); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Cancelar coleta?</AlertDialogTitle>
@@ -247,9 +269,20 @@ export default function PortalPickups() {
               A solicitação será marcada como cancelada. Esta ação não altera coletas já finalizadas.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="portal-pickup-cancel-reason">Motivo do cancelamento</Label>
+            <Textarea
+              id="portal-pickup-cancel-reason"
+              value={cancelReason}
+              onChange={(event) => { cancelRequestIdRef.current = null; setCancelReason(event.target.value); }}
+              maxLength={PORTAL_PICKUP_CANCELLATION_REASON_MAX_LENGTH}
+              placeholder="Explique por que a coleta deve ser cancelada"
+              rows={3}
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Voltar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancel} disabled={cancelMut.isPending}>
+            <AlertDialogAction onClick={(event) => { event.preventDefault(); void handleCancel(); }} disabled={cancelMut.isPending || cancelReason.trim().length < 10}>
               {cancelMut.isPending ? 'Cancelando…' : 'Confirmar cancelamento'}
             </AlertDialogAction>
           </AlertDialogFooter>

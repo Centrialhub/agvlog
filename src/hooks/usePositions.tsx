@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import type { Tables } from '@/integrations/supabase/types';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 
 const POSITION_LAST_SAFE_SELECT =
   'tenant_id, vehicle_id, lat, lng, speed, heading, captured_at, received_at';
@@ -44,7 +45,7 @@ export async function fetchFleetPositionPages(tenantId: string, signal: AbortSig
       return rows;
     }
 
-    rows.push(...page);
+    rows.push(...page.filter((position) => hasValidGeographicCoordinates(position.lat, position.lng)));
     if (page.length < pageSize) return rows;
     const lastVehicleId = page.at(-1)?.vehicle_id;
     if (!lastVehicleId || lastVehicleId === afterVehicleId) {
@@ -71,7 +72,7 @@ export function useFleetPositions(enabled = true) {
   });
 }
 
-export function useVehicleHistory(vehicleId: string | null, startDate?: string, endDate?: string) {
+export function useVehicleHistory(vehicleId: string | null, startDate?: string, endDate?: string, enabled = true) {
   const { currentTenant } = useTenant();
 
   return useQuery({
@@ -107,7 +108,7 @@ export function useVehicleHistory(vehicleId: string | null, startDate?: string, 
           return rows;
         }
 
-        rows.push(...page);
+        rows.push(...page.filter((position) => hasValidGeographicCoordinates(position.lat, position.lng)));
         if (page.length < pageSize) return rows;
 
         const last = page.at(-1);
@@ -120,7 +121,7 @@ export function useVehicleHistory(vehicleId: string | null, startDate?: string, 
 
       return rows;
     },
-    enabled: !!currentTenant && !!vehicleId && !!startDate && !!endDate,
+    enabled: !!currentTenant && !!vehicleId && !!startDate && !!endDate && enabled,
     retry: false,
   });
 }
@@ -140,7 +141,8 @@ export function useVehiclePosition(vehicleId: string | null) {
         .abortSignal(signal)
         .maybeSingle();
       if (error) throw error;
-      return data as PositionLast | null;
+      const position = data as PositionLast | null;
+      return position && hasValidGeographicCoordinates(position.lat, position.lng) ? position : null;
     },
     enabled: !!currentTenant && !!vehicleId,
     refetchInterval: 30_000,

@@ -1,13 +1,13 @@
 // @vitest-environment node
+import { historicalFinanceAuditSchema } from './helpers/historicalFinanceContracts';
 import {readFileSync} from 'node:fs';
 import {randomUUID,createHash} from 'node:crypto';
 import type {PGlite} from '@electric-sql/pglite';
 import {afterAll,afterEach,beforeAll,beforeEach,describe,expect,it} from 'vitest';
 import {financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
 import {setupFinanceStatementIntakeDatabase} from './helpers/setupFinanceStatementIntakeDatabase';
-import {statementListSchema,statementLinesSchema} from '@/lib/financial/statementHistoryContract';
+import {statementCursorListSchema,statementListSchema,statementLinesSchema} from '@/lib/financial/statementHistoryContract';
 import {identityCandidatesSchema} from '@/lib/financial/statementReviewContract';
-import {financeAuditSchema} from '@/lib/financial/financeAuditContract';
 import {reconciliationOptionsSchema,reconciliationContextSchema} from '@/lib/financial/reconciliationContract';
 import {reconciliationHistorySchema} from '@/lib/financial/reconciliationHistoryContract';
 import {statementIntakeResultSchema} from '@/lib/financial/statementImportContract';
@@ -274,7 +274,7 @@ describe('statement intake preserves multiplicity and quarantines uncertain iden
     expect((await db.query('select * from finance_movements')).rows).toHaveLength(2);expect((await db.query('select * from finance_bank_entries')).rows).toHaveLength(1);
     expect((await db.query<{actor_id:string;actor_name:string}>('select actor_id,actor_name from finance_reconciliation_groups')).rows[0]).toEqual({actor_id:i.operator,actor_name:'Financeiro QA'});
     await expect(reconcile({...p,request_id:randomUUID(),expected_revision:(await context()).revision})).rejects.toThrow('finance_reconciliation_already_linked');
-    const audit=financeAuditSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select list_finance_audit_events($1,$2::jsonb) result',[i.tenant,JSON.stringify({manual_only:true})])).rows[0].result);
+    const audit=historicalFinanceAuditSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select list_finance_audit_events($1,$2::jsonb) result',[i.tenant,JSON.stringify({manual_only:true})])).rows[0].result);
     expect(audit.rows.some(row=>row.action==='bank_reconciled_manually'&&row.manual_intervention)).toBe(true);
     expect((await financeAs(db,i.driverUser,'select * from finance_reconciliation_groups')).rows).toHaveLength(0);
     const reversePayload={version:1,tenant_id:i.tenant,request_id:randomUUID(),group_id:result.group_id,reason:'Vínculo selecionado incorretamente na conferência'};
@@ -306,7 +306,7 @@ describe('statement intake preserves multiplicity and quarantines uncertain iden
     for(const date of ['2026-09-09T02:59:59Z','2026-09-09T03:00:00Z','2026-09-10T02:59:59Z','2026-09-10T03:00:00Z']){
       await db.query("insert into finance_events(tenant_id,entity_type,entity_id,action,actor_id,actor_name,reason,after_data,created_at) values($1,'statement_import',$2,'identity_review_reversed',$3,'Maria Financeiro','Revisão 100% conferida','{}',$4)",[i.tenant,randomUUID(),i.operator,date]);
     }
-    const query=async(filters:object={},tenant=i.tenant,actor=i.operator)=>financeAuditSchema.parse((await financeAs<{result:unknown}>(db,actor,'select list_finance_audit_events($1,$2::jsonb) result',[tenant,JSON.stringify(filters)])).rows[0].result);
+    const query=async(filters:object={},tenant=i.tenant,actor=i.operator)=>historicalFinanceAuditSchema.parse((await financeAs<{result:unknown}>(db,actor,'select list_finance_audit_events($1,$2::jsonb) result',[tenant,JSON.stringify(filters)])).rows[0].result);
     const result=await query({from:'2026-09-09',to:'2026-09-09',page_size:1,manual_only:true,search:'%'});
     expect(result.total).toBe(2);expect(result.manual_count).toBe(2);expect(result.rows).toHaveLength(1);expect(result.rows[0].actor_name).toBe('Maria Financeiro');
     expect((await query({actor_id:i.operator,actor_search:'Maria'})).total).toBe(4);expect((await query({actor_search:'Financeiro QA'})).total).toBe(0);
@@ -374,6 +374,11 @@ describe('statement intake preserves multiplicity and quarantines uncertain iden
     const page=await list({page:1,page_size:1});expect(page.total).toBe(2);expect(page.rows).toHaveLength(1);
     const literal=await list({search:'%'});expect(literal.total).toBe(1);expect(literal.rows[0]).toMatchObject({file_name:'Janeiro 100%.csv',counts:{new:2},source_verification:'pending'});
     expect((await list({from:'2026-02-01'})).total).toBe(0);
+    await db.exec(readFileSync('supabase/migrations/20260921171357_keyset_finance_statements.sql','utf8'));
+    const firstKeyed=statementCursorListSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select list_finance_statements_v2($1,$2::jsonb) result',[i.tenant,JSON.stringify({page_size:1})])).rows[0].result);expect(firstKeyed.rows).toHaveLength(1);expect(firstKeyed.next_cursor).not.toBeNull();
+    await intake(await payload([row()]));
+    const secondKeyed=statementCursorListSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select list_finance_statements_v2($1,$2::jsonb) result',[i.tenant,JSON.stringify({page_size:1,cursor:firstKeyed.next_cursor})])).rows[0].result);expect(secondKeyed.rows).toHaveLength(1);expect(secondKeyed.rows[0].id).not.toBe(firstKeyed.rows[0].id);
+    const body=(await db.query<{body:string}>("select prosrc body from pg_proc where oid='finance_private.list_statements_v2(uuid,jsonb)'::regprocedure")).rows[0].body;expect(body).toContain('limit size+1');expect(body.indexOf('page_keys')).toBeLessThan(body.indexOf('finance_statement_rows sr'));
     await expect(list({},i.otherTenant)).rejects.toThrow('finance_access_denied');
     await expect(list({},i.tenant,i.driverUser)).rejects.toThrow('finance_access_denied');
   });

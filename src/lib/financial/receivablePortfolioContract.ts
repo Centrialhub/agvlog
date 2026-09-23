@@ -23,6 +23,6 @@ export type PortfolioFilters={from:string|null;to:string|null;client:string|null
 export const portfolioStatusLabels:Record<string,string>={pending:'Pendente',invoiced:'Faturado',partial:'Parcialmente baixado',received:'Baixado integralmente'};
 export function portfolioFilters(period:'7d'|'30d'|'90d'|'all',dateFrom:string,dateTo:string,client:string,now=new Date()):PortfolioFilters{
  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(now),start=new Date(`${today}T12:00:00Z`);
- if(period!=='all')start.setUTCDate(start.getUTCDate()-Number(period.slice(0,-1)));
+ if(period!=='all')start.setUTCDate(start.getUTCDate()-(Number(period.slice(0,-1))-1));
  return {from:dateFrom||(period==='all'?null:start.toISOString().slice(0,10)),to:dateTo||(period==='all'?null:today),client:client==='all'?null:client};
 }

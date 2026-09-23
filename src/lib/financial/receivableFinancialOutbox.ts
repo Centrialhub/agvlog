@@ -25,7 +25,7 @@ export function createFinancialOutbox(deps:Dependencies){
  let inFlight:Promise<FinancialResult>|null=null;
  const run=(tenant:string,actor:string,input?:FinancialCommandInput)=>{
   if(inFlight)return inFlight;const key=keyFor(tenant,actor);const work=deps.lock(key,async()=>{
-   deps.assertContext();let row=pendingFinancialCommand(deps.storage,tenant,actor);const uncertain=!!row;
+   deps.assertContext();let row=pendingFinancialCommand(deps.storage,tenant,actor);
    if(row&&input)throw new Error('Há uma operação financeira sem confirmação. Recupere o pedido existente antes de iniciar outra.');
    if(!row){if(!input)throw new Error('Nenhuma operação financeira pendente nesta sessão.');
     if(input.action==='reverse'&&input.refund_kind!=='money_returned')throw new Error('Confirme que o dinheiro já foi devolvido antes de registrar a saída.');
@@ -33,7 +33,7 @@ export function createFinancialOutbox(deps:Dependencies){
     try{deps.storage.setItem(key,JSON.stringify(row));}catch{throw unavailable();}deps.changed();}
    const forget=()=>{try{deps.storage.removeItem(key);}catch{/* exact durable replay remains safe */}deps.changed();};
    deps.assertContext();const {data,error}=await deps.send(row.payload);deps.assertContext();
-   if(error){const code=isRecord(error)?String(error.code??''):'';if(!uncertain&&(/^(22|23)/.test(code)||['40001','40P01','55P03','42501','55000'].includes(code)))forget();throw error;}
+   if(error){const code=isRecord(error)?String(error.code??''):'';if(/^(22|23)/.test(code)||['40001','40P01','55P03','42501','55000'].includes(code))forget();throw error;}
    const result=parseFinancialResult(data,row.payload);forget();return result;
   });inFlight=work;void work.finally(()=>{if(inFlight===work)inFlight=null;deps.changed();}).catch(()=>{});return work;
  };

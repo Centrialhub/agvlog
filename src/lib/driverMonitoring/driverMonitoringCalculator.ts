@@ -1,4 +1,5 @@
 // Cálculos e regras de status para o Monitoramento de Motoristas
+import { APP_TIME_ZONE, localDateInputValue } from '@/lib/utils/formatDate';
 
 export type DriverMonitorStatus =
   | 'active'
@@ -55,19 +56,19 @@ export function calculateExpectedReturnDate(startedAt: Date | string | null, day
   return out.toISOString().slice(0, 10);
 }
 
-export function detectDelayedRoute(monitor: MonitorLike, now: Date = new Date()): boolean {
+export function detectDelayedRoute(monitor: MonitorLike, now: Date = new Date(), timeZone = APP_TIME_ZONE): boolean {
   if (!monitor.expected_return_date) return false;
   if (monitor.actual_returned_at) return false;
   const remaining = calculateRemainingDeliveries(monitor.total_deliveries, monitor.completed_deliveries || 0);
   if (remaining <= 0) return false;
-  const exp = new Date(monitor.expected_return_date + 'T23:59:59');
-  return now.getTime() > exp.getTime();
+  return localDateInputValue(now, timeZone) > monitor.expected_return_date;
 }
 
 export function calculateDriverStatus(
   monitor: MonitorLike,
   updates: ProgressUpdateLike[],
   now: Date = new Date(),
+  timeZone = APP_TIME_ZONE,
 ): DriverMonitorStatus {
   if (monitor.status === 'cancelled') return 'cancelled';
   if (monitor.actual_returned_at) return monitor.status === 'arrived' ? 'arrived' : 'completed';
@@ -81,7 +82,7 @@ export function calculateDriverStatus(
   const hasCritical = /crítico|critico|acidente|urgente|problema/i.test(monitor.notes || '');
   if (hasCritical) return 'issue';
 
-  if (detectDelayedRoute({ ...monitor, completed_deliveries: completed }, now)) return 'delayed';
+  if (detectDelayedRoute({ ...monitor, completed_deliveries: completed }, now, timeZone)) return 'delayed';
 
   const last = monitor.last_update_at ? new Date(monitor.last_update_at) : null;
   if (last && now.getTime() - last.getTime() > 24 * 3600 * 1000) return 'no_update';

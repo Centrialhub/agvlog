@@ -26,8 +26,8 @@ beforeEach(async()=>{
   const actor=mock.actor;let pending:Promise<unknown>|undefined;
   const run=()=>{if(pending)return pending;const work=async()=>{try{
    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);let data:unknown;
-   if(mock.queryError&&name==='list_driver_expenses_for_review')return {data:null,error:{message:'Falha de consulta QA'}};
-   if(name==='list_driver_expenses_for_review')data=(await operationRpc(db,'select list_driver_expenses_for_review($1,$2,$3) result',[args._tenant_id,args._status,args._offset])).rows[0].result;
+   if(mock.queryError&&name==='list_driver_expenses_for_review_v2')return {data:null,error:{message:'Falha de consulta QA'}};
+   if(name==='list_driver_expenses_for_review_v2')data=(await operationRpc(db,'select list_driver_expenses_for_review_v2($1,$2,$3,$4) result',[args._tenant_id,args._status,args._cursor_expense_at,args._cursor_id])).rows[0].result;
    else if(name==='get_driver_expense_review_context')data=(await operationRpc(db,'select get_driver_expense_review_context($1,$2) result',[args._tenant_id,args._expense_id])).rows[0].result;
    else if(name==='review_driver_expense')data=(await operationRpc(db,'select review_driver_expense($1::jsonb) result',[JSON.stringify(args._payload)])).rows[0].result;
    else throw new Error('Unexpected expense RPC '+name);

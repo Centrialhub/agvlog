@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useUserUiPreference } from '@/hooks/useUserUiPreference';
@@ -16,7 +16,8 @@ import { AlertTriangle, Eye, Loader2, Plus, Search, UserX, UserCheck } from 'luc
 import { useToast } from '@/hooks/use-toast';
 import type { Vehicle } from '@/hooks/useVehicles';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
-import { canSelectDocumentForNewLoad, getNewLoadCreationErrorMessage } from '@/lib/loads/newLoadDocumentSelection';
+import { canSelectDocumentForNewLoad, getNewLoadCreationErrorMessage, isIssuedLoadDocument } from '@/lib/loads/newLoadDocumentSelection';
+import { useLoadCreation } from '@/hooks/useLoadCreation';
 
 type DriverOption = { id: string; name: string; user_id: string | null };
 type AvailableFiscalDocument = {
@@ -32,6 +33,11 @@ type AvailableFiscalDocument = {
   product_summary: string | null;
   status: string;
   load_id: string | null;
+  deleted_at: string | null;
+  current_delivery_attempt_id: string | null;
+  cte_emitted_at: string | null;
+  cte_emitted_outbound_id: string | null;
+  nfse_emitted_at: string | null;
   created_at: string;
   clients: { company_name: string } | null;
   loads: { id: string; load_number: string } | null;
@@ -100,18 +106,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const recentDocListRef = useRef<HTMLDivElement | null>(null);
   const isDocPreferenceHydrated = useRef(false);
   const skipNextFilterReset = useRef(false);
-  const createRequestId = useRef(crypto.randomUUID());
+  const createLoad = useLoadCreation('documents');
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
   const currentDocPreference = useMemo(() => ({ filters: docFilters, sort: docSort, visibleDocCount, visibleRecentDocCount, scrollTop: docScrollTop, recentScrollTop: recentDocScrollTop }), [docFilters, docSort, visibleDocCount, visibleRecentDocCount, docScrollTop, recentDocScrollTop]);
-  const createLoad = useMutation({
-    mutationFn: async (payload: Record<string, unknown>) => {
-      const { data, error } = await supabase.rpc('create_load_with_documents_v1' as never, { _payload: payload } as never);
-      if (error) throw error;
-      const result = data as unknown as { load_id?: string; load?: { id?: string } };
-      if (!result?.load_id && !result?.load?.id) throw new Error('Criação da carga sem confirmação compatível.');
-      return result;
-    },
-  });
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -138,11 +135,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     queryFn: async () => {
       if (!currentTenant) return [];
       return fetchAllPostgrestPages((from, to) => supabase.from('fiscal_documents')
-        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, status, load_id, created_at, clients!fiscal_documents_client_id_fkey(company_name), loads(id, load_number)')
+        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, status, load_id, deleted_at, current_delivery_attempt_id, cte_emitted_at, cte_emitted_outbound_id, nfse_emitted_at, created_at, clients!fiscal_documents_client_id_fkey(company_name), loads(id, load_number)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false }).order('id')
-        .range(from, to)) as Promise<AvailableFiscalDocument[]>;
+        .range(from, to).overrideTypes<AvailableFiscalDocument[], { merge: false }>());
     },
     enabled: !!currentTenant && open,
   });
@@ -470,6 +468,24 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     setPreviewDoc(null);
   };
 
+  const finishCreation = (description?: string) => {
+    toast({ title: 'Carga criada', description });
+    setOpen(false); setForm(emptyForm); setSelectedDocIds(new Set());
+    setDocAutofillSnapshots({}); setPreviewDoc(null); setDetailsDoc(null);
+    for (const key of ['loads', 'fiscal_documents', 'load_items', 'new_load_available_fiscal_docs', 'new_load_linked_load_lookup', 'pending_fiscal_docs', 'pending_docs_count']) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    }
+    onCreated();
+  };
+  const handleRecover = async () => {
+    try {
+      const result = await createLoad.recover('manual');
+      finishCreation(`Carga ${result.load.load_number} confirmada com ${result.document_count} nota(s).`);
+    } catch (error) {
+      toast({ title: 'Não foi possível confirmar a criação', description: getNewLoadCreationErrorMessage(error), variant: 'destructive' });
+    }
+  };
+
   const handleSave = async () => {
     try {
       const notes = [
@@ -481,6 +497,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       ].filter(Boolean).join('\n');
 
       const selectedDocIdList = Array.from(selectedDocIds);
+      if (selectedDocs.length !== selectedDocIdList.length) throw new Error('selected_document_not_available');
       const unavailableSelectedDoc = fiscalDocs.find(doc => selectedDocIds.has(doc.id) && !canSelectDocumentForNewLoad(doc));
       if (unavailableSelectedDoc) {
         removeDocSelection(unavailableSelectedDoc.id);
@@ -519,16 +536,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               },
             };
           });
-      await createLoad.mutateAsync({
-        tenant_id: currentTenant!.id,
-        request_id: createRequestId.current,
+      const result = await createLoad.submit('manual', {
         changes: {
           ...(form.load_number.trim() ? { load_number: form.load_number.trim() } : {}),
           origin: form.origin || null, destination: form.destination || form.neighborhood || null,
           notes: notes || null, vehicle_id: form.vehicle_id || null, driver_id: form.driver_id || null,
         },
         selected_document_ids: selectedDocIdList,
-        single_document_patch: selectedDocIdList.length === 1 ? {
+        single_document_patch: selectedDocIdList.length === 1 && !isIssuedLoadDocument(selectedDocs[0]) ? {
           invoice_number: form.invoice_number.trim() || null, client_id: form.client_id || null,
           recipient: form.client_name || clients.find(c => c.id === form.client_id)?.company_name || null,
           recipient_neighborhood: form.neighborhood || null, recipient_city: form.destination || null,
@@ -542,19 +557,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         audit_events: auditEvents,
       });
 
-      toast({ title: 'Carga criada' });
-      setOpen(false);
-      setForm(emptyForm);
-      setSelectedDocIds(new Set());
-      setDocAutofillSnapshots({});
-      setPreviewDoc(null);
-      setDetailsDoc(null);
-      createRequestId.current = crypto.randomUUID();
-      queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      queryClient.invalidateQueries({ queryKey: ['load_items'] });
-      queryClient.invalidateQueries({ queryKey: ['new_load_available_fiscal_docs', currentTenant?.id] });
-      queryClient.invalidateQueries({ queryKey: ['new_load_linked_load_lookup', currentTenant?.id] });
-      onCreated();
+      finishCreation(`Carga ${result.load.load_number} confirmada.`);
     } catch (error: unknown) {
       toast({ title: 'Erro ao criar carga', description: getNewLoadCreationErrorMessage(error), variant: 'destructive' });
     }
@@ -568,10 +571,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       <DialogContent className="flex max-w-5xl flex-col overflow-hidden p-0" style={{ height: modalHeight }}>
         <DialogHeader className="shrink-0 border-b border-border px-5 py-4">
           <DialogTitle>Nova Carga</DialogTitle>
-          <DialogDescription>
-            Informe os dados operacionais e, se necessário, associe notas fiscais de entrada à nova carga.
-          </DialogDescription>
+          <DialogDescription>Informe os dados operacionais e, se necessário, associe notas fiscais de entrada à nova carga.</DialogDescription>
         </DialogHeader>
+        {createLoad.error && <p role="alert" className="px-5 text-sm text-destructive">{createLoad.error}</p>}
+        {createLoad.pending.length > 0 && <div className="flex items-center justify-between gap-3 border-b px-5 py-3 text-sm">
+          <span>Há uma criação sem confirmação nesta sessão.</span>
+          <Button disabled={createLoad.isPending} onClick={() => void handleRecover()}>Recuperar criação</Button>
+        </div>}
+        {selectedDocs.some(isIssuedLoadDocument) && <p className="px-5 text-sm text-muted-foreground">Os dados fiscais das notas já emitidas serão preservados ao vincular a carga.</p>}
         <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
           <div className="flex-1 space-y-3 overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
@@ -841,7 +848,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           </div>
           <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-border pt-4">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={createLoad.isPending}>Criar</Button>
+            <Button onClick={handleSave} disabled={createLoad.isPending || createLoad.pending.length > 0 || !!createLoad.error}>Criar</Button>
           </div>
           <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
             <DialogContent className="flex h-[min(88vh,760px)] max-w-4xl flex-col overflow-hidden p-0">

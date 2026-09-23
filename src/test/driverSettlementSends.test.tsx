@@ -26,3 +26,15 @@ it('refreshes the settlement list and bank reconciliation candidates after recor
  for(const prefix of ['finance-movements','finance-audit','finance-reconciliation-options','finance-automatic-reconciliation'])expect(invalidation).toHaveBeenCalledWith({queryKey:[prefix,m.tenant]});
  expect(screen.getByRole('status')).toHaveTextContent('Confira a movimentação no extrato');
 });
+it('mantém o último resultado e bloqueia um intervalo de datas invertido',async()=>{
+ mount();await screen.findByText(/31 registros/);expect(m.read).toHaveBeenCalledTimes(1);
+ fireEvent.change(screen.getByLabelText('Envios de'),{target:{value:'2026-09-20'}});
+ fireEvent.change(screen.getByLabelText('Envios até'),{target:{value:'2026-09-01'}});
+ expect(screen.getByRole('alert')).toHaveTextContent('data inicial');
+ expect(screen.getByRole('button',{name:'Filtrar envios'})).toBeDisabled();
+ expect(screen.getByText(/31 registros/)).toBeInTheDocument();
+ expect(m.read).toHaveBeenCalledTimes(1);
+ fireEvent.change(screen.getByLabelText('Envios até'),{target:{value:'2026-09-30'}});
+ fireEvent.click(screen.getByRole('button',{name:'Filtrar envios'}));
+ await waitFor(()=>expect(m.read).toHaveBeenLastCalledWith(m.tenant,expect.objectContaining({from:'2026-09-20',to:'2026-09-30'})));
+});

@@ -1,4 +1,5 @@
 import {useEmployeeAdvanceRegistration} from './useEmployeeAdvanceRegistration';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
@@ -7,7 +8,7 @@ import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/su
 import {readPayrollProjection,readPayrollPeriodPage,readPayrollPeriods} from '@/lib/financial/ledgerClient';
 import type {PayrollPaymentSummary} from '@/lib/financial/payrollPaymentContract';
 import {fetchAllPostgrestPages} from '@/lib/supabase/fetchAllPages';
-import {acknowledgeDurableOperatorCommand,prepareDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
+import {acknowledgeDurableOperatorCommand,isDefinitiveOperatorCommandRejection,prepareDurableOperatorCommand,readDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
 
 // ---------------- Constants / labels ----------------
 export const PAYROLL_PERIOD_STATUSES = ['draft','calculated','under_review','approved','closed','cancelled'] as const;
@@ -86,13 +87,13 @@ export function usePayrollPeriod(id?: string) {
   });
 }
 
-export function usePayrollEntries(periodId?: string) {
+export function usePayrollEntries(periodId?: string,page=1,search='',payment='all',entryId:string|null=null) {
   const {currentTenant}=useTenant();
   return useQuery({
-    queryKey: ['payroll_entries', periodId,currentTenant?.id],
+    queryKey: ['payroll_entries', periodId,currentTenant?.id,page,search,payment,entryId],
     queryFn: async () => {
-      if (!periodId||!currentTenant) return [];
-      return await readPayrollProjection(currentTenant.id,periodId) as unknown as (PayrollEntry & { employees?: { name: string|null; doc_cpf: string | null; branch: string | null; department: string | null } })[];
+      if (!periodId||!currentTenant) return null;
+      return await readPayrollProjection(currentTenant.id,periodId,page,search,payment,entryId) as unknown as {rows:(PayrollEntry & { employees?: { name: string|null; doc_cpf: string | null; branch: string | null; department: string | null } })[];total:number;filtered_total:number;has_more:boolean;totals:{gross:string;discount:string;already_paid:string;carryover_in:string;carryover_out:string;title_paid:string;remaining:string}};
     },
     enabled: !!periodId&&!!currentTenant,
     refetchOnWindowFocus:true,
@@ -131,6 +132,7 @@ export function useGeneratePayrollPeriod() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payroll_periods'] });
       qc.invalidateQueries({ queryKey: ['payroll_entries'] });
+      qc.invalidateQueries({ queryKey: ['payroll_generation_issues'] });
       Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]);
     },
   });
@@ -153,26 +155,43 @@ export function useRecalculatePayrollEntry() {
 
 export function useApprovePayrollPeriod() {
   const qc = useQueryClient();
-  return useMutation({
+  const {currentTenant}=useTenant();const {user}=useAuth();const [,setPendingRevision]=useState(0);
+  const reconcile=()=>Promise.all([qc.invalidateQueries({queryKey:['payroll_periods']}),qc.invalidateQueries({queryKey:['payroll_entries']}),qc.invalidateQueries({queryKey:['payroll_generation_issues']}),qc.invalidateQueries({queryKey:['payables']}),qc.invalidateQueries({queryKey:['finance-recorded-costs']}),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]);
+  const mutation=useMutation({
     mutationFn: async (period_id: string) => {
-      const { error } = await supabase.rpc('approve_payroll_period', { _period_id: period_id });
-      if (error) throw error;
+      if(!currentTenant||!user)throw new Error('Sessão não disponível.');
+      const pending=await prepareDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'approve_payroll_period',entityId:period_id,payload:{period_id}});
+      let data;
+      try{const response=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:{code?:string;message:string}|null}>)('approve_payroll_period_v3',{_period_id:period_id,_request_id:pending.requestId});if(response.error)throw response.error;data=response.data;}
+      catch(error){if(isDefinitiveOperatorCommandRejection(error))acknowledgeDurableOperatorCommand(pending);await reconcile();setPendingRevision(value=>value+1);throw error;}
+      const result = data as { approved?: boolean; issue_count?: number } | null;
+      acknowledgeDurableOperatorCommand(pending);setPendingRevision(value=>value+1);
+      if (!result?.approved) {
+        await qc.invalidateQueries({ queryKey: ['payroll_generation_issues'] });
+        throw new Error(`${result?.issue_count || 0} pendência(s) impedem a aprovação. Corrija e recalcule a folha.`);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payroll_periods'] });
       qc.invalidateQueries({ queryKey: ['payroll_entries'] });
+      qc.invalidateQueries({ queryKey: ['payroll_generation_issues'] });
       Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]);
       qc.invalidateQueries({ queryKey: ['payables'] });
     },
   });
+  return mutation;
 }
 
 export function useClosePayrollPeriod() {
   const qc = useQueryClient();
+  const {currentTenant}=useTenant();const {user}=useAuth();
   return useMutation({
     mutationFn: async ({ period_id, reason }: { period_id: string; reason?: string }) => {
-      const { error } = await supabase.rpc('close_payroll_period', { _period_id: period_id, _reason: reason ?? undefined });
-      if (error) throw error;
+      if(!currentTenant||!user)throw new Error('Sessão não disponível.');
+      const payload={period_id,reason:reason?.trim()??''};
+      const pending=await prepareDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'close_payroll_period',entityId:period_id,payload});
+      try{const {error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{error:{code?:string;message:string}|null}>)('close_payroll_period_v2',{_period_id:period_id,_reason:reason??null,_request_id:pending.requestId});if(error)throw error;acknowledgeDurableOperatorCommand(pending);}
+      catch(error){if(isDefinitiveOperatorCommandRejection(error))acknowledgeDurableOperatorCommand(pending);await Promise.all([qc.invalidateQueries({queryKey:['payroll_periods']}),qc.invalidateQueries({queryKey:['payables']}),qc.invalidateQueries({queryKey:['finance-recorded-costs']}),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]);throw error;}
     },
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ['payroll_periods'] }); void Promise.all([qc.invalidateQueries({ queryKey: ['finance-recorded-costs'] }),qc.invalidateQueries({queryKey:['finance-recorded-cost-summary']})]); },
   });
@@ -183,11 +202,15 @@ export function usePayrollGenerationIssues(periodId?:string){
   if(!currentTenant||!periodId)return [];return await fetchAllPostgrestPages((from,to)=>supabase.from('payroll_generation_issues').select('*').eq('tenant_id',currentTenant.id).eq('payroll_period_id',periodId).eq('resolved',false).order('created_at').order('id').range(from,to));
  }});
 }
-export function useChangePayrollPeriodState(){const qc=useQueryClient();const {currentTenant}=useTenant();const {user}=useAuth();return useMutation({mutationFn:async(input:{periodId:string;action:'cancel'|'reopen';reason:string})=>{
+export function useChangePayrollPeriodState(){const qc=useQueryClient();const {currentTenant}=useTenant();const {user}=useAuth();const [,setPendingRevision]=useState(0);const mutation=useMutation({mutationFn:async(input:{periodId:string;action:'cancel'|'reopen';reason:string})=>{
  if(input.reason.trim().length<5)throw new Error('Informe um motivo com pelo menos 5 caracteres.');if(!currentTenant||!user)throw new Error('Sessão não disponível.');
  const command={period_id:input.periodId,action:input.action,reason:input.reason.trim()};const pending=await prepareDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'change_payroll_period_state',entityId:input.periodId,payload:command});
- const {error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{error:{message:string}|null}>)('change_payroll_period_state_v2',{_period_id:input.periodId,_action:input.action,_reason:input.reason.trim(),_request_id:pending.requestId});if(error)throw new Error(error.message);acknowledgeDurableOperatorCommand(pending);
- },onSuccess:()=>{qc.invalidateQueries({queryKey:['payroll_periods']});qc.invalidateQueries({queryKey:['payroll_entries']});qc.invalidateQueries({queryKey:['payroll_generation_issues']});qc.invalidateQueries({queryKey:['payables']});}});}
+ try{const {error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{error:{message:string;code?:string}|null}>)('change_payroll_period_state_v2',{_period_id:input.periodId,_action:input.action,_reason:input.reason.trim(),_request_id:pending.requestId});if(error)throw error;acknowledgeDurableOperatorCommand(pending);setPendingRevision(value=>value+1);}catch(error){if(isDefinitiveOperatorCommandRejection(error))acknowledgeDurableOperatorCommand(pending);setPendingRevision(value=>value+1);throw error;}
+ },onSuccess:()=>{qc.invalidateQueries({queryKey:['payroll_periods']});qc.invalidateQueries({queryKey:['payroll_entries']});qc.invalidateQueries({queryKey:['payroll_generation_issues']});qc.invalidateQueries({queryKey:['payables']});}});return Object.assign(mutation,{
+  getPendingCommand:(periodId:string)=>currentTenant&&user?readDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'change_payroll_period_state',entityId:periodId}):null,
+  recoverPending:(periodId:string)=>{const pending=currentTenant&&user?readDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'change_payroll_period_state',entityId:periodId}):null;const saved=pending?.payload as {period_id?:string;action?:'cancel'|'reopen';reason?:string}|undefined;return saved?.period_id&&saved.action&&saved.reason?mutation.mutateAsync({periodId:saved.period_id,action:saved.action,reason:saved.reason}):Promise.reject(new Error('Nenhuma alteração pendente.'));},
+  discardPending:(periodId:string)=>{const pending=currentTenant&&user?readDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'change_payroll_period_state',entityId:periodId}):null;if(pending)acknowledgeDurableOperatorCommand(pending);setPendingRevision(value=>value+1);},
+ });}
 
 // ---------------- Manual item ops ----------------
 export function useAddPayrollManualItem() {
@@ -254,18 +277,26 @@ export function useCreateEmployeeContract() {
   const { currentTenant } = useTenant();
   const {user}=useAuth();
   const qc = useQueryClient();
-  return useMutation({
+  const [,setPendingRevision]=useState(0);
+  const mutation=useMutation({
     mutationFn: async (values: CreateEmployeeContractInput) => {
       if(!user)throw new Error('Usuário não autenticado');
       const pending=await prepareDurableOperatorCommand({tenantId:currentTenant!.id,actorId:user.id,action:'create_employee_contract',entityId:'new',payload:values});
-      const { data, error } = await supabase.rpc('create_employee_contract_v1', {
+      let data;
+      try{const result = await supabase.rpc('create_employee_contract_v1', {
         _payload: { ...values, tenant_id: currentTenant!.id,request_id:pending.requestId } as unknown as Json,
-      });
-      if (error) throw error;
+      });if(result.error)throw result.error;data=result.data;}catch(error){if(isDefinitiveOperatorCommandRejection(error))acknowledgeDurableOperatorCommand(pending);setPendingRevision(value=>value+1);throw error;}
       acknowledgeDurableOperatorCommand(pending);
+      setPendingRevision(value=>value+1);
       return data as unknown as EmployeeContract;
     },
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['employee_contracts', v.employee_id] }),
+  });
+  const pendingCommand=currentTenant&&user?readDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'create_employee_contract',entityId:'new'}):null;
+  return Object.assign(mutation,{
+    pendingCommand,
+    recoverPending:()=>pendingCommand?mutation.mutateAsync(pendingCommand.payload as CreateEmployeeContractInput):Promise.reject(new Error('Nenhum contrato pendente.')),
+    discardPending:()=>{if(pendingCommand)acknowledgeDurableOperatorCommand(pendingCommand);setPendingRevision(value=>value+1);},
   });
 }
 

@@ -2,7 +2,7 @@ import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useTenant } from '@/hooks/useTenant';
+import { useIsAdmin, useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,6 +54,7 @@ export default function ClientRegions() {
   const { confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const { currentTenant } = useTenant();
+  const isAdmin = useIsAdmin();
   const qc = useQueryClient();
 
   const [filterRegion, setFilterRegion] = useState('');
@@ -103,6 +104,7 @@ export default function ClientRegions() {
   const upsertMutation = useMutation({
     mutationFn: async (values: typeof form & { id?: string }) => {
       if (!currentTenant) throw new Error('Sem tenant');
+      if (!isAdmin) throw new Error('Apenas administradores podem alterar regiões.');
       const municipality = values.municipality.trim().replace(/\s+/g, ' ');
       const regionName = values.region_name.trim().replace(/\s+/g, ' ');
       if (!municipality || !regionName) throw new Error('Município e região são obrigatórios.');
@@ -139,6 +141,7 @@ export default function ClientRegions() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       if (!currentTenant) throw new Error('Sem tenant');
+      if (!isAdmin) throw new Error('Apenas administradores podem remover regiões.');
       const { error } = await supabase.from('client_regions').delete()
         .eq('id', id)
         .eq('tenant_id', currentTenant.id);
@@ -154,7 +157,7 @@ export default function ClientRegions() {
   async function handleFileImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !currentTenant) return;
+    if (!file || !currentTenant || !isAdmin) return;
     setImporting(true);
     try {
       const buf = await file.arrayBuffer();
@@ -354,6 +357,7 @@ export default function ClientRegions() {
           </p>
         </div>
         <div className="flex gap-2">
+          {isAdmin && <>
           <input
             ref={fileInputRef}
             type="file"
@@ -380,9 +384,13 @@ export default function ClientRegions() {
             <div className="space-y-4">
               <div>
                 <Label>Cliente</Label>
-                <Select value={form.client_id} onValueChange={(v) => setForm({ ...form, client_id: v })}>
+                <Select
+                  value={form.client_id || '__all_clients__'}
+                  onValueChange={(value) => setForm({ ...form, client_id: value === '__all_clients__' ? '' : value })}
+                >
                   <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="__all_clients__">— Todos os clientes (região genérica)</SelectItem>
                     {clients.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                     ))}
@@ -436,6 +444,7 @@ export default function ClientRegions() {
             </div>
           </DialogContent>
         </Dialog>
+          </>}
         </div>
       </div>
 
@@ -519,17 +528,17 @@ export default function ClientRegions() {
                 <TableHead>Município</TableHead>
                 <TableHead>UF</TableHead>
                 <TableHead>Região</TableHead>
-                <TableHead className="w-20">Ações</TableHead>
+                {isAdmin && <TableHead className="w-20">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
+                  <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma região encontrada</TableCell>
+                  <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground">Nenhuma região encontrada</TableCell>
                 </TableRow>
               ) : (
                 filtered.map((r) => (
@@ -539,7 +548,7 @@ export default function ClientRegions() {
                     <TableCell className="text-sm font-medium">{r.municipality}</TableCell>
                     <TableCell className="text-sm">{r.state_code}</TableCell>
                     <TableCell className="text-sm">{r.region_name}</TableCell>
-                    <TableCell>
+                    {isAdmin && <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(r)}>
                           <Pencil className="h-3.5 w-3.5" />
@@ -555,7 +564,7 @@ export default function ClientRegions() {
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
-                    </TableCell>
+                    </TableCell>}
                   </TableRow>
                 ))
               )}

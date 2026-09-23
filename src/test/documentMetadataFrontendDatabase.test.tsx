@@ -70,7 +70,7 @@ describe('real metadata conference frontend against local PostgreSQL',{timeout:1
   await db.query("update fiscal_documents set delivery_meta=delivery_meta||'{\"contact_email\":\"new@example.invalid\"}' where id=$1",[i.doc2]);
   fireEvent.click(within(dialog).getByRole('button',{name:'Salvar conferência'}));await within(dialog).findByText(/A nota ou tentativa mudou/);
   expect(await count()).toBe(0);expect(localStorage.length).toBe(0);expect(within(dialog).getByLabelText('Motivo e fonte da conferência')).toHaveValue('Conferência das observações XML pela operação QA');
-  fireEvent.click(within(dialog).getByRole('button',{name:'Fechar'}));expect(screen.getByRole('button',{name:'Salvar Notas (2)'})).toBeDisabled();
+  fireEvent.click(within(dialog).getAllByRole('button',{name:'Fechar'})[0]);expect(screen.getByRole('button',{name:'Salvar Notas (2)'})).toBeDisabled();
   fireEvent.click(screen.getByRole('button',{name:'Revisar rascunhos sobre valores atuais'}));const second=await review();
   fireEvent.click(within(second).getByRole('button',{name:'Salvar conferência'}));await waitFor(()=>expect(mock.success).toHaveBeenCalledTimes(1));
   expect(await count()).toBe(2);expect((await db.query("select delivery_meta->>'contact_email' contact from fiscal_documents where id=$1",[i.doc2])).rows[0]).toEqual({contact:'new@example.invalid'});

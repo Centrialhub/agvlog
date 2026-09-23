@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { TablesInsert } from '@/integrations/supabase/types';
+import { acknowledgeDurableOperatorCommand, isDefinitiveOperatorCommandRejection, prepareDurableOperatorCommand, type DurableOperatorCommand } from '@/lib/operator/durableOperatorCommand';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export const INVENTORY_PAGE_SIZE = 50;
 
@@ -69,13 +71,16 @@ export function useInventoryLocations() {
     queryKey: ['inventory_locations', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('inventory_locations')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('name');
-      if (error) throw error;
-      return (data || []) as InventoryLocation[];
+      return fetchAllPostgrestPages<InventoryLocation>(async (from,to) => {
+        const { data, error } = await supabase
+          .from('inventory_locations')
+          .select('*')
+          .eq('tenant_id', currentTenant.id)
+          .order('name')
+          .order('id')
+          .range(from,to);
+        return { data: data as InventoryLocation[] | null, error };
+      },500);
     },
     enabled: !!currentTenant,
   });
@@ -109,20 +114,12 @@ export function useInventoryMovements(filters:InventoryMovementPageFilters={},pa
     queryKey: ['inventory_movements', currentTenant?.id,filters,page],
     queryFn: async ():Promise<InventoryPage<InventoryMovement>> => {
       if (!currentTenant) return {rows:[],total:0};
-      let query=supabase.from('inventory_movements')
-        .select('*, clients(company_name), inventory_locations(name)',{count:'exact'})
-        .eq('tenant_id',currentTenant.id);
-      if(filters.search?.trim())query=query.ilike('item_description',`%${filters.search.trim()}%`);
-      if(filters.client&&filters.client!=='all')query=query.eq('client_id',filters.client);
-      if(filters.location&&filters.location!=='all')query=query.eq('location_id',filters.location);
-      if(filters.type&&filters.type!=='all')query=query.eq('movement_type',filters.type);
-      if(filters.from)query=query.gte('moved_at',`${filters.from}T00:00:00`);
-      if(filters.to)query=query.lte('moved_at',`${filters.to}T23:59:59.999`);
-      const from=(page-1)*INVENTORY_PAGE_SIZE;
-      const {data,error,count}=await query.order('moved_at',{ascending:false}).order('id',{ascending:false})
-        .range(from,from+INVENTORY_PAGE_SIZE-1);
-      if(error)throw error;
-      return {rows:(data??[]) as InventoryMovement[],total:count??0};
+      const {data,error}=await supabase.rpc('list_inventory_movements_page_v1' as never,{
+        _tenant_id:currentTenant.id,_search:filters.search?.trim()||null,_client_id:filters.client&&filters.client!=='all'?filters.client:null,
+        _location_id:filters.location&&filters.location!=='all'?filters.location:null,_movement_type:filters.type&&filters.type!=='all'?filters.type:null,
+        _from:filters.from||null,_to:filters.to||null,_timezone:currentTenant.timezone,_page:page,_page_limit:INVENTORY_PAGE_SIZE,
+      } as never) as unknown as {data:{rows?:InventoryMovement[];total?:number}|null;error:{message:string}|null};
+      if(error)throw error;return {rows:data?.rows??[],total:Number(data?.total)||0};
     },
     enabled: !!currentTenant,
   });
@@ -134,16 +131,18 @@ export function useCreateMovement() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<InventoryMovement>) => {
-      if (!currentTenant) throw new Error('Tenant não selecionado');
+      if (!currentTenant || !user) throw new Error('Empresa ou usuário não selecionado');
       const { clients: _clients, inventory_locations: _locations, ...recordValues } = values;
       const payload = {
         ...recordValues,
         tenant_id: currentTenant.id,
-        created_by: user?.id,
-      } as TablesInsert<'inventory_movements'>;
-      const { data, error } = await supabase.from('inventory_movements').insert(payload).select().single();
-      if (error) throw error;
-      return data;
+      };
+      let pending:DurableOperatorCommand|null=null;
+      try{
+        pending=await prepareDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'create_inventory_movement',entityId:'new',payload});
+        const {data,error}=await supabase.rpc('create_inventory_movement_v1' as never,{_payload:{...payload,request_id:pending.requestId}} as never);
+        if(error)throw error;acknowledgeDurableOperatorCommand(pending);return data as unknown as InventoryMovement;
+      }catch(error){if(pending&&isDefinitiveOperatorCommandRejection(error))acknowledgeDurableOperatorCommand(pending);throw error;}
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory_movements'] });
@@ -159,19 +158,11 @@ export function useInventoryBalances(filters:InventoryPageFilters={},page=1,agin
     queryKey: ['inventory_balances', currentTenant?.id,filters,page,aging],
     queryFn: async ():Promise<InventoryPage<InventoryBalance>> => {
       if (!currentTenant) return {rows:[],total:0};
-      let query=supabase
-        .from('inventory_balances')
-        .select('*, clients(company_name), inventory_locations(name)',{count:'exact'})
-        .eq('tenant_id',currentTenant.id);
-      if(filters.search?.trim())query=query.ilike('item_description',`%${filters.search.trim()}%`);
-      if(filters.client&&filters.client!=='all')query=query.eq('client_id',filters.client);
-      if(filters.location&&filters.location!=='all')query=query.eq('location_id',filters.location);
-      if(aging)query=query.gt('quantity',0).lt('first_inbound_at',new Date(Date.now()-30*86400000).toISOString());
-      const from=(page-1)*INVENTORY_PAGE_SIZE;
-      const {data,error,count}=await query.order(aging?'first_inbound_at':'item_description',{ascending:true})
-        .order('id').range(from,from+INVENTORY_PAGE_SIZE-1);
-      if(error)throw error;
-      return {rows:(data??[]) as InventoryBalance[],total:count??0};
+      const {data,error}=await supabase.rpc('list_inventory_balances_page_v1' as never,{
+        _tenant_id:currentTenant.id,_search:filters.search?.trim()||null,_client_id:filters.client&&filters.client!=='all'?filters.client:null,
+        _location_id:filters.location&&filters.location!=='all'?filters.location:null,_aging:aging,_page:page,_page_limit:INVENTORY_PAGE_SIZE,
+      } as never) as unknown as {data:{rows?:InventoryBalance[];total?:number}|null;error:{message:string}|null};
+      if(error)throw error;return {rows:data?.rows??[],total:Number(data?.total)||0};
     },
     enabled: !!currentTenant,
   });

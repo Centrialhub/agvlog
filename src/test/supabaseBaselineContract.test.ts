@@ -13,6 +13,7 @@ const intentionallyPrivateForwardTables = new Set([
   'finance_legacy_cut_reviews',
   'finance_movement_voids',
   'finance_unloading_projection_repairs',
+  'portal_download_audit',
   'ssx_tracking_reference_catalog',
 ]);
 
@@ -121,9 +122,9 @@ describe('Supabase baseline contract', () => {
     expect(preparationMigration).toContain('perform public._log_entity_audit(');
     expect(preparationMigration).toContain("'item_preparation'");
     expect(preparationMigration).toContain('item_preparation_expected_changed');
-    expect(appSource).toContain("rpc('delete_load_item_v3'");
+    expect(appSource).toContain("rpc('delete_load_item_v4'");
     expect(appSource).toContain("rpc('assign_fiscal_documents_to_load_v2'");
-    expect(appSource).toContain("rpc('remove_fiscal_documents_from_load_v2'");
+    expect(canonicalMigration).toContain('remove_fiscal_documents_from_load_v2');
     expect(appSource).not.toMatch(/from\('load_items'\)[\s\S]{0,120}\.(?:insert|update|delete)\(/);
     expect(canonicalMigration).toContain('REVOKE UPDATE ON public.loads FROM authenticated');
     expect(canonicalMigration).toContain('REVOKE INSERT, UPDATE, DELETE ON public.load_items FROM authenticated');
@@ -587,7 +588,9 @@ describe('Supabase baseline contract', () => {
     }
     expect(migration.match(/REFERENCES public\.tenants \(id\)/g)).toHaveLength(5);
     expect(indexCleanup.match(/DROP INDEX IF EXISTS/g)).toHaveLength(5);
-    expect(monitoringHook).toContain(".eq('tenant_id', tenantId)");
+    expect(monitoringHook).toMatch(
+      /\.from\('driver_route_monitors'\)[\s\S]*?\.eq\('tenant_id',\s*currentTenant!?\.id\)/,
+    );
     expect(monitoringHook).not.toMatch(/\bas any\b/);
   });
 

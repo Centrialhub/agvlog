@@ -16,6 +16,10 @@ const reimportDialog = readFileSync(join(
   process.cwd(),
   'src/components/loads/BatchReimportDialog.tsx',
 ), 'utf8');
+const atomicReplacement = readFileSync(join(
+  process.cwd(),
+  'supabase/migrations/20260916234500_finish_reported_bulk_workflows.sql',
+), 'utf8');
 
 const target = 'clear_reimport_batch_data(uuid)';
 const bounded = 'clear_reimport_batch_data(uuid,date,date)';
@@ -147,15 +151,14 @@ describe('unbounded reimport cleanup browser ACL closure', () => {
   });
 
   it('keeps the frontend on the previewed, date-bounded contract', () => {
-    const call = reimportDialog.match(
-      /\.rpc\('clear_reimport_batch_data',[\s\S]*?\}\);/,
-    )?.[0];
-    expect(call).toBeDefined();
-    expect(call).toContain('_tenant_id:');
-    expect(call).toContain('_start_date:');
-    expect(call).toContain('_end_date:');
+    expect(reimportDialog).toMatch(
+      /\.rpc\('replace_reimport_batch_v1'[\s\S]*?_payload:\s*\{[\s\S]*?tenant_id:[\s\S]*?start_date:[\s\S]*?end_date:[\s\S]*?documents:/,
+    );
     expect(reimportDialog).toMatch(
       /\.rpc\('preview_reimport_cleanup_counts',[\s\S]*?_start_date:[\s\S]*?_end_date:/,
+    );
+    expect(atomicReplacement).toMatch(
+      /clear_reimport_batch_data\(v_tenant,v_start,v_end\)/,
     );
   });
 

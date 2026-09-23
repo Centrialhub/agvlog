@@ -99,14 +99,15 @@ export function useOrders() {
 }
 
 export function useCreateOrder() {
-  const { currentTenant } = useTenant();
+  const { currentTenant, currentRole } = useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<Order>) => {
+      if (!currentTenant || (currentRole !== 'owner' && currentRole !== 'admin')) throw new Error('Somente administradores podem criar pedidos.');
       const payload = {
         ...values,
-        tenant_id: currentTenant!.id,
+        tenant_id: currentTenant.id,
         created_by: user?.id,
       } as unknown as TablesInsert<'orders'>;
       const { data, error } = await supabase.from('orders').insert(payload).select().single();
@@ -119,11 +120,12 @@ export function useCreateOrder() {
 
 export function useUpdateOrder() {
   const { user } = useAuth();
-  const { currentTenant } = useTenant();
+  const { currentTenant, currentRole } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, expected_updated_at, ...values }: Partial<Order> & { id: string; expected_updated_at: string }) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
+      if (currentRole !== 'owner' && currentRole !== 'admin') throw new Error('Somente administradores podem alterar pedidos.');
       const { clients: _clients, created_at: _createdAt, updated_at: _updatedAt, tenant_id: _tenantId, ...editableValues } = values;
       const payload = {
         ...editableValues,

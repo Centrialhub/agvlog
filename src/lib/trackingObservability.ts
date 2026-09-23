@@ -47,7 +47,7 @@ export interface TrackingObservability {
   queue: { pending: number; errors: number };
   addresses: { pending: number; ambiguous: number; error: number };
   integration: { lastAt: string | null; success: boolean | null; action: string | null; error: string | null };
-  schedule: { enabled: boolean; pollMinutes: number; fullSyncHours: number; lastFinishedAt: string | null; lastStatus: string | null; consecutiveFailures: number };
+  schedule: { enabled: boolean; pollMinutes: number; fullSyncHours: number; configurationUpdatedAt: string | null; lastFinishedAt: string | null; lastStatus: string | null; consecutiveFailures: number };
 }
 
 export function parseTrackingObservability(value: unknown): TrackingObservability {
@@ -88,6 +88,7 @@ export function parseTrackingObservability(value: unknown): TrackingObservabilit
       enabled: scheduleEnabled === true,
       pollMinutes: optionalPositiveNumber(schedule, 'poll_interval_minutes', 3),
       fullSyncHours: optionalPositiveNumber(schedule, 'full_sync_interval_hours', 6),
+      configurationUpdatedAt: optionalTimestamp(schedule, 'configuration_updated_at'),
       lastFinishedAt: optionalTimestamp(schedule, 'last_finished_at'),
       lastStatus: optionalText(schedule, 'last_status'),
       consecutiveFailures: 'consecutive_failures' in schedule ? count(schedule, 'consecutive_failures') : 0,

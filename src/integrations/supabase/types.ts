@@ -1407,6 +1407,7 @@ export type Database = {
           id: string
           message: string
           occurrence_id: string
+          request_id: string | null
           tenant_id: string
         }
         Insert: {
@@ -1416,6 +1417,7 @@ export type Database = {
           id?: string
           message: string
           occurrence_id: string
+          request_id?: string | null
           tenant_id: string
         }
         Update: {
@@ -1425,6 +1427,7 @@ export type Database = {
           id?: string
           message?: string
           occurrence_id?: string
+          request_id?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -8574,6 +8577,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "fiscal_documents"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_fiscal_tenant_fkey"
+            columns: ["tenant_id", "fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["tenant_id", "id"]
           },
           {
             foreignKeyName: "load_items_load_id_fkey"
@@ -16200,6 +16210,10 @@ export type Database = {
         Args: { _period_id: string }
         Returns: undefined
       }
+      approve_payroll_period_v2: {
+        Args: { _period_id: string }
+        Returns: Json
+      }
       assert_tenant_integration_capability_v1: {
         Args: { _capability: string; _tenant_id: string }
         Returns: undefined
@@ -16290,6 +16304,15 @@ export type Database = {
       }
       cancel_client_pickup: {
         Args: { _pickup_id: string; _tenant_id: string }
+        Returns: undefined
+      }
+      cancel_client_pickup_v2: {
+        Args: {
+          _pickup_id: string
+          _reason: string
+          _request_id: string
+          _tenant_id: string
+        }
         Returns: undefined
       }
       cancel_closing_report: {
@@ -16571,6 +16594,19 @@ export type Database = {
         Args: { _tenant_name: string }
         Returns: string
       }
+      create_client_occurrence_v2: {
+        Args: {
+          _client_id: string
+          _description: string
+          _event_type: string
+          _load_id?: string
+          _order_id?: string
+          _request_id: string
+          _severity?: string
+          _tenant_id: string
+        }
+        Returns: string
+      }
       import_merchandise_shortage_batch_v1: {
         Args: {
           _cases: Json
@@ -16613,6 +16649,10 @@ export type Database = {
       }
       delete_load_item_v3: {
         Args: { p_item_id: string; p_tenant_id: string }
+        Returns: boolean
+      }
+      delete_load_item_v4: {
+        Args: { p_expected: Json; p_item_id: string; p_tenant_id: string }
         Returns: boolean
       }
       delete_load_safely: {
@@ -17113,6 +17153,34 @@ export type Database = {
           status: string
           value: number
           weight_kg: number
+        }[]
+      }
+      list_client_mdfe_documents_v1: {
+        Args: {
+          _client_id?: string
+          _end_date?: string
+          _limit?: number
+          _offset?: number
+          _search?: string
+          _start_date?: string
+          _tenant_id: string
+        }
+        Returns: {
+          access_key: string | null
+          client_id: string | null
+          document_type: string
+          has_pod: boolean
+          id: string
+          invoice_number: string | null
+          issue_date: string | null
+          load_id: string
+          recipient: string | null
+          recipient_city: string | null
+          recipient_state: string | null
+          remitter: string | null
+          status: string | null
+          value: number | null
+          weight_kg: number | null
         }[]
       }
       list_client_documents_v2: {
@@ -17824,6 +17892,17 @@ export type Database = {
         }
         Returns: Json
       }
+      portal_list_financial_titles_v2: {
+        Args: {
+          _client_id?: string
+          _limit?: number
+          _offset?: number
+          _revision?: string
+          _status?: string[]
+          _tenant_id: string
+        }
+        Returns: Json
+      }
       portal_list_fiscal_bundle: {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: Json
@@ -18031,6 +18110,15 @@ export type Database = {
       }
       reply_client_occurrence: {
         Args: { _message: string; _occurrence_id: string; _tenant_id: string }
+        Returns: string
+      }
+      reply_client_occurrence_v2: {
+        Args: {
+          _message: string
+          _occurrence_id: string
+          _request_id: string
+          _tenant_id: string
+        }
         Returns: string
       }
       request_client_pickup: {

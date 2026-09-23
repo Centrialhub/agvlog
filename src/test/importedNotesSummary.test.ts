@@ -52,6 +52,9 @@ describe('resolveNoteStatus', () => {
   it('entregue quando load.status = delivered', () => {
     expect(resolveNoteStatus(mk({ load_id: 'l1', loads: load('delivered') }))).toBe('delivered');
   });
+  it.each(['partial_delivery', 'returned', 'refused', 'failed'])('não trata carga %s como processada normalmente', (status) => {
+    expect(resolveNoteStatus(mk({ load_id: 'l1', loads: load(status) }))).toBe('not_delivered');
+  });
   it('prioriza imported_note_status quando preenchido', () => {
     expect(resolveNoteStatus(mk({ imported_note_status: 'transferred', load_id: 'l1', loads: load('in_transit') }))).toBe('transferred');
   });
@@ -92,6 +95,10 @@ describe('exportImportedNotesCsv', () => {
     expect(lines[0]).toContain('Nº Nota');
     expect(lines).toHaveLength(2);
     expect(lines[1].split(';')).toHaveLength(lines[0].split(';').length);
-    expect(lines[1]).toContain('"Empresa Exemplo";"Filial Centro"');
+    expect(lines[1]).toContain('Empresa Exemplo;Filial Centro');
+  });
+  it.each(['=SUM(1+1)', '+cmd', '-2+3', '@formula'])('neutraliza célula iniciada por %s', (dangerous) => {
+    const csv = exportImportedNotesCsv([mk({ remitter: dangerous, recipient: dangerous })], { company: dangerous });
+    expect(csv.split(`'${dangerous}`).length - 1).toBe(3);
   });
 });

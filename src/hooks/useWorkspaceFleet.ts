@@ -4,6 +4,7 @@ import { useTenant } from './useTenant';
 import type { Database, Json } from '@/integrations/supabase/types';
 import type { MovementState } from './useVehiclesState';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 
 export interface WorkspaceFleetSnapshot {
   id: string;
@@ -50,7 +51,9 @@ export function useWorkspaceFleetSnapshot() {
           .range(from, to),
         500,
       );
-      return rows as WorkspaceFleetSnapshot[];
+      return rows.map((row) => hasValidGeographicCoordinates(row.lat, row.lng)
+        ? row
+        : { ...row, lat: null, lng: null }) as WorkspaceFleetSnapshot[];
     },
     enabled: !!currentTenant,
     refetchInterval: 30_000,

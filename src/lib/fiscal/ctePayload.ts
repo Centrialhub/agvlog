@@ -124,6 +124,11 @@ export interface CtePayloadRecipient {
   state: string | null;
 }
 
+export interface CtePayloadPayer {
+  name: string | null;
+  taxId: string | null;
+}
+
 export interface AuthorizedCteHubDetails {
   accessKey: string | null;
   remitter: {
@@ -150,6 +155,12 @@ export function readCtePayloadRecipient(value: Json | null | undefined): CtePayl
     city: asText(destination?.municipio) ?? asText(address?.municipio),
     state: asText(destination?.uf) ?? asText(address?.uf),
   };
+}
+
+/** Resolves the freight payer from the immutable taker role and party snapshot. */
+export function readCtePayloadPayer(value: Json | null | undefined): CtePayloadPayer {
+  const { taker } = readCteMdfeDetails(value);
+  return { name: taker?.name ?? null, taxId: taker?.taxId ?? null };
 }
 
 export function readAuthorizedCteHubDetails(value: Json | null | undefined): AuthorizedCteHubDetails {

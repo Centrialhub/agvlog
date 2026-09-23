@@ -52,7 +52,17 @@ export async function geocodeAddress(
   const { data, error } = await supabase.functions.invoke('geocode-address', {
     body,
   });
-  if (error) throw error;
+  if (error) {
+    if ('context' in error && error.context instanceof Response && error.context.status === 409) {
+      const detail = await error.context.clone().json().catch(() => null);
+      if (detail && typeof detail === 'object' && 'error' in detail
+        && detail.error === 'address_review_already_resolved') {
+        throw new Error('Este endereço já foi validado por outra pessoa. Atualize a fila antes de pesquisar novamente.');
+      }
+      throw new Error('Este endereço mudou. Atualize a fila antes de pesquisar novamente.');
+    }
+    throw error;
+  }
   const parsed = responseSchema.safeParse(data);
   if (!parsed.success) throw new Error('O serviço de endereço retornou uma resposta inválida.');
   return parsed.data.candidates;

@@ -48,7 +48,7 @@ describe('operator POD history and recoverable occurrence commands',()=>{
   await db.query(`insert into dispatch_stops(id,tenant_id,dispatch_trip_id,stop_order,destination,status,created_at,updated_at)
     values($1,$2,$3,99,'Destino legado mais recente','pending',clock_timestamp(),clock_timestamp())`,[newerStop,i.tenant,trip]);
   await db.query(`insert into dispatch_stop_documents(id,tenant_id,dispatch_stop_id,fiscal_document_id,load_id,created_at,delivery_attempt_id)
-    values($1,$2,$3,$4,$5,'2099-01-01T00:00:00Z',null)`,[newerAllocation,i.tenant,newerStop,i.doc,i.load]);
+    values($1,$2,$3,$4,$5,clock_timestamp(),null)`,[newerAllocation,i.tenant,newerStop,i.doc,i.load]);
   const candidates=await db.query<{id:string}>(`select id from dispatch_stop_documents where tenant_id=$1 and fiscal_document_id=$2
     and delivery_attempt_id is not distinct from null order by created_at desc nulls last,id desc`,[i.tenant,i.doc]);
   expect(candidates.rows[0]?.id).toBe(newerAllocation);

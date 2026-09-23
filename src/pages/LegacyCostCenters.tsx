@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -40,6 +40,8 @@ interface CostCenterTransaction {
   type: 'Pagável' | 'Recebível' | 'Banco' | 'Despesa' | 'Manutenção';
 }
 
+export class LegacyCostCenterSnapshotChangedError extends Error {}
+
 export default function CostCenters() {
   const toast = useSonnerToast();
   const { currentTenant } = useTenant();
@@ -47,12 +49,15 @@ export default function CostCenters() {
   const [selectedCostCenter, setSelectedCostCenter] = useState<string>('all');
   const [period, setPeriod] = useState<Period>('30d');
   const [page, setPage] = useState(1);
+  const [snapshotAt, setSnapshotAt] = useState<string | null>(null);
+  const [collectionRevision, setCollectionRevision] = useState<string | null>(null);
   const pageSize = 50;
+  const resetPaging = () => { setPage(1); setSnapshotAt(null); setCollectionRevision(null); };
   const periodStart = period === '30d' ? format(subDays(new Date(), 30), 'yyyy-MM-dd')
     : period === '90d' ? format(subDays(new Date(), 90), 'yyyy-MM-dd') : null;
 
   const reportQuery = useQuery({
-    queryKey: ['legacy_cost_center_report', currentTenant?.id, periodStart, selectedCostCenter, page],
+    queryKey: ['legacy_cost_center_report', currentTenant?.id, periodStart, selectedCostCenter, page, snapshotAt, collectionRevision],
     queryFn: async () => {
       if (!currentTenant) return null;
       const { data, error } = await (supabase.rpc.bind(supabase) as unknown as (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>)('get_legacy_cost_center_report_v1', {
@@ -61,8 +66,16 @@ export default function CostCenters() {
         _cost_center: selectedCostCenter === 'all' ? null : selectedCostCenter,
         _page: page,
         _page_size: pageSize,
+        _snapshot_at: snapshotAt,
+        _expected_revision: collectionRevision,
       });
-      if (error) throw error;
+      if (error) {
+        const rpcError = error as { code?: string; message?: string };
+        if (rpcError.code === '40001' || rpcError.message?.includes('legacy_cost_center_snapshot_changed')) {
+          throw new LegacyCostCenterSnapshotChangedError('Os lançamentos mudaram durante a navegação. O relatório foi reiniciado.');
+        }
+        throw error;
+      }
       const report = data as LegacyCostCenterReport;
       if (report.tenant_id !== currentTenant.id || report.page !== page || report.page_size !== pageSize) {
         throw new Error('Relatório legado fora do contexto solicitado.');
@@ -74,6 +87,9 @@ export default function CostCenters() {
   const report = reportQuery.data;
   const filteredTransactions = report?.rows ?? [];
   const isLoading = reportQuery.isLoading;
+  useEffect(() => {
+    if (reportQuery.error instanceof LegacyCostCenterSnapshotChangedError) resetPaging();
+  }, [reportQuery.error]);
   const stats = {
     totalOutflow: report?.total_outflow ?? Number.NaN,
     totalInflow: report?.total_inflow ?? Number.NaN,
@@ -97,9 +113,14 @@ export default function CostCenters() {
     const csvContent = '\uFEFF' + [headers, ...rows].map(row => row.map(csvSafeCell).join(';')).join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(blob);
+    link.href = objectUrl;
     link.download = `relatorio_centros_custo_${format(new Date(), 'yyyyMMdd')}.csv`;
-    link.click();
+    try {
+      link.click();
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
     toast.success('Relatório exportado com sucesso');
   };
 
@@ -118,7 +139,7 @@ export default function CostCenters() {
           <Button variant="outline" size="sm" onClick={handleExport} disabled={!report || reportQuery.isError}>
             <FileDown className="h-4 w-4 mr-2" /> Exportar página
           </Button>
-          <Select value={period} onValueChange={value => { setPage(1); setPeriod(value as Period); }}>
+          <Select value={period} onValueChange={value => { resetPaging(); setPeriod(value as Period); }}>
             <SelectTrigger className="w-[140px] h-9">
               <Calendar className="h-4 w-4 mr-2" />
               <SelectValue />
@@ -195,7 +216,7 @@ export default function CostCenters() {
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-primary" /> Histórico de Lançamentos
                 </CardTitle>
-                <Select value={selectedCostCenter} onValueChange={value => { setPage(1); setSelectedCostCenter(value); }}>
+                <Select value={selectedCostCenter} onValueChange={value => { resetPaging(); setSelectedCostCenter(value); }}>
                   <SelectTrigger className="w-[180px] h-8 text-[10px]">
                     <Filter className="h-3.5 w-3.5 mr-2" />
                     <SelectValue placeholder="Filtrar Centro" />
@@ -242,9 +263,13 @@ export default function CostCenters() {
                   </Table>
                 </div>
                 <div className="flex items-center justify-between border-t p-3">
-                  <Button variant="outline" disabled={page === 1 || isLoading} onClick={() => setPage(value => value - 1)}>Anterior</Button>
+                  <Button variant="outline" disabled={page === 1 || isLoading} onClick={() => page === 2 ? resetPaging() : setPage(value => value - 1)}>Anterior</Button>
                   <span className="text-sm">Página {page} de {Math.max(1, Math.ceil((report?.total ?? 0) / pageSize))}</span>
-                  <Button variant="outline" disabled={page * pageSize >= (report?.total ?? 0) || isLoading} onClick={() => setPage(value => value + 1)}>Próxima</Button>
+                  <Button variant="outline" disabled={page * pageSize >= (report?.total ?? 0) || isLoading} onClick={() => {
+                    setSnapshotAt(current => current ?? report!.snapshot_at);
+                    setCollectionRevision(current => current ?? report!.revision);
+                    setPage(value => value + 1);
+                  }}>Próxima</Button>
                 </div>
               </CardContent>
             </Card>
@@ -336,6 +361,8 @@ export default function CostCenters() {
 
 interface LegacyCostCenterReport {
   tenant_id: string;
+  snapshot_at: string;
+  revision: string;
   page: number;
   page_size: number;
   total: number;

@@ -18,7 +18,9 @@ import {
   PICKUP_STATUSES,
   PICKUP_STATUS_LABELS,
 } from '@/hooks/usePickupOrders';
-import { localDateTimeInputValue } from '@/lib/utils/formatDate';
+import { APP_TIME_ZONE, localDateTimeInputToIso, localDateTimeInputValue } from '@/lib/utils/formatDate';
+import { PendingCommandRecovery } from '@/components/operator/PendingCommandRecovery';
+import { useTenant } from '@/hooks/useTenant';
 
 interface Props {
   open: boolean;
@@ -34,6 +36,8 @@ function errorMessage(error: unknown): string {
 }
 
 export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pickup }: Props) {
+  const { currentTenant } = useTenant();
+  const tenantTimeZone = currentTenant?.timezone || APP_TIME_ZONE;
   const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { toast } = useToast();
@@ -46,7 +50,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
   const [recipientName, setRecipientName] = useState('');
   const [driverId, setDriverId] = useState<string>(NONE);
   const [vehicleId, setVehicleId] = useState<string>(NONE);
-  const [pickupAt, setPickupAt] = useState(() => localDateTimeInputValue());
+  const [pickupAt, setPickupAt] = useState(() => localDateTimeInputValue(new Date(), tenantTimeZone));
   const [status, setStatus] = useState<typeof PICKUP_STATUSES[number]>('pendente');
   const [notes, setNotes] = useState('');
 
@@ -57,7 +61,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
         setRecipientName(pickup.recipient_name || '');
         setDriverId(pickup.driver_id || NONE);
         setVehicleId(pickup.vehicle_id || NONE);
-        setPickupAt(localDateTimeInputValue(pickup.pickup_at || new Date()));
+        setPickupAt(localDateTimeInputValue(pickup.pickup_at || new Date(), tenantTimeZone));
         setStatus(pickup.status);
         setNotes(pickup.notes || '');
       } else {
@@ -65,12 +69,12 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
         setRecipientName('');
         setDriverId(NONE);
         setVehicleId(NONE);
-        setPickupAt(localDateTimeInputValue());
+        setPickupAt(localDateTimeInputValue(new Date(), tenantTimeZone));
         setStatus('pendente');
         setNotes('');
       }
     }
-  }, [open, pickup]);
+  }, [open, pickup, tenantTimeZone]);
 
   const pickupTimestamp = Date.parse(pickupAt);
   const pickupFormInvalid = (
@@ -103,21 +107,20 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
       return;
     }
 
-    const payload: CreatePickupOrderInput = {
-      remitter_client_id: remitter?.id || null,
-      remitter_name: remitter?.company_name || null,
-      remitter_cnpj: remitter?.tax_id || null,
-      recipient_name: recipientName.trim(),
-      driver_id: driver.id,
-      driver_name_snapshot: driver.name,
-      vehicle_id: vehicle.id,
-      vehicle_plate_snapshot: vehicle.plate,
-      pickup_at: new Date(pickupTimestamp).toISOString(),
-      status,
-      notes: notes.trim() || null,
-    };
-
     try {
+      const payload: CreatePickupOrderInput = {
+        remitter_client_id: remitter?.id || null,
+        remitter_name: remitter?.company_name || null,
+        remitter_cnpj: remitter?.tax_id || null,
+        recipient_name: recipientName.trim(),
+        driver_id: driver.id,
+        driver_name_snapshot: driver.name,
+        vehicle_id: vehicle.id,
+        vehicle_plate_snapshot: vehicle.plate,
+        pickup_at: localDateTimeInputToIso(pickupAt, tenantTimeZone),
+        status,
+        notes: notes.trim() || null,
+      };
       if (pickup) {
         await updateMut.mutateAsync({ id: pickup.id, expected_updated_at: pickup.updated_at, ...payload });
         toast({ title: 'Coleta atualizada' });
@@ -140,6 +143,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
           <DialogTitle>{pickup ? `Editar Coleta nº ${pickup.pickup_number}` : 'Nova Coleta'}</DialogTitle>
           <DialogDescription>Informe as partes, o responsável, o veículo e o horário local da coleta.</DialogDescription>
         </DialogHeader>
+        {!pickup && createMut.pendingCommand && <PendingCommandRecovery subject="uma criação de coleta" onRecover={createMut.recoverPending} onDiscard={createMut.discardPending} />}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 space-y-2">

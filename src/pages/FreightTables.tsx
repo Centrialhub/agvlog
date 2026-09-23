@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert } from '@/integrations/supabase/types';
-import { useTenant } from '@/hooks/useTenant';
+import { useIsAdmin, useTenant } from '@/hooks/useTenant';
 import { localDateInputValue } from '@/lib/utils/formatDate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ const UF_OPTIONS = [
   'PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO',
 ];
 
-const emptyForm = {
+const createEmptyForm = () => ({
   table_name: '',
   client_id: '',
   payer_group: '',
@@ -60,12 +60,13 @@ const emptyForm = {
   loading_value: '',
   gris_value: '',
   insurance_percent: '',
-};
+});
 
 export default function FreightTables() {
   const { confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const { currentTenant } = useTenant();
+  const isAdmin = useIsAdmin();
   const qc = useQueryClient();
 
   // Filters
@@ -79,7 +80,7 @@ export default function FreightTables() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(createEmptyForm);
 
   const rowsQuery = useQuery({
     queryKey: ['freight_tables', currentTenant?.id],
@@ -133,6 +134,9 @@ export default function FreightTables() {
   const upsertMutation = useMutation({
     mutationFn: async (values: typeof form & { id?: string }) => {
       if (!currentTenant) throw new Error('Sem tenant');
+      if (!isAdmin) throw new Error('Apenas administradores podem alterar tabelas de frete.');
+      const tableName = values.table_name.trim().replace(/\s+/g, ' ');
+      if (!tableName) throw new Error('Informe um nome para a tabela de frete.');
       const hasContext = !!(
         values.client_id ||
         values.origin_state ||
@@ -151,7 +155,7 @@ export default function FreightTables() {
       if (numericKeys.some(key => values[key] !== '' && (!Number.isFinite(Number(values[key])) || Number(values[key]) < 0))) throw new Error('Tarifas, percentuais e componentes não podem ser negativos.');
       const record: TablesInsert<'freight_tables'> = {
         tenant_id: currentTenant.id,
-        table_name: values.table_name,
+        table_name: tableName,
         client_id: values.client_id || null,
         payer_group: values.payer_group || null,
         payer: values.payer || null,
@@ -203,6 +207,7 @@ export default function FreightTables() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       if (!currentTenant) throw new Error('Sem tenant');
+      if (!isAdmin) throw new Error('Apenas administradores podem remover tabelas de frete.');
       const { error } = await supabase.from('freight_tables').delete()
         .eq('id', id)
         .eq('tenant_id', currentTenant.id);
@@ -216,7 +221,7 @@ export default function FreightTables() {
   });
 
   function resetForm() {
-    setForm(emptyForm);
+    setForm(createEmptyForm());
     setEditingId(null);
     setDialogOpen(false);
   }
@@ -281,7 +286,11 @@ export default function FreightTables() {
             Tabelas de frete por grupo pagador, região de origem e destino.
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetForm(); setDialogOpen(o); }}>
+        {isAdmin && <Dialog open={dialogOpen} onOpenChange={(open) => {
+          if (!open) resetForm();
+          else if (!editingId) setForm(createEmptyForm());
+          setDialogOpen(open);
+        }}>
           <DialogTrigger asChild>
             <Button disabled={!!queryError}><Plus className="h-4 w-4 mr-2" />Nova Tabela</Button>
           </DialogTrigger>
@@ -507,13 +516,13 @@ export default function FreightTables() {
                 <Label>Bloqueado</Label>
               </div>
 
-              <Button className="w-full" disabled={!form.table_name || !form.valid_from}
+              <Button className="w-full" disabled={!form.table_name.trim() || !form.valid_from}
                 onClick={() => upsertMutation.mutate({ ...form, id: editingId || undefined })}>
                 {editingId ? 'Salvar Alterações' : 'Cadastrar'}
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
       </div>
 
       {/* Filters */}
@@ -624,19 +633,19 @@ export default function FreightTables() {
                   <TableHead className="text-right">Fixo</TableHead>
                   <TableHead className="text-right">Mín.</TableHead>
                   <TableHead className="w-16">BL</TableHead>
-                  <TableHead className="w-20">Ações</TableHead>
+                  {isAdmin && <TableHead className="w-20">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading || clientsQuery.isLoading || regionsQuery.isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={18} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
+                    <TableCell colSpan={isAdmin ? 18 : 17} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
                   </TableRow>
                 ) : queryError ? (
-                  <TableRow><TableCell colSpan={18} className="text-center py-8 text-destructive">Não foi possível carregar tabelas, clientes ou regiões: {queryError instanceof Error ? queryError.message : 'erro desconhecido'}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={isAdmin ? 18 : 17} className="text-center py-8 text-destructive">Não foi possível carregar tabelas, clientes ou regiões: {queryError instanceof Error ? queryError.message : 'erro desconhecido'}</TableCell></TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={18} className="text-center py-8 text-muted-foreground">Nenhuma tabela encontrada</TableCell>
+                    <TableCell colSpan={isAdmin ? 18 : 17} className="text-center py-8 text-muted-foreground">Nenhuma tabela encontrada</TableCell>
                   </TableRow>
                 ) : (
                   filtered.map((r) => (
@@ -664,7 +673,7 @@ export default function FreightTables() {
                           <span className="text-xs text-muted-foreground">Não</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      {isAdmin && <TableCell>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(r)}>
                             <Pencil className="h-3.5 w-3.5" />
@@ -674,7 +683,7 @@ export default function FreightTables() {
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                      </TableCell>
+                      </TableCell>}
                     </TableRow>
                   ))
                 )}

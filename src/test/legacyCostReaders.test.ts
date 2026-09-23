@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { historicalFinanceAuditSchema } from './helpers/historicalFinanceContracts';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import type {PGlite} from '@electric-sql/pglite';
@@ -6,7 +7,6 @@ import {beforeAll,beforeEach,afterEach,afterAll,it,expect} from 'vitest';
 import {createLegacyExpenseCostDatabase} from './helpers/legacyExpenseCostDatabase';
 import {financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
 import {legacyCostContextSchema,legacyCostInventorySchema} from '@/lib/financial/legacyCostAssociationContract';
-import {financeAuditSchema} from '@/lib/financial/financeAuditContract';
 let db:PGlite;const trip=randomUUID();
 beforeAll(async()=>{db=await createLegacyExpenseCostDatabase();await db.exec(readFileSync('supabase/migrations/20260910155523_finance_legacy_cost_readers.sql','utf8'));
  // Empty statement dependencies for the audit left joins; association events are real.
@@ -34,7 +34,7 @@ it('paginates real cost candidates with revisions and preserves association hist
  const linked=await context(expense,2);expect(linked.active_link?.cost_id).toBe(candidate.cost_id);expect(linked.history.total).toBe(1);expect(linked.history.rows).toHaveLength(0);
  await financeAs(db,i.operator,'select reverse_finance_legacy_expense_cost_association($1::jsonb)',[JSON.stringify({version:1,tenant_id:i.tenant,request_id:randomUUID(),link_id:linked.active_link!.id,reason:'Associação incorreta após conferência adicional'})]);
  const reversed=await context(expense);expect(reversed.active_link).toBeNull();expect(reversed.history.rows[0].reversal?.actor_id).toBe(i.operator);expect(reversed.history.rows[0].actor_id).toBe(i.operator);
- const audit=financeAuditSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select list_finance_audit_events($1,$2::jsonb) result',[i.tenant,JSON.stringify({manual_only:true})])).rows[0].result);
+ const audit=historicalFinanceAuditSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select list_finance_audit_events($1,$2::jsonb) result',[i.tenant,JSON.stringify({manual_only:true})])).rows[0].result);
  expect(audit.total).toBe(2);expect(audit.manual_count).toBe(2);expect(audit.rows.every(row=>row.manual_intervention&&row.actor_id===i.operator)).toBe(true);
  expect(new Set(audit.rows.map(row=>row.action))).toEqual(new Set(['legacy_expense_cost_associated','legacy_expense_cost_association_reversed']));
 });

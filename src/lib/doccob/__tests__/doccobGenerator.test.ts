@@ -57,8 +57,8 @@ const baseInput = (): DoccobBuildInput => ({
 });
 
 describe('generateDoccob', () => {
-  it('gera arquivo com registros na ordem correta e CRLF', () => {
-    const res = generateDoccob(baseInput());
+  it('gera arquivo com registros na ordem correta e CRLF', async () => {
+    const res = await generateDoccob(baseInput());
     const lines = res.content.split('\r\n').filter(Boolean);
     const types = lines.map((l) => l.slice(0, 3));
     expect(types[0]).toBe('000');
@@ -71,8 +71,8 @@ describe('generateDoccob', () => {
     expect(res.content.endsWith('\r\n')).toBe(true);
   });
 
-  it('respeita comprimento de linha por tipo de registro', () => {
-    const res = generateDoccob(baseInput());
+  it('respeita comprimento de linha por tipo de registro', async () => {
+    const res = await generateDoccob(baseInput());
     for (const line of res.content.split('\r\n').filter(Boolean)) {
       const type = line.slice(0, 3) as keyof typeof DOCCOB_LINE_LENGTHS;
       expect(line.length).toBe(DOCCOB_LINE_LENGTHS[type]);
@@ -80,27 +80,36 @@ describe('generateDoccob', () => {
     expect(res.lengthWarnings).toEqual([]);
   });
 
-  it('não duplica valor de frete quando charge tem várias NFs', () => {
-    const res = generateDoccob(baseInput());
+  it('não duplica valor de frete quando charge tem várias NFs', async () => {
+    const res = await generateDoccob(baseInput());
     expect(res.totalAmount).toBe(15285.25);
     expect(res.chargeCount).toBe(2);
     expect(res.detailCount).toBe(3);
   });
 
-  it('bloqueia charge sem details a menos que perfil autorize', () => {
+  it('bloqueia charge sem details a menos que perfil autorize', async () => {
     const input = baseInput();
     input.invoices[0].charges[0].details = [];
-    expect(() => generateDoccob(input)).toThrow();
+    await expect(generateDoccob(input)).rejects.toThrow();
     input.profile.allowChargeWithoutDetails = true;
-    const res = generateDoccob(input);
+    const res = await generateDoccob(input);
     expect(res.detailCount).toBe(1);
   });
 
-  it('trailer contém total em centavos correto', () => {
-    const res = generateDoccob(baseInput());
+  it('trailer contém total em centavos correto', async () => {
+    const res = await generateDoccob(baseInput());
     const trailer = res.content.split('\r\n').filter(Boolean).pop()!;
     // total field: chars 9..24 => 15 dígitos, 15285.25 => 1528525 cents
     const cents = parseInt(trailer.slice(9, 24), 10);
     expect(cents).toBe(1528525);
+  });
+
+  it('produz SHA-256 hexadecimal dos bytes UTF-8 exatos do arquivo', async () => {
+    const res = await generateDoccob(baseInput());
+    const expected = Array.from(new Uint8Array(
+      await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(res.content)),
+    ), byte => byte.toString(16).padStart(2, '0')).join('');
+    expect(res.hash).toBe(expected);
+    expect(res.hash).toMatch(/^[a-f0-9]{64}$/);
   });
 });

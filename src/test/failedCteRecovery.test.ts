@@ -20,8 +20,8 @@ describe('failed CT-e recovery', () => {
   });
 
   it('does not expose a timeout with a Hub reference as a removable error', () => {
-    expect(mapOutboundStatus('error', 'status_timeout', 'hub-document-id')).toBe('processed');
-    expect(mapSearchOutboundStatus('error', 'status_timeout', 'hub-document-id')).toBe('processed');
+    expect(mapOutboundStatus('error', 'status_timeout', 'hub-document-id')).toBe('processed_error');
+    expect(mapSearchOutboundStatus('error', 'status_timeout', 'hub-document-id')).toBe('sefaz_error');
   });
 
   it('keeps a definitive provider rejection visible as an error even with a Hub id', () => {

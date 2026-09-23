@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   acknowledgeDurableOperatorCommand,
+  isDefinitiveOperatorCommandRejection,
   prepareDurableOperatorCommand,
   readDurableOperatorCommand,
 } from '@/lib/operator/durableOperatorCommand';
@@ -83,5 +84,13 @@ describe('durable operator command identity', () => {
     });
     expect(refreshed).toEqual(first);
     expect(storage.length).toBe(1);
+  });
+
+  it('distinguishes definitive database rejections from uncertain transport failures', () => {
+    expect(isDefinitiveOperatorCommandRejection({ code: '23503' })).toBe(true);
+    expect(isDefinitiveOperatorCommandRejection({ code: 'P0001' })).toBe(true);
+    expect(isDefinitiveOperatorCommandRejection({ code: '42501' })).toBe(true);
+    expect(isDefinitiveOperatorCommandRejection({ code: '503' })).toBe(false);
+    expect(isDefinitiveOperatorCommandRejection(new TypeError('network failed'))).toBe(false);
   });
 });

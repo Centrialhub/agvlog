@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   global: {} as Record<string, unknown>,
   filtered: {} as Record<string, unknown>,
   invalidateQueries: vi.fn(),
+  toast: vi.fn(),
 }));
 
 vi.mock('@/hooks/useOperationalEvents', async (importOriginal) => {
@@ -23,7 +24,7 @@ vi.mock('@/hooks/useLoads', () => ({ useLoads: () => ({ data: [] }) }));
 vi.mock('@/hooks/useClients', () => ({ useClients: () => ({ data: [] }) }));
 vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: 'tenant-1' } }) }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'actor-1' } }) }));
-vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: state.toast }) }));
 vi.mock('@/components/driver/DriverConversation', () => ({
   DriverConversation: () => null,
   EventConversation: () => null,

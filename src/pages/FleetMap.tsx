@@ -19,6 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { resolvePositionTelemetry } from '@/lib/positionTelemetry';
 import {useWorkspaceSsxAccounts} from '@/hooks/useWorkspaceSsxAccounts';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 
 interface PipelineHealth {
   last_run_at?: string;
@@ -193,7 +194,10 @@ export default function FleetMap() {
     });
   }, [enriched, search, statusFilter]);
 
-  const withPosition = useMemo(() => filtered.filter(e => e.lat != null && e.lng != null), [filtered]);
+  const withPosition = useMemo(
+    () => filtered.filter(e => hasValidGeographicCoordinates(e.lat, e.lng)),
+    [filtered],
+  );
   const mapPoints = useMemo<[number, number][]>(
     () => withPosition.map((entry) => [entry.lat as number, entry.lng as number]),
     [withPosition],

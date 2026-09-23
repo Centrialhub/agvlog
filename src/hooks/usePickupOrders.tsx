@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database, Json } from '@/integrations/supabase/types';
 import { useTenant } from './useTenant';
 import {useAuth} from './useAuth';
-import {acknowledgeDurableOperatorCommand,prepareDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
+import {acknowledgeDurableOperatorCommand,isDefinitiveOperatorCommandRejection,prepareDurableOperatorCommand,readDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export const PICKUP_STATUSES = ['pendente', 'vinculada', 'finalizada', 'cancelada'] as const;
@@ -98,7 +99,8 @@ export function useCreatePickupOrder() {
   const { currentTenant } = useTenant();
   const {user}=useAuth();
   const qc = useQueryClient();
-  return useMutation({
+  const [, setPendingRevision] = useState(0);
+  const mutation = useMutation({
     mutationFn: async (values: CreatePickupOrderInput) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       if(!user)throw new Error('Usuário não autenticado');
@@ -107,14 +109,29 @@ export function useCreatePickupOrder() {
         tenant_id: currentTenant.id,
       };
       const pending=await prepareDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'create_pickup_order',entityId:'new',payload});
-      const { data, error } = await supabase.rpc('create_pickup_order_v1', {
-        _payload: {...payload,request_id:pending.requestId} as unknown as Json,
-      });
-      if (error) throw error;
+      let data;
+      try {
+        const result = await supabase.rpc('create_pickup_order_v1', {
+          _payload: {...payload,request_id:pending.requestId} as unknown as Json,
+        });
+        if (result.error) throw result.error;
+        data = result.data;
+      } catch (error) {
+        if (isDefinitiveOperatorCommandRejection(error)) acknowledgeDurableOperatorCommand(pending);
+        setPendingRevision(value => value + 1);
+        throw error;
+      }
       acknowledgeDurableOperatorCommand(pending);
+      setPendingRevision(value => value + 1);
       return normalizePickupOrder(data as unknown as PickupOrder);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pickup_orders'] }),
+  });
+  const pendingCommand = currentTenant && user ? readDurableOperatorCommand({tenantId:currentTenant.id,actorId:user.id,action:'create_pickup_order',entityId:'new'}) : null;
+  return Object.assign(mutation, {
+    pendingCommand,
+    recoverPending: () => pendingCommand ? mutation.mutateAsync(pendingCommand.payload as CreatePickupOrderInput) : Promise.reject(new Error('Nenhuma coleta pendente.')),
+    discardPending: () => { if (pendingCommand) acknowledgeDurableOperatorCommand(pendingCommand); setPendingRevision(value => value + 1); },
   });
 }
 

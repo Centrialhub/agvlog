@@ -1,3 +1,5 @@
+import {MemoryRouter} from 'react-router-dom';
+import {readFileSync} from 'node:fs';
 import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import type {PGlite} from '@electric-sql/pglite';
@@ -48,13 +50,20 @@ const mock=vi.hoisted(()=>({rpc:vi.fn(),from:vi.fn(),tenant:'',actor:'',lost:fal
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:mock.tenant}})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:mock.actor}})}));
 vi.mock('@/hooks/useClients',()=>({useClients:()=>({data:mock.clients})}));
-vi.mock('@/hooks/useCompanyProfile',()=>({useCompanyProfile:()=>({data:null})}));
+vi.mock('@/hooks/useCompanyProfile',()=>({useCompanyProfile:()=>({data:{}})}));
 vi.mock('@/hooks/useSonnerToast',()=>({useSonnerToast:()=>({success:vi.fn(),error:vi.fn()})}));
 vi.mock('@/hooks/useClientInvoices',async()=>{const actual=await vi.importActual<typeof import('@/hooks/useClientInvoices')>('@/hooks/useClientInvoices');return {...actual,
  useEligibleCtes:()=>({data:mock.ctes,isFetching:false,error:mock.sourceError,refetch:vi.fn()}),useEligibleNfse:()=>({data:[],isFetching:false,error:null,refetch:vi.fn()})};});
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mock.rpc,from:mock.from}}));
 let db:PGlite;let client:QueryClient;let transport:Promise<unknown>=Promise.resolve();
-beforeAll(async()=>{({db}=await createInvoiceLifecycleDatabase());},30000);
+beforeAll(async()=>{
+ ({db}=await createInvoiceLifecycleDatabase());
+ // The older lifecycle fixture predates the private schema. Keep its existing access rule.
+ await db.exec(`create schema finance_private;grant usage on schema finance_private to authenticated;
+ create function finance_private.require_access(t uuid) returns void language plpgsql as $$
+ begin if not public.is_tenant_operator_or_admin(t) then raise exception 'finance_access_denied';end if;end$$;`);
+ await db.exec(readFileSync('supabase/migrations/20260923132100_finance_audit_invoice_pagination.sql','utf8'));
+},30000);
 afterAll(async()=>{await db?.close();vi.unstubAllGlobals();});
 beforeEach(async()=>{
  vi.clearAllMocks();localStorage.clear();mock.tenant=i.tenant;mock.actor=i.operator;mock.lost=false;mock.delay=false;mock.release=null;mock.ctes=[];mock.sourceError=null;
@@ -62,13 +71,24 @@ beforeEach(async()=>{
  client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
  Object.defineProperty(navigator,'locks',{configurable:true,value:{request:async(_key:string,work:()=>Promise<unknown>)=>work()}});
  Element.prototype.scrollIntoView=vi.fn();Element.prototype.hasPointerCapture=vi.fn(()=>false);Element.prototype.setPointerCapture=vi.fn();Element.prototype.releasePointerCapture=vi.fn();
- mock.from.mockImplementation(()=>{throw new Error('Invoice command must not write tables directly');});
+ mock.from.mockImplementation((table:string)=>{
+  if(table!=='client_invoices')throw new Error('Invoice command must not write tables directly');
+  let tenant='',from=0,to=499;
+  const query={
+   select:()=>query,
+   eq:(field:string,value:unknown)=>{if(field==='tenant_id')tenant=String(value);return query;},
+   order:()=>query,
+   range:(start:number,end:number)=>{from=start;to=end;return query;},
+   abortSignal:async()=>{try{return {data:(await db.query<Record<string,unknown>>('select * from client_invoices where tenant_id=$1 order by created_at desc,id limit $2 offset $3',[tenant,to-from+1,from])).rows,error:null};}catch(error){return {data:null,error};}},
+  };return query;
+ });
  mock.rpc.mockImplementation((name:string,args:Record<string,unknown>)=>{
   const actor=mock.actor;let pending:Promise<unknown>|undefined;
   const run=()=>{if(pending)return pending;const work=async()=>{try{
    await db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);let data:unknown;
    if(name==='get_client_invoice_action_context')data=(await operationRpc(db,'select get_client_invoice_action_context($1,$2) result',[args._tenant_id,args._invoice_id])).rows[0].result;
    else if(name==='get_client_invoice_creation_context')data=(await operationRpc(db,'select get_client_invoice_creation_context($1,$2,$3::jsonb) result',[args._tenant_id,args._report_id,args._draft===null?null:JSON.stringify(args._draft)])).rows[0].result;
+   else if(name==='list_client_invoice_financial_page')data=(await operationRpc(db,'select list_client_invoice_financial_page($1,$2,$3,$4) result',[args._tenant_id,args._filters,args._page,args._revision])).rows[0].result;
    else if(name==='list_client_invoice_financials')data=(await operationRpc(db,'select list_client_invoice_financials($1) result',[args._tenant_id])).rows[0].result;
    else if(name==='apply_client_invoice_command')data=(await operationRpc(db,'select apply_client_invoice_command($1::jsonb) result',[JSON.stringify(args._payload)])).rows[0].result;
    else throw new Error('Unexpected RPC '+name);
@@ -125,7 +145,7 @@ describe('invoice UI integrated with the candidate SQL',{timeout:15000},()=>{
  });
  it('blocks preview on source query errors instead of displaying an empty success',async()=>{mock.sourceError=new Error('Falha controlada');render(<Story wizard/>);await wizardStart();expect(screen.getByText(/Falha na consulta de origens/)).toBeInTheDocument();expect(screen.getByRole('button',{name:'Ver prévia'})).toBeDisabled();expect(calls()).toHaveLength(0);});
  it('displays settled and remaining balances for a partially received invoice',async()=>{
-  const s=await createInvoiceScenario(db);await bank();await financialCommand(db,await financialPayload(db,s.receivable));render(<QueryClientProvider client={client}><ClientInvoices/></QueryClientProvider>);await screen.findByRole('button',{name:'Ações da fatura'});
+  const s=await createInvoiceScenario(db);await bank();await financialCommand(db,await financialPayload(db,s.receivable));render(<QueryClientProvider client={client}><MemoryRouter><ClientInvoices/></MemoryRouter></QueryClientProvider>);await screen.findByRole('button',{name:'Ações da fatura'});
   expect(within(screen.getByText('Em aberto').parentElement!).getByText(/230,00/)).toBeInTheDocument();expect(within(screen.getByText('Total liquidado').parentElement!).getByText(/10,00/)).toBeInTheDocument();expect(screen.getByRole('button',{name:'Recebimentos e estornos'})).toBeInTheDocument();
  });
 });

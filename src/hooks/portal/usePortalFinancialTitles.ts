@@ -10,6 +10,7 @@ export function usePortalFinancialTitles(filters: {
   status?: string[];
   limit?: number;
   offset?: number;
+  revision?: string;
 } = {}) {
   const { user } = useAuth();
   const { currentTenant } = useTenant();
@@ -22,12 +23,13 @@ export function usePortalFinancialTitles(filters: {
     queryKey: ['portal_financial_titles', tenantId, actorId, selectedClientId, filters],
     queryFn: async ({ signal }) => {
       if (!tenantId || !actorId) throw new Error('Entre com uma sessão válida.');
-      const { data, error } = await supabase.rpc('portal_list_financial_titles', {
+      const { data, error } = await supabase.rpc('portal_list_financial_titles_v2', {
         _tenant_id: tenantId,
         _client_id: selectedClientId ?? undefined,
         _status: filters.status,
         _limit: filters.limit ?? 50,
         _offset: filters.offset ?? 0,
+        _revision: filters.revision,
       }).abortSignal(signal);
       if (error) throw error;
       return parsePortalFinancialTitles(data, {

@@ -20,9 +20,12 @@ export type ExpenseReviewContext=z.infer<typeof contextSchema>;
 export function parseExpenseReviewContext(value:unknown,tenant:string,actor:string,expense:string){const parsed=contextSchema.safeParse(value);
  if(!parsed.success||parsed.data.tenant_id!==tenant||parsed.data.actor_id!==actor||parsed.data.expense_id!==expense||parsed.data.expense.id!==expense||parsed.data.expense.tenant_id!==tenant)
   throw new Error('Contexto de despesa incompatível com a sessão. Atualize a consulta.');return parsed.data;}
-const listSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,can_review:z.boolean(),filter:z.enum(['pending','reviewed']),offset:z.number().int().nonnegative(),total:z.number().int().nonnegative(),rows:z.array(rowSchema).max(50)}).strict();
-export function parseExpenseReviewList(value:unknown,tenant:string,actor:string,filter:string,offset:number){const parsed=listSchema.safeParse(value);
- if(!parsed.success||parsed.data.tenant_id!==tenant||parsed.data.actor_id!==actor||parsed.data.filter!==filter||parsed.data.offset!==offset||parsed.data.rows.some(row=>row.tenant_id!==tenant))
+const expenseCursorSchema=z.object({expense_at:z.string(),id}).strict();
+export type ExpenseReviewCursor=z.infer<typeof expenseCursorSchema>;
+const listSchema=z.object({version:z.literal(2),tenant_id:id,actor_id:id,can_review:z.boolean(),filter:z.enum(['pending','reviewed']),cursor:expenseCursorSchema.nullable(),next_cursor:expenseCursorSchema.nullable(),has_more:z.boolean(),total:z.number().int().nonnegative(),rows:z.array(rowSchema).max(50)}).strict();
+export function parseExpenseReviewList(value:unknown,tenant:string,actor:string,filter:string,cursor:ExpenseReviewCursor|null){const parsed=listSchema.safeParse(value);
+ const sameCursor=JSON.stringify(parsed.success?parsed.data.cursor:null)===JSON.stringify(cursor);
+ if(!parsed.success||!sameCursor||parsed.data.tenant_id!==tenant||parsed.data.actor_id!==actor||parsed.data.filter!==filter||parsed.data.rows.some(row=>row.tenant_id!==tenant))
   throw new Error('Lista de despesas incompatível com a sessão. Atualize a consulta.');return parsed.data;}
 const resultSchema=z.object({version:z.literal(1),tenant_id:id,actor_id:id,request_id:id,expense_id:id,command_id:id,action:z.enum(['approve','reject']),status:z.enum(['approved','rejected']),confirmed:z.literal(true),revision}).strict();
 export type ExpenseReviewResult=z.infer<typeof resultSchema>;

@@ -7,7 +7,7 @@ import {invalidateAccountDirectory} from '@/lib/financial/invalidateAccountRevie
 const mock=vi.hoisted(()=>({read:vi.fn(),actor:'operator'}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'tenant'}})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:mock.actor?{id:mock.actor}:null})}));
-vi.mock('@/integrations/supabase/client',()=>({supabase:{from:()=>({select:()=>({eq:()=>({eq:()=>({order:mock.read})})})})}}));
+vi.mock('@/integrations/supabase/client',()=>({supabase:{from:()=>({select:()=>{const builder={eq:()=>builder,order:()=>builder,range:(from:number,to:number)=>mock.read(from,to)};return builder;}})}}));
 beforeEach(()=>{vi.clearAllMocks();mock.actor='operator';mock.read.mockResolvedValue({data:[{id:'active',name:'Conta ativa',active:true}],error:null});});
 function setup(){const client=new QueryClient({defaultOptions:{queries:{staleTime:Infinity,retry:false}}});return {client,wrapper:({children}:{children:ReactNode})=><QueryClientProvider client={client}>{children}</QueryClientProvider>};}
 it('does not reuse the full registry cache for active payment accounts',async()=>{

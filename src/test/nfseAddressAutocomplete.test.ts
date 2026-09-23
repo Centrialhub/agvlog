@@ -90,6 +90,55 @@ describe('NFS-e tomador address autocomplete', () => {
     });
   });
 
+  it('does not replace a reviewed street with another street from a CEP in the same city', async () => {
+    const completed = mergeOfficialProfileIntoNFSeTomador(emptyTomador, profile, 'BA');
+    const requests: string[] = [];
+    const resolved = await canonicalizeNFSeTomadorPostalAddress(completed, async input => {
+      requests.push(input);
+      return input.includes('/40460620/')
+        ? { ok: true, json: async () => ({
+            cep: '40460-620', logradouro: 'Rua de Outro Bairro', localidade: 'Salvador', uf: 'BA', ibge: '2927408',
+          }) }
+        : { ok: true, json: async () => [{
+            cep: '40015-025', logradouro: 'Rua Estado de Israel', bairro: 'Comércio',
+            localidade: 'Salvador', uf: 'BA', ibge: '2927408',
+          }] };
+    });
+    expect(requests).toHaveLength(2);
+    expect(resolved).toMatchObject({ endereco: 'Rua Estado de Israel', cep: '40015025' });
+  });
+
+  it('preserves the street for a municipality-wide CEP without a street', async () => {
+    const completed = mergeOfficialProfileIntoNFSeTomador(emptyTomador, profile, 'BA');
+    const resolved = await canonicalizeNFSeTomadorPostalAddress(completed, async () => ({
+      ok: true, json: async () => ({ cep: '40460-620', logradouro: '', localidade: 'Salvador', uf: 'BA', ibge: '2927408' }),
+    }));
+    expect(resolved).toMatchObject({ endereco: 'ESTADO DE ISRAEL', cep: '40460620' });
+  });
+
+  it('rejects malformed exact CEP payloads without searching or changing the address', async () => {
+    const completed = mergeOfficialProfileIntoNFSeTomador(emptyTomador, profile, 'BA');
+    await expect(canonicalizeNFSeTomadorPostalAddress(completed, async () => ({
+      ok: true, json: async () => null,
+    }))).rejects.toThrow('resposta inválida');
+  });
+
+  it('does not accept an exact response for another CEP or a correction without CEP', async () => {
+    const completed = mergeOfficialProfileIntoNFSeTomador(emptyTomador, profile, 'BA');
+    const requests: string[] = [];
+    await expect(canonicalizeNFSeTomadorPostalAddress(completed, async input => {
+      requests.push(input);
+      return input.includes('/40460620/')
+        ? { ok: true, json: async () => ({
+            cep: '40015-025', logradouro: 'Rua Estado de Israel', localidade: 'Salvador', uf: 'BA', ibge: '2927408',
+          }) }
+        : { ok: true, json: async () => [{
+            logradouro: 'Rua Estado de Israel', localidade: 'Salvador', uf: 'BA', ibge: '2927408',
+          }] };
+    })).rejects.toThrow('não foi possível corrigi-lo de forma inequívoca');
+    expect(requests).toHaveLength(2);
+  });
+
   it('blocks a CEP mismatch when address search is ambiguous', async () => {
     const completed = mergeOfficialProfileIntoNFSeTomador(emptyTomador, profile, 'BA');
     await expect(canonicalizeNFSeTomadorPostalAddress(completed, async input =>

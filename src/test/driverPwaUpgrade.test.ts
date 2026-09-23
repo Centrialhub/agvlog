@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 interface CachedResponse {
   ok:boolean;
+  headers:{get:(name:string)=>string|null};
   clone:()=>CachedResponse;
   text:()=>Promise<string>;
   json:()=>Promise<unknown>;
@@ -12,9 +13,10 @@ interface CachedResponse {
 
 type WorkerHandler=(event:Record<string,unknown>)=>void;
 
-function response(body:string|unknown,ok=true):CachedResponse {
+function response(body:string|unknown,ok=true,contentType='text/plain'):CachedResponse {
   const text=typeof body==='string'?body:JSON.stringify(body);
-  return {ok,clone:()=>response(body,ok),text:async()=>text,json:async()=>JSON.parse(text)};
+  return {ok,headers:{get:name=>name.toLowerCase()==='content-type'?contentType:null},
+    clone:()=>response(body,ok,contentType),text:async()=>text,json:async()=>JSON.parse(text)};
 }
 
 function pathOf(request:unknown){
@@ -24,13 +26,14 @@ function pathOf(request:unknown){
 }
 
 function serviceWorkerHarness(shared:{stores:Map<string,Map<string,CachedResponse>>;indexedDB:{pending:Map<string,unknown>;deleteDatabase:ReturnType<typeof vi.fn>}},
-  hash:string,failPath?:string){
+  hash:string,failPath?:string,htmlFallbackPath?:string){
   const handlers=new Map<string,WorkerHandler>(),claim=vi.fn(async()=>undefined),skipWaiting=vi.fn();let online=true;
   const fetch=async(request:unknown)=>{
     const path=pathOf(request);if(!online||path===failPath)throw new Error('offline');
-    if(path==='/')return response('<html><script src="/assets/index.js"></script></html>');
-    if(path==='/driver-shell-assets.json')return response(['/assets/DriverDeliveries.js']);
-    return response(`asset:${path}`);
+    if(path==='/')return response('<html><script src="/assets/index.js"></script></html>',true,'text/html');
+    if(path==='/driver-shell-assets.json')return response(['/assets/DriverDeliveries.js'],true,'application/json');
+    if(path===htmlFallbackPath)return response('<html>SPA fallback</html>',true,'text/html');
+    return response(`asset:${path}`,true,path.endsWith('.js')?'application/javascript':'text/plain');
   };
   const caches={
     open:async(name:string)=>{
@@ -62,6 +65,14 @@ describe('driver PWA safe build upgrade',()=>{
     const active=serviceWorkerHarness(shared,'build-one');await active.waitFor('install');await active.waitFor('activate');
     const broken=serviceWorkerHarness(shared,'build-broken','/assets/DriverDeliveries.js');
     await expect(broken.waitFor('install')).rejects.toThrow('offline');
+    expect([...shared.stores.keys()]).toEqual(['agvlog-driver-shell-build-one']);
+  });
+
+  it('rejects a 200 HTML fallback for a missing driver build module',async()=>{
+    const shared={stores:new Map<string,Map<string,CachedResponse>>(),indexedDB:{pending:new Map<string,unknown>(),deleteDatabase:vi.fn()}};
+    const active=serviceWorkerHarness(shared,'build-one');await active.waitFor('install');await active.waitFor('activate');
+    const fallback=serviceWorkerHarness(shared,'build-fallback',undefined,'/assets/DriverDeliveries.js');
+    await expect(fallback.waitFor('install')).rejects.toThrow('Invalid build asset response');
     expect([...shared.stores.keys()]).toEqual(['agvlog-driver-shell-build-one']);
   });
 

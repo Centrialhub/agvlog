@@ -88,3 +88,11 @@ export function formatDuplicateFiscalDocumentMessage(existing?: {
   if (existing.access_key) parts.push(`Chave: ${existing.access_key}`);
   return parts.join(' • ');
 }
+
+/** Converts duplicate-domain errors to an actionable UI message and preserves ordinary failures. */
+export function formatFiscalDocumentError(error: unknown, fallback = 'Falha inesperada no documento fiscal'): string {
+  if (error instanceof DuplicateFiscalDocumentError) {
+    return formatDuplicateFiscalDocumentMessage(error.existingDocument as Parameters<typeof formatDuplicateFiscalDocumentMessage>[0]);
+  }
+  return error instanceof Error && error.message ? error.message : fallback;
+}

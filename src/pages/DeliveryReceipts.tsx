@@ -123,7 +123,7 @@ export default function DeliveryReceipts(){
     if(!tenant||!actor)throw new Error('Empresa ou usuário não selecionado.');
     if(action.type==='physical')return recordPhysicalDeliveryReceiptStatus(tenant,actor,action.row,action.physicalStatus??'received',action.reason);
     return reviewDeliveryReceipt(tenant,action.row,action.type==='validate'?'validated':'rejected',action.reason);
-  },onSuccess:async()=>{setRejecting(null);setReason('');setPhysicalReview(null);setPhysicalReason('');toast({title:'Canhoto atualizado'});
+  },onSuccess:async()=>{setRejecting(null);setReason('');setPhysicalReview(null);setPhysicalReason('');setSelected([]);toast({title:'Canhoto atualizado'});
     await Promise.all([client.invalidateQueries({queryKey:['delivery-receipts']}),client.invalidateQueries({queryKey:['delivery-receipt-operations']})]);},
   onError:error=>toast({title:'Não foi possível atualizar',description:deliveryReceiptError(error),variant:'destructive'})});
   const downloadMutation=useMutation({mutationFn:(row:DeliveryReceiptRow)=>downloadDeliveryReceiptPdf(tenant!,actor!,row),
@@ -145,7 +145,7 @@ export default function DeliveryReceipts(){
   },onSuccess:async()=>{toast({title:'Modelo do fornecedor salvo'});await client.invalidateQueries({queryKey:['delivery-receipt-operations']});},
   onError:error=>toast({title:'Não foi possível salvar o modelo',description:deliveryReceiptError(error),variant:'destructive'})});
   const replacementMutation=useMutation({mutationFn:async()=>{if(!tenant||!actor||!replacing||!replacementFile)throw new Error('Selecione o arquivo substituto.');
-    return replaceDeliveryReceipt(tenant,actor,replacing,replacementFile,replacementReason);},onSuccess:async()=>{setReplacing(null);setReplacementFile(null);setReplacementReason('');
+    return replaceDeliveryReceipt(tenant,actor,replacing,replacementFile,replacementReason);},onSuccess:async()=>{setReplacing(null);setReplacementFile(null);setReplacementReason('');setSelected([]);
       toast({title:'Substituição registrada para nova validação'});await Promise.all([client.invalidateQueries({queryKey:['delivery-receipts']}),client.invalidateQueries({queryKey:['delivery-receipt-operations']})]);},
     onError:error=>toast({title:'Não foi possível substituir o canhoto',description:deliveryReceiptError(error),variant:'destructive'})});
   const retryMutation=useMutation({mutationFn:(batchId:string)=>retryDeliveryReceiptEmailBatch(tenant!,batchId),onSuccess:async()=>{
@@ -250,7 +250,7 @@ export default function DeliveryReceipts(){
       {eligible.length>0?<label className="flex w-fit items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" disabled={allFiltered.isFetching}
         checked={!!allFiltered.data&&bulkSelection.every(row=>selected.includes(row.id))} onChange={async event=>{const checked=event.target.checked;
           if(!checked){setSelected(current=>current.filter(id=>!eligible.some(row=>row.id===id)));return;}
-          const complete=allFiltered.data??(await allFiltered.refetch()).data;if(!complete)return;
+          const complete=(await allFiltered.refetch()).data;if(!complete)return;
           const completeEligible=(groupDeliveryReceiptsBySupplier(complete).find(group=>group.key===key)?.rows??[])
             .filter(row=>row.digital_status==='validated'&&row.has_pdf);
           setSelected(current=>[...new Set([...current,...completeEligible.map(row=>row.id)])]);}}/>

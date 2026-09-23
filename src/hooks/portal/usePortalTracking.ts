@@ -6,6 +6,7 @@ import {
   classifyTelemetryFreshness,
   type TelemetryFreshness,
 } from '@/lib/telemetryFreshness';
+import { hasValidGeographicCoordinates } from '@/lib/maps/coordinates';
 
 export interface PortalTrackingNextStop {
   id: string;
@@ -69,8 +70,11 @@ export function usePortalTracking() {
       if (!Array.isArray(items)) throw new Error('Resposta de tracking sem a lista obrigatória de cargas.');
       return (items as unknown as Omit<PortalTrackingItem, 'telemetry_freshness'>[]).map((item) => {
         const telemetryFreshness = classifyTelemetryFreshness(item.captured_at);
+        const validCoordinates = hasValidGeographicCoordinates(item.lat, item.lng);
         return {
           ...item,
+          lat: validCoordinates ? item.lat : null,
+          lng: validCoordinates ? item.lng : null,
           speed: telemetryFreshness === 'fresh' && typeof item.speed === 'number' && Number.isFinite(item.speed)
             ? item.speed
             : null,

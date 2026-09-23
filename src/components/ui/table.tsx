@@ -65,27 +65,34 @@ const TableHead = React.forwardRef<
 >(({ className, sortConfig, sortKey, onSort, children, ...props }, ref) => {
   const isSorted = sortConfig && sortKey && sortConfig.key === sortKey;
   const direction = isSorted ? sortConfig.direction : null;
+  const sortable = Boolean(onSort && sortKey);
+  const ariaSort = sortable
+    ? direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'
+    : props['aria-sort'];
 
   return (
     <th
       ref={ref}
       className={cn(
         "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
-        onSort && sortKey && "cursor-pointer select-none hover:text-foreground transition-colors",
         className
       )}
-      onClick={() => onSort && sortKey && onSort(sortKey)}
       {...props}
+      aria-sort={ariaSort}
     >
-      <div className="flex items-center gap-1">
-        {children}
-        {onSort && sortKey && (
-          <div className="flex flex-col opacity-40 group-hover:opacity-100">
+      {sortable ? (
+        <button
+          type="button"
+          className="group -mx-2 inline-flex min-h-11 select-none items-center gap-1 rounded-sm px-2 text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          onClick={() => onSort?.(sortKey!)}
+        >
+          {children}
+          <span aria-hidden="true" className="flex flex-col opacity-40 group-hover:opacity-100">
             <span className={cn("text-[8px] leading-[4px]", direction === 'asc' && "text-primary opacity-100 font-bold")}>▲</span>
             <span className={cn("text-[8px] leading-[4px]", direction === 'desc' && "text-primary opacity-100 font-bold")}>▼</span>
-          </div>
-        )}
-      </div>
+          </span>
+        </button>
+      ) : <div className="flex items-center gap-1">{children}</div>}
     </th>
   );
 });

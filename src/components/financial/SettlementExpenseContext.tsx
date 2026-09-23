@@ -1,5 +1,5 @@
 import {ExpenseCostCoverage} from './ExpenseCostCoverage';
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {Link} from 'react-router-dom';
 import {useAuth} from '@/hooks/useAuth';
@@ -7,7 +7,7 @@ import {useTenant} from '@/hooks/useTenant';
 import {Button} from '@/components/ui/button';
 import {FinanceAccessBoundary} from './FinanceAccessBoundary';
 import {formatFinanceCents,financeError} from '@/lib/financial/ledgerContract';
-import {readSettlementExpenseContext} from '@/lib/financial/settlementExpenseContextClient';
+import {readSettlementExpenseContext,SettlementExpenseSnapshotChangedError} from '@/lib/financial/settlementExpenseContextClient';
 import {expenseCategories} from '@/lib/financial/expenseBatchContract';
 export function SettlementExpenseContext({settlement}:{settlement:string}){
  const {currentTenant}=useTenant(),{user}=useAuth();if(!currentTenant||!user)return null;
@@ -18,11 +18,15 @@ const payeeLabels={driver:'Motorista',supplier:'Fornecedor',none:'Sem complement
 const statuses:Record<string,string>={pending:'Pendente',approved:'Aprovado',paid:'Pago',cancelled:'Cancelado',overdue:'Vencido'};
 export function SettlementExpenseContextPanel({tenant,actor,settlement}:{tenant:string;actor:string;settlement:string}){
  const [page,setPage]=useState(1);
- const query=useQuery({queryKey:['finance-settlement-expense-context',tenant,actor,settlement,page],queryFn:()=>readSettlementExpenseContext(tenant,settlement,page),retry:false});
+ const [revision,setRevision]=useState<string|null>(null),[pagingNotice,setPagingNotice]=useState('');
+ const query=useQuery({queryKey:['finance-settlement-expense-context',tenant,actor,settlement,page,page===1?null:revision],enabled:page===1||!!revision,queryFn:()=>readSettlementExpenseContext(tenant,settlement,page,page===1?null:revision),retry:false});
  const data=query.error||query.isFetching?undefined:query.data;
+ useEffect(()=>{if(page===1&&data?.revision)setRevision(data.revision);},[data?.revision,page]);
+ useEffect(()=>{if(page>1&&query.error instanceof SettlementExpenseSnapshotChangedError){setPagingNotice(`${query.error.message} A lista voltou à primeira página.`);setRevision(null);setPage(1);}},[page,query.error]);
  return <section aria-label="Gastos conferidos da viagem" className="rounded border p-3 space-y-3">
  <div className="flex justify-between gap-2"><h3 className="font-semibold">Gastos conferidos da viagem</h3><Button size="sm" variant="outline" disabled={query.isFetching} onClick={()=>void query.refetch()}>Atualizar gastos</Button></div>
  <p className="text-sm">O custo destes gastos compõe o acerto. O complemento já está em Contas a pagar e não cria outro crédito de reembolso no acerto ou na folha.</p>
+ {pagingNotice&&<p role="alert">{pagingNotice}</p>}
  {query.isFetching&&<p role="status">Consultando gastos e títulos…</p>}{query.isError&&<p role="alert">Não foi possível consultar os gastos. {financeError(query.error)}</p>}
  {data&&(data.trip_id===null?<p>Este acerto não tem vínculo de viagem. Os gastos das cargas não são associados automaticamente.</p>:<>
  <dl className="grid grid-cols-2 gap-2 text-sm">{[['Custo total',data.total_cents],['Vínculos históricos com saídas',data.allocated_cents],['Complementos em títulos',data.payable_cents],['Pago dos complementos',data.paid_cents],['Complementos em aberto',data.outstanding_cents]].map(([label,value])=><div key={label}><dt>{label}</dt><dd className="font-semibold">{money(value)}</dd></div>)}</dl>

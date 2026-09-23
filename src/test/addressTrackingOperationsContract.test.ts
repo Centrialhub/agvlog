@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(path, 'utf8');
 const migration = read('supabase/migrations/20260910154838_address_resolution_tracking_operations.sql');
 const geocoder = read('supabase/functions/geocode-address/index.ts');
+const candidateRecording = read('supabase/migrations/20260923144034_atomic_address_candidate_recording.sql');
 const scheduler = read('supabase/functions/agvlog-schedule-tenants/index.ts');
 const cron = read('supabase/bootstrap/tracking_tenant_cron.sql');
 const dispatch = read('src/hooks/route-planning/useDispatchRoutePlan.ts');
@@ -29,7 +30,9 @@ describe('address resolution and tracking operations contract', () => {
     expect(geocoder).toContain("cache: 'hit'");
     expect(geocoder).toContain("cache: 'miss'");
     expect(geocoder).toContain('geocoding_rate_limited');
-    expect(geocoder).toContain('address_resolution_queue');
+    expect(geocoder).toContain("rpc('record_address_entity_candidates_v1'");
+    expect(candidateRecording).toContain('insert into public.address_resolution_queue');
+    expect(candidateRecording).toContain('update public.clients set address_geocode_status = v_status');
   });
 
   it('blocks dispatch without verified coordinates unless a detailed exception is audited', () => {

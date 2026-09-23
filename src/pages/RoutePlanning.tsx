@@ -29,7 +29,7 @@ import RouteValidationPanel from '@/components/route-planning/RouteValidationPan
 import { consolidateLoadsIntoStops } from '@/lib/route-planning/stopConsolidation';
 import { routeStopOrder } from '@/lib/route-planning/routeStopOrder';
 import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from '@/lib/route-planning/simpleStopSequencing';
-import { simulateStopTimeline } from '@/lib/route-planning/timelineSimulation';
+import { isValidRouteDuration, MAX_ROUTE_DURATION_MINUTES, simulateStopTimeline } from '@/lib/route-planning/timelineSimulation';
 import { regenerateStopsPreservingEdits } from '@/lib/route-planning/regenerateStops';
 import { generateAutomaticRoutePlans, defaultPlannedStartAt } from '@/lib/route-planning/autoRoutePlanner';
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
@@ -38,10 +38,9 @@ import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePla
 import { useRoutePlanAutosave } from '@/hooks/route-planning/useRoutePlanAutosave';
 import { validateRouteConsistency } from '@/lib/route-planning/routeConsistency';
 import { computeRouteStatus, STATUS_VISUALS, type RoutePlanStatusExt } from '@/lib/route-planning/routeStatus';
-import { useRoutePlanningDrafts, useSavePlanSnapshot, useDeleteDraft, type RoutePlanSnapshot } from '@/hooks/useRoutePlanningDrafts';
+import { useRoutePlanningDrafts, useSavePlanSnapshot, useDeleteDraft } from '@/hooks/useRoutePlanningDrafts';
 import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
 import { normalizeCity } from '@/lib/utils/normalizeCity';
-import type { Json } from '@/integrations/supabase/types';
 import { getErrorMessage } from '@/lib/errors';
 import { routeDraftDeleteError } from '@/lib/route-planning/draftDeleteCommand';
 import { usePendingLoadsForRouting } from '@/hooks/route-planning/usePendingLoadsForRouting';
@@ -53,6 +52,7 @@ import {
   toggleVisibleLoadSelection,
   type PendingRoutePlanningLoad as PendingLoad,
 } from '@/lib/route-planning/routePlanningLoads';
+import { parseRoutePlanSnapshot } from '@/lib/route-planning/routePlanSnapshot';
 
 /* ────────────── types ────────────── */
 interface RoutePlan {
@@ -77,11 +77,6 @@ interface RoutePlan {
   /** Exclusão remota em confirmação; também pausa o autosave desta rota. */
   deleting?: boolean;
 }
-
-const routeSnapshot = (value: Json | null): RoutePlanSnapshot =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as unknown as RoutePlanSnapshot
-    : {};
 
 /* ────────────── main component ────────────── */
 /** If all selected loads share the same vehicle_id / driver_id, inherit those
@@ -152,7 +147,8 @@ export default function RoutePlanning() {
     const hydrated: RoutePlan[] = persistedDrafts.map((d) => {
       // Semeia versão conhecida para guarda otimista de concorrência.
       savePlanSnapshot.seedVersion(d.id, d.updated_at);
-      const cfg = routeSnapshot(d.route_config);
+      const parsed = parseRoutePlanSnapshot(d.route_config);
+      const cfg = parsed.snapshot;
       const ids: string[] = Array.isArray(d.load_ids) ? d.load_ids : (Array.isArray(cfg.load_ids) ? cfg.load_ids : []);
       const loads = ids.map(id => loadById.get(id)).filter((load): load is PendingLoad => Boolean(load));
       const missingCount = ids.length - loads.length;
@@ -167,7 +163,7 @@ export default function RoutePlanning() {
         sortMode: cfg.sortMode,
         initial_transit_minutes: cfg.initial_transit_minutes,
         notes: d.notes || cfg.notes,
-        dirty: missingCount > 0 || (Array.isArray(cfg.stops) && cfg.stops.length > 0 && loads.length === 0),
+        dirty: !parsed.valid || missingCount > 0 || (Array.isArray(cfg.stops) && cfg.stops.length > 0 && loads.length === 0),
       } as RoutePlan;
     }).filter(r => r.loads.length > 0);
     if (hydrated.length > 0) {
@@ -249,7 +245,7 @@ export default function RoutePlanning() {
     const selected = availableLoads.filter(l => selectedLoads.has(l.id));
     if (selected.length === 0) return;
     const dest = selected[0].destination || 'Rota';
-    const name = newRouteName || `${dest} - ${format(new Date(), 'dd/MM')}`;
+    const name = newRouteName.trim() || `${dest} - ${format(new Date(), 'dd/MM')}`;
     setRoutes(prev => [...prev, {
       id: crypto.randomUUID(),
       name,
@@ -874,9 +870,11 @@ export default function RoutePlanning() {
                         <Input
                           type="number"
                           min={0}
+                          max={MAX_ROUTE_DURATION_MINUTES}
                           value={route.initial_transit_minutes ?? 30}
                           onChange={(e) => {
-                            const v = Math.max(0, Number(e.target.value) || 0);
+                            const v = Number(e.target.value);
+                            if (!isValidRouteDuration(v)) return;
                             setRoutes(prev => prev.map(r => {
                               if (r.id !== route.id) return r;
                               const stops = r.stops

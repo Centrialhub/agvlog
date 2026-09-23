@@ -1,15 +1,15 @@
 // @vitest-environment node
+import { historicalSettlementExpenseContextSchema } from './helpers/historicalFinanceContracts';
 import {afterAll,afterEach,beforeAll,beforeEach,expect,it} from 'vitest';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {createUnloadingCostCorrectionDatabase,installUnloadingCostCorrection,seedUnloadingRepairSource} from './helpers/unloadingCostCorrectionDatabase';
 import {installPreparedReceiptCostPredecessors} from './helpers/preparedReceiptCostIntegrationDatabase';
 import {financeIds as i,financeAs} from './helpers/financeLedgerDatabase';
-import {expenseHistorySchema} from '@/lib/financial/expenseHistoryContract';
+import {expenseHistoryPageSchema,expenseHistorySchema} from '@/lib/financial/expenseHistoryContract';
 import {installEffectiveCostBuilder} from './helpers/effectiveCostReadersDatabase';
 import {recordedCostsSchema} from '@/lib/financial/recordedCostsContract';
 import {recordedCostSummarySchema} from '@/lib/financial/recordedCostSummaryContract';
-import {settlementExpenseContextSchema} from '@/lib/financial/settlementExpenseContextContract';
 import {costDispositionsSchema} from '@/lib/financial/costDispositionsContract';
 import {expenseCostCoverageSchema} from '@/lib/financial/expenseCostFundingContract';
 import {payablePortfolioSchema} from '@/lib/financial/payablePortfolioContract';
@@ -52,6 +52,10 @@ it('preserves paid150, reserved150 and bank outflow150 while projecting cost120 
  const first=expenseHistorySchema.parse((await db.query<{v:unknown}>('select finance_private.list_expenses($1,$2) v',[i.tenant,{page:1,page_size:30}])).rows[0].v);
  const second=expenseHistorySchema.parse((await db.query<{v:unknown}>('select finance_private.list_expenses($1,$2) v',[i.tenant,{page:2,page_size:30}])).rows[0].v);
  expect(first.total_cents).toBe('15100');expect(first.rows.some(row=>row.id===e.expense)).toBe(false);expect(second.rows.some(row=>row.id===e.expense)).toBe(true);expect(second.total_cents).toBe(first.total_cents);
+ await db.exec(read('20260921141500_keyset_finance_expenses'));
+ const keyedFirst=expenseHistoryPageSchema.parse((await db.query<{v:unknown}>('select finance_private.list_expense_page_v2($1,$2) v',[i.tenant,{page_size:30}])).rows[0].v);expect(keyedFirst.rows).toHaveLength(30);expect(keyedFirst.summary).toBeNull();expect(keyedFirst.next_cursor).not.toBeNull();
+ await rpc('record_finance_expense_batch',{...base(),context:'office',description:'Inserção concorrente',items:[{id:randomUUID(),category:'office',description:'Novo gasto antes do cursor',supplier_name:'Fornecedor concorrente',amount_cents:100,occurred_on:'2026-08-04',no_receipt_reason:'Fixture concorrente',payee_type:'supplier',allocations:[]}]});
+ const keyedSecond=expenseHistoryPageSchema.parse((await db.query<{v:unknown}>('select finance_private.list_expense_page_v2($1,$2) v',[i.tenant,{page_size:30,cursor:keyedFirst.next_cursor}])).rows[0].v);expect(keyedSecond.summary).toBeNull();expect(keyedSecond.rows.some(row=>row.id===e.expense)).toBe(true);expect(new Set([...keyedFirst.rows,...keyedSecond.rows].map(row=>row.id)).size).toBe(keyedFirst.rows.length+keyedSecond.rows.length);
  await db.exec('savepoint corruption');
  // Owner-only corruption fixture: application writers cannot perform this update. No guard success is inferred.
  await db.exec('alter table finance_private.expense_cost_regularizations disable trigger user');await db.query("update finance_private.expense_cost_regularizations set source_snapshot=source_snapshot||jsonb_build_object('qa_broken_proof',true) where expense_id=$1",[e.expense]);await db.exec('alter table finance_private.expense_cost_regularizations enable trigger user');
@@ -82,7 +86,7 @@ it('reports custody separately with zero uncovered cost and preserves original c
  expect(costs.find(x=>x.source_id===expense)).toMatchObject({amount:'120.0000000000000000',metadata:{reimbursable:false,settlement_credit_created:false,allocation_total_cents:15000}});
  const list=expenseHistorySchema.parse((await db.query<{v:unknown}>('select finance_private.list_expenses($1,$2) v',[i.tenant,{}])).rows[0].v);expect(list).toMatchObject({total_cents:'27000',allocated_cents:'15000',complement_cents:'15000'});
  const settlement=(await db.query<{id:string}>('select public._build_driver_settlement($1,$2) id',[i.tenant,src.trip_id])).rows[0].id;
- const context=settlementExpenseContextSchema.parse((await db.query<{v:unknown}>('select get_finance_settlement_expense_context($1,$2) v',[i.tenant,settlement])).rows[0].v);
+ const context=historicalSettlementExpenseContextSchema.parse((await db.query<{v:unknown}>('select get_finance_settlement_expense_context($1,$2) v',[i.tenant,settlement])).rows[0].v);
  expect(context.rows.find(row=>row.id===expense)).toMatchObject({amount_cents:'12000',allocated_cents:'15000',payable_cents:'0',outstanding_cents:'0',needs_review:false});
  expect((await db.query<{amount:string,metadata:unknown}>("select amount,metadata from driver_settlement_items where settlement_id=$1 and source_table='finance_expense_items' and source_id=$2",[settlement,expense])).rows).toMatchObject([{amount:'120.0000000000000000',metadata:{reimbursable:false,settlement_credit_created:false,coverage:{driver_custody_cents:'3000'}}}]);
 

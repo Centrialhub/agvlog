@@ -47,6 +47,7 @@ beforeAll(async()=>{
  await db.exec(readFileSync('supabase/migrations/20260910011121_finance_fiscal_cancellation_credits.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260910012152_finance_receivable_fiscal_context.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260910012756_finance_fiscal_queue_worker.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20260921140500_keyset_finance_fiscal_queue.sql','utf8'));
 },30000);
 beforeEach(async()=>{await db.exec('begin');});afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
 async function emission(status='authorized',environment='production',dispatch='recorded'){
@@ -66,16 +67,20 @@ async function worker(limit=50){
  return (await db.query<{result:{handled:number;deferred:number;failed:number;busy:boolean}}>('select finance_private.run_fiscal_queue($1) result',[limit])).rows[0].result;
 }
 describe('durable fiscal observations for financial projection',()=>{
- it('lists tenant totals and pages independently of the displayed page and denies drivers',async()=>{
+ it('lists tenant totals with a stable cursor while jobs change status and denies drivers',async()=>{
   for(let index=1;index<=32;index++)await readyCte(String(index).padStart(44,'0'));
-  const read=async(status:string,page:number)=>fiscalQueueSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select list_finance_fiscal_queue($1,$2,$3) result',[i.tenant,status,page])).rows[0].result);
-  const first=await read('pending',1),second=await read('pending',2);
+  const read=async(status:string,cursor:{observed_order:string;observation_id:string}|null)=>fiscalQueueSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select list_finance_fiscal_queue_v2($1,$2,$3,$4) result',[i.tenant,status,cursor?.observed_order??null,cursor?.observation_id??null])).rows[0].result);
+  const first=await read('pending',null);
   expect(first).toMatchObject({total:32,counts:{pending:32,review:0,applied:0,superseded:0},scheduler_active:false});
+  expect(first.next_cursor).not.toBeNull();
+  await db.query("update finance_fiscal_projection_jobs set status='applied' where observation_id=$1",[first.rows[0].observation_id]);
+  const second=await read('pending',first.next_cursor);
   expect(first.rows).toHaveLength(30);expect(second.rows).toHaveLength(2);
   expect(new Set([...first.rows,...second.rows].map(row=>row.observation_id)).size).toBe(32);
-  expect((await read('review',1)).total).toBe(0);
-  await expect(financeAs(db,i.driverUser,'select list_finance_fiscal_queue($1,$2,$3)',[i.tenant,'',1])).rejects.toThrow('finance_access_denied');
-  await expect(financeAs(db,i.operator,'select list_finance_fiscal_queue($1,$2,$3)',[i.otherTenant,'',1])).rejects.toThrow('finance_access_denied');
+  expect(second).toMatchObject({total:31,has_more:false});
+  expect((await read('review',null)).total).toBe(0);
+  await expect(financeAs(db,i.driverUser,'select list_finance_fiscal_queue_v2($1,$2,$3,$4)',[i.tenant,'',null,null])).rejects.toThrow('finance_access_denied');
+  await expect(financeAs(db,i.operator,'select list_finance_fiscal_queue_v2($1,$2,$3,$4)',[i.otherTenant,'',null,null])).rejects.toThrow('finance_access_denied');
  });
  it('automatically drains bounded batches, preserves system provenance and skips applied jobs',async()=>{
   await readyCte();await readyCte('3'.repeat(44));

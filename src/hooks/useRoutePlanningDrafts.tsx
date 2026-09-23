@@ -12,6 +12,9 @@ import {
   routeDraftDeleteCommandSchema,
   type RouteDraftDeleteResult,
 } from '@/lib/route-planning/draftDeleteCommand';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+
+export const ROUTE_PLANNING_DRAFT_PAGE_SIZE = 200;
 
 export class DraftConflictError extends Error {
   constructor(public routeId: string, public expected: string | null, public actual: string | null) {
@@ -42,14 +45,17 @@ export function useRoutePlanningDrafts() {
     queryKey: ['route_planning_drafts', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('route_planning_drafts')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('status', 'draft')
-        .order('updated_at', { ascending: false });
-      if (error) throw error;
-      return (data || []) as unknown as RoutePlanningDraft[];
+      return fetchAllPostgrestPages<RoutePlanningDraft>(async (from,to) => {
+        const { data, error } = await supabase
+          .from('route_planning_drafts')
+          .select('id,tenant_id,name,vehicle_id,notes,status,updated_at,load_ids,driver_id,planned_start_at,route_config')
+          .eq('tenant_id', currentTenant.id)
+          .eq('status', 'draft')
+          .order('updated_at', { ascending: false })
+          .order('id')
+          .range(from,to);
+        return {data:data as unknown as RoutePlanningDraft[]|null,error};
+      },ROUTE_PLANNING_DRAFT_PAGE_SIZE);
     },
     enabled: !!currentTenant,
   });
@@ -69,6 +75,8 @@ export function useSavePlanSnapshot() {
   const mutation = useMutation({
     mutationFn: async ({ routeId, name, snapshot }: { routeId: string; name: string; snapshot: RoutePlanSnapshot }) => {
       if (!currentTenant || !user) throw new Error('Sessão não autenticada');
+      const normalizedName=name.trim();
+      if(!normalizedName)throw new Error('Informe um nome para a rota.');
       const loadIds: string[] = Array.isArray(snapshot?.loads)
         ? snapshot.loads.map(load => load.id).filter(Boolean)
         : [];
@@ -90,7 +98,7 @@ export function useSavePlanSnapshot() {
       const payload: TablesInsert<'route_planning_drafts'> = {
         id: routeId,
         tenant_id: currentTenant.id,
-        name,
+        name:normalizedName,
         load_ids: loadIds,
         order_ids: loadIds,
         vehicle_id: snapshot?.vehicle_id || null,

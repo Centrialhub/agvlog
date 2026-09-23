@@ -16,6 +16,7 @@ export interface ShipmentRow {
   recipient_city: string | null;
   recipient_state: string | null;
   product_summary: string | null;
+  volume_count: number | null;
   pallet_count: number | null;
   weight_kg: number | null;
   value: number | null;

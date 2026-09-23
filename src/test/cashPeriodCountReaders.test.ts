@@ -1,11 +1,11 @@
 // @vitest-environment node
+import { historicalFinanceAuditSchema } from './helpers/historicalFinanceContracts';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {beforeAll,beforeEach,afterEach,afterAll,it,expect} from 'vitest';
 import {createCashPeriodCloseDatabase} from './helpers/cashPeriodCloseDatabase';
 import {financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
 import {cashPeriodCountResultSchema,cashPeriodCountHistorySchema} from '@/lib/financial/cashPeriodContract';
-import {financeAuditSchema} from '@/lib/financial/financeAuditContract';
 let db:Awaited<ReturnType<typeof createCashPeriodCloseDatabase>>;
 const end='2026-08-31';
 beforeAll(async()=>{db=await createCashPeriodCloseDatabase();for(const file of ['20260910165830_finance_period_manual_audit.sql','20260910174142_finance_cash_period_count_readers.sql','20260910174822_finance_cash_period_manual_audit.sql'])await db.exec(readFileSync(`supabase/migrations/${file}`,'utf8'));},30000);
@@ -44,7 +44,7 @@ it('keeps real count, correction, close and reopening visible in manual-only aud
  const frozen=await history();expect(frozen.can_record).toBe(false);expect(frozen.can_reverse).toBe(false);expect(frozen.rows.every(row=>!row.can_reverse)).toBe(true);
  await financeAs(db,i.operator,'select reopen_finance_account_period($1)',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),closure_id:closed.closure_id,revision:closed.revision,reason:'Reabertura de caixa para revisão documentada'}]);
  expect((await history()).rows.find(row=>row.id===current.count_id)?.can_reverse).toBe(true);
- const audit=financeAuditSchema.parse((await financeAs<{v:unknown}>(db,i.operator,'select list_finance_audit_events($1,$2) v',[i.tenant,{manual_only:true,page_size:100}])).rows[0].v);
+ const audit=historicalFinanceAuditSchema.parse((await financeAs<{v:unknown}>(db,i.operator,'select list_finance_audit_events($1,$2) v',[i.tenant,{manual_only:true,page_size:100}])).rows[0].v);
  for(const action of ['cash_period_count_recorded','cash_period_count_reversed','cash_period_closed','account_period_reopened'])expect(audit.rows.filter(row=>row.action===action)).toEqual(expect.arrayContaining([expect.objectContaining({actor_id:i.operator,manual_intervention:true})]));
  expect(audit.rows.filter(row=>row.action==='cash_period_count_recorded')).toHaveLength(2);
  expect(audit.manual_count).toBe(audit.total);expect((await db.query('select count(*)::int n from finance_movements')).rows[0]).toEqual({n:0});

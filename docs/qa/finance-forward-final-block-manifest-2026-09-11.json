@@ -1,15 +1,15 @@
 [
   {
     "file": "supabase/migrations/20260830192908_audit_client_invoice_lifecycle.sql",
-    "sha256": "03cd774ed14b4f4eda00d93ef3479f362dd673b9a4d332e1783410d7127b4510"
+    "sha256": "e345e26f41d2ccc4c2b21d3f5450983eb41ca359856d61dc29afd11472ae5ccf"
   },
   {
     "file": "supabase/migrations/20260830203548_audit_driver_expense_reviews.sql",
-    "sha256": "0024490322b5048eb7465909383b21f1a149e5bd91ab4fd1e1335662150ab06c"
+    "sha256": "0e41618541f0ef918ed1bb2c6742c5dbfc5298201b40cb9a2ec67470ee205dce"
   },
   {
     "file": "supabase/migrations/20260830211707_make_driver_expense_creation_recoverable.sql",
-    "sha256": "e4653ae0a090e4e954dd1b25b6cd3d727aed7ddf757bdfd9652ceda164f93adf"
+    "sha256": "0f97c014bf8174683181a105da3fcfb38cec2104b2488b2a2218235ac3107315"
   },
   {
     "file": "supabase/migrations/20260901141149_make_load_payment_recoverable.sql",
@@ -69,11 +69,11 @@
   },
   {
     "file": "supabase/migrations/20260830231003_enforce_expense_creation_mfa.sql",
-    "sha256": "e0af4f2f66662c19667b36617db691adb5f6065fd54305c4b385378a11705f74"
+    "sha256": "a7a3ac1bb45a09d79d864fd667f58104b758cebe9277690bbbc14f8673417dc7"
   },
   {
     "file": "supabase/rollouts/finance_settlement_adjustments_current_auth.sql",
-    "sha256": "d8acaef4c913ba66492a92a8da36fed73c7dabdc2a695d4a4ff12504aec5d447"
+    "sha256": "3b67f4d6dc0280ced585515a53805d241763df4d5b5fb80da56e3d7fa90f9591"
   },
   {
     "file": "supabase/migrations/20260909234654_finance_legacy_driver_boundary.sql",
@@ -97,7 +97,7 @@
   },
   {
     "file": "supabase/rollouts/finance_expense_adjustment_internal_only_policy.sql",
-    "sha256": "fedaf54088b6a912133340ff9f5eeee33d8f813cc82d865195b024e787b25e06"
+    "sha256": "c6a06d496f55a93ea47f4f03206c7c24ed9fee145d27ab9ad1186438278472ab"
   },
   {
     "file": "supabase/migrations/20260910000731_finance_payroll_payment_projection.sql",
@@ -293,7 +293,7 @@
   },
   {
     "file": "supabase/migrations/20260910142143_finance_statement_coverage_approvals.sql",
-    "sha256": "cc8bea0528ceef3155cb1447a4cfeff9adf4cc09441aaa38e56beb896e0e1166"
+    "sha256": "b81167c319e8339860ba7df0b183963f0e49a389a23f683ab2ce5d8d75e50f5c"
   },
   {
     "file": "supabase/migrations/20260910142740_finance_legacy_adoption_inventory.sql",
@@ -305,7 +305,7 @@
   },
   {
     "file": "supabase/migrations/20260910143833_finance_legacy_payable_associations.sql",
-    "sha256": "2948e859d766cbff838a170ab288b543bf0d133412e9ba526d1f7fdb3125e529"
+    "sha256": "e364f4dcf0bb83800fb5e65dfd4a2ed582fb422608a385465a51abc0e9f5ae02"
   },
   {
     "file": "supabase/migrations/20260910143920_finance_legacy_payable_association_options.sql",
@@ -313,7 +313,7 @@
   },
   {
     "file": "supabase/migrations/20260910145616_finance_legacy_receipt_associations.sql",
-    "sha256": "c0f2ba253350a39f0c8ec117df2f4883ad655fff1e0c65eeddac486fe6fa8848"
+    "sha256": "c912acc4dc990d140d54dc050c81f69eed28ed4daf70d2d1ca3e3a8d388c25c2"
   },
   {
     "file": "supabase/migrations/20260910145659_finance_legacy_receivable_association_options.sql",
@@ -333,7 +333,7 @@
   },
   {
     "file": "supabase/migrations/20260910152557_finance_recorded_cost_summary.sql",
-    "sha256": "8ed4b1b076cfc49e8d0657c8d64190da0078edbb25580e4968d81935e1191a7f"
+    "sha256": "9f4cc8977eaca3590de8f7c1a1deef0c7af0a25aca005b0d02847e132d9b3a06"
   },
   {
     "file": "supabase/migrations/20260910152711_finance_fiscal_dashboard_summary.sql",
@@ -393,7 +393,7 @@
   },
   {
     "file": "supabase/migrations/20260910163116_finance_legacy_cut_reviews.sql",
-    "sha256": "6baa25c2e21533aae152f6c61fbda8ecb891541888b133f2c325dd546bc21e0d"
+    "sha256": "64e7e46188c5ffc65413aea4abd3cba8b943c4bc7ad572e6f78f806f1b5d76fa"
   },
   {
     "file": "supabase/migrations/20260910164256_finance_account_period_history.sql",
@@ -417,7 +417,7 @@
   },
   {
     "file": "supabase/migrations/20260910170213_finance_legacy_cut_settlement_mapping.sql",
-    "sha256": "2641e645cc06ec82195173094c88e7a67402bb9cc18a6b6de4f112a37388cd63"
+    "sha256": "c8c0f6016c86724f66be2cf958d366234afa6cb245761627e82fbebcba513a95"
   },
   {
     "file": "supabase/migrations/20260910170454_finance_stock_acquisition_associations.sql",
@@ -461,7 +461,7 @@
   },
   {
     "file": "supabase/migrations/20260910175641_finance_unpaid_expense_cancellation.sql",
-    "sha256": "20fa89e70daa64f04ea1c8c4590801e9e0a63ea9e8e5e4f4ae7879f9d65b5984"
+    "sha256": "4cd062f4eb4a4269e0a084e003912bfd7f9dd8f6b39521d6f4f7335adcab96af"
   },
   {
     "file": "supabase/migrations/20260910175733_finance_expense_cancellation_preview.sql",
@@ -469,7 +469,7 @@
   },
   {
     "file": "supabase/migrations/20260910180040_finance_payable_portfolio.sql",
-    "sha256": "51773219434d93c0a7cade674b75381f5a5e2f4dcc6dbd9bd24fd04f52c482f5"
+    "sha256": "c640a8deb85c4451284da07c61c888b8854a0de5f3426acab47ff71f8fd4ee5a"
   },
   {
     "file": "supabase/migrations/20260910180245_reassert_finance_cash_period_relation_rls_and_grants.sql",
@@ -477,7 +477,7 @@
   },
   {
     "file": "supabase/migrations/20260910181257_finance_unpaid_manual_expense_cancellation.sql",
-    "sha256": "524e93c21de27fcb3bb5b46720bc8e340304efc6d2be086460e249e3d19cb50a"
+    "sha256": "da58af60afc8b8e841ffc4c5a84293a506b8544be5e7f8a1d52be33ef1d1967e"
   },
   {
     "file": "supabase/migrations/20260910181549_finance_manual_expense_cancellation_preview.sql",
@@ -485,7 +485,7 @@
   },
   {
     "file": "supabase/migrations/20260910182406_finance_expense_cancellation_manual_audit.sql",
-    "sha256": "20740e5099f555dd58dff206adfc707e2ad139acda22b4906e415d89e7ef216b"
+    "sha256": "dee27ca0e95fa4cdcb1216f60782b9fc98493fad8abee46e09d6ce39ba8071cc"
   },
   {
     "file": "supabase/migrations/20260910182541_finance_movement_correction_foundation.sql",
@@ -501,15 +501,15 @@
   },
   {
     "file": "supabase/migrations/20260910183442_finance_reconciliation_active_movements.sql",
-    "sha256": "1ace7642c0c66c131627b5d860f0289782d8b5ff2c48bc2e21d96dc0ad206ac8"
+    "sha256": "560d113cda09f839a7c1e548bd2fb5566d6f35848868081d4212ba62b7d4340f"
   },
   {
     "file": "supabase/migrations/20260910183506_finance_active_movement_financial_guards.sql",
-    "sha256": "130bc344d89633f918fefb977dd4d7d2a3a1769e3eaa4bf0bd6ff0079480dfaf"
+    "sha256": "e48311f0531e9cbe98b9afb5689c50c35ae94b24318369968c1fa8e578fe67d9"
   },
   {
     "file": "supabase/migrations/20260910184213_finance_movement_active_reference.sql",
-    "sha256": "8fbcdb2344bb125fa68f61647ce36c91db95f71e55eba09a4c7e24a746aebf3c"
+    "sha256": "3328d12b760b0200b36a1ea34934f73b8b063ea1015872015a5400e692c28208"
   },
   {
     "file": "supabase/migrations/20260910184543_finance_active_movement_options.sql",
@@ -517,7 +517,7 @@
   },
   {
     "file": "supabase/migrations/20260910185338_finance_void_aware_monetary_proofs.sql",
-    "sha256": "de962a9c2d7ab108974c75fe5f9ec6430129b60d7725be75e9c1b4e17b0b8c0a"
+    "sha256": "7cef11d69c5bc1c3b47f8f95b5a3e1ebeca0f1fe7ecb327f50fe2f909bdd1ec0"
   },
   {
     "file": "supabase/migrations/20260910185517_finance_movement_recording_origin.sql",
@@ -525,7 +525,7 @@
   },
   {
     "file": "supabase/migrations/20260910190516_finance_movement_correction_context.sql",
-    "sha256": "fbffac3208c08250d6aabc82b91b3d127f3f3c0e675f2b6dd958a3ffb0d6bcfc"
+    "sha256": "a4d72d2aedb085555683bc47553cf5dadae2cde79a4388e144a7927160ebfdc2"
   },
   {
     "file": "supabase/migrations/20260910190635_finance_movement_correction_preview.sql",
@@ -561,15 +561,15 @@
   },
   {
     "file": "supabase/migrations/20260910205941_finance_unloading_receivable_source_guard.sql",
-    "sha256": "b8701c4f801c6840e3d37ce1ab048cc366a98f7c10be92adf3974d673e66ee09"
+    "sha256": "9b44fdc1e437c21a3adc4f1bb0d1f8e97c77a3ccc61df3985c7c011886ff6e83"
   },
   {
     "file": "supabase/migrations/20260910210433_finance_unloading_receivable_context.sql",
-    "sha256": "6bad5b960550ad173a507cb03dce6239a63c6108ef0a13681364ba2a30238e77"
+    "sha256": "8a04620017bbe51318d41993998bca5686975a8a6998cdc5aabb4f04c8712c44"
   },
   {
     "file": "supabase/migrations/20260910211156_finance_unloading_projection_repair.sql",
-    "sha256": "c0e71109be86c5f43bc799b506479c6fa7103e4db1b9a38b5a500c61fcd8f482"
+    "sha256": "56f6297892b4ce0a7112fb99ad495f28b09abdafd0a745d704e4c688034e6771"
   },
   {
     "file": "supabase/migrations/20260910211740_finance_unloading_projection_repair_preview.sql",
@@ -577,6 +577,6 @@
   },
   {
     "file": "supabase/migrations/20260910212550_finance_public_unloading_projection_repair.sql",
-    "sha256": "0bbf8948dbbfe8bdfd4f5cbb157be6da61558d1a8387c1036038b619e0164d74"
+    "sha256": "7164af39d350f514313c854363b706e7b7b46d5ee4c38a50cec98c80fbbfdfc2"
   }
 ]

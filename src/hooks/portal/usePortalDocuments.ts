@@ -41,16 +41,21 @@ export function usePortalDocuments(filters?: {
     queryFn: async (): Promise<PortalDocumentsPage> => {
       if (!currentTenant) return { rows: [], hasMore: false };
       const requestedLimit = filters?.limit ?? 50;
-      const { data, error } = await supabase.rpc('list_client_documents_v2', {
+      const commonArgs = {
         _tenant_id: currentTenant.id,
         _client_id: selectedClientId ?? undefined,
-        _document_type: filters?.document_type || undefined,
         _search: filters?.search || undefined,
         _start_date: filters?.start || undefined,
         _end_date: filters?.end || undefined,
         _limit: requestedLimit + 1,
         _offset: filters?.offset ?? 0,
-      });
+      };
+      const { data, error } = filters?.document_type === 'mdfe'
+        ? await supabase.rpc('list_client_mdfe_documents_v1', commonArgs)
+        : await supabase.rpc('list_client_documents_v2', {
+            ...commonArgs,
+            _document_type: filters?.document_type || undefined,
+          });
       if (error) throw error;
       const rows = (data as PortalDocument[]) || [];
       return {

@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database, Tables } from '@/integrations/supabase/types';
-import { readCtePayloadRecipient } from '@/lib/fiscal/ctePayload';
+import { readCtePayloadPayer, readCtePayloadRecipient } from '@/lib/fiscal/ctePayload';
 import { matchesCteMonitorFilters } from '@/lib/fiscal/cteListFilters';
-import { localDayBoundary } from '@/lib/listFilters';
+import { APP_TIME_ZONE, dateOnlyUtcRange } from '@/lib/utils/formatDate';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { containsIlikePattern, flexibleIdentifierIlikePattern } from '@/lib/supabase/ilike';
 import { useTenant } from './useTenant';
 
 export const SEFAZ_STATUSES = [
@@ -144,6 +145,11 @@ export function useCteMonitor(filters: CteMonitorFilters) {
     staleTime: 15_000,
     queryFn: async () => {
       if (!currentTenant) return [];
+      const tenantTimezone = currentTenant.timezone || APP_TIME_ZONE;
+      const dayBoundary = (day: string, nextDay = false) => {
+        const range = dateOnlyUtcRange(day, tenantTimezone);
+        return nextDay ? range.toExclusive : range.from;
+      };
       const docNumber = nz(filters.docNumber);
       const payer = nz(filters.payer);
       const internal = nz(filters.internalNumber);
@@ -162,27 +168,27 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           .from('cte_documents')
           .select('*')
           .eq('tenant_id', currentTenant.id);
-        if (docNumber) q = q.ilike('cte_number', `%${docNumber}%`);
-        if (payer) q = q.ilike('payer_name', `%${payer}%`);
-        if (internal) q = q.ilike('internal_number', `%${internal}%`);
-        if (ref) q = q.ilike('reference_number', `%${ref}%`);
-        if (protocol) q = q.ilike('protocol_number', `%${protocol}%`);
-        if (key) q = q.ilike('access_key', `%${key}%`);
-        if (plate) q = q.ilike('vehicle_plate', `%${plate.replace(/\W/g, '').split('').join('%')}%`);
-        if (driver) q = q.ilike('driver_name', `%${driver}%`);
+        if (docNumber) q = q.ilike('cte_number', containsIlikePattern(docNumber));
+        if (payer) q = q.ilike('payer_name', containsIlikePattern(payer));
+        if (internal) q = q.ilike('internal_number', containsIlikePattern(internal));
+        if (ref) q = q.ilike('reference_number', containsIlikePattern(ref));
+        if (protocol) q = q.ilike('protocol_number', containsIlikePattern(protocol));
+        if (key) q = q.ilike('access_key', containsIlikePattern(key));
+        if (plate) q = q.ilike('vehicle_plate', flexibleIdentifierIlikePattern(plate));
+        if (driver) q = q.ilike('driver_name', containsIlikePattern(driver));
         if (series) q = q.eq('cte_series', series);
-        if (branch) q = q.ilike('company_branch', `%${branch}%`);
-        if (cg) q = q.ilike('company_group', `%${cg}%`);
-        if (pg) q = q.ilike('payer_group', `%${pg}%`);
+        if (branch) q = q.ilike('company_branch', containsIlikePattern(branch));
+        if (cg) q = q.ilike('company_group', containsIlikePattern(cg));
+        if (pg) q = q.ilike('payer_group', containsIlikePattern(pg));
         if (filters.statuses && filters.statuses.length > 0) {
           q = q.or(`sefaz_status.in.(${filters.statuses.join(',')}),access_key.not.is.null`);
         }
         if (filters.correctionLetter === 'yes') q = q.eq('correction_letter', true);
         if (filters.correctionLetter === 'no') q = q.eq('correction_letter', false);
-        if (filters.processedStart) q = q.gte('processed_at', localDayBoundary(filters.processedStart));
-        if (filters.processedEnd) q = q.lt('processed_at', localDayBoundary(filters.processedEnd, true));
-        if (filters.issuedStart) q = q.or(`issued_at.gte.${localDayBoundary(filters.issuedStart)},and(issued_at.is.null,created_at.gte.${localDayBoundary(filters.issuedStart)})`);
-        if (filters.issuedEnd) q = q.or(`issued_at.lt.${localDayBoundary(filters.issuedEnd, true)},and(issued_at.is.null,created_at.lt.${localDayBoundary(filters.issuedEnd, true)})`);
+        if (filters.processedStart) q = q.gte('processed_at', dayBoundary(filters.processedStart));
+        if (filters.processedEnd) q = q.lt('processed_at', dayBoundary(filters.processedEnd, true));
+        if (filters.issuedStart) q = q.or(`issued_at.gte.${dayBoundary(filters.issuedStart)},and(issued_at.is.null,created_at.gte.${dayBoundary(filters.issuedStart)})`);
+        if (filters.issuedEnd) q = q.or(`issued_at.lt.${dayBoundary(filters.issuedEnd, true)},and(issued_at.is.null,created_at.lt.${dayBoundary(filters.issuedEnd, true)})`);
         return q
           .order('created_at', { ascending: false })
           .order('id', { ascending: false })
@@ -241,6 +247,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .filter((d) => !usedHubIds.has(d.id))
         .map((d): CteMonitorRow => {
           const payloadRecipient = readCtePayloadRecipient(d.cte_payload);
+          const payloadPayer = readCtePayloadPayer(d.cte_payload);
           return {
           id: d.id,
           tenant_id: currentTenant.id,
@@ -262,8 +269,8 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           xml_url: null,
           reference_number: null,
           internal_number: d.invoice_number ?? null,
-          payer_name: d.remitter ?? null,
-          payer_cnpj: null,
+          payer_name: payloadPayer.name,
+          payer_cnpj: payloadPayer.taxId,
           company_branch: null,
           company_group: null,
           payer_group: null,
@@ -273,7 +280,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           recipient_city: payloadRecipient.city ?? d.recipient_city ?? null,
           recipient_state: payloadRecipient.state ?? d.recipient_state ?? null,
           remitter: d.remitter ?? null,
-          freight_value: Number(d.freight_value ?? d.value ?? 0),
+          freight_value: Number(d.freight_value ?? 0),
           cargo_value: Number(d.value ?? 0),
           issued_at: d.issue_date || d.created_at || null,
           created_at: d.created_at,
@@ -289,7 +296,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 
 
 
-      return [...hubRows, ...draftRows].filter(row => matchesCteMonitorFilters(row, filters)).sort(
+      return [...hubRows, ...draftRows].filter(row => matchesCteMonitorFilters(row, filters, tenantTimezone)).sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
     },
@@ -297,15 +304,16 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 }
 
 /** Traduz status de `fiscal_documents` para o vocabulário do monitor SEFAZ. */
-export function mapOutboundStatus(status?: string | null, sefaz?: string | null, hubId?: string | null): SefazStatus {
+export function mapOutboundStatus(status?: string | null, sefaz?: string | null, _hubId?: string | null): SefazStatus {
   const s = (sefaz || '').toLowerCase();
   const st = (status || '').toLowerCase();
   if (st === 'cancelled' || s === 'cancelled') return 'cancelled';
+  if (st === 'cancel_pending' || s === 'cancel_pending') return 'cancel_pending';
   if (st === 'cancelling' || s === 'cancelling') return 'cancelling';
   // Cancelamento rejeitado mantém o documento fiscal autorizado e manejável.
   if (s === 'cancel_rejected' || s === 'cancel_error' || s.includes('cancel_rejeit')) return 'processed';
   if (st === 'authorized' || s === 'authorized') return 'processed';
-  if (s === 'status_timeout') return hubId ? 'processed' : 'processed_error';
+  if (s === 'status_timeout') return 'processed_error';
   if (st === 'error' || st === 'rejected' || s === 'error' || s === 'rejected' || s.endsWith('_error')) return 'processed_error';
   if (st === 'transmitting' || s === 'processing') return 'processing';
   return 'pending';

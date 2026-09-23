@@ -103,6 +103,7 @@ const MerchandiseShortages = lazy(() => import("@/pages/MerchandiseShortages"));
 const CostCenters = lazy(() => import("@/pages/CostCenters"));
 const Mdfe = lazy(() => import("@/pages/Mdfe"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
+const HelpCenter = lazy(() => import("@/pages/HelpCenter"));
 const SetPassword = lazy(() => import("@/pages/SetPassword"));
 
 const DriverHome = lazy(() => import("@/pages/driver/DriverHome"));
@@ -128,6 +129,7 @@ export function AppRoutes() {
       <Route path="/" element={<ProtectedRoute gate="any"><RoleRouter /></ProtectedRoute>} />
 
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/help" element={<ProtectedRoute gate="any"><HelpCenter /></ProtectedRoute>} />
       <Route path="/vehicles" element={<ProtectedRoute><Vehicles /></ProtectedRoute>} />
       <Route path="/drivers" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
       <Route path="/fleet-map" element={<ProtectedRoute><FleetMap /></ProtectedRoute>} />
@@ -138,7 +140,7 @@ export function AppRoutes() {
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
       <Route path="/corridors" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
       <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-      <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+      <Route path="/orders" element={<ProtectedRoute roles={['owner', 'admin']}><Orders /></ProtectedRoute>} />
       <Route path="/fiscal-documents" element={<ProtectedRoute><FiscalDocuments /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       <Route path="/loads" element={<ProtectedRoute><Loads /></ProtectedRoute>} />
@@ -157,7 +159,7 @@ export function AppRoutes() {
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="/expense-approval" element={<ProtectedRoute><ExpenseApproval /></ProtectedRoute>} />
       <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
-      <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
+      <Route path="/team" element={<ProtectedRoute roles={['owner', 'admin']}><TeamManagement /></ProtectedRoute>} />
       <Route path="/data-audit" element={<ProtectedRoute><DataAudit /></ProtectedRoute>} />
       <Route path="/regions" element={<ProtectedRoute><FreightHub /></ProtectedRoute>} />
       <Route path="/freight" element={<ProtectedRoute><FreightHub /></ProtectedRoute>} />

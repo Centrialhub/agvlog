@@ -183,7 +183,7 @@ export default function PortalShipments() {
                     <TableCell className="text-sm">{fmtDateTime(r.planned_arrival_at)}</TableCell>
                     <TableCell className="text-sm">{r.load_number || '—'}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
-                      {r.pallet_count ?? 0}
+                      {r.volume_count ?? 0}
                       <div className="flex justify-end gap-1 mt-0.5">
                         {r.has_pod && <ClipboardCheck className="h-3 w-3 text-emerald-600" />}
                         {r.has_open_occurrence && <AlertTriangle className="h-3 w-3 text-rose-600" />}

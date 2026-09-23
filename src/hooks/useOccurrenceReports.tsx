@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
@@ -5,7 +6,7 @@ import { useAuth } from './useAuth';
 import type { ReportType, ResolutionType } from '@/lib/occurrenceReports/occurrenceReportBuilder';
 import { validateFinalize } from '@/lib/occurrenceReports/occurrenceReportBuilder';
 import type { Json } from '@/integrations/supabase/types';
-import {acknowledgeDurableOperatorCommand,prepareDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
+import {acknowledgeDurableOperatorCommand,isDefinitiveOperatorCommandRejection,prepareDurableOperatorCommand,readDurableOperatorCommand} from '@/lib/operator/durableOperatorCommand';
 
 export interface OccurrenceRow {
   id: string;
@@ -102,20 +103,29 @@ export interface ExportRow {
   filters_snapshot: Record<string, unknown> | null;
 }
 
-export function useReportExports() {
+export interface ReportExportsPage {
+  rows: ExportRow[];
+  total: number;
+}
+
+export function useReportExports(page = 0, pageSize = 50) {
   const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
   return useQuery({
-    queryKey: ['occurrence-report-exports', activeTenantId],
+    queryKey: ['occurrence-report-exports', activeTenantId, page, pageSize],
     enabled: !!activeTenantId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const from = page * pageSize;
+      const { data, error, count } = await supabase
         .from('occurrence_report_exports')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('tenant_id', activeTenantId!)
         .order('created_at', { ascending: false })
-        .limit(200);
+        .range(from, from + pageSize - 1);
       if (error) throw error;
-      return (data ?? []) as unknown as ExportRow[];
+      return {
+        rows: (data ?? []) as unknown as ExportRow[],
+        total: count ?? 0,
+      } satisfies ReportExportsPage;
     },
   });
 }
@@ -288,23 +298,21 @@ export function useImportLegacyBatch() {
   const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
   const {user}=useAuth();
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (params: {
-      file_name: string;
-      detected_model: string;
-      row_count: number;
-      imported_count: number;
-      unmatched_count: number;
-      error_count: number;
-      errors: unknown[];
-      metadata?: Record<string, unknown>;
-      occurrences?: Array<Partial<OccurrenceRow>>;
-    }) => {
+  const [, setPendingRevision] = useState(0);
+  type ImportParams = {
+    file_name: string; detected_model: string; row_count: number; imported_count: number;
+    unmatched_count: number; error_count: number; errors: unknown[];
+    metadata?: Record<string, unknown>; occurrences?: Array<Partial<OccurrenceRow>>;
+  };
+  const mutation = useMutation({
+    mutationFn: async (params: ImportParams) => {
       if (!activeTenantId) throw new Error('Tenant não selecionado');
       if(!user)throw new Error('Usuário não autenticado');
       const command={batch:{file_name:params.file_name,detected_model:params.detected_model,row_count:params.row_count,imported_count:params.imported_count,unmatched_count:params.unmatched_count,error_count:params.error_count,errors:params.errors,metadata:params.metadata??{}},occurrences:params.occurrences??[]};
       const pending=await prepareDurableOperatorCommand({tenantId:activeTenantId,actorId:user.id,action:'import_occurrence_report',entityId:'new',payload:command});
-      const { data: batch, error } = await supabase.rpc('import_occurrence_report_batch_v1', {
+      let batch;
+      try {
+        const result = await supabase.rpc('import_occurrence_report_batch_v1', {
         _batch: {
           tenant_id: activeTenantId,
           file_name: params.file_name,
@@ -319,14 +327,28 @@ export function useImportLegacyBatch() {
           request_id: pending.requestId,
         } as unknown as Json,
         _occurrences: (params.occurrences ?? []) as unknown as Json,
-      });
-      if (error) throw error;
+        });
+        if (result.error) throw result.error;
+        batch = result.data;
+      } catch (error) {
+        if (isDefinitiveOperatorCommandRejection(error)) acknowledgeDurableOperatorCommand(pending);
+        setPendingRevision(value => value + 1);
+        throw error;
+      }
       acknowledgeDurableOperatorCommand(pending);
+      setPendingRevision(value => value + 1);
       return batch;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['occurrence-import-batches', activeTenantId] });
       qc.invalidateQueries({ queryKey: ['delivery-occurrences', activeTenantId] });
     },
+  });
+  const pendingCommand = activeTenantId && user ? readDurableOperatorCommand({tenantId:activeTenantId,actorId:user.id,action:'import_occurrence_report',entityId:'new'}) : null;
+  const recovered = pendingCommand?.payload as {batch?: Omit<ImportParams, 'occurrences'>; occurrences?: ImportParams['occurrences']} | undefined;
+  return Object.assign(mutation, {
+    pendingCommand,
+    recoverPending: () => recovered?.batch ? mutation.mutateAsync({...recovered.batch, occurrences: recovered.occurrences}) : Promise.reject(new Error('Nenhuma importação pendente.')),
+    discardPending: () => { if (pendingCommand) acknowledgeDurableOperatorCommand(pendingCommand); setPendingRevision(value => value + 1); },
   });
 }

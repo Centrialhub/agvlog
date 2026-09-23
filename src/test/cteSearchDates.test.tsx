@@ -74,7 +74,7 @@ describe('CT-e issuance dates in the search page', () => {
   });
 
   it.each([
-    { label: 'Hoje', day: '2026-08-31' }, { label: '7 dias', day: '2026-08-24' }, { label: '30 dias', day: '2026-08-01' },
+    { label: 'Hoje', day: '2026-08-31' }, { label: '7 dias', day: '2026-08-25' }, { label: '30 dias', day: '2026-08-02' },
   ])('uses the local day for the $label shortcut near midnight', ({ label, day }) => {
       vi.useFakeTimers({ toFake: ['Date'] });
       vi.setSystemTime(new Date(2026, 7, 31, 23, 30));

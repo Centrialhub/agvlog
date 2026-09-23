@@ -170,7 +170,9 @@ describe('OperationsCenter exact-count contract', () => {
     expect(source).toContain(".limit(200)");
     expect(source).toContain(".limit(1000)");
     expect(source).toContain(".limit(20)");
-    expect(source).toMatch(/select\('id', \{ count: 'exact', head: true \}\)[\s\S]*cargas ativas/);
+    expect(source).toMatch(/rpc\('get_operations_load_counts_v1',[\s\S]*active_count[\s\S]*cargas ativas/);
+    expect(source).toMatch(/in_transit_count[\s\S]*cargas em trânsito/);
+    expect(source).toMatch(/delayed_count[\s\S]*cargas atrasadas/);
     expect(source).toMatch(/alert_instances'[\s\S]*count: 'exact'[\s\S]*alertas ativos/);
     expect(source).toMatch(/incidents'[\s\S]*count: 'exact'[\s\S]*incidentes abertos/);
     expect(source).toMatch(/dispatch_trips'[\s\S]*count: 'exact'[\s\S]*viagens ativas/);

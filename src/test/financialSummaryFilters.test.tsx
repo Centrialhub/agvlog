@@ -7,6 +7,7 @@ const mock = vi.hoisted(() => ({
   portfolio: vi.fn().mockResolvedValue({}),
   cost: vi.fn().mockResolvedValue({}),
   fiscal: vi.fn().mockResolvedValue({}),
+  tenant: 'tenant',
 }));
 
 vi.mock('@/components/financial/UnbilledFreightPanel', () => ({ UnbilledFreightPanel: () => <p>Previsão com filtros próprios</p> }));
@@ -17,9 +18,12 @@ vi.mock('@/components/ui/searchable-select', () => ({
     </select>
   ),
 }));
-vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: 'tenant' } }) }));
+vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: mock.tenant } }) }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'actor' } }) }));
-vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+  useSearchParams: () => [new URLSearchParams(), vi.fn()],
+}));
 vi.mock('@/hooks/useClients', () => ({ useClients: () => ({ data: [{ id: 'client', company_name: 'Cliente QA', active: true }] }) }));
 vi.mock('@/hooks/useCostCenters', () => ({ useCostCenters: () => ({ fullData: [{ id: 'center-id', name: 'Centro QA', active: true }] }) }));
 vi.mock('@/lib/financial/receivablePortfolioClient', () => ({ readReceivablePortfolio: mock.portfolio }));
@@ -30,6 +34,7 @@ vi.mock('@/components/financial/RecordedCostSummary', () => ({ RecordedCostCard:
 vi.mock('@/components/financial/FiscalDashboardSummary', () => ({ FiscalDashboardCard: () => null, FiscalDashboardSummary: () => null }));
 
 beforeEach(() => {
+  mock.tenant = 'tenant';
   vi.stubGlobal('ResizeObserver', class {
     observe() {}
     unobserve() {}
@@ -75,5 +80,18 @@ it('applies the proper filters to each server summary only after explicit apply,
     to: '2026-01-31',
     client: 'client',
   });
-  expect(screen.getByText(/Previsão com filtros próprios/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Fretes a faturar'));
+  expect(await screen.findByText(/Previsão com filtros próprios/)).toBeInTheDocument();
+});
+
+it('descarta cliente e centro de custo da empresa anterior ao trocar de tenant', async () => {
+  const view=render(<QueryClientProvider client={new QueryClient()}><Financial /></QueryClientProvider>);
+  fireEvent.change(screen.getByRole('combobox',{name:'Cliente — carteira e fiscal'}),{target:{value:'client'}});
+  fireEvent.change(screen.getByLabelText('Centro de custo dos registros incorporados'),{target:{value:'center-id'}});
+  expect(screen.getByRole('combobox',{name:'Cliente — carteira e fiscal'})).toHaveValue('client');
+  expect(screen.getByLabelText('Centro de custo dos registros incorporados')).toHaveValue('center-id');
+  mock.tenant='tenant-b';
+  view.rerender(<QueryClientProvider client={new QueryClient()}><Financial /></QueryClientProvider>);
+  expect(screen.getByRole('combobox',{name:'Cliente — carteira e fiscal'})).toHaveValue('all');
+  expect(screen.getByLabelText('Centro de custo dos registros incorporados')).toHaveValue('all');
 });

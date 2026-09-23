@@ -23,8 +23,8 @@ import { useCancelCTe, useResendCte } from '@/hooks/useIssueCTe';
 import { useDeleteFailedCTe } from '@/hooks/useDeleteFailedCTe';
 import { usePollCteStatus } from '@/hooks/usePollCteStatus';
 import { useSortableData } from '@/hooks/useSortableData';
-import { calendarDay } from '@/lib/listFilters';
-import { fmtDateSafe } from '@/lib/utils/formatDate';
+import { APP_TIME_ZONE, fmtDateInTimeZone, localDateInputValue, shiftDateInputValue } from '@/lib/utils/formatDate';
+import { useTenant } from '@/hooks/useTenant';
 import { Table, TableHead, TableHeader, TableRow, TableBody, TableCell } from '@/components/ui/table';
 import { csvSafeCell } from '@/lib/csvSafety';
 
@@ -84,10 +84,13 @@ const DEFAULT_FILTERS: CteSearchFilters = {
   complementaryDoc: 'all',
 };
 
-function localDaysAgo(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return calendarDay(d.toISOString());
+// eslint-disable-next-line react-refresh/only-export-components
+export function cteSearchPeriod(today: string, days: number): { issueDateStart: string; issueDateEnd: string } {
+  const inclusiveDays = days === 0 ? 1 : days;
+  return {
+    issueDateStart: shiftDateInputValue(today, -(inclusiveDays - 1)),
+    issueDateEnd: today,
+  };
 }
 
 function activeFilterCount(f: CteSearchFilters) {
@@ -130,7 +133,7 @@ export function reconcileCteSelection(checked: Set<string>, ids: string[]) {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function toCsv(rows: CteSearchRow[]) {
+export function toCsv(rows: CteSearchRow[], timeZone = APP_TIME_ZONE) {
   const head = [
     'Status', 'Tipo', 'CT-e', 'Serie', 'Chave', 'Emissao', 'Pagador', 'Remetente',
     'Destinatario', 'Cidade', 'UF', 'Placa', 'Motorista', 'Notas', 'Frete', 'Carga',
@@ -143,7 +146,7 @@ export function toCsv(rows: CteSearchRow[]) {
     SEFAZ_STATUS_LABELS[r.sefaz_status as SefazStatus] ?? r.sefaz_status,
     CTE_TYPE_LABELS[r.cte_type as CteType] ?? r.cte_type,
     r.cte_number, r.cte_series, r.access_key,
-    fmtDateSafe(r.issued_at, ''),
+    fmtDateInTimeZone(r.issued_at, timeZone, ''),
     r.payer_name, r.remitter, r.recipient, r.recipient_city, r.recipient_state,
     r.vehicle_plate, r.driver_name, r.invoice_numbers,
     r.freight_value.toFixed(2).replace('.', ','), r.cargo_value.toFixed(2).replace('.', ','),
@@ -152,6 +155,8 @@ export function toCsv(rows: CteSearchRow[]) {
 }
 
 export default function CteSearch() {
+  const { currentTenant } = useTenant();
+  const tenantTimezone = currentTenant?.timezone || APP_TIME_ZONE;
   const { promptAction, confirmAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const cancelCte = useCancelCTe();
@@ -185,7 +190,7 @@ export default function CteSearch() {
   useEffect(() => {
     const transientRows = rows.filter(r => 
       r.hub_document_id && 
-      (r.sefaz_status === 'cancelling' || r.sefaz_status === 'processing')
+      (r.sefaz_status === 'cancel_pending' || r.sefaz_status === 'cancelling' || r.sefaz_status === 'processing')
     );
 
     if (transientRows.length > 0) {
@@ -246,10 +251,8 @@ export default function CteSearch() {
   }
 
   function setPeriod(days: number | null) {
-    apply({
-      issueDateStart: days === null ? '' : localDaysAgo(days),
-      issueDateEnd: '',
-    });
+    if (days === null) apply({ issueDateStart: '', issueDateEnd: '' });
+    else apply(cteSearchPeriod(localDateInputValue(new Date(), tenantTimezone), days));
   }
 
   const downloadableRows = useMemo(() => rows.filter(canDownloadCte), [rows]);
@@ -339,8 +342,8 @@ export default function CteSearch() {
 
   function exportCsv() {
     if (rows.length === 0) return;
-    const stamp = localDaysAgo(0);
-    saveBlob(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), `consulta-ctes-${stamp}.csv`);
+    const stamp = localDateInputValue(new Date(), tenantTimezone);
+    saveBlob(new Blob([toCsv(rows, tenantTimezone)], { type: 'text/csv;charset=utf-8' }), `consulta-ctes-${stamp}.csv`);
     toast.success(`CSV com ${rows.length} registro(s) gerado`);
   }
 
@@ -610,6 +613,7 @@ export default function CteSearch() {
               )}
               {rows.map((r) => {
                 const has = canDownloadCte(r);
+                const rowLabel = cteLabel(r);
                 return (
                   <TableRow key={r.id} className={`border-t hover:bg-muted/30 ${checked.has(r.id) ? 'bg-primary/5' : ''}`}>
                     <TableCell className="px-3 py-2">
@@ -633,7 +637,7 @@ export default function CteSearch() {
                     <TableCell className="px-3 py-2 text-xs">{CTE_TYPE_LABELS[r.cte_type as CteType] ?? r.cte_type}</TableCell>
                     <TableCell className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</TableCell>
                     <TableCell className="px-3 py-2">{r.cte_series ?? '—'}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs">{fmtDateSafe(r.issued_at)}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs">{fmtDateInTimeZone(r.issued_at, tenantTimezone)}</TableCell>
                     <TableCell className="px-3 py-2 text-xs truncate max-w-[150px]" title={r.remitter ?? ''}>{r.remitter ?? '—'}</TableCell>
                     <TableCell className="px-3 py-2 text-xs truncate max-w-[150px]" title={r.recipient ?? ''}>{r.recipient ?? '—'}</TableCell>
                     <TableCell className="px-3 py-2 text-xs">{[r.recipient_city, r.recipient_state].filter(Boolean).join(' / ') || '—'}</TableCell>
@@ -641,14 +645,14 @@ export default function CteSearch() {
                     <TableCell className="px-3 py-2 text-right text-xs">{BRL(r.freight_value)}</TableCell>
                     <TableCell className="px-3 py-2 text-right">
                       <div className="inline-flex gap-1">
-                        <Button size="sm" variant="ghost" title="Visualizar DACTE" disabled={!resultsReady || !has} onClick={() => oneFile(r, 'pdf', true)}>
-                          <Eye className="h-4 w-4" />
+                        <Button size="sm" variant="ghost" title="Visualizar DACTE" aria-label={`Visualizar DACTE do ${rowLabel}`} disabled={!resultsReady || !has} onClick={() => oneFile(r, 'pdf', true)}>
+                          <Eye aria-hidden="true" className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost" title="Baixar PDF" disabled={!resultsReady || !has} onClick={() => oneFile(r, 'pdf')}>
-                          <FileText className="h-4 w-4" />
+                        <Button size="sm" variant="ghost" title="Baixar PDF" aria-label={`Baixar PDF do ${rowLabel}`} disabled={!resultsReady || !has} onClick={() => oneFile(r, 'pdf')}>
+                          <FileText aria-hidden="true" className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost" title="Baixar XML" disabled={!resultsReady || !has} onClick={() => oneFile(r, 'xml')}>
-                          <FileDown className="h-4 w-4" />
+                        <Button size="sm" variant="ghost" title="Baixar XML" aria-label={`Baixar XML do ${rowLabel}`} disabled={!resultsReady || !has} onClick={() => oneFile(r, 'xml')}>
+                          <FileDown aria-hidden="true" className="h-4 w-4" />
                         </Button>
                         {isCteCancellationAllowed(r) && (
                           <Button 
@@ -656,10 +660,11 @@ export default function CteSearch() {
                             variant="ghost" 
                             className="text-destructive hover:text-destructive hover:bg-destructive/10" 
                             title="Cancelar CT-e" 
+                            aria-label={`Cancelar ${rowLabel}`}
                             disabled={!resultsReady || cancelCte.isPending} 
                             onClick={() => handleCancel(r)}
                           >
-                            <Ban className="h-4 w-4" />
+                            <Ban aria-hidden="true" className="h-4 w-4" />
                           </Button>
                         )}
                         {r.sefaz_status.endsWith('_error') && (
@@ -667,10 +672,11 @@ export default function CteSearch() {
                             size="sm" 
                             variant="ghost" 
                             title="Consultar/recuperar operação"
+                            aria-label={`Consultar ou recuperar operação do ${rowLabel}`}
                             disabled={!resultsReady || resendCte.isPending}
                             onClick={() => handleResend(r)}
                           >
-                            <RefreshCw className="h-4 w-4" />
+                            <RefreshCw aria-hidden="true" className="h-4 w-4" />
                           </Button>
                         )}
                         {(r.sefaz_status === 'error' || r.sefaz_status === 'rejected' || r.sefaz_status === 'sent_error' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'sefaz_error') && (
@@ -679,10 +685,11 @@ export default function CteSearch() {
                             variant="ghost" 
                             className="text-destructive hover:text-destructive hover:bg-destructive/10" 
                             title={r.hub_document_id ? "Remover rascunho (possui ID no Hub)" : "Excluir registro de erro"} 
+                            aria-label={r.hub_document_id ? `Remover rascunho do ${rowLabel}` : `Excluir registro de erro do ${rowLabel}`}
                             disabled={!resultsReady || deleteCte.isPending} 
                             onClick={() => handleDelete(r)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 aria-hidden="true" className="h-4 w-4" />
                           </Button>
                         )}
                       </div>

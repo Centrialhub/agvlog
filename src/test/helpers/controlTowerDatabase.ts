@@ -81,6 +81,9 @@ export async function prepareControlTowerDatabase(db: Pick<PGlite,'exec'>,candid
     await db.exec(readFileSync('supabase/migrations/20260917132000_make_control_tower_reader_catalog_compatible.sql','utf8'));
     await db.exec(readFileSync('supabase/migrations/20260917143500_restore_control_tower_revision_guards.sql','utf8'));
     await db.exec(readFileSync('supabase/migrations/20260917143600_bound_control_tower_snapshot.sql','utf8'));
+    await db.exec(readFileSync('supabase/migrations/20260921192051_enrich_control_tower_alert_trips.sql','utf8'));
+    await db.exec(readFileSync('supabase/migrations/20260921195730_bound_control_tower_alerts.sql','utf8'));
+    await db.exec(readFileSync('supabase/migrations/20260921200610_bound_control_tower_trip_collections.sql','utf8'));
   }
 }
 

@@ -26,6 +26,8 @@ import { useSortableData } from '@/hooks/useSortableData';
 import { Table, TableHead, TableHeader, TableRow, TableBody, TableCell } from '@/components/ui/table';
 import { FiscalListPagination } from '@/components/fiscal/FiscalListPagination';
 import { useSearchParams } from 'react-router-dom';
+import { useTenant } from '@/hooks/useTenant';
+import { APP_TIME_ZONE, fmtDateInTimeZone, fmtDateTimeInTimeZone } from '@/lib/utils/formatDate';
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Falha inesperada';
 
@@ -148,8 +150,11 @@ const TABLE_PAGE_SIZE = 50;
 
 export default function CteMonitor() {
   const toast = useSonnerToast();
-  const [searchParams] = useSearchParams();
+  const { currentTenant } = useTenant();
+  const tenantTimezone = currentTenant?.timezone || APP_TIME_ZONE;
+  const [searchParams, setSearchParams] = useSearchParams();
   const linkedDocumentId = searchParams.get('fiscalDocumentId');
+  const linkedCteId = searchParams.get('cteId');
   const linkedDocumentNumber = searchParams.get('docNumber') || undefined;
   const [filters, setFilters] = useState<CteMonitorFilters>({
     statuses: DEFAULT_STATUSES,
@@ -163,16 +168,33 @@ export default function CteMonitor() {
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [page, setPage] = useState(1);
 
+  useEffect(() => {
+    setFilters((previous) => ({ ...previous, docNumber: linkedDocumentNumber }));
+    setDraft((previous) => ({ ...previous, docNumber: linkedDocumentNumber }));
+    setPage(1);
+  }, [linkedDocumentNumber]);
+
   const { data: queriedRows = [], isLoading, isError, error, refetch, isFetching } = useCteMonitor(filters);
   const rowsData = useMemo(() => isError ? [] : queriedRows, [isError, queriedRows]);
   const resend = useResendCte();
 
   const { sortedItems: rows, requestSort, sortConfig } = useSortableData(rowsData);
   useEffect(() => {
-    if (!linkedDocumentId || selected) return;
-    const linkedRow = rowsData.find((row) => row.fiscal_document_id === linkedDocumentId || row.id === linkedDocumentId);
-    if (linkedRow) setSelected(linkedRow);
-  }, [linkedDocumentId, rowsData, selected]);
+    const linkedId = linkedDocumentId || linkedCteId;
+    if (!linkedId) return;
+    const linkedRow = rowsData.find((row) =>
+      row.id === linkedId || row.fiscal_document_id === linkedId || row.cte_document_id === linkedId);
+    if (linkedRow && selected?.id !== linkedRow.id) setSelected(linkedRow);
+  }, [linkedCteId, linkedDocumentId, rowsData, selected?.id]);
+
+  const closeDetail = () => {
+    setSelected(null);
+    if (!linkedDocumentId && !linkedCteId) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('fiscalDocumentId');
+    next.delete('cteId');
+    setSearchParams(next, { replace: true });
+  };
   const pageCount = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const visibleRows = useMemo(
@@ -507,7 +529,7 @@ export default function CteMonitor() {
                     <TableCell className="px-3 py-2 font-mono">{r.vehicle_plate ?? '—'}</TableCell>
                     <TableCell className="px-3 py-2 font-mono text-xs">{r.protocol_number ?? '—'}</TableCell>
                     <TableCell className="px-3 py-2 text-xs">
-                      {r.issued_at ? new Date(r.issued_at).toLocaleDateString('pt-BR') : '—'}
+                      {fmtDateInTimeZone(r.issued_at, tenantTimezone)}
                     </TableCell>
                     <TableCell className="px-3 py-2 text-xs max-w-xs truncate" title={r.sefaz_status_reason ?? ''}>
                       {r.sefaz_status_reason ? (
@@ -545,9 +567,9 @@ export default function CteMonitor() {
           {!isError && <div className="px-3 pb-3"><FiscalListPagination page={currentPage} pageSize={TABLE_PAGE_SIZE} totalItems={rows.length} onPageChange={setPage} /></div>}
         </Card>
 
-        <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-          <DialogContent className="max-w-3xl">
-            {selected && <CteDetail row={selected} onClose={() => setSelected(null)} />}
+        <Dialog open={!!selected} onOpenChange={(o) => !o && closeDetail()}>
+          <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-3xl overflow-y-auto">
+            {selected && <CteDetail row={selected} onClose={closeDetail} timeZone={tenantTimezone} />}
           </DialogContent>
         </Dialog>
       </div>
@@ -555,7 +577,7 @@ export default function CteMonitor() {
   );
 }
 
-function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }) {
+function CteDetail({ row, onClose, timeZone }: { row: CteMonitorRow; onClose: () => void; timeZone: string }) {
   const { promptAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const { data: events = [], isLoading: eventsLoading, isError: eventsError, error: eventsQueryError } = useCteSefazEvents(row.cte_document_id ?? null);
@@ -602,13 +624,12 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-sm border-b pb-4 mb-4">
-        <div><span className="text-muted-foreground">Emissão:</span> {row.issued_at ? new Date(row.issued_at).toLocaleString('pt-BR') : '—'}</div>
+        <div><span className="text-muted-foreground">Emissão:</span> {fmtDateTimeInTimeZone(row.issued_at, timeZone)}</div>
         <div><span className="text-muted-foreground">Protocolo:</span> {row.protocol_number ?? '—'}</div>
         <div><span className="text-muted-foreground">Remetente:</span> {row.remitter ?? '—'}</div>
         <div><span className="text-muted-foreground">Pagador:</span> {row.payer_name ?? '—'}</div>
         <div><span className="text-muted-foreground">Destinatário:</span> {row.recipient ?? '—'}</div>
         <div><span className="text-muted-foreground">Cidade/UF Destino:</span> {row.recipient_city ?? '—'} / {row.recipient_state ?? '—'}</div>
-        <div><span className="text-muted-foreground">Protocolo:</span> {row.protocol_number ?? '—'}</div>
         <div><span className="text-muted-foreground">Ambiente:</span> {row.sefaz_environment ?? '—'}</div>
         <div><span className="text-muted-foreground">Placa:</span> {row.vehicle_plate ?? '—'}</div>
         <div><span className="text-muted-foreground">Motorista:</span> {row.driver_name ?? '—'}</div>
@@ -636,7 +657,7 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
             <div key={e.id} className="p-2 text-xs">
               <div className="flex justify-between">
                 <span className="font-medium">{e.event_type}</span>
-                <span className="text-muted-foreground">{new Date(e.occurred_at).toLocaleString('pt-BR')}</span>
+                <span className="text-muted-foreground">{fmtDateTimeInTimeZone(e.occurred_at, timeZone)}</span>
               </div>
               {e.reason && <div className="text-muted-foreground">{e.reason}</div>}
               {e.protocol_number && <div className="text-muted-foreground">Protocolo: {e.protocol_number}</div>}

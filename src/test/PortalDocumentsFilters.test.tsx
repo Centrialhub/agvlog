@@ -10,7 +10,8 @@ vi.mock('@/hooks/portal/usePortalClientScope', () => ({ usePortalClientScope: ()
 vi.mock('@/hooks/portal/usePortalDocuments', () => ({ usePortalDocuments: (filters: { offset: number }) => {
   mocks.query(filters);
   const count = filters.offset === 0 ? 50 : 1;
-  return { data: Array.from({ length: count }, (_, index) => ({ id: `${filters.offset + index}`, invoice_number: `NF-${filters.offset + index}`, document_type: 'nfe' })), isLoading: false };
+  const rows = Array.from({ length: count }, (_, index) => ({ id: `${filters.offset + index}`, invoice_number: `NF-${filters.offset + index}`, document_type: 'nfe' }));
+  return { data: { rows, hasMore: filters.offset === 0 }, isLoading: false };
 } }));
 afterEach(() => { cleanup(); mocks.query.mockClear(); mocks.client = 'client-a'; });
 

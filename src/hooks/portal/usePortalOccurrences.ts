@@ -6,6 +6,8 @@ import { assertPortalListPage, nextPortalListPage, PORTAL_LIST_PAGE_SIZE, type P
 
 export interface PortalOccurrence {
   id: string;
+  client_id: string | null;
+  can_reply: boolean;
   load_id: string | null;
   order_id: string | null;
   event_type: string;
@@ -64,9 +66,11 @@ export function useCreatePortalOccurrence() {
       severity?: string;
       load_id?: string;
       order_id?: string;
+      fiscal_document_id?: string;
+      request_id: string;
     }) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { data, error } = await supabase.rpc('create_client_occurrence', {
+      const { data, error } = await supabase.rpc('create_client_occurrence_v3' as never, {
         _tenant_id: currentTenant.id,
         _client_id: args.client_id,
         _event_type: args.event_type,
@@ -74,10 +78,15 @@ export function useCreatePortalOccurrence() {
         _severity: args.severity || 'medium',
         _load_id: args.load_id || undefined,
         _order_id: args.order_id || undefined,
-      });
+        _fiscal_document_id: args.fiscal_document_id || undefined,
+        _request_id: args.request_id,
+      } as never);
       if (error) throw error;
       return data as string;
     },
-    onSuccess: () => qc.resetQueries({ queryKey: ['portal_occurrences'] }),
+    onSuccess: () => {
+      void qc.resetQueries({ queryKey: ['portal_occurrences'] });
+      void qc.invalidateQueries({ queryKey: ['portal_shipment_detail_v2'] });
+    },
   });
 }

@@ -1,4 +1,5 @@
 import { DoccobBuildInput, DoccobInvoiceInput } from './doccobTypes';
+import { isValidCnpj } from '@/lib/fiscal/insuranceValidation';
 
 export interface DoccobValidationIssue {
   invoiceId?: string;
@@ -11,6 +12,8 @@ export function validateDoccobExportInput(input: DoccobBuildInput): DoccobValida
   const issues: DoccobValidationIssue[] = [];
   if (!input.carrier?.cnpj) {
     issues.push({ code: 'carrier_cnpj_missing', message: 'CNPJ da transportadora não configurado.', level: 'error' });
+  } else if (!isValidCnpj(input.carrier.cnpj)) {
+    issues.push({ code: 'carrier_cnpj_invalid', message: 'CNPJ da transportadora inválido — informe 14 dígitos válidos.', level: 'error' });
   }
   if (!input.carrier?.name) {
     issues.push({ code: 'carrier_name_missing', message: 'Razão social da transportadora não configurada.', level: 'error' });

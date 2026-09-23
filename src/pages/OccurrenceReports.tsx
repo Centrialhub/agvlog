@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react';
-import { useNavigate as useNavigateRR } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { PendingCommandRecovery } from '@/components/operator/PendingCommandRecovery';
 import {
   useOccurrences,
   useReportExports,
@@ -37,6 +37,7 @@ import { buildOccurrenceReportExcel } from '@/lib/occurrenceReports/occurrenceRe
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { useTenant } from '@/hooks/useTenant';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
+import { OccurrenceReportRowsTable } from '@/components/occurrences/OccurrenceReportRowsTable';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -50,6 +51,7 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export default function OccurrenceReports() {
+  const reportHistoryPageSize = 50;
   const { toast } = useToast();
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
@@ -59,6 +61,7 @@ export default function OccurrenceReports() {
   const [resolutionType, setResolutionType] = useState<string>('');
   const [rural, setRural] = useState<'all' | 'only' | 'exclude'>('all');
   const [onlyFinalized, setOnlyFinalized] = useState(true);
+  const [reportHistoryPage, setReportHistoryPage] = useState(0);
 
   const filters = {
     periodStart: periodStart || undefined,
@@ -74,11 +77,21 @@ export default function OccurrenceReports() {
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
   const companyInfo = useMemo(() => toCompanyPdfInfo(companyProfile, currentTenant?.name), [companyProfile, currentTenant?.name]);
-  const { data: exportsRows = [] } = useReportExports();
+  const { data: reportHistory, isFetching: isFetchingReportHistory } = useReportExports(
+    reportHistoryPage,
+    reportHistoryPageSize,
+  );
+  const exportsRows = reportHistory?.rows ?? [];
+  const reportHistoryTotal = reportHistory?.total ?? 0;
+  const reportHistoryPageCount = Math.max(1, Math.ceil(reportHistoryTotal / reportHistoryPageSize));
   const { data: batches = [] } = useImportBatches();
   const createExport = useCreateExport();
   const markSent = useMarkExportSent();
   const importBatch = useImportLegacyBatch();
+
+  useEffect(() => {
+    setReportHistoryPage(0);
+  }, [currentTenant?.id]);
 
   const agg = useMemo(() => aggregateOccurrences(occurrences), [occurrences]);
 
@@ -264,6 +277,7 @@ export default function OccurrenceReports() {
 
   return (
     <div className="p-6 space-y-6">
+      {importBatch.pendingCommand && <PendingCommandRecovery subject="uma importação de ocorrências" onRecover={importBatch.recoverPending} onDiscard={importBatch.discardPending} />}
       <div>
         <h1 className="text-2xl font-semibold">Relatórios de Ocorrências</h1>
         <p className="text-sm text-muted-foreground">
@@ -350,7 +364,7 @@ export default function OccurrenceReports() {
             <Button variant="outline" onClick={() => generateReturnedReport('excel')}>Exportar Excel</Button>
             <Button variant="outline" onClick={() => generateReturnedReport('csv')}>Exportar CSV</Button>
           </div>
-          <RowTable rows={returnedRows} emptyLabel="Nenhuma devolução no período." />
+          <OccurrenceReportRowsTable rows={returnedRows} emptyLabel="Nenhuma devolução no período." />
         </TabsContent>
 
         <TabsContent value="unserved" className="space-y-3">
@@ -359,14 +373,18 @@ export default function OccurrenceReports() {
             <Button variant="outline" onClick={() => generateUnservedReport('excel')}>Exportar Excel</Button>
             <Button variant="outline" onClick={() => generateUnservedReport('csv')}>Exportar CSV</Button>
           </div>
-          <RowTable rows={unservedRows} emptyLabel="Nenhuma nota sem saída." />
+          <OccurrenceReportRowsTable rows={unservedRows} emptyLabel="Nenhuma nota sem saída." />
         </TabsContent>
 
         <TabsContent value="shortage" className="space-y-3">
-          <RowTable rows={shortageSurplusRows} emptyLabel="Nenhuma falta ou sobra registrada." />
+          <OccurrenceReportRowsTable rows={shortageSurplusRows} emptyLabel="Nenhuma falta ou sobra registrada." />
         </TabsContent>
 
-        <TabsContent value="history">
+        <TabsContent value="history" className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+            <span>{reportHistoryTotal.toLocaleString('pt-BR')} relatório(s) no histórico</span>
+            <span>Página {reportHistoryPage + 1} de {reportHistoryPageCount}</span>
+          </div>
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
@@ -399,6 +417,22 @@ export default function OccurrenceReports() {
               </TableBody>
             </Table>
           </CardContent></Card>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={reportHistoryPage === 0 || isFetchingReportHistory}
+              onClick={() => setReportHistoryPage((page) => Math.max(0, page - 1))}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              disabled={reportHistoryPage + 1 >= reportHistoryPageCount || isFetchingReportHistory}
+              onClick={() => setReportHistoryPage((page) => page + 1)}
+            >
+              Próxima
+            </Button>
+          </div>
         </TabsContent>
 
         <TabsContent value="import" className="space-y-3">
@@ -459,40 +493,5 @@ export default function OccurrenceReports() {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function RowTable({ rows, emptyLabel }: { rows: Array<Record<string, any>>; emptyLabel: string }) {
-  const navigate = useNavigateRR();
-  return (
-    <Card><CardContent className="p-0">
-      <Table>
-        <TableHeader><TableRow>
-          <TableHead>Data</TableHead><TableHead>NF</TableHead><TableHead>Cliente</TableHead>
-          <TableHead>Cidade</TableHead><TableHead>Fornecedor</TableHead><TableHead>Tipo</TableHead>
-          <TableHead>Resolução</TableHead><TableHead>Motivo</TableHead><TableHead>Folha</TableHead>
-        </TableRow></TableHeader>
-        <TableBody>
-          {rows.map((o) => (
-            <TableRow key={o.id as string}>
-              <TableCell>{(o.occurrence_date as string) ?? '—'}</TableCell>
-              <TableCell>{(o.invoice_number as string) ?? '—'}</TableCell>
-              <TableCell>{(o.customer_name as string) ?? '—'}</TableCell>
-              <TableCell>{(o.city as string) ?? '—'}</TableCell>
-              <TableCell>{(o.supplier_name as string) ?? '—'}</TableCell>
-              <TableCell>{(o.occurrence_type as string) ?? '—'}</TableCell>
-              <TableCell>{resolutionTypeLabels[(o.resolution_type as string) ?? ''] ?? '—'}</TableCell>
-              <TableCell className="max-w-[280px] truncate">{(o.occurrence_reason as string) ?? (o.resolution_notes as string) ?? '—'}</TableCell>
-              <TableCell>
-                <Button size="sm" variant="ghost" onClick={() => navigate(`/occurrences/${o.id}/return-sheet`)}>
-                  Folha
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-          {!rows.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground">{emptyLabel}</TableCell></TableRow>}
-        </TableBody>
-      </Table>
-    </CardContent></Card>
   );
 }

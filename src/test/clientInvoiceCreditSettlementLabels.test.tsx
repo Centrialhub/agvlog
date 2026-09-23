@@ -5,7 +5,7 @@ const ids={tenant:'10000000-0000-4000-8000-000000000001',invoice:'10000000-0000-
 const m=vi.hoisted(()=>({submit:vi.fn(),canCancel:true,settled:4000}));
 vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:'10000000-0000-4000-8000-000000000001'}})}));
 vi.mock('@/hooks/useAuth',()=>({useAuth:()=>({user:{id:'10000000-0000-4000-8000-000000000003'}})}));
-vi.mock('@/hooks/useClientInvoiceLifecycle',()=>({useClientInvoiceLifecycle:()=>({query:{data:{invoice_number:'F-100',status:'generated',received_cents:m.settled,open_cents:5000-m.settled,revision:'a'.repeat(32),can_cancel:m.canCancel,can_mark_sent:false,can_reactivate:false,requires_reconciliation:false,history:[]},isPending:false,isFetching:false,error:null,refetch:vi.fn()},submit:m.submit,isPending:false,pending:null,recoveryError:null})}));
+vi.mock('@/hooks/useClientInvoiceLifecycle',()=>({useClientInvoiceLifecycle:()=>({query:{data:{invoice_number:'F-100',status:'generated',received_cents:m.settled,open_cents:5000-m.settled,revision:'a'.repeat(32),can_cancel:m.canCancel,can_mark_sent:false,can_reactivate:false,requires_reconciliation:false,history:[]},isPending:false,isFetching:false,error:null,refetch:vi.fn()},history:{data:[],isFetching:false,error:null},submit:m.submit,isPending:false,pending:null,recoveryError:null})}));
 beforeEach(()=>{m.submit.mockReset();m.canCancel=true;m.settled=4000;});afterEach(cleanup);
 it('permits server-authorized cancellation of a credit-only40 without instructing a cash reversal',async()=>{
  m.submit.mockResolvedValue({action:'cancel'});render(<ClientInvoiceLifecycleDialog tenantId={ids.tenant} invoiceId={ids.invoice} onClose={()=>{}}/>);

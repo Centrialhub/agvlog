@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const preview = 'https://agvlog-preview-thomaz-20260831.veituma.chatgpt.site';
-const vercel = 'https://agvlogistica.vercel.app';
-const production = 'https://agvlog.lovable.app';
+const production = 'https://agvlogistica.vercel.app';
+const retired = 'https://agvlog.lovable.app';
 async function loadCors(env: Record<string, string> = {}) {
   vi.resetModules();
   vi.stubGlobal('Deno', { env: { get: (key: string) => env[key] } });
@@ -14,7 +14,7 @@ async function loadCors(env: Record<string, string> = {}) {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('fiscal browser access without bypassing authentication', () => {
-  it.each([preview, production, vercel])('allows preflight and exposes authentication errors to %s', async origin => {
+  it.each([preview, production])('allows preflight and exposes authentication errors to %s', async origin => {
     const withCors = await loadCors();
     const handler = vi.fn(async (req: Request) => new Response(req.method === 'OPTIONS' ? 'ok' : 'unauthorized', {
       status: req.method === 'OPTIONS' ? 200 : 401,
@@ -33,7 +33,7 @@ describe('fiscal browser access without bypassing authentication', () => {
     }
     expect(handler).toHaveBeenCalledTimes(2);
   });
-  it.each(['https://evil.test', 'https://another.vercel.app', vercel + '.evil.test', 'http://agvlogistica.vercel.app', vercel + '/nfse', preview + '.evil.test', 'https://another.veituma.chatgpt.site', preview + '/cte-hub', 'null', ''])('rejects %s before dispatch', async origin => {
+  it.each([retired, 'https://evil.test', 'https://another.vercel.app', production + '.evil.test', 'http://agvlogistica.vercel.app', production + '/nfse', preview + '.evil.test', 'https://another.veituma.chatgpt.site', preview + '/cte-hub', 'null', ''])('rejects %s before dispatch', async origin => {
     const withCors = await loadCors();
     const dispatch = vi.fn();
     const response = await withCors(dispatch)(new Request('https://edge.test', { method: 'POST', headers: { Origin: origin } }));
@@ -54,7 +54,7 @@ describe('fiscal browser access without bypassing authentication', () => {
     const handler = vi.fn(async () => new Response('ok'));
     expect((await withCors(handler)(new Request('https://edge.test', { headers: { Origin: preview } }))).status).toBe(403);
     expect((await withCors(handler)(new Request('https://edge.test', { headers: { Origin: production } }))).status).toBe(200);
-    expect((await withCors(handler)(new Request('https://edge.test', { headers: { Origin: vercel } }))).status).toBe(200);
+    expect((await withCors(handler)(new Request('https://edge.test', { headers: { Origin: retired } }))).status).toBe(403);
   });
   it('only accepts exact HTTPS entries from explicit preview configuration', async () => {
     const withCors = await loadCors({ AGVLOG_FISCAL_PREVIEW_ORIGINS: 'https://approved.test,https://bad.test/path,http://insecure.test,*,null' });

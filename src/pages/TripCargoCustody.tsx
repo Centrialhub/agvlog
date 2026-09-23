@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/hooks/useTenant';
 import {
-  closeTripCargo, getTripCargoCollectionPage, getTripCargoControl, listTripCargoControls, reviewTripCargoDivergence,
+  closeTripCargo, getCompleteTripCargoCollection, getTripCargoCollectionPage, getTripCargoControl, listTripCargoControls, reviewTripCargoDivergence,
   TripCargoListChangedError,
   tripCargoDocumentLabels, tripCargoSealStatusLabels, tripCargoStatusLabels, tripCargoStatuses, type TripCargoStatus,
 } from '@/lib/driver/tripCargoCustody';
@@ -49,11 +49,15 @@ export default function TripCargoCustody() {
     queryFn:()=>getTripCargoCollectionPage(tenantId!,tripId!,'seals',collectionPages.seals,50,available!.collection_counts.seals)});
   const divergencesPage=useQuery({queryKey:['trip-cargo-collection',tenantId,tripId,'divergences',collectionPages.divergences,available?.collection_counts.divergences],enabled:!!available&&collectionPages.divergences>1,retry:false,
     queryFn:()=>getTripCargoCollectionPage(tenantId!,tripId!,'divergences',collectionPages.divergences,50,available!.collection_counts.divergences)});
+  const needsCompleteSealCheck=available?.control.status==='returned'&&available.collection_counts.seals>available.seals.length;
+  const closeSeals=useQuery({queryKey:['trip-cargo-close-seals',tenantId,tripId,available?.control.updated_at,available?.collection_counts.seals],enabled:!!available&&needsCompleteSealCheck,retry:false,
+    queryFn:()=>getCompleteTripCargoCollection(tenantId!,tripId!,'seals',available!.collection_counts.seals,available!.seals)});
 
   const refresh = async () => {
     await Promise.all([
       qc.invalidateQueries({ queryKey: ['trip-cargo-list'] }),
       qc.invalidateQueries({ queryKey: ['trip-cargo-control'] }),
+      qc.invalidateQueries({ queryKey: ['trip-cargo-close-seals'] }),
     ]);
   };
   const review = useMutation({
@@ -88,7 +92,9 @@ export default function TripCargoCustody() {
     }
   }, [list.data, tripId]);
 
-  const hasUnresolvedSeal = snapshot?.seals.some(row => row.status === 'installed'
+  const closureSeals=needsCompleteSealCheck?closeSeals.data:snapshot?.seals;
+  const sealCheckUnavailable=!!needsCompleteSealCheck&&(closeSeals.isPending||closeSeals.isError||!closureSeals);
+  const hasUnresolvedSeal = closureSeals?.some(row => row.status === 'installed'
     || !row.resolved_at || !row.resolved_by || (row.resolution_reason?.trim().length ?? 0) < 5
     || (!row.resolution_evidence_id && !row.evidence_waived_legacy)) ?? false;
   return <div className="space-y-5">
@@ -179,12 +185,14 @@ export default function TripCargoCustody() {
 
       {snapshot.control.status === 'returned' && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><CheckCircle2 className="h-4 w-4" />Encerramento da custódia</CardTitle></CardHeader><CardContent className="space-y-3">
         <p className="text-sm">Recebidos: {snapshot.physical_receipts.required_count - snapshot.physical_receipts.pending_count} / {snapshot.physical_receipts.required_count}. Ausentes: {snapshot.physical_receipts.missing_count}.</p>
+        {needsCompleteSealCheck && closeSeals.isPending && <p className="text-xs text-muted-foreground">Verificando todos os lacres antes do encerramento…</p>}
+        {needsCompleteSealCheck && closeSeals.isError && <p className="text-xs text-destructive">Não foi possível verificar todos os lacres. Atualize o dossiê e tente novamente.</p>}
         {hasUnresolvedSeal && <p className="text-xs text-destructive">O encerramento está bloqueado até todos os lacres terem situação final, conferência, motivo e evidência.</p>}
         {(snapshot.physical_receipts.pending_count > 0 || snapshot.physical_receipts.missing_count > 0) && <>
           <p className="text-xs text-amber-700">O encerramento normal está bloqueado. Somente owner/admin pode usar exceção, com justificativa auditada.</p>
           <div><Label htmlFor="cargo-override">Justificativa da exceção supervisora</Label><Input id="cargo-override" value={overrideReason} onChange={event => setOverrideReason(event.target.value)} /></div>
         </>}
-        <Button disabled={close.isPending || hasUnresolvedSeal || ((snapshot.physical_receipts.pending_count > 0 || snapshot.physical_receipts.missing_count > 0) && overrideReason.trim().length < 10)} onClick={() => close.mutate()}>
+        <Button disabled={close.isPending || sealCheckUnavailable || hasUnresolvedSeal || ((snapshot.physical_receipts.pending_count > 0 || snapshot.physical_receipts.missing_count > 0) && overrideReason.trim().length < 10)} onClick={() => close.mutate()}>
           Encerrar custódia
         </Button>
       </CardContent></Card>}

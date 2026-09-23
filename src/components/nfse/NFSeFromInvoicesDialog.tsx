@@ -23,7 +23,7 @@ import { useEmitters } from '@/hooks/useEmitters';
 import { useCreateNFSe, useIssueNFSeBatch, type NFSeDoc } from '@/hooks/useNFSe';
 import type { FiscalDocument } from '@/hooks/useFiscalDocuments';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
-import { formatCnpj, validateInsurance } from '@/lib/fiscal/insuranceValidation';
+import { formatCnpj, validateInsurance, onlyDigits } from '@/lib/fiscal/insuranceValidation';
 import { hasInsuranceData } from '@/lib/fiscal/insuranceText';
 import { hasInsuranceProfile } from '@/lib/fiscal/insuranceProfile';
 import { Calculator, Save } from 'lucide-react';
@@ -44,6 +44,7 @@ import {
   needsNFSeTomadorRegistryEnrichment,
 } from '@/lib/fiscal/nfseAddressAutocomplete';
 import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
+import { normalizedPartyIdentity } from '@/lib/fiscal/nfsePartyIdentity';
 import { buildIndividualNFSeDescription } from '@/lib/fiscal/nfseDescription';
 import {
   DEFAULT_TRANSPORT_NFSE_NATIONAL_SERVICE_CODE,
@@ -67,7 +68,6 @@ interface BatchAttempt {
 }
 
 function num(value: unknown) { return Number(value ?? 0) || 0; }
-function onlyDigits(value: unknown) { return String(value ?? '').replace(/\D/g, ''); }
 
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message
@@ -75,18 +75,6 @@ function errorMessage(error: unknown): string {
     : 'Falha ao processar emissão(ões)';
 }
 
-function normalizedPartyIdentity(party: TomadorData): string {
-  return [
-    onlyDigits(party.cnpj),
-    String(party.nome || '').trim().toLocaleUpperCase('pt-BR'),
-    onlyDigits(party.ie),
-    String(party.endereco || '').trim().toLocaleUpperCase('pt-BR'),
-    String(party.numero || '').trim().toLocaleUpperCase('pt-BR'),
-    normalizeCep(party.cep),
-    normalizeIbgeCity(party.municipio_cod) || String(party.municipio || '').trim().toLocaleUpperCase('pt-BR'),
-    String(party.uf || '').trim().toLocaleUpperCase('pt-BR'),
-  ].join('|');
-}
 
 function isStoredBatchAttempt(value: unknown): value is BatchAttempt {
   if (!value || typeof value !== 'object') return false;
@@ -314,7 +302,18 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     setManualRecalcing(true);
     try {
       const res = await recalcFreight.mutateAsync(ids);
-      toast.success(`Frete recalculado: ${res.updated} atualizadas, ${res.skipped} com override, ${res.failed} falharam`);
+      const summary = `Frete recalculado: ${res.updated} atualizadas, ${res.skipped} com override, ${res.failed} falharam`;
+      if (res.failed === 0) toast.success(summary);
+      else {
+        const affected = res.failedIds.slice(0, 10).join(', ');
+        const suffix = res.failedIds.length > 10 ? ` e mais ${res.failedIds.length - 10}` : '';
+        const message = `${summary}. NF-es afetadas: ${affected}${suffix}`;
+        if (res.updated === 0) toast.error(message); else toast.warning(message);
+      }
+    } catch (error) {
+      toast.error('Não foi possível recalcular os fretes', {
+        description: error instanceof Error ? error.message : 'Falha ao consultar NF-es ou grupos pagadores.',
+      });
     } finally {
       setManualRecalcing(false);
     }

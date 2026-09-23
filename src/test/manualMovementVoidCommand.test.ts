@@ -1,10 +1,11 @@
 // @vitest-environment node
+import { historicalFinanceAuditSchema } from './helpers/historicalFinanceContracts';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {beforeAll,beforeEach,afterEach,afterAll,it,expect} from 'vitest';
 import {createMovementCorrectionContextDatabase} from './helpers/movementCorrectionContextDatabase';
 import {financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
-import {financeAuditSchema,financeAuditActions} from '@/lib/financial/financeAuditContract';
+import {financeAuditActions} from '@/lib/financial/financeAuditContract';
 let db:Awaited<ReturnType<typeof createMovementCorrectionContextDatabase>>;
 beforeAll(async()=>{db=await createMovementCorrectionContextDatabase();await db.exec(readFileSync('supabase/migrations/20260910191905_finance_manual_movement_void_command.sql','utf8'));},30000);
 beforeEach(async()=>{await db.exec('begin');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[i.operator]);});
@@ -22,7 +23,7 @@ it('invalidates a free manual outgoing once, preserves original and records acto
  expect((await db.query('select * from finance_movements where id=$1',[m.id])).rows[0]).toEqual(before);
  expect((await db.query('select count(*)::int n from finance_private.active_movements where id=$1',[m.id])).rows[0]).toEqual({n:0});
  expect((await db.query("select count(*)::int n from finance_events where action='movement_voided' and entity_id=$1",[m.id])).rows[0]).toEqual({n:1});
- const audit=financeAuditSchema.parse((await db.query<{v:unknown}>('select finance_private.audit_events($1,$2) v',[i.tenant,{page:1,page_size:30,manual_only:true,action:'movement_voided'}])).rows[0].v);
+ const audit=historicalFinanceAuditSchema.parse((await db.query<{v:unknown}>('select finance_private.audit_events($1,$2) v',[i.tenant,{page:1,page_size:30,manual_only:true,action:'movement_voided'}])).rows[0].v);
  expect(audit).toMatchObject({total:1,manual_count:1,rows:[{action:'movement_voided',entity_id:m.id,actor_id:i.operator,reason:m.payload.reason,manual_intervention:true}]});
  expect(financeAuditActions.movement_voided).toContain('manualmente');
  expect((await db.query('select count(*)::int n from finance_private.movement_void_write_tickets')).rows[0]).toEqual({n:0});

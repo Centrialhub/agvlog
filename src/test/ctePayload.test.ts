@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readAuthorizedCteHubDetails, readCteMdfeDetails, readCtePayloadRecipient } from '@/lib/fiscal/ctePayload';
+import { readAuthorizedCteHubDetails, readCteMdfeDetails, readCtePayloadPayer, readCtePayloadRecipient } from '@/lib/fiscal/ctePayload';
 
 describe('readCtePayloadRecipient', () => {
   it('reads recipient and destination data from a Hub Fiscal payload', () => {
@@ -16,6 +16,24 @@ describe('readCtePayloadRecipient', () => {
       payload: { destinatario: { endereco: { municipio: 'Santos', uf: 'SP' } } },
     })).toEqual({ name: null, city: 'Santos', state: 'SP' });
     expect(readCtePayloadRecipient(['invalid'])).toEqual({ name: null, city: null, state: null });
+  });
+});
+
+describe('readCtePayloadPayer', () => {
+  it('uses the party selected by the taker role instead of assuming the remitter', () => {
+    expect(readCtePayloadPayer({
+      payload: {
+        remetente: { nome: 'REMETENTE', cnpj: '11111111000111' },
+        destinatario: { nome: 'DESTINATARIO', cnpj: '22222222000122' },
+        tomador: { role: 'destinatario' },
+      },
+    })).toEqual({ name: 'DESTINATARIO', taxId: '22222222000122' });
+
+    expect(readCtePayloadPayer({
+      payload: {
+        tomador: { role: 'terceiro', dados: { nome: 'TERCEIRO', cpf: '12345678900' } },
+      },
+    })).toEqual({ name: 'TERCEIRO', taxId: '12345678900' });
   });
 });
 

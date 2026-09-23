@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
           status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const appOrigin = Deno.env.get("AGVLOG_APP_ORIGIN")?.replace(/\/$/, "") || "https://agvlog.lovable.app";
+      const appOrigin = Deno.env.get("AGVLOG_APP_ORIGIN")?.replace(/\/$/, "") || "https://agvlogistica.vercel.app";
       const publicClient = createClient(supabaseUrl, anonKey);
       const { error: resetError } = await publicClient.auth.resetPasswordForEmail(target.user.email, {
         redirectTo: `${appOrigin}/set-password`,

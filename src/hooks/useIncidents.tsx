@@ -147,7 +147,7 @@ export function useUpdateIncident() {
 export function useIncidentResponsibles(incidentId?: string) {
   const { currentTenant } = useTenant();
   return useQuery({
-    queryKey: ['incident_responsible', incidentId],
+    queryKey: ['incident_responsible', currentTenant?.id, incidentId],
     queryFn: async () => {
       if (!incidentId || !currentTenant) return [];
       const { data, error } = await supabase
@@ -188,7 +188,7 @@ export type EmployeeIncidentAction = EmployeeIncidentActionRow & {
 export function useIncidentActions(incidentId?: string) {
   const { currentTenant } = useTenant();
   return useQuery({
-    queryKey: ['employee_incident_actions', incidentId],
+    queryKey: ['employee_incident_actions', currentTenant?.id, incidentId],
     queryFn: async () => {
       if (!incidentId || !currentTenant) return [];
       const data = await fetchAllPostgrestPages((from, to) => supabase.from('employee_incident_actions')
@@ -202,6 +202,14 @@ export function useIncidentActions(incidentId?: string) {
     },
     enabled: !!incidentId && !!currentTenant,
   });
+}
+
+export function useSetEmployeeIncidentActionStatus(){
+  const qc=useQueryClient();
+  return useMutation({mutationFn:async(input:{id:string;incidentId:string;status:'completed'|'cancelled'})=>{
+    const {data,error}=await (supabase.rpc.bind(supabase) as unknown as (name:string,args:Record<string,unknown>)=>PromiseLike<{data:unknown;error:unknown}>)('set_employee_incident_action_status_v1',{_action_id:input.id,_status:input.status});
+    if(error)throw error;return data;
+  },onSuccess:()=>qc.invalidateQueries({queryKey:['employee_incident_actions'],exact:false})});
 }
 
 export interface AddIncidentActionInput {

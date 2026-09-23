@@ -1,0 +1,488 @@
+{
+  "captured_at": "2026-09-22T20:47:59.418Z",
+  "workspace": "F:/agvlog-main",
+  "head": "4089f464",
+  "scope": "17 rotas financeiras, componentes e bibliotecas financeiras, hooks relacionados e integração financeira do portal; análise estática orientada a risco e metadados/contagens agregadas no banco ativo.",
+  "remote_project": "qcvnsdrbcchaxvawcngk",
+  "remote_mutations": false,
+  "inventory": {
+    "files": 457,
+    "files_over_300_lines": [
+      {
+        "file": "src/components/financial/DriverSettlementDrawer.tsx",
+        "lines": 686,
+        "maxLine": 337,
+        "bytes": 43289
+      },
+      {
+        "file": "src/components/financial/NewInvoiceWizard.tsx",
+        "lines": 351,
+        "maxLine": 293,
+        "bytes": 23117
+      },
+      {
+        "file": "src/components/financial/ReceivableAgreementDialog.tsx",
+        "lines": 492,
+        "maxLine": 605,
+        "bytes": 18681
+      },
+      {
+        "file": "src/pages/Receivables.tsx",
+        "lines": 319,
+        "maxLine": 1232,
+        "bytes": 24411
+      },
+      {
+        "file": "src/pages/BillingEdi.tsx",
+        "lines": 610,
+        "maxLine": 469,
+        "bytes": 37193
+      },
+      {
+        "file": "src/pages/ClosingReports.tsx",
+        "lines": 340,
+        "maxLine": 259,
+        "bytes": 22258
+      },
+      {
+        "file": "src/pages/BankReconciliation.tsx",
+        "lines": 451,
+        "maxLine": 350,
+        "bytes": 30713
+      },
+      {
+        "file": "src/hooks/useBankReconciliation.tsx",
+        "lines": 320,
+        "maxLine": 162,
+        "bytes": 12382
+      },
+      {
+        "file": "src/hooks/useBilling.tsx",
+        "lines": 403,
+        "maxLine": 178,
+        "bytes": 14904
+      },
+      {
+        "file": "src/hooks/useDriverSettlements.tsx",
+        "lines": 555,
+        "maxLine": 357,
+        "bytes": 24939
+      },
+      {
+        "file": "src/hooks/usePayroll.tsx",
+        "lines": 349,
+        "maxLine": 545,
+        "bytes": 21723
+      }
+    ],
+    "files_with_lines_over_1000_characters": 135,
+    "outbox_files": 27
+  },
+  "rpc_scan": {
+    "literal_call_sites": 178,
+    "dynamic_transport_call_sites": 35,
+    "limitations": "Nomes e argumentos literais; não valida tipos dos valores, JSON retornado, execução autorizada ou wrappers dinâmicos/intermódulos.",
+    "incompatibilities": [
+      {
+        "id": 121,
+        "file": "src/hooks/useBankReconciliation.tsx",
+        "line": 211,
+        "name": "get_finance_legacy_reconciliation_summary",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 40,
+        "file": "src/lib/financial/ledgerClient.ts",
+        "line": 133,
+        "name": "get_finance_payable_movements",
+        "arguments_complete": true,
+        "overloads": 1,
+        "compatible": false
+      },
+      {
+        "id": 39,
+        "file": "src/lib/financial/ledgerClient.ts",
+        "line": 127,
+        "name": "list_finance_fiscal_queue_v2",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 169,
+        "file": "src/hooks/usePayroll.tsx",
+        "line": 193,
+        "name": "close_payroll_period_v2",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 122,
+        "file": "src/hooks/useBankReconciliation.tsx",
+        "line": 251,
+        "name": "list_finance_legacy_reconciliation_rows",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 155,
+        "file": "src/hooks/useDriverSettlements.tsx",
+        "line": 390,
+        "name": "list_available_loads_for_settlement_v2",
+        "arguments_complete": true,
+        "overloads": 1,
+        "compatible": false
+      },
+      {
+        "id": 63,
+        "file": "src/lib/financial/ledgerClient.ts",
+        "line": 242,
+        "name": "reassign_finance_statement_account_v1",
+        "arguments_complete": true,
+        "overloads": 1,
+        "compatible": false
+      },
+      {
+        "id": 51,
+        "file": "src/lib/financial/ledgerClient.ts",
+        "line": 190,
+        "name": "list_finance_expense_page_v2",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 163,
+        "file": "src/hooks/useExpenseReview.ts",
+        "line": 15,
+        "name": "list_driver_expenses_for_review_v2",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 168,
+        "file": "src/hooks/usePayroll.tsx",
+        "line": 165,
+        "name": "approve_payroll_period_v3",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 120,
+        "file": "src/hooks/portal/usePortalFinancialTitles.ts",
+        "line": 26,
+        "name": "portal_list_financial_titles_v2",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 43,
+        "file": "src/lib/financial/ledgerClient.ts",
+        "line": 145,
+        "name": "get_finance_payable_payment_history",
+        "arguments_complete": true,
+        "overloads": 1,
+        "compatible": false
+      },
+      {
+        "id": 94,
+        "file": "src/lib/financial/settlementExpenseContextClient.ts",
+        "line": 6,
+        "name": "get_finance_settlement_expense_context_v2",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 91,
+        "file": "src/lib/financial/receivablesPageClient.ts",
+        "line": 6,
+        "name": "get_finance_receivables_page_v3",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 57,
+        "file": "src/lib/financial/ledgerClient.ts",
+        "line": 213,
+        "name": "list_finance_statements_v2",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 44,
+        "file": "src/lib/financial/ledgerClient.ts",
+        "line": 149,
+        "name": "get_finance_payroll_entry_page",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      },
+      {
+        "id": 123,
+        "file": "src/hooks/useBankReconciliation.tsx",
+        "line": 298,
+        "name": "list_finance_legacy_reconciliation_rows",
+        "arguments_complete": true,
+        "overloads": 0,
+        "compatible": null
+      }
+    ],
+    "remote_signatures": [
+      {
+        "proname": "get_finance_payable_movements",
+        "arguments": "_tenant_id uuid, _payable_id uuid, _search text DEFAULT ''::text, _page integer DEFAULT 1"
+      },
+      {
+        "proname": "get_finance_payable_payment_history",
+        "arguments": "_tenant_id uuid, _payable_id uuid, _page integer DEFAULT 1"
+      },
+      {
+        "proname": "list_available_loads_for_settlement_v2",
+        "arguments": "_tenant_id uuid, _driver_id uuid DEFAULT NULL::uuid, _search text DEFAULT NULL::text, _include_settlement_id uuid DEFAULT NULL::uuid, _page integer DEFAULT 1, _page_size integer DEFAULT 100"
+      },
+      {
+        "proname": "reassign_finance_statement_account_v1",
+        "arguments": "_tenant_id uuid, _import_id uuid, _account_id uuid, _reason text"
+      }
+    ]
+  },
+  "remote_summary": {
+    "counts": {
+      "payables": 4,
+      "payments": 0,
+      "movements": 1,
+      "statements": 0,
+      "receivables": 1
+    },
+    "schedulers": [
+      {
+        "name": "finance-fiscal-projection-every-minute",
+        "active": true,
+        "schedule": "* * * * *"
+      },
+      {
+        "name": "finance-bank-reconciliation-every-minute",
+        "active": true,
+        "schedule": "* * * * *"
+      }
+    ],
+    "jobs_columns": [
+      "observation_id",
+      "tenant_id",
+      "status",
+      "attempts",
+      "issue",
+      "created_at",
+      "updated_at",
+      "result",
+      "available_at",
+      "automatic_failures",
+      "last_error_code"
+    ],
+    "migration_counts": {
+      "count": 881,
+      "max_version": "20260922195558"
+    },
+    "receivable_triggers": [
+      {
+        "name": "a_unloading_receivable_source",
+        "schema": "finance_private",
+        "function": "guard_unloading_receivable_source"
+      },
+      {
+        "name": "guard_receivable_ledger",
+        "schema": "public",
+        "function": "_guard_receivable_ledger"
+      },
+      {
+        "name": "invalidate_legacy_integrity_cache",
+        "schema": "finance_private",
+        "function": "invalidate_legacy_integrity_cache"
+      },
+      {
+        "name": "preserve_receivable_temporal_source_truncate",
+        "schema": "finance_private",
+        "function": "preserve_receivable_temporal_history"
+      },
+      {
+        "name": "z_receivable_temporal_capture",
+        "schema": "finance_private",
+        "function": "capture_receivable_temporal_version"
+      }
+    ]
+  },
+  "latest_fiscal_queue": [
+    {
+      "status": "applied",
+      "issue": null,
+      "environment": "production",
+      "latest_emissions": 37,
+      "oldest_observation": "2026-09-11 04:09:16.807969+00"
+    },
+    {
+      "status": "review",
+      "issue": "authorization_evidence_missing,invalid_receivable_amount",
+      "environment": "production",
+      "latest_emissions": 112,
+      "oldest_observation": "2026-09-11 04:09:16.783757+00"
+    },
+    {
+      "status": "review",
+      "issue": "authorization_evidence_missing",
+      "environment": "production",
+      "latest_emissions": 24,
+      "oldest_observation": "2026-09-11 04:09:16.805258+00"
+    },
+    {
+      "status": "review",
+      "issue": "invalid_receivable_amount",
+      "environment": "production",
+      "latest_emissions": 13,
+      "oldest_observation": "2026-09-11 04:09:16.789737+00"
+    },
+    {
+      "status": "review",
+      "issue": "authorization_evidence_missing,invalid_receivable_amount,payer_missing",
+      "environment": "production",
+      "latest_emissions": 4,
+      "oldest_observation": "2026-09-15 20:56:00.598809+00"
+    },
+    {
+      "status": "review",
+      "issue": "authorization_evidence_missing,nfse_net_amount_conflict,retention_data_missing",
+      "environment": "production",
+      "latest_emissions": 2,
+      "oldest_observation": "2026-09-11 04:09:16.831363+00"
+    }
+  ],
+  "latest_fiscal_document_states": [
+    {
+      "doc_type": "cte",
+      "fiscal_status": "authorized",
+      "projection_status": "review",
+      "count": 129
+    },
+    {
+      "doc_type": "nfse",
+      "fiscal_status": "authorized",
+      "projection_status": "review",
+      "count": 26
+    }
+  ],
+  "cron_last_24h": [
+    {
+      "jobname": "finance-bank-reconciliation-every-minute",
+      "status": "succeeded",
+      "executions": 1440,
+      "last_start": "2026-09-22 20:45:00.385397+00",
+      "last_end": "2026-09-22 20:45:00.48047+00"
+    },
+    {
+      "jobname": "finance-fiscal-projection-every-minute",
+      "status": "succeeded",
+      "executions": 1440,
+      "last_start": "2026-09-22 20:45:00.237589+00",
+      "last_end": "2026-09-22 20:45:00.31728+00"
+    }
+  ],
+  "security": [
+    {
+      "name": "rls_enabled_no_policy",
+      "level": "INFO",
+      "count": 55,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy"
+    },
+    {
+      "name": "anon_security_definer_function_executable",
+      "level": "WARN",
+      "count": 5,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable"
+    },
+    {
+      "name": "authenticated_security_definer_function_executable",
+      "level": "WARN",
+      "count": 236,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable"
+    },
+    {
+      "name": "auth_insufficient_mfa_options",
+      "level": "WARN",
+      "count": 1,
+      "remediation": "https://supabase.com/docs/guides/auth/auth-mfa"
+    }
+  ],
+  "performance": [
+    {
+      "name": "unindexed_foreign_keys",
+      "level": "INFO",
+      "count": 211,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "level": "WARN",
+      "count": 16,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan"
+    },
+    {
+      "name": "no_primary_key",
+      "level": "INFO",
+      "count": 1,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0004_no_primary_key"
+    },
+    {
+      "name": "unused_index",
+      "level": "INFO",
+      "count": 600,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "level": "WARN",
+      "count": 23,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies"
+    },
+    {
+      "name": "duplicate_index",
+      "level": "WARN",
+      "count": 2,
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0009_duplicate_index"
+    },
+    {
+      "name": "auth_db_connections_absolute",
+      "level": "INFO",
+      "count": 1,
+      "remediation": "https://supabase.com/docs/guides/deployment/going-into-prod"
+    }
+  ],
+  "tests": {
+    "vitest": {
+      "files": 32,
+      "passed": 183,
+      "failed": 0,
+      "logs": [
+        "audit-finance-tests-20260922.log",
+        "audit-finance-flows-20260922.log"
+      ]
+    },
+    "typecheck": {
+      "passed": false,
+      "diagnostics": 9,
+      "financial_production_source_diagnostics": 2,
+      "log": "audit-finance-typecheck-20260922.log"
+    },
+    "runtime": "Node 24.19.0; package.json requer >=22 <23",
+    "browser_tested": false,
+    "real_money_operations_tested": false
+  }
+}

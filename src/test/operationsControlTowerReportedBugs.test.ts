@@ -10,6 +10,10 @@ const boundedTowerMigration = readFileSync(
   'supabase/migrations/20260917143600_bound_control_tower_snapshot.sql',
   'utf8',
 );
+const runtimeAuthRecovery = readFileSync(
+  'supabase/migrations/20260921154231_restore_control_tower_runtime_auth.sql',
+  'utf8',
+);
 const towerHook = readFileSync('src/hooks/useActiveTripsLive.ts', 'utf8');
 
 describe('reported Operations Center and Control Tower regressions', () => {
@@ -72,5 +76,24 @@ describe('reported Operations Center and Control Tower regressions', () => {
     expect(boundedTowerMigration).toContain('get_control_tower_snapshot_v1');
     expect(towerHook).toContain("supabase.rpc('get_control_tower_snapshot_v1'");
     expect(towerHook.match(/refetchInterval: 10_000/g)).toHaveLength(1);
+  });
+
+  it('restores the current tenant authorization contract after the runtime dependencies', () => {
+    expect(runtimeAuthRecovery).toContain(
+      'create or replace function control_tower_private.assert_evaluator',
+    );
+    expect(runtimeAuthRecovery).toContain(
+      'create or replace function control_tower_private.assert_route_actor',
+    );
+    expect(runtimeAuthRecovery).toContain("_role not in ('owner', 'admin', 'operator')");
+    expect(runtimeAuthRecovery).toContain("policy.feature_key = 'ssx_enabled'");
+    expect(runtimeAuthRecovery).toContain("policy.feature_key = 'ssx_kill_switch'");
+    expect(runtimeAuthRecovery).toContain(
+      'grant execute on function public.stop_terminal_statuses() to authenticated',
+    );
+    expect(runtimeAuthRecovery).toContain(
+      'alter function public.stop_terminal_statuses() security invoker',
+    );
+    expect(runtimeAuthRecovery).not.toContain("auth.jwt()->>'aal'");
   });
 });

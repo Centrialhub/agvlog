@@ -1,0 +1,1 @@
+create table public.entity_audit_log(id uuid not null default gen_random_uuid(),tenant_id uuid not null,entity_type text not null,entity_id uuid not null,action text not null,old_data jsonb,new_data jsonb,actor_user_id uuid,actor_role text,source text,request_id text,created_at timestamp with time zone not null default now(),PRIMARY KEY (id));

@@ -55,6 +55,13 @@ it('preserves an uncertain request and resumes it even after selected rows disap
   api.apply.mockImplementationOnce(async request=>result(request));mount({titles:[]});expect(screen.getByText('Pedido preservado. Retome exatamente a mesma baixa.')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'Retomar mesma baixa'}));await waitFor(()=>expect(api.apply).toHaveBeenCalledTimes(2));expect(api.apply.mock.calls[1][0]).toEqual(original);
 });
+it('releases a saved request after a definitive rejection during recovery',async()=>{
+  const pendingChanged=vi.fn();api.apply.mockRejectedValueOnce(new Error('network'));const first=mount({onPendingChange:pendingChanged});await review();fireEvent.click(screen.getByRole('button',{name:'Confirmar baixa em lote'}));
+  await screen.findByText('Não foi possível confirmar a resposta. O mesmo pedido foi preservado para retomada.');first.view.unmount();
+  const rejected=new (await import('@/lib/financial/payableBulkSettlementClient')).PayableBulkRejectedError('finance_payable_bulk_changed');api.apply.mockRejectedValueOnce(rejected);
+  mount({onPendingChange:pendingChanged});fireEvent.click(screen.getByRole('button',{name:'Retomar mesma baixa'}));
+  expect(await screen.findByText(/Faça uma nova revisão/)).toBeInTheDocument();expect(localStorage.getItem(payableBulkStorageKey(tenant,actor))).toBeNull();expect(screen.queryByRole('button',{name:'Retomar mesma baixa'})).not.toBeInTheDocument();expect(pendingChanged).toHaveBeenCalledWith(false);
+});
 
 it('switches to the exact request written by another tab after a storage event',async()=>{
   mount();

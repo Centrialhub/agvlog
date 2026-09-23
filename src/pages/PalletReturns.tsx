@@ -23,13 +23,14 @@ import {
   type PalletFilters, type PalletProtocol, type PalletType,
 } from '@/hooks/usePalletReturns';
 import {
-  parsePalletReturnWorkbook, type ParsedPalletReturn,
+  isPositiveWholePalletQuantity, palletReturnValidationErrors, parsePalletReturnWorkbook, type ParsedPalletReturn,
 } from '@/lib/palletReturns/palletReturnImporter';
 import { generatePalletReturnProtocolPdf, generatePalletReportPdf, downloadBlob } from '@/lib/palletReturns/palletReturnPdf';
 import { protocolsToCsv, rowsToCsv, downloadCsv } from '@/lib/palletReturns/palletReturnCsv';
 import { protocolsToExcel } from '@/lib/palletReturns/palletReturnExcel';
 import { buildSupplierReport, buildMonthlyReport, buildPalletTypeRanking, pendingProtocols, daysSince, totalsByPalletType } from '@/lib/palletReturns/palletReturnReports';
 import { fmtDateSafe } from '@/lib/utils/formatDate';
+import { PalletReturnHistory } from '@/components/palletReturns/PalletReturnHistory';
 
 const STATUS_LABEL: Record<PalletProtocol['status'], string> = {
   draft: 'Rascunho',
@@ -110,9 +111,10 @@ export default function PalletReturns() {
     if (createLock.current || createMut.isPending) return;
     if (!supplierName.trim() && !supplierId) { toast({ title: 'Fornecedor obrigatório', variant: 'destructive' }); return; }
     if (!issueDate) { toast({ title: 'Data obrigatória', variant: 'destructive' }); return; }
+    if (returnDate && returnDate < issueDate) { toast({ title: 'A devolução não pode anteceder o lançamento', variant: 'destructive' }); return; }
     if (items.length === 0) { toast({ title: 'Adicione ao menos 1 item', variant: 'destructive' }); return; }
-    if (items.some((i) => !i.code || !i.name || !i.quantity || i.quantity <= 0)) {
-      toast({ title: 'Itens inválidos', description: 'Cada item precisa de tipo, nome e quantidade > 0', variant: 'destructive' }); return;
+    if (items.some((i) => !i.code || !i.name || !isPositiveWholePalletQuantity(i.quantity))) {
+      toast({ title: 'Itens inválidos', description: 'Cada item precisa de tipo, nome e quantidade inteira positiva', variant: 'destructive' }); return;
     }
     if (status === 'confirmed' && !returnDate) { toast({ title: 'Data de devolução obrigatória para confirmar', variant: 'destructive' }); return; }
 
@@ -120,6 +122,7 @@ export default function PalletReturns() {
     createLock.current = true;
     try {
       const res = await createMut.mutateAsync({
+        request_id: crypto.randomUUID(),
         supplier_id: supplierId || null,
         supplier_name_snapshot: (client?.company_name || supplierName).trim(),
         issue_date: issueDate,
@@ -190,12 +193,20 @@ export default function PalletReturns() {
       toast({ title: 'Totais divergentes', description: `Corrija ${divergent.length} aba(s) cuja soma dos itens não corresponde ao total declarado.`, variant: 'destructive' });
       return;
     }
-    const valid = previewList.filter((p) => p.supplier && p.issueDate && p.items.length > 0);
-    if (valid.length === 0) { toast({ title: 'Nada para importar', variant: 'destructive' }); return; }
+    const rejected = previewList.flatMap((parsed, index) => {
+      const reasons = palletReturnValidationErrors(parsed);
+      return reasons.length ? [{
+        supplier: parsed.supplier || parsed.rawTitle || `Aba ${index + 1}`,
+        date: parsed.issueDate || '',
+        reason: reasons.join('; '),
+      }] : [];
+    });
+    const valid = previewList.filter((parsed) => palletReturnValidationErrors(parsed).length === 0);
     try {
       const res = await importMut.mutateAsync({
         fileName: importFileName,
         asStatus: importStatus,
+        localErrors: rejected,
         parsedList: valid.map((p) => ({
           supplier: p.supplier!, issueDate: p.issueDate!,
           items: p.items.map((i) => ({ code: i.code, name: i.name, quantity: i.quantity })),
@@ -229,6 +240,14 @@ export default function PalletReturns() {
   const [editReason, setEditReason] = useState('');
   const [editItems, setEditItems] = useState<NewItem[]>([]);
 
+  useEffect(() => {
+    setDetail(null);
+    setCancelTarget(null); setCancelReason('');
+    setAttachTarget(null); setReceiverName(''); setSignatureDate(localDateInputValue()); setProofFile(null);
+    setEditTarget(null); setEditSupplierName(''); setEditIssueDate(''); setEditReturnDate('');
+    setEditDriver(''); setEditPlate(''); setEditNotes(''); setEditReason(''); setEditItems([]);
+  }, [currentTenant?.id]);
+
   const openEdit = (p: PalletProtocol) => {
     setEditTarget(p);
     setEditSupplierName(p.supplier_name_snapshot || '');
@@ -251,9 +270,10 @@ export default function PalletReturns() {
     if (!editTarget) return;
     if (!editSupplierName.trim()) { toast({ title: 'Fornecedor obrigatório', variant: 'destructive' }); return; }
     if (!editIssueDate) { toast({ title: 'Data obrigatória', variant: 'destructive' }); return; }
+    if (editReturnDate && editReturnDate < editIssueDate) { toast({ title: 'A devolução não pode anteceder o lançamento', variant: 'destructive' }); return; }
     if (editItems.length === 0) { toast({ title: 'Adicione ao menos 1 item', variant: 'destructive' }); return; }
-    if (editItems.some((i) => !i.code || !i.name || !i.quantity || i.quantity <= 0)) {
-      toast({ title: 'Itens inválidos', variant: 'destructive' }); return;
+    if (editItems.some((i) => !i.code || !i.name || !isPositiveWholePalletQuantity(i.quantity))) {
+      toast({ title: 'Itens inválidos', description: 'As quantidades devem ser números inteiros positivos.', variant: 'destructive' }); return;
     }
     try {
       await editMut.mutateAsync({
@@ -293,6 +313,27 @@ export default function PalletReturns() {
       logoDataUrl: company?.logo_data_url,
     });
     downloadBlob(blob, `${p.protocol_number}.pdf`);
+  };
+
+  const openSignedPalletProof = async (path: string) => {
+    const popup = window.open('', '_blank');
+    if (!popup) {
+      toast({
+        title: 'Pop-up bloqueado',
+        description: 'Permita pop-ups para este site e tente abrir o comprovante novamente.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    popup.opener = null;
+    try {
+      const url = await getPalletProofSignedUrl(path);
+      if (!url) throw new Error('Não foi possível gerar o link temporário do comprovante.');
+      popup.location.href = url;
+    } catch (error) {
+      popup.close();
+      toast({ title: 'Não foi possível abrir o comprovante', description: errorMessage(error), variant: 'destructive' });
+    }
   };
 
   const changeStatus = async (p: PalletProtocol, status: PalletProtocol['status'], payload: Record<string, unknown> = {}) => {
@@ -425,8 +466,8 @@ export default function PalletReturns() {
                 </Select>
                 {!supplierId && (<Input className="mt-2" placeholder="Nome do fornecedor" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} />)}
               </div>
-              <div><Label>Data do lançamento</Label><Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} /></div>
-              <div><Label>Data efetiva de devolução</Label><Input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} /></div>
+              <div><Label>Data do lançamento</Label><Input type="date" max={returnDate||undefined} value={issueDate} onChange={(e) => setIssueDate(e.target.value)} /></div>
+              <div><Label>Data efetiva de devolução</Label><Input type="date" min={issueDate||undefined} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} /></div>
               <div><Label>Motorista</Label><Input value={driverName} onChange={(e) => setDriverName(e.target.value)} /></div>
               <div><Label>Placa</Label><Input value={plate} onChange={(e) => setPlate(e.target.value)} /></div>
               <div><Label>Status inicial</Label>
@@ -471,7 +512,7 @@ export default function PalletReturns() {
                         )}
                       </TableCell>
                       <TableCell><Input value={it.color || ''} onChange={(e) => setItems((p) => p.map((x, i) => i === idx ? { ...x, color: e.target.value } : x))} /></TableCell>
-                      <TableCell className="w-24"><Input type="number" min={1} value={it.quantity} onChange={(e) => setItems((p) => p.map((x, i) => i === idx ? { ...x, quantity: Number(e.target.value) } : x))} /></TableCell>
+                      <TableCell className="w-24"><Input type="number" min={1} step={1} value={it.quantity} onChange={(e) => setItems((p) => p.map((x, i) => i === idx ? { ...x, quantity: Number(e.target.value) } : x))} /></TableCell>
                       <TableCell><Input value={it.notes || ''} onChange={(e) => setItems((p) => p.map((x, i) => i === idx ? { ...x, notes: e.target.value } : x))} /></TableCell>
                       <TableCell className="text-right"><Button variant="ghost" size="sm" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4" /></Button></TableCell>
                     </TableRow>
@@ -596,7 +637,7 @@ export default function PalletReturns() {
                   <SelectItem value="returned">Importar como devolvido</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={commitImport} disabled={previewList.length === 0}>Importar</Button>
+              <Button onClick={commitImport} disabled={previewList.length === 0 || importMut.isPending}>Importar</Button>
             </div>
             {previewList.map((p, idx) => (
               <Card key={idx} className="border-dashed"><CardContent className="p-3 space-y-2">
@@ -639,8 +680,9 @@ export default function PalletReturns() {
               </div>
               {detail.notes && (<div><strong>Observações:</strong> {detail.notes}</div>)}
               {detail.signed_proof_url && (
-                <Button variant="link" size="sm" onClick={async () => { const url = await getPalletProofSignedUrl(detail.signed_proof_url!); if (url) window.open(url, '_blank', 'noopener,noreferrer'); }}>Abrir comprovante assinado</Button>
+                <Button variant="link" size="sm" onClick={() => void openSignedPalletProof(detail.signed_proof_url!)}>Abrir comprovante assinado</Button>
               )}
+              <PalletReturnHistory protocolId={detail.id} />
             </div>
           )}
           <DialogFooter>
@@ -692,8 +734,8 @@ export default function PalletReturns() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-2"><Label>Fornecedor</Label><Input value={editSupplierName} onChange={(e) => setEditSupplierName(e.target.value)} /></div>
-                <div><Label>Data lançamento</Label><Input type="date" value={editIssueDate} onChange={(e) => setEditIssueDate(e.target.value)} /></div>
-                <div><Label>Data devolução</Label><Input type="date" value={editReturnDate} onChange={(e) => setEditReturnDate(e.target.value)} /></div>
+                <div><Label>Data lançamento</Label><Input type="date" max={editReturnDate||undefined} value={editIssueDate} onChange={(e) => setEditIssueDate(e.target.value)} /></div>
+                <div><Label>Data devolução</Label><Input type="date" min={editIssueDate||undefined} value={editReturnDate} onChange={(e) => setEditReturnDate(e.target.value)} /></div>
                 <div><Label>Motorista</Label><Input value={editDriver} onChange={(e) => setEditDriver(e.target.value)} /></div>
                 <div><Label>Placa</Label><Input value={editPlate} onChange={(e) => setEditPlate(e.target.value)} /></div>
                 <div className="md:col-span-3"><Label>Observações</Label><Textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={2} /></div>
@@ -735,7 +777,7 @@ export default function PalletReturns() {
                           )}
                         </TableCell>
                         <TableCell><Input value={it.color || ''} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, color: e.target.value } : x))} /></TableCell>
-                        <TableCell className="w-24"><Input type="number" min={1} value={it.quantity} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, quantity: Number(e.target.value) } : x))} /></TableCell>
+                        <TableCell className="w-24"><Input type="number" min={1} step={1} value={it.quantity} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, quantity: Number(e.target.value) } : x))} /></TableCell>
                         <TableCell><Input value={it.notes || ''} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, notes: e.target.value } : x))} /></TableCell>
                         <TableCell className="text-right"><Button variant="ghost" size="sm" onClick={() => setEditItems((p) => p.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4" /></Button></TableCell>
                       </TableRow>
@@ -767,7 +809,7 @@ function PalletTypesEditor({ types, onSave, saving }: {
 }) {
   const [code, setCode] = useState(''); const [name, setName] = useState(''); const [color, setColor] = useState(''); const [desc, setDesc] = useState('');
   const addType = async () => {
-    if (!code || !name || saving) return;
+    if (!code.trim() || !name.trim() || saving) return;
     try {
       await onSave({ code, name, color: color || null, description: desc || null });
       setCode(''); setName(''); setColor(''); setDesc('');

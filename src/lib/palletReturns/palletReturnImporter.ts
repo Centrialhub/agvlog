@@ -19,6 +19,17 @@ export interface ParsedPalletReturn {
   rawReceiverText: string | null;
 }
 
+export function palletReturnValidationErrors(parsed: ParsedPalletReturn): string[] {
+  const errors: string[] = [];
+  if (!parsed.supplier) errors.push('fornecedor não detectado');
+  if (!parsed.issueDate) errors.push('data não detectada');
+  if (parsed.items.length === 0) errors.push('nenhum item detectado');
+  return errors;
+}
+
+export const isPositiveWholePalletQuantity = (value: number): boolean =>
+  Number.isSafeInteger(value) && value > 0;
+
 function excelSerialToISO(v: unknown): string | null {
   if (v == null || v === '') return null;
   if (typeof v === 'number' && isFinite(v)) {
@@ -185,4 +196,15 @@ export function parsePalletReturnSheet(buffer: ArrayBuffer | Uint8Array, fileNam
 export function protocolDedupeKey(supplier: string, issueDate: string, items: ParsedPalletItem[]): string {
   const sig = [...items].map((i) => `${i.code}:${i.quantity}`).sort().join('|');
   return `${stripAccent(normalize(supplier)).toUpperCase()}#${issueDate}#${sig}`;
+}
+
+export async function palletImportRequestId(tenantId: string, dedupeKey: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`pallet-return-import:${tenantId}:${dedupeKey}`),
+  ));
+  digest[6] = (digest[6] & 0x0f) | 0x50;
+  digest[8] = (digest[8] & 0x3f) | 0x80;
+  const hex = Array.from(digest.slice(0, 16), byte => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

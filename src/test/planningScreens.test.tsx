@@ -60,7 +60,7 @@ vi.mock('@/components/maps/LocationPicker',()=>({LocationPicker:({idPrefix,addre
       provider:'test-map',accuracy_m:null,confidence:1,audit:{selected_interactively:true}})}>Selecionar no mapa</button>}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mock.rpc,from:(table:string)=>{
   const rows=table==='fiscal_documents'?[{id:'doc-1',invoice_number:'1'},{id:'doc-2',invoice_number:'2'}]:table==='drivers'?[{id:'driver',name:'Motorista QA',active:true}]:[];
-  const query={select:()=>query,eq:()=>query,is:()=>query,in:()=>query,order:()=>query,
+  const query={select:()=>query,eq:()=>query,is:()=>query,in:()=>query,order:()=>query,range:()=>query,
     maybeSingle:async()=>table==='loads' && mock.loadError
       ? {data:null,error:new Error('QA load read failure')}
       : {data:table==='loads'?{...mock.load,trip_id:mock.tripId}:null,error:null},

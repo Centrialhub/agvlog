@@ -1,4 +1,4 @@
-import { localDayBoundary, localDayEnd } from '@/lib/listFilters';
+import { dateOnlyUtcRange } from '@/lib/utils/formatDate';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -24,7 +24,7 @@ export function usePortalPods(filters?: { status?: string; start?: string; end?:
   const { currentTenant } = useTenant();
   const { selectedClientId } = usePortalClientScope();
   const qc = useQueryClient();
-  const queryKey = ['portal_pods', currentTenant?.id, selectedClientId, filters] as const;
+  const queryKey = ['portal_pods', currentTenant?.id, currentTenant?.timezone, selectedClientId, filters] as const;
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: null as PortalListPageParam | null,
@@ -34,8 +34,8 @@ export function usePortalPods(filters?: { status?: string; start?: string; end?:
         _tenant_id: currentTenant.id,
         _client_id: selectedClientId ?? undefined,
         _status: filters?.status || undefined,
-        _start_date: filters?.start ? localDayBoundary(filters.start) : undefined,
-        _end_date: filters?.end ? localDayEnd(filters.end) : undefined,
+        _start_date: filters?.start ? dateOnlyUtcRange(filters.start, currentTenant.timezone).from : undefined,
+        _end_date: filters?.end ? new Date(Date.parse(dateOnlyUtcRange(filters.end, currentTenant.timezone).toExclusive) - 1).toISOString() : undefined,
         _page_size: PORTAL_LIST_PAGE_SIZE,
         _snapshot_at: pageParam?.snapshotAt,
         _cursor: pageParam?.cursor,

@@ -130,13 +130,13 @@ describe('validateRouteConsistency', () => {
     expect(r.blockingErrors.join(' ')).toMatch(/Veículo já alocado/);
   });
 
-  it('warning para excesso de paletes', () => {
+  it('bloqueia excesso de paletes', () => {
     const r = validateRouteConsistency(
       { loads: [baseLoad({ total_pallet_count: 30 })], stops: [baseStop()], vehicle_id: 'V1', driver_id: 'D1', planned_start_at: 'x' },
       { vehicles: [{ id: 'V1', max_pallets: 20 }] },
     );
-    expect(r.warnings.join(' ')).toMatch(/excedem/);
-    expect(r.valid).toBe(true);
+    expect(r.blockingErrors.join(' ')).toMatch(/excedem/);
+    expect(r.valid).toBe(false);
   });
   it('bloqueia documento omitido mesmo se sua carga aparece na parada',()=>{
     const result=validateRouteConsistency({loads:[baseLoad({items:[{fiscal_document_id:'FD1'},{fiscal_document_id:'FD2'}]})],

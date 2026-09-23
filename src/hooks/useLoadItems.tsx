@@ -2,8 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useItemPreparationWrites } from './useItemPreparationWrites';
-import { PREPARATION_STATUSES, type ItemPreparationValues, type ItemPreparationExpected } from '@/lib/loads/itemPreparation';
+import { PREPARATION_STATUSES, itemPreparationMessage, validateManualItemCreation, type ItemPreparationValues, type ItemPreparationExpected } from '@/lib/loads/itemPreparation';
 import { selectLoadItemFiscalDocument } from '@/lib/loads/loadItemRelations';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 export const ITEM_STATUSES = [
   'pending', 'waiting_conference', 'in_stock', 'picking',
@@ -60,13 +61,13 @@ export function useLoadItems(loadId: string | undefined) {
     queryKey: ['load_items', loadId],
     queryFn: async () => {
       if (!loadId) return [];
-      const { data, error } = await supabase
+      return await fetchAllPostgrestPages((from, to) => supabase
         .from('load_items')
         .select(`*, orders(order_number, clients(company_name)), ${selectLoadItemFiscalDocument('invoice_number, value, remitter, remitter_cnpj, recipient, recipient_city, recipient_state')}`)
         .eq('load_id', loadId)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return (data || []) as LoadItem[];
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)) as LoadItem[];
     },
     enabled: !!loadId,
   });
@@ -83,6 +84,7 @@ export function useCreateLoadItem() {
   const api=useItemPreparationWrites();
   return {...api,mutateAsync:async(values:Partial<LoadItem>&Pick<LoadItem,'load_id'>)=>{
     if(values.fiscal_document_id)throw new Error('Use a confirmação de inclusão de notas para alterar a composição documental.');
+    validateManualItemCreation(preparationValues(values));
     return api.submit({load_id:values.load_id,item_id:null,values:preparationValues(values),expected:null});
   }};
 }
@@ -99,28 +101,13 @@ export function useDeleteLoadItem() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { data: item, error: fetchErr } = await supabase
-        .from('load_items')
-        .select('id, load_id, fiscal_document_id')
-        .eq('id', id)
-        .maybeSingle();
-      if (fetchErr) throw fetchErr;
-      if (!item) return;
-      if (item.fiscal_document_id) {
-        const { error } = await supabase.rpc('remove_fiscal_documents_from_load_v2', {
-          _tenant_id: currentTenant!.id,
-          _load_id: item.load_id,
-          _document_ids: [item.fiscal_document_id],
-        });
-        if (error) throw error;
-        return;
-      }
-      const { error } = await supabase.rpc('delete_load_item_v3', {
+    mutationFn: async ({ id, expected }: { id: string; expected: ItemPreparationExpected }) => {
+      const { error } = await supabase.rpc('delete_load_item_v4', {
         p_tenant_id: currentTenant!.id,
         p_item_id: id,
+        p_expected: expected,
       });
-      if (error) throw error;
+      if (error) throw new Error(itemPreparationMessage(error));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['load_items'] });
@@ -128,4 +115,18 @@ export function useDeleteLoadItem() {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
     },
   });
+}
+
+export function loadItemDeleteExpected(item: LoadItem): ItemPreparationExpected {
+  return {
+    order_id: item.order_id,
+    item_description: item.item_description,
+    quantity: item.quantity,
+    pallet_count: item.pallet_count,
+    weight_kg: item.weight_kg,
+    volume_m3: item.volume_m3,
+    status: item.status,
+    notes: item.notes,
+    updated_at: item.updated_at,
+  } as ItemPreparationExpected;
 }

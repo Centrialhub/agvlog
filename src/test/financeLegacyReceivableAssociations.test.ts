@@ -26,7 +26,7 @@ const base=()=>({version:1,tenant_id:i.tenant,request_id:randomUUID(),reason:'Co
 async function revision(payment:string){return (await db.query<{revision:string}>('select finance_private.legacy_receivable_source_revision($1,$2) revision',[i.tenant,payment])).rows[0].revision;}
 async function payload(payment:string,movement_id:string){return {...base(),payment_id:payment,movement_id,revision:await revision(payment),existing_receipt_confirmed:true};}
 async function associate(p:unknown){return (await operationRpc<{result:{link_id:string}}>(db,'select associate_finance_legacy_receivable_payment($1) result',[p])).rows[0].result;}
-async function reverse(link_id:string){return (await operationRpc<{result:unknown}>(db,'select reverse_finance_legacy_receivable_association($1) result',[{...base(),link_id}])).rows[0].result;}
+async function reverse(payment_id:string,link_id:string){return (await operationRpc<{result:unknown}>(db,'select reverse_finance_legacy_receivable_association($1) result',[{...base(),payment_id,link_id}])).rows[0].result;}
 async function source(f:Awaited<ReturnType<typeof fixture>>){return (await db.query('select jsonb_build_object(\'payment\',(select to_jsonb(p) from receivables_payments p where id=$1),\'receivable\',(select to_jsonb(r) from receivables r where id=$2),\'bank\',(select to_jsonb(b) from bank_transactions b where id=$3)) snapshot',[f.payment,f.receivable,f.tx])).rows[0];}
 async function used(id:string){return (await db.query<{value:string}>('select finance_private.receipt_movement_used_cents($1,$2)::text value',[i.tenant,id])).rows[0].value;}
 it('associates explicit old receipt without changing source or creating money or canonical commands',async()=>{
@@ -35,7 +35,12 @@ it('associates explicit old receipt without changing source or creating money or
  expect((await db.query('select * from finance_receivable_movement_links')).rows).toHaveLength(0);expect((await db.query('select * from receivable_financial_commands')).rows).toHaveLength(0);expect((await db.query('select source_snapshot from finance_legacy_receipt_movement_links')).rows[0]).toMatchObject({source_snapshot:{existing_receipt_confirmed:true,payment:{id:f.payment}}});
 });
 it('reverses only association and permits reassociation preserving amount received and old bank record',async()=>{
- const f=await fixture(),m=await movement(f.bank),before=await source(f),a=await associate(await payload(f.payment,m));await reverse(a.link_id);expect(await used(m)).toBe('0');expect(await source(f)).toEqual(before);await associate(await payload(f.payment,m));expect(await used(m)).toBe('3000');expect((await db.query('select * from finance_legacy_receipt_movement_links')).rows).toHaveLength(2);
+ const f=await fixture(),m=await movement(f.bank),before=await source(f),a=await associate(await payload(f.payment,m));await reverse(f.payment,a.link_id);expect(await used(m)).toBe('0');expect(await source(f)).toEqual(before);await associate(await payload(f.payment,m));expect(await used(m)).toBe('3000');expect((await db.query('select * from finance_legacy_receipt_movement_links')).rows).toHaveLength(2);
+});
+it('rejeita a reversão quando o vínculo pertence a outro recebimento',async()=>{
+ const f=await fixture(),m=await movement(f.bank),a=await associate(await payload(f.payment,m));
+ await expect(reverse(randomUUID(),a.link_id)).rejects.toThrow('finance_legacy_receipt_link_mismatch');
+ expect(await used(m)).toBe('3000');expect((await db.query('select count(*)::int n from finance_legacy_receipt_link_reversals')).rows).toEqual([{n:0}]);
 });
 it('requires reviewed snapshot and literal confirmation before reserving capacity',async()=>{
  const f=await fixture(),m=await movement(f.bank),p=await payload(f.payment,m);await expect(associate({...p,existing_receipt_confirmed:'true'})).rejects.toThrow('finance_invalid_receipt_declaration');await expect(associate({...p,amount_cents:1})).rejects.toThrow('finance_invalid_payload');await db.query("update bank_transactions set description='Fonte atualizada' where id=$1",[f.tx]);await expect(associate(p)).rejects.toThrow('finance_legacy_receipt_changed');expect(await used(m)).toBe('0');
@@ -45,7 +50,7 @@ it('rejects incompatible account date direction and insufficient incoming capaci
  await expect(associate(await payload(f.payment,await movement(f.bank,'2026-01-01','in','receipt',2999)))).rejects.toThrow('finance_receipt_movement_capacity_exceeded');
 });
 it('protects original receipt and bank after association reversal',async()=>{
- const f=await fixture(),a=await associate(await payload(f.payment,await movement(f.bank)));await reverse(a.link_id);
+ const f=await fixture(),a=await associate(await payload(f.payment,await movement(f.bank)));await reverse(f.payment,a.link_id);
  for(const sql of [`update receivables_payments set amount=29 where id='${f.payment}'`,`delete from receivables_payments where id='${f.payment}'`,`update bank_transactions set description='Alteração' where id='${f.tx}'`]){await db.exec('savepoint protected');await expect(db.exec(sql)).rejects.toThrow(/immutable|history|append|preserv|versioned/);await db.exec('rollback to savepoint protected');}
 });
 it('accepts only exact load payment alias by receipt ID account day and amount',async()=>{

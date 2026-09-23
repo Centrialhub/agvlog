@@ -3,7 +3,7 @@ import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {useTenant} from '@/hooks/useTenant';
 import {useAuth} from '@/hooks/useAuth';
 import {supabase} from '@/integrations/supabase/client';
-import {parseSettlementAdjustmentContext,settlementAdjustmentError,type SettlementAdjustmentInput,type SettlementAdjustmentResult} from '@/lib/financial/settlementAdjustmentCommands';
+import {parseSettlementAdjustmentContext,settlementAdjustmentError,type SettlementAdjustmentInput} from '@/lib/financial/settlementAdjustmentCommands';
 import {SETTLEMENT_ADJUSTMENT_CHANGED,createSettlementAdjustmentOutbox,pendingSettlementAdjustment} from '@/lib/financial/settlementAdjustmentOutbox';
 const invalidations=['settlement-adjustment-context','driver_settlements','driver_settlement','driver_expenses','financial_obligations'];
 export function useSettlementAdjustment(settlement?:string){
@@ -22,10 +22,10 @@ export function useSettlementAdjustment(settlement?:string){
  }),[assertContext]);
  const recovery=useMemo(()=>{try{return {revision,pending:tenant&&actor?pendingSettlementAdjustment(window.localStorage,tenant,actor):null,error:null};}
   catch(cause){return {revision,pending:null,error:settlementAdjustmentError(cause)};}},[tenant,actor,revision]);
- const run=async(work:()=>Promise<SettlementAdjustmentResult>)=>{
+ const run=async<T>(work:()=>Promise<T>)=>{
   if(!tenant||!actor)throw new Error('Entre e selecione a empresa.');if(busy.current)throw new Error('Aguarde o ajuste em andamento.');assertContext();busy.current=true;setPending(true);
   try{const result=await work();assertContext();return result;}catch(cause){throw new Error(settlementAdjustmentError(cause));}
   finally{await Promise.allSettled(invalidations.map(key=>client.invalidateQueries({queryKey:[key]})));busy.current=false;if(alive.current)setPending(false);}
  };
- return {query,isPending,pending:recovery.pending,recoveryError:recovery.error,submit:(input:SettlementAdjustmentInput)=>run(()=>outbox.submit(tenant!,actor!,input)),recover:()=>run(()=>outbox.recover(tenant!,actor!))};
+ return {query,isPending,pending:recovery.pending,recoveryError:recovery.error,submit:(input:SettlementAdjustmentInput)=>run(()=>outbox.submit(tenant!,actor!,input)),recover:()=>run(()=>outbox.recover(tenant!,actor!)),abandon:()=>run(()=>outbox.abandon(tenant!,actor!))};
 }

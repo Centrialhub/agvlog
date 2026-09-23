@@ -8,7 +8,7 @@ import {financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
 import {legacyPayableContextSchema} from '@/lib/financial/legacyPayableAssociationContract';
 import {payablePaymentHistorySchema} from '@/lib/financial/payableMovementContract';
 let db:PGlite;
-beforeAll(async()=>{db=await createLegacyPayableAssociationDatabase();await db.exec(readFileSync('supabase/migrations/20260910143920_finance_legacy_payable_association_options.sql','utf8'));await db.exec('create or replace view finance_private.active_movements as select * from finance_movements');await db.exec(readFileSync('supabase/migrations/20260917072951_stabilize_legacy_association_paging.sql','utf8'));},30000);
+beforeAll(async()=>{db=await createLegacyPayableAssociationDatabase();await db.exec(readFileSync('supabase/migrations/20260910143920_finance_legacy_payable_association_options.sql','utf8'));await db.exec('create or replace view finance_private.active_movements as select * from finance_movements');await db.exec(readFileSync('supabase/migrations/20260917072951_stabilize_legacy_association_paging.sql','utf8'));await db.exec(readFileSync('supabase/migrations/20260922202000_guard_legacy_payable_beneficiary.sql','utf8'));await db.exec(readFileSync('supabase/migrations/20260922204000_snapshot_payable_payment_history.sql','utf8'));},30000);
 beforeEach(async()=>{await db.exec('begin');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[i.operator]);});afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
 async function fixture(){const title=randomUUID(),payment=randomUUID(),tx=randomUUID();
  await db.query("insert into payables(id,tenant_id,supplier_name,category,description,amount,due_date,status,driver_id) values($1,$2,'Fornecedor antigo','other','Antigo',300,'2026-01-01','approved',$3)",[title,i.tenant,i.driver]);
@@ -17,10 +17,14 @@ async function fixture(){const title=randomUUID(),payment=randomUUID(),tx=random
 }
 async function movement(extra:Record<string,unknown>={}){const result=await financeAs<{result:{movement_id:string}}>(db,i.operator,'select record_finance_movement($1) result',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),bank_account_id:i.account,driver_id:i.driver,direction:'out',nature:'payment',amount_cents:50000,occurred_on:'2026-01-01',description:'Saída já registrada',beneficiary_name:'Motorista QA',reason:'Conferência do registro histórico',...extra}]);return result.rows[0].result.movement_id;}
 async function read(payment:string,page=1,actor=i.operator,expectedRevision:string|null=null){return legacyPayableContextSchema.parse((await financeAs<{result:unknown}>(db,actor,'select get_finance_legacy_payable_association($1,$2,$3,$4) result',[i.tenant,payment,page,expectedRevision])).rows[0].result);}
-async function associate(payment:string,movement_id:string){const preview=await read(payment);return (await financeAs<{result:{link_id:string}}>(db,i.operator,'select associate_finance_legacy_payable_payment($1) result',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),payment_id:payment,movement_id,revision:preview.revision,reason:'Associação explicitamente conferida'}])).rows[0].result;}
+async function associate(payment:string,movement_id:string){const preview=await read(payment);return (await financeAs<{result:{link_id:string}}>(db,i.operator,'select associate_finance_legacy_payable_payment($1) result',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),payment_id:payment,movement_id,revision:preview.revision,existing_payment_confirmed:true,reason:'Associação explicitamente conferida'}])).rows[0].result;}
 it('offers only same-day outgoing movements with matching driver and enough capacity',async()=>{
  const f=await fixture(),good=await movement();await movement({occurred_on:'2026-01-02'});await movement({driver_id:undefined});await movement({amount_cents:20000});await movement({direction:'in',nature:'receipt'});
  const result=await read(f.payment);expect(result).toMatchObject({eligible:true,issue:null,total:1,payment:{amount_cents:'30000',paid_on:'2026-01-01',bank_transaction_id:f.tx}});expect(result.rows[0]).toMatchObject({id:good,remaining_cents:'50000'});
+});
+it('offers only the same normalized beneficiary when the payable has no driver identity',async()=>{
+ const f=await fixture();await db.query('update payables set driver_id=null where id=$1',[f.title]);const matching=await movement({driver_id:undefined,beneficiary_name:'  FORNECEDOR   ANTIGO '}),wrong=await movement({driver_id:undefined,beneficiary_name:'Outra empresa'});
+ const result=await read(f.payment);expect(result.rows.map(row=>row.id)).toContain(matching);expect(result.rows.map(row=>row.id)).not.toContain(wrong);
 });
 it('uses shared remaining capacity rather than the original movement value',async()=>{
  const a=await fixture(),b=await fixture(),m=await movement();await associate(b.payment,m);expect((await read(a.payment)).rows).toEqual([]);

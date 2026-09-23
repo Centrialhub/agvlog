@@ -14,7 +14,8 @@ import type { Json } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { useCreatePickupOrder, type CreatePickupOrderInput, type PickupOrder } from '@/hooks/usePickupOrders';
 import { maskCpfCnpj, maskCurrencyBRL } from '@/lib/inputMasks';
-import { localDateTimeInputValue } from '@/lib/utils/formatDate';
+import { APP_TIME_ZONE, localDateTimeInputToIso, localDateTimeInputValue } from '@/lib/utils/formatDate';
+import { useTenant } from '@/hooks/useTenant';
 
 interface Props {
   open: boolean;
@@ -24,11 +25,11 @@ interface Props {
 
 const NONE = '__none__';
 
-const empty = () => ({
+const empty = (timeZone = APP_TIME_ZONE) => ({
   // Documento
   doc_numero: '', doc_serie: '', pre_fatura: '', sgl_emp: '', sgl_fil: '',
   nf_ref: '', nf_int: '0', situacao_doc: '00', situacao_label: 'Documento regular',
-  nf_servico: '', data_emissao: localDateTimeInputValue(),
+  nf_servico: '', data_emissao: localDateTimeInputValue(new Date(), timeZone),
   agente: '', tab_icms: '', local_emissao: '', prev_entrega: '',
   nat_prestacao: 'TRANSP. INTERMUNICIPAL (COM)', modal: 'Rodoviário',
   emitente: '', calculado_ate: 'DESTINO',
@@ -99,12 +100,14 @@ function errorMessage(error: unknown): string {
 }
 
 export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Props) {
+  const { currentTenant } = useTenant();
+  const tenantTimeZone = currentTenant?.timezone || APP_TIME_ZONE;
   const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { toast } = useToast();
   const createMut = useCreatePickupOrder();
 
-  const [form, setForm] = useState<FormState>(empty);
+  const [form, setForm] = useState<FormState>(() => empty(tenantTimeZone));
   const [remitterClientId, setRemitterClientId] = useState<string>(NONE);
   const [driverId, setDriverId] = useState<string>(NONE);
   const [vehicleId, setVehicleId] = useState<string>(NONE);
@@ -148,7 +151,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
         driver_name_snapshot: driver?.name || form.motorista || null,
         vehicle_id: vehicle?.id || null,
         vehicle_plate_snapshot: vehicle?.plate || form.placa || null,
-        pickup_at: new Date(form.data_emissao).toISOString(),
+        pickup_at: localDateTimeInputToIso(form.data_emissao, tenantTimeZone),
         status: 'pendente',
         notes: form.observacao.trim() || form.obs_manual.trim() || null,
         manual_meta: { ...form } satisfies Json,
@@ -157,7 +160,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
       toast({ title: `ORT manual nº ${created.pickup_number} criada` });
       onCreated?.(created);
       onOpenChange(false);
-      setForm(empty());
+      setForm(empty(tenantTimeZone));
       setRemitterClientId(NONE);
       setDriverId(NONE);
       setVehicleId(NONE);

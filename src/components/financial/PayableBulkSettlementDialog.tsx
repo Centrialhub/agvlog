@@ -56,7 +56,7 @@ export function PayableBulkSettlementDialog({tenant,actor,titles,open,onOpenChan
     if(sending.current||corrupt)return;const saved=pending||preview;if(!saved)return;const wasPending=!!pending;
     sending.current=true;setBusy(true);setError('');
     try{if(wasPending)await outbox.recover(tenant,actor);else await outbox.submit(tenant,actor,saved);if(live.current.active){setPending(null);onRecorded();onOpenChange(false);}}
-    catch(cause){if(live.current.active&&cause instanceof PayableBulkRejectedError&&!wasPending){setPreview(null);setError(rejectionMessage(cause));}
+    catch(cause){if(live.current.active&&cause instanceof PayableBulkRejectedError){let remains=true;try{remains=!!pendingPayableBulkSettlement(localStorage,tenant,actor);}catch{setCorrupt(true);}if(remains)setError('O pedido foi recusado, mas a recuperação local ainda está preservada. Confira o histórico antes de iniciar outro lote.');else{setPending(null);setPreview(null);setError(rejectionMessage(cause));}}
       else if(live.current.active&&wasPending)setError('Ainda não foi possível confirmar o pedido preservado. Tente retomá-lo novamente.');
       else if(live.current.active){let preserved=false;try{preserved=!!pendingPayableBulkSettlement(localStorage,tenant,actor);}catch{setCorrupt(true);}setError(preserved?'Não foi possível confirmar a resposta. O mesmo pedido foi preservado para retomada.':'Não foi possível preservar o pedido. Nenhuma baixa foi iniciada.');}}
     finally{sending.current=false;if(live.current.active)setBusy(false);}

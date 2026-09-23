@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import NFSePage from '@/pages/NFSe';
 import CteMonitor from '@/pages/CteMonitor';
 import type { NFSeDoc } from '@/hooks/useNFSe';
+import { MemoryRouter } from 'react-router-dom';
 
 const state = vi.hoisted(() => ({
   nfse: {
@@ -91,7 +92,7 @@ describe('estados da lista NFS-e', () => {
     state.nfse.data = [nfse(99, 'draft')];
     state.nfse.isError = true;
     state.nfse.error = new Error('NFS-e indisponível');
-    render(<NFSePage />);
+    render(<MemoryRouter><NFSePage /></MemoryRouter>);
 
     expect(screen.getByRole('alert')).toHaveTextContent('NFS-e indisponível');
     expect(screen.queryByText('Nenhuma NFS-e para os filtros selecionados')).not.toBeInTheDocument();
@@ -103,13 +104,13 @@ describe('estados da lista NFS-e', () => {
 
   it('oferece exclusão somente para rascunho e rejeitada', () => {
     state.nfse.data = [nfse(1, 'draft'), nfse(2, 'rejected'), nfse(3, 'error'), nfse(4, 'authorized')];
-    render(<NFSePage />);
+    render(<MemoryRouter><NFSePage /></MemoryRouter>);
     expect(screen.getAllByRole('button', { name: /Excluir/ })).toHaveLength(2);
   });
 
   it('pagina a tabela sem esconder os registros posteriores ao primeiro lote visual', () => {
     state.nfse.data = Array.from({ length: 51 }, (_, index) => nfse(index + 1));
-    render(<NFSePage />);
+    render(<MemoryRouter><NFSePage /></MemoryRouter>);
     expect(screen.queryByText('RPS 51')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Próxima' }));
     expect(screen.getByText('RPS 51')).toBeInTheDocument();
@@ -121,7 +122,7 @@ describe('estados do Monitor CT-e', () => {
   it('mostra falha com retry sem renderizar o estado vazio', () => {
     state.cte.isError = true;
     state.cte.error = new Error('Monitor indisponível');
-    render(<CteMonitor />);
+    render(<MemoryRouter><CteMonitor /></MemoryRouter>);
 
     expect(screen.getByRole('alert')).toHaveTextContent('Monitor indisponível');
     expect(screen.queryByText('Nenhum CT-e encontrado para os filtros informados.')).not.toBeInTheDocument();

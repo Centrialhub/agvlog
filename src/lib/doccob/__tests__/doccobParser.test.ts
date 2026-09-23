@@ -28,8 +28,8 @@ const input: DoccobBuildInput = {
 };
 
 describe('parseDoccobFile', () => {
-  it('reconhece registros 000/350/351/352/353/354/355', () => {
-    const res = generateDoccob(input);
+  it('reconhece registros 000/350/351/352/353/354/355', async () => {
+    const res = await generateDoccob(input);
     const parsed = parseDoccobFile(res.content);
     expect(parsed.header).not.toBeNull();
     expect(parsed.identification).not.toBeNull();
@@ -40,14 +40,14 @@ describe('parseDoccobFile', () => {
     expect(parsed.trailer).not.toBeNull();
   });
 
-  it('trailer total corresponde a R$ 15.285,25', () => {
-    const res = generateDoccob(input);
+  it('trailer total corresponde a R$ 15.285,25', async () => {
+    const res = await generateDoccob(input);
     const parsed = parseDoccobFile(res.content);
     expect(trailerTotalReais(parsed)).toBe(15285.25);
   });
 
-  it('não gera warnings quando arquivo é válido', () => {
-    const res = generateDoccob(input);
+  it('não gera warnings quando arquivo é válido', async () => {
+    const res = await generateDoccob(input);
     const parsed = parseDoccobFile(res.content);
     expect(parsed.validationWarnings).toEqual([]);
   });

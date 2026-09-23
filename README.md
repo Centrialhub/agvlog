@@ -46,8 +46,8 @@ Playwright recusa por padrão qualquer backend não local.
 - Faça deploy das Edge Functions respeitando o `verify_jwt` de `supabase/config.toml`.
 - Mantenha o Auth invite-only, com senha mínima de 12 caracteres e TOTP/AAL2
   obrigatório para proprietário e administrador.
-- Configure `AGVLOG_APP_ORIGIN` com a origem HTTPS exata do frontend; o CORS das
-  Edge Functions falha fechado quando essa configuração está ausente ou inválida.
+- Configure `AGVLOG_APP_ORIGIN=https://agvlogistica.vercel.app` nas Edge Functions; o CORS
+  falha fechado quando essa configuração está ausente ou inválida.
 - Configure um `OSRM_BASE_URL` aprovado e dedicado; a aplicação falha de forma segura sem ele.
 - Mantenha SSX e fiscal desativados por tenant até homologação específica; as
   Edge Functions e os crons falham fechado quando as flags estão desligadas.

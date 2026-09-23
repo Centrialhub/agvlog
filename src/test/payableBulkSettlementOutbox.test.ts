@@ -27,6 +27,14 @@ it('replays the exact request id and payload from durable storage after a reload
   expect(secondSend.mock.calls[0][0]).toEqual(command);
   expect(localStorage.getItem(payableBulkStorageKey(tenant,actor))).toBeNull();
 });
+it('forgets a definitively rejected recovery while preserving an uncertain failure',async()=>{
+  const key=payableBulkStorageKey(tenant,actor),rejected=new Error('finance_payable_bulk_changed');
+  const first=createPayableBulkSettlementOutbox({storage:localStorage,assertContext:()=>{},changed:()=>{},lock:directLock,send:async()=>{throw new Error('network');},isDefinitive:error=>error===rejected});
+  await expect(first.submit(tenant,actor,request)).rejects.toThrow('network');expect(localStorage.getItem(key)).not.toBeNull();
+  const second=createPayableBulkSettlementOutbox({storage:localStorage,assertContext:()=>{},changed:()=>{},lock:directLock,send:async()=>{throw rejected;},isDefinitive:error=>error===rejected});
+  await expect(second.recover(tenant,actor)).rejects.toBe(rejected);expect(localStorage.getItem(key)).toBeNull();
+  await expect(box(async payload=>result(payload)).submit(tenant,actor,{...request,command:{...command,request_id:crypto.randomUUID()}})).resolves.toMatchObject({confirmed:true});
+});
 
 it('serializes concurrent work with the in-process fallback and uses navigator locks when available',async()=>{
   const order:string[]=[];let release!:()=>void;

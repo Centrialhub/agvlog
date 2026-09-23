@@ -1,20 +1,21 @@
 // @vitest-environment node
 import {randomUUID} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import type {PGlite} from '@electric-sql/pglite';
 import {beforeAll,beforeEach,afterEach,afterAll,it,expect} from 'vitest';
 import {createLegacyPayableAssociationDatabase} from './helpers/legacyPayableAssociationDatabase';
 import {financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
 let db:PGlite;
-beforeAll(async()=>{db=await createLegacyPayableAssociationDatabase();},30000);
+beforeAll(async()=>{db=await createLegacyPayableAssociationDatabase();await db.exec(readFileSync('supabase/migrations/20260910143920_finance_legacy_payable_association_options.sql','utf8'));await db.exec('create or replace view finance_private.active_movements as select * from finance_movements');await db.exec(readFileSync('supabase/migrations/20260917072951_stabilize_legacy_association_paging.sql','utf8'));await db.exec(readFileSync('supabase/migrations/20260922202000_guard_legacy_payable_beneficiary.sql','utf8'));},30000);
 beforeEach(async()=>{await db.exec('begin');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[i.operator]);});afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
 const base=()=>({version:1,tenant_id:i.tenant,request_id:randomUUID(),reason:'Associação por identificadores originais conferidos'});
-async function fixture(bank=true){
+async function fixture(bank=true,withDriver=true,beneficiary='Motorista'){
  const title=randomUUID(),payment=randomUUID(),tx=bank?randomUUID():null,movement=randomUUID();
- await db.query("insert into payables(id,tenant_id,supplier_name,category,description,amount,due_date,status,driver_id) values($1,$2,'Fornecedor antigo','other','Pagamento histórico',300,'2026-01-01','approved',$3)",[title,i.tenant,i.driver]);
+ await db.query("insert into payables(id,tenant_id,supplier_name,category,description,amount,due_date,status,driver_id) values($1,$2,'Fornecedor antigo','other','Pagamento histórico',300,'2026-01-01','approved',$3)",[title,i.tenant,withDriver?i.driver:null]);
  if(tx)await db.query("insert into bank_transactions(id,tenant_id,bank_account_id,posted_at,amount,transaction_type,raw_payload) values($1,$2,$3,'2026-01-02T01:00:00Z',300,'debit','{}')",[tx,i.tenant,i.account]);
  await db.query("insert into payables_payments(id,tenant_id,payable_id,amount,paid_at,bank_account_id,method,bank_transaction_id,attachment_url,created_by) values($1,$2,$3,300,'2026-01-02T01:00:00Z',$4,'pix',$5,'recibo-legado',$6)",[payment,i.tenant,title,i.account,tx,i.operator]);
- await db.query("insert into finance_movements(id,tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,description,beneficiary_name,driver_id,created_by) values($1,$2,$3,'out','payment',50000,'2026-01-01','Saída real','Motorista',$4,$5)",[movement,i.tenant,i.account,i.driver,i.operator]);
- return {title,payment,tx,movement,payload:{...base(),payment_id:payment,movement_id:movement,revision:await sourceRevision(payment)}};
+ await db.query("insert into finance_movements(id,tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,description,beneficiary_name,driver_id,created_by) values($1,$2,$3,'out','payment',50000,'2026-01-01','Saída real',$4,$5,$6)",[movement,i.tenant,i.account,beneficiary,withDriver?i.driver:null,i.operator]);
+ return {title,payment,tx,movement,payload:{...base(),payment_id:payment,movement_id:movement,revision:await sourceRevision(payment),existing_payment_confirmed:true}};
 }
 async function sourceRevision(payment:string){return (await db.query<{revision:string}>('select finance_private.legacy_payable_source_revision($1,$2) revision',[i.tenant,payment])).rows[0].revision;}
 async function associate(p:unknown,actor=i.operator){return (await financeAs<{result:{link_id:string;payment_id:string}}>(db,actor,'select associate_finance_legacy_payable_payment($1) result',[p])).rows[0].result;}
@@ -52,6 +53,14 @@ it('requires exact bank account direction date amount and driver while preservin
  const f=await fixture();await db.query("update bank_transactions set amount=299 where id=$1",[f.tx]);await expect(associate({...f.payload,revision:await sourceRevision(f.payment)})).rejects.toThrow('finance_legacy_bank_source_mismatch');await db.query("update bank_transactions set amount=300 where id=$1",[f.tx]);
  const wrong=randomUUID();await db.query("insert into finance_movements(id,tenant_id,bank_account_id,direction,nature,amount_cents,occurred_on,description,beneficiary_name,driver_id,created_by) values($1,$2,$3,'out','payment',30000,'2026-01-02','Dia UTC errado','Motorista',$4,$5)",[wrong,i.tenant,i.account,i.driver,i.operator]);await expect(associate({...f.payload,movement_id:wrong})).rejects.toThrow('finance_legacy_movement_mismatch');
  await associate(f.payload);
+});
+it('rejects a different beneficiary when the payable has no driver identity',async()=>{
+ const mismatched=await fixture(true,false,'Outra empresa');await expect(associate(mismatched.payload)).rejects.toThrow('finance_legacy_payable_beneficiary_mismatch');
+ const matching=await fixture(true,false,'  FORNECEDOR   ANTIGO ');await associate(matching.payload);
+});
+it('requires an explicit integral-payment declaration',async()=>{
+ const f=await fixture();const {existing_payment_confirmed:_,...withoutDeclaration}=f.payload;void _;
+ await expect(associate(withoutDeclaration)).rejects.toThrow('finance_invalid_payment_declaration');
 });
 it('keeps legacy bank and payment immutable after association and its reversal',async()=>{
  const f=await fixture(),saved=await associate(f.payload);await reverse(saved.link_id);

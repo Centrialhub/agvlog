@@ -156,17 +156,19 @@ describe('delivery receipt operational completion',()=>{
 
   it('loads queue counters separately from bounded filter options',async()=>{
     const driverId=crypto.randomUUID();
+    const snapshotId=crypto.randomUUID();
     mocks.rpc.mockResolvedValueOnce({data:{version:1,tenant_id:tenant,actor_id:actor,total:101,
       queues:{awaiting_sync:1,awaiting_validation:2,rejected:3,validated:4,physical_pending:5,ready_to_send:6,sent:7,send_failures:8}},error:null})
       .mockResolvedValueOnce({data:{version:1,tenant_id:tenant,actor_id:actor,kind:'driver',search:'Zulu',
-        items:[{value:driverId,label:'Motorista Zulu'}],has_more:true,next_cursor_label:'Motorista Zulu',next_cursor_value:driverId},error:null});
+        snapshot_id:snapshotId,items:[{value:driverId,label:'Motorista Zulu'}],has_more:true,next_cursor_label:'Motorista Zulu',next_cursor_value:driverId},error:null});
     expect((await getDeliveryReceiptFilterSummary(tenant,actor)).total).toBe(101);
     const page=await listDeliveryReceiptFilterOptions(tenant,actor,'driver',' Zulu ');
     expect(page.items.at(-1)?.label).toBe('Motorista Zulu');
-    expect(page.nextCursor).toEqual({label:'Motorista Zulu',value:driverId});
+    expect(page.nextCursor).toEqual({label:'Motorista Zulu',value:driverId,snapshotId});
     expect(mocks.rpc).toHaveBeenNthCalledWith(1,'get_delivery_receipt_filter_summary_v1',{_tenant_id:tenant});
     expect(mocks.rpc).toHaveBeenNthCalledWith(2,'list_delivery_receipt_filter_options_v1',{
       _tenant_id:tenant,_kind:'driver',_search:'Zulu',_limit:25,_cursor_label:null,_cursor_value:null,
+      _snapshot_id:null,
     });
   });
 

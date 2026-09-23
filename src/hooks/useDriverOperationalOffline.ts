@@ -17,7 +17,7 @@ import {
 
 type RpcError = Error & { code?: string; retryable?: boolean };
 type RpcResult = PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>;
-const rpc = supabase.rpc.bind(supabase) as unknown as (name: string, args: Record<string, unknown>) => RpcResult;
+const rpc = ((name: unknown, args: unknown) => (supabase.rpc.bind(supabase) as unknown as (name: unknown, args: unknown) => unknown)(name, args)) as unknown as (name: string, args: Record<string, unknown>) => RpcResult;
 let operationalSessionRefresh:Promise<boolean>|null=null;
 
 function isAuthorizationError(error:{code?:string;message?:string}|null):boolean{

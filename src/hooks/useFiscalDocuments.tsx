@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
-import { calculateFreight, logFreightCalculation } from './useFreightCalculator';
+import { calculateFreight } from './useFreightCalculator';
 import {
   DuplicateFiscalDocumentError,
   isUniqueViolation,
@@ -12,6 +12,8 @@ import {
 } from '@/lib/fiscalDocuments/fiscalIdentity';
 import type { Database, Json, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { assertFiscalDocumentIdentity } from '@/lib/fiscalDocuments/fiscalDocumentIdentity';
+import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { readLoadFreightContext } from '@/lib/fiscalDocuments/loadFreightContext';
 
 const FREIGHT_TRIGGER_FIELDS = [
   'recipient',
@@ -245,15 +247,17 @@ export function useFiscalDocuments() {
     queryKey: ['fiscal_documents', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('fiscal_documents')
-        .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)')
-        .eq('tenant_id', currentTenant.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false });
-      if (error) throw error;
-      return (data || []) as FiscalDocument[];
+      return fetchAllPostgrestPages<FiscalDocument>(async (from,to) => {
+        const { data, error } = await supabase
+          .from('fiscal_documents')
+          .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)')
+          .eq('tenant_id', currentTenant.id)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from,to);
+        return {data:data as FiscalDocument[]|null,error};
+      },500);
     },
     enabled: !!currentTenant,
   });
@@ -344,13 +348,14 @@ export async function findExistingFiscalDocument(input: {
       .maybeSingle();
     if (data) return data as FiscalDocument;
     // Fallback: broader search, since stored values may differ in formatting
-    const { data: broad } = await supabase
+    const broad = await fetchAllPostgrestPages((from,to)=>supabase
       .from('fiscal_documents')
       .select('*')
       .eq('tenant_id', input.tenantId)
       .eq('document_type', 'inbound')
-      .limit(50);
-    const match = (broad || []).find((d) =>
+      .order('id')
+      .range(from,to));
+    const match = broad.find((d) =>
       normalizeTaxId(d.remitter_cnpj) === cnpj &&
       normalizeFiscalNumber(d.invoice_number) === number &&
       (normalizeFiscalNumber(d.invoice_series) || '0') === series &&
@@ -363,7 +368,6 @@ export async function findExistingFiscalDocument(input: {
 
 export function useUpdateFiscalDocument() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: UpdateFiscalDocumentInput) => {
@@ -371,44 +375,22 @@ export function useUpdateFiscalDocument() {
       if (Object.prototype.hasOwnProperty.call(values, 'status')) {
         throw new Error('O status fiscal é controlado pelos fluxos operacionais e fiscais; use o comando correspondente.');
       }
-      const updatePayload: TablesUpdate<'fiscal_documents'> = {
-        ...values,
-        updated_at: new Date().toISOString(),
-      };
-      const { data, error } = await supabase.from('fiscal_documents')
-        .update(updatePayload)
-        .eq('id', id)
-        .eq('tenant_id', currentTenant.id)
-        .select()
-        .single();
-      if (error) throw error;
-
-      // Auto-recalc freight when destination/weight/pallets change on a CT-e (outbound)
-      // and the freight isn't manually overridden
-      try {
-        const triggered = FREIGHT_TRIGGER_FIELDS.some((f) => f in values);
-        const doc = data;
-        if (
-          triggered &&
-          currentTenant &&
-          doc &&
-          doc.document_type === 'outbound' &&
-          !doc.freight_overridden
-        ) {
+      const triggered = FREIGHT_TRIGGER_FIELDS.some((f) => f in values);
+      if(triggered){
+        const {data:current,error:readError}=await supabase.from('fiscal_documents').select('*')
+          .eq('id',id).eq('tenant_id',currentTenant.id).single();
+        if(readError)throw readError;
+        const doc={...current,...values};
+        if(doc.document_type==='outbound'&&!doc.freight_overridden){
           // Pull NF-e context from the same load
           let clientId: string | null = doc.client_id || null;
           let nfeTotalValue = 0;
           if (doc.load_id) {
-            const { data: nfeDocs, error: nfeError } = await supabase
-              .from('fiscal_documents')
-              .select('client_id, value')
-              .eq('load_id', doc.load_id)
-              .eq('tenant_id', currentTenant.id)
-              .eq('document_type', 'inbound');
-            if (nfeError) throw nfeError;
-            nfeTotalValue = (nfeDocs || []).reduce((sum, document) => sum + (Number(document.value) || 0), 0);
+            const context = await readLoadFreightContext(currentTenant.id, doc.load_id);
+            const nfeDocs = context.documents;
+            nfeTotalValue = nfeDocs.reduce((sum, document) => sum + (Number(document.value) || 0), 0);
             if (!clientId) {
-              const ref = (nfeDocs || []).find((document) => document.client_id);
+              const ref = nfeDocs.find((document) => document.client_id);
               clientId = ref?.client_id || null;
             }
           }
@@ -447,22 +429,23 @@ export function useUpdateFiscalDocument() {
               freight_breakdown: result.breakdown as unknown as Json,
               cbs_base: v, cbs_rate: cbsRate, cbs_value: v * cbsRate / 100,
               ibs_base: v, ibs_rate: ibsRate, ibs_value: v * ibsRate / 100,
-              updated_at: new Date().toISOString(),
             } satisfies TablesUpdate<'fiscal_documents'>;
-            const { error: freightUpdateError } = await supabase.from('fiscal_documents')
-              .update(freightUpdate)
-              .eq('id', id)
-              .eq('tenant_id', currentTenant.id);
-            if (freightUpdateError) throw freightUpdateError;
-
-            await logFreightCalculation(currentTenant.id, id, 'cte', result.breakdown, user?.id);
+            const {data,error}=await supabase.rpc('update_fiscal_document_with_freight_v1' as never,{
+              _tenant_id:currentTenant.id,_document_id:id,_expected_updated_at:current.updated_at,
+              _document_patch:values,_freight_patch:freightUpdate,_breakdown:result.breakdown,
+            } as never);
+            if(error){
+              if(error.code==='40001'||error.message.includes('fiscal_document_changed'))throw new Error('O documento mudou durante o recálculo. Atualize os dados e tente novamente.');
+              throw error;
+            }
+            return data;
           }
+          throw new Error('Não foi possível calcular o frete com os dados atualizados. Nenhuma alteração foi salva.');
         }
-      } catch (e) {
-        console.warn('[useUpdateFiscalDocument] auto-recalc falhou', e);
       }
-
-      return data;
+      const updatePayload: TablesUpdate<'fiscal_documents'> = {...values,updated_at:new Date().toISOString()};
+      const {data,error}=await supabase.from('fiscal_documents').update(updatePayload).eq('id',id).eq('tenant_id',currentTenant.id).select().single();
+      if(error)throw error;return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });

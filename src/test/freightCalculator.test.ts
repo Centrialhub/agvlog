@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeSpecificity,
+  calculateFreight,
   freightBreakdownFromJson,
   freightBreakdownToJson,
   type FreightBreakdown,
@@ -21,18 +22,18 @@ interface FreightTableFixture {
   rate_percent?: number;
 }
 
-describe('computeSpecificity — payer_group soft matching', () => {
+describe('computeSpecificity — payer restrictions require known matching inputs', () => {
   it('does NOT disqualify an all-wildcard table when input.payerGroup is missing', () => {
     const table: FreightTableFixture = { payer_group: null, per_kg_value: 0.696 };
     const { score } = computeSpecificity(table, baseInput);
     expect(score).toBeGreaterThanOrEqual(0);
   });
 
-  it('does NOT disqualify a payer_group-specific table when input.payerGroup is missing (soft)', () => {
+  it('disqualifies a payer_group-specific table when input.payerGroup is missing', () => {
     const table: FreightTableFixture = { payer_group: 'TABELA TRANSVILA' };
     const { score, ignored } = computeSpecificity(table, { ...baseInput, payerGroup: null });
-    expect(score).toBeGreaterThanOrEqual(0);
-    expect(ignored.some((s) => s.includes('não desqualifica'))).toBe(true);
+    expect(score).toBeLessThan(0);
+    expect(ignored).toContain('payer_group: table="TABELA TRANSVILA" vs input="(vazio)"');
   });
 
   it('DOES disqualify on a real payer_group mismatch (both sides present, different)', () => {
@@ -41,22 +42,52 @@ describe('computeSpecificity — payer_group soft matching', () => {
     expect(score).toBeLessThan(0);
   });
 
-  it('scores an all-null J.Macedo-like table above a mismatched specific table (both qualify)', () => {
+  it('keeps a wildcard table eligible and rejects a specific table without payer group', () => {
     const jmacedo: FreightTableFixture = { payer_group: null, per_kg_value: 0.696 };
     const transvila: FreightTableFixture = { payer_group: 'TABELA TRANSVILA', rate_percent: 6 };
     const r1 = computeSpecificity(jmacedo, baseInput);
     const r2 = computeSpecificity(transvila, baseInput);
-    // Both qualified (>=0), but neither is preferred over the other by pontuation here —
-    // the important invariant is that both are eligible so the caller can pick correctly.
     expect(r1.score).toBeGreaterThanOrEqual(0);
-    expect(r2.score).toBeGreaterThanOrEqual(0);
+    expect(r2.score).toBeLessThan(0);
   });
 
-  it('payer (client_id) is not compared against the literal string "client"', () => {
-    // Table restricts to a specific client id; input has no client. Should not disqualify.
+  it('rejects a payer-specific table when no payer name is available', () => {
     const table: FreightTableFixture = { payer: 'some-client-uuid' };
     const { score } = computeSpecificity(table, { ...baseInput, clientId: null });
-    expect(score).toBeGreaterThanOrEqual(0);
+    expect(score).toBeLessThan(0);
+  });
+
+  it('never offsets a hard mismatch with many exact matches', () => {
+    const table = {
+      client_id: 'other-client', payer_group: 'GROUP', payer: 'PAYER',
+      origin_state: 'SP', destination_state: 'RJ', origin_municipality: 'São Paulo',
+      destination_municipality: 'Rio de Janeiro', origin_region: 'CAPITAL',
+      destination_region: 'METRO', route: 'R1', distribution_type: 'D1', cargo_type: 'C1',
+    } as FreightTableFixture & Record<string,string>;
+    const result = computeSpecificity(table, {
+      ...baseInput, clientId: 'wanted-client', payerGroup: 'GROUP', payerName: 'PAYER',
+      originState: 'SP', destinationState: 'RJ', originMunicipality: 'São Paulo',
+      destinationMunicipality: 'Rio de Janeiro', origin: 'CAPITAL', destination: 'METRO',
+      route: 'R1', distributionType: 'D1', cargoType: 'C1',
+    });
+    expect(result.score).toBeGreaterThanOrEqual(0);
+    expect(result.eligible).toBe(false);
+  });
+});
+
+describe('freight metric validation', () => {
+  it.each([
+    ['valor da nota', { totalValue: -1 }],
+    ['peso', { totalWeight: -0.01 }],
+    ['quantidade de paletes', { totalPallets: -1 }],
+  ])('rejects negative %s before querying freight tables', async (label, override) => {
+    const result = await calculateFreight({ ...baseInput, ...override });
+    expect(result).toEqual({
+      success: false,
+      value: 0,
+      breakdown: null,
+      error: `O ${label} deve ser um número maior ou igual a zero`,
+    });
   });
 });
 

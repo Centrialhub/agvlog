@@ -221,9 +221,10 @@ function StaleFiscalDocsSection() {
         .select('id, invoice_number, issue_date, recipient, recipient_neighborhood, recipient_city, recipient_state, remitter, pallet_count, weight_kg, value, status, clients!fiscal_documents_client_id_fkey(company_name)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
+        .is('deleted_at', null)
         .is('load_id', null)
         .neq('status', 'cancelled')
-        .lte('issue_date', cutoff)
+        .lt('issue_date', cutoff)
         .order('issue_date', { ascending: true })
         .limit(200);
       if (error) throw error;

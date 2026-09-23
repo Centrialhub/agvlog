@@ -320,10 +320,13 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           size="sm"
           variant="outline"
           className="h-7 text-xs"
-          onClick={() => printLoadNotesReport(load, inboundDocs.map(d => ({
-            ...d,
-            delivery_meta: docMeta(d.delivery_meta),
-          })))}
+          onClick={() => {
+            const opened = printLoadNotesReport(load, inboundDocs.map(d => ({
+              ...d,
+              delivery_meta: docMeta(d.delivery_meta),
+            })));
+            if (!opened) toast.error('Permita pop-ups para gerar o relatório.');
+          }}
           disabled={!inboundDocs.length}
           title="Gerar relatório imprimível / Salvar como PDF"
         >

@@ -13,6 +13,16 @@ export interface PortalOccurrenceMessage {
 
 const MESSAGE_PAGE_SIZE = 100;
 
+export function mergePortalOccurrenceMessages(
+  ...groups: PortalOccurrenceMessage[][]
+): PortalOccurrenceMessage[] {
+  const byId = new Map<string, PortalOccurrenceMessage>();
+  for (const message of groups.flat()) byId.set(message.id, message);
+  return [...byId.values()].sort((left, right) => (
+    left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id)
+  ));
+}
+
 async function readMessagePage(args: {
   tenantId: string;
   occurrenceId: string;
@@ -69,13 +79,15 @@ export function usePortalOccurrenceMessages(occurrenceId: string | null) {
   }, [contextKey]);
 
   const latestMessages = (query.data ?? []).slice(0, MESSAGE_PAGE_SIZE);
-  const messages = useMemo(() => {
-    const byId = new Map<string, PortalOccurrenceMessage>();
-    for (const message of [...latestMessages, ...olderMessages]) byId.set(message.id, message);
-    return [...byId.values()].sort((left, right) => (
-      left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id)
-    ));
-  }, [latestMessages, olderMessages]);
+  useEffect(() => {
+    if (!query.data?.length) return;
+    const observedWindow = query.data.slice(0, MESSAGE_PAGE_SIZE);
+    setOlderMessages((current) => mergePortalOccurrenceMessages(current, observedWindow));
+  }, [contextKey, query.data]);
+  const messages = useMemo(
+    () => mergePortalOccurrenceMessages(latestMessages, olderMessages),
+    [latestMessages, olderMessages],
+  );
 
   const hasOlder = olderHasMore ?? (query.data?.length ?? 0) > MESSAGE_PAGE_SIZE;
   const loadOlder = useCallback(async () => {
@@ -94,7 +106,7 @@ export function usePortalOccurrenceMessages(occurrenceId: string | null) {
         signal: request.controller.signal,
       });
       if (olderRequestRef.current !== request || request.controller.signal.aborted) return;
-      setOlderMessages((current) => [...current, ...page.slice(0, MESSAGE_PAGE_SIZE)]);
+      setOlderMessages((current) => mergePortalOccurrenceMessages(current, page.slice(0, MESSAGE_PAGE_SIZE)));
       setOlderHasMore(page.length > MESSAGE_PAGE_SIZE);
     } catch (error) {
       if (olderRequestRef.current !== request || request.controller.signal.aborted) return;
@@ -145,12 +157,13 @@ export function useReplyPortalOccurrence() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { occurrence_id: string; message: string }) => {
+    mutationFn: async (args: { occurrence_id: string; message: string; request_id: string }) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { data, error } = await supabase.rpc('reply_client_occurrence', {
+      const { data, error } = await supabase.rpc('reply_client_occurrence_v2', {
         _tenant_id: currentTenant.id,
         _occurrence_id: args.occurrence_id,
         _message: args.message,
+        _request_id: args.request_id,
       });
       if (error) throw error;
       return data as string;

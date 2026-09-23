@@ -23,6 +23,7 @@ export async function createLegacyReceivableAssociationDatabase(){
  }
  await db.exec(readFileSync('supabase/migrations/20260910142740_finance_legacy_adoption_inventory.sql','utf8'));
  await db.exec(readFileSync('supabase/migrations/20260910145616_finance_legacy_receipt_associations.sql','utf8'));
+ await db.exec(readFileSync('supabase/migrations/20260922200000_scope_legacy_receivable_reversal.sql','utf8'));
  return db;
 }
 // Simulate a row loaded before the command-required cutoff, not a writer bypass.

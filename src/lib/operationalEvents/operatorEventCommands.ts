@@ -87,7 +87,7 @@ const occurrenceSchema=z.object({id,event_type:z.string(),severity:z.string(),de
  client_action_required:z.boolean(),public_status:z.string().nullable(),resolved_at:timestamp,created_at:z.string().datetime({offset:true}),updated_at:z.string().datetime({offset:true})}).strict();
 const currentOutcomeSchema=outcomeSchema.omit({allocation_id:true,event_id:true,is_current:true,superseded_by:true});
 const podTotalsSchema=z.object({attempts:z.number().int().nonnegative(),outcomes:z.number().int().nonnegative(),proofs:z.number().int().nonnegative(),allocations:z.number().int().nonnegative(),occurrences:z.number().int().nonnegative()}).strict();
-const podCollectionsShape={page:z.number().int().positive(),page_size:z.number().int().min(1).max(50),totals:podTotalsSchema,
+const podCollectionsShape={page:z.number().int().positive(),page_size:z.number().int().min(1).max(50),snapshot_at:z.string().datetime({offset:true}),collection_revision:revision,totals:podTotalsSchema,
  attempts:z.array(attemptSchema),outcomes:z.array(outcomeSchema),proofs:z.array(proofSchema),allocations:z.array(allocationSchema),occurrences:z.array(occurrenceSchema)};
 export const operatorPodCollectionsSchema=z.object({version:z.literal(1),tenant_id:id,document_id:id,...podCollectionsShape}).strict();
 export const operatorPodHistorySchema=z.object({
@@ -122,14 +122,14 @@ type OperatorRpcArgs={
  get_operational_event_create_context:{_tenant_id:string;_bindings:OperationalEventBindings};
  get_operational_event_context:{_tenant_id:string;_event_id:string};
  get_operator_pod_history_v1:{_tenant_id:string;_document_id:string};
- get_operator_pod_history_collections_v1:{_tenant_id:string;_document_id:string;_page:number;_page_size:number};
+ get_operator_pod_history_collections_v1:{_tenant_id:string;_document_id:string;_page:number;_page_size:number;_snapshot_at?:string;_expected_revision?:string};
  create_operational_event_v1:{_payload:OperationalEventCreateCommand};
  resolve_operational_event_v1:{_payload:OperationalEventResolveCommand};
 };
 interface RpcResponse{data:unknown;error:unknown}
 interface RpcBuilder extends PromiseLike<RpcResponse>{abortSignal:(signal:AbortSignal)=>PromiseLike<RpcResponse>}
-const rpc=supabase.rpc.bind(supabase) as unknown as <Name extends keyof OperatorRpcArgs>(name:Name,args:OperatorRpcArgs[Name])=>RpcBuilder;
 export async function callOperatorEventRpc<Name extends keyof OperatorRpcArgs>(name:Name,args:OperatorRpcArgs[Name],signal?:AbortSignal){
+ const rpc=supabase.rpc.bind(supabase) as unknown as <RpcName extends keyof OperatorRpcArgs>(name:RpcName,args:OperatorRpcArgs[RpcName])=>RpcBuilder;
  const request=rpc(name,args);return await (signal?request.abortSignal(signal):request);
 }
 

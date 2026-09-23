@@ -1,99 +1,68 @@
-import { useMemo } from 'react';
-import { useOrders, ORDER_STATUS_LABELS, OrderStatus } from '@/hooks/useOrders';
-import { useLoads } from '@/hooks/useLoads';
+import { ORDER_STATUS_LABELS, OrderStatus } from '@/hooks/useOrders';
 import { useInventorySummary } from '@/hooks/useInventory';
-import { useVehicles } from '@/hooks/useVehicles';
-import { useIncidents, SEVERITY_LABELS, INCIDENT_STATUS_LABELS } from '@/hooks/useIncidents';
-import { useEmployees } from '@/hooks/useEmployees';
-import { useMaintenanceOrders, MAINT_STATUS_LABELS } from '@/hooks/useMaintenanceOrders';
-import { useStockItems } from '@/hooks/useStock';
+import { SEVERITY_LABELS, INCIDENT_STATUS_LABELS } from '@/hooks/useIncidents';
+import { MAINT_STATUS_LABELS } from '@/hooks/useMaintenanceOrders';
+import { useOperationsDashboardSummary } from '@/hooks/useOperationsDashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import {
   ShoppingCart, PackageCheck, Truck, AlertTriangle,
   Package, Activity, AlertOctagon, CheckCircle,
-  Users, Wrench, Boxes, DollarSign,
+  Users, Wrench, Boxes, DollarSign, RefreshCw,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 
 const PIE_COLORS = ['hsl(var(--primary))', 'hsl(var(--destructive))', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#94a3b8', '#14b8a6'];
 
 export default function OperationsDashboard() {
-  const { data: orders = [] } = useOrders();
-  const { data: loads = [] } = useLoads();
-  const { data: inventorySummary } = useInventorySummary();
-  const { data: vehicles = [] } = useVehicles();
-  const { data: incidents = [] } = useIncidents();
-  const { data: employees = [] } = useEmployees();
-  const { data: maintenanceOrders = [] } = useMaintenanceOrders();
-  const { data: stockItems = [] } = useStockItems();
+  const dashboardQuery=useOperationsDashboardSummary();
+  const inventoryQuery = useInventorySummary();
+  const dashboard=dashboardQuery.data;
+  const { data: inventorySummary } = inventoryQuery;
   const navigate = useNavigate();
-
-  const pendingOrders = orders.filter(o => !['delivered', 'cancelled', 'returned', 'refused'].includes(o.status));
-  const delayedOrders = orders.filter(o => {
-    if (!o.promised_date || ['delivered', 'cancelled', 'returned', 'refused'].includes(o.status)) return false;
-    return new Date(o.promised_date + 'T23:59:59') < new Date();
-  });
-
-  const ordersByStatus = useMemo(() => {
-    const counts: Record<string, number> = {};
-    orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1; });
-    return Object.entries(counts).map(([status, count]) => ({
-      name: ORDER_STATUS_LABELS[status as OrderStatus] || status, value: count,
-    }));
-  }, [orders]);
-
-  // Cargas ativas: exclui concluídas e canceladas
-  const activeLoads = loads.filter(l => !['delivered', 'divergent', 'cancelled'].includes(l.status));
-  const inTransitLoads = loads.filter(l => l.status === 'in_transit');
-  const divergentLoads = loads.filter(l => l.status === 'divergent');
-  const deliveredLoads = loads.filter(l => l.status === 'delivered').length;
-  // Taxa de sucesso considera o que foi FINALIZADO (entregue vs divergente/devolvido)
-  const completedLoads = deliveredLoads + divergentLoads.length;
-  const deliverySuccessRate = completedLoads > 0 ? Math.round((deliveredLoads / completedLoads) * 100) : 100;
-
-  // Incidents KPIs: exclui cancelados e resolvidos
-  const openIncidents = incidents.filter(i => !['closed', 'cancelled', 'resolved'].includes(i.status));
-  const criticalIncidents = incidents.filter(i => (i.severity === 'critical' || i.severity === 'high') && !['closed', 'cancelled', 'resolved'].includes(i.status));
-  const incidentCost = incidents.reduce((s, i) => s + (i.actual_cost || i.estimated_cost || 0), 0);
-
-  // Maintenance KPIs
-  const openMaintenance = maintenanceOrders.filter(o => !['completed', 'closed', 'cancelled'].includes(o.status));
-  const maintenanceCost = maintenanceOrders.reduce((s, o) => s + (o.total_cost || 0), 0);
-
-  // Employee KPIs
-  const expiringDocs = employees.filter(e => {
-    const now = new Date();
-    if (e.cnh_expiry && differenceInDays(parseISO(e.cnh_expiry), now) < 30) return true;
-    if (e.medical_exam_expiry && differenceInDays(parseISO(e.medical_exam_expiry), now) < 30) return true;
-    return false;
-  });
-
-  // Stock KPIs
-  const lowStockItems = stockItems.filter(i =>
-    (i.current_quantity ?? 0) <= (i.min_quantity ?? 0) && (i.min_quantity ?? 0) > 0,
-  );
+  const ordersByStatus=(dashboard?.orders_by_status??[]).map(item=>({name:ORDER_STATUS_LABELS[item.status as OrderStatus]||item.status,value:item.count}));
+  const delayedOrders=dashboard?.delayed_order_rows??[],openIncidents=dashboard?.incident_rows??[],openMaintenance=dashboard?.maintenance_rows??[],vehicleOccupancy=dashboard?.vehicle_occupancy_rows??[];
 
   const totalPalletsInStock = inventorySummary?.totalPallets ?? 0;
 
-  // Vehicle occupancy
-  const vehicleOccupancy = useMemo(() => {
-    const vehiclesWithCapacity = vehicles.filter((v: any) => v.max_pallets && v.max_pallets > 0);
-    return vehiclesWithCapacity.map((v: any) => {
-      const vehicleLoads = loads.filter(l => l.vehicle_id === v.id && ['loaded', 'in_transit'].includes(l.status));
-      const totalPallets = vehicleLoads.reduce((s, l) => s + (l.total_pallet_count || 0), 0);
-      const occupancy = Math.min(100, Math.round((totalPallets / v.max_pallets) * 100));
-      return { plate: v.plate, nickname: v.nickname, maxPallets: v.max_pallets, loadedPallets: totalPallets, occupancy };
-    }).sort((a, b) => b.occupancy - a.occupancy);
-  }, [vehicles, loads]);
-
   // Stock by client
   const stockByClient = inventorySummary?.stockByClient ?? [];
+
+  const failedQueries = [
+    { name: 'resumo operacional', query: dashboardQuery },
+    { name: 'saldos de estoque', query: inventoryQuery },
+  ].filter(({ query }) => query.isError);
+
+  if (failedQueries.length > 0) {
+    return (
+      <div className="animate-fade-in space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Activity className="h-6 w-6 text-primary" /> Painel Operacional
+          </h1>
+          <p className="text-sm text-muted-foreground">Visão consolidada de operações, frota, RH e manutenção</p>
+        </div>
+        <Card className="border-destructive/50" role="alert">
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+            <AlertTriangle className="h-7 w-7 text-destructive" />
+            <div>
+              <p className="font-medium text-destructive">Não foi possível montar o painel operacional</p>
+              <p className="text-sm text-muted-foreground">
+                Fontes indisponíveis: {failedQueries.map(({ name }) => name).join(', ')}. Nenhum indicador parcial será apresentado.
+              </p>
+            </div>
+            <Button variant="outline" onClick={() => void Promise.all(failedQueries.map(({ query }) => query.refetch()))}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -106,22 +75,22 @@ export default function OperationsDashboard() {
 
       {/* Main KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <KPICard icon={<ShoppingCart className="h-3.5 w-3.5 text-primary" />} label="Pedidos Pendentes" value={pendingOrders.length} onClick={() => navigate('/orders')} />
-        <KPICard icon={<AlertTriangle className="h-3.5 w-3.5 text-destructive" />} label="Atrasados" value={delayedOrders.length} alert={delayedOrders.length > 0} onClick={() => navigate('/orders')} />
-        <KPICard icon={<PackageCheck className="h-3.5 w-3.5 text-primary" />} label="Cargas Ativas" value={activeLoads.length} onClick={() => navigate('/loads')} />
-        <KPICard icon={<Truck className="h-3.5 w-3.5 text-info" />} label="Em Trânsito" value={inTransitLoads.length} onClick={() => navigate('/loads')} />
-        <KPICard icon={<CheckCircle className="h-3.5 w-3.5 text-success" />} label="Sucesso Entrega" value={`${deliverySuccessRate}%`} />
+        <KPICard icon={<ShoppingCart className="h-3.5 w-3.5 text-primary" />} label="Pedidos Pendentes" value={dashboard?.pending_orders??'—'} onClick={() => navigate('/orders')} />
+        <KPICard icon={<AlertTriangle className="h-3.5 w-3.5 text-destructive" />} label="Atrasados" value={dashboard?.delayed_orders??'—'} alert={(dashboard?.delayed_orders??0) > 0} onClick={() => navigate('/orders')} />
+        <KPICard icon={<PackageCheck className="h-3.5 w-3.5 text-primary" />} label="Cargas Ativas" value={dashboard?.active_loads??'—'} onClick={() => navigate('/loads')} />
+        <KPICard icon={<Truck className="h-3.5 w-3.5 text-info" />} label="Em Trânsito" value={dashboard?.in_transit_loads??'—'} onClick={() => navigate('/loads')} />
+        <KPICard icon={<CheckCircle className="h-3.5 w-3.5 text-success" />} label="Sucesso Entrega" value={dashboard?.delivery_success_rate==null ? '—' : `${dashboard.delivery_success_rate}%`} />
         <KPICard icon={<Package className="h-3.5 w-3.5 text-primary" />} label="Paletes Estoque" value={totalPalletsInStock} onClick={() => navigate('/inventory')} />
       </div>
 
       {/* Secondary KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <KPICard icon={<AlertOctagon className="h-3.5 w-3.5 text-destructive" />} label="Ocorrências Abertas" value={openIncidents.length} alert={criticalIncidents.length > 0} onClick={() => navigate('/incidents')} />
-        <KPICard icon={<DollarSign className="h-3.5 w-3.5 text-warning" />} label="Custo Ocorrências" value={`R$ ${(incidentCost / 1000).toFixed(1)}k`} onClick={() => navigate('/incidents')} />
-        <KPICard icon={<Wrench className="h-3.5 w-3.5 text-primary" />} label="OS Abertas" value={openMaintenance.length} onClick={() => navigate('/maintenance-orders')} />
-        <KPICard icon={<DollarSign className="h-3.5 w-3.5 text-primary" />} label="Custo Manutenção" value={`R$ ${(maintenanceCost / 1000).toFixed(1)}k`} onClick={() => navigate('/maintenance-orders')} />
-        <KPICard icon={<Users className="h-3.5 w-3.5 text-warning" />} label="Docs Vencendo" value={expiringDocs.length} alert={expiringDocs.length > 0} onClick={() => navigate('/employees')} />
-        <KPICard icon={<Boxes className="h-3.5 w-3.5 text-warning" />} label="Estoque Baixo" value={lowStockItems.length} alert={lowStockItems.length > 0} onClick={() => navigate('/stock')} />
+        <KPICard icon={<AlertOctagon className="h-3.5 w-3.5 text-destructive" />} label="Ocorrências Abertas" value={dashboard?.open_incidents??'—'} alert={(dashboard?.critical_incidents??0) > 0} onClick={() => navigate('/incidents')} />
+        <KPICard icon={<DollarSign className="h-3.5 w-3.5 text-warning" />} label="Custo Ocorrências" value={dashboard?`R$ ${(dashboard.incident_cost / 1000).toFixed(1)}k`:'—'} onClick={() => navigate('/incidents')} />
+        <KPICard icon={<Wrench className="h-3.5 w-3.5 text-primary" />} label="OS Abertas" value={dashboard?.open_maintenance??'—'} onClick={() => navigate('/maintenance-orders')} />
+        <KPICard icon={<DollarSign className="h-3.5 w-3.5 text-primary" />} label="Custo Manutenção" value={dashboard?`R$ ${(dashboard.maintenance_cost / 1000).toFixed(1)}k`:'—'} onClick={() => navigate('/maintenance-orders')} />
+        <KPICard icon={<Users className="h-3.5 w-3.5 text-warning" />} label="Docs Vencendo" value={dashboard?.expiring_docs??'—'} alert={(dashboard?.expiring_docs??0) > 0} onClick={() => navigate('/employees')} />
+        <KPICard icon={<Boxes className="h-3.5 w-3.5 text-warning" />} label="Estoque Baixo" value={dashboard?.low_stock??'—'} alert={(dashboard?.low_stock??0) > 0} onClick={() => navigate('/stock')} />
       </div>
 
       {/* Charts row */}
@@ -181,7 +150,7 @@ export default function OperationsDashboard() {
               <TableBody>
                 {openIncidents.length === 0 ? (
                   <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-4 text-sm">Nenhuma ocorrência aberta 🎉</TableCell></TableRow>
-                ) : openIncidents.slice(0, 8).map(i => (
+                ) : openIncidents.map(i => (
                   <TableRow key={i.id} className="cursor-pointer hover:bg-accent/50" onClick={() => navigate('/incidents')}>
                     <TableCell className="font-mono text-xs">{i.incident_number}</TableCell>
                     <TableCell className="text-sm max-w-[180px] truncate">{i.title}</TableCell>
@@ -209,7 +178,7 @@ export default function OperationsDashboard() {
               <TableBody>
                 {openMaintenance.length === 0 ? (
                   <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-4 text-sm">Nenhuma OS aberta</TableCell></TableRow>
-                ) : openMaintenance.slice(0, 8).map(o => (
+                ) : openMaintenance.map(o => (
                   <TableRow key={o.id} className="cursor-pointer hover:bg-accent/50" onClick={() => navigate('/maintenance-orders')}>
                     <TableCell className="font-mono text-xs">{o.order_number}</TableCell>
                     <TableCell className="text-sm">{o.vehicles?.plate || '—'}</TableCell>
@@ -239,12 +208,12 @@ export default function OperationsDashboard() {
               <TableBody>
                 {delayedOrders.length === 0 ? (
                   <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-4 text-sm">Nenhum pedido atrasado 🎉</TableCell></TableRow>
-                ) : delayedOrders.slice(0, 8).map(o => (
+                ) : delayedOrders.map(o => (
                   <TableRow key={o.id} className="cursor-pointer hover:bg-accent/50" onClick={() => navigate('/orders')}>
                     <TableCell className="font-medium">{o.order_number}</TableCell>
                     <TableCell className="text-sm">{o.clients?.company_name || '—'}</TableCell>
-                    <TableCell className="text-sm text-destructive">{o.promised_date ? formatDistanceToNow(new Date(o.promised_date + 'T23:59:59'), { addSuffix: true, locale: ptBR }) : '—'}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{ORDER_STATUS_LABELS[o.status] || o.status}</Badge></TableCell>
+                    <TableCell className="text-sm text-destructive">{o.days_overdue===1?'há 1 dia':`há ${o.days_overdue} dias`}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{ORDER_STATUS_LABELS[o.status as OrderStatus] || o.status}</Badge></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -266,14 +235,14 @@ export default function OperationsDashboard() {
               <TableBody>
                 {vehicleOccupancy.length === 0 ? (
                   <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-4 text-sm">Configure a capacidade dos veículos</TableCell></TableRow>
-                ) : vehicleOccupancy.slice(0, 8).map(v => (
+                ) : vehicleOccupancy.map(v => (
                   <TableRow key={v.plate}>
                     <TableCell className="font-medium">{v.plate}{v.nickname ? ` (${v.nickname})` : ''}</TableCell>
-                    <TableCell>{v.loadedPallets} pal</TableCell>
-                    <TableCell className="text-muted-foreground">{v.maxPallets} pal</TableCell>
+                    <TableCell>{v.loaded_pallets} pal</TableCell>
+                    <TableCell className="text-muted-foreground">{v.max_pallets} pal</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Progress aria-label={`Ocupação do veículo ${v.plate}`} aria-valuetext={`${v.occupancy}%`} value={v.occupancy} className={`w-16 h-2 ${v.occupancy > 90 ? '[&>div]:bg-destructive' : v.occupancy > 60 ? '[&>div]:bg-warning' : ''}`} />
+                        <Progress aria-label={`Ocupação do veículo ${v.plate}`} aria-valuetext={`${v.occupancy}%`} value={Math.min(100, v.occupancy)} className={`w-16 h-2 ${v.occupancy > 90 ? '[&>div]:bg-destructive' : v.occupancy > 60 ? '[&>div]:bg-warning' : ''}`} />
                         <span className="text-xs font-medium">{v.occupancy}%</span>
                       </div>
                     </TableCell>

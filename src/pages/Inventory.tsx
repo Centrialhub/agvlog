@@ -4,7 +4,7 @@ import { useListFilters } from '@/hooks/useListFilters';
 import { useEffect, useState } from 'react';
 import {
   useInventoryBalances, useInventoryMovements, useInventoryLocations,
-  useCreateMovement, useCreateLocation, useInventorySummary, INVENTORY_PAGE_SIZE, MOVEMENT_TYPES, MOVEMENT_TYPE_LABELS,
+  useCreateMovement, useCreateLocation, useInventorySummary, INVENTORY_PAGE_SIZE, ALL_MOVEMENT_TYPES, MOVEMENT_TYPES, MOVEMENT_TYPE_LABELS,
   type InventoryLocation, type InventoryMovement, type MovementType,
 } from '@/hooks/useInventory';
 import { useClients, type Client } from '@/hooks/useClients';
@@ -22,6 +22,7 @@ import { Plus, Warehouse, Package, ArrowDownUp, MapPin, Clock } from 'lucide-rea
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useIsAdmin } from '@/hooks/useTenant';
 
 function MovementForm({ clients, locations, onSave, onCancel }: {
   clients: Client[];
@@ -88,7 +89,7 @@ function MovementForm({ clients, locations, onSave, onCancel }: {
       <div><Label>Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
       <div className="flex gap-2 justify-end">
         <Button variant="outline" onClick={onCancel}>Cancelar</Button>
-        <Button onClick={() => onSave({ ...form, adjustment_direction:form.movement_type==='adjustment'?form.adjustment_direction:null,location_id: form.location_id || null, client_id: form.client_id || null, weight_kg: form.weight_kg ? Number(form.weight_kg) : null })} disabled={!form.item_description.trim() || form.quantity <= 0 || form.pallet_count < 0 || Number(form.weight_kg || 0) < 0}>Salvar</Button>
+        <Button onClick={() => onSave({ ...form, item_description:form.item_description.trim(), adjustment_direction:form.movement_type==='adjustment'?form.adjustment_direction:null,location_id: form.location_id || null, client_id: form.client_id || null, weight_kg: form.weight_kg ? Number(form.weight_kg) : null })} disabled={!form.item_description.trim() || form.quantity <= 0 || form.pallet_count < 0 || Number(form.weight_kg || 0) < 0}>Salvar</Button>
       </div>
     </div>
   );
@@ -113,6 +114,7 @@ function LocationForm({ onSave, onCancel }: {
 }
 
 export default function Inventory() {
+  const isAdmin = useIsAdmin();
   const locationsQuery=useInventoryLocations();const locations=locationsQuery.data??[];
   const clientsQuery=useClients();const clients=clientsQuery.data??[];
   const createMovement = useCreateMovement();
@@ -173,7 +175,7 @@ export default function Inventory() {
           </h1>
           <p className="text-sm text-muted-foreground">{summaryQuery.data?.balanceCount??'—'} itens em estoque • {summaryQuery.data?.stagnantCount??'—'} parados há +30 dias</p>
         </div>
-        <div className="flex gap-2">
+        {isAdmin ? <div className="flex gap-2">
           <Dialog open={locDialog} onOpenChange={setLocDialog}>
             <DialogTrigger asChild><Button variant="outline"><MapPin className="h-4 w-4 mr-2" /> Novo Local</Button></DialogTrigger>
             <DialogContent>
@@ -194,7 +196,7 @@ export default function Inventory() {
               <MovementForm clients={clients} locations={locations} onSave={handleMovementSave} onCancel={() => setMovDialog(false)} />
             </DialogContent>
           </Dialog>
-        </div>
+        </div> : <p className="text-sm text-muted-foreground">Somente administradores podem registrar movimentos ou locais.</p>}
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -254,7 +256,7 @@ export default function Inventory() {
 
         <TabsContent value="movements" className="mt-4 space-y-3">
           <ListFilterBar activeCount={movementFilters.activeCount} onReset={movementFilters.resetFilters} resultCount={movements.length} totalCount={movementsQuery.data?.total??0} loading={movLoading} description="Filtros aplicados no servidor ao histórico paginado." fields={[
-            { key: 'type', label: 'Tipo de movimento', value: movementFilters.filters.type, onChange: value => movementFilters.setFilter('type', value), options: [{ value: 'all', label: 'Todos os tipos' }, ...MOVEMENT_TYPES.map(value => ({ value, label: MOVEMENT_TYPE_LABELS[value] }))] },
+            { key: 'type', label: 'Tipo de movimento', value: movementFilters.filters.type, onChange: value => movementFilters.setFilter('type', value), options: [{ value: 'all', label: 'Todos os tipos' }, ...ALL_MOVEMENT_TYPES.map(value => ({ value, label: MOVEMENT_TYPE_LABELS[value] }))] },
             { key: 'from', label: 'Movimentação de', type: 'date', value: movementFilters.filters.from, onChange: value => movementFilters.setFilter('from', value), max: movementFilters.filters.to || undefined },
             { key: 'to', label: 'Movimentação até', type: 'date', value: movementFilters.filters.to, onChange: value => movementFilters.setFilter('to', value), min: movementFilters.filters.from || undefined },
           ]} />

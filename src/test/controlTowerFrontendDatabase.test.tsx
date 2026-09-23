@@ -79,7 +79,7 @@ describe('Control Tower page → actual read hooks → PostgreSQL',()=>{
   });
   it('validates a response tenant before rendering it',async()=>{
     const foreign=await towerRead<Record<string,unknown>[]>(db);
-    state.rpc.mockImplementation(()=>({abortSignal:async()=>({data:{version:1,tenant_id:i.tenant,read_at:new Date().toISOString(),trip_limit:200,trip_total:foreign.length,truncated:false,trips:foreign.map(t=>({...t,tenant_id:i.other})),alerts:[]},error:null})}));
+    state.rpc.mockImplementation(()=>({abortSignal:async()=>({data:{version:1,tenant_id:i.tenant,read_at:new Date().toISOString(),trip_limit:200,trip_total:foreign.length,truncated:false,alert_limit:200,alert_total:0,alerts_truncated:false,trips:foreign.map(t=>({...t,tenant_id:i.other})),alerts:[]},error:null})}));
     open();expect(await screen.findByText(/Não foi possível consultar as viagens/)).toBeInTheDocument();expect(screen.queryByText('QA-1234')).not.toBeInTheDocument();
   });
   it('counts a resolved Edge error as failure, never as a successful route',async()=>{

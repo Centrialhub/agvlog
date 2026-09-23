@@ -34,6 +34,15 @@ async function cacheApplicationShell() {
     await cache.put('/', response);
     const cached=await Promise.all(['/',...required].map(path=>cache.match(path)));
     if(cached.some(entry=>!entry))throw new Error('Application shell cache incomplete');
+    for (let index=0;index<required.length;index++) {
+      const path=required[index];
+      if(!path.startsWith('/assets/'))continue;
+      const contentType=cached[index+1].headers.get('content-type')?.toLowerCase()||'';
+      if((path.endsWith('.js')&&!/(?:javascript|ecmascript)/.test(contentType))
+        ||(path.endsWith('.css')&&!contentType.startsWith('text/css'))){
+        throw new Error(`Invalid build asset response: ${path}`);
+      }
+    }
   } catch (error) {
     await caches.delete(CACHE_NAME);
     throw error;

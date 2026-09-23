@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AddressResolutionPicker, type AddressResolutionSelection } from '@/components/maps/AddressResolutionPicker';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
+import { useScopedAlerts } from '@/hooks/useAlertStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsAdmin, useTenant } from '@/hooks/useTenant';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,6 +30,8 @@ type QueueItem = {
 };
 
 type QueueCursor = { createdAt: string; id: string };
+const reviewSubject=(item:QueueItem)=>item.entity_type==='dispatch_stop'
+  ? `Destino ${item.address_snapshot}` : `${item.company_name} — ${item.address_snapshot}`;
 
 const isCandidate = (value: unknown): value is GeocodingCandidate => {
   if (!value || typeof value !== 'object') return false;
@@ -74,9 +77,12 @@ export default function AddressResolution() {
   const { user } = useAuth();
   const isAdmin = useIsAdmin();
   const toast = useSonnerToast();
+  const {confirmAction}=useScopedAlerts();
   const tenantId = currentTenant?.id;
   const queryKey = ['address-resolution-queue', tenantId];
   const [page, setPage] = useState(1);
+  const [activeReviewId,setActiveReviewId]=useState<string|null>(null);
+  const [dirtyReviewId,setDirtyReviewId]=useState<string|null>(null);
   const [generation, setGeneration] = useState(0);
   const [pageCursors, setPageCursors] = useState<Record<number, QueueCursor | null>>({ 1: null });
   const snapshotRef = useRef<string | null>(null);
@@ -85,6 +91,8 @@ export default function AddressResolution() {
     setPage(1);
     setPageCursors({ 1: null });
     snapshotRef.current = null;
+    setActiveReviewId(null);
+    setDirtyReviewId(null);
     setGeneration(value => value + 1);
   }, [tenantId]);
 
@@ -138,9 +146,27 @@ export default function AddressResolution() {
 
   const restartQueue = () => {
     snapshotRef.current = null;
+    setActiveReviewId(null);
+    setDirtyReviewId(null);
     setPage(1);
     setPageCursors({ 1: null });
     setGeneration(value => value + 1);
+  };
+  const confirmDiscard=async()=>!dirtyReviewId||await confirmAction(
+    'Há um ponto de endereço ajustado sem confirmação. Descartar este ajuste?',
+    {title:'Descartar ajuste de endereço',confirmLabel:'Descartar ajuste'},
+  );
+  const reviewItem=async(item:QueueItem)=>{
+    if(activeReviewId===item.id){
+      if(!await confirmDiscard())return;
+      setActiveReviewId(null);setDirtyReviewId(null);return;
+    }
+    if(!await confirmDiscard())return;
+    setActiveReviewId(item.id);setDirtyReviewId(null);
+  };
+  const changePage=async(nextPage:number)=>{
+    if(!await confirmDiscard())return;
+    setActiveReviewId(null);setDirtyReviewId(null);setPage(nextPage);
   };
 
   const searchMutation = useMutation({
@@ -210,7 +236,7 @@ export default function AddressResolution() {
         <h1 className="flex items-center gap-2 text-2xl font-bold"><MapPin className="h-6 w-6 text-primary" />Endereços para validar</h1>
         <p className="mt-1 text-sm text-muted-foreground">Backfill assistido para endereços novos, alterados ou ambíguos.</p>
       </div>
-      <Button type="button" variant="outline" onClick={restartQueue} disabled={queue.isFetching}>
+      <Button type="button" variant="outline" onClick={()=>void confirmDiscard().then(allowed=>{if(allowed)restartQueue();})} disabled={queue.isFetching}>
         <RefreshCw className={`mr-2 h-4 w-4 ${queue.isFetching ? 'animate-spin' : ''}`} />Atualizar
       </Button>
     </div>
@@ -240,14 +266,19 @@ export default function AddressResolution() {
           <p className="text-sm">{item.address_snapshot}</p>
           {item.invalidated_at ? <p className="flex items-center gap-1 text-xs text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />Endereço alterado; localização anterior invalidada.</p> : null}
           {item.last_error ? <p className="text-xs text-destructive">{item.last_error}</p> : null}
-          <Button type="button" size="sm" variant="outline" onClick={() => searchMutation.mutate(item)}
+          <Button type="button" size="sm" variant="outline" aria-label={`Buscar opções para ${reviewSubject(item)}`}
+            onClick={()=>void confirmDiscard().then(allowed=>{if(allowed){setActiveReviewId(null);setDirtyReviewId(null);searchMutation.mutate(item);}})}
             disabled={searchMutation.isPending || resolveMutation.isPending}>
             {searchMutation.isPending && searchMutation.variables?.id === item.id
               ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
             Buscar opções
           </Button>
-          {item.candidates.length > 0 ? <AddressResolutionPicker address={item.address_snapshot}
-            candidates={item.candidates} disabled={resolveMutation.isPending}
+          {item.candidates.length > 0 ? <Button type="button" size="sm" variant="outline"
+            aria-label={`${activeReviewId===item.id?'Fechar':'Conferir'} opções de endereço para ${reviewSubject(item)}`}
+            onClick={()=>void reviewItem(item)}>{activeReviewId===item.id?'Fechar conferência':'Conferir opções no mapa'}</Button> : null}
+          {activeReviewId===item.id&&item.candidates.length>0 ? <AddressResolutionPicker address={item.address_snapshot}
+            subjectLabel={reviewSubject(item)} candidates={item.candidates} disabled={resolveMutation.isPending}
+            onSelectionChange={()=>setDirtyReviewId(item.id)}
             onConfirm={(selection) => resolveMutation.mutate({ item, selection })} /> : null}
         </CardContent>
       </Card>)}
@@ -255,9 +286,9 @@ export default function AddressResolution() {
     {queue.isSuccess && totalCount > 0 ? <nav className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3" aria-label="Paginação da fila de endereços">
       <p className="text-sm text-muted-foreground">Página {page} · {items.length} item(ns) nesta página · {totalCount} ativo(s) no snapshot</p>
       <div className="flex gap-2">
-        <Button type="button" size="sm" variant="outline" disabled={page === 1} onClick={() => setPage(1)}>Primeira</Button>
-        <Button type="button" size="sm" variant="outline" disabled={page === 1} onClick={() => setPage(value => Math.max(1, value - 1))}>Anterior</Button>
-        <Button type="button" size="sm" variant="outline" disabled={!queue.data?.hasMore || !pageCursors[page + 1]} onClick={() => setPage(value => value + 1)}>Próxima</Button>
+        <Button type="button" size="sm" variant="outline" disabled={page === 1} onClick={() => void changePage(1)}>Primeira</Button>
+        <Button type="button" size="sm" variant="outline" disabled={page === 1} onClick={() => void changePage(Math.max(1,page-1))}>Anterior</Button>
+        <Button type="button" size="sm" variant="outline" disabled={!queue.data?.hasMore || !pageCursors[page + 1]} onClick={() => void changePage(page+1)}>Próxima</Button>
       </div>
     </nav> : null}
   </div>;

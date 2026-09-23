@@ -14,7 +14,7 @@ import { AlertTriangle, CheckCircle2, Clock, Download, FileSpreadsheet, MapPin, 
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { localDateInputValue } from '@/lib/utils/formatDate';
 import {
-  useDriverMonitorsList, useDriverMonitorCommand, useAddProgressUpdate, useAddForecast,
+  useDriverMonitorsList, useDriverMonitorsReport, useDriverMonitorCommand, useAddProgressUpdate, useAddForecast,
   useMonitorUpdates, useMonitorForecasts,
   useImportDriverMonitoringWorkbook, type DriverMonitorRow,
   type DriverMonitoringFilters, DRIVER_MONITOR_PAGE_SIZE,
@@ -68,8 +68,9 @@ export default function DriverMonitoring() {
   const [applied, setApplied] = useState<DriverMonitoringFilters>({});
   const [page,setPage]=useState(1);
   const monitors=useDriverMonitorsList(applied,page);const rows=useMemo(()=>monitors.data?.rows??[],[monitors.data?.rows]);
+  const reportMonitors=useDriverMonitorsReport(applied);const reportRows=useMemo(()=>reportMonitors.data??[],[reportMonitors.data]);
   const {isLoading,isError:monitorsIsError,error:monitorsError,refetch:refetchMonitors}=monitors;
-  const { data: forecasts = [], isLoading: forecastsLoading, isError: forecastsIsError, error: forecastsError, refetch: refetchForecasts } = useMonitorForecasts(rows.map(row=>row.id));
+  const { data: forecasts = [], isLoading: forecastsLoading, isError: forecastsIsError, error: forecastsError, refetch: refetchForecasts } = useMonitorForecasts(reportRows.map(row=>row.id));
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
   const companyInfo = toCompanyPdfInfo(companyProfile, currentTenant?.name);
@@ -104,6 +105,7 @@ export default function DriverMonitoring() {
   const [parsed, setParsed] = useState<ParsedDriverMonitoringWorkbook | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
   const activeRows = useMemo(() => rows.filter((row) => ACTIVE_MONITOR_STATUSES.has(row.status)), [rows]);
+  const activeReportRows = useMemo(() => reportRows.filter((row) => ACTIVE_MONITOR_STATUSES.has(row.status)), [reportRows]);
   const filteredForecasts = useMemo(() => {
     const monitorIds = new Set(rows.map((row) => row.id));
     return forecasts.filter((forecast) => monitorIds.has(forecast.monitor_id));
@@ -116,13 +118,13 @@ export default function DriverMonitoring() {
   }, [rows, openRow]);
 
   const kpis = useMemo(() => {
-    const today = localDateInputValue();
+    const today = localDateInputValue(new Date(),currentTenant?.timezone);
     const acc = {
       inRoute: 0, onTime: 0, delayed: 0, noUpdate: 0,
       predicted: 0, done: 0, remaining: 0,
       returningToday: 0, lateReturn: 0,
     };
-    for (const r of rows) {
+    for (const r of reportRows) {
       if (['active', 'on_time', 'delayed', 'no_update', 'returning'].includes(r.status)) acc.inRoute++;
       if (r.status === 'on_time') acc.onTime++;
       if (r.status === 'delayed') acc.delayed++;
@@ -134,7 +136,7 @@ export default function DriverMonitoring() {
       if (r.expected_return_date && r.expected_return_date < today && !r.actual_returned_at) acc.lateReturn++;
     }
     return acc;
-  }, [rows]);
+  }, [reportRows,currentTenant?.timezone]);
 
   const applyFilters = () => {setPage(1);setApplied({ ...filters });};
   const clearFilters = () => { setPage(1);setFilters({}); setApplied({}); };
@@ -343,12 +345,12 @@ export default function DriverMonitoring() {
 
         <TabsContent value="panel" className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <KpiCard icon={<Users className="h-4 w-4" />} label="Em rota" value={monitorsIsError ? '—' : kpis.inRoute} />
-            <KpiCard icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} label="No prazo" value={monitorsIsError ? '—' : kpis.onTime} />
-            <KpiCard icon={<AlertTriangle className="h-4 w-4 text-destructive" />} label="Atrasados" value={monitorsIsError ? '—' : kpis.delayed} />
-            <KpiCard icon={<Clock className="h-4 w-4" />} label="Sem atualização" value={monitorsIsError ? '—' : kpis.noUpdate} />
-            <KpiCard icon={<MapPin className="h-4 w-4" />} label="Entregas restantes" value={monitorsIsError ? '—' : kpis.remaining} />
-            <KpiCard icon={<Truck className="h-4 w-4" />} label="Retornos atrasados" value={monitorsIsError ? '—' : kpis.lateReturn} />
+            <KpiCard icon={<Users className="h-4 w-4" />} label="Em rota" value={reportMonitors.isError ? '—' : kpis.inRoute} />
+            <KpiCard icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} label="No prazo" value={reportMonitors.isError ? '—' : kpis.onTime} />
+            <KpiCard icon={<AlertTriangle className="h-4 w-4 text-destructive" />} label="Atrasados" value={reportMonitors.isError ? '—' : kpis.delayed} />
+            <KpiCard icon={<Clock className="h-4 w-4" />} label="Sem atualização" value={reportMonitors.isError ? '—' : kpis.noUpdate} />
+            <KpiCard icon={<MapPin className="h-4 w-4" />} label="Entregas restantes" value={reportMonitors.isError ? '—' : kpis.remaining} />
+            <KpiCard icon={<Truck className="h-4 w-4" />} label="Retornos atrasados" value={reportMonitors.isError ? '—' : kpis.lateReturn} />
           </div>
           <MonitorsTable rows={rows} isLoading={isLoading} isError={monitorsIsError} error={monitorsError} onRetry={refetchMonitors} onOpen={setOpenRow} onProgress={setProgDlg}
             onForecast={setForecastDlg} onEdit={openEditMonitor} onArrive={arriveMonitor}
@@ -435,11 +437,11 @@ export default function DriverMonitoring() {
 
         <TabsContent value="reports" className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <ReportCard title="Motoristas em Rota" onCsv={() => downloadCsv('motoristas-em-rota.csv', driversInRouteCsv(activeRows))} onPdf={() => downloadPdf(driversInRoutePdf(activeRows, filterSummary, companyInfo), 'motoristas-em-rota.pdf')} disabled={monitorsIsError} disabledHint="Os monitoramentos precisam estar disponíveis." />
+            <ReportCard title="Motoristas em Rota" onCsv={() => downloadCsv('motoristas-em-rota.csv', driversInRouteCsv(activeReportRows))} onPdf={() => downloadPdf(driversInRoutePdf(activeReportRows, filterSummary, companyInfo), 'motoristas-em-rota.pdf')} disabled={reportMonitors.isError||reportMonitors.isFetching} disabledHint="Os monitoramentos completos precisam estar disponíveis." />
             <ReportCard title="Entregas por Motorista" onCsv={() => downloadCsv('entregas-por-motorista.csv', deliveriesByDriverCsv(openUpdates))} onPdf={() => downloadPdf(deliveriesByDriverPdf(openUpdates, filterSummary, companyInfo), 'entregas-por-motorista.pdf')} disabled={!openRow || updatesIsError} disabledHint={updatesIsError ? 'As atualizações da rota estão indisponíveis.' : 'Abra uma rota para exportar suas entregas.'} />
             <ReportCard title="Chegada de Veículos" onCsv={() => downloadCsv('chegadas.csv', arrivalForecastsCsv(filteredForecasts))} onPdf={() => downloadPdf(arrivalForecastsPdf(filteredForecasts, filterSummary, companyInfo), 'chegadas.pdf')} disabled={forecastsIsError} disabledHint="As previsões precisam estar disponíveis." />
-            <ReportCard title="Atrasos" onCsv={() => downloadCsv('atrasos.csv', driversInRouteCsv(rows.filter((r) => r.status === 'delayed')))} onPdf={() => downloadPdf(delaysPdf(rows.filter((r) => r.status === 'delayed'), filterSummary, companyInfo), 'atrasos.pdf')} disabled={monitorsIsError} disabledHint="Os monitoramentos precisam estar disponíveis." />
-            <ReportCard title="Produtividade" onCsv={() => downloadCsv('produtividade.csv', driversInRouteCsv(rows))} onPdf={() => downloadPdf(productivityPdf(rows, filterSummary, companyInfo), 'produtividade.pdf')} disabled={monitorsIsError} disabledHint="Os monitoramentos precisam estar disponíveis." />
+            <ReportCard title="Atrasos" onCsv={() => downloadCsv('atrasos.csv', driversInRouteCsv(reportRows.filter((r) => r.status === 'delayed')))} onPdf={() => downloadPdf(delaysPdf(reportRows.filter((r) => r.status === 'delayed'), filterSummary, companyInfo), 'atrasos.pdf')} disabled={reportMonitors.isError||reportMonitors.isFetching} disabledHint="Os monitoramentos completos precisam estar disponíveis." />
+            <ReportCard title="Produtividade" onCsv={() => downloadCsv('produtividade.csv', driversInRouteCsv(reportRows))} onPdf={() => downloadPdf(productivityPdf(reportRows, filterSummary, companyInfo), 'produtividade.pdf')} disabled={reportMonitors.isError||reportMonitors.isFetching} disabledHint="Os monitoramentos completos precisam estar disponíveis." />
           </div>
         </TabsContent>
 

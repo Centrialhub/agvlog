@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { localDateInputValue } from '@/lib/utils/formatDate';
+import { useEffect, useMemo, useState } from 'react';
+import { dateOnlyUtcRange, localDateInputValue } from '@/lib/utils/formatDate';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
@@ -25,7 +25,6 @@ import { CLIENT_LOAD_OBSERVATION_RULES } from '@/lib/documentParsers';
 import { useSortableData } from '@/hooks/useSortableData';
 import { useCreateOperationalEvent } from '@/hooks/useOperationalEvents';
 import { getErrorMessage } from '@/lib/errors';
-import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 
 type SiatStatus = 'pending' | 'in_transit' | 'delivered';
 
@@ -214,14 +213,22 @@ const formatSla = (hours: number): string => {
 
 const SLA_THRESHOLD_KEY = 'traceability.slaThresholdHours';
 const DEFAULT_SLA_THRESHOLD_H = 72;
+const TRACE_PAGE_SIZE = 50;
+
+const daysAgoDateInput = (days: number) => {
+  const value = new Date();
+  value.setDate(value.getDate() - days);
+  return localDateInputValue(value);
+};
 
 export default function Traceability() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const registerEvent = useCreateOperationalEvent();
   const [filters, setFilters] = useState({
-    invoice: '', loadNumber: '', clientRef: '', client: '', supplier: '', plate: '', driver: '', start: '', end: '', deliveryStart: '', deliveryEnd: '', importStart: '', importEnd: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '', payment: '', importBatch: 'all',
+    invoice: '', loadNumber: '', clientRef: '', client: '', supplier: '', plate: '', driver: '', start: '', end: '', deliveryStart: '', deliveryEnd: '', importStart: daysAgoDateInput(30), importEnd: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '', payment: '', importBatch: 'all',
   });
+  const [page,setPage]=useState(1);
   const [selectedRow, setSelectedRow] = useState<TraceRow | null>(null);
   const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', description: '' });
   const [slaThresholdH, setSlaThresholdH] = useState<number>(() => {
@@ -233,90 +240,88 @@ export default function Traceability() {
   const [analyzerOpen, setAnalyzerOpen] = useState(false);
   const [analyzerResult, setAnalyzerResult] = useState<AnalyzerResult | null>(null);
 
+  useEffect(()=>setPage(1),[filters]);
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['traceability', currentTenant?.id],
+    queryKey: ['traceability', currentTenant?.id, page, filters.invoice, filters.supplier, filters.start, filters.end, filters.importStart, filters.importEnd, filters.importBatch],
     queryFn: async () => {
-      if (!currentTenant) return { docs: [], events: [], trips: [], stops: [], proofs: [] };
-      const docs = await fetchAllPostgrestPages<TraceDocument>(async (from, to) => {
-        const { data: page, error: pageError } = await supabase
+      if (!currentTenant) return { docs: [], events: [], trips: [], stops: [], proofs: [], total: 0 };
+      let documentsQuery = supabase
           .from('fiscal_documents')
-          .select('id, invoice_number, access_key, document_type, issue_date, created_at, created_by, import_batch_id, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, client_load_source, clients!fiscal_documents_client_id_fkey(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
+          .select('id, invoice_number, access_key, document_type, issue_date, created_at, created_by, import_batch_id, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, client_load_source, clients!fiscal_documents_client_id_fkey(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))',{count:'exact'})
           .eq('tenant_id', currentTenant.id)
           .order('created_at', { ascending: false })
-          .order('id', { ascending: false })
-          .range(from, to);
-        return { data: (page || []) as unknown as TraceDocument[], error: pageError };
-      });
+          .order('id', { ascending: false });
+      if(filters.invoice.trim())documentsQuery=documentsQuery.ilike('invoice_number',`%${filters.invoice.trim()}%`);
+      if(filters.supplier.trim())documentsQuery=documentsQuery.ilike('remitter',`%${filters.supplier.trim()}%`);
+      if(filters.start)documentsQuery=documentsQuery.gte('issue_date',filters.start);
+      if(filters.end)documentsQuery=documentsQuery.lte('issue_date',filters.end);
+      if(filters.importStart)documentsQuery=documentsQuery.gte('created_at',dateOnlyUtcRange(filters.importStart).from);
+      if(filters.importEnd)documentsQuery=documentsQuery.lt('created_at',dateOnlyUtcRange(filters.importEnd).toExclusive);
+      if(filters.importBatch!=='all')documentsQuery=documentsQuery.eq('import_batch_id',filters.importBatch);
+      const {data:documentPage,error:documentsError,count}=await documentsQuery.range((page-1)*TRACE_PAGE_SIZE,page*TRACE_PAGE_SIZE-1);
+      if(documentsError)throw documentsError;
+      const docs=(documentPage||[]) as unknown as TraceDocument[];
 
       const proofs: DeliveryProof[] = [];
       const documentIds = docs.map(document => document.id);
       for (let index = 0; index < documentIds.length; index += 200) {
         const ids = documentIds.slice(index, index + 200);
-        const chunk = await fetchAllPostgrestPages<DeliveryProof>(async (from, to) => {
-          const { data: page, error: pageError } = await supabase
+        const {data:chunk,error:chunkError}=await supabase
             .from('proof_of_delivery')
             .select('id, fiscal_document_id, proof_type, status, storage_path, photo_url, signature_url, received_at')
             .eq('tenant_id', currentTenant.id)
             .eq('is_active', true)
             .in('fiscal_document_id', ids)
-            .range(from, to);
-          return { data: (page || []) as DeliveryProof[], error: pageError };
-        });
-        proofs.push(...chunk);
+            .limit(1000);
+        if(chunkError)throw chunkError;
+        proofs.push(...((chunk||[]) as DeliveryProof[]));
       }
 
       const loadIds = Array.from(new Set(
         docs.map((document) => document.load_id).filter((id): id is string => Boolean(id)),
       ));
-      if (!loadIds.length) return { docs, events: [], trips: [], stops: [], proofs };
+      if (!loadIds.length) return { docs, events: [], trips: [], stops: [], proofs, total: count??0 };
 
       const events: OperationalEvent[] = [];
       const trips: DispatchTrip[] = [];
       for (let index = 0; index < loadIds.length; index += 200) {
         const ids = loadIds.slice(index, index + 200);
         const [eventChunk, tripChunk] = await Promise.all([
-          fetchAllPostgrestPages<OperationalEvent>(async (from, to) => {
-            const { data: page, error: pageError } = await supabase
+          supabase
               .from('operational_events')
               .select('id, load_id, event_type, severity, description, resolved_at, created_at, drivers(name)')
               .eq('tenant_id', currentTenant.id)
               .in('load_id', ids)
               .order('created_at', { ascending: false })
-              .range(from, to);
-            return { data: (page || []) as unknown as OperationalEvent[], error: pageError };
-          }),
-          fetchAllPostgrestPages<DispatchTrip>(async (from, to) => {
-            const { data: page, error: pageError } = await supabase
+              .limit(1000),
+          supabase
               .from('dispatch_trips')
               .select('id, load_id, actual_start_at, actual_end_at, planned_start_at, planned_end_at, status')
               .eq('tenant_id', currentTenant.id)
               .in('load_id', ids)
               .order('planned_start_at', { ascending: false, nullsFirst: false })
               .order('id', { ascending: false })
-              .range(from, to);
-            return { data: (page || []) as DispatchTrip[], error: pageError };
-          }),
+              .limit(1000),
         ]);
-        events.push(...eventChunk);
-        trips.push(...tripChunk);
+        if(eventChunk.error)throw eventChunk.error;if(tripChunk.error)throw tripChunk.error;
+        events.push(...((eventChunk.data||[]) as unknown as OperationalEvent[]));
+        trips.push(...((tripChunk.data||[]) as DispatchTrip[]));
       }
 
       const tripIds = trips.map((trip) => trip.id);
       const stops: DispatchStop[] = [];
       for (let index = 0; index < tripIds.length; index += 200) {
         const ids = tripIds.slice(index, index + 200);
-        const chunk = await fetchAllPostgrestPages<DispatchStop>(async (from, to) => {
-          const { data: page, error: pageError } = await supabase
+        const {data:chunk,error:chunkError}=await supabase
             .from('dispatch_stops')
             .select('id, dispatch_trip_id, destination, status, actual_arrival_at, actual_departure_at, planned_arrival_at, stop_order')
             .eq('tenant_id', currentTenant.id)
             .in('dispatch_trip_id', ids)
             .order('stop_order')
             .order('id')
-            .range(from, to);
-          return { data: (page || []) as DispatchStop[], error: pageError };
-        });
-        stops.push(...chunk);
+            .limit(1000);
+        if(chunkError)throw chunkError;
+        stops.push(...((chunk||[]) as DispatchStop[]));
       }
 
       return {
@@ -325,6 +330,7 @@ export default function Traceability() {
         trips,
         stops,
         proofs,
+        total: count??0,
       };
     },
     enabled: !!currentTenant,
@@ -345,10 +351,7 @@ export default function Traceability() {
         || trips.find(t => t.load_id === doc.load_id)
         || null;
       const proofs = proofsByDocument.get(doc.id) || [];
-      const evidenceProofs = proofs.filter(proof =>
-        ['uploaded', 'validated'].includes(proof.status)
-        || Boolean(proof.storage_path || proof.photo_url || proof.signature_url || proof.received_at),
-      );
+      const evidenceProofs = proofs.filter(proof => ['uploaded', 'validated'].includes(proof.status));
       return {
         doc,
         siatStatus: loadStatusToSiat(doc),
@@ -821,7 +824,7 @@ export default function Traceability() {
           <p className="text-sm text-muted-foreground">Consulta operacional de NF, carga, entrega, POD e ocorrências. Nº de CT-e/ORT é gerado apenas após emissão fiscal.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={exportCsv} disabled={!filteredRows.length}><Download className="mr-2 h-4 w-4" /> Exportar CSV</Button>
+          <Button variant="outline" onClick={exportCsv} disabled={!filteredRows.length}><Download className="mr-2 h-4 w-4" /> Exportar página CSV</Button>
           <Button
             variant="outline"
             onClick={exportMissingLoadCsv}
@@ -844,7 +847,7 @@ export default function Traceability() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total de registros</p><p className="text-xl font-semibold">{counts.total}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Registros nesta página</p><p className="text-xl font-semibold">{counts.total}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Pendente</p><p className="text-xl font-semibold text-warning">{counts.pending}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Em trânsito</p><p className="text-xl font-semibold text-info">{counts.inTransit}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Entregue</p><p className="text-xl font-semibold text-success">{counts.delivered}</p></CardContent></Card>
@@ -1179,6 +1182,11 @@ export default function Traceability() {
           </div>
         </CardContent>
       </Card>
+      <nav aria-label="Paginação da rastreabilidade" className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+        <Button variant="outline" disabled={page===1||isLoading} onClick={()=>setPage(current=>Math.max(1,current-1))}>Anterior</Button>
+        <span>Página {page} de {Math.max(1,Math.ceil((data?.total??0)/TRACE_PAGE_SIZE))} · {data?.total??0} documento(s) no período</span>
+        <Button variant="outline" disabled={isLoading||page*TRACE_PAGE_SIZE>=(data?.total??0)} onClick={()=>setPage(current=>current+1)}>Próxima</Button>
+      </nav>
 
       <Dialog open={!!selectedRow} onOpenChange={open => !open && setSelectedRow(null)}>
         <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">

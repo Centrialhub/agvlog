@@ -77,17 +77,18 @@ export function useCostCenters() {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: async ({ id, active }: { id: string, active: boolean }) => {
+    mutationFn: async ({ id, active, expectedUpdatedAt }: { id: string, active: boolean, expectedUpdatedAt: string }) => {
       if (!currentTenant) throw new Error('Tenant not found');
       const { data, error } = await supabase
         .from('cost_centers')
         .update({ active, updated_at: new Date().toISOString() })
         .eq('tenant_id', currentTenant.id)
         .eq('id', id)
+        .eq('updated_at', expectedUpdatedAt)
         .select('id')
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      if (!data) throw new Error('O status não foi alterado. Atualize a página e tente novamente.');
+      if (!data) throw new Error('Este centro de custo foi alterado por outra pessoa. Atualize a lista e tente novamente.');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cost_centers'] });
@@ -100,17 +101,18 @@ export function useCostCenters() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, expectedUpdatedAt }: { id: string, expectedUpdatedAt: string }) => {
       if (!currentTenant) throw new Error('Tenant not found');
       const { data, error } = await supabase
         .from('cost_centers')
         .delete()
         .eq('tenant_id', currentTenant.id)
         .eq('id', id)
+        .eq('updated_at', expectedUpdatedAt)
         .select('id')
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      if (!data) throw new Error('O centro de custo não foi excluído. Atualize a página e tente novamente.');
+      if (!data) throw new Error('Este centro de custo foi alterado por outra pessoa. Atualize a lista e tente novamente.');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cost_centers'] });
@@ -134,6 +136,6 @@ export function useCostCenters() {
     deleteCostCenter: deleteMutation.mutateAsync,
     isAdding: addMutation.isPending,
     togglingId: toggleMutation.isPending ? toggleMutation.variables?.id ?? null : null,
-    deletingId: deleteMutation.isPending ? deleteMutation.variables ?? null : null,
+    deletingId: deleteMutation.isPending ? deleteMutation.variables?.id ?? null : null,
   };
 }

@@ -5,9 +5,10 @@ import { fmtDateSafe } from '@/lib/utils/formatDate';
 const BOM = '\uFEFF';
 
 function esc(v: unknown): string {
-  const s = v == null ? '' : String(v);
-  if (/[";\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-  return s;
+  const raw = v == null ? '' : String(v);
+  const safe = /^[\t\r]/.test(raw) || /^\s*[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  if (/[";\r\n]/.test(safe)) return '"' + safe.replace(/"/g, '""') + '"';
+  return safe;
 }
 function fmtDate(v: string | null | undefined): string {
   return fmtDateSafe(v, '');
@@ -30,7 +31,7 @@ export function shortageReportToCsv(rows: ShortageReportRow[], meta?: { month?: 
     ? `CONTROLE MENSAL - FALTA DE MERCADORIA;${monthLabel(meta.month, meta.year)}`
     : 'CONTROLE MENSAL - FALTA DE MERCADORIA';
   const total = rows.reduce((a, r) => a + (r.total_amount ?? 0), 0);
-  return BOM + [title, '', header.join(';'), ...lines, '', `TOTAL;;;;;;;;;${fmtBR(total)}`].join('\n');
+  return BOM + [title, '', header.map(esc).join(';'), ...lines, '', `TOTAL;;;;;;;;;${fmtBR(total)}`].join('\n');
 }
 
 export function shortageReportToCsvBlob(rows: ShortageReportRow[], meta?: { month?: number; year?: number }): Blob {

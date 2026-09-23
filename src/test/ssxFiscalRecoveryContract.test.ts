@@ -81,14 +81,15 @@ describe('Fiscal polling contract', () => {
   const nfsePoll = source('supabase', 'functions', 'nfse-status-poll', 'index.ts');
 
   it.each([
-    ['CT-e', ctePoll],
-    ['NFS-e', nfsePoll],
-  ])('polls only transient %s states', (_label, poller) => {
+    ['CT-e', ctePoll, true],
+    ['NFS-e', nfsePoll, false],
+  ])('polls only transient %s states', (_label, poller, pollsDraft) => {
     const pending = poller.match(/const PENDING\s*=\s*\[([\s\S]*?)\];/)?.[1] || '';
     for (const status of [
-      'draft', 'processing', 'provider_unknown', 'cancel_processing',
+      'processing', 'provider_unknown', 'cancel_processing',
       'queued', 'submitted', 'pending', 'transmitting', 'cancelling',
     ]) expect(pending).toContain(`'${status}'`);
+    expect(pending.includes("'draft'")).toBe(pollsDraft);
     for (const terminal of ['authorized', 'issued', 'rejected', 'denied', 'cancelled', 'error'])
       expect(pending).not.toContain(`'${terminal}'`);
   });

@@ -2,12 +2,12 @@ import {z} from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { movementListSchema, movementResultSchema, type MovementCommand, type MovementFilters } from './ledgerContract';
 import { expenseOptionsSchema, expenseBatchResultSchema, type ExpenseBatchCommand, type ExpenseOptionKind } from './expenseBatchContract';
-import {expenseHistorySchema,type ExpenseFilters} from './expenseHistoryContract';
+import {expenseHistoryPageSchema,expenseHistorySchema,type ExpenseCursorFilters} from './expenseHistoryContract';
 import type {StatementImportCommand} from './statementImportContract';
-import {statementListSchema,statementLinesSchema,statementHistoryPageSchema,type StatementListFilters,type StatementLineFilters} from './statementHistoryContract';
+import {statementCursorListSchema,statementLinesSchema,statementHistoryPageSchema,type StatementCursorFilters,type StatementLineFilters} from './statementHistoryContract';
 import {identityCandidatesSchema,statementReviewResultSchema,reviewReversalResultSchema,type ReviewReversalCommand,type StatementReviewCommand} from './statementReviewContract';
 import {financeAuditSchema,type FinanceAuditFilters} from './financeAuditContract';
-import {fiscalQueueSchema,type FiscalQueueStatus} from './fiscalQueueContract';
+import {fiscalQueueSchema,fiscalWorkQueueSchema,type FiscalQueueStatus} from './fiscalQueueContract';
 import {reconciliationOptionsSchema,reconciliationContextSchema,reconciliationResultSchema,type ReconciliationKind,type ReconciliationCommand} from './reconciliationContract';
 import {reconciliationHistorySchema,reconciliationReversalResultSchema,type ReconciliationReversalCommand} from './reconciliationHistoryContract';
 import {nativeStatementAccountSchema} from './nativeStatementAccountContract';
@@ -21,7 +21,7 @@ import {transferStageResultSchema,pendingTransfersSchema,type TransferStageComma
 import {transferPeriodSchema} from './transferPeriodContract';
 import {manualExpenseResultSchema,manualExpenseOptionsSchema,type ManualExpenseCommand} from './manualExpenseContract';
 import {recordedCostsSchema,type RecordedCostFilters} from './recordedCostsContract';
-import {payrollProjectionSchema,payrollPeriodsProjectionSchema} from './payrollPaymentContract';
+import {payrollProjectionPageSchema,payrollPeriodsProjectionSchema} from './payrollPaymentContract';
 import {payableMovementOptionsSchema,payableMovementResultSchema,payablePaymentHistorySchema,payableReversalResultSchema,type PayableMovementCommand,type PayableReversalCommand} from './payableMovementContract';
 
 // Narrow adapter until the additive migrations are deployed and generated types
@@ -123,13 +123,19 @@ export async function reconcileBankGroup(command:ReconciliationCommand){
  const result=reconciliationResultSchema.parse(await rpc('reconcile_finance_bank_group',{_payload:command}));
  if(result.tenant_id!==command.tenant_id||result.request_id!==command.request_id)throw new Error('Confirmação da conciliação fora do contexto.');return result;
 }
-export async function readFiscalQueue(tenant:string,status:FiscalQueueStatus,page:number){
- const result=fiscalQueueSchema.parse(await rpc('list_finance_fiscal_queue',{_tenant_id:tenant,_status:status,_page:page}));
- if(result.tenant_id!==tenant||result.page!==page||result.status_filter!==status||result.rows.some(row=>row.tenant_id!==tenant))throw new Error('Fila fiscal fora do contexto.');
+export async function readFiscalQueue(tenant:string,status:FiscalQueueStatus,cursor:import('./fiscalQueueContract').FiscalQueueCursor|null){
+ const result=fiscalQueueSchema.parse(await rpc('list_finance_fiscal_queue_v2',{_tenant_id:tenant,_status:status,
+  _cursor_observed_order:cursor?.observed_order??null,_cursor_observation_id:cursor?.observation_id??null}));
+ if(result.tenant_id!==tenant||JSON.stringify(result.cursor)!==JSON.stringify(cursor)||result.status_filter!==status||result.rows.some(row=>row.tenant_id!==tenant))throw new Error('Fila fiscal fora do contexto.');
  return result;
 }
-export async function readPayableMovements(tenant:string,payable:string,search:string,page:number){
- const result=payableMovementOptionsSchema.parse(await rpc('get_finance_payable_movements',{_tenant_id:tenant,_payable_id:payable,_search:search,_page:page}));
+export async function readFiscalWorkQueue(tenant:string,status:FiscalQueueStatus,cursor:import('./fiscalQueueContract').FiscalQueueCursor|null,currentOnly=true){
+ const result=fiscalWorkQueueSchema.parse(await rpc('list_finance_fiscal_work_queue',{_tenant_id:tenant,_status:status,_cursor_observed_order:cursor?.observed_order??null,_cursor_observation_id:cursor?.observation_id??null,_current_only:currentOnly}));
+ if(result.tenant_id!==tenant||JSON.stringify(result.cursor)!==JSON.stringify(cursor)||result.status_filter!==status||result.current_only!==currentOnly||result.rows.some(row=>row.tenant_id!==tenant||(currentOnly&&!row.is_current)))throw new Error('Fila fiscal fora do contexto.');
+ return result;
+}
+export async function readPayableMovements(tenant:string,payable:string,search:string,page:number,expectedRevision:string|null=null){
+ const result=payableMovementOptionsSchema.parse(await rpc('get_finance_payable_movements',{_tenant_id:tenant,_payable_id:payable,_search:search,_page:page,_expected_revision:expectedRevision}));
  if(result.tenant_id!==tenant||result.payable_id!==payable||result.page!==page)throw new Error('Saídas fora do contexto.');return result;
 }
 export async function applyPayableMovement(command:PayableMovementCommand){
@@ -140,14 +146,14 @@ export async function reversePayableLink(command:PayableReversalCommand){
  const result=payableReversalResultSchema.parse(await rpc('reverse_finance_payable_link',{_payload:command}));
  if(result.tenant_id!==command.tenant_id||result.request_id!==command.request_id||result.link_id!==command.link_id)throw new Error('Resposta da correção fora do contexto.');return result;
 }
-export async function readPayablePaymentHistory(tenant:string,payable:string,page:number){
- const result=payablePaymentHistorySchema.parse(await rpc('get_finance_payable_payment_history',{_tenant_id:tenant,_payable_id:payable,_page:page}));
+export async function readPayablePaymentHistory(tenant:string,payable:string,page:number,expectedRevision:string|null=null){
+ const result=payablePaymentHistorySchema.parse(await rpc('get_finance_payable_payment_history',{_tenant_id:tenant,_payable_id:payable,_page:page,_expected_revision:expectedRevision}));
  if(result.tenant_id!==tenant||result.payable_id!==payable||result.page!==page||result.rows.some(row=>row.tenant_id!==tenant||row.payable_id!==payable))throw new Error('Histórico fora do contexto.');return result;
 }
-export async function readPayrollProjection(tenant:string,period:string){
-  const result=payrollProjectionSchema.parse(await rpc('get_finance_payroll_entries',{_tenant_id:tenant,_period_id:period}));
-  if(result.tenant_id!==tenant||result.period_id!==period||result.rows.some(row=>row.tenant_id!==tenant||row.payroll_period_id!==period))throw new Error('Folha fora do contexto.');
-  return result.rows;
+export async function readPayrollProjection(tenant:string,period:string,page=1,search='',payment='all',entryId:string|null=null){
+  const result=payrollProjectionPageSchema.parse(await rpc('get_finance_payroll_entry_page',{_tenant_id:tenant,_period_id:period,_page:page,_search:search,_payment:payment,_entry_id:entryId}));
+  if(result.tenant_id!==tenant||result.period_id!==period||result.page!==page||result.search!==search||result.payment_filter!==payment||result.rows.some(row=>row.tenant_id!==tenant||row.payroll_period_id!==period||(entryId!==null&&row.id!==entryId)))throw new Error('Folha fora do contexto.');
+  return result;
 }
 export async function readPayrollPeriods(tenant:string,period?:string){
   const result=payrollPeriodsProjectionSchema.parse(await rpc('get_finance_payroll_periods',{_tenant_id:tenant,_period_id:period??null}));
@@ -186,9 +192,9 @@ export async function recordExpenseBatch(command: ExpenseBatchCommand) {
     || result.rows.length !== command.items.length || command.items.some(item => !ids.has(item.id))) throw new Error('Finance batch response mismatch');
   return result;
 }
-export async function readExpenseHistory(tenant:string,filters:ExpenseFilters) {
-  const result=expenseHistorySchema.parse(await rpc('list_finance_expenses',{_tenant_id:tenant,_filters:filters}));
-  if(result.tenant_id!==tenant||result.page!==filters.page||result.page_size!==filters.page_size||result.rows.some(row=>row.tenant_id!==tenant))throw new Error('Finance history scope mismatch');
+export async function readExpenseHistory(tenant:string,filters:ExpenseCursorFilters) {
+  const result=expenseHistoryPageSchema.parse(await rpc('list_finance_expense_page_v2',{_tenant_id:tenant,_filters:filters}));
+  if(result.tenant_id!==tenant||JSON.stringify(result.cursor)!==JSON.stringify(filters.cursor)||result.page_size!==filters.page_size||result.rows.some(row=>row.tenant_id!==tenant))throw new Error('Finance history scope mismatch');
   return result;
 }
 export async function intakeFinanceStatement(command:StatementImportCommand){return rpc('intake_finance_statement',{_payload:command});}
@@ -209,9 +215,9 @@ export async function financeStatementOriginalReady(command:StatementImportComma
   const result=await rpc('finance_statement_original_ready',{_tenant_id:command.tenant_id,_file_hash:command.file_hash,_source_path:command.source_path});
   if(typeof result!=='boolean')throw new Error('Resposta de consulta do original inválida.');return result;
 }
-export async function readFinanceStatements(tenant:string,filters:StatementListFilters){
-  const result=statementListSchema.parse(await rpc('list_finance_statements',{_tenant_id:tenant,_filters:filters}));
-  if(result.tenant_id!==tenant||result.page!==filters.page||result.page_size!==filters.page_size||result.rows.some(row=>row.tenant_id!==tenant))throw new Error('Resposta de extratos fora do contexto.');return result;
+export async function readFinanceStatements(tenant:string,filters:StatementCursorFilters){
+  const result=statementCursorListSchema.parse(await rpc('list_finance_statements_v2',{_tenant_id:tenant,_filters:filters}));
+  if(result.tenant_id!==tenant||JSON.stringify(result.cursor)!==JSON.stringify(filters.cursor)||result.page_size!==filters.page_size||result.rows.some(row=>row.tenant_id!==tenant))throw new Error('Resposta de extratos fora do contexto.');return result;
 }
 export async function readFinanceStatementLines(tenant:string,importId:string,filters:StatementLineFilters){
   const result=statementLinesSchema.parse(await rpc('list_finance_statement_lines',{_tenant_id:tenant,_import_id:importId,_filters:filters}));
@@ -223,6 +229,12 @@ export async function readFinanceStatementHistory(tenant:string,importId:string,
   if(result.tenant_id!==tenant||result.import_id!==importId||result.page!==page||result.page_size!==pageSize||(snapshotAt!==null&&result.snapshot_at!==snapshotAt))throw new Error('Histórico do extrato fora do contexto.');
   return result;
 }
+export async function readExpenseHistorySummary(tenant:string,filters:ExpenseCursorFilters) {
+  const {cursor:_cursor,...stable}=filters;
+  const result=expenseHistorySchema.parse(await rpc('list_finance_expenses',{_tenant_id:tenant,_filters:{...stable,page:1,page_size:1}}));
+  if(result.tenant_id!==tenant||result.page!==1||result.rows.some(row=>row.tenant_id!==tenant))throw new Error('Finance history summary scope mismatch');
+  return result;
+}
 export async function readPayrollPeriodPage(tenant:string,page:number,pageSize=30,filters:{search:string;status:string;payment:string;snapshot_at?:string;collection_revision?:string}={search:'',status:'all',payment:'all'}){
  const result=payrollPeriodsProjectionSchema.parse(await rpc('get_finance_payroll_period_page_v2',{_tenant_id:tenant,_page:page,_page_size:pageSize,_filters:filters}));
  if(result.tenant_id!==tenant||result.page!==page||result.page_size!==pageSize||result.total===undefined||!result.snapshot_at||!result.collection_revision
@@ -232,7 +244,7 @@ export async function readPayrollPeriodPage(tenant:string,page:number,pageSize=3
 }
 const statementOriginalLocatorSchema=z.object({bucket:z.string().min(1),path:z.string().min(1)}).strict();
 export async function getFinanceStatementOriginalLocator(tenant:string,importId:string){return statementOriginalLocatorSchema.parse(await rpc('get_finance_statement_original_locator_v1',{_tenant_id:tenant,_import_id:importId}));}
-export async function reassignFinanceStatementAccount(tenant:string,importId:string,accountId:string,reason:string){
- const result=z.object({confirmed:z.literal(true),import_id:z.string().uuid(),bank_account_id:z.string().uuid()}).parse(await rpc('reassign_finance_statement_account_v1',{_tenant_id:tenant,_import_id:importId,_account_id:accountId,_reason:reason.trim()}));
- if(result.import_id!==importId||result.bank_account_id!==accountId)throw new Error('Resposta de correção fora do pedido.');return result;
+export async function reassignFinanceStatementAccount(tenant:string,importId:string,accountId:string,reason:string,requestId:string){
+ const result=z.object({confirmed:z.literal(true),import_id:z.string().uuid(),bank_account_id:z.string().uuid(),request_id:z.string().uuid()}).parse(await rpc('reassign_finance_statement_account_v1',{_tenant_id:tenant,_import_id:importId,_account_id:accountId,_reason:reason.trim(),_request_id:requestId}));
+ if(result.import_id!==importId||result.bank_account_id!==accountId||result.request_id!==requestId)throw new Error('Resposta de correção fora do pedido.');return result;
 }

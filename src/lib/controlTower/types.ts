@@ -54,8 +54,14 @@ export interface ActiveTripLive {
   position_captured_at: string | null;
   next_stop: ActiveTripLiveStop | null;
   previous_stops: ActiveTripLiveStop[];
+  previous_stops_total: number;
+  previous_stops_truncated: boolean;
   pending_stops: ActiveTripLiveStop[];
+  pending_stops_total: number;
+  pending_stops_truncated: boolean;
   loads: ActiveTripLiveLoad[];
+  loads_total: number;
+  loads_truncated: boolean;
 }
 
 export interface TripAlert {
@@ -69,6 +75,10 @@ export interface TripAlert {
   message: string | null;
   status: string;
   opened_at: string;
+  trip_code?: string | null;
+  trip_status?: string | null;
+  vehicle_plate?: string | null;
+  driver_name?: string | null;
 }
 
 export const STATE_LABELS: Record<TripLiveState, string> = {

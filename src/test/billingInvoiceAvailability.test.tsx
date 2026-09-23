@@ -185,7 +185,7 @@ it('refreshes both billing lists and the summary immediately after importing an 
 it('defers full-history reads during a batch and refreshes once when the batch finishes', async () => {
   const {result} = renderHook(() => ({ documents: useFiscalDocuments(), create: useCreateFiscalDocument({deferRefetch: true}) }), {wrapper: Wrapper});
   await waitFor(() => expect(result.current.documents.isSuccess).toBe(true));
-  const countReads = () => state.requests.filter(url => url.pathname.endsWith('/fiscal_documents') && url.searchParams.has('order')).length;
+  const countReads = () => state.requests.filter(url => url.pathname.endsWith('/fiscal_documents') && url.searchParams.has('offset')).length;
   const initialReads = countReads();
   const initialCount = result.current.documents.data!.length;
   await act(async () => {
@@ -233,6 +233,20 @@ it('renders all 49 CT-e sources after clearing the saved filter, without any of 
   const cells = new Set(Array.from(document.querySelectorAll('td')).map(cell => cell.textContent?.trim()));
   for (const row of other) expect(cells.has(String(row.invoice_number))).toBe(true);
   for (const row of local) expect(cells.has(String(row.invoice_number))).toBe(false);
+});
+
+it('remounts tenant-scoped filters and hydrates the preference of the new tenant', async () => {
+  state.savedInvoice = 'PREFERENCIA-A';
+  const view = render(<MemoryRouter><Wrapper><BillingPage /></Wrapper></MemoryRouter>);
+  const invoiceInput = () => screen.getByText('Nota Fiscal').parentElement!.querySelector('input') as HTMLInputElement;
+  await waitFor(() => expect(invoiceInput()).toHaveValue('PREFERENCIA-A'));
+  fireEvent.change(invoiceInput(), {target: {value: 'VALOR-ANTIGO'}});
+  expect(invoiceInput()).toHaveValue('VALOR-ANTIGO');
+
+  state.tenant = 'tenant-b';
+  state.savedInvoice = 'PREFERENCIA-B';
+  view.rerender(<MemoryRouter><Wrapper><BillingPage /></Wrapper></MemoryRouter>);
+  await waitFor(() => expect(invoiceInput()).toHaveValue('PREFERENCIA-B'));
 });
 
 it('renders precisely the 11 local NFS-e sources and restores them after clearing filters', async () => {

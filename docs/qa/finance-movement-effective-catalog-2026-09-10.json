@@ -2618,6 +2618,13 @@
       "fixture": "receivable_fiscal_projection",
       "indirect_reference_candidates": [
         {
+          "signature": "finance_private.reverse_legacy_receivable_association_scoped(_payload jsonb)",
+          "sha256": "38ef8079010393fce1eac57820b0513570e923216c6946db5d34aab7d5514b60",
+          "definition": "CREATE OR REPLACE FUNCTION finance_private.reverse_legacy_receivable_association_scoped(_payload jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  t uuid;\n  payment uuid;\n  link uuid;\nbegin\n  if jsonb_typeof(_payload) is distinct from 'object'\n     or _payload->'version' is distinct from '1'::jsonb\n     or exists(select 1 from jsonb_object_keys(_payload) key where key not in ('version','tenant_id','request_id','payment_id','link_id','reason')) then\n    raise exception 'finance_invalid_payload' using errcode='22023';\n  end if;\n  t := (_payload->>'tenant_id')::uuid;\n  payment := (_payload->>'payment_id')::uuid;\n  link := (_payload->>'link_id')::uuid;\n  if not finance_private.can_access(t) then raise exception 'finance_access_denied' using errcode='42501'; end if;\n  if not exists(\n    select 1 from public.finance_legacy_receipt_movement_links existing\n    where existing.tenant_id=t and existing.id=link and existing.payment_id=payment\n  ) then\n    raise exception 'finance_legacy_receipt_link_mismatch' using errcode='23514';\n  end if;\n  return finance_private.manage_legacy_receivable_association(_payload-'payment_id',true);\nend;\n$function$\n",
+          "classification": "needs_review",
+          "basis": "transitive textual call candidate resolved against installed pg_proc; not a PostgreSQL dependency proof"
+        },
+        {
           "signature": "public.associate_finance_legacy_receivable_payment(_payload jsonb)",
           "sha256": "29d10b922434556edbe7c460967975ceac0862c76d66292a7ab6ef5075b7cf6c",
           "definition": "CREATE OR REPLACE FUNCTION public.associate_finance_legacy_receivable_payment(_payload jsonb)\n RETURNS jsonb\n LANGUAGE sql\n SET search_path TO ''\nAS $function$select finance_private.manage_legacy_receivable_association(_payload,false)$function$\n",
@@ -2647,14 +2654,14 @@
         },
         {
           "signature": "public.reverse_finance_legacy_receivable_association(_payload jsonb)",
-          "sha256": "8e117bc0ace76dafd4a5881ebd3ee0ff94e782508dc1bd4f5d5b43401f4b8613",
-          "definition": "CREATE OR REPLACE FUNCTION public.reverse_finance_legacy_receivable_association(_payload jsonb)\n RETURNS jsonb\n LANGUAGE sql\n SET search_path TO ''\nAS $function$select finance_private.manage_legacy_receivable_association(_payload,true)$function$\n",
+          "sha256": "ee9eb109e454d2f9097e5842705078cf931074ef96f881a60bd234b3c9dbf9a4",
+          "definition": "CREATE OR REPLACE FUNCTION public.reverse_finance_legacy_receivable_association(_payload jsonb)\n RETURNS jsonb\n LANGUAGE sql\n SET search_path TO ''\nAS $function$select finance_private.reverse_legacy_receivable_association_scoped(_payload)$function$\n",
           "classification": "needs_review",
           "basis": "transitive textual call candidate resolved against installed pg_proc; not a PostgreSQL dependency proof"
         }
       ],
       "unresolved_private_calls": [],
-      "function_count": 211,
+      "function_count": 212,
       "direct_reference_count": 7,
       "functions": [
         {
@@ -2975,6 +2982,7 @@
         "finance_private.receivable_fiscal_issue(_tenant uuid, _receivable uuid)",
         "finance_private.record_movement(_payload jsonb)",
         "finance_private.release_cancelled_receipts(_tenant uuid, _origin uuid, _observation uuid)",
+        "finance_private.reverse_legacy_receivable_association_scoped(_payload jsonb)",
         "public._apply_delivery_admin_patch(_tenant uuid, _document uuid, _changes jsonb, _reason text, _request uuid, _source text, _event uuid)",
         "public._assert_closing_sources_current(_report uuid)",
         "public._assert_driver_owns_trip(_trip_id uuid)",

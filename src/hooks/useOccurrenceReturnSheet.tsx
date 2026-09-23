@@ -32,6 +32,13 @@ export interface ReturnSheet {
   updated_at: string;
 }
 
+export function partitionReturnSheets(sheets: readonly ReturnSheet[]) {
+  const activeSheet = sheets.find(sheet => ['generated', 'printed', 'signed'].includes(sheet.status)) ?? null;
+  const displaySheet = activeSheet ?? sheets[0] ?? null;
+  const historicalSheets = displaySheet ? sheets.filter(sheet => sheet.id !== displaySheet.id) : [];
+  return { activeSheet, displaySheet, historicalSheets };
+}
+
 export const ALLOWED_RESOLUTION_TYPES = [
   'returned_total', 'returned_partial', 'partial_return', 'damaged_before_dispatch',
   'refused_by_customer', 'rejected_invoice', 'shortage_found', 'surplus_found',

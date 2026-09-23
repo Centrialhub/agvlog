@@ -1,11 +1,11 @@
 // @vitest-environment node
+import { historicalFinanceAuditSchema } from './helpers/historicalFinanceContracts';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {beforeAll,beforeEach,afterEach,afterAll,it,expect} from 'vitest';
 import {createMaintenanceDirectPartDatabase} from './helpers/maintenanceDirectPartDatabase';
 import {financeAs,financeIds as i} from './helpers/financeLedgerDatabase';
 import {maintenanceDirectPartContextSchema} from '@/lib/financial/maintenanceDirectPartAssociationContract';
-import {financeAuditSchema} from '@/lib/financial/financeAuditContract';
 import {maintenanceLaborContextSchema} from '@/lib/financial/maintenanceLaborAssociationContract';
 let db:Awaited<ReturnType<typeof createMaintenanceDirectPartDatabase>>;const order=randomUUID(),part=randomUUID(),supplier=randomUUID();
 beforeAll(async()=>{db=await createMaintenanceDirectPartDatabase();await db.exec('create table finance_statement_imports(id uuid,tenant_id uuid,file_name text);create table finance_statement_rows(id uuid,tenant_id uuid,source_row integer)');
@@ -26,7 +26,7 @@ it('shows association and reversal in permanent history and manual audit',async(
  const linked=await read(2,'ausente');expect(linked.active_link?.supplier_id).toBe(supplier);expect(linked.history.total).toBe(1);
  await financeAs(db,i.operator,'select reverse_finance_maintenance_direct_part_association($1::jsonb)',[JSON.stringify({version:1,tenant_id:i.tenant,request_id:randomUUID(),link_id:linked.active_link!.id,reason:'Desfeita após conferência do documento da peça'})]);
  const reversed=await read();expect(reversed.active_link).toBeNull();expect(reversed.history.rows[0].reversal?.actor_id).toBe(i.operator);
- const audit=financeAuditSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select list_finance_audit_events($1,$2::jsonb) result',[i.tenant,JSON.stringify({manual_only:true})])).rows[0].result);expect(audit.manual_count).toBe(2);
+ const audit=historicalFinanceAuditSchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select list_finance_audit_events($1,$2::jsonb) result',[i.tenant,JSON.stringify({manual_only:true})])).rows[0].result);expect(audit.manual_count).toBe(2);
  expect(audit.rows.every(row=>row.manual_intervention&&row.actor_id===i.operator)).toBe(true);
 });
 it('rejects invalid context and keeps invalid quantity visible',async()=>{

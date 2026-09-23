@@ -27,10 +27,10 @@ import { payrollPaymentIssues, payrollPaymentLabels } from '@/lib/financial/payr
 import { formatPayrollCurrency } from './formatPayrollCurrency';
 
 export function EntryDrawer({ entry: selectedEntry, period, onClose }: { entry: PayrollEntry | null; period: PayrollPeriod | null; onClose: () => void }) {
-  const paymentQuery=usePayrollEntries(selectedEntry?.payroll_period_id);
+  const paymentQuery=usePayrollEntries(selectedEntry?.payroll_period_id,1,'','all',selectedEntry?.id??null);
   const paymentBusy=paymentQuery.isPending||paymentQuery.isFetching;
   const paymentError=paymentQuery.error;
-  const entry=!paymentBusy&&!paymentError?paymentQuery.data?.find(row=>row.id===selectedEntry?.id)??null:null;
+  const entry=!paymentBusy&&!paymentError?paymentQuery.data?.rows.find(row=>row.id===selectedEntry?.id)??null:null;
   const { promptAction } = useScopedAlerts();
   const toast = useSonnerToast();
   const itemQuery=usePayrollEntryItems(selectedEntry?.id);

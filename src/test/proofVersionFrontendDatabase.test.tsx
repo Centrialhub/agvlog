@@ -13,7 +13,7 @@ vi.mock('@/hooks/useTenant',()=>({useTenant:()=>({currentTenant:{id:i.tenant}})}
 vi.mock('@/hooks/portal/usePortalPods',()=>({useDownloadPortalPod:()=>({mutateAsync:mock.download,isPending:false})}));
 vi.mock('@/hooks/use-toast',()=>({useToast:()=>({toast:mock.toast})}));
 vi.mock('@/integrations/supabase/client',()=>({supabase:{rpc:mock.rpc}}));
-let db:PGlite;let stop:string;let trip:string;let client:QueryClient;let oldId:string;let currentId:string;
+let db:PGlite;let stop:string;let trip:string;let client:QueryClient;let oldId:string;let currentId:string;let popup:Window;
 beforeAll(async()=>{({db,stop,trip}=await createProofVersionDatabase());},30000);
 afterAll(async()=>{await db?.close();vi.unstubAllGlobals();});
 beforeEach(async()=>{
@@ -30,7 +30,8 @@ beforeEach(async()=>{
   if(!rows[0]?.storage_path)throw new Error('Comprovante não disponível');
   return 'https://example.invalid/signed-proof';
  });
- vi.spyOn(window,'open').mockImplementation(()=>null);
+ popup={opener:window,location:{replace:vi.fn()},close:vi.fn()} as unknown as Window;
+ vi.spyOn(window,'open').mockImplementation(()=>popup);
 });
 afterEach(async()=>{cleanup();client.clear();vi.restoreAllMocks();await db.exec('rollback');});
 const show=()=>render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/portal/shipments/'+i.doc]}><Routes><Route path="/portal/shipments/:documentId" element={<PortalShipmentDetail/>}/></Routes></MemoryRouter></QueryClientProvider>);
@@ -46,14 +47,19 @@ describe('real portal proof-version page, hook and SQL (not hosted browser E2E)'
  });
  it('downloads the original proof ID rather than the new pending proof',async()=>{
   await openProofs();fireEvent.click(screen.getByRole('button',{name:'Baixar comprovante anterior versão 1'}));
-  await waitFor(()=>expect(window.open).toHaveBeenCalledWith('https://example.invalid/signed-proof','_blank','noopener,noreferrer'));
+  expect(window.open).toHaveBeenCalledWith('about:blank','_blank');
+  await waitFor(()=>expect(popup.location.replace).toHaveBeenCalledWith('https://example.invalid/signed-proof'));
+  expect(popup.opener).toBeNull();
   expect(mock.download).toHaveBeenCalledWith(oldId);expect(mock.download).not.toHaveBeenCalledWith(currentId);
  });
  it('handles a revoked download permission without opening a window or losing proof history',async()=>{
   await openProofs();await db.exec('update client_portal_access set can_download_documents=false');
   fireEvent.click(screen.getByRole('button',{name:'Baixar comprovante anterior versão 1'}));
   await waitFor(()=>expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({title:'Erro ao baixar',variant:'destructive'})));
-  expect(window.open).not.toHaveBeenCalled();expect(screen.getByText('Comprovante anterior — versão 1')).toBeInTheDocument();
+  expect(window.open).toHaveBeenCalledWith('about:blank','_blank');
+  expect(popup.close).toHaveBeenCalledOnce();
+  expect(popup.location.replace).not.toHaveBeenCalled();
+  expect(screen.getByText('Comprovante anterior — versão 1')).toBeInTheDocument();
  });
  it('does not offer historical download when the server permissions disallow it',async()=>{
   await db.exec('update client_portal_access set can_download_documents=false');await openProofs();

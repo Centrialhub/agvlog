@@ -17,6 +17,9 @@ import { useSonnerToast } from '@/hooks/useSonnerToast';
 import { getErrorMessage } from '@/lib/errors';
 import { matchOperationalRoute } from '@/lib/routes/matchOperationalRoute';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import type { LoadHeaderChanges } from '@/lib/loads/loadAggregateCommands';
+import { useLoadCreation } from '@/hooks/useLoadCreation';
+import { suggestGroupDrivers, suggestGroupVehicles } from '@/lib/loads/groupAssignments';
 
 interface PendingDoc {
   id: string;
@@ -54,6 +57,8 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   const { data: vehicles = [] } = useVehicles();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
   const queryClient = useQueryClient();
+  const creation = useLoadCreation('grouped');
+  const manualDrivers = useRef(new Set<string>());
 
   const [executing, setExecuting] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
@@ -127,6 +132,11 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     return Array.from(groupMap.values()).sort((a, b) => b.totalPallets - a.totalPallets);
   }, [pendingDocs, operationalRoutes]);
 
+  useEffect(() => {
+    setVehicleAssignments(new Map()); setDriverAssignments(new Map()); manualDrivers.current.clear();
+    initialSelectionApplied.current = false; setSelectedGroups(new Set());
+  }, [currentTenant?.id]);
+
   // Auto-select only once per dialog opening; an explicit empty selection is preserved.
   useEffect(() => {
     if (!open) {
@@ -138,42 +148,29 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     }
   }, [groups, open]);
 
-  // Auto-suggest vehicles
-  const vehiclesWithCapacity = useMemo(() => vehicles.filter(vehicle => (vehicle.max_pallets || 0) > 0), [vehicles]);
-
+  // Suggestions fill untouched choices only; explicit empty selections survive.
   useEffect(() => {
-    if (vehiclesWithCapacity.length === 0 || groups.length === 0) return;
-    const newMap = new Map<string, string>();
-    const used = new Set<string>();
-    const sorted = [...groups].sort((a, b) => b.totalPallets - a.totalPallets);
-    for (const g of sorted) {
-      const best = vehiclesWithCapacity
-        .filter(vehicle => !used.has(vehicle.id))
-        .filter(vehicle => (vehicle.max_pallets || 0) >= g.totalPallets)
-        .sort((left, right) => (left.max_pallets || 0) - (right.max_pallets || 0))[0];
-      if (best) {
-        used.add(best.id);
-        newMap.set(g.routeName, best.id);
-      }
-    }
-    setVehicleAssignments(newMap);
-  }, [vehiclesWithCapacity, groups]);
+    setVehicleAssignments(previous => suggestGroupVehicles(groups, vehicles, previous));
+  }, [vehicles, groups]);
 
   // Auto-suggest driver based on vehicle assignment
   useEffect(() => {
-    if (drivers.length === 0) return;
-    const next = new Map<string, string>();
-    for (const g of groups) {
-      const vId = vehicleAssignments.get(g.routeName);
-      if (!vId) continue;
-      const veh = vehicles.find(vehicle => vehicle.id === vId);
-      const derived = veh?.current_driver_id
-        ? drivers.find(driver => driver.id === veh.current_driver_id)
-        : null;
-      if (derived) next.set(g.routeName, derived.id);
-    }
-    setDriverAssignments(next);
+    setDriverAssignments(previous => suggestGroupDrivers(groups, vehicles, drivers, vehicleAssignments, previous, manualDrivers.current));
   }, [vehicleAssignments, drivers, groups, vehicles]);
+
+  const refreshLoads = () => {
+    for (const key of ['loads', 'fiscal_documents', 'pending_fiscal_docs', 'load_items', 'pending_docs_count', 'new_load_available_fiscal_docs']) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    }
+    onCreated();
+  };
+  const handleRecover = async (scope: string) => {
+    try {
+      const result = await creation.recover(scope);
+      toast.success(`Carga ${result.load.load_number} confirmada (${result.document_count} notas).`);
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível confirmar a carga.')); }
+    finally { refreshLoads(); }
+  };
 
   const toggleGroup = (name: string) => {
     setSelectedGroups(prev => {
@@ -189,7 +186,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     if (selected.length === 0) return;
     const overCapacity = selected.find(group => {
       const vehicle = vehicles.find(candidate => candidate.id === vehicleAssignments.get(group.routeName));
-      return vehicle?.max_pallets != null && group.totalPallets > vehicle.max_pallets;
+      return vehicle?.max_pallets != null && vehicle.max_pallets > 0 && group.totalPallets > vehicle.max_pallets;
     });
     if (overCapacity) {
       toast.error(`${overCapacity.routeName} excede a capacidade de paletes do veículo selecionado.`);
@@ -208,20 +205,14 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
           const vehicleId = vehicleAssignments.get(group.routeName) || null;
           const driverId = driverAssignments.get(group.routeName) || null;
           const docIds = group.docs.map(d => d.id);
-          const { error } = await supabase.rpc('create_grouped_load_v1' as never, {
-            _payload: {
-              tenant_id: currentTenant!.id,
-              request_id: crypto.randomUUID(),
+          await creation.submit(group.routeName, {
               changes: {
                 destination: group.routeName,
                 vehicle_id: vehicleId,
                 driver_id: driverId,
-                status: 'planned',
-              },
+              } satisfies LoadHeaderChanges,
               document_ids: docIds,
-            },
-          } as never);
-          if (error) throw error;
+          });
 
           created++;
         } catch (error: unknown) {
@@ -230,11 +221,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
         }
       }
 
-      queryClient.invalidateQueries({ queryKey: ['loads'] });
-      queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      queryClient.invalidateQueries({ queryKey: ['pending_fiscal_docs'] });
-      queryClient.invalidateQueries({ queryKey: ['load_items'] });
-      queryClient.invalidateQueries({ queryKey: ['pending_docs_count'] });
+      refreshLoads();
 
       if (errors > 0) {
         toast.error(`${created} carga(s) criada(s), ${errors} erro(s)`, {
@@ -244,7 +231,6 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
         toast.success(`${created} carga(s) criada(s)`);
         onOpenChange(false);
       }
-      onCreated();
     } finally {
       setExecuting(false);
     }
@@ -261,6 +247,11 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        {creation.error && <p role="alert" className="text-sm text-destructive">{creation.error}</p>}
+        {creation.pending.map(pending => <div key={pending.scope} className="flex items-center justify-between gap-3 rounded border p-3 text-sm">
+          <span>{pending.scope}: criação sem confirmação.</span>
+          <Button disabled={creation.isPending || executing} onClick={() => void handleRecover(pending.scope)}>Recuperar criação</Button>
+        </div>)}
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileStack className="h-5 w-5 text-primary" />
@@ -294,6 +285,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                   <CardContent className="py-3 px-4">
                     <div className="flex items-center gap-3">
                       <Checkbox
+                        disabled={executing || creation.isPending}
                         checked={selected}
                         onCheckedChange={() => toggleGroup(g.routeName)}
                       />
@@ -324,11 +316,11 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
 
                       <div className="flex items-center gap-3 shrink-0">
                         <Select
+                          disabled={executing || creation.isPending}
                           value={vehicleAssignments.get(g.routeName) || '__none__'}
                           onValueChange={v => setVehicleAssignments(prev => {
                             const next = new Map(prev);
-                            if (v === '__none__') next.delete(g.routeName);
-                            else next.set(g.routeName, v);
+                            next.set(g.routeName, v === '__none__' ? '' : v);
                             return next;
                           })}
                         >
@@ -350,13 +342,13 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                         </Select>
 
                         <Select
+                          disabled={executing || creation.isPending}
                           value={driverAssignments.get(g.routeName) || '__none__'}
-                          onValueChange={v => setDriverAssignments(prev => {
+                          onValueChange={v => { manualDrivers.current.add(g.routeName); setDriverAssignments(prev => {
                             const next = new Map(prev);
-                            if (v === '__none__') next.delete(g.routeName);
-                            else next.set(g.routeName, v);
+                            next.set(g.routeName, v === '__none__' ? '' : v);
                             return next;
-                          })}
+                          }); }}
                         >
                           <SelectTrigger className="w-[160px] h-8 text-xs">
                             <SelectValue placeholder="Motorista" />
@@ -394,10 +386,10 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button onClick={handleExecute} disabled={executing || selectedGroups.size === 0 || groups.some(group => {
+              <Button onClick={handleExecute} disabled={executing || creation.isPending || !!creation.error || creation.pending.length > 0 || selectedGroups.size === 0 || groups.some(group => {
                 if (!selectedGroups.has(group.routeName)) return false;
                 const vehicle = vehicles.find(candidate => candidate.id === vehicleAssignments.get(group.routeName));
-                return vehicle?.max_pallets != null && group.totalPallets > vehicle.max_pallets;
+                return vehicle?.max_pallets != null && vehicle.max_pallets > 0 && group.totalPallets > vehicle.max_pallets;
               })}>
                 {executing ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Criando...</>

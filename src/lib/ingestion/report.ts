@@ -33,6 +33,20 @@ function isFilled(value: unknown): boolean {
   return normalized.length > 0 && !/^(UNKNOWN|N\/?I|N\/?A)$/i.test(normalized);
 }
 
+function fiscalReviewIdentities(value: {
+  accessKey?: string | null;
+  emitterCnpj?: string | null;
+  emitterName?: string | null;
+  invoiceNumber?: string | null;
+}): string[] {
+  const identities: string[] = [];
+  const accessKey = onlyDigits(value.accessKey);
+  if (accessKey) identities.push(`access:${accessKey}`);
+  const supplier = onlyDigits(value.emitterCnpj) || String(value.emitterName || '').trim().toLocaleUpperCase('pt-BR');
+  identities.push(`fiscal:${supplier}|${String(value.invoiceNumber || '').trim()}`);
+  return identities;
+}
+
 export function createIngestionBatchId(generatedAt = new Date()): string {
   return `ING-${generatedAt.toISOString().replace(/\D/g, '').slice(0, 14)}`;
 }
@@ -79,9 +93,6 @@ export function buildIngestionReport(args: BuildIngestionReportArgs): IngestionR
     },
   ];
 
-  const needsReviewDocs =
-    ortReviewDocs.filter((doc) => doc.needsReview).length
-    + docs.filter((doc) => Number((doc.source as ReportSource).confidence ?? 1) < reviewThreshold || normalizeStateRegistration(doc.source.recipientStateRegistration, doc.source.recipientState).unknown).length;
   const unresolved = docs.filter((doc) => !doc.matchedClientId).length;
 
   const issueDates = docs
@@ -97,7 +108,7 @@ export function buildIngestionReport(args: BuildIngestionReportArgs): IngestionR
     : null;
 
   const reviewItems: ReviewItem[] = [];
-  const seenInvoices = new Set<string>();
+  const seenDocuments = new Set<string>();
 
   for (const ort of ortReviewDocs) {
     const reasons: string[] = [];
@@ -113,7 +124,7 @@ export function buildIngestionReport(args: BuildIngestionReportArgs): IngestionR
       reasons.push('Marcado para revisão manual');
     }
     if (reasons.length === 0) continue;
-    seenInvoices.add(ort.invoiceNumber);
+    fiscalReviewIdentities(ort).forEach((identity) => seenDocuments.add(identity));
     reviewItems.push({
       invoiceNumber: ort.invoiceNumber,
       fileName: ort.fileName,
@@ -140,11 +151,13 @@ export function buildIngestionReport(args: BuildIngestionReportArgs): IngestionR
       missing.push('endereço');
     }
     if (!doc.matchedClientId) missing.push('cliente');
-    if (missing.length > 0 && confidence < reviewThreshold) {
+    if (missing.length > 0) {
       reasons.push(`Mapeamento incompleto: ${missing.join(', ')}`);
     }
-    if (reasons.length === 0 || seenInvoices.has(source.invoiceNumber)) continue;
+    const identities = fiscalReviewIdentities(source);
+    if (reasons.length === 0 || identities.some((identity) => seenDocuments.has(identity))) continue;
 
+    identities.forEach((identity) => seenDocuments.add(identity));
     reviewItems.push({
       invoiceNumber: source.invoiceNumber,
       recipientName: source.recipientName,
@@ -157,10 +170,10 @@ export function buildIngestionReport(args: BuildIngestionReportArgs): IngestionR
     totalDocs: total,
     savedDocs: savedCount,
     errorDocs: errorCount,
-    needsReviewDocs,
+    needsReviewDocs: reviewItems.length,
     clientsAutoCreated: autoCreatedCount,
     clientsMatched: matchedCount,
-    clientsUnresolved: Math.max(0, unresolved - autoCreatedCount),
+    clientsUnresolved: unresolved,
     fieldCoverage,
     reviewItems,
     reviewThreshold,

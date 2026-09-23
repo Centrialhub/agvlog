@@ -70,13 +70,13 @@ it('offers distinct deactivate and permanent-delete actions', async () => {
   render(<CostCenterManager />);
 
   fireEvent.click(screen.getByRole('button', { name: 'Desativar Operacional' }));
-  await waitFor(() => expect(state.toggleCostCenter).toHaveBeenCalledWith({ id: 'cost-center', active: false }));
+  await waitFor(() => expect(state.toggleCostCenter).toHaveBeenCalledWith({ id: 'cost-center', active: false, expectedUpdatedAt: '2026-09-13T00:00:00Z' }));
 
   fireEvent.click(screen.getByRole('button', { name: 'Excluir Operacional' }));
   expect(screen.getByRole('alertdialog')).toHaveTextContent('Excluir centro de custo?');
   fireEvent.click(screen.getByRole('button', { name: 'Excluir definitivamente' }));
 
-  await waitFor(() => expect(state.deleteCostCenter).toHaveBeenCalledWith('cost-center'));
+  await waitFor(() => expect(state.deleteCostCenter).toHaveBeenCalledWith({ id: 'cost-center', expectedUpdatedAt: '2026-09-13T00:00:00Z' }));
   await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
 });
 

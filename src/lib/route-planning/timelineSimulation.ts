@@ -12,6 +12,13 @@ export interface SimulateOptions {
   originNeighborhood?: string | null;
 }
 
+export const MAX_ROUTE_DURATION_MINUTES = 1440;
+export const isValidRouteDuration = (value:number) => Number.isFinite(value) && value>=0 && value<=MAX_ROUTE_DURATION_MINUTES;
+const boundedDuration=(value:unknown,fallback:number) => {
+  const parsed=Number(value);
+  return isValidRouteDuration(parsed)?parsed:fallback;
+};
+
 /**
  * Estimativa heurística de deslocamento entre dois pontos sem coordenadas:
  * - mesmo bairro: 15 min
@@ -57,8 +64,8 @@ export function simulateStopTimeline(
       ? { city: options.originCity, state: options.originState, neighborhood: options.originNeighborhood }
       : null;
   // Deslocamento até a 1ª parada: usa override explícito ou heurística a partir da origem.
-  const firstTransitOverride = typeof options.initialTransitMinutes === 'number'
-    ? Math.max(0, options.initialTransitMinutes)
+  const firstTransitOverride = options.initialTransitMinutes !== undefined
+    ? boundedDuration(options.initialTransitMinutes,0)
     : null;
 
   return stops.map((s) => {
@@ -71,7 +78,11 @@ export function simulateStopTimeline(
     cursor += transitMin * 60_000;
 
     const arrival = new Date(cursor);
-    const serviceMin = Math.max(0, Number(s.service_time_minutes) || 20);
+    const rawServiceMinutes: unknown = s.service_time_minutes;
+    const parsedServiceMinutes = rawServiceMinutes === null || rawServiceMinutes === undefined || rawServiceMinutes === ''
+      ? Number.NaN
+      : Number(rawServiceMinutes);
+    const serviceMin = boundedDuration(parsedServiceMinutes,20);
     cursor += serviceMin * 60_000;
     const departure = new Date(cursor);
 

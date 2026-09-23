@@ -5,7 +5,14 @@ import {createCorrectionDatabase} from './operationCorrectionDatabase.ts';
 import {operationIds as i,operationPayload,recordOperation,operationRpc} from './operationOutcomeDatabase.ts';
 export const attemptFoundationMigration='20260830135338_introduce_delivery_attempt_allocations.sql';
 export const attemptFoundationSql=()=>readFileSync('supabase/migrations/'+attemptFoundationMigration,'utf8');
-export async function createDeliveryAttemptDatabase(){const result=await createCorrectionDatabase();await result.db.exec(attemptFoundationSql());return result;}
+export async function createDeliveryAttemptDatabase(){
+ const result=await createCorrectionDatabase();
+ // The older composition fixture exposes load_items through a transitional
+ // compatibility view. The production attempt migration replaces that view
+ // with the attempt-aware definition, so remove only the fixture copy first.
+ await result.db.exec('drop view if exists public.current_load_items');
+ await result.db.exec(attemptFoundationSql());return result;
+}
 export async function seedUndelivered(db:PGlite,stop:string,outcome='returned'){
  return recordOperation(db,await operationPayload(db,stop,i.doc,outcome));
 }

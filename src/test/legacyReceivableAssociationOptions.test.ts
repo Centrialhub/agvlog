@@ -9,7 +9,7 @@ import {createFinancialScenario,financialPayload,financialCommand} from './helpe
 import {legacyReceivableContextSchema} from '@/lib/financial/legacyReceivableAssociationContract';
 import {movementReceiptTraceSchema} from '@/lib/financial/movementReceiptTraceContract';
 let db:PGlite;
-beforeAll(async()=>{db=await createLegacyReceivableAssociationDatabase();for(const file of ['20260910145659_finance_legacy_receivable_association_options.sql','20260910150338_finance_legacy_receipt_movement_trace.sql'])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));await db.exec('create or replace view finance_private.active_movements as select * from finance_movements');await db.exec(readFileSync('supabase/migrations/20260917072951_stabilize_legacy_association_paging.sql','utf8'));},30000);
+beforeAll(async()=>{db=await createLegacyReceivableAssociationDatabase();for(const file of ['20260910145659_finance_legacy_receivable_association_options.sql','20260910150338_finance_legacy_receipt_movement_trace.sql'])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));await db.exec('create or replace view finance_private.active_movements as select * from finance_movements');for(const file of ['20260917072951_stabilize_legacy_association_paging.sql','20260922201000_reuse_legacy_receivable_catalog.sql'])await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));},30000);
 beforeEach(async()=>{await db.exec('begin');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[i.operator]);});
 afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
 async function fixture(){
@@ -32,7 +32,7 @@ it('offers only compatible incoming entries and validates whole cents through th
 it('preserves manual history and payment after reversing and re-associating',async()=>{
  const f=await fixture(),m=await movement(f.bank),first=await associate(f.payment,m);
  expect(await read(f.payment)).toMatchObject({eligible:false,active_link:first.link_id,total:0,history_total:1,history:[{actor_id:i.operator,origin:'legacy_adoption'}]});
- await operationRpc(db,'select reverse_finance_legacy_receivable_association($1)',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),link_id:first.link_id,reason:'Corrigir somente o vínculo antigo'}]);
+ await operationRpc(db,'select reverse_finance_legacy_receivable_association($1)',[{version:1,tenant_id:i.tenant,request_id:randomUUID(),payment_id:f.payment,link_id:first.link_id,reason:'Corrigir somente o vínculo antigo'}]);
  expect(await read(f.payment)).toMatchObject({eligible:true,active_link:null,history:[{reversal:{actor_id:i.operator}}]});
  const second=await associate(f.payment,m);expect(await read(f.payment)).toMatchObject({active_link:second.link_id,history_total:2,payment:{id:f.payment,amount_cents:'3000'}});
  const history=await trace(m);expect(history.total).toBe(2);

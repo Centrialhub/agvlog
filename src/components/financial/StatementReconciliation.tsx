@@ -1,3 +1,4 @@
+import {createDurableDecisionStorage,withFinancialDecisionLock} from '@/lib/financial/durableDecisionStorage';
 import {invalidateAccountReview} from '@/lib/financial/invalidateAccountReview';
 import {useEffect,useRef,useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
@@ -9,8 +10,9 @@ import {checkReconciliation,reconciliationSavedSchema,reconciliationError,type R
 import {formatFinanceCents} from '@/lib/financial/ledgerContract';
 import {ReconciliationSelection} from './ReconciliationSelection';
 export function StatementReconciliation({tenant,actor,statement}:{tenant:string;actor:string;statement:string}){
+ const [durableDecisionStorage]=useState(createDurableDecisionStorage);
  const key=`finance-reconciliation:${tenant}:${actor}:${statement}`,qc=useQueryClient();
- const [restored]=useState(()=>{try{const raw=sessionStorage.getItem(key);if(!raw)return {saved:null,error:''};
+ const [restored]=useState(()=>{try{const raw=durableDecisionStorage.getItem(key);if(!raw)return {saved:null,error:''};
   const saved=reconciliationSavedSchema.parse(JSON.parse(raw));if(saved.actor_id!==actor||saved.import_id!==statement||saved.command.tenant_id!==tenant)throw new Error('scope');checkReconciliation(saved);
   return {saved,error:''};}catch{return {saved:null,error:'Não foi possível recuperar a conciliação anterior. Não envie outro pedido nesta sessão.'};}});
  const [open,setOpen]=useState(!!restored.saved||!!restored.error),[pending,setPending]=useState<ReconciliationSaved|null>(restored.saved),[preview,setPreview]=useState<ReconciliationSaved|null>(null);
@@ -25,14 +27,15 @@ export function StatementReconciliation({tenant,actor,statement}:{tenant:string;
   }catch(cause){if(live.current)setError(cause instanceof ZodError?'Não foi possível validar a seleção. Atualize os dados e confira os motivos.':cause instanceof FinanceRejectedError?reconciliationError(cause):cause instanceof Error?cause.message:'Confira a seleção e os motivos.');}
   finally{sending.current=false;if(live.current)setBusy(false);}
  }
- async function submit(){
+ async function submit(){try{await withFinancialDecisionLock(key,submitLocked);}catch(e){setError(e instanceof Error?e.message:'Não foi possível proteger o pedido.');}}
+ async function submitLocked(){
   const saved=pending||preview;if(!saved||sending.current||recoveryError)return;const uncertain=!!pending;
-  try{sessionStorage.setItem(key,JSON.stringify(saved));}catch{setError('Não foi possível preservar o pedido. Nenhuma confirmação foi enviada.');return;}
+  try{durableDecisionStorage.setItem(key,JSON.stringify(saved));}catch{setError('Não foi possível preservar o pedido. Nenhuma confirmação foi enviada.');return;}
   sending.current=true;setBusy(true);setPending(saved);setPreview(null);setError('');
   try{const result=await reconcileBankGroup(saved.command);if(result.amount_cents!==checkReconciliation(saved))throw new Error('Confirmação com total incompatível');
-   sessionStorage.removeItem(key);if(live.current){setPending(null);setMovements([]);setEntries([]);setReason('');setAccountEvidence('');setOpen(false);setNotice('Conciliação manual registrada, com responsável e evidências preservados. Nenhuma movimentação foi criada.');
+   durableDecisionStorage.removeItem(key);if(live.current){setPending(null);setMovements([]);setEntries([]);setReason('');setAccountEvidence('');setOpen(false);setNotice('Conciliação manual registrada, com responsável e evidências preservados. Nenhuma movimentação foi criada.');
     void invalidateAccountReview(qc,tenant);for(const prefix of ['finance-reconciliation-history','finance-reconciliation-options','finance-statement-lines','finance-statements','finance-audit'])void qc.invalidateQueries({queryKey:[prefix,tenant]});}
-  }catch(cause){if(live.current){setError(reconciliationError(cause));if(cause instanceof FinanceRejectedError&&!uncertain){try{sessionStorage.removeItem(key);setPending(null);void qc.invalidateQueries({queryKey:['finance-reconciliation-options',tenant]});}catch{/* Keep request identity if cleanup fails. */}}}}
+  }catch(cause){if(live.current){setError(reconciliationError(cause));if(cause instanceof FinanceRejectedError&&!uncertain){try{durableDecisionStorage.removeItem(key);setPending(null);void qc.invalidateQueries({queryKey:['finance-reconciliation-options',tenant]});}catch{/* Keep request identity if cleanup fails. */}}}}
   finally{sending.current=false;if(live.current)setBusy(false);}
  }
  const frozen=pending||preview;
@@ -53,6 +56,6 @@ export function StatementReconciliation({tenant,actor,statement}:{tenant:string;
    <label className="block">Como conferiu a conta no original?<Textarea disabled={busy} maxLength={2000} value={accountEvidence} onChange={e=>setAccountEvidence(e.target.value)}/></label>
    <label className="block">Justificativa da conciliação<Textarea disabled={busy} maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)}/></label>
    <Button disabled={busy||!!recoveryError||!movements.length||!entries.length||reason.trim().length<10||accountEvidence.trim().length<10} onClick={()=>void prepare()}>Conferir seleção e totais</Button>
-  </>}{error&&<p role="alert">{error}</p>}{recoveryError&&<Button variant="outline" onClick={()=>{sessionStorage.removeItem(key);setPending(null);setPreview(null);setError('');setRecoveryError('');}}>Descartar recuperação inválida e recomeçar</Button>}
+  </>}{error&&<p role="alert">{error}</p>}{recoveryError&&<Button variant="outline" onClick={()=>{try{durableDecisionStorage.removeItem(key);setPending(null);setPreview(null);setError('');setRecoveryError('');}catch{setError('A recuperação mudou ou conflita com outra aba. Preserve os pedidos e confira o histórico antes de continuar.');}}}>Descartar recuperação inválida e recomeçar</Button>}
  </section>;
 }

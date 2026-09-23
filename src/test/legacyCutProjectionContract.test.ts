@@ -6,7 +6,7 @@ const part={payment_id:crypto.randomUUID(),link_id:crypto.randomUUID(),movement_
 function review(classification:string,footprints?:unknown[],sourceTable='employee_advances'){
  const source={source_table:sourceTable,source_id:id,occurred_on:null,account_id:account,amount_cents:null,movement_ids:[movement],classification};
  if(sourceTable==='employee_advances')Object.assign(source,{chain_revision:'b'.repeat(32),footprints:footprints||[]});
- return {...scope,current:false,approved:false,can_review:false,status:'not_approved',review_id:null,approval:null,history:[],blockers:[],manifest:{...scope,classifier_version:'3',source_count:1,sources:[source],evidence:{employee_advances:[{id}]},integrity:[],blockers:[]}};
+ return {...scope,current:false,approved:false,can_review:false,status:'not_approved',review_id:null,approval:null,history:[],blockers:[],manifest:{...scope,classifier_version:'3',page:1,page_size:30,source_count:1,sources_has_more:false,sources:[source],blocker_count:0,blockers_has_more:false,blockers:[],evidence:{employee_advances:{count:sourceTable==='employee_advances'?1:0,revision:'c'.repeat(32)}},integrity:[],integrity_count:0,movement_voids:[]}};
 }
 it('keeps incomplete unresolved evidence readable without upgrading it to a proven payment',()=>{
  const incomplete={...part,occurred_on:null,amount_cents:null,link_id:null};

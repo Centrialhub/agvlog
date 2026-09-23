@@ -10,7 +10,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: (table: str
   const query = { select: (value: string) => { mocks.select(table, value); return query; },
     ilike: (key: string, value: string) => { mocks.ilike(key, value); return query; },
     eq: (key: string, value: string) => { mocks.eq(key, value); return query; },
-    order: () => query, limit: () => query, gte: () => query, lte: () => query,
+    order: () => query, range: () => query, is: () => query, limit: () => query, gte: () => query, lte: () => query,
     then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve),
   }; return query;
 } } }));

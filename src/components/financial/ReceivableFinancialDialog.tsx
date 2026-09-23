@@ -58,6 +58,16 @@ function FinancialForm({receivableId,tenantId,onClose}:{receivableId:string;tena
    setNotice(`Pedido confirmado: ${financialActionLabels[result.action]}. Saldos e histórico atualizados; nenhuma transferência bancária foi executada.`);
   }catch(cause){let message=financialError(cause);if(uploadedPath&&!pendingFinancialAttachment(window.localStorage,tenantId,context.actor_id,uploadedPath)){try{await deletePaymentAttachment(tenantId,'receivable',uploadedPath);setAttachment(null);}catch{message+=' O comprovante enviado ainda não pôde ser descartado; mantenha este diálogo aberto e tente voltar novamente.';}}setError(message);}finally{busy.current=false;setWorking(false);}
  };
+ const selectFile=async(next:File|null)=>{
+  if(working||busy.current||!context)return;
+  if(attachment&&!pendingFinancialAttachment(window.localStorage,tenantId,context.actor_id,attachment)){
+   setWorking(true);setError('');
+   try{await deletePaymentAttachment(tenantId,'receivable',attachment);setAttachment(null);}
+   catch{setError('Não foi possível descartar o comprovante anterior; o arquivo novo não foi selecionado. Tente novamente antes de substituir ou fechar.');setFileVersion(n=>n+1);setWorking(false);return;}
+   setWorking(false);
+  }
+  setFile(next);
+ };
  const close=async()=>{if(working||busy.current)return;if(attachment&&context&&!pendingFinancialAttachment(window.localStorage,tenantId,context.actor_id,attachment)){setWorking(true);setError('');try{await deletePaymentAttachment(tenantId,'receivable',attachment);setAttachment(null);}catch{setError('Não foi possível descartar o comprovante ainda não vinculado. Tente novamente antes de fechar.');setWorking(false);return;}setWorking(false);}onClose();};
  return <Dialog open onOpenChange={open=>{if(!open)void close();}}><DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto"><DialogHeader>
   <DialogTitle>Recebimentos — {context?.reference||'Título'}</DialogTitle><DialogDescription>Registro contábil de valores já recebidos. Não movimenta sua conta bancária. Estornos preservam os lançamentos originais.</DialogDescription></DialogHeader>
@@ -76,7 +86,7 @@ function FinancialForm({receivableId,tenantId,onClose}:{receivableId:string;tena
      {!context.bank_accounts.length?<p>Cadastre uma conta bancária ativa antes de registrar o recebimento.</p>:null}
      <label className="block">Forma de recebimento<select className="h-10 w-full rounded border bg-background px-3" value={method} onChange={e=>setMethod(e.target.value as PaymentMethod)}>{PAYMENT_METHODS.map(m=><option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}</select></label>
      <label className="block">Observação<Textarea maxLength={2000} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
-     <label className="block">Comprovante (opcional)<Input key={fileVersion} type="file" accept="image/*,application/pdf" onChange={e=>{setFile(e.target.files?.[0]||null);setAttachment(null);}}/></label></>:null}
+     <label className="block">Comprovante (opcional)<Input key={fileVersion} type="file" accept="image/*,application/pdf" onChange={e=>void selectFile(e.target.files?.[0]||null)}/></label></>:null}
     {action==='reverse'?<><p>Registre aqui a devolução integral já realizada ao pagador. A saída ficará pendente de conciliação com o extrato. Para uma baixa no título errado, use a correção de vínculo no histórico.</p><p>{selectedPayment?`Selecionado: ${selectedPayment.row.id} · ${brl(selectedPayment.row.amount_cents)}`:"Selecione o recebimento no histórico paginado abaixo."}</p><label className="block"><input type="checkbox" checked={refundConfirmed} onChange={e=>setRefundConfirmed(e.target.checked)}/> Confirmo que o dinheiro já foi devolvido ao pagador</label></>:null}
     {action&&action!=='reconcile'?<label className="block">Data da operação<Input type="date" max={today()} value={date} onChange={e=>{setDate(e.target.value);setMovement('');}}/></label>:null}
     {action?<label className="block">Motivo da operação<Textarea maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)}/></label>:null}

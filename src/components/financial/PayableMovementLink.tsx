@@ -20,17 +20,21 @@ export function PayableMovementLink({tenant,actor,payable,onRecorded}:{tenant:st
  const [pending,setPending]=useState<Saved|null>(restored.saved),[preview,setPreview]=useState<Saved|null>(null);
  const [open,setOpen]=useState(!!restored.saved||!!restored.error),[choice,setChoice]=useState<PayableMovementOption|null>(null);
  const [search,setSearch]=useState(''),[term,setTerm]=useState(''),[page,setPage]=useState(1),[amount,setAmount]=useState('');
+ const [pageRevision,setPageRevision]=useState<string|null>(null);
+ const [catalogRefresh,setCatalogRefresh]=useState(0);
  const [method,setMethod]=useState<PaymentMethod>('pix'),[reason,setReason]=useState(''),[error,setError]=useState(''),[recoveryError,setRecoveryError]=useState(restored.error),[busy,setBusy]=useState(false);
  const sending=useRef(false),active=useRef(true);useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
- const query=useQuery({queryKey:['finance-payable-options',tenant,actor,payable,term,page],enabled:open&&!pending&&!recoveryError,
-  queryFn:()=>readPayableMovements(tenant,payable,term,page),staleTime:0});
+ const query=useQuery({queryKey:['finance-payable-options',tenant,actor,payable,term,page,catalogRefresh],enabled:open&&!pending&&!recoveryError,
+  queryFn:()=>readPayableMovements(tenant,payable,term,page,pageRevision),staleTime:0});
+ useEffect(()=>{if(query.data&&pageRevision===null)setPageRevision(query.data.page_revision);},[query.data,pageRevision]);
  function prepare(){
   const cents=parseFinanceAmount(amount),data=query.data;
-  if(!choice||!data||query.error||!data.can_apply){setError('Selecione uma saída para um título aprovado com saldo disponível.');return;}
-  if(cents===null||BigInt(cents)>BigInt(choice.remaining_cents)||BigInt(cents)>BigInt(data.remaining_cents)){setError('O valor deve caber no saldo da saída e do título.');return;}
-  const command=payableMovementCommandSchema.safeParse({version:1,tenant_id:tenant,request_id:crypto.randomUUID(),payable_id:payable,movement_id:choice.id,amount_cents:cents,method,reason});
+  const selected=data?.rows.find(row=>row.id===choice?.id);
+  if(!selected||!data||query.error||!data.can_apply){setError('Selecione uma saída desta página para um título aprovado com saldo disponível.');return;}
+  if(cents===null||BigInt(cents)>BigInt(selected.remaining_cents)||BigInt(cents)>BigInt(data.remaining_cents)){setError('O valor deve caber no saldo da saída e do título.');return;}
+  const command=payableMovementCommandSchema.safeParse({version:1,tenant_id:tenant,request_id:crypto.randomUUID(),payable_id:payable,movement_id:selected.id,amount_cents:cents,method,reason});
   if(!command.success){setError('Informe valor, forma de pagamento e motivo com pelo menos cinco caracteres.');return;}
-  setPreview({command:command.data,choice,title:data.payable_name});setError('');
+  setPreview({command:command.data,choice:selected,title:data.payable_name});setError('');
  }
  const discardRecovery=()=>{setError('');try{sessionStorage.removeItem(key);setPending(null);setPreview(null);setRecoveryError('');}catch{setError('Não foi possível descartar a recuperação incompatível nesta sessão.');}};
  async function submit(){
@@ -57,22 +61,22 @@ export function PayableMovementLink({tenant,actor,payable,onRecorded}:{tenant:st
    <Button disabled={busy||!!recoveryError} onClick={()=>void submit()}>{busy?'Confirmando…':pending?'Retomar mesma baixa':'Confirmar vínculo e registrar baixa'}</Button>
    {!pending&&<Button variant="outline" onClick={()=>setPreview(null)}>Voltar à edição</Button>}
   </div>:<>
-   <div className="flex gap-2"><Input aria-label="Buscar saída" value={search} onChange={e=>setSearch(e.target.value)}/><Button onClick={()=>{setTerm(search);setPage(1);}}>Buscar</Button></div>
+   <div className="flex gap-2"><Input aria-label="Buscar saída" value={search} onChange={e=>setSearch(e.target.value)}/><Button onClick={()=>{setChoice(null);setPageRevision(null);setTerm(search);setPage(1);}}>Buscar</Button></div>
    {query.isPending&&<p role="status">Carregando saídas…</p>}
-   {query.error&&<p role="alert">Não foi possível consultar as saídas. <Button onClick={()=>void query.refetch()}>Tentar novamente</Button></p>}
+   {query.error&&<p role="alert">Não foi possível consultar as saídas. A lista pode ter mudado durante a navegação. <Button onClick={()=>{setChoice(null);setPage(1);setPageRevision(null);setCatalogRefresh(value=>value+1);}}>Atualizar lista</Button></p>}
    {query.data&&!query.error&&<>
     <p>Saldo do título: {formatFinanceCents(query.data.remaining_cents)}</p>
     {!query.data.can_apply&&<p>O título precisa estar aprovado e ter saldo disponível para receber este vínculo.</p>}
     <div className="max-h-44 overflow-auto">{query.data.rows.map(row=><Button key={row.id} variant={choice?.id===row.id?'secondary':'ghost'} className="w-full h-auto text-left justify-start whitespace-normal" onClick={()=>setChoice(row)}>
      {row.beneficiary_name} · {row.account_name} · {row.occurred_on} · {row.bank_reference||row.description} · Disponível {formatFinanceCents(row.remaining_cents)}
     </Button>)}{!query.data.rows.length&&<p>Nenhuma saída disponível.</p>}</div>
-    <div className="flex justify-between"><Button variant="ghost" disabled={page===1} onClick={()=>setPage(page-1)}>Anterior</Button><span>Página {page}</span><Button variant="ghost" disabled={page*30>=query.data.total} onClick={()=>setPage(page+1)}>Próxima</Button></div>
+    <div className="flex justify-between"><Button variant="ghost" disabled={page===1||!pageRevision} onClick={()=>{setChoice(null);setPage(page-1);}}>Anterior</Button><span>Página {page}</span><Button variant="ghost" disabled={page*30>=query.data.total||!pageRevision} onClick={()=>{setChoice(null);setPage(page+1);}}>Próxima</Button></div>
    </>}
    {choice&&<p>Envio selecionado: {choice.beneficiary_name} · {choice.occurred_on}</p>}
    <label className="block">Valor para este título (R$)<Input inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="300,00"/></label>
    <label className="block">Forma de pagamento<select className="block border rounded p-2" value={method} onChange={e=>setMethod(e.target.value as PaymentMethod)}>{PAYMENT_METHODS.map(m=><option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}</select></label>
    <label className="block">Motivo do vínculo<Input maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)}/></label>
-   <Button disabled={!!recoveryError||!!query.error||!query.data?.can_apply} onClick={prepare}>Revisar vínculo</Button>
+   <Button disabled={!!recoveryError||!!query.error||!query.data?.can_apply||!query.data?.rows.some(row=>row.id===choice?.id)} onClick={prepare}>Revisar vínculo</Button>
   </>}
   {error&&<p role="alert">{error}</p>}
  </section>;

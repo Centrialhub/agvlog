@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useLoads, Load } from '@/hooks/useLoads';
+import { useLoadsPage, Load } from '@/hooks/useLoads';
 import { useLoadItems, LoadItem } from '@/hooks/useLoadItems';
 import { useVehicles, type Vehicle } from '@/hooks/useVehicles';
 import { useMoveLoadItems } from '@/hooks/useMoveLoadItems';
@@ -22,8 +22,11 @@ import { normalizeCity } from '@/lib/utils/normalizeCity';
 import { getErrorMessage } from '@/lib/errors';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { assertReallocationCapacity } from '@/lib/loads/reallocationCapacity';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 const REALLOCATION_FILTER_CHUNK = 100;
+const REALLOCATION_LOAD_PAGE_SIZE = 100;
+const REALLOCATION_ACTIVE_STATUSES = ['planned', 'assembling', 'ready', 'loading', 'loaded', 'divergent'];
 
 type FilterField = 'all' | 'remitter' | 'recipient' | 'city' | 'invoice';
 
@@ -146,9 +149,9 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
             <span className="text-warning">Sem veículo</span>
           )}
         </div>
-        {(recipientsSummary.recipients.length > 0 || recipientsSummary.cities.length > 0) && (
+        {(recipientsSummary.remitters.length > 0 || recipientsSummary.recipients.length > 0 || recipientsSummary.cities.length > 0) && (
           <div className="space-y-1 rounded-md bg-muted/40 border border-border/60 p-1.5">
-            {recipientsSummary.recipients.length > 0 && (
+            {(recipientsSummary.remitters.length > 0 || recipientsSummary.recipients.length > 0) && (
               <div className="flex flex-col gap-1">
                 <div className="flex items-start gap-1.5 min-w-0 overflow-hidden">
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
@@ -316,13 +319,17 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
               const fd = fiscalDetails(item.fiscal_documents);
               const invoice = fd?.invoice_number;
               const orderNum = item.orders?.order_number;
-              const key = invoice ? `INV-${invoice}` : (orderNum ? `ORD-${orderNum}` : `ID-${item.id}`);
+              const key = invoice ? `INV-${item.fiscal_document_id || item.id}-${invoice}` : (orderNum ? `ORD-${orderNum}` : `ID-${item.id}`);
               
-              if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice ?? null };
+              if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice ?? null, countedDocuments: new Set<string>() };
               acc[key].items.push(item);
-              acc[key].totalValue += (fd?.value || 0);
+              const documentId = item.fiscal_document_id;
+              if (documentId && !acc[key].countedDocuments.has(documentId)) {
+                acc[key].totalValue += (fd?.value || 0);
+                acc[key].countedDocuments.add(documentId);
+              }
               return acc;
-            }, {} as Record<string, { items: LoadItem[], totalValue: number, invoice: string | null }>);
+            }, {} as Record<string, { items: LoadItem[], totalValue: number, invoice: string | null, countedDocuments: Set<string> }>);
 
             return Object.entries(grouped).map(([key, group]) => {
               const allSelected = group.items.every(i => selectedItems.has(i.id));
@@ -413,8 +420,17 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
 
 export default function LoadReallocation() {
   const toast = useSonnerToast();
-  const loadsQuery = useLoads();
-  const loads = loadsQuery.data ?? [];
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogPage, setCatalogPage] = useState(1);
+  const debouncedCatalogSearch = useDebouncedValue(catalogSearch, 300);
+  const loadsQuery = useLoadsPage({
+    page: catalogPage,
+    pageSize: REALLOCATION_LOAD_PAGE_SIZE,
+    filters: { search: debouncedCatalogSearch, statuses: REALLOCATION_ACTIVE_STATUSES },
+  });
+  const loads = useMemo(() => loadsQuery.data?.rows ?? [], [loadsQuery.data?.rows]);
+  const loadTotal = loadsQuery.data?.totalCount ?? 0;
+  const catalogPages = Math.max(1, Math.ceil(loadTotal / REALLOCATION_LOAD_PAGE_SIZE));
   const vehiclesQuery = useVehicles();
   const vehicles = vehiclesQuery.data ?? [];
   const { moveItems, isPending: moving } = useMoveLoadItems();
@@ -436,9 +452,11 @@ export default function LoadReallocation() {
     success: boolean; errorCount?: number;
   }>>([]);
   const [lastResult, setLastResult] = useState<{ moved: number; errors: number; targetLabel: string } | null>(null);
+  const [loadCache, setLoadCache] = useState<Map<string, Load>>(new Map());
+  useEffect(() => { setCatalogPage(1); }, [debouncedCatalogSearch]);
   useEffect(() => {
     setSourceLoadId(''); setTargetLoadId(''); setSelectedItems(new Set());
-    setHistory([]); setLastResult(null); setMoveError(null);
+    setHistory([]); setLastResult(null); setMoveError(null); setLoadCache(new Map()); setCatalogSearch(''); setCatalogPage(1);
   }, [currentTenant?.id, user?.id]);
 
   // Only show active loads (not delivered)
@@ -519,10 +537,10 @@ export default function LoadReallocation() {
     const tree = new Map<string, Map<string, Map<string, Load[]>>>();
     for (const l of activeLoads) {
       const meta = loadMeta.get(l.id);
-      const client = meta?.client || 'Sem cliente identificado';
+      const client = meta?.client || 'Sem destinatário';
       const city = meta?.city || 'Sem cidade';
       const route = l.destination || 'Sem rota';
-      const cKey = client;
+      const cKey = meta?.remitter ? `[FORN: ${meta.remitter}] ${client}` : client;
       const cityKey = city;
       const rKey = route;
       let byCity = tree.get(cKey);
@@ -563,8 +581,12 @@ export default function LoadReallocation() {
     return groups;
   }, [activeLoads, loadMeta]);
 
-  const sourceLoad = activeLoads.find(l => l.id === sourceLoadId);
-  const targetLoad = activeLoads.find(l => l.id === targetLoadId);
+  const sourceLoad = activeLoads.find(l => l.id === sourceLoadId) || loadCache.get(sourceLoadId);
+  const targetLoad = activeLoads.find(l => l.id === targetLoadId) || loadCache.get(targetLoadId);
+  const rememberLoad = (id: string) => {
+    const load = activeLoads.find((candidate) => candidate.id === id);
+    if (load) setLoadCache((previous) => new Map(previous).set(id, load));
+  };
 
   const toggleItem = (id: string) => {
     if (compositionBusy) return;
@@ -652,10 +674,19 @@ export default function LoadReallocation() {
       )}
 
       {/* Load selectors */}
+      <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-muted/20 p-3">
+        <div className="min-w-[220px] flex-1">
+          <label htmlFor="reallocation-load-search" className="text-xs font-medium text-muted-foreground mb-1 block">Buscar cargas ativas</label>
+          <Input id="reallocation-load-search" value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Número, placa ou destino" />
+        </div>
+        <span className="text-xs text-muted-foreground">{loadTotal} carga(s) · página {catalogPage} de {catalogPages}</span>
+        <Button type="button" size="sm" variant="outline" disabled={catalogPage <= 1 || loadsQuery.isFetching} onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}>Anterior</Button>
+        <Button type="button" size="sm" variant="outline" disabled={catalogPage >= catalogPages || loadsQuery.isFetching} onClick={() => setCatalogPage((page) => Math.min(catalogPages, page + 1))}>Próxima</Button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-end gap-2 md:gap-4 max-w-full">
         <div className="min-w-0">
           <label htmlFor="reallocation-source" className="text-xs font-medium text-muted-foreground mb-1 block">Carga Origem</label>
-          <Select disabled={compositionBusy || hasReadError} value={sourceLoadId} onValueChange={v => { setSourceLoadId(v); setSelectedItems(new Set()); }}>
+          <Select disabled={compositionBusy || hasReadError} value={sourceLoadId} onValueChange={v => { rememberLoad(v); setSourceLoadId(v); setSelectedItems(new Set()); }}>
             <SelectTrigger id="reallocation-source" className="w-full">
               <SelectValue placeholder="Selecione a carga de origem..." />
             </SelectTrigger>
@@ -696,7 +727,7 @@ export default function LoadReallocation() {
 
         <div className="min-w-0">
           <label htmlFor="reallocation-target" className="text-xs font-medium text-muted-foreground mb-1 block">Carga Destino</label>
-          <Select disabled={compositionBusy || hasReadError} value={targetLoadId} onValueChange={setTargetLoadId}>
+          <Select disabled={compositionBusy || hasReadError} value={targetLoadId} onValueChange={(value) => { rememberLoad(value); setTargetLoadId(value); }}>
             <SelectTrigger id="reallocation-target" className="w-full">
               <SelectValue placeholder="Selecione a carga de destino..." />
             </SelectTrigger>

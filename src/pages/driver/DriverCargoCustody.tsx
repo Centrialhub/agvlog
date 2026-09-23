@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { removeSecureFiles, uploadSecureFile } from '@/lib/secureUpload';
 import {
-  buildTripCargoDivergenceCommand, getTripCargoControl, tripCargoDocumentLabels, tripCargoStatusLabels, updateDriverTripCargo,
+  buildTripCargoDivergenceCommand, getCompleteTripCargoControl, tripCargoDocumentLabels, tripCargoStatusLabels, updateDriverTripCargo,
   tripCargoSealStatusLabels, type DriverTripCargoAction, type TripCargoAvailableSnapshot,
 } from '@/lib/driver/tripCargoCustody';
 import { driverOperationalSnapshotStore } from '@/lib/driver/driverOperationalOffline';
@@ -61,13 +61,13 @@ export default function DriverCargoCustody() {
   const [evidence, setEvidence] = useState<EvidenceDraft[]>(emptyEvidence);
   const hydratedControl = useRef<string | null>(null);
   const requestIds = useRef(new Map<string, string>());
-  const [cachedCargo, setCachedCargo] = useState<Awaited<ReturnType<typeof getTripCargoControl>> | null>(null);
+  const [cachedCargo, setCachedCargo] = useState<Awaited<ReturnType<typeof getCompleteTripCargoControl>> | null>(null);
 
   const cargo = useQuery({
     queryKey: ['trip-cargo-control', currentTenant?.id, tripId],
     enabled: !!currentTenant?.id && !!tripId,
     retry: false,
-    queryFn: () => getTripCargoControl(currentTenant!.id, tripId!),
+    queryFn: () => getCompleteTripCargoControl(currentTenant!.id, tripId!),
   });
   useEffect(() => {
     hydratedControl.current = null;

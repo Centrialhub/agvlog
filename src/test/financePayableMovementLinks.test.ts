@@ -38,6 +38,10 @@ beforeAll(async()=>{
  }
  await db.exec('create trigger recalc after insert or update or delete on payables_payments for each row execute function _recalc_payable_paid();grant execute on function reverse_payable_payment(uuid) to authenticated;');
  for(const file of ['20260909212514_finance_delivery_unloading.sql','20260909213959_finance_expense_batches.sql','20260909220020_finance_expense_workspace_queries.sql','20260909233625_finance_audit_queries.sql','20260910000731_finance_payroll_payment_projection.sql','20260910002244_finance_payable_movement_links.sql','20260910003529_finance_payable_link_reversal.sql'])await db.exec(readFileSync(`supabase/migrations/${file}`,'utf8'));
+ await db.exec('create or replace view finance_private.active_movements as select * from finance_movements');
+ await db.exec(readFileSync('supabase/migrations/20260922203000_snapshot_payable_movement_options.sql','utf8'));
+ await db.exec("alter table finance_payable_movement_links add column if not exists origin text not null default 'canonical'");
+ await db.exec(readFileSync('supabase/migrations/20260922204000_snapshot_payable_payment_history.sql','utf8'));
 },30000);
 beforeEach(async()=>{await db.exec('begin');});afterEach(async()=>{await db.exec('rollback');});afterAll(async()=>{await db?.close();});
 async function manualFixture(){
@@ -147,9 +151,9 @@ it('retires legacy payable writers without changing evidence or disabling their 
  await expect(db.query("insert into payables_payments(tenant_id,payable_id,amount,paid_at,bank_account_id,method,created_by) values($1,$2,1,now(),$3,'pix',$4)",[i.tenant,next.payable_id,i.account,i.operator])).rejects.toThrow('finance_payment_requires_recorded_movement');await db.exec('rollback to savepoint bypass');
  await db.exec('savepoint erase_history');await expect(db.query('delete from payables_payments where payable_id=$1',[first.payable_id])).rejects.toThrow(/finance_immutable_record|finance_linked_payment_requires_audited_correction/);await db.exec('rollback to savepoint erase_history');
 });
-async function movement(){
+async function movement(receipt_path?:string){
  const p={version:1,tenant_id:i.tenant,request_id:randomUUID(),bank_account_id:i.account,direction:'out',nature:'payment',amount_cents:50000,
- occurred_on:'2026-01-01',description:'Envio agrupado',beneficiary_name:'Fornecedor QA',reason:'Registro do envio efetuado'};
+ occurred_on:'2026-01-01',description:'Envio agrupado',beneficiary_name:'Fornecedor QA',reason:'Registro do envio efetuado',...(receipt_path?{receipt_path}:{})};
  return (await financeAs<{result:{movement_id:string}}>(db,i.operator,'select record_finance_movement($1) result',[JSON.stringify(p)])).rows[0].result.movement_id;
 }
 async function payable(amount=500){return (await db.query<{id:string}>("insert into payables(tenant_id,supplier_name,category,amount,status) values($1,'Fornecedor QA','other',$2,'approved') returning id",[i.tenant,amount])).rows[0].id;}
@@ -227,6 +231,23 @@ describe('payable payments reuse recorded cash',()=>{
   expect((await db.query('select * from bank_transactions')).rows).toHaveLength(0);
   expect((await db.query<{status:string}>('select status from payables')).rows.map(r=>r.status)).toEqual(['paid','paid']);
   await expect(apply({...c,amount_cents:29900})).rejects.toThrow('finance_request_conflict');
+ });
+ it('rejects a later page when concurrent allocation changes the candidate snapshot',async()=>{
+  const m=await movement(),p=await payable(300),other=await payable(100);
+  const first=payableMovementOptionsSchema.parse((await financeAs<{result:unknown}>(db,i.operator,"select get_finance_payable_movements($1,$2,'',1,null) result",[i.tenant,p])).rows[0].result);
+  await apply(command(m,other,10000));
+  await expect(financeAs(db,i.operator,"select get_finance_payable_movements($1,$2,'',2,$3) result",[i.tenant,p,first.page_revision])).rejects.toThrow('finance_payable_options_changed');
+  const refreshed=payableMovementOptionsSchema.parse((await financeAs<{result:unknown}>(db,i.operator,"select get_finance_payable_movements($1,$2,'',1,null) result",[i.tenant,p])).rows[0].result);expect(refreshed.page_revision).not.toBe(first.page_revision);
+ });
+ it('rejects a later payment-history page when a concurrent payment changes the snapshot',async()=>{
+  const firstMovement=await movement(),secondMovement=await movement(),p=await payable(300);await apply(command(firstMovement,p,10000));
+  const first=payablePaymentHistorySchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select get_finance_payable_payment_history($1,$2,1,null) result',[i.tenant,p])).rows[0].result);
+  await apply(command(secondMovement,p,10000));
+  await expect(financeAs(db,i.operator,'select get_finance_payable_payment_history($1,$2,2,$3) result',[i.tenant,p,first.page_revision])).rejects.toThrow('finance_payable_history_changed');
+ });
+ it('projects the preserved movement receipt path in payable payment history',async()=>{
+  const path=`${i.tenant}/payable-payments/proof.pdf`,m=await movement(path),p=await payable();await apply(command(m,p));
+  const history=payablePaymentHistorySchema.parse((await financeAs<{result:unknown}>(db,i.operator,'select get_finance_payable_payment_history($1,$2) result',[i.tenant,p])).rows[0].result);expect(history.rows[0].attachment_url).toBe(path);
  });
  it('shares capacity with expense batches and removes exhausted sends from the existing picker',async()=>{
   const m=await movement(),p=await payable();

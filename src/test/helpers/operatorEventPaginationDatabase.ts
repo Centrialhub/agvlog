@@ -4,7 +4,9 @@ import { createOperatorEventDatabase } from './operatorEventDatabase';
 import { operationIds as i, operationRpc } from './operationOutcomeDatabase';
 
 export const operatorEventPaginationMigration = '20260901190100_add_cursor_operator_event_reader.sql';
+export const operatorEventResolutionDateMigration = '20260922026000_filter_operational_events_by_resolution_date.sql';
 export const operatorEventPaginationSql = () => readFileSync(`supabase/migrations/${operatorEventPaginationMigration}`, 'utf8');
+export const operatorEventResolutionDateSql = () => readFileSync(`supabase/migrations/${operatorEventResolutionDateMigration}`, 'utf8');
 
 export async function createOperatorEventPaginationDatabase() {
   const result = await createOperatorEventDatabase();
@@ -13,6 +15,7 @@ export async function createOperatorEventPaginationDatabase() {
   await result.db.exec(`grant usage on schema auth to authenticated;
     grant select on public.operational_events,public.loads,public.drivers,public.clients,public.vehicles to authenticated;`);
   await result.db.exec(operatorEventPaginationSql());
+  await result.db.exec(operatorEventResolutionDateSql());
   return result;
 }
 
