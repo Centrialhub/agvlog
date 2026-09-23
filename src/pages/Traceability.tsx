@@ -25,6 +25,7 @@ import { CLIENT_LOAD_OBSERVATION_RULES } from '@/lib/documentParsers';
 import { useSortableData } from '@/hooks/useSortableData';
 import { useCreateOperationalEvent } from '@/hooks/useOperationalEvents';
 import { getErrorMessage } from '@/lib/errors';
+import { csvSafeCell } from '@/lib/csvSafety';
 
 type SiatStatus = 'pending' | 'in_transit' | 'delivered';
 
@@ -706,7 +707,7 @@ export default function Traceability() {
         slaThresholdH,
       ];
     });
-    const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const csv = [headers, ...body].map(row => row.map(csvSafeCell).join(';')).join('\r\n');
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -747,7 +748,7 @@ export default function Traceability() {
       doc.loads?.load_number || '',
       doc.client_load_source ? JSON.stringify(doc.client_load_source) : '',
     ]);
-    const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const csv = [headers, ...body].map(row => row.map(csvSafeCell).join(';')).join('\r\n');
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

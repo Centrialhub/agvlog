@@ -1,4 +1,5 @@
 // UTF-8 with BOM CSV writer using ; as separator.
+import { csvSafeCell } from '@/lib/csvSafety';
 
 function fmtDate(v?: string | null): string {
   if (!v) return '';
@@ -10,23 +11,14 @@ function fmtValue(n?: number | null): string {
   return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function esc(cell: unknown): string {
-  if (cell == null) return '';
-  const s = String(cell);
-  if (s.includes(';') || s.includes('"') || s.includes('\n')) {
-    return '"' + s.replace(/"/g, '""') + '"';
-  }
-  return s;
-}
-
 export interface CsvRow {
   [k: string]: unknown;
 }
 
 export function toCsvString(headers: string[], rows: CsvRow[], keys: string[]): string {
   const bom = '\uFEFF';
-  const head = headers.map(esc).join(';');
-  const body = rows.map((r) => keys.map((k) => esc(r[k])).join(';')).join('\n');
+  const head = headers.map(csvSafeCell).join(';');
+  const body = rows.map((r) => keys.map((k) => csvSafeCell(r[k])).join(';')).join('\n');
   return bom + head + '\n' + body;
 }
 

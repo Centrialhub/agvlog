@@ -76,10 +76,6 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request, { cache: 'no-store' })
-        .then((response) => {
-          if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put('/', response.clone()));
-          return response;
-        })
         .catch(() => caches.match(request).then((cached) => cached || caches.match('/'))),
     );
     return;

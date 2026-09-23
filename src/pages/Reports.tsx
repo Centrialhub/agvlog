@@ -13,6 +13,7 @@ import { FileText, Route, Clock, AlertTriangle, Gauge, TrendingUp, MapPin, Downl
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { reportsDefaultPeriod } from '@/lib/reports/reportDateRange';
+import { csvSafeCell } from '@/lib/csvSafety';
 
 export default function Reports() {
   const { currentTenant } = useTenant();
@@ -88,7 +89,7 @@ export default function Reports() {
       `${Math.floor(v.stopped / 3600)}h${Math.floor((v.stopped % 3600) / 60)}m`,
       v.trips, v.stops, v.overspeed,
     ]);
-    const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const csv = '\uFEFF' + [headers, ...rows].map(row => row.map(csvSafeCell).join(';')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

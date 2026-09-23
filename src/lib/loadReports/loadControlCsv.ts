@@ -1,14 +1,10 @@
 import type { LoadControlRow } from '@/hooks/useLoadControl';
-
-const csvEscape = (v: string | number | null | undefined) => {
-  const s = v == null ? '' : String(v);
-  return /[",;\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
+import { csvSafeCell } from '@/lib/csvSafety';
 
 const dt = (v?: string | null) => v ? v.slice(0, 10).split('-').reverse().join('/') : '';
 const money = (v?: number | null) => v == null ? '' : Number(v).toFixed(2).replace('.', ',');
 
-export function exportLoadControlCsv(rows: LoadControlRow[], filename = 'controle-cargas.csv') {
+export function buildLoadControlCsv(rows: LoadControlRow[]): string {
   const header = [
     'Nº Carga','Cliente','Data Carga','Data Chegada','Valor Faturado','Valor Frete','% Frete',
     'Peso','NFs','CT-es','Motorista','Placa','Status Op.','Status Fat.','Status Fin.',
@@ -26,7 +22,11 @@ export function exportLoadControlCsv(rows: LoadControlRow[], filename = 'control
     money(r.received_amount),
     money((Number(r.freight_amount || 0) - Number(r.received_amount || 0))),
   ]);
-  const csv = '\uFEFF' + [header, ...body].map(cols => cols.map(csvEscape).join(';')).join('\r\n');
+  return '\uFEFF' + [header, ...body].map(cols => cols.map(csvSafeCell).join(';')).join('\r\n');
+}
+
+export function exportLoadControlCsv(rows: LoadControlRow[], filename = 'controle-cargas.csv') {
+  const csv = buildLoadControlCsv(rows);
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
   const a = document.createElement('a');
   a.href = url; a.download = filename;

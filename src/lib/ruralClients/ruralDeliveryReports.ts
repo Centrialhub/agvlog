@@ -1,10 +1,5 @@
 import type { RuralProfile } from '@/hooks/useRuralClients';
-
-const csvEscape = (v: unknown): string => {
-  if (v == null) return '';
-  const s = String(v).replace(/"/g, '""');
-  return /[";\n]/.test(s) ? `"${s}"` : s;
-};
+import { csvSafeCell } from '@/lib/csvSafety';
 
 export function ruralProfilesToCsv(rows: RuralProfile[]): string {
   const header = [
@@ -30,7 +25,7 @@ export function ruralProfilesToCsv(rows: RuralProfile[]): string {
       r.taxi_estimated_cost != null ? String(r.taxi_estimated_cost).replace('.', ',') : '',
       r.driver_instructions || '',
       r.internal_notes || '',
-    ].map(csvEscape).join(';'));
+    ].map(csvSafeCell).join(';'));
   }
   return '\uFEFF' + lines.join('\r\n');
 }

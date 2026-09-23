@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSonnerToast } from '@/hooks/useSonnerToast';
 import type { PdfWorkerRequest, PdfWorkerResponse } from './pdfReportWorker';
 import type { IngestionReport } from '@/lib/ingestion/types';
+import { csvSafeCell } from '@/lib/csvSafety';
 
 interface ResultsStepProps {
   results: string[];
@@ -37,10 +38,7 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
 
   const handleExportCsv = () => {
     if (!report) return;
-    const esc = (v: unknown) => {
-      const s = String(v ?? '');
-      return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
+    const esc = csvSafeCell;
     const pct = (n: number, d: number) => (d > 0 ? ((n / d) * 100).toFixed(1) : '0.0');
     const lines: string[] = [];
     if (report.auditMeta) {
@@ -101,10 +99,7 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
   // Compact CSV: only audit meta, KPIs and the review list. Ideal for attaching to audits.
   const handleExportCsvSummary = () => {
     if (!report) return;
-    const esc = (v: unknown) => {
-      const s = String(v ?? '');
-      return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
+    const esc = csvSafeCell;
     const pct = (n: number, d: number) => (d > 0 ? ((n / d) * 100).toFixed(1) : '0.0');
     const lines: string[] = [];
     if (report.auditMeta) {

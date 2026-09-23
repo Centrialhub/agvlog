@@ -28,9 +28,10 @@ function pathOf(request:unknown){
 function serviceWorkerHarness(shared:{stores:Map<string,Map<string,CachedResponse>>;indexedDB:{pending:Map<string,unknown>;deleteDatabase:ReturnType<typeof vi.fn>}},
   hash:string,failPath?:string,htmlFallbackPath?:string){
   const handlers=new Map<string,WorkerHandler>(),claim=vi.fn(async()=>undefined),skipWaiting=vi.fn();let online=true;
+  let shellHtml='<html><script src="/assets/index.js"></script></html>';
   const fetch=async(request:unknown)=>{
     const path=pathOf(request);if(!online||path===failPath)throw new Error('offline');
-    if(path==='/')return response('<html><script src="/assets/index.js"></script></html>',true,'text/html');
+    if(path==='/'||path==='/driver')return response(shellHtml,true,'text/html');
     if(path==='/driver-shell-assets.json')return response(['/assets/DriverDeliveries.js'],true,'application/json');
     if(path===htmlFallbackPath)return response('<html>SPA fallback</html>',true,'text/html');
     return response(`asset:${path}`,true,path.endsWith('.js')?'application/javascript':'text/plain');
@@ -56,10 +57,25 @@ function serviceWorkerHarness(shared:{stores:Map<string,Map<string,CachedRespons
     handlers.get(type)?.({...event,waitUntil:(value:Promise<unknown>)=>{task=Promise.resolve(value);}});
     if(!task){reject(new Error(`${type} did not register waitUntil`));return;}task.then(()=>resolve(),reject);
   });
-  return {handlers,claim,skipWaiting,setOffline:()=>{online=false;},waitFor};
+  return {handlers,claim,skipWaiting,setOffline:()=>{online=false;},setShellHtml:(html:string)=>{shellHtml=html;},waitFor};
 }
 
 describe('driver PWA safe build upgrade',()=>{
+  it('keeps the installed offline shell pinned while a newer deployment is served online',async()=>{
+    const shared={stores:new Map<string,Map<string,CachedResponse>>(),indexedDB:{pending:new Map<string,unknown>(),deleteDatabase:vi.fn()}};
+    const active=serviceWorkerHarness(shared,'build-one');await active.waitFor('install');await active.waitFor('activate');
+    active.setShellHtml('<html><script src="/assets/index-new.js"></script></html>');
+    const navigate=async()=>{
+      let answer:Promise<CachedResponse|undefined>|undefined;
+      active.handlers.get('fetch')?.({request:{method:'GET',url:'https://app.test/driver',mode:'navigate',destination:'document'},
+        respondWith:(value:Promise<CachedResponse|undefined>)=>{answer=value;}});
+      return (await answer)?.text();
+    };
+    expect(await navigate()).toContain('/assets/index-new.js');
+    active.setOffline();
+    expect(await navigate()).toContain('/assets/index.js');
+    expect(await shared.stores.get('agvlog-driver-shell-build-one')?.get('/')?.text()).toContain('/assets/index.js');
+  });
   it('keeps the complete active cache when installation of the next build fails',async()=>{
     const shared={stores:new Map<string,Map<string,CachedResponse>>(),indexedDB:{pending:new Map<string,unknown>(),deleteDatabase:vi.fn()}};
     const active=serviceWorkerHarness(shared,'build-one');await active.waitFor('install');await active.waitFor('activate');
