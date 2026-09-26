@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 
 import { accounts, fixtureIds } from "./fixtures/accounts";
+import { preTripChecklistPayload } from "./fixtures/driverChecklist";
 import { cleanupSyntheticManualLoad } from "./fixtures/loadCleanup";
 import { loginThroughUi, passwordToken } from "./fixtures/session";
 
@@ -162,7 +163,7 @@ test("driver records canonical expense and delivery outcome with recoverable eve
   const checklist = await rpc(request, session, "driver_save_checklist", {
     _trip_id: fixtureIds.tripA,
     _kind: "pre",
-    _payload: { tires: true, lights: true, source: "e2e" },
+    _payload: preTripChecklistPayload(),
   });
   expect(checklist.ok(), await checklist.text()).toBeTruthy();
 

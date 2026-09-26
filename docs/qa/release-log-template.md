@@ -11,6 +11,7 @@ Crie uma cópia deste arquivo para cada release em `docs/qa/release-log-AAAA-MM-
 | PR e SHA completo do candidato | <links e SHA> |
 | SHA atualmente publicado | <SHA verificado no alias Vercel> |
 | Backend do bundle candidato | <supabaseOrigin de release.json e origin esperado do staging; sem chaves> |
+| Ciclo de vida das fixtures | <banco exclusivo descartável/reset por tentativa ou entidades isoladas; histórico imutável e workers concorrentes considerados> |
 | Quality gate e release candidate | <links dos runs, status de cada job> |
 | Estado | <preparação / bloqueado / staging / promovido / retornado> |
 | Janela de observação | <início/fim UTC, ciclo operacional e limiares acordados antes da promoção> |
@@ -29,6 +30,7 @@ Crie uma cópia deste arquivo para cada release em `docs/qa/release-log-AAAA-MM-
 - Contrato esperado: <RPC/assinatura/grants/RLS, UI e regra de negócio>.
 - Risco de regressão: <fluxos e dados afetados, concorrência, limites de tempo>.
 - Dependências: <migrações, Edge, frontend; versões já publicadas que devem ser preservadas>.
+- Compatibilidade do retorno: <a versão anterior consegue ler os dados/checkpoints produzidos pelo candidato? registrar teste e adaptação necessária, preservando cooldowns ativos>.
 - Plano de validação e retorno: <critérios mensuráveis e responsável>.
 
 ## Gates e comandos

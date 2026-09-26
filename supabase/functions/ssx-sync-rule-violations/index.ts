@@ -19,6 +19,17 @@ import {
 type JsonObject = Record<string, unknown>;
 const RESULT_LIMIT = 500;
 const MAX_REQUESTS = 32;
+const MIN_RATE_LIMIT_BACKOFF_SECONDS = 15 * 60;
+const MAX_RATE_LIMIT_BACKOFF_SECONDS = 24 * 60 * 60;
+
+function rateLimitBackoffSeconds(code: unknown): number {
+  if (code === "rate_limited") return MIN_RATE_LIMIT_BACKOFF_SECONDS;
+  if (typeof code !== "string") return 0;
+  const match = /^rate_limited:(\d{1,5})$/.exec(code);
+  if (!match) return 0;
+  return Math.max(MIN_RATE_LIMIT_BACKOFF_SECONDS,
+    Math.min(MAX_RATE_LIMIT_BACKOFF_SECONDS, Number(match[1])));
+}
 
 const SAFE_PAYLOAD_FIELDS = [
   "IdRuleViolation", "RuleIntegrationCode", "TrackedUnitIntegrationCode",
@@ -137,23 +148,25 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "Token expired or missing. Run ssx-login first." }, 409);
     }
 
-    const { data: violationCursor } = await admin
+    const { data: violationCursor, error: cursorReadError } = await admin
       .from("ssx_rule_violation_cursors")
       .select("last_error_code,updated_at")
       .eq("integration_account_id", accountId)
       .maybeSingle();
+    if (cursorReadError) throw new Error("cursor_read_failed");
     const cursorUpdatedAt = violationCursor?.updated_at
       ? new Date(violationCursor.updated_at).getTime()
       : 0;
+    const backoffSeconds = rateLimitBackoffSeconds(violationCursor?.last_error_code);
     if (
-      violationCursor?.last_error_code === "rate_limited"
-      && cursorUpdatedAt > Date.now() - 15 * 60_000
+      backoffSeconds > 0
+      && cursorUpdatedAt + backoffSeconds * 1000 > Date.now()
     ) {
       return jsonResp({
         success: true,
         status: "deferred",
         reason: "rate_limited_backoff",
-        retry_at: new Date(cursorUpdatedAt + 15 * 60_000).toISOString(),
+        retry_at: new Date(cursorUpdatedAt + backoffSeconds * 1000).toISOString(),
         upserted: 0,
         requests: 0,
       });
@@ -214,12 +227,24 @@ Deno.serve(async (req) => {
           durationMs: response.durationMs,
           responsePreview: redactedSsxResponsePreview(response.text, response.networkError),
           result: response.ok && items ? (items.length ? "success" : "empty") : "error",
-          errorClass: response.ok ? undefined : response.errorClass,
+          errorClass: response.ok ? undefined
+            : response.status === 429 ? "rate_limited" : response.errorClass,
         });
         if (response.ok || response.errorClass !== "body_incompatible") break;
       }
       if (!response) throw new Error("request_budget_exhausted");
-      if (!response.ok) throw new Error(response.errorClass || "upstream_failed");
+      if (!response.ok) {
+        if (response.status === 429 || response.errorClass === "rate_limited") {
+          // Preserve the published 15-minute code for a missing/short header.
+          // The shared HTTP helper caps Retry-After at 24 hours.
+          const providerSeconds = Math.ceil(response.retryAfterSeconds || 0);
+          const effectiveSeconds = Math.max(MIN_RATE_LIMIT_BACKOFF_SECONDS,
+            Math.min(MAX_RATE_LIMIT_BACKOFF_SECONDS, providerSeconds));
+          throw new Error(effectiveSeconds > MIN_RATE_LIMIT_BACKOFF_SECONDS
+            ? `rate_limited:${effectiveSeconds}` : "rate_limited");
+        }
+        throw new Error(response.errorClass || "upstream_failed");
+      }
       if (!items) throw new Error("invalid_schema");
       if (items.length < RESULT_LIMIT) {
         completedThrough = end;

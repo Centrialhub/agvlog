@@ -1,7 +1,6 @@
 {
   "schema_version": 1,
   "kind": "observation_not_release_gate",
-  "observed_at_utc": "2026-09-26T21:30:34.000Z",
   "project_ref": "qcvnsdrbcchaxvawcngk",
   "hash_normalization": "SHA-256 of UTF-8 source after CRLF-to-LF normalization; terminal newline preserved",
   "live_bundles": [
@@ -140,6 +139,48 @@
       "verify_jwt_live": false,
       "verify_jwt_candidate_config": false,
       "local_recovery_cache_path": ".codex-build-audit/edge-live-bundles-2026-09-26/ssx-sync-units/"
+    },
+    {
+      "slug": "ssx-sync-rule-violations",
+      "function_id": "056d068e-e4e2-4f60-b1aa-3268afd5d416",
+      "version": 13,
+      "updated_at_utc": "2026-09-23T17:56:33.147Z",
+      "bundle_ezbr_sha256": "719a48a23c3e6c7ab999c30a87a5336eab4e760d1e0074f5a4158b447ea72cbd",
+      "files": [
+        {
+          "path": "supabase/functions/_shared/active-tenant.ts",
+          "sha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45"
+        },
+        {
+          "path": "supabase/functions/_shared/capabilities.ts",
+          "sha256": "8c786cc9ae6b031e3a0f2efd2a4f508247b114e1fcbac9b74fa22d1307ddeac3"
+        },
+        {
+          "path": "supabase/functions/_shared/cors.ts",
+          "sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679"
+        },
+        {
+          "path": "supabase/functions/_shared/cron-auth.ts",
+          "sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312"
+        },
+        {
+          "path": "supabase/functions/_shared/ssx-utils.ts",
+          "sha256": "c5af60226dd25720c6af1808484f5d65340a9dfe99856b1f1ffefde7e2bfdd96"
+        },
+        {
+          "path": "supabase/functions/ssx-sync-rule-violations/deno.json",
+          "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+        },
+        {
+          "path": "supabase/functions/ssx-sync-rule-violations/index.ts",
+          "sha256": "53bbd87af95b7bcdb9fc64bbc26343ceb043f3dcfccaccb43860360f3b16ea91"
+        }
+      ],
+      "verify_jwt_live": false,
+      "verify_jwt_candidate_config": false,
+      "local_recovery_cache_path": ".codex-build-audit/edge-live-bundles-2026-09-26/ssx-sync-rule-violations/",
+      "verified_source_commit": "e797c40acc8bd5565d77191bc01f213ff004be3a",
+      "verified_source_commit_note": "All seven live per-file LF SHA-256 values match Git sources at this commit; it is a reproducible source for preparing a compatible rollback, not an approved rollback artifact."
     }
   ],
   "candidate_files": [
@@ -196,6 +237,14 @@
       "sha256": "2f67f2011c1536f58cb2d36c16a4f817fabe6aba67eae92f4367b95db4b10f0a"
     },
     {
+      "path": "supabase/functions/ssx-sync-rule-violations/deno.json",
+      "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
+    },
+    {
+      "path": "supabase/functions/ssx-sync-rule-violations/index.ts",
+      "sha256": "5636a3c2c0e51024a77da1396a828f598acca30fc839fe35f71404e69e79804b"
+    },
+    {
       "path": "supabase/functions/ssx-sync-units/deno.json",
       "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256"
     },
@@ -229,26 +278,35 @@
     },
     {
       "path": "supabase/functions/_shared/ssx-utils.ts",
-      "reason": "Uses the governance v14 helper (Retry-After parsing and timer cleanup), which differs from the older helper bundled with ssx-sync-units v146. The v146 entrypoint itself matched the candidate before the explicit identity fix."
+      "reason": "Uses the governance v14 helper (Retry-After parsing and timer cleanup), which differs from the older helper bundled with ssx-sync-units v146 and ssx-sync-rule-violations v13. Both entrypoints matched the candidate before their explicit safety fixes."
+    },
+    {
+      "path": "supabase/functions/ssx-sync-rule-violations/index.ts",
+      "reason": "Separate safety fix: cursor read errors stop before provider calls; HTTP 429 is recognized even with non-JSON bodies; a longer Retry-After is durably encoded as rate_limited:<seconds>, preserving the legacy rate_limited code for 15 minutes or less. Candidate delay is bounded to 15 minutes..24 hours."
     }
   ],
   "notes": [
-    "Common cron-auth, capabilities, cors and active-tenant modules match all three live bundles and the candidate.",
+    "Common cron-auth, capabilities, cors and active-tenant modules match all four live bundles and the candidate.",
     "The live pipeline checkpoint wait export is unused by its entrypoint.",
     "No production deploy or database write was performed.",
     "A legacy pipeline_units cache containing only upserted:0 does not prove an empty source and is rejected until a valid fresh/manual result or cache with counters is available.",
-    "Administration discovery is not enabled or forced by this reconciliation."
+    "Administration discovery is not enabled or forced by this reconciliation.",
+    "These source observations were captured at different times; recheck all active versions immediately before promotion.",
+    "Rule violation cooldown does not provide a lease: concurrent invocations before the first acknowledgment can still reach the provider.",
+    "Rollback constraint: live violations v13 does not understand rate_limited:<seconds>. Do not restore that reader while a new-format cooldown remains active; prepare and test a compatible rollback bundle or another reviewed procedure that preserves the remaining deadline."
   ],
-  "candidate_base_commit": "e797c40acc8bd5565d77191bc01f213ff004be3a",
+  "candidate_base_commit": "029c01642548dbae5086932f4c3747f30e8314fa",
   "working_tree_snapshot": {
     "state": "uncommitted",
     "identity": "candidate_files SHA-256 values",
-    "captured_at_utc": "2026-09-26T21:50:47.166Z"
+    "captured_at_utc": "2026-09-26T22:10:01.909Z"
   },
   "local_recovery_cache": {
-    "files_verified": 25,
+    "files_verified": 32,
     "ignored_by_git": true,
     "scope": "Current worktree on this host only; ignored files are not included in Git commits or managed worktree archives.",
     "verification": "Each source file matched its live per-file SHA-256 after LF normalization."
-  }
+  },
+  "first_recorded_at_utc": "2026-09-26T21:30:34.000Z",
+  "updated_at_utc": "2026-09-26T22:10:01.909Z"
 }
