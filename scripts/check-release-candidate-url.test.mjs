@@ -42,10 +42,14 @@ test("rejects foreign, mutable, and disguised candidate URLs", () => {
 test("runs the trusted URL policy before checking out candidate code or injecting the E2E password", () => {
   const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/release-candidate.yml", import.meta.url)), "utf8");
   const trustedCheckout = workflow.indexOf("- name: Checkout trusted release policy");
-  const urlGuard = workflow.indexOf("- name: Verify candidate URL belongs to this Vercel project");
+  const urlGuard = workflow.indexOf("- name: Verify immutable candidate URL and SHA inputs");
+  const environmentGuard = workflow.indexOf("- name: Verify protected release environment before candidate checkout");
+  const stagingGuard = workflow.indexOf("- name: Refuse production backend for hosted E2E");
   const candidateCheckout = workflow.indexOf("- name: Checkout candidate commit");
   const hostedE2E = workflow.indexOf("- name: Hosted desktop/tablet/mobile journeys");
-  assert.ok(trustedCheckout >= 0 && trustedCheckout < urlGuard && urlGuard < candidateCheckout
+  assert.ok(trustedCheckout >= 0 && trustedCheckout < urlGuard && urlGuard < environmentGuard
+    && environmentGuard < stagingGuard && stagingGuard < candidateCheckout
     && candidateCheckout < hostedE2E);
+  assert.match(workflow.slice(urlGuard, candidateCheckout), /\^\[0-9a-f\]\{40\}\$/);
   assert.equal(workflow.slice(0, hostedE2E).includes("E2E_PASSWORD:"), false);
 });

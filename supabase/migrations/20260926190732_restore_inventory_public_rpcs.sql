@@ -107,6 +107,14 @@ declare
 begin
  if auth.uid() is null or not public.is_tenant_admin(t) then raise exception 'inventory_not_authorized' using errcode='42501';end if;
  if r is null then raise exception 'inventory_request_id_required' using errcode='22023';end if;
+ -- Serialize retries before reading the idempotency row. A concurrent insert
+ -- otherwise passes the SELECT in both sessions, then returns 23505 in one
+ -- session after the other has already applied the balance trigger.
+ perform pg_catalog.pg_advisory_xact_lock(
+   pg_catalog.hashtextextended('inventory-movement:'||t::text||':'||r::text,0)
+ );
+ -- An administrator can be revoked while waiting for another transaction.
+ if auth.uid() is null or not public.is_tenant_admin(t) then raise exception 'inventory_not_authorized' using errcode='42501';end if;
  select * into existing from public.inventory_movements where tenant_id=t and request_id=r;
  if found then
   if existing.request_hash is distinct from h then raise exception 'inventory_request_conflict' using errcode='23505';end if;

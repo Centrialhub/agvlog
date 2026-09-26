@@ -13,6 +13,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -21,6 +22,7 @@ concurrency:
 
 jobs:
   verify-hosted-candidate:
+    # Branch restriction and release log: docs/qa/release-candidate-environment-guard.md
     environment: release-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -48,10 +50,28 @@ jobs:
           node-version-file: .node-version
           cache: npm
 
-      - name: Verify candidate URL belongs to this Vercel project
+      - name: Verify immutable candidate URL and SHA inputs
+        shell: bash
         env:
           CANDIDATE_URL: ${{ github.event.inputs.candidate_url }}
-        run: node scripts/check-release-candidate-url.mjs
+          CANDIDATE_SHA: ${{ github.event.inputs.candidate_sha }}
+        run: |
+          if [[ ! "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "candidate_sha must be a full lowercase commit SHA" >&2
+            exit 1
+          fi
+          node scripts/check-release-candidate-url.mjs
+
+      - name: Verify protected release environment before candidate checkout
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node scripts/check-release-environment.mjs
+
+      - name: Refuse production backend for hosted E2E
+        env:
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+        run: node scripts/check-release-staging-backend.mjs
 
       - name: Checkout candidate commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -64,10 +84,6 @@ jobs:
         env:
           CANDIDATE_SHA: ${{ github.event.inputs.candidate_sha }}
         run: |
-          if [[ ! "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "candidate_sha must be a full lowercase commit SHA" >&2
-            exit 1
-          fi
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
 
       - name: Frozen install and audit
@@ -79,6 +95,8 @@ jobs:
           npm run supabase:release:check
 
       - name: Verify deployed security and hosted signup policy
+        env:
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: npm run smoke:deploy
 
       - name: Install Chromium
@@ -87,11 +105,13 @@ jobs:
       - name: Hosted desktop/tablet/mobile journeys
         env:
           E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: npm run e2e
 
       - name: Critical journeys three consecutive times
         env:
           E2E_PASSWORD: ${{ secrets.STAGING_E2E_PASSWORD }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: npm run e2e:critical:3
 
       - name: Upload hosted evidence

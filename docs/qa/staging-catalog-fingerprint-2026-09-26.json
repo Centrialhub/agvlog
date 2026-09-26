@@ -1,0 +1,102 @@
+{
+  "formatVersion": 2,
+  "observedAtUTC": "2026-09-26 21:15:33 UTC",
+  "projectRef": "qcvnsdrbcchaxvawcngk",
+  "postgresVersion": "17.6",
+  "ledgerMaxVersion": "20260924155758",
+  "searchPath": "pg_catalog",
+  "queryPath": "supabase/verify/staging_catalog_fingerprint.sql",
+  "notes": "Structural triage only. Includes platform-managed objects. Investigate object-level differences; compare the same query revision and search_path.",
+  "categories": [
+    {
+      "category": "column",
+      "object_count": 9122,
+      "catalog_md5": "8fe67b323c63e1ef3429e2467b44510e"
+    },
+    {
+      "category": "constraint",
+      "object_count": 2248,
+      "catalog_md5": "62b7366a3be01dbd79c5f3f0ee6bec90"
+    },
+    {
+      "category": "default_acl",
+      "object_count": 6,
+      "catalog_md5": "d419181568cda33fc89787cf4c10cf57"
+    },
+    {
+      "category": "event_trigger",
+      "object_count": 7,
+      "catalog_md5": "87190b8337bca1e94e0b41a51e5e154a"
+    },
+    {
+      "category": "extension",
+      "object_count": 10,
+      "catalog_md5": "ace9623bac593f821d1655bc47e84886"
+    },
+    {
+      "category": "index",
+      "object_count": 1743,
+      "catalog_md5": "f7c6f61d09dea09e2acd065a89685839"
+    },
+    {
+      "category": "migration_ledger",
+      "object_count": 896,
+      "catalog_md5": "314becc188a60dc6d330cd4d5e47aef6"
+    },
+    {
+      "category": "policy",
+      "object_count": 1336,
+      "catalog_md5": "184c35259bbd0d9e65341ec48fdb4687"
+    },
+    {
+      "category": "relation",
+      "object_count": 2135,
+      "catalog_md5": "5a92363cf0887eaa6bf4b94a554f6f7a"
+    },
+    {
+      "category": "role",
+      "object_count": 32,
+      "catalog_md5": "7f0e782b0fc070a5d06db8f001bc3dce"
+    },
+    {
+      "category": "role_membership",
+      "object_count": 22,
+      "catalog_md5": "fe920609cf78ac3a7f0e1fe284768842"
+    },
+    {
+      "category": "routine",
+      "object_count": 1678,
+      "catalog_md5": "fa0b61761dc8d59ee38fc438a40c692a"
+    },
+    {
+      "category": "schema_acl",
+      "object_count": 13,
+      "catalog_md5": "f63575581658899325dc026b499e8447"
+    },
+    {
+      "category": "sequence",
+      "object_count": 6,
+      "catalog_md5": "785b36ebfcdbdb77b7bfa022d5451bed"
+    },
+    {
+      "category": "storage_bucket",
+      "object_count": 8,
+      "catalog_md5": "9f5442018c77b868faf7ce6ad79d00a7"
+    },
+    {
+      "category": "trigger",
+      "object_count": 636,
+      "catalog_md5": "f7dae689572b2d4e72de46535fd0a461"
+    },
+    {
+      "category": "type",
+      "object_count": 816,
+      "catalog_md5": "f9a54954f4b8ff9ec4f96c6136ae3371"
+    },
+    {
+      "category": "view",
+      "object_count": 14,
+      "catalog_md5": "24ff25e7c69e5b4ffee9f78a1f06e8d0"
+    }
+  ]
+}

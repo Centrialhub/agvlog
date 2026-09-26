@@ -24,8 +24,23 @@ $preflight$;
 alter table public.ssx_mapping_conflicts
   add column if not exists resolution_request_id uuid,
   add column if not exists resolution_result jsonb;
-create index if not exists idx_ssx_mapping_conflicts_review
+-- The published idx_ssx_mapping_conflicts_review has only the first four
+-- columns. Use a new name so IF NOT EXISTS cannot silently retain that shape.
+create index if not exists idx_ssx_mapping_conflicts_review_v2
   on public.ssx_mapping_conflicts (tenant_id, status, due_at, first_observed_at, id);
+do $index_contract$
+begin
+  if not exists (
+    select 1 from pg_index i
+    where i.indexrelid = to_regclass('public.idx_ssx_mapping_conflicts_review_v2')
+      and i.indisvalid and i.indisready
+      and pg_get_indexdef(i.indexrelid) =
+        'CREATE INDEX idx_ssx_mapping_conflicts_review_v2 ON public.ssx_mapping_conflicts USING btree (tenant_id, status, due_at, first_observed_at, id)'
+  ) then
+    raise exception 'ssx_review_index_contract_changed' using errcode = '55000';
+  end if;
+end;
+$index_contract$;
 create unique index if not exists uq_ssx_mapping_conflicts_resolution_request
   on public.ssx_mapping_conflicts (resolution_request_id)
   where resolution_request_id is not null;

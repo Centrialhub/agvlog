@@ -10,14 +10,16 @@ Crie uma cópia deste arquivo para cada release em `docs/qa/release-log-AAAA-MM-
 | Ambiente alvo e projeto Supabase | <staging ou produção, project ref> |
 | PR e SHA completo do candidato | <links e SHA> |
 | SHA atualmente publicado | <SHA verificado no alias Vercel> |
+| Backend do bundle candidato | <supabaseOrigin de release.json e origin esperado do staging; sem chaves> |
 | Quality gate e release candidate | <links dos runs, status de cada job> |
 | Estado | <preparação / bloqueado / staging / promovido / retornado> |
+| Janela de observação | <início/fim UTC, ciclo operacional e limiares acordados antes da promoção> |
 
 ## Estado anterior e plano de retorno
 
 | Camada | Versão anterior verificada | Versão candidata | Retorno preparado |
 | --- | --- | --- | --- |
-| Postgres | <última versão, contagem e export do ledger; backup/ponto de retorno> | <migrações e ordem> | <compensação SQL revisada; limites> |
+| Postgres | <última versão, contagem e lista sanitizada de versões do ledger; backup/ponto de retorno> | <migrações e ordem> | <compensação SQL revisada; limites> |
 | Edge Functions | <nome, versão e hash de cada bundle afetado> | <versões e hash> | <bundle anterior recuperável> |
 | Vercel | <deployment imutável, SHA e alias> | <deployment imutável, SHA> | <deployment anterior promovível> |
 
@@ -34,6 +36,7 @@ Crie uma cópia deste arquivo para cada release em `docs/qa/release-log-AAAA-MM-
 | Gate | Comando / evidência | Resultado e horário UTC |
 | --- | --- | --- |
 | Revisão local | `git rev-parse HEAD`; diff do PR; `npm run supabase:release:check` | <link/output> |
+| Revisão do candidato hospedado | PR, SHA completo, URL imutável, destino Supabase do bundle e diff de scripts/dependências/testes que receberão credenciais | <responsável, evidência e horário UTC antes do workflow_dispatch> |
 | Código | `npm run typecheck`; `npm run lint:errors`; `npm run build:check`; testes focados | <link/output> |
 | CI completo | `validate`, todos os shards `unit-tests`, `database-and-e2e` | <run e resultado por job> |
 | Banco isolado | `supabase db reset --local`; lint, baseline, pgTAP; replay e cenários de concorrência | <link/output> |
@@ -44,6 +47,8 @@ Crie uma cópia deste arquivo para cada release em `docs/qa/release-log-AAAA-MM-
 ## Matriz de fluxos críticos
 
 Marque cada fluxo com `pendente`, `passou` ou `falhou` e vincule teste e smoke do mesmo SHA/ambiente.
+
+Uma tela aberta, uma integração desativada ou um teste ignorado não comprovam a operação. Registre também a gravação e as contagens/estado final esperados, usando fixtures sintéticas isoladas e limpeza verificável.
 
 | Fluxo | Teste de contrato e interface | Staging | Produção |
 | --- | --- | --- | --- |
@@ -60,6 +65,14 @@ Marque cada fluxo com `pendente`, `passou` ou `falhou` e vincule teste e smoke d
 | Horário | Ação, versão e responsável | Evidência | Resultado |
 | --- | --- | --- | --- |
 | <AAAA-MM-DD HH:MM> | <preflight / migração / Edge / Vercel / smoke / observação / retorno> | <link ou artefato> | <passou / falhou / pendente> |
+
+## Registro de regressões e falhas de execução
+
+Use uma linha por ocorrência ou conjunto correlacionado; mantenha a causa como `em investigação` até existir evidência. Não transcreva payloads, tokens ou dados reais de clientes.
+
+| ID / horário UTC | Fluxo e sintoma | Ambiente / versões / correlação | Impacto e reprodução | Causa confirmada | Correção e teste preventivo | Estado / responsável |
+| --- | --- | --- | --- | --- | --- | --- |
+| <REG-001 / UTC> | <operação, HTTP/SQLSTATE, resultado parcial/erro> | <SHA, Edge/SQL, request ID sanitizado> | <bloqueador/menor; passos e fixture; esperado/observado; contagens> | <evidência ou em investigação> | <PR, teste que falha antes e passa depois> | <aberto/corrigido no candidato/validado em staging/publicado; nome> |
 
 ## Decisão e observação
 

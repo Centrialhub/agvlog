@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { candidateBypassHeaders, isImmutableCandidateOrigin } from "./release-candidate-origin.mjs";
+import { assertReleaseSupabaseOrigin } from "./release-backend-identity.mjs";
 
 const target = process.env.DEPLOY_SMOKE_URL;
 if (!target) throw new Error("DEPLOY_SMOKE_URL is required for a deployed smoke test.");
@@ -8,9 +10,21 @@ if (targetUrl.protocol !== "https:" && process.env.DEPLOY_SMOKE_ALLOW_HTTP !== "
 }
 if (targetUrl.username || targetUrl.password) throw new Error("DEPLOY_SMOKE_URL must not contain credentials.");
 const origin = targetUrl.origin;
-const fetchOptions = () => ({ redirect: "error", signal: AbortSignal.timeout(15_000) });
+const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+const protectedCandidate = isImmutableCandidateOrigin(origin);
+if (protectedCandidate && !bypassSecret) {
+  throw new Error("VERCEL_AUTOMATION_BYPASS_SECRET is required for a protected candidate.");
+}
+if (bypassSecret && !protectedCandidate) {
+  throw new Error("Vercel automation bypass may only target this project's immutable Preview URL.");
+}
+const candidateHeaders = bypassSecret ? candidateBypassHeaders(origin, bypassSecret) : {};
+const fetchCandidate = (url) => {
+  if (new URL(url).origin !== origin) throw new Error("Candidate fetch left its approved origin.");
+  return fetch(url, { headers: candidateHeaders, redirect: "error", signal: AbortSignal.timeout(15_000) });
+};
 
-const page = await fetch(origin, fetchOptions());
+const page = await fetchCandidate(origin);
 if (!page.ok) throw new Error(`Frontend returned HTTP ${page.status}`);
 
 const requiredHeaders = {
@@ -33,23 +47,27 @@ if (/sb_secret_|service_role|BEGIN [A-Z ]*PRIVATE KEY/i.test(html)) {
 
 const expectedRelease = process.env.DEPLOY_EXPECTED_RELEASE;
 if (!expectedRelease) throw new Error("DEPLOY_EXPECTED_RELEASE is required for immutable candidate verification.");
-const releaseResponse = await fetch(new URL("/release.json", origin), fetchOptions());
+const releaseResponse = await fetchCandidate(new URL("/release.json", origin));
 if (!releaseResponse.ok) throw new Error(`Release metadata returned HTTP ${releaseResponse.status}`);
 const releaseMetadata = await releaseResponse.json();
 if (releaseMetadata?.release !== expectedRelease) {
   throw new Error(`Candidate release mismatch: expected ${expectedRelease}, received ${releaseMetadata?.release ?? "<absent>"}`);
 }
+const supabaseUrl = process.env.DEPLOY_SUPABASE_URL;
+const publishableKey = process.env.DEPLOY_SUPABASE_PUBLISHABLE_KEY;
+if (!supabaseUrl || !publishableKey) throw new Error("Hosted Auth smoke variables are required.");
+assertReleaseSupabaseOrigin(releaseMetadata, supabaseUrl);
 const scriptPaths = [...html.matchAll(/<script[^>]+src=["']([^"']+\.js)["']/gi)].map((match) => match[1]);
 for (const scriptPath of new Set(scriptPaths)) {
   const scriptUrl = new URL(scriptPath, origin);
   if (scriptUrl.origin !== origin) throw new Error(`Unexpected cross-origin script: ${scriptUrl}`);
-  const script = await fetch(scriptUrl, fetchOptions());
+  const script = await fetchCandidate(scriptUrl);
   if (!script.ok) throw new Error(`Deployed chunk unavailable: ${scriptUrl}`);
   const source = await script.text();
   if (/sourceMappingURL=|sb_secret_|BEGIN [A-Z ]*PRIVATE KEY/i.test(source)) {
     throw new Error(`Unsafe marker in deployed chunk: ${scriptUrl}`);
   }
-  const sourceMap = await fetch(`${scriptUrl}.map`, fetchOptions());
+  const sourceMap = await fetchCandidate(`${scriptUrl}.map`);
   if (sourceMap.ok) {
     // SPA rewrites can return index.html with HTTP 200 for a missing .map path.
     // Only that HTML fallback is harmless; any other successful response is an
@@ -61,9 +79,6 @@ for (const scriptPath of new Set(scriptPaths)) {
   }
 }
 
-const supabaseUrl = process.env.DEPLOY_SUPABASE_URL;
-const publishableKey = process.env.DEPLOY_SUPABASE_PUBLISHABLE_KEY;
-if (!supabaseUrl || !publishableKey) throw new Error("Hosted Auth smoke variables are required.");
 const signup = await fetch(`${supabaseUrl.replace(/\/$/, "")}/auth/v1/signup`, {
   method: "POST",
   headers: { apikey: publishableKey, "Content-Type": "application/json" },

@@ -5,6 +5,7 @@ Antes de alterar um fluxo publicado ou preparar um release, leia [o roteiro de e
 ## Regras de trabalho
 
 - Confirme o SHA realmente publicado, as versões das Edge Functions e o contrato SQL em produção antes de assumir que `main` representa o ambiente público. O histórico local e o banco divergiam em 26/09/2026.
+- Antes de publicar Edge Functions, compare o bundle completo de cada função afetada, incluindo módulos compartilhados, com a versão ativa. Não execute uma publicação de todas as funções a partir de um checkout sem essa reconciliação: `ssx-sync-governance` v14 e `agvlog-pipeline-run` v153 publicados contêm checkpoints ausentes no candidato de 26/09.
 - Faça a mudança em checkout isolado e preserve alterações de outros trabalhos. Use migrações novas e incrementais; não reescreva uma migração já aplicada para corrigir produção.
 - Não execute `supabase db push` enquanto `npm run supabase:parity:check` falhar para o banco alvo. Aplique apenas SQL revisado e específico depois de conferir dependências, dados existentes, autorização e efeito em hotfixes já publicados.
 - Para cada função `.rpc()` nova ou alterada, teste assinatura, permissões, isolamento entre empresas, repetição e erro. Para importação, fiscal e financeiro, inclua ao menos um cenário de dado realista e um de concorrência ou estado obsoleto.

@@ -99,6 +99,42 @@ beforeAll(async () => {
 afterAll(async () => db?.close());
 
 describe('durable SSX mapping conflict review', () => {
+  it('adds a five-column cursor index beside the published four-column index', async () => {
+    const indexes = (await db.query<{ indexname: string; indexdef: string }>(`
+      select indexname,indexdef from pg_indexes
+      where schemaname='public' and indexname in
+        ('idx_ssx_mapping_conflicts_review','idx_ssx_mapping_conflicts_review_v2')
+      order by indexname
+    `)).rows;
+    expect(indexes).toEqual([
+      { indexname: 'idx_ssx_mapping_conflicts_review',
+        indexdef: 'CREATE INDEX idx_ssx_mapping_conflicts_review ON public.ssx_mapping_conflicts USING btree (tenant_id, status, due_at, first_observed_at)' },
+      { indexname: 'idx_ssx_mapping_conflicts_review_v2',
+        indexdef: 'CREATE INDEX idx_ssx_mapping_conflicts_review_v2 ON public.ssx_mapping_conflicts USING btree (tenant_id, status, due_at, first_observed_at, id)' },
+    ]);
+    await db.exec(reviewMigration);
+    expect((await db.query<{ indexname: string; indexdef: string }>(`
+      select indexname,indexdef from pg_indexes
+      where schemaname='public' and indexname in
+        ('idx_ssx_mapping_conflicts_review','idx_ssx_mapping_conflicts_review_v2')
+      order by indexname
+    `)).rows).toEqual(indexes);
+  });
+
+  it('refuses a preexisting v2 index with a different cursor shape', async () => {
+    await db.exec('begin');
+    try {
+      await db.exec(`
+        drop index public.idx_ssx_mapping_conflicts_review_v2;
+        create index idx_ssx_mapping_conflicts_review_v2
+          on public.ssx_mapping_conflicts (tenant_id, status);
+      `);
+      await expect(db.exec(reviewMigration)).rejects.toThrow('ssx_review_index_contract_changed');
+    } finally {
+      await db.exec('rollback');
+    }
+  });
+
   it('restores the missing RPCs without clearing cache and preserves their grants on replay', async () => {
     await db.exec(reviewMigration);
     expect((await db.query('select count(*)::int n from public.address_geocoding_cache')).rows)

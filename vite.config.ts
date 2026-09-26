@@ -49,7 +49,7 @@ const manualChunks = (id: string) => {
   return undefined;
 };
 
-const pwaDriverAssetManifest = (): Plugin => ({
+const pwaDriverAssetManifest = (supabaseOrigin: string | null): Plugin => ({
   name: 'pwa-driver-asset-manifest',
   generateBundle(_options,bundle){
     const chunks=Object.values(bundle).filter((item):item is Extract<typeof item,{type:'chunk'}>=>item.type==='chunk');
@@ -87,7 +87,7 @@ const pwaDriverAssetManifest = (): Plugin => ({
     this.emitFile({type:'asset',fileName:'driver-build.json',source:JSON.stringify({
       version:process.env.npm_package_version??'development',release,buildHash,builtAt,
     })});
-    this.emitFile({type:'asset',fileName:'release.json',source:JSON.stringify({release,buildHash,builtAt})});
+    this.emitFile({type:'asset',fileName:'release.json',source:JSON.stringify({release,buildHash,builtAt,supabaseOrigin})});
     this.emitFile({type:'asset',fileName:'sw.js',source:workerTemplate.replace(/__AGVLOG_BUILD_HASH__/g,buildHash)});
   },
 });
@@ -99,6 +99,10 @@ export default defineConfig(({ mode }) => {
   if (process.env.VERCEL === "1" && configurationIssues.length > 0) {
     throw new Error(`Invalid Vercel public build configuration: ${configurationIssues.join(", ")}`);
   }
+  const supabaseOrigin = configurationIssues.includes("missing_supabase_url")
+    || configurationIssues.includes("invalid_supabase_url")
+    ? null
+    : new URL(buildEnvironment.VITE_SUPABASE_URL as string).origin;
 
   return ({
   server: {
@@ -108,7 +112,7 @@ export default defineConfig(({ mode }) => {
       overlay: false,
     },
   },
-  plugins: [react(), pwaDriverAssetManifest(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [react(), pwaDriverAssetManifest(supabaseOrigin), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

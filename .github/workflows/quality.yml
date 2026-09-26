@@ -40,6 +40,9 @@ jobs:
       - name: Verify migration and Edge release contract
         run: npm run supabase:release:check
 
+      - name: Verify reviewed CI baseline candidate manifest
+        run: npm run supabase:baseline-candidate:check
+
       - name: Test pipeline contracts
         run: npm run test:pipeline
 
