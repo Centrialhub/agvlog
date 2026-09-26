@@ -308,7 +308,7 @@
     "verification": "Each source file matched its live per-file SHA-256 after LF normalization."
   },
   "first_recorded_at_utc": "2026-09-26T21:30:34.000Z",
-  "updated_at_utc": "2026-09-26T22:35:46.806Z",
+  "updated_at_utc": "2026-09-26T22:48:46.277Z",
   "compatible_rollback_preparation": {
     "slug": "ssx-sync-rule-violations",
     "status": "local_candidate_not_deployed",
@@ -316,5 +316,39 @@
     "manifest_lf_sha256": "923ec248eaf770b8f4f63ad7dcf03e430cb5cbd084aebded0bc560a1f0e672de",
     "generator": "scripts/prepare-ssx-violations-rollback.mjs",
     "limitation": "Requires staging rehearsal and active-version recheck; does not provide a lease or undo persisted events."
+  },
+  "versioned_source_snapshots": {
+    "directory": "docs/qa/edge-source-snapshots-2026-09-26",
+    "format": "UTF-8 source in .txt files named by SHA-256 after CRLF-to-LF normalization; terminal newline preserved",
+    "slugs": [
+      "agvlog-pipeline-run",
+      "ssx-sync-governance",
+      "ssx-sync-units"
+    ],
+    "source_references": 25,
+    "unique_files": 15,
+    "canonical_utf8_bytes": 169399,
+    "generator": "scripts/prepare-observed-edge-recovery.mjs",
+    "purpose": "Reconstruct each historical bundle separately without the ignored cache or a PR-only Git commit. Source identity is not rollout approval; historical bugs and persisted-state compatibility require staging review.",
+    "prepared_packages": [
+      {
+        "slug": "agvlog-pipeline-run",
+        "observed_version": 153,
+        "manifest_sha256": "570a848e393ab677e12b1a6eeaca0e383cd9731673106f0cb527b4761a195f15",
+        "files_verified": 7
+      },
+      {
+        "slug": "ssx-sync-governance",
+        "observed_version": 14,
+        "manifest_sha256": "d81b0dd123ecd0b32f0e3284b17e5cafe1888a7156d943040805346110d2a846",
+        "files_verified": 11
+      },
+      {
+        "slug": "ssx-sync-units",
+        "observed_version": 146,
+        "manifest_sha256": "b356484d0e424316050bc89460e01c43bafb24f55c02f557943feb2775d27e7a",
+        "files_verified": 7
+      }
+    ]
   }
 }
