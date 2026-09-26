@@ -20,8 +20,6 @@ export async function createIdempotencyPolicyDatabase(){
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
     create schema auth;create function auth.uid() returns uuid language sql stable as
       $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
-    create function auth.jwt() returns jsonb language sql stable as
-      $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb$$;
     grant usage on schema auth to authenticated,service_role;
     create table public.profiles(id uuid primary key);
     alter table public.profiles enable row level security;
@@ -64,7 +62,6 @@ export async function seedIdempotencyPolicy(db:PGlite){
       public.drivers,public.dispatch_trips,public.dispatch_trip_loads,public.dispatch_stops,public.dispatch_stop_documents,
       public.entity_state_audit_log;`+idempotencyPolicyContract.helper+';'+originalIdempotencyPolicy);
   await db.query('select set_config($1,$2,false)',['request.jwt.claim.sub',i.user]);
-  await db.query('select set_config($1,$2,false)',['request.jwt.claims','']);
   await db.query('insert into profiles values($1),($2)',[i.user,i.otherUser]);
   await db.query('insert into tenants values($1),($2)',[i.tenant,i.otherTenant]);
   await db.query("insert into tenant_memberships values($1,$2,true,'operator'),($3,$4,true,'operator')",[i.user,i.tenant,i.otherUser,i.otherTenant]);

@@ -8,9 +8,6 @@ import {createIdempotencyPolicyDatabase,idempotencyPolicySql,idempotencyPolicyCo
 let db:PGlite;
 const recovery=readFileSync('docs/qa/IDEMPOTENCY-RLS-RECOVERY-2026-08-30.sql','utf8');
 const liveProbe=readFileSync('docs/qa/IDEMPOTENCY-RLS-POSTDEPLOY-PROBE-2026-08-30.sql','utf8');
-const mfaMigration=readFileSync('supabase/migrations/20260828210458_enforce_privileged_mfa_release.sql','utf8');
-const mfaHelperStart=mfaMigration.indexOf('create or replace function public.is_tenant_operator_or_admin(');
-const mfaHelper=mfaMigration.slice(mfaHelperStart,mfaMigration.indexOf('$function$;',mfaHelperStart)+11);
 beforeAll(async()=>{db=await createIdempotencyPolicyDatabase();},30000);
 beforeEach(async()=>{await seedIdempotencyPolicy(db);});
 afterAll(async()=>{await db?.close();});
@@ -24,25 +21,6 @@ async function authenticated(){await db.exec('set role authenticated');}
 async function apply(){await db.exec(idempotencyPolicySql);}
 
 describe('idempotency result SELECT RLS',()=>{
-  it('accepts the exact earlier MFA helper and preserves its AAL2 requirement',async()=>{
-    await db.exec(mfaHelper);
-    const helperHash=(await db.query<{hash:string}>(`select md5(replace(
-      pg_get_functiondef('public.is_tenant_operator_or_admin(uuid)'::regprocedure),E'\\r\\n',E'\\n')) hash`)).rows[0].hash;
-    expect(helperHash).toBe('1345468a366a7b0b9ae62d3ec4825232');
-    await db.query('update public.tenant_memberships set role=$1 where tenant_id=$2 and user_id=$3',
-      ['owner',i.tenant,i.user]);
-    await apply();
-    await authenticated();
-    expect(await keys()).toEqual([]);
-    await db.exec('reset role');
-    await db.query("select set_config('request.jwt.claims',$1,false)",['{"aal":"aal2"}']);
-    await authenticated();
-    expect(await keys()).toEqual([{key_value:'own'}]);
-    await db.exec('reset role');
-    expect((await db.query<{hash:string}>(`select md5(replace(
-      pg_get_functiondef('public.is_tenant_operator_or_admin(uuid)'::regprocedure),E'\\r\\n',E'\\n')) hash`)).rows[0].hash)
-      .toBe(helperHash);
-  });
   it('reproduces the legacy cross-tenant read despite an own-profile-only SELECT policy',async()=>{
     expect(await policyHash()).toBe(idempotencyPolicyContract.policy.hash);
     await authenticated();expect(await keys()).toEqual([{key_value:'foreign'},{key_value:'own'}]);
@@ -106,14 +84,6 @@ describe('idempotency result SELECT RLS',()=>{
   ])('refuses rollout when the destination drifts: %s',async(sql,error)=>{
     await db.exec(sql);const before=await policyHash();
     await expect(apply()).rejects.toThrow(error);await db.exec('rollback');expect(await policyHash()).toBe(before);
-  });
-  it('reports the observed hash when the helper has an unreviewed definition',async()=>{
-    await db.exec('alter function public.is_tenant_operator_or_admin(uuid) set search_path=public');
-    const observed=(await db.query<{hash:string}>(`select md5(replace(
-      pg_get_functiondef('public.is_tenant_operator_or_admin(uuid)'::regprocedure),E'\\r\\n',E'\\n')) hash`)).rows[0].hash;
-    expect(observed).not.toBe('1345468a366a7b0b9ae62d3ec4825232');
-    expect(observed).not.toBe('682f66029dc9bb798f9f329b4e8f95aa');
-    await expect(apply()).rejects.toThrow(`Idempotency membership helper changed (observed hash: ${observed})`);
   });
   it('recovers and reapplies the policy without changing keys or consumer functions',async()=>{
     const before=await clients();const rows=await keys();await apply();

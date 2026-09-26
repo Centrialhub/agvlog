@@ -4,8 +4,6 @@
 set local lock_timeout='3s';
 set local statement_timeout='15s';
 do $preflight$
-declare
-  v_membership_helper_hash text;
 begin
   if not exists(select 1 from pg_class where oid='public.idempotency_keys'::regclass
     and relrowsecurity and not relforcerowsecurity) then
@@ -19,13 +17,9 @@ begin
       and md5(replace(pg_get_expr(polqual,polrelid),E'\r\n',E'\n'))='52dcb2b8b590a76089a38b21cebaf9c7') then
     raise exception 'Idempotency legacy policy changed';
   end if;
-  -- Historical preflight compatibility only: replay can reach either reviewed
-  -- MFA or non-MFA helper. This does not change its DDL or authorization.
-  v_membership_helper_hash := md5(replace(
-    pg_get_functiondef(to_regprocedure('public.is_tenant_operator_or_admin(uuid)')),E'\r\n',E'\n'));
-  if v_membership_helper_hash is null or v_membership_helper_hash not in (
-    '1345468a366a7b0b9ae62d3ec4825232', '682f66029dc9bb798f9f329b4e8f95aa') then
-    raise exception 'Idempotency membership helper changed (observed hash: %)', v_membership_helper_hash;
+  if md5(replace(pg_get_functiondef(to_regprocedure('public.is_tenant_operator_or_admin(uuid)')),E'\r\n',E'\n'))
+    is distinct from '682f66029dc9bb798f9f329b4e8f95aa' then
+    raise exception 'Idempotency membership helper changed';
   end if;
 end;
 $preflight$;

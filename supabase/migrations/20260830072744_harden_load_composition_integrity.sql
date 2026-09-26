@@ -2,7 +2,7 @@
 set local lock_timeout='3s';
 set local statement_timeout='30s';
 do $preflight$
-declare v_contract record;v_oid oid;v_authorization_hash text;
+declare v_contract record;v_oid oid;
 begin
   for v_contract in select * from(values
     ('public._load_is_locked(uuid)','e77c73ef2b708130f34da83c2830c478',false,true),
@@ -21,13 +21,8 @@ begin
   if not exists(select 1 from pg_trigger where tgrelid='public.load_items'::regclass and tgname='trg_recalc_load_totals'
     and tgfoid='public.recalc_load_totals()'::regprocedure and tgtype=29 and tgenabled='O' and not tgisinternal
     and not tgdeferrable and tgnargs=0 and tgqual is null) then raise exception 'Composition totals trigger changed';end if;
-  -- Historical preflight compatibility only; neither reviewed helper body is replaced here.
-  v_authorization_hash := md5(replace(
-    pg_get_functiondef(to_regprocedure('public.is_tenant_operator_or_admin(uuid)')),E'\r\n',E'\n'));
-  if v_authorization_hash is null or v_authorization_hash not in (
-    '1345468a366a7b0b9ae62d3ec4825232', '682f66029dc9bb798f9f329b4e8f95aa') then
-    raise exception 'Composition authorization changed (observed hash: %)', v_authorization_hash;
-  end if;
+  if md5(replace(pg_get_functiondef(to_regprocedure('public.is_tenant_operator_or_admin(uuid)')),E'\r\n',E'\n'))
+    is distinct from '682f66029dc9bb798f9f329b4e8f95aa' then raise exception 'Composition authorization changed';end if;
   if exists(select 1 from public.load_items i join public.loads l on l.id=i.load_id where i.tenant_id is distinct from l.tenant_id)
     or exists(select 1 from public.load_items i join public.fiscal_documents f on f.id=i.fiscal_document_id where i.tenant_id is distinct from f.tenant_id)
     or exists(select 1 from public.load_items i join public.orders o on o.id=i.order_id where i.tenant_id is distinct from o.tenant_id) then
