@@ -1,6 +1,6 @@
 begin;
 
-select plan(90);
+select plan(92);
 
 select has_table('public', 'tenant_feature_policy', 'tenant capability policy exists');
 
@@ -797,14 +797,20 @@ set local role authenticated;
 
 select is(
   (select count(*)::integer from public.get_user_tenant_ids()),
-  0,
-  'owner tenant access is denied at AAL1'
+  1,
+  'owner tenant access remains available at AAL1'
 );
 
 select is(
   public.is_tenant_admin('20000000-0000-4000-8000-000000000001'),
+  true,
+  'owner is authorized as admin at AAL1'
+);
+
+select is(
+  public.is_tenant_admin('20000000-0000-4000-8000-000000000002'),
   false,
-  'owner is not authorized as admin at AAL1'
+  'owner cannot administer another tenant at AAL1'
 );
 
 reset role;
@@ -818,13 +824,19 @@ set local role authenticated;
 select is(
   (select count(*)::integer from public.get_user_tenant_ids()),
   1,
-  'owner tenant access is restored at AAL2'
+  'owner tenant access remains available at AAL2'
 );
 
 select is(
   public.is_tenant_admin('20000000-0000-4000-8000-000000000001'),
   true,
-  'owner is authorized as admin at AAL2'
+  'owner remains authorized as admin at AAL2'
+);
+
+select is(
+  public.is_tenant_admin('20000000-0000-4000-8000-000000000002'),
+  false,
+  'owner cannot administer another tenant at AAL2'
 );
 
 select ok(
