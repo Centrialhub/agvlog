@@ -179,8 +179,8 @@
       "verify_jwt_live": false,
       "verify_jwt_candidate_config": false,
       "local_recovery_cache_path": ".codex-build-audit/edge-live-bundles-2026-09-26/ssx-sync-rule-violations/",
-      "verified_source_commit": "e797c40acc8bd5565d77191bc01f213ff004be3a",
-      "verified_source_commit_note": "All seven live per-file LF SHA-256 values match Git sources at this commit; it is a reproducible source for preparing a compatible rollback, not an approved rollback artifact."
+      "verified_source_commit": "17a7592dca01f31b1aa7b63340fbaf28bb116347",
+      "verified_source_commit_note": "All seven live per-file LF SHA-256 values match the published main ancestor at this commit (also previously verified at e797c40acc8bd5565d77191bc01f213ff004be3a). Pinning main ancestry keeps regeneration independent of PR squash/branch deletion. Source provenance does not approve rollout."
     }
   ],
   "candidate_files": [
@@ -210,7 +210,7 @@
     },
     {
       "path": "supabase/functions/_shared/ssx-utils.ts",
-      "sha256": "1cf0c99523e75c3856d9da30a1b6cb4216f1e016d53117691b24ca607902430e"
+      "sha256": "ba9b4126aed1aeb3dc7ade9a3164676897bbcedb0f32ac7c3898d64e42e315d1"
     },
     {
       "path": "supabase/functions/agvlog-pipeline-run/deno.json",
@@ -278,7 +278,7 @@
     },
     {
       "path": "supabase/functions/_shared/ssx-utils.ts",
-      "reason": "Uses the governance v14 helper (Retry-After parsing and timer cleanup), which differs from the older helper bundled with ssx-sync-units v146 and ssx-sync-rule-violations v13. Both entrypoints matched the candidate before their explicit safety fixes."
+      "reason": "Based on the governance v14 helper (Retry-After parsing and timer cleanup), with an explicit candidate safety fix: capture 429 status and Retry-After before consuming the body and retain them if body reading fails. Other body-read failures keep prior network-error semantics. This candidate helper differs from the helpers observed in governance, units and violations; the pipeline bundle does not include it. Deploy only reconciled affected bundles."
     },
     {
       "path": "supabase/functions/ssx-sync-rule-violations/index.ts",
@@ -295,11 +295,11 @@
     "Rule violation cooldown does not provide a lease: concurrent invocations before the first acknowledgment can still reach the provider.",
     "Rollback constraint: live violations v13 does not understand rate_limited:<seconds>. Do not restore that reader while a new-format cooldown remains active; prepare and test a compatible rollback bundle or another reviewed procedure that preserves the remaining deadline."
   ],
-  "candidate_base_commit": "029c01642548dbae5086932f4c3747f30e8314fa",
+  "candidate_base_commit": "169b22e1956356ad2f2a5d032954e61031506ba1",
   "working_tree_snapshot": {
     "state": "uncommitted",
     "identity": "candidate_files SHA-256 values",
-    "captured_at_utc": "2026-09-26T22:10:01.909Z"
+    "captured_at_utc": "2026-09-26T22:35:46.806Z"
   },
   "local_recovery_cache": {
     "files_verified": 32,
@@ -308,5 +308,13 @@
     "verification": "Each source file matched its live per-file SHA-256 after LF normalization."
   },
   "first_recorded_at_utc": "2026-09-26T21:30:34.000Z",
-  "updated_at_utc": "2026-09-26T22:10:01.909Z"
+  "updated_at_utc": "2026-09-26T22:35:46.806Z",
+  "compatible_rollback_preparation": {
+    "slug": "ssx-sync-rule-violations",
+    "status": "local_candidate_not_deployed",
+    "manifest": "docs/qa/ssx-violations-compatible-rollback-manifest-2026-09-26.json",
+    "manifest_lf_sha256": "923ec248eaf770b8f4f63ad7dcf03e430cb5cbd084aebded0bc560a1f0e672de",
+    "generator": "scripts/prepare-ssx-violations-rollback.mjs",
+    "limitation": "Requires staging rehearsal and active-version recheck; does not provide a lease or undo persisted events."
+  }
 }

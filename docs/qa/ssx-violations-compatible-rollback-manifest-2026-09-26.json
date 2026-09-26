@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "kind": "local_compatible_rollback_candidate_not_deployed",
+  "generated_by": "scripts/prepare-ssx-violations-rollback.mjs",
+  "hash_normalization": "SHA-256 of UTF-8 source after CRLF-to-LF normalization; terminal newline preserved",
+  "source": {
+    "project_ref": "qcvnsdrbcchaxvawcngk",
+    "slug": "ssx-sync-rule-violations",
+    "function_id": "056d068e-e4e2-4f60-b1aa-3268afd5d416",
+    "version": 13,
+    "updated_at_utc": "2026-09-23T17:56:33.147Z",
+    "bundle_ezbr_sha256": "719a48a23c3e6c7ab999c30a87a5336eab4e760d1e0074f5a4158b447ea72cbd",
+    "pinned_commit": "17a7592dca01f31b1aa7b63340fbaf28bb116347",
+    "verify_jwt_live": false
+  },
+  "output": {
+    "verify_jwt": false,
+    "backoff_min_seconds": 900,
+    "backoff_max_seconds": 86400,
+    "config_path": "supabase/config.toml",
+    "config_sha256": "fd6dfa3a90906769a501d559535812caf905971ef77275951630106407090ca5",
+    "files": [
+      {
+        "source_path": "supabase/functions/_shared/active-tenant.ts",
+        "path": "supabase/functions/_shared/active-tenant.ts",
+        "source_sha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45",
+        "sha256": "6f027ca3529730d0d15d31544b0084916a284eb13b80731b2042bff377c61a45",
+        "changed": false
+      },
+      {
+        "source_path": "supabase/functions/_shared/capabilities.ts",
+        "path": "supabase/functions/_shared/capabilities.ts",
+        "source_sha256": "8c786cc9ae6b031e3a0f2efd2a4f508247b114e1fcbac9b74fa22d1307ddeac3",
+        "sha256": "8c786cc9ae6b031e3a0f2efd2a4f508247b114e1fcbac9b74fa22d1307ddeac3",
+        "changed": false
+      },
+      {
+        "source_path": "supabase/functions/_shared/cors.ts",
+        "path": "supabase/functions/_shared/cors.ts",
+        "source_sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679",
+        "sha256": "3f26c39239bb15edba366967581623e1e429f9973b90c97782d94fb2d1546679",
+        "changed": false
+      },
+      {
+        "source_path": "supabase/functions/_shared/cron-auth.ts",
+        "path": "supabase/functions/_shared/cron-auth.ts",
+        "source_sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312",
+        "sha256": "26731647b863c8fc1af4a2e4e11d554e14ffe8f07913432c096caae821b19312",
+        "changed": false
+      },
+      {
+        "source_path": "supabase/functions/_shared/ssx-utils.ts",
+        "path": "supabase/functions/_shared/ssx-utils.ts",
+        "source_sha256": "c5af60226dd25720c6af1808484f5d65340a9dfe99856b1f1ffefde7e2bfdd96",
+        "sha256": "ba9b4126aed1aeb3dc7ade9a3164676897bbcedb0f32ac7c3898d64e42e315d1",
+        "changed": true
+      },
+      {
+        "source_path": "supabase/functions/ssx-sync-rule-violations/deno.json",
+        "path": "supabase/functions/ssx-sync-rule-violations/deno.json",
+        "source_sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256",
+        "sha256": "d8688a8a90af9d0e7a19aa196b5ae98bb362d9e9be1c23ffc7c206f9f5d2f256",
+        "changed": false
+      },
+      {
+        "source_path": "supabase/functions/ssx-sync-rule-violations/index.ts",
+        "path": "supabase/functions/ssx-sync-rule-violations/index.ts",
+        "source_sha256": "53bbd87af95b7bcdb9fc64bbc26343ceb043f3dcfccaccb43860360f3b16ea91",
+        "sha256": "28a0c61d978c77b7b5d285210e2ab4621ee3727074f2ad60ebdcb34531de4e7b",
+        "changed": true
+      }
+    ],
+    "differences_from_v13": [
+      "Read legacy rate_limited and extended rate_limited:<seconds> cooldowns.",
+      "Fail closed when the cursor read fails.",
+      "Record Retry-After >15 minutes up to 24 hours on new HTTP 429 responses, including non-JSON bodies.",
+      "Preserve known HTTP 429 status and Retry-After when response body reading fails or times out.",
+      "Keep the HTTP timeout active until the response body completes and clear it in finally."
+    ]
+  }
+}

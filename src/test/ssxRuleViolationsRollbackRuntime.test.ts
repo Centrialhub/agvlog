@@ -1,8 +1,10 @@
 // @vitest-environment node
+import { readFile } from 'node:fs/promises';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type FetchReply = { status: number; body: string; retryAfter?: string; bodyReadFailure?: boolean };
 type RpcArgs = Record<string, unknown>;
+
 const state = vi.hoisted(() => ({
   handler: null as null | ((request: Request) => Promise<Response>),
   account: {} as Record<string, unknown>,
@@ -13,21 +15,14 @@ const state = vi.hoisted(() => ({
   windowCalls: 0,
   upsertCalls: 0,
   acks: [] as RpcArgs[],
-  violations: new Map<number, Record<string, unknown>>(),
 }));
 
-vi.mock('../../supabase/functions/_shared/cron-auth.ts', () => ({
-  isCronRequest: vi.fn().mockResolvedValue(true),
-}));
-vi.mock('../../supabase/functions/_shared/capabilities.ts', () => ({
-  requireIntegrationCapability: vi.fn().mockResolvedValue(null),
-}));
+// Only the transport is mocked. The generated Edge handler and its shared
+// cron, capability and SSX HTTP helpers run from the rollback bundle.
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     from: (table: string) => {
-      if (table === 'integration_logs') return {
-        insert: async () => ({ error: null }),
-      };
+      if (table === 'integration_logs') return { insert: async () => ({ error: null }) };
       if (table !== 'integration_accounts' && table !== 'ssx_rule_violation_cursors') {
         throw new Error(`Unexpected table: ${table}`);
       }
@@ -43,6 +38,14 @@ vi.mock('@supabase/supabase-js', () => ({
       return query;
     },
     rpc: async (name: string, args: RpcArgs) => {
+      if (name === 'verify_agvlog_cron_secret') {
+        expect(args).toEqual({ p_secret: 'synthetic-cron-secret' });
+        return { data: true, error: null };
+      }
+      if (name === 'assert_tenant_integration_capability_v1') {
+        expect(args).toEqual({ _tenant_id: 'tenant-1', _capability: 'ssx' });
+        return { data: true, error: null };
+      }
       if (name === 'get_ssx_rule_violation_window_v1') {
         state.windowCalls++;
         return { data: {
@@ -52,11 +55,7 @@ vi.mock('@supabase/supabase-js', () => ({
       }
       if (name === 'upsert_ssx_rule_violations_v1') {
         state.upsertCalls++;
-        const items = args._items as Array<Record<string, unknown>>;
-        for (const item of items) {
-          state.violations.set(Number(item.provider_violation_id), item);
-        }
-        return { data: items.length, error: null };
+        return { data: (args._items as unknown[]).length, error: null };
       }
       if (name === 'ack_ssx_rule_violation_window_v1') {
         state.acks.push(args);
@@ -78,9 +77,27 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 const startAt = new Date('2026-09-26T12:00:00.000Z');
-const oneViolation = [{ IdRuleViolation: 101, InitialDate: '2026-09-25T12:00:00.000Z' }];
 
 beforeAll(async () => {
+  // Import a variable path returned by the generator. A static import would
+  // exercise the current Edge source rather than the prepared rollback.
+  const generatorPath = '../../scripts/prepare-ssx-violations-rollback.mjs';
+  const generator = await import(generatorPath);
+  const { entrypointPath, manifestPath } = generator.prepareSsxViolationsRollback() as {
+    entrypointPath: string;
+    manifestPath: string;
+  };
+  expect(entrypointPath.replace(/\\/g, '/')).toContain(
+    '/.codex-build-audit/edge-compatible-rollback-2026-09-26/ssx-sync-rule-violations-v13/supabase/functions/ssx-sync-rule-violations/index.ts',
+  );
+  const reviewedManifestPath = new URL(
+    '../../docs/qa/ssx-violations-compatible-rollback-manifest-2026-09-26.json', import.meta.url,
+  );
+  const [generatedManifest, reviewedManifest] = await Promise.all([
+    readFile(manifestPath, 'utf8'),
+    readFile(reviewedManifestPath, 'utf8'),
+  ]);
+  expect(JSON.parse(generatedManifest)).toEqual(JSON.parse(reviewedManifest));
   vi.stubGlobal('Deno', {
     env: { get: (key: string) => ({
       SUPABASE_URL: 'https://db.invalid',
@@ -89,11 +106,11 @@ beforeAll(async () => {
     } as Record<string, string>)[key] },
     serve: (handler: typeof state.handler) => { state.handler = handler; },
   });
-  // Variable import keeps Deno-only Edge code outside the frontend typecheck.
-  const handlerPath = '../../supabase/functions/ssx-sync-rule-violations/index.ts';
-  await import(handlerPath);
+  await import(entrypointPath);
+  expect(state.handler).toBeTypeOf('function');
 });
 afterAll(() => { vi.unstubAllGlobals(); });
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(startAt);
@@ -111,7 +128,6 @@ beforeEach(() => {
   state.windowCalls = 0;
   state.upsertCalls = 0;
   state.acks = [];
-  state.violations.clear();
   vi.stubGlobal('fetch', vi.fn(async () => {
     state.providerCalls++;
     const reply = state.replies.shift();
@@ -132,15 +148,16 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 async function invoke() {
-  if (!state.handler) throw new Error('Handler not loaded');
+  if (!state.handler) throw new Error('Generated handler not loaded');
   const response = await state.handler(new Request('https://edge.invalid/ssx-sync-rule-violations', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-agvlog-cron-secret': 'synthetic-cron-secret' },
     body: JSON.stringify({ integration_account_id: 'account-1' }),
   }));
   return { response, body: await response.json() as Record<string, unknown> };
 }
 
-describe('SSX rule violation retry and cursor contract', () => {
+describe('generated SSX rule violation rollback runtime', () => {
   it('retains Retry-After when the 429 response body stream fails', async () => {
     state.replies.push({ status: 429, body: '', retryAfter: '7200', bodyReadFailure: true });
     const failure = await invoke();
@@ -160,19 +177,20 @@ describe('SSX rule violation retry and cursor contract', () => {
     expect(state.acks).toHaveLength(1);
   });
 
-  it('honors a long Retry-After even when the 429 body is not JSON, then replays idempotently', async () => {
+  it('writes extended cooldown from a plain-text 429 and resumes only after expiry', async () => {
     state.replies.push(
       { status: 429, body: 'Too many requests', retryAfter: '7200' },
-      { status: 200, body: JSON.stringify(oneViolation) },
-      { status: 200, body: JSON.stringify(oneViolation) },
+      { status: 200, body: '[]' },
     );
-
     const failure = await invoke();
     expect(failure.response.status).toBe(502);
     expect(failure.body.code).toBe('rate_limited:7200');
-    expect(state.cursor.last_position_id).toBe('7');
     expect(state.cursor.last_error_code).toBe('rate_limited:7200');
-    expect(state.acks[0]).toMatchObject({ _success: false, _expected_last_position_id: '7' });
+    expect(state.acks).toEqual([expect.objectContaining({
+      _success: false, _expected_last_position_id: '7', _end_position_id: '10',
+      _error_code: 'rate_limited:7200',
+    })]);
+    expect(state.cursor.last_position_id).toBe('7');
     expect(state.upsertCalls).toBe(0);
 
     vi.setSystemTime(new Date(startAt.getTime() + 60 * 60_000));
@@ -184,54 +202,86 @@ describe('SSX rule violation retry and cursor contract', () => {
     });
     expect(state.providerCalls).toBe(1);
     expect(state.windowCalls).toBe(1);
+    expect(state.acks).toHaveLength(1);
+    expect(state.cursor.last_position_id).toBe('7');
 
     vi.setSystemTime(new Date(startAt.getTime() + 7200_000 + 1000));
     const success = await invoke();
-    expect(success.body).toMatchObject({ success: true, cursor_advanced: true, upserted: 1 });
+    expect(success.body).toMatchObject({ success: true, cursor_advanced: true, requests: 1 });
+    expect(state.providerCalls).toBe(2);
+    expect(state.upsertCalls).toBe(1);
     expect(state.cursor.last_position_id).toBe('10');
     expect(state.cursor.last_error_code).toBeNull();
-    expect(state.violations.size).toBe(1);
-
-    const replay = await invoke();
-    expect(replay.body).toMatchObject({ success: true, cursor_advanced: true });
-    expect(state.cursor.last_position_id).toBe('10');
-    expect(state.violations.size).toBe(1);
   });
 
-  it.each([undefined, '120'])('keeps the published 15-minute cooldown for Retry-After %s', async (retryAfter) => {
+  it('preserves the legacy 900-second cooldown and literal for a short Retry-After', async () => {
     state.replies.push(
-      { status: 429, body: '{"error":"rate limit"}', retryAfter },
+      { status: 429, body: '{"error":"rate limit"}', retryAfter: '120' },
       { status: 200, body: '[]' },
     );
     expect((await invoke()).body.code).toBe('rate_limited');
-    expect(state.cursor.last_position_id).toBe('7');
+    expect(state.cursor.last_error_code).toBe('rate_limited');
     vi.setSystemTime(new Date(startAt.getTime() + 14 * 60_000));
-    expect((await invoke()).body.status).toBe('deferred');
+    expect((await invoke()).body).toMatchObject({ status: 'deferred', requests: 0 });
     expect(state.providerCalls).toBe(1);
+    expect(state.acks).toHaveLength(1);
     vi.setSystemTime(new Date(startAt.getTime() + 15 * 60_000 + 1000));
     expect((await invoke()).body).toMatchObject({ success: true, cursor_advanced: true });
     expect(state.providerCalls).toBe(2);
+    expect(state.cursor.last_position_id).toBe('10');
   });
 
-  it('accepts an HTTP-date Retry-After through the real SSX HTTP helper', async () => {
-    state.replies.push({
-      status: 429, body: '',
-      retryAfter: new Date(startAt.getTime() + 30 * 60_000).toUTCString(),
+  it('honors a persisted extended cooldown without calling the provider', async () => {
+    state.cursor.last_error_code = 'rate_limited:7200';
+    state.cursor.updated_at = startAt.toISOString();
+    vi.setSystemTime(new Date(startAt.getTime() + 60 * 60_000));
+    expect((await invoke()).body).toMatchObject({
+      status: 'deferred', retry_at: new Date(startAt.getTime() + 7200_000).toISOString(),
     });
-    expect((await invoke()).body.code).toBe('rate_limited:1800');
-    vi.setSystemTime(new Date(startAt.getTime() + 20 * 60_000));
-    expect((await invoke()).body.status).toBe('deferred');
-    expect(state.providerCalls).toBe(1);
+    expect(state.providerCalls).toBe(0);
+    expect(state.windowCalls).toBe(0);
+    expect(state.acks).toHaveLength(0);
     expect(state.cursor.last_position_id).toBe('7');
   });
 
-  it('fails closed if the cursor cannot be read', async () => {
+  it('parses an HTTP-date Retry-After through the generated SSX HTTP helper', async () => {
+    state.replies.push({
+      status: 429,
+      body: '',
+      retryAfter: new Date(startAt.getTime() + 30 * 60_000).toUTCString(),
+    });
+    expect((await invoke()).body.code).toBe('rate_limited:1800');
+    expect(state.cursor.last_error_code).toBe('rate_limited:1800');
+    vi.setSystemTime(new Date(startAt.getTime() + 20 * 60_000));
+    expect((await invoke()).body).toMatchObject({
+      status: 'deferred', retry_at: new Date(startAt.getTime() + 30 * 60_000).toISOString(),
+    });
+    expect(state.providerCalls).toBe(1);
+    expect(state.acks).toHaveLength(1);
+    expect(state.cursor.last_position_id).toBe('7');
+  });
+
+  it('rejects a direct request without a verified cron secret or user bearer', async () => {
+    if (!state.handler) throw new Error('Generated handler not loaded');
+    const response = await state.handler(new Request('https://edge.invalid/ssx-sync-rule-violations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ integration_account_id: 'account-1' }),
+    }));
+    expect(response.status).toBe(401);
+    expect(state.providerCalls).toBe(0);
+    expect(state.windowCalls).toBe(0);
+    expect(state.acks).toHaveLength(0);
+  });
+
+  it('fails closed when the cursor read fails', async () => {
     state.cursorReadError = true;
     const { response, body } = await invoke();
     expect(response.status).toBe(502);
     expect(body.code).toBe('cursor_read_failed');
     expect(state.providerCalls).toBe(0);
     expect(state.windowCalls).toBe(0);
+    expect(state.upsertCalls).toBe(0);
     expect(state.acks).toHaveLength(0);
     expect(state.cursor.last_position_id).toBe('7');
   });

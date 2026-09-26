@@ -515,6 +515,8 @@ export async function ssxPost(
   const start = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let observedStatus = 0;
+  let retryAfterSeconds = 0;
   try {
 
     const headers: Record<string, string> = {
@@ -532,6 +534,11 @@ export async function ssxPost(
     }
 
     const resp = await fetch(endpoint, init);
+    observedStatus = resp.status;
+    const retryHeader = resp.headers.get("Retry-After");
+    const retrySeconds = retryHeader === null ? 0 : /^\d+$/.test(retryHeader)
+      ? Number(retryHeader) : Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000);
+    retryAfterSeconds = Number.isFinite(retrySeconds) ? Math.min(86400, Math.max(0, retrySeconds)) : 0;
     const text = await resp.text();
     clearTimeout(timer);
     const durationMs = Date.now() - start;
@@ -541,14 +548,14 @@ export async function ssxPost(
     try { parsed = JSON.parse(text); } catch { parseError = text.length > 0; }
 
     const errorClass = resp.ok ? (parseError ? "parse_error" : "unknown") : classifyError(resp.status, undefined, parseError);
-    const retryHeader = resp.headers.get("Retry-After");
-    const retrySeconds = retryHeader === null ? 0 : /^\d+$/.test(retryHeader)
-      ? Number(retryHeader) : Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000);
-    const retryAfterSeconds = Number.isFinite(retrySeconds) ? Math.min(86400, Math.max(0, retrySeconds)) : 0;
     return { ok: resp.ok, status: resp.status, text, parsed, parseError, networkError: null, durationMs, errorClass, retryAfterSeconds };
   } catch (error: any) {
     const durationMs = Date.now() - start;
     const msg = error.name === "AbortError" ? `Timeout after ${timeoutMs}ms` : error.message;
+    if (observedStatus === 429) {
+      return { ok: false, status: 429, text: "", parsed: null, parseError: false,
+        networkError: msg, durationMs, errorClass: "rate_limited", retryAfterSeconds };
+    }
     return { ok: false, status: 0, text: "", parsed: null, parseError: false, networkError: msg, durationMs, errorClass: classifyError(0, msg) };
   } finally {
     clearTimeout(timer);

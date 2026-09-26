@@ -21,7 +21,7 @@ Crie uma cópia deste arquivo para cada release em `docs/qa/release-log-AAAA-MM-
 | Camada | Versão anterior verificada | Versão candidata | Retorno preparado |
 | --- | --- | --- | --- |
 | Postgres | <última versão, contagem e lista sanitizada de versões do ledger; backup/ponto de retorno> | <migrações e ordem> | <compensação SQL revisada; limites> |
-| Edge Functions | <nome, versão e hash de cada bundle afetado> | <versões e hash> | <bundle anterior recuperável> |
+| Edge Functions | <nome, versão e hash de cada bundle afetado> | <versões e hash> | <pacote recuperável, manifesto/hash, fonte reproduzível e teste de compatibilidade com o estado criado pelo candidato> |
 | Vercel | <deployment imutável, SHA e alias> | <deployment imutável, SHA> | <deployment anterior promovível> |
 
 ## Hipótese, risco e contrato
