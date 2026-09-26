@@ -3,6 +3,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { isCronRequest } from "../_shared/cron-auth.ts";
 import { requireIntegrationCapability } from "../_shared/capabilities.ts";
+import { normalizeSnapshot, type JsonObject } from "./snapshot-normalization.ts";
+import { governanceUnitIdentity } from "./unit-identity.ts";
+import { ssxResponseDiagnostic } from "../_shared/ssx-response-diagnostics.ts";
+import { checkpointedSync, claimSync, finishSync, SsxSyncError, waitSsxTurn } from "../_shared/ssx-sync-checkpoint.ts";
 import {
   buildTrackingUrl,
   corsHeaders,
@@ -16,7 +20,6 @@ import {
   ssxPost,
 } from "../_shared/ssx-utils.ts";
 
-type JsonObject = Record<string, unknown>;
 type ResourceType =
   | "evaluation_formula" | "person_role" | "trailer" | "logged_rule"
   | "compatible_rule" | "unit_rule" | "rule_unit";
@@ -27,6 +30,8 @@ interface SnapshotSpec {
   keyField: string;
   body: unknown;
   scopeKey?: string;
+  checkpointResource?: string;
+  missingIdentity?: boolean;
 }
 
 function jsonResp(body: unknown, status = 200): Response {
@@ -42,23 +47,6 @@ function strictObjectArray(value: unknown): JsonObject[] | null {
     Boolean(item) && typeof item === "object" && !Array.isArray(item)
   );
   return items.length === value.length ? items : null;
-}
-
-function normalizeSnapshot(items: JsonObject[], keyField: string) {
-  const result: Array<{ external_key: string; payload: JsonObject }> = [];
-  const seen = new Set<string>();
-  for (const item of items) {
-    const rawKey = item[keyField];
-    if ((typeof rawKey !== "string" && typeof rawKey !== "number") || !String(rawKey).trim()) {
-      return null;
-    }
-    const externalKey = String(rawKey).trim();
-    if (externalKey.length > 200) return null;
-    if (seen.has(externalKey)) continue;
-    seen.add(externalKey);
-    result.push({ external_key: externalKey, payload: item });
-  }
-  return result;
 }
 
 async function mapBounded<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>) {
@@ -123,98 +111,172 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "Token expired or missing. Run ssx-login first." }, 409);
     }
 
+    // One request per account at a time; shared cooldown survives isolate restarts.
+    const gate = await claimSync(admin, accountId, 'governance_gate', '', 0);
+    if (gate.decision !== 'claimed') return jsonResp({ success: false, status: 'partial',
+      error: `SSX governance pending: ${gate.error_code || 'in_progress'}`,
+      retry_after_seconds: gate.retry_after_seconds, snapshots: {}, failed_resources: [],
+    }, 503);
+    const deadline = Date.now() + 30_000;
+    const { data: progress, error: progressError } = await admin.from('ssx_sync_checkpoints')
+      .select('resource,scope_key,status,last_success_at,result').eq('integration_account_id',accountId).limit(1000);
+    if (progressError) throw new Error('Failed to read synchronization progress');
+    const completed = new Map((progress || []).filter(row => row.status === 'success'
+      && Date.now() - new Date(row.last_success_at).getTime() < 21600_000)
+      .map(row => [JSON.stringify([row.resource,row.scope_key]), row.result as JsonObject]));
     const counts: Partial<Record<ResourceType, number>> = {};
     const failures: Array<{ resource: ResourceType; scope: string; code: string }> = [];
     const observedAt = new Date().toISOString();
+    let supersededSnapshots = 0;
+    let rateLimited = false;
+    let skippedRequests = 0;
+    let retryAfterSeconds = 0;
 
     const syncSnapshot = async (spec: SnapshotSpec): Promise<JsonObject[] | null> => {
+      const checkpointResource = spec.checkpointResource || spec.resourceType;
+      const cached = completed.get(JSON.stringify([checkpointResource,spec.scopeKey || '']));
+      if (cached) {
+        counts[spec.resourceType] = (counts[spec.resourceType] || 0) + Number(cached.count || 0);
+        return Array.isArray(cached.rule_codes) ? cached.rule_codes.map(code => ({RuleIntegrationCode:code})) : [];
+      }
+      if (rateLimited || Date.now() >= deadline) {
+        skippedRequests++;
+        failures.push({ resource: spec.resourceType, scope: spec.scopeKey || '',
+          code: rateLimited ? 'rate_limited' : 'time_budget_exhausted' });
+        return null;
+      }
       const scope = spec.scopeKey || "";
-      const endpoint = buildTrackingUrl(config.baseUrl, spec.path);
-      const response = await ssxPost(endpoint, config.token!, spec.body, config.requestTimeoutMs);
-      const items = response.status === 204 ? [] : strictObjectArray(response.parsed);
-      const normalized = items ? normalizeSnapshot(items, spec.keyField) : null;
-      logSsxCall({
-        routine: "sync-governance", endpoint, method: "POST", apiVersion: "v1",
-        attemptType: spec.resourceType, statusCode: response.status,
-        durationMs: response.durationMs,
-        responsePreview: redactedSsxResponsePreview(response.text, response.networkError),
-        result: response.ok && normalized ? (normalized.length ? "success" : "empty") : "error",
-        errorClass: response.ok ? undefined : response.errorClass,
-      });
-      if (!response.ok || !normalized) {
-        failures.push({ resource: spec.resourceType, scope, code: response.errorClass || "invalid_schema" });
+      try {
+        const result = await checkpointedSync(admin, accountId, checkpointResource, scope, async () => {
+          if (spec.missingIdentity) throw new SsxSyncError('invalid_schema');
+          await waitSsxTurn(1000);
+          const remaining = deadline - Date.now();
+          if (remaining < 500) throw new SsxSyncError('time_budget_exhausted');
+          const endpoint = buildTrackingUrl(config.baseUrl, spec.path);
+          const response = await ssxPost(endpoint, config.token!, spec.body, Math.min(config.requestTimeoutMs, 10_000, remaining));
+          if (response.status === 429) {
+            rateLimited = true;
+            retryAfterSeconds = Math.max(300, response.retryAfterSeconds || 0);
+          }
+          const items = response.status === 204 ? [] : strictObjectArray(response.parsed);
+          const snapshot = items ? normalizeSnapshot(items, spec.keyField) : null;
+          const normalized = snapshot?.items;
+          logSsxCall({
+            routine: "sync-governance", endpoint, method: "POST", apiVersion: "v1",
+            attemptType: spec.resourceType, statusCode: response.status,
+            durationMs: response.durationMs,
+            responsePreview: redactedSsxResponsePreview(response.text, response.networkError),
+            result: response.ok && normalized ? (normalized.length ? "success" : "empty") : "error",
+            errorClass: response.ok ? (snapshot?.error ? 'unknown' : undefined) : response.errorClass,
+          });
+          if (!response.ok || !normalized) {
+            console.warn("[SSX:sync-governance] response_rejected", {
+              resource: spec.resourceType, status: response.status,
+              ...ssxResponseDiagnostic(response.parsed, response.text, spec.keyField),
+            });
+            const code = response.status === 403 ? 'permission_denied'
+              : response.status === 409 ? 'provider_conflict'
+              : response.status === 415 ? 'parameters_rejected'
+              : response.ok ? snapshot?.error || 'invalid_schema' : response.errorClass || 'request_failed';
+            throw new SsxSyncError(code, retryAfterSeconds);
+          }
+          const { data, error } = await admin.rpc("replace_ssx_tracking_snapshot_v1", {
+            _integration_account_id: accountId,
+            _resource_type: spec.resourceType,
+            _scope_key: scope,
+            _items: normalized,
+            _received_at: observedAt,
+          });
+          if (error) {
+            throw new SsxSyncError('persistence_failed');
+          }
+          if (data === -1) {
+            supersededSnapshots++;
+            throw new SsxSyncError('snapshot_superseded');
+          }
+          return { count: Number(data) || 0,
+            rule_codes: spec.resourceType === 'logged_rule' ? normalized.slice(0,250).map(item => item.external_key) : [] };
+        });
+        counts[spec.resourceType] = (counts[spec.resourceType] || 0) + Number(result.count || 0);
+        return Array.isArray(result.rule_codes) ? result.rule_codes.map(code => ({ RuleIntegrationCode: code })) : [];
+      } catch (error) {
+        const failure = error instanceof SsxSyncError ? error : new SsxSyncError('request_failed');
+        if (failure.code === 'rate_limited') {
+          rateLimited = true; retryAfterSeconds = Math.max(retryAfterSeconds, failure.retrySeconds);
+        }
+        failures.push({ resource: spec.resourceType, scope,
+          code: spec.missingIdentity ? 'missing_integration_code' : failure.code });
         return null;
       }
-      const { data, error } = await admin.rpc("replace_ssx_tracking_snapshot_v1", {
-        _integration_account_id: accountId,
-        _resource_type: spec.resourceType,
-        _scope_key: scope,
-        _items: normalized,
-        _received_at: observedAt,
-      });
-      if (error) {
-        failures.push({ resource: spec.resourceType, scope, code: "persistence_failed" });
-        return null;
-      }
-      counts[spec.resourceType] = (counts[spec.resourceType] || 0) + (Number(data) || 0);
-      return items;
     };
 
     const globalSpecs: SnapshotSpec[] = [
-      { resourceType: "evaluation_formula", path: "/Tracking/EvaluationFormula/List", keyField: "EvaluationFormulaIntegrationCode", body: null },
+      { resourceType: "evaluation_formula", path: "/Tracking/EvaluationFormula/List", keyField: "EvaluationFormulaIntegrationCode", body: [] },
       { resourceType: "person_role", path: "/Tracking/Person/ListPersonRole", keyField: "PersonRoleIntegrationCode", body: null },
-      { resourceType: "trailer", path: "/Tracking/Trailer/List", keyField: "IntegrationCode", body: null },
-      { resourceType: "logged_rule", path: "/Tracking/RuleList/ListRuleOfLoggedUser", keyField: "RuleIntegrationCode", body: null },
+      { resourceType: "trailer", path: "/Tracking/Trailer/List", keyField: "IntegrationCode", body: [] },
+      { resourceType: "logged_rule", path: "/Tracking/RuleList/ListRuleOfLoggedUser", keyField: "RuleIntegrationCode", body: [] },
     ];
-    const globalResults = await mapBounded(globalSpecs, 4, syncSnapshot);
+    const globalResults = await mapBounded(globalSpecs, 1, syncSnapshot);
     const loggedRules = globalResults[3] || [];
 
     const { data: units, error: unitsError } = await admin.from("provider_units")
-      .select("external_code").eq("integration_account_id", accountId).eq("active", true)
+      .select("external_code,metadata").eq("integration_account_id", accountId).eq("active", true)
       .order("external_code").limit(251);
-    if (unitsError) return jsonResp({ error: "Failed to read provider units" }, 500);
+    if (unitsError) throw new Error("Failed to read provider units");
     if ((units || []).length > 250) {
       failures.push({ resource: "unit_rule", scope: "", code: "unit_limit_exceeded" });
     }
-    const unitCodes = (units || []).slice(0, 250)
-      .map((unit) => String(unit.external_code || "").trim()).filter(Boolean);
-    await mapBounded(unitCodes, 4, async (unitCode) => {
+    const unitIdentities = (units || []).slice(0, 250).map(governanceUnitIdentity).filter(unit => unit.scope);
+    await mapBounded(unitIdentities, 1, async (unit) => {
       await syncSnapshot({
         resourceType: "compatible_rule", path: "/Tracking/RuleCompatible/List",
-        keyField: "RuleIntegrationCode", scopeKey: unitCode,
-        body: { TrackingUnitIntegrationCode: unitCode },
+        keyField: "RuleIntegrationCode", scopeKey: unit.scope,
+        checkpointResource: unit.code ? 'compatible_rule' : 'compatible_rule_identity',
+        missingIdentity: !unit.code,
+        body: { TrackingUnitIntegrationCode: unit.code },
       });
       await syncSnapshot({
         resourceType: "unit_rule", path: "/Tracking/RuleList/ListRulesByUnitTracked",
-        keyField: "RuleIntegrationCode", scopeKey: unitCode,
-        body: [{ PropertyName: "TrackedUnitIntegrationCode", Condition: "=", Value: unitCode }],
+        keyField: "RuleIntegrationCode", scopeKey: unit.scope,
+        checkpointResource: unit.code ? 'unit_rule' : 'unit_rule_by_identification',
+        missingIdentity: !unit.filter,
+        body: unit.filter ? [unit.filter] : [],
       });
     });
 
-    const ruleCodes = loggedRules.map((rule) => String(rule.RuleIntegrationCode || "").trim())
-      .filter(Boolean).slice(0, 250);
-    if (loggedRules.length > 250) {
+    const ruleCodes = [...new Set(loggedRules.map((rule) =>
+      String(rule.RuleIntegrationCode || "").trim()
+    ).filter(Boolean))].slice(0, 250);
+    if (Number(counts.logged_rule || 0) > 250) {
       failures.push({ resource: "rule_unit", scope: "", code: "rule_limit_exceeded" });
     }
-    await mapBounded(ruleCodes, 4, (ruleCode) => syncSnapshot({
+    await mapBounded(ruleCodes, 1, (ruleCode) => syncSnapshot({
       resourceType: "rule_unit", path: "/Tracking/RuleList/ListUnitTrackedByRule",
       keyField: "TrackedUnitIntegrationCode", scopeKey: ruleCode,
       body: { RuleIntegrationCode: ruleCode },
     }));
 
+    // Completing the gate releases ownership; individual failures remain durable.
+    await finishSync(admin, accountId, 'governance_gate', '', gate, {},
+      rateLimited ? new SsxSyncError('rate_limited', retryAfterSeconds) : null);
     await logIntegration(admin, {
       tenant_id: account.tenant_id,
       integration_account_id: accountId,
       action: "ssx_sync_governance",
       success: failures.length === 0,
       error_message: failures.length ? "One or more SSX governance resources failed" : undefined,
-      metadata: { counts, failures: failures.slice(0, 50) },
+      metadata: { counts, failures: failures.slice(0, 50), skipped_requests: skippedRequests, rate_limited: rateLimited, superseded_snapshots: supersededSnapshots },
     });
     return jsonResp({
       success: failures.length === 0,
       status: failures.length === 0 ? "success" : "partial",
       snapshots: counts,
       failed_resources: failures,
+      skipped_requests: skippedRequests,
+      rate_limited: rateLimited,
+      superseded_snapshots: supersededSnapshots,
+      retry_after_seconds: retryAfterSeconds,
+      error: failures.length ? `SSX governance pending: ${[...new Set(failures.map(f => f.code))].join(', ')}` : undefined,
     }, failures.length === 0 ? 200 : 502);
   } catch (error: unknown) {
     console.error("[SSX:sync-governance] internal failure", {

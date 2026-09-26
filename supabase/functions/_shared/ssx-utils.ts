@@ -500,6 +500,7 @@ export interface SsxHttpResult {
   networkError: string | null;
   durationMs: number;
   errorClass: SsxErrorClass;
+  retryAfterSeconds?: number;
 }
 
 /**
@@ -512,9 +513,9 @@ export async function ssxPost(
   timeoutMs = 30_000,
 ): Promise<SsxHttpResult> {
   const start = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
@@ -531,8 +532,8 @@ export async function ssxPost(
     }
 
     const resp = await fetch(endpoint, init);
-    clearTimeout(timer);
     const text = await resp.text();
+    clearTimeout(timer);
     const durationMs = Date.now() - start;
 
     let parsed: any = null;
@@ -540,11 +541,17 @@ export async function ssxPost(
     try { parsed = JSON.parse(text); } catch { parseError = text.length > 0; }
 
     const errorClass = resp.ok ? (parseError ? "parse_error" : "unknown") : classifyError(resp.status, undefined, parseError);
-    return { ok: resp.ok, status: resp.status, text, parsed, parseError, networkError: null, durationMs, errorClass };
+    const retryHeader = resp.headers.get("Retry-After");
+    const retrySeconds = retryHeader === null ? 0 : /^\d+$/.test(retryHeader)
+      ? Number(retryHeader) : Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000);
+    const retryAfterSeconds = Number.isFinite(retrySeconds) ? Math.min(86400, Math.max(0, retrySeconds)) : 0;
+    return { ok: resp.ok, status: resp.status, text, parsed, parseError, networkError: null, durationMs, errorClass, retryAfterSeconds };
   } catch (error: any) {
     const durationMs = Date.now() - start;
     const msg = error.name === "AbortError" ? `Timeout after ${timeoutMs}ms` : error.message;
     return { ok: false, status: 0, text: "", parsed: null, parseError: false, networkError: msg, durationMs, errorClass: classifyError(0, msg) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
