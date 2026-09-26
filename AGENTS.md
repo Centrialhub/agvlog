@@ -1,6 +1,6 @@
 # Direção para mudanças no AGVLOG
 
-Antes de alterar um fluxo publicado ou preparar um release, leia [o roteiro de estabilidade](docs/qa/production-stability-playbook-2026-09-26.md) e [o log do incidente](docs/qa/production-stability-log-2026-09-26.md). Atualize o log com as evidências e pendências da sua mudança.
+Antes de alterar um fluxo publicado ou preparar um release, leia [o roteiro de estabilidade](docs/qa/production-stability-playbook-2026-09-26.md) e [o log do incidente de 26/09](docs/qa/production-stability-log-2026-09-26.md). Para cada novo release, crie um log próprio a partir do [template permanente](docs/qa/release-log-template.md), com as evidências e pendências da mudança. Preserve o log de 26/09 como histórico; não o use como registro contínuo de releases futuros.
 
 ## Regras de trabalho
 

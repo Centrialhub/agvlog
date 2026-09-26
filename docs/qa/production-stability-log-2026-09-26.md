@@ -1,6 +1,6 @@
 # Log do incidente de estabilidade e do candidato de release
 
-Atualizado em 26/09/2026, aproximadamente 19:23 UTC (16:23 em Brasília). **Estado: investigação e correções locais; sem PR, staging ou publicação destas correções.** O roteiro de promoção é [production-stability-playbook-2026-09-26.md](production-stability-playbook-2026-09-26.md). Este log não contém dados de clientes.
+Atualizado em 26/09/2026, aproximadamente 19:46 UTC (16:46 em Brasília). **Estado: [PR #3 em draft](https://github.com/Centrialhub/agvlog/pull/3), primeiro Quality gate falhou; correções validadas localmente e novo run remoto pendente. Sem staging ou publicação destas correções.** O roteiro de promoção é [production-stability-playbook-2026-09-26.md](production-stability-playbook-2026-09-26.md). Use o [template](release-log-template.md) para releases futuros; este log permanece como histórico. Este arquivo não contém dados de clientes.
 
 ## Linha do tempo e evidência
 
@@ -15,8 +15,12 @@ Atualizado em 26/09/2026, aproximadamente 19:23 UTC (16:23 em Brasília). **Esta
 | 26/09, reconciliação local | Os sete arquivos SQL de 24/09 foram copiados de `F:\agvlog-main\supabase\migrations` para o worktree isolado com SHA-256 igual origem/destino. Seus nomes e versões coincidem com o ledger live; não houve alteração do banco. | Preservados no candidato. |
 | 26/09, reconciliação local | Identificados 413 nomes iguais sob timestamps diferentes. `finalize_geofence_automation` local `20260916152615` e live `20260916153300`: o arquivo local revoga `EXECUTE` de `service_role` restaurado pelo hotfix `20260924124326`, que já consta aplicado. `make_poi_dedupe_conflict_inferable` local `20260922039000` e live `20260924124337` têm SQL idêntico. | Replay histórico bloqueado. |
 | 26/09, candidato | Correções locais e testes focados descritos abaixo; `.gitattributes` força LF para SQL no replay Windows. O Quality gate local foi redesenhado para timeout de 60 minutos, cobertura focada e oito shards de testes. | Ainda sem execução no GitHub. |
-| 26/09, prevenção | `AGENTS.md` criado na raiz com ponteiros para o roteiro e este log, além dos invariantes de paridade, teste, evidência e ordem DB→Edge→frontend. | Apenas no worktree; ainda não publicado. |
-| 26/09, revisão fiscal | Migração candidata `20260926185847_enforce_fiscal_document_load_tenant.sql`, ordenada imediatamente antes da restauração das RPCs de frete, adiciona unicidade `loads(id, tenant_id)` e FK composta com `NOT VALID` seguido de `VALIDATE`. Preflight live agregado não encontrou órfãos nem ligações entre empresas; FK e frete 7/7 testes PGlite e checagem de release verdes. | Apenas local; validação e lock em staging ainda pendentes. |
+| 26/09, prevenção | `AGENTS.md` criado na raiz com ponteiros para o roteiro e este log, além dos invariantes de paridade, teste, evidência e ordem DB→Edge→frontend. | No PR; ainda não publicado. |
+| 26/09, revisão fiscal | Migração candidata `20260926185847_enforce_fiscal_document_load_tenant.sql`, ordenada imediatamente antes da restauração das RPCs de frete, adiciona unicidade `loads(id, tenant_id)` e FK composta com `NOT VALID` seguido de `VALIDATE`. Preflight live agregado não encontrou órfãos nem ligações entre empresas; FK e frete 7/7 testes PGlite e checagem de release verdes. | No PR; validação e lock em staging ainda pendentes. |
+| 26/09, ~19:31 | [PR #3 em draft](https://github.com/Centrialhub/agvlog/pull/3) criado para o commit `2eeb66f372c701575ca31b8c96ea2946039d416f`. [Quality gate](https://github.com/Centrialhub/agvlog/actions/runs/36266120248) ainda em progresso: `validate` verde; shards 2, 4, 5 e 6 verdes; shard 3 falhou por dois timeouts de 5 s e `financeLegacyAdoptionInventory` esperado 30/recebido 31. Correções delegadas, demais shards sem conclusão registrada neste horário. | PR aberto; CI bloqueado, resultado final pendente. |
+| 26/09, ~19:35 | [Run 36266120248](https://github.com/Centrialhub/agvlog/actions/runs/36266120248) terminou: `validate` e shards 2/4/5/6 verdes; shards 1/3/7/8 falharam; `database-and-e2e` foi ignorado. Shards 1/7/8 tiveram timeouts; 7/8 também falharam por fixtures de data dependentes do fuso do runner. | Primeiro Quality gate vermelho; novo SHA/run necessários. |
+| 26/09, ~19:38 | Correção local das datas de CT-e e notas importadas: fixtures e expectativas em `America/Sao_Paulo` com instantes/offsets explícitos; detalhe da nota passou a usar o fuso do tenant, igual ao filtro. As duas suítes deram 31/31 em `TZ=UTC` e `TZ=America/Sao_Paulo`; ESLint direcionado e `npm run typecheck` passaram. Timeouts e demais falhas estão em correção por outros responsáveis. | Ainda não incorporada ao SHA do PR; sem execução remota dessa correção. |
+| 26/09, ~19:46 | Teste da 501ª parcela otimizado sem remover os 501 comandos SQL: a revisão retornada alimenta o próximo comando; duração isolada caiu de 86 s para 51 s. Shard 1 completo 922/922 em 242 s com dois workers; shard 3 completo 902/902 em 179 s. Timeouts curtos foram ajustados e fixture de competência financeira deixou de depender do fuso. `repository:check`, `supabase:release:check`, `test:pipeline` 12/12, lint completo, typecheck e build passaram. | Correções locais prontas para novo commit/run do PR; resultado remoto ainda pendente. |
 
 ## Contratos ausentes no live e correções candidatas
 
@@ -30,7 +34,7 @@ Atualizado em 26/09/2026, aproximadamente 19:23 UTC (16:23 em Brasília). **Esta
 | Operação | `delete_load_item_v4`, `list_operator_routes_page_v1`, `productivity_report_summary_v1` | Migrações `20260926191500`, `20260926191625`, `20260926191630`; rotas/produtividade e Portal ocorrências somaram 10/10 testes; MDF-e e exclusão CAS 5/5 PGlite. |
 | SSX | `list_ssx_mapping_conflicts_v2`, `resolve_ssx_mapping_conflict_v2` | `20260926191257_restore_ssx_mapping_conflict_review_rpcs.sql`; 7 testes PGlite, preservando o cache de geocoding. |
 
-Além desses 19 nomes: `20260926183928_restore_portal_list_contracts.sql` corrige as duas listas v2 existentes (5/5 testes); `20260926184015_restrict_incident_personnel_reads.sql` restringe SELECT de RH (5/5 testes). A parserização CSV tem 6 testes focados; o financeiro acrescenta revisão do saldo autoritativo na carteira e no diálogo de liquidação, com testes focados. Tudo permanece no worktree.
+Além desses 19 nomes: `20260926183928_restore_portal_list_contracts.sql` corrige as duas listas v2 existentes (5/5 testes); `20260926184015_restrict_incident_personnel_reads.sql` restringe SELECT de RH (5/5 testes). A parserização CSV tem 6 testes focados; o financeiro acrescenta revisão do saldo autoritativo na carteira e no diálogo de liquidação, com testes focados. Tudo está no candidato do PR e ainda não foi publicado.
 
 ## Gates executados e limites
 
@@ -38,13 +42,13 @@ Além desses 19 nomes: `20260926183928_restore_portal_list_contracts.sql` corrig
 | --- | --- | --- |
 | `npm run supabase:release:check`, `npm run repository:check`, `npm run lockfile:check` | Passaram no worktree durante a reconciliação. | Verificam estrutura local; não a paridade live. |
 | `npm run test:pipeline` | 12/12, incluindo quatro casos do novo `scripts/check-supabase-migration-parity.mjs`. | O preflight live não rodou, pois `AGVLOG_RELEASE_DB_URL` não está disponível. A falha fechada sem segredo foi confirmada. |
-| Cobertura crítica local | Sete suítes, 53 testes e 87,81% de statements, segundo execução local do responsável por CI. | Oito shards para os 1.317 arquivos e `database-and-e2e` ainda não rodaram no GitHub. |
+| Cobertura crítica local | Sete suítes, 53 testes e 87,81% de statements, segundo execução local do responsável por CI. | O [primeiro run do PR #3](https://github.com/Centrialhub/agvlog/actions/runs/36266120248) terminou: `validate` e shards 2/4/5/6 passaram; shards 1/3/7/8 falharam; `database-and-e2e` foi ignorado. |
 | Testes SQL focados | Portal listas 5/5; RLS 5/5; fiscal 10 e replay FK+frete 7/7; geocode 6/6; estoque/equipe 11/11; Portal ocorrências 4/4; SSX 7; rotas/produtividade incluídos em 10/10; MDF-e/exclusão CAS 5/5. O agente SQL reportou 39/39 em dez arquivos antes da revisão final da FK. Lint, qualidade estrutural e typecheck do escopo MDF-e/CAS passaram. | Sem execução contra staging ou banco publicado. |
-| Smoke autenticado e retorno | Não executados. | Staging e credencial de smoke não disponíveis; não há PR/candidato Vercel imutável deste lote. |
+| Smoke autenticado e retorno | Não executados. | Staging e credencial de smoke não disponíveis; PR #3 está em draft e ainda não há candidato Vercel imutável deste lote. |
 
 ## Próximos registros obrigatórios
 
 1. Reconciliar versões históricas e efeitos SQL com o ledger live, começando por geofence. Executar `npm run supabase:parity:check` com credencial de leitura protegida contra o banco alvo; anexar o resultado. **Não executar `db push` enquanto falhar.**
-2. Executar replay completo local, oito shards e `database-and-e2e`; testar a validação e o lock da FK fiscal em staging; anexar links de todos os jobs de um PR.
+2. Enviar as correções locais dos shards 1/3/7/8 em novo SHA ao PR e registrar o resultado completo do novo Quality gate. Exigir `database-and-e2e` verde e testar a validação e o lock da FK fiscal em staging.
 3. Preparar staging com histórico compatível e dados sintéticos; publicar migrações, Edge e frontend imutável nessa ordem. Executar a matriz do [roteiro](production-stability-playbook-2026-09-26.md) e `release-candidate.yml`; registrar SHA, versões e artefatos.
 4. Só após gates verdes e revisão do resultado concreto, planejar promoção e retorno em produção. Acrescentar aqui horários UTC, comandos, links, responsáveis e status real de cada etapa. Nenhuma correção desta rodada deve ser descrita como publicada antes desse registro.

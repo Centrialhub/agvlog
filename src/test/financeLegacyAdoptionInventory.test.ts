@@ -37,7 +37,7 @@ async function read(page=1,actor=i.operator,account=i.account){const result=(awa
 async function payment(kind='receivables_payments',bank:string|null=null,amount=12.34){
  const id=randomUUID(),incoming=kind==='receivables_payments';await db.query(`insert into ${kind}(id,tenant_id,${incoming?'receivable_id':'payable_id'},amount,${incoming?'received_at':'paid_at'},bank_account_id,method,bank_transaction_id) values($1,$2,$3,$4,'2026-09-10T12:00:00Z',$5,'pix',$6)`,[id,i.tenant,randomUUID(),amount,i.account,bank]);return id;
 }
-async function bank(){const id=randomUUID();await db.query(`insert into bank_transactions(id,tenant_id,bank_account_id,posted_at,amount,transaction_type,raw_payload) values($1,$2,$3,'2026-09-10T12:00:00Z',12.34,'credit','{}')`,[id,i.tenant,i.account]);return id;}
+async function bank(account=i.account){const id=randomUUID();await db.query(`insert into bank_transactions(id,tenant_id,bank_account_id,posted_at,amount,transaction_type,raw_payload) values($1,$2,$3,'2026-09-10T12:00:00Z',12.34,'credit','{}')`,[id,i.tenant,account]);return id;}
 it('returns empty diagnostics without claiming integration or closing',async()=>{
  expect(await read()).toMatchObject({total:0,rows:[],counts_by_source:{},unknown_account:{total:0,not_additive_across_accounts:true},legacy_integration_status:'not_reviewed',can_close:false});
 });
@@ -78,8 +78,21 @@ it('keeps a paid advance with only partial payment unresolved without manufactur
  const r=await read();expect(r.total).toBe(1);expect(r.unknown_account.rows[0]).toMatchObject({source_id:a,amount_cents:null,reason:'paid_advance_payment_evidence_incomplete'});
 });
 it('paginates deterministically at 30 without including other account or dates',async()=>{
- for(let n=0;n<31;n++)await bank();expect((await read()).rows).toHaveLength(30);const second=await read(2);expect(second.total).toBe(31);expect(second.rows).toHaveLength(1);expect((await read()).rows.map(r=>r.source_id)).not.toContain(second.rows[0].source_id);
- await db.query("update bank_transactions set posted_at='2026-10-01' where id=$1",[second.rows[0].source_id]);expect((await read()).total).toBe(30);
+ const otherAccount=randomUUID();
+ await db.query('insert into bank_accounts(id,tenant_id,active) values($1,$2,true)',[otherAccount,i.tenant]);
+ const excluded=await bank(otherAccount);
+ for(let n=0;n<31;n++)await bank();
+ const first=await read();
+ expect(first.rows).toHaveLength(30);
+ expect(first.total).toBe(31);
+ expect(first.rows.map(r=>r.source_id)).not.toContain(excluded);
+ const second=await read(2);
+ expect(second.total).toBe(31);
+ expect(second.rows).toHaveLength(1);
+ expect(first.rows.map(r=>r.source_id)).not.toContain(second.rows[0].source_id);
+ // Noon UTC is already October 1 in the inventory's Sao Paulo civil timezone.
+ await db.query("update bank_transactions set posted_at='2026-10-01T12:00:00Z' where id=$1",[second.rows[0].source_id]);
+ expect((await read()).total).toBe(30);
 });
 it('denies driver, mixed profile, foreign account and invalid pagination',async()=>{
  await expect(read(1,i.driverUser)).rejects.toThrow('finance_access_denied');await db.query("insert into tenant_memberships values($1,$2,'operator',true)",[i.tenant,i.driverUser]);await expect(read(1,i.driverUser)).rejects.toThrow('finance_access_denied');

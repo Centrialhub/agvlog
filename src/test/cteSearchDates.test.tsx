@@ -13,6 +13,7 @@ vi.mock('@/hooks/useCteSearch', async importOriginal => {
   } };
 });
 vi.mock('@/hooks/useAlertStore', () => ({ useScopedAlerts: () => ({ promptAction: vi.fn(), confirmAction: vi.fn() }) }));
+vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: 'tenant', timezone: 'America/Sao_Paulo' } }) }));
 vi.mock('@/hooks/useSonnerToast', () => ({ useSonnerToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock('@/hooks/useIssueCTe', () => ({ useCancelCTe: () => ({}), useResendCte: () => ({}) }));
 vi.mock('@/hooks/useDeleteFailedCTe', () => ({ useDeleteFailedCTe: () => ({}) }));
@@ -41,11 +42,12 @@ describe('CT-e issuance dates in the search page', () => {
     expect(screen.queryByText('30/08/2026')).not.toBeInTheDocument();
   });
 
-  it('preserves local-time formatting for full timestamps and the fallback for missing dates', () => {
+  it('formats full timestamps in the tenant calendar and falls back for missing dates', () => {
     const timestamp = '2026-09-01T01:30:00Z';
-    state.rows = [row('279', timestamp), row('280', null)];
+    state.rows = [row('279', timestamp), row('280', null), row('281', '2026-09-01T12:00:00Z')];
     render(<CteSearch />);
-    expect(within(screen.getByRole('row', { name: /279/ })).getByText(new Date(timestamp).toLocaleDateString('pt-BR'))).toBeInTheDocument();
+    expect(within(screen.getByRole('row', { name: /279/ })).getByText('31/08/2026')).toBeInTheDocument();
+    expect(within(screen.getByRole('row', { name: /281/ })).getByText('01/09/2026')).toBeInTheDocument();
     expect(within(screen.getByRole('row', { name: /280/ })).getAllByRole('cell')[5]).toHaveTextContent('—');
   });
 
@@ -77,7 +79,7 @@ describe('CT-e issuance dates in the search page', () => {
     { label: 'Hoje', day: '2026-08-31' }, { label: '7 dias', day: '2026-08-25' }, { label: '30 dias', day: '2026-08-02' },
   ])('uses the local day for the $label shortcut near midnight', ({ label, day }) => {
       vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(new Date(2026, 7, 31, 23, 30));
+      vi.setSystemTime(new Date('2026-09-01T02:30:00Z')); // 31/08 às 23:30 em São Paulo
       render(<CteSearch />);
       fireEvent.click(screen.getByRole('button', { name: label }));
       expect(state.filters.issueDateStart).toBe(day);

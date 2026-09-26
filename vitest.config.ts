@@ -13,7 +13,8 @@ export default defineConfig({
     },
     // PGlite/WASM suites are CPU-heavy; keeping worker fan-out bounded prevents
     // Vitest's coordinator RPC from starving while preserving file isolation.
-    maxWorkers: 4,
+    maxWorkers: 2,
+    testTimeout: 30_000,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     coverage: {
