@@ -7,6 +7,10 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    env: {
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || "https://test-project.supabase.co",
+      VITE_SUPABASE_PUBLISHABLE_KEY: process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "publishable-test-key",
+    },
     // PGlite/WASM suites are CPU-heavy; keeping worker fan-out bounded prevents
     // Vitest's coordinator RPC from starving while preserving file isolation.
     maxWorkers: 4,

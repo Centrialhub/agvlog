@@ -1,5 +1,4 @@
 // NF-e XML parser — extracts structured data from Brazilian electronic invoice XML
-import * as XLSX from 'xlsx';
 import { detectPaymentMethodDetailed } from './paymentMethodDetection';
 import { normalizeIbgeCity, normalizeCep, normalizeUf, normalizePhone, normalizeCpfCnpj } from './fiscal/fiscalAddress';
 import { normalizeNfeAccessKey } from './fiscalDocuments/nfeAccessKey';
@@ -414,67 +413,5 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   };
 }
 
-// CSV/Excel parser for orders
-export interface ParsedOrderRow {
-  orderNumber: string;
-  clientName: string;
-  clientCnpj: string;
-  destination: string;
-  items: string;
-  quantity: number;
-  palletCount: number;
-  weightKg: number;
-  promisedDate: string;
-}
-
-function parseRowsToOrders(headers: string[], dataRows: string[][]): ParsedOrderRow[] {
-  const findCol = (candidates: string[]) => {
-    for (const c of candidates) {
-      const idx = headers.findIndex(h => h.includes(c));
-      if (idx >= 0) return idx;
-    }
-    return -1;
-  };
-
-  const colOrder = findCol(['pedido', 'order', 'numero', 'numpedido']);
-  const colClient = findCol(['cliente', 'client', 'razao', 'empresa', 'nome']);
-  const colCnpj = findCol(['cnpj', 'cpf', 'documento', 'taxid']);
-  const colDest = findCol(['destino', 'destination', 'cidade', 'endereco', 'city']);
-  const colItems = findCol(['item', 'produto', 'product', 'descricao', 'mercadoria']);
-  const colQty = findCol(['quantidade', 'qty', 'qtd', 'quantity']);
-  const colPallets = findCol(['palet', 'pallet', 'paletes']);
-  const colWeight = findCol(['peso', 'weight', 'kg']);
-  const colDate = findCol(['data', 'date', 'prazo', 'entrega', 'promised']);
-
-  return dataRows
-    .filter(cols => cols.length >= 2 && cols.some(c => !!c))
-    .map((cols, i) => ({
-      orderNumber: colOrder >= 0 ? cols[colOrder] || '' : `IMP-${i + 1}`,
-      clientName: colClient >= 0 ? cols[colClient] || '' : '',
-      clientCnpj: colCnpj >= 0 ? cols[colCnpj] || '' : '',
-      destination: colDest >= 0 ? cols[colDest] || '' : '',
-      items: colItems >= 0 ? cols[colItems] || '' : '',
-      quantity: colQty >= 0 ? parseFloat(cols[colQty]) || 0 : 0,
-      palletCount: colPallets >= 0 ? parseInt(cols[colPallets]) || 0 : 0,
-      weightKg: colWeight >= 0 ? parseFloat(cols[colWeight]) || 0 : 0,
-      promisedDate: colDate >= 0 ? cols[colDate] || '' : '',
-    }));
-}
-
-export function parseCsvOrders(csvText: string): ParsedOrderRow[] {
-  const lines = csvText.trim().split('\n');
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(/[,;\t]/).map(h => h.trim().toLowerCase().replace(/["\s]/g, ''));
-  const dataRows = lines.slice(1).map(l => l.split(/[,;\t]/).map(c => c.trim().replace(/^"|"$/g, '')));
-  return parseRowsToOrders(headers, dataRows);
-}
-
-export function parseExcelOrders(buffer: ArrayBuffer): ParsedOrderRow[] {
-  const workbook = XLSX.read(buffer, { type: 'array' });
-  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-  const jsonData = XLSX.utils.sheet_to_json<string[]>(firstSheet, { header: 1, defval: '' });
-  if (jsonData.length < 2) return [];
-  const headers = (jsonData[0] as string[]).map(h => String(h).trim().toLowerCase().replace(/["\s]/g, ''));
-  const dataRows = jsonData.slice(1).map(row => (row as string[]).map(c => String(c).trim()));
-  return parseRowsToOrders(headers, dataRows);
-}
+export { parseCsvOrders, parseExcelOrders } from './orderParsers';
+export type { ParsedOrderRow } from './orderParsers';

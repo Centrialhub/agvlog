@@ -46,6 +46,10 @@ export function PayableBulkSettlementDialog({tenant,actor,titles,open,onOpenChan
     setBusy(true);setError('');
     try{
       const context=await readPayableBulkContext(tenant,actor,choice.id,items);
+      if(titles.some(title=>context.items.find(item=>item.payable_id===title.payable_id)?.remaining_cents!==title.open_cents)){
+        setError('O saldo de um ou mais títulos mudou desde a seleção. Atualize a carteira e selecione novamente antes de revisar a baixa.');
+        return;
+      }
       if(!context.eligible){setError('A prévia encontrou saldo insuficiente ou título sem aprovação. Nenhuma baixa foi registrada.');return;}
       const command=payableBulkCommandSchema.parse({version:1,tenant_id:tenant,request_id:crypto.randomUUID(),movement_id:choice.id,bank_account_id:context.movement.bank_account_id,paid_on:context.movement.occurred_on,expected_revision:context.expected_revision,items,method,reason});
       setPreview({command,context});

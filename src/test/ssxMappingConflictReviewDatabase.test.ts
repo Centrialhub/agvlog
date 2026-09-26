@@ -13,7 +13,7 @@ const indexMigration = readFileSync(
   'utf8',
 );
 const reviewMigration = readFileSync(
-  'supabase/migrations/20260923140515_refresh_geocoding_cache_and_ssx_conflict_review.sql',
+  'supabase/migrations/20260926191257_restore_ssx_mapping_conflict_review_rpcs.sql',
   'utf8',
 );
 const id = {
@@ -92,12 +92,35 @@ beforeAll(async () => {
   await db.exec(migration);
   await db.exec(activeTenantMigration);
   await db.exec(indexMigration);
+  await db.exec("insert into public.address_geocoding_cache values('60000000-0000-4000-8000-000000000001')");
   await db.exec(reviewMigration);
 }, 30_000);
 
 afterAll(async () => db?.close());
 
 describe('durable SSX mapping conflict review', () => {
+  it('restores the missing RPCs without clearing cache and preserves their grants on replay', async () => {
+    await db.exec(reviewMigration);
+    expect((await db.query('select count(*)::int n from public.address_geocoding_cache')).rows)
+      .toEqual([{ n: 1 }]);
+    const rows = (await db.query<{proname:string;prosecdef:boolean;proconfig:string[];anon:boolean;authenticated:boolean}>(`
+      select p.proname,p.prosecdef,p.proconfig,
+        has_function_privilege('anon',p.oid,'EXECUTE') anon,
+        has_function_privilege('authenticated',p.oid,'EXECUTE') authenticated
+      from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname='public' and p.proname in
+        ('list_ssx_mapping_conflicts_v2','resolve_ssx_mapping_conflict_v2')
+      order by p.proname
+    `)).rows;
+    expect(rows.map(row=>row.proname)).toEqual([
+      'list_ssx_mapping_conflicts_v2','resolve_ssx_mapping_conflict_v2',
+    ]);
+    for (const row of rows) {
+      expect(row).toMatchObject({prosecdef:true,anon:false,authenticated:true});
+      expect(row.proconfig).toContain('search_path=""');
+    }
+  });
+
   it('deduplicates observations, enforces browser ACL and resolves one audited link', async () => {
     const payload = JSON.stringify({
       tenant_id: id.tenant,

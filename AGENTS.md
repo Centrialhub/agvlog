@@ -1,0 +1,14 @@
+# Direção para mudanças no AGVLOG
+
+Antes de alterar um fluxo publicado ou preparar um release, leia [o roteiro de estabilidade](docs/qa/production-stability-playbook-2026-09-26.md) e [o log do incidente](docs/qa/production-stability-log-2026-09-26.md). Atualize o log com as evidências e pendências da sua mudança.
+
+## Regras de trabalho
+
+- Confirme o SHA realmente publicado, as versões das Edge Functions e o contrato SQL em produção antes de assumir que `main` representa o ambiente público. O histórico local e o banco divergiam em 26/09/2026.
+- Faça a mudança em checkout isolado e preserve alterações de outros trabalhos. Use migrações novas e incrementais; não reescreva uma migração já aplicada para corrigir produção.
+- Não execute `supabase db push` enquanto `npm run supabase:parity:check` falhar para o banco alvo. Aplique apenas SQL revisado e específico depois de conferir dependências, dados existentes, autorização e efeito em hotfixes já publicados.
+- Para cada função `.rpc()` nova ou alterada, teste assinatura, permissões, isolamento entre empresas, repetição e erro. Para importação, fiscal e financeiro, inclua ao menos um cenário de dado realista e um de concorrência ou estado obsoleto.
+- Antes de promover, exija o Quality gate completo: `validate`, todos os shards `unit-tests` e `database-and-e2e`. Compare o contrato do candidato com o mesmo banco de staging usado pelo smoke autenticado. Registre SHA, horários UTC, links, contagens e resultado no log.
+- Publique na ordem migrações, contratos do banco, Edge Functions e frontend. Registre o estado anterior e o plano de retorno; trocar apenas o frontend não reverte mudanças de dados ou esquema.
+
+Um teste local ou build verde não prova estabilidade da versão pública. Não marque uma correção como publicada antes de verificar o alias Vercel, as versões do banco/Edge e os fluxos críticos no ambiente final.
