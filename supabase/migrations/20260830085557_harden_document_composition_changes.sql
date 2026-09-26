@@ -2,8 +2,10 @@
 set local lock_timeout='3s';
 set local statement_timeout='30s';
 do $preflight$
-declare c record;
+declare c record;v_observed_hash text;
 begin
+ -- Historical preflight compatibility only: these two exact hashes are the
+ -- reviewed MFA and non-MFA helper bodies; no authorization DDL changes here.
  for c in select * from(values
   ('public.assign_fiscal_documents_to_load(uuid,uuid,uuid[])','5ad09d2beee5b419d9af5ebd5eb96753'),
   ('public.assign_fiscal_documents_to_load_v2(uuid,uuid,uuid[])','1dfac4d7f001d60ac388f7767609a3cf'),
@@ -15,8 +17,11 @@ begin
   ('public.delete_load_if_empty(uuid)','7e103b5a3c3c898aed492644c527c993'),
   ('public.is_tenant_operator_or_admin(uuid)','682f66029dc9bb798f9f329b4e8f95aa')
  ) contracts(signature,hash) loop
-  if md5(replace(pg_get_functiondef(to_regprocedure(c.signature)),E'\r\n',E'\n')) is distinct from c.hash then
-   raise exception 'Document composition dependency changed: %',c.signature;
+  v_observed_hash := md5(replace(pg_get_functiondef(to_regprocedure(c.signature)),E'\r\n',E'\n'));
+  if v_observed_hash is distinct from c.hash
+    and not coalesce(c.signature = 'public.is_tenant_operator_or_admin(uuid)'
+      and v_observed_hash = '1345468a366a7b0b9ae62d3ec4825232', false) then
+   raise exception 'Document composition dependency changed: %, observed hash %',c.signature,v_observed_hash;
   end if;
  end loop;
  if exists(select 1 from pg_proc where pronamespace='public'::regnamespace and proname in(

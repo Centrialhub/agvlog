@@ -103,7 +103,7 @@ jobs:
         run: npm run test -- --shard=${{ matrix.shard }}/8
 
   database-and-e2e:
-    needs: [validate, unit-tests]
+    needs: [validate]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

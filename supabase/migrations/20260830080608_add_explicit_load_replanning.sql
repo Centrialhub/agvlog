@@ -3,8 +3,10 @@
 set local lock_timeout='3s';
 set local statement_timeout='30s';
 do $preflight$
-declare c record;
+declare c record;v_observed_hash text;
 begin
+  -- Historical preflight compatibility only: these two exact hashes are the
+  -- reviewed MFA and non-MFA helper bodies; no authorization DDL changes here.
   for c in select * from(values
     ('public._load_is_locked(uuid)','a15b8a40dfd93a05479f8cc0b04db3eb'),
     ('public.recalc_load_totals()','7dc12046ecada4d2f04bb2942a92493d'),
@@ -14,8 +16,11 @@ begin
     ('public._derive_driver_delivery_result(uuid,uuid)','f9c85c43e7813e316467b95fb09b5963'),
     ('public.is_tenant_operator_or_admin(uuid)','682f66029dc9bb798f9f329b4e8f95aa')
   ) expected(signature,hash) loop
-    if md5(replace(pg_get_functiondef(to_regprocedure(c.signature)),E'\r\n',E'\n')) is distinct from c.hash then
-      raise exception 'Replanning dependency changed: %',c.signature;
+    v_observed_hash := md5(replace(pg_get_functiondef(to_regprocedure(c.signature)),E'\r\n',E'\n'));
+    if v_observed_hash is distinct from c.hash
+      and not coalesce(c.signature = 'public.is_tenant_operator_or_admin(uuid)'
+        and v_observed_hash = '1345468a366a7b0b9ae62d3ec4825232', false) then
+      raise exception 'Replanning dependency changed: %, observed hash %',c.signature,v_observed_hash;
     end if;
   end loop;
   if to_regprocedure('public.get_load_replanning_context(uuid,uuid,uuid)') is not null

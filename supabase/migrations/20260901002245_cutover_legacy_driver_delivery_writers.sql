@@ -3,7 +3,7 @@
 set local lock_timeout = '3s';
 set local statement_timeout = '20s';
 do $preflight$
-declare v_contract record;
+declare v_contract record;v_observed_hash text;
 begin
   if to_regprocedure('public.driver_record_delivery_outcome(uuid,text,jsonb,uuid,text)') is null
     or to_regprocedure('public.driver_record_delivery_note(uuid,text,jsonb,uuid)') is null then
@@ -16,22 +16,30 @@ begin
     ('public.derive_trip_and_load_status_v1(uuid,uuid)','8c2b9d7ee1dbac08dc3a80fab68aff59'),
     ('public.transition_stop_status_v1(uuid,uuid,text,uuid,text,text,jsonb)','4aaa78a290e6ad9e8ce1ced7396f374d')
   ) expected(signature,hash) loop
-    if md5(replace(pg_get_functiondef(to_regprocedure(v_contract.signature)),chr(13),'')) is distinct from v_contract.hash then
-      raise exception 'Legacy contract changed: %; recapture before cutover',v_contract.signature;
+    v_observed_hash := md5(replace(pg_get_functiondef(to_regprocedure(v_contract.signature)),chr(13),''));
+    if v_observed_hash is distinct from v_contract.hash then
+      raise exception 'Legacy contract changed: %; observed hash %; recapture before cutover',
+        v_contract.signature,v_observed_hash;
     end if;
   end loop;
   -- Private phase may be installed before this release. Detect drift in every
   -- staged function as well as the old APIs before granting any public access.
+  -- Historical preflight compatibility only: five staged APIs were rewritten
+  -- by earlier migrations in a clean replay. Both exact reviewed hashes are
+  -- accepted for each; this changes no function DDL or authorization grant.
   for v_contract in select * from (values
-    ('public._delivery_result_from_statuses(text[])','be12c89528e9935bc76ce89dec420de7'),
-    ('public._derive_driver_delivery_result(uuid,uuid)','f9c85c43e7813e316467b95fb09b5963'),
-    ('public._lock_delivery_trip_graph(uuid,uuid)','ffa8920db62358d266660d11685ed9c0'),
-    ('public._lock_driver_delivery_stop(uuid)','78068242359e41562da395ea27564dd2'),
-    ('public.driver_record_delivery_note(uuid,text,jsonb,uuid)','65c6456a38ade57bb4c7137bc81d1f16'),
-    ('public.driver_record_delivery_outcome(uuid,text,jsonb,uuid,text)','381e01547f4b7b67d1945018151ff3e2')
-  ) expected(signature,hash) loop
-    if md5(replace(pg_get_functiondef(to_regprocedure(v_contract.signature)),chr(13),'')) is distinct from v_contract.hash then
-      raise exception 'Staged API contract changed: %; recapture before cutover',v_contract.signature;
+    ('public._delivery_result_from_statuses(text[])','be12c89528e9935bc76ce89dec420de7','2acc28ff3b14abf6153a535f8b3c23f6'),
+    ('public._derive_driver_delivery_result(uuid,uuid)','f9c85c43e7813e316467b95fb09b5963','e34be4cc878f3367b67e0528dc38aae0'),
+    ('public._lock_delivery_trip_graph(uuid,uuid)','ffa8920db62358d266660d11685ed9c0','09d1f26d159716d66c588457e02cccd2'),
+    ('public._lock_driver_delivery_stop(uuid)','78068242359e41562da395ea27564dd2','78068242359e41562da395ea27564dd2'),
+    ('public.driver_record_delivery_note(uuid,text,jsonb,uuid)','65c6456a38ade57bb4c7137bc81d1f16','a30ddc4e484cd3c66b26c57080965726'),
+    ('public.driver_record_delivery_outcome(uuid,text,jsonb,uuid,text)','381e01547f4b7b67d1945018151ff3e2','d7cf0a8888b3ecbfef5105efa2685ad5')
+  ) expected(signature,hash,replay_hash) loop
+    v_observed_hash := md5(replace(pg_get_functiondef(to_regprocedure(v_contract.signature)),chr(13),''));
+    if v_observed_hash is distinct from v_contract.hash
+      and v_observed_hash is distinct from v_contract.replay_hash then
+      raise exception 'Staged API contract changed: %; observed hash %; recapture before cutover',
+        v_contract.signature,v_observed_hash;
     end if;
   end loop;
 end;

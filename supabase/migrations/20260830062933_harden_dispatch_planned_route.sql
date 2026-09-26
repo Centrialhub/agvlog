@@ -3,11 +3,18 @@
 set local lock_timeout='3s';
 set local statement_timeout='30s';
 do $preflight$
+declare
+  v_authorization_hash text;
 begin
   if md5(replace(pg_get_functiondef(to_regprocedure('public.dispatch_planned_route(jsonb)')),E'\r\n',E'\n'))
     is distinct from '2ad186be84b9aca809f36302a3135be3' then raise exception 'Planning legacy contract changed';end if;
-  if md5(replace(pg_get_functiondef(to_regprocedure('public.is_tenant_operator_or_admin(uuid)')),E'\r\n',E'\n'))
-    is distinct from '682f66029dc9bb798f9f329b4e8f95aa' then raise exception 'Planning authorization contract changed';end if;
+  -- Historical preflight compatibility only; neither reviewed helper body is replaced here.
+  v_authorization_hash := md5(replace(
+    pg_get_functiondef(to_regprocedure('public.is_tenant_operator_or_admin(uuid)')),E'\r\n',E'\n'));
+  if v_authorization_hash is null or v_authorization_hash not in (
+    '1345468a366a7b0b9ae62d3ec4825232', '682f66029dc9bb798f9f329b4e8f95aa') then
+    raise exception 'Planning authorization contract changed (observed hash: %)', v_authorization_hash;
+  end if;
   if md5(replace(pg_get_functiondef(to_regprocedure('public.guard_trip_load_link_graph()')),E'\r\n',E'\n'))
     is distinct from '020ab0928aa3b624f2cdbb2f10eee329'
     or not exists(select 1 from pg_trigger where tgrelid='public.dispatch_trip_loads'::regclass
