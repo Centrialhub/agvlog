@@ -96,7 +96,7 @@ try {
   const ids = docker('ps', '-aq', '--no-trunc', '--filter', `label=com.supabase.cli.project=${project}`).split(/\s+/).filter(Boolean);
   requireCondition(ids.length === names.length && ids.every((id) => /^[a-f0-9]{64}$/.test(id)), 'unexpected_container_inventory');
   // Request selected fields only; never retrieve Config.Env or health-check logs.
-  const inspectFormat = '{"id":{{json .Id}},"name":{{json .Name}},"image":{{json .Config.Image}},"imageId":{{json .Image}},"project":{{json (index .Config.Labels "com.supabase.cli.project")}},"running":{{json .State.Running}},"status":{{json .State.Status}},"health":{{if .State.Health}}{{json .State.Health.Status}}{{else}}null{{end}},"startedAt":{{json .State.StartedAt}},"restartCount":{{json .RestartCount}},"ports":{{json .NetworkSettings.Ports}},"networkMode":{{json .HostConfig.NetworkMode}},"networks":{{json .NetworkSettings.Networks}}}';
+  const inspectFormat = '{"id":{{json .Id}},"name":{{json .Name}},"image":{{json .Config.Image}},"imageId":{{json .Image}},"project":{{json (index .Config.Labels "com.supabase.cli.project")}},"running":{{json .State.Running}},"status":{{json .State.Status}},"health":{{with (index .State "Health")}}{{json .Status}}{{else}}null{{end}},"startedAt":{{json .State.StartedAt}},"restartCount":{{json .RestartCount}},"ports":{{json .NetworkSettings.Ports}},"networkMode":{{json .HostConfig.NetworkMode}},"networks":{{json .NetworkSettings.Networks}}}';
   const inspected = docker('inspect', '--format', inspectFormat, ...ids).split('\n').filter(Boolean).map(parseJson);
   requireCondition(sameMembers(inspected.map((item) => item.name), names.map((name) => `/${name}`)), 'unexpected_container_names');
 
