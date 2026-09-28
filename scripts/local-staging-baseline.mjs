@@ -5,6 +5,7 @@ import { EXPECTED_FORWARD_FILES } from './check-baseline-candidate.mjs';
 
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 const hashPattern = /^[a-f0-9]{64}$/;
+export const MAX_BASELINE_REVISIONS = 8;
 const roles = ['application-schema', 'managed-customizations', 'reviewed-roles', 'reviewed-extensions', 'synthetic-buckets'];
 const reviewAssertions = ['schemaSanitized', 'noCustomerData', 'noProductionSecrets', 'externalJobsDisabled',
   'managedCustomizationsReviewed', 'rolesReviewed', 'extensionsReviewed', 'syntheticBucketsReviewed', 'rawRolesDumpExcluded'];
@@ -50,9 +51,12 @@ function validateLedger(value) {
 }
 
 function validateApproval(approval, candidate, candidateSha256) {
-  exactKeys(approval, ['formatVersion', 'purpose', 'targetProjectId', 'source', 'review', 'artifacts', 'candidate'], 'invalid_manifest_fields');
-  requireCondition(approval.formatVersion === 1 && approval.purpose === 'agvlog-local-staging-reviewed-baseline' &&
+  exactKeys(approval, ['formatVersion', 'purpose', 'targetProjectId', 'source', 'review', 'artifacts', 'candidate',
+    ...(approval?.formatVersion === 2 ? ['supersedesApprovalSha256'] : [])], 'invalid_manifest_fields');
+  requireCondition([1, 2].includes(approval.formatVersion) && approval.purpose === 'agvlog-local-staging-reviewed-baseline' &&
     approval.targetProjectId === 'agvlog-local-staging', 'wrong_manifest_scope');
+  if (approval.formatVersion === 2) requireCondition(typeof approval.supersedesApprovalSha256 === 'string' &&
+    hashPattern.test(approval.supersedesApprovalSha256), 'invalid_previous_approval_hash');
   const source = approval.source;
   exactKeys(source, ['projectRef', 'capturedAtUtc', 'postgresMajor', 'captureMethod', 'schemaCaptureSha256', 'ledgerCaptureSha256', 'ledgerBefore', 'ledgerAfter'], 'invalid_source_fields');
   requireCondition(source.projectRef === candidate.liveObservation.projectRef && source.postgresMajor === 17 &&
@@ -109,7 +113,8 @@ export function loadReviewedLocalBaseline({ root, manifestPath, approvedSha256, 
   manifestPath = resolve(manifestPath);
   const insideRoot = relative(root, manifestPath);
   if (prepared) {
-    requireCondition(manifestPath === join(root, '.local-staging/baseline/approval.json'), 'wrong_prepared_manifest_path');
+    requireCondition([join(root, '.local-staging/baseline/approval.json'),
+      join(root, '.local-staging/baseline/revisions', approvedSha256, 'approval.json')].includes(manifestPath), 'wrong_prepared_manifest_path');
   } else {
     requireCondition(insideRoot.startsWith(`..${sep}`) || isAbsolute(insideRoot), 'private_input_must_be_outside_checkout');
   }
@@ -124,16 +129,57 @@ export function loadReviewedLocalBaseline({ root, manifestPath, approvedSha256, 
     candidate.forwards.every((forward, index) => forward.filename === EXPECTED_FORWARD_FILES[index]) &&
     candidate.liveObservation?.projectRef, 'invalid_repository_candidate_manifest');
   validateApproval(approval, candidate, digest(candidateBytes));
-  const files = new Map([['baseline/approval.json', approvalBytes]]);
+  const prefix = approval.formatVersion === 1 ? 'baseline' : `baseline/revisions/${approvedSha256}`;
+  if (prepared) requireCondition(manifestPath === join(root, '.local-staging', prefix, 'approval.json'), 'wrong_prepared_manifest_path');
+  requireCondition(approval.supersedesApprovalSha256 !== approvedSha256, 'approval_cycle');
+  const files = new Map([[`${prefix}/approval.json`, approvalBytes]]);
   for (const artifact of approval.artifacts) {
     const bytes = readBounded(join(dirname(manifestPath), artifact.filename), artifact.bytes);
     requireCondition(bytes.length === artifact.bytes && digest(bytes) === artifact.sha256, 'baseline_artifact_changed');
-    files.set(`baseline/${artifact.filename}`, bytes);
+    files.set(`${prefix}/${artifact.filename}`, bytes);
   }
   for (const forward of candidate.forwards) {
     const bytes = readBounded(join(root, 'supabase/migrations', forward.filename), 16 * 1024 * 1024);
     requireCondition(digest(bytes) === forward.sha256, 'candidate_forward_changed');
-    files.set(`baseline/forwards/${forward.filename}`, bytes);
+    files.set(`${prefix}/forwards/${forward.filename}`, bytes);
   }
-  return { approvedSha256, approval, files };
+  return { approvedSha256, approval, files, approvalArtifact: `${prefix}/approval.json`, revisionCount: 0, previous: null };
+}
+
+export function combineLocalBaselineRevision(previous, revision) {
+  requireCondition(revision.approval.formatVersion === 2 &&
+    revision.approval.supersedesApprovalSha256 === previous.approvedSha256, 'previous_approval_mismatch');
+  requireCondition(previous.revisionCount < MAX_BASELINE_REVISIONS, 'revision_depth_exceeded');
+  const seen = new Set([revision.approvedSha256]);
+  for (let ancestor = previous; ancestor; ancestor = ancestor.previous) {
+    requireCondition(!seen.has(ancestor.approvedSha256), 'approval_cycle');
+    seen.add(ancestor.approvedSha256);
+    requireCondition(seen.size <= MAX_BASELINE_REVISIONS + 1, 'revision_depth_exceeded');
+  }
+  requireCondition(revision.approval.review.reviewedAtUtc >= previous.approval.review.reviewedAtUtc, 'revision_review_predates_previous');
+  for (const path of revision.files.keys()) requireCondition(!previous.files.has(path), 'revision_path_collision');
+  return { ...revision, previous, revisionCount: previous.revisionCount + 1,
+    files: new Map([...previous.files, ...revision.files]) };
+}
+
+export function loadPreparedLocalBaseline({ root, approvedSha256 }) {
+  requireCondition(typeof approvedSha256 === 'string' && hashPattern.test(approvedSha256), 'external_approval_hash_required');
+  const originalPath = join(resolve(root), '.local-staging/baseline/approval.json');
+  const originalHash = digest(readBounded(originalPath, 256 * 1024));
+  const seen = new Set();
+  function load(hash) {
+    requireCondition(!seen.has(hash), 'approval_cycle');
+    requireCondition(seen.size <= MAX_BASELINE_REVISIONS, 'revision_depth_exceeded');
+    seen.add(hash);
+    const manifestPath = hash === originalHash ? originalPath : join(resolve(root), '.local-staging/baseline/revisions', hash, 'approval.json');
+    let revision;
+    try {
+      revision = loadReviewedLocalBaseline({ root, manifestPath, approvedSha256: hash, prepared: true });
+    } catch (error) {
+      if (error.code === 'ENOENT') throw new Error('Local baseline approval rejected: approval_hash_mismatch_or_missing_revision');
+      throw error;
+    }
+    return revision.approval.formatVersion === 1 ? revision : combineLocalBaselineRevision(load(revision.approval.supersedesApprovalSha256), revision);
+  }
+  return load(approvedSha256);
 }

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, parse, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadReviewedLocalBaseline } from './local-staging-baseline.mjs';
+import { combineLocalBaselineRevision, loadPreparedLocalBaseline, loadReviewedLocalBaseline } from './local-staging-baseline.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const templatePath = 'infra/local-staging/config.toml';
@@ -88,7 +88,7 @@ function expectedFiles(root, reviewed = null) {
     manifest.state = 'reviewed-baseline-prepared';
     manifest.baseline = {
       state: 'reviewed-artifacts-prepared-not-restored', approvalSha256: reviewed.approvedSha256,
-      approvalArtifact: 'baseline/approval.json', catalogCompared: false,
+      approvalArtifact: reviewed.approvalArtifact, catalogCompared: false,
       source: reviewed.approval.source,
       artifacts: reviewed.approval.artifacts,
       forwards: reviewed.approval.candidate.forwards,
@@ -99,7 +99,17 @@ function expectedFiles(root, reviewed = null) {
       'Restore and compare the baseline before applying forwards, seeds, Auth hook or application functions.',
       'A separate restore procedure and catalog/behavior verification remain required; no application flow is approved.',
     ];
-    for (const [relative, bytes] of reviewed.files) {
+    const baselineFiles = new Map(reviewed.files);
+    if (reviewed.previous) {
+      const previousFiles = expectedFiles(root, reviewed.previous);
+      for (const [relative, bytes] of previousFiles) {
+        if (relative.startsWith('baseline/') && !baselineFiles.has(relative)) baselineFiles.set(relative, bytes);
+      }
+      baselineFiles.set(`${dirname(reviewed.approvalArtifact).replaceAll('\\', '/')}/previous-manifest.json`, previousFiles.get('manifest.json'));
+      manifest.baseline.revisionCount = reviewed.revisionCount;
+      manifest.baseline.supersedesApprovalSha256 = reviewed.previous.approvedSha256;
+    }
+    for (const [relative, bytes] of baselineFiles) {
       files.set(relative, bytes);
       manifest.files[relative] = { sha256: sha256(bytes) };
     }
@@ -113,12 +123,18 @@ function validateExistingTree(output, files) {
   const stat = statIfPresent(output);
   if (!stat) return;
   if (!stat.isDirectory()) throw new Error('The staging workdir must be a directory.');
+  const baselineDirectories = new Set();
+  for (const relative of files.keys()) {
+    if (!relative.startsWith('baseline/')) continue;
+    const parts = relative.split('/');
+    for (let end = 1; end < parts.length; end += 1) baselineDirectories.add(parts.slice(0, end).join('/'));
+  }
   function inspect(directory, prefix = '') {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
       const path = join(directory, entry.name);
       rejectLinks(path);
-      const baselineDirectory = files.has('baseline/approval.json') && ['baseline', 'baseline/forwards'].includes(relative);
+      const baselineDirectory = baselineDirectories.has(relative);
       if ((allowedDirectories.has(relative) || baselineDirectory) && entry.isDirectory()) {
         inspect(path, relative);
       } else if (runtimeMetadata.has(relative)) {
@@ -146,6 +162,33 @@ function validateExistingTree(output, files) {
   inspect(output);
 }
 
+function requireCompleteFiles(output, files) {
+  for (const relative of files.keys()) {
+    if (!statIfPresent(join(output, relative))) throw new Error('Local staging preparation is incomplete.');
+  }
+}
+
+function writeMissingFiles(output, files) {
+  for (const [relative, content] of files) {
+    const path = join(output, relative);
+    rejectLinks(path);
+    mkdirSync(dirname(path), { recursive: true });
+    if (!statIfPresent(path)) writeFileSync(path, content, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+  }
+}
+
+function replaceManifest(output, previous, next) {
+  const path = join(output, 'manifest.json');
+  if (readRegularFile(path) !== previous) throw new Error('Staging manifest changed during baseline preparation.');
+  const temporary = join(output, `.manifest-${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary, next, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    renameSync(temporary, path);
+  } finally {
+    if (statIfPresent(temporary)) unlinkSync(temporary);
+  }
+}
+
 export function prepareLocalStaging({ root = repositoryRoot, baselineManifest, approvedSha256, ...unknownOptions } = {}) {
   if (Object.keys(unknownOptions).length > 0) throw new Error('Unsupported local staging preparation option.');
   rejectLinks(root);
@@ -156,6 +199,7 @@ export function prepareLocalStaging({ root = repositoryRoot, baselineManifest, a
     throw new Error('Baseline preparation requires a private manifest and its external approval hash.');
   }
   const reviewed = baselineRequested ? loadReviewedLocalBaseline({ root, manifestPath: baselineManifest, approvedSha256 }) : null;
+  if (reviewed?.approval.formatVersion === 2) throw new Error('A baseline revision requires the explicit revise operation and previous approval hash.');
   const files = expectedFiles(root, reviewed);
   const manifestPath = join(output, 'manifest.json');
   const emptyManifest = expectedFiles(root).get('manifest.json');
@@ -168,26 +212,45 @@ export function prepareLocalStaging({ root = repositoryRoot, baselineManifest, a
   validateExistingTree(output, currentFiles);
   // Complete validation before the first write. Exclusive creation also prevents overwrites in a race.
   mkdirSync(join(output, 'supabase'), { recursive: true });
-  for (const [relative, content] of files) {
-    const path = join(output, relative);
-    rejectLinks(path);
-    mkdirSync(dirname(path), { recursive: true });
-    if (!statIfPresent(path)) writeFileSync(path, content, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
-  }
+  writeMissingFiles(output, files);
   if (transitioning) {
     // Only the exact validated bootstrap manifest can advance. Config and SQL are never overwritten.
-    if (readRegularFile(manifestPath) !== emptyManifest) throw new Error('Staging manifest changed during baseline preparation.');
-    const temporary = join(output, `.manifest-${randomUUID()}.tmp`);
-    try {
-      writeFileSync(temporary, files.get('manifest.json'), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
-      renameSync(temporary, manifestPath);
-    } finally {
-      if (statIfPresent(temporary)) unlinkSync(temporary);
-    }
+    replaceManifest(output, emptyManifest, files.get('manifest.json'));
   }
   validateExistingTree(output, files);
   return { workdir: output, manifest: manifestPath, applicationReady: false,
     ...(reviewed ? { state: 'reviewed-baseline-prepared', approvalSha256: reviewed.approvedSha256 } : {}) };
+}
+
+// File preparation only: this operation cannot establish whether SQL ran or the database is empty.
+export function reviseLocalStaging({ root = repositoryRoot, baselineManifest, previousApprovedSha256, approvedSha256, ...unknownOptions } = {}) {
+  if (Object.keys(unknownOptions).length > 0) throw new Error('Unsupported local staging revision option.');
+  rejectLinks(root);
+  root = realpathSync(root);
+  const output = join(root, '.local-staging');
+  const previous = loadPreparedLocalBaseline({ root, approvedSha256: previousApprovedSha256 });
+  const revision = loadReviewedLocalBaseline({ root, manifestPath: baselineManifest, approvedSha256 });
+  const reviewed = combineLocalBaselineRevision(previous, revision);
+  const previousFiles = expectedFiles(root, previous);
+  const files = expectedFiles(root, reviewed);
+  const manifestPath = join(output, 'manifest.json');
+  if (lstatSync(manifestPath).size > 256 * 1024) throw new Error('Existing staging manifest exceeds the reviewed size limit.');
+  const currentManifest = readRegularFile(manifestPath);
+  const alreadyPrepared = currentManifest === files.get('manifest.json');
+  if (!alreadyPrepared && currentManifest !== previousFiles.get('manifest.json')) throw new Error('Staging manifest does not match the previous approved revision.');
+  const currentFiles = new Map(files);
+  currentFiles.set('manifest.json', currentManifest);
+  // This also admits an interrupted copy of precisely this next revision. Every
+  // existing byte is checked before mutation; all OLD required files must exist.
+  validateExistingTree(output, currentFiles);
+  requireCompleteFiles(output, alreadyPrepared ? files : previousFiles);
+  writeMissingFiles(output, files);
+  validateExistingTree(output, currentFiles);
+  requireCompleteFiles(output, currentFiles);
+  if (!alreadyPrepared) replaceManifest(output, currentManifest, files.get('manifest.json'));
+  validateExistingTree(output, files);
+  return { workdir: output, manifest: manifestPath, applicationReady: false, state: 'reviewed-baseline-prepared',
+    approvalSha256: reviewed.approvedSha256, revisionCount: reviewed.revisionCount, approvalArtifact: reviewed.approvalArtifact };
 }
 
 export function verifyLocalStaging({ root = repositoryRoot, approvedSha256, ...unknownOptions } = {}) {
@@ -195,13 +258,10 @@ export function verifyLocalStaging({ root = repositoryRoot, approvedSha256, ...u
   rejectLinks(root);
   root = realpathSync(root);
   const output = join(root, '.local-staging');
-  const reviewed = approvedSha256 === undefined ? null : loadReviewedLocalBaseline({ root,
-    manifestPath: join(output, 'baseline/approval.json'), approvedSha256, prepared: true });
+  const reviewed = approvedSha256 === undefined ? null : loadPreparedLocalBaseline({ root, approvedSha256 });
   const files = expectedFiles(root, reviewed);
   validateExistingTree(output, files);
-  for (const relative of files.keys()) {
-    if (!statIfPresent(join(output, relative))) throw new Error('Local staging preparation is incomplete.');
-  }
+  requireCompleteFiles(output, files);
   return { workdir: output, manifest: join(output, 'manifest.json'), applicationReady: false,
     ...(reviewed ? { state: 'reviewed-baseline-prepared', approvalSha256: reviewed.approvedSha256 } : {}) };
 }
@@ -220,6 +280,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       result = verifyLocalStaging({ approvedSha256: args[2] });
     } else if (args.length === 4 && args[0] === '--baseline-manifest' && args[2] === '--approved-sha256') {
       result = prepareLocalStaging({ baselineManifest: args[1], approvedSha256: args[3] });
+    } else if (args.length === 6 && args[0] === '--revise-baseline' && args[2] === '--previous-approved-sha256' && args[4] === '--approved-sha256') {
+      result = reviseLocalStaging({ baselineManifest: args[1], previousApprovedSha256: args[3], approvedSha256: args[5] });
     } else {
       throw new Error('Only --check is accepted unless explicit reviewed-baseline options are supplied.');
     }

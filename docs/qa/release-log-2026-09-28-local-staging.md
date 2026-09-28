@@ -153,3 +153,13 @@ Foi implementada uma transição explícita para copiar artefatos aprovados, por
 A revisão encontrou e corrigiu, antes de qualquer execução, uma incompatibilidade no rascunho SQL: três privilégios padrão de `supabase_admin` não podem ser restaurados sob `SET ROLE postgres`. Esses blocos foram deslocados, sem alterar seu SQL, para o complemento de plataforma executado com o papel local adequado. As definições da aplicação permaneceram iguais ao dump.
 
 Testes: **50/50** focados no preparo/baseline e **92/92** no pipeline completo, sem falhas nem casos ignorados. O pipeline foi executado com Node **22.23.2** e npm **10.9.4**. ESLint focado, sintaxe e whitespace passaram. Esses resultados aprovam as proteções de preparo; a restauração e os fluxos da aplicação ainda não foram testados por eles.
+
+### Primeiro ensaio transacional — 17:49 UTC
+
+Os artefatos foram preparados no Linux no commit **0fde19fa7e0cf9b940d950a7359d85e44ec8c251**, com verificação real dos arquivos, nove serviços e zero tabelas públicas. O [registro da revisão e do ensaio](local-baseline-review-2026-09-28.md) detalha a composição, os limites e as diferenças de plataforma.
+
+A restauração em uma transação foi interrompida na criação de `ensure_rls` sob um papel diferente do owner da função. O erro provocou rollback; o banco permaneceu sem tabelas públicas. Às **17:51:03 UTC**, uma sondagem também revertida confirmou a correção: criar esse gatilho sob `postgres`. Não houve aplicação dos forwards nem seed.
+
+O procedimento passou a admitir revisões imutáveis dos artefatos, com hash anterior e novo explícitos, preservando o SQL e o manifesto anteriores. Essa proteção registra as tentativas sem sobrescrever a evidência e continua sem afirmar que o banco foi restaurado.
+
+Após essa alteração, passaram **58/58 testes focados** e **100/100 no pipeline completo**, novamente com Node 22.23.2 e npm 10.9.4. A revisão do verificador de catálogo identificou truncamento de chaves longas pelo tipo PostgreSQL `name`; a consulta foi corrigida para `text`. A [revisão do baseline](local-baseline-review-2026-09-28.md#correção-da-consulta-de-comparação) explica a limitação dos hashes anteriores e a necessidade da captura corrigida em ambos os ambientes.

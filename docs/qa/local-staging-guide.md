@@ -132,6 +132,14 @@ node scripts/verify-local-staging-runtime.mjs --baseline-approval-sha256 HASH_SH
 
 O último comando roda no Linux e continua exigindo o banco vazio: arquivos preparados não comprovam restauração. Hash divergente, entrada alterada, revisão incompleta, ledger divergente, forward adicional ou vínculo remoto bloqueiam o preparo. Repetir com os mesmos bytes é idempotente. O modo inicial sem argumentos permanece exclusivo da infraestrutura vazia; depois de preparar um baseline, conferir sempre com o hash externo revisado. A passagem para banco restaurado/comparado exige seu próprio registro e verificador.
 
+Uma correção no procedimento pode exigir revisar os artefatos preparados. Usar um novo manifesto `formatVersion: 2`, com `supersedesApprovalSha256` apontando à aprovação anterior, e o comando explícito:
+
+```text
+node scripts/prepare-local-staging.mjs --revise-baseline /caminho-privado/revisao/approval.json --previous-approved-sha256 HASH_ANTERIOR --approved-sha256 HASH_NOVO
+```
+
+Cada revisão fica em `baseline/revisions/HASH_NOVO/`; SQL anterior e configuração são preservados. O manifesto gerado só avança após validar os arquivos antigos e copiar integralmente o novo pacote. O verificador exige a cadeia completa, limitada a oito revisões, e os hashes externos. Uma cópia interrompida pode ser retomada apenas com os mesmos bytes previstos. Este comando não restaura nem reverte banco: conferir o estado real antes de repetir SQL. O [ensaio do baseline](local-baseline-review-2026-09-28.md) registra o caso que motivou essa revisão.
+
 ## 5. Aprovação e prevenção de regressões
 
 Executar lint de banco, `supabase/verify/baseline_contract.sql`, pgTAP e a matriz do [roteiro de estabilidade](production-stability-playbook-2026-09-26.md). Importação, fiscal e financeiro precisam comprovar ação e efeito persistido, inclusive erro, repetição e concorrência.

@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { prepareLocalStaging, verifyLocalStaging } from './prepare-local-staging.mjs';
+import { prepareLocalStaging, reviseLocalStaging, verifyLocalStaging } from './prepare-local-staging.mjs';
+import { combineLocalBaselineRevision, loadPreparedLocalBaseline, loadReviewedLocalBaseline, MAX_BASELINE_REVISIONS } from './local-staging-baseline.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -190,4 +191,168 @@ test('does not accept a self-declared replacement approval or overwritten genera
   f.approval.review.evidenceId = 'another-self-declared-review';
   writeFileSync(join(f.output, 'baseline/approval.json'), JSON.stringify(f.approval));
   assert.throws(() => verifyLocalStaging({ root: f.root, approvedSha256: f.approvedSha256 }), /approval_hash_mismatch/);
+});
+
+function revisionFixture(f, previousApprovedSha256, number = 1) {
+  const directory = join(f.directory, `private-revision-${number}`);
+  mkdirSync(directory);
+  const approval = structuredClone(f.approval);
+  approval.formatVersion = 2;
+  approval.supersedesApprovalSha256 = previousApprovedSha256;
+  approval.review.reviewedAtUtc = new Date().toISOString();
+  approval.review.evidenceId = `synthetic-revision-${number}`;
+  for (const artifact of approval.artifacts) {
+    const bytes = Buffer.concat([readFileSync(join(f.privateDirectory, artifact.filename)), Buffer.from(`-- Revision ${number}\n`)]);
+    artifact.bytes = bytes.length;
+    artifact.sha256 = digest(bytes);
+    writeFileSync(join(directory, artifact.filename), bytes);
+  }
+  const baselineManifest = join(directory, 'approval.json');
+  const bytes = `${JSON.stringify(approval, null, 2)}\n`;
+  writeFileSync(baselineManifest, bytes);
+  return { root: f.root, baselineManifest, previousApprovedSha256, approvedSha256: digest(bytes) };
+}
+
+test('an explicit revision preserves old SQL, config and metadata, and stores the exact previous manifest', (t) => {
+  const f = fixture(t);
+  prepareLocalStaging({ root: f.root, baselineManifest: f.manifestPath, approvedSha256: f.approvedSha256 });
+  mkdirSync(join(f.output, 'supabase/.temp'));
+  writeFileSync(join(f.output, 'supabase/.temp/cli-latest'), 'v2.118.0');
+  const previousManifest = readFileSync(join(f.output, 'manifest.json'));
+  const paths = ['baseline/approval.json', 'supabase/config.toml', 'supabase/.temp/cli-latest', ...f.approval.artifacts.map((a) => `baseline/${a.filename}`)];
+  const before = paths.map((path) => ({ path: join(f.output, path), bytes: readFileSync(join(f.output, path)), mtime: lstatSync(join(f.output, path)).mtimeMs }));
+  const next = revisionFixture(f, f.approvedSha256);
+  const result = reviseLocalStaging(next);
+  assert.equal(result.revisionCount, 1);
+  assert.equal(result.applicationReady, false);
+  assert.equal(result.approvalArtifact, `baseline/revisions/${next.approvedSha256}/approval.json`);
+  assert.equal(verifyLocalStaging({ root: f.root, approvedSha256: next.approvedSha256 }).applicationReady, false);
+  for (const item of before) {
+    assert.deepEqual(readFileSync(item.path), item.bytes);
+    assert.equal(lstatSync(item.path).mtimeMs, item.mtime);
+  }
+  assert.deepEqual(readFileSync(join(f.output, `baseline/revisions/${next.approvedSha256}/previous-manifest.json`)), previousManifest);
+  const manifest = JSON.parse(readFileSync(result.manifest, 'utf8'));
+  assert.equal(manifest.baseline.supersedesApprovalSha256, f.approvedSha256);
+  assert.equal(manifest.baseline.catalogCompared, false);
+  assert.equal(manifest.applicationReady, false);
+  assert.deepEqual(manifest.approvedFlows, []);
+  assert.throws(() => prepareLocalStaging(next), /Unsupported local staging preparation option/);
+  assert.throws(() => prepareLocalStaging({ root: f.root, baselineManifest: next.baselineManifest, approvedSha256: next.approvedSha256 }), /explicit revise operation/);
+});
+
+test('revision rejects mismatched external old/new hashes and incomplete or altered OLD artifacts before writes', (t) => {
+  const f = fixture(t);
+  prepareLocalStaging({ root: f.root, baselineManifest: f.manifestPath, approvedSha256: f.approvedSha256 });
+  const next = revisionFixture(f, f.approvedSha256);
+  const manifest = readFileSync(join(f.output, 'manifest.json'));
+  assert.throws(() => reviseLocalStaging({ ...next, previousApprovedSha256: '0'.repeat(64) }), /approval_hash_mismatch/);
+  assert.throws(() => reviseLocalStaging({ ...next, approvedSha256: '1'.repeat(64) }), /approval_hash_mismatch/);
+  const oldSql = join(f.output, 'baseline', f.approval.artifacts[0].filename);
+  const oldBytes = readFileSync(oldSql);
+  writeFileSync(oldSql, Buffer.alloc(oldBytes.length, 'x'));
+  assert.throws(() => reviseLocalStaging(next), /baseline_artifact_changed/);
+  writeFileSync(oldSql, oldBytes);
+  const oldForward = join(f.output, 'baseline/forwards', f.approval.candidate.forwards[0].filename);
+  rmSync(oldForward);
+  assert.throws(() => reviseLocalStaging(next), /incomplete/);
+  assert.deepEqual(readFileSync(join(f.output, 'manifest.json')), manifest);
+  assert.equal(readdirSync(join(f.output, 'baseline')).includes('revisions'), false);
+});
+
+test('revision requires exact supersedes linkage and rejects unrecognized fields', (t) => {
+  const f = fixture(t);
+  prepareLocalStaging({ root: f.root, baselineManifest: f.manifestPath, approvedSha256: f.approvedSha256 });
+  const next = revisionFixture(f, f.approvedSha256);
+  const manifest = JSON.parse(readFileSync(next.baselineManifest, 'utf8'));
+  manifest.supersedesApprovalSha256 = '0'.repeat(64);
+  let bytes = JSON.stringify(manifest);
+  writeFileSync(next.baselineManifest, bytes);
+  assert.throws(() => reviseLocalStaging({ ...next, approvedSha256: digest(bytes) }), /previous_approval_mismatch/);
+  delete manifest.supersedesApprovalSha256;
+  bytes = JSON.stringify(manifest);
+  writeFileSync(next.baselineManifest, bytes);
+  assert.throws(() => reviseLocalStaging({ ...next, approvedSha256: digest(bytes) }), /invalid_manifest_fields/);
+});
+
+test('resumes an exact interrupted next revision without overwriting existing files and is idempotent after promotion', (t) => {
+  const f = fixture(t);
+  prepareLocalStaging({ root: f.root, baselineManifest: f.manifestPath, approvedSha256: f.approvedSha256 });
+  const next = revisionFixture(f, f.approvedSha256);
+  const revisionPath = join(f.output, 'baseline/revisions', next.approvedSha256);
+  mkdirSync(revisionPath, { recursive: true });
+  const partialSql = join(revisionPath, f.approval.artifacts[0].filename);
+  writeFileSync(join(revisionPath, 'approval.json'), readFileSync(next.baselineManifest));
+  writeFileSync(partialSql, readFileSync(join(dirname(next.baselineManifest), f.approval.artifacts[0].filename)));
+  const before = lstatSync(partialSql).mtimeMs;
+  assert.throws(() => verifyLocalStaging({ root: f.root, approvedSha256: f.approvedSha256 }), /Unknown artifact/);
+  reviseLocalStaging(next);
+  assert.equal(lstatSync(partialSql).mtimeMs, before);
+  const manifestTime = lstatSync(join(f.output, 'manifest.json')).mtimeMs;
+  reviseLocalStaging(next);
+  assert.equal(lstatSync(join(f.output, 'manifest.json')).mtimeMs, manifestTime);
+  assert.equal(lstatSync(partialSql).mtimeMs, before);
+});
+
+test('does not resume corrupted partial revisions or accept other revision directories/remote links', (t) => {
+  const f = fixture(t);
+  prepareLocalStaging({ root: f.root, baselineManifest: f.manifestPath, approvedSha256: f.approvedSha256 });
+  const next = revisionFixture(f, f.approvedSha256);
+  const revisionPath = join(f.output, 'baseline/revisions', next.approvedSha256);
+  mkdirSync(revisionPath, { recursive: true });
+  const partialSql = join(revisionPath, f.approval.artifacts[0].filename);
+  writeFileSync(partialSql, 'unapproved SQL sentinel');
+  assert.throws(() => reviseLocalStaging(next), /modified/);
+  assert.equal(readFileSync(partialSql, 'utf8'), 'unapproved SQL sentinel');
+  rmSync(partialSql);
+  const unexpected = join(revisionPath, 'secret.env');
+  writeFileSync(unexpected, 'secret sentinel');
+  assert.throws(() => reviseLocalStaging(next), /Unknown artifact/);
+  rmSync(unexpected);
+  mkdirSync(join(f.output, 'supabase/.temp'));
+  writeFileSync(join(f.output, 'supabase/.temp/project-ref'), 'remote');
+  assert.throws(() => reviseLocalStaging(next), /Unknown artifact/);
+});
+
+test('verifies all ancestor SQL and previous-manifest snapshots in a multi-revision chain', (t) => {
+  const f = fixture(t);
+  prepareLocalStaging({ root: f.root, baselineManifest: f.manifestPath, approvedSha256: f.approvedSha256 });
+  const first = revisionFixture(f, f.approvedSha256, 1);
+  reviseLocalStaging(first);
+  const second = revisionFixture(f, first.approvedSha256, 2);
+  reviseLocalStaging(second);
+  assert.equal(verifyLocalStaging({ root: f.root, approvedSha256: second.approvedSha256 }).applicationReady, false);
+  const ancestorSql = join(f.output, 'baseline/revisions', first.approvedSha256, f.approval.artifacts[0].filename);
+  const original = readFileSync(ancestorSql);
+  writeFileSync(ancestorSql, Buffer.alloc(original.length, 'z'));
+  assert.throws(() => verifyLocalStaging({ root: f.root, approvedSha256: second.approvedSha256 }), /baseline_artifact_changed/);
+  writeFileSync(ancestorSql, original);
+  writeFileSync(join(f.output, 'baseline/revisions', first.approvedSha256, 'previous-manifest.json'), '{}');
+  assert.throws(() => verifyLocalStaging({ root: f.root, approvedSha256: second.approvedSha256 }), /modified/);
+});
+
+test('allows eight immutable revisions and refuses a ninth before writing its directory', (t) => {
+  const f = fixture(t);
+  prepareLocalStaging({ root: f.root, baselineManifest: f.manifestPath, approvedSha256: f.approvedSha256 });
+  let previous = f.approvedSha256;
+  for (let number = 1; number <= MAX_BASELINE_REVISIONS; number += 1) {
+    const next = revisionFixture(f, previous, number);
+    assert.equal(reviseLocalStaging(next).revisionCount, number);
+    previous = next.approvedSha256;
+  }
+  assert.equal(verifyLocalStaging({ root: f.root, approvedSha256: previous }).applicationReady, false);
+  const refused = revisionFixture(f, previous, MAX_BASELINE_REVISIONS + 1);
+  assert.throws(() => reviseLocalStaging(refused), /revision_depth_exceeded/);
+  assert.equal(readdirSync(join(f.output, 'baseline/revisions')).includes(refused.approvedSha256), false);
+});
+
+test('chain assembly rejects repeated approval identities and cyclic ancestry', (t) => {
+  const f = fixture(t);
+  prepareLocalStaging({ root: f.root, baselineManifest: f.manifestPath, approvedSha256: f.approvedSha256 });
+  const previous = loadPreparedLocalBaseline({ root: f.root, approvedSha256: f.approvedSha256 });
+  const next = revisionFixture(f, f.approvedSha256);
+  const revision = loadReviewedLocalBaseline({ root: f.root, manifestPath: next.baselineManifest, approvedSha256: next.approvedSha256 });
+  assert.throws(() => combineLocalBaselineRevision(previous, { ...revision, approvedSha256: previous.approvedSha256 }), /approval_cycle/);
+  previous.previous = previous;
+  assert.throws(() => combineLocalBaselineRevision(previous, revision), /approval_cycle/);
 });

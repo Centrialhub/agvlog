@@ -26,7 +26,8 @@ with app_schema(name) as (
     or (n.nspname = 'auth' and c.relname = 'users')
     or (n.nspname = 'storage' and c.relname in ('objects', 'buckets'))
 ), catalog_row as (
-  select 'schema_acl' as category, n.nspname as object_key,
+  -- Explicit text prevents UNION coercion to name, which truncates keys at 63 bytes.
+  select 'schema_acl' as category, n.nspname::text as object_key,
     pg_get_userbyid(n.nspowner) || '|' || coalesce(n.nspacl::text, '') as definition
   from pg_namespace n where n.nspname in (select name from app_schema)
   union all
