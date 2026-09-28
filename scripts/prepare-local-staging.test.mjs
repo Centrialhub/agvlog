@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -94,6 +94,68 @@ test('accepts bounded future stable update notices without changing the pinned C
     assert.equal(readFileSync(join(output, 'supabase/.temp/cli-latest'), 'utf8'), latest);
   }
 });
+
+test('preserves the observed empty snippets directory without approving application flows', (t) => {
+  const { root, output } = fixture(t);
+  prepareLocalStaging({ root });
+  addRuntimeMetadata(output);
+  const snippets = join(output, 'supabase/snippets');
+  mkdirSync(snippets);
+  const before = lstatSync(snippets);
+  const manifestBefore = readFileSync(join(output, 'manifest.json'));
+  assert.equal(prepareLocalStaging({ root }).applicationReady, false);
+  assert.equal(verifyLocalStaging({ root }).applicationReady, false);
+  assert.deepEqual(readdirSync(snippets), []);
+  assert.equal(lstatSync(snippets).mtimeMs, before.mtimeMs);
+  assert.equal(lstatSync(snippets).ino, before.ino);
+  assert.deepEqual(readFileSync(join(output, 'manifest.json')), manifestBefore);
+});
+
+for (const child of ['query.sql', '.env', 'project-ref']) {
+  test(`does not admit or remove snippets content ${child}`, (t) => {
+    const { root, output } = fixture(t);
+    prepareLocalStaging({ root });
+    const snippets = join(output, 'supabase/snippets');
+    mkdirSync(snippets);
+    const path = join(snippets, child);
+    writeFileSync(path, 'synthetic-content-not-to-be-printed');
+    const before = lstatSync(path).mtimeMs;
+    assert.throws(() => verifyLocalStaging({ root }), /Unknown artifact/);
+    assert.throws(() => prepareLocalStaging({ root }), /Unknown artifact/);
+    assert.equal(readFileSync(path, 'utf8'), 'synthetic-content-not-to-be-printed');
+    assert.equal(lstatSync(path).mtimeMs, before);
+  });
+}
+
+test('refuses a regular file at snippets and any nested directory, including an empty one', (t) => {
+  const { root, output } = fixture(t);
+  prepareLocalStaging({ root });
+  const snippets = join(output, 'supabase/snippets');
+  writeFileSync(snippets, '');
+  assert.throws(() => verifyLocalStaging({ root }), /Unknown artifact/);
+  assert.equal(lstatSync(snippets).isFile(), true);
+  rmSync(snippets);
+  mkdirSync(join(snippets, 'nested'), { recursive: true });
+  assert.throws(() => verifyLocalStaging({ root }), /Unknown artifact/);
+  assert.throws(() => prepareLocalStaging({ root }), /Unknown artifact/);
+  assert.equal(lstatSync(join(snippets, 'nested')).isDirectory(), true);
+});
+
+for (const relative of ['supabase/snippets', 'supabase/snippets/linked']) {
+  test(`refuses a symlink or junction at ${relative}`, (t) => {
+    const { root, output, directory } = fixture(t);
+    prepareLocalStaging({ root });
+    const outside = join(directory, 'outside-snippets');
+    mkdirSync(outside);
+    const path = join(output, relative);
+    mkdirSync(dirname(path), { recursive: true });
+    symlinkSync(outside, path, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.throws(() => verifyLocalStaging({ root }), /symlinks or junctions/);
+    assert.throws(() => prepareLocalStaging({ root }), /symlinks or junctions/);
+    assert.equal(lstatSync(path).isSymbolicLink(), true);
+    assert.deepEqual(readdirSync(outside), []);
+  });
+}
 
 test('rejects empty, oversized, noncanonical and nonstable update metadata without rewriting it', (t) => {
   const { root, output } = fixture(t);

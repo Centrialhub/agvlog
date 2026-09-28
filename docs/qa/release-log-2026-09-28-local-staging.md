@@ -44,7 +44,7 @@ Foi solicitado ao responsável executar a instalação em PowerShell como admini
 
 | Gate | Estado |
 | --- | --- |
-| Gerador/configuração e testes de proteção | Arquivos gerados; verificação passou; 23/23 testes após revisão dos metadados reais |
+| Gerador/configuração e testes de proteção | Arquivos gerados; verificação passou; 30/30 testes após revisão dos metadados reais e diretório Studio |
 | WSL 2 e distribuição Linux | Concluído após reinício; Ubuntu 24.04.5, WSL 2.7.13.0 |
 | Docker Engine e binding loopback | Engine 29.8.1; rede e portas efetivas em 127.0.0.1, inclusive no Windows |
 | Stack vazia iniciada e health checks | 9 serviços ativos; PostgreSQL 17.6; Auth, REST e Studio HTTP 200 |
@@ -110,11 +110,13 @@ O [JSON sanitizado capturado em 12:41:03 UTC](local-staging-runtime-evidence-202
 
 ### Proteções adicionadas após a execução real
 
-A CLI criou somente `.temp/cli-latest` (`v2.118.0`) e `.branches/_current_branch` (`main`) além dos arquivos preparados. O verificador anterior os recusava por sua lista fechada. A revisão admite apenas esses dois tipos de metadados locais, validando formato, tamanho, tipo e ausência de links, preservando bytes/mtime. `project-ref` remoto, SQL, `.env` e artefatos desconhecidos continuam proibidos; a versão disponível em cache não muda a CLI 2.116.0 fixada.
+A CLI criou `.temp/cli-latest` (`v2.118.0`) e `.branches/_current_branch` (`main`) além dos arquivos preparados. O verificador anterior os recusava por sua lista fechada. A revisão admite apenas esses dois tipos de metadados locais, validando formato, tamanho, tipo e ausência de links, preservando bytes/mtime. Na conferência após transferir `ee062fd3`, o runtime também tinha criado `supabase/snippets` vazio, usado pelo Studio; essa execução bloqueou corretamente o artefato ainda desconhecido. A compatibilidade foi ampliada somente para esse diretório vazio, mantendo a rejeição de qualquer conteúdo ou link. `project-ref` remoto, SQL, `.env` e artefatos desconhecidos continuam proibidos; a versão disponível em cache não muda a CLI 2.116.0 fixada.
 
 O comando `staging:local:health` passa a verificar o runtime de forma reproduzível, sem emitir credenciais. É exclusivo desta fase vazia: deve falhar se tabelas públicas já estiverem restauradas. Não serve como aprovação de login da aplicação, RLS de negócio, importação, fiscal ou financeiro.
 
 O preparador revisado passou em **23/23 testes**. O pipeline de contratos de scripts passou em **65/65**, sem falhas ou casos ignorados, usando Node **22.23.2** e npm **10.9.4**. ESLint focado, sintaxe Node, contrato do lockfile e conferência de whitespace passaram. O provisionador mantém o hash registrado acima. São evidências das ferramentas de preparação; os testes da aplicação continuam pendentes do baseline.
+
+Após admitir o diretório vazio do Studio, o preparador passou em **30/30** e o pipeline completo em **72/72**, com as mesmas versões de Node/npm, sem falhas ou casos ignorados. A inspeção dos mounts confirmou que `supabase/snippets` é o único bind do container Studio. Não foi admitido conteúdo SQL nessa pasta.
 
 ### Gate remoto e impedimento restante
 

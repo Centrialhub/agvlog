@@ -8,7 +8,8 @@ const templatePath = 'infra/local-staging/config.toml';
 const templateSha256 = 'df0703b59d0ecac3d5ef7fd98a3cc20c878a861afc7f84cee349a7ff01b7a021';
 export const LOCAL_STAGING_CLI_VERSION = '2.116.0';
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
-const allowedDirectories = new Set(['supabase', 'supabase/.temp', 'supabase/.branches']);
+// Studio creates snippets as an empty directory; no child path is allowlisted.
+const allowedDirectories = new Set(['supabase', 'supabase/.temp', 'supabase/.branches', 'supabase/snippets']);
 const runtimeMetadata = new Map([
   // This is an update notice, not permission to change the pinned CLI version.
   // Stable semver only, optional v, canonical numbers of at most five digits.
