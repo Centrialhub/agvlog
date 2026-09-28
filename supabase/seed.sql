@@ -90,11 +90,22 @@ values
   ('10000000-0000-4000-8000-000000000007', 'Multi Operator E2E')
 on conflict (id) do update set full_name = excluded.full_name, updated_at = now();
 
-insert into public.tenants (id, name, plan_key, timezone, settings)
+-- Keep the two fixture tenants in different workspaces. Membership triggers
+-- propagate employees within a workspace, so sharing one would erase this
+-- fixture's cross-tenant authorization boundary.
+insert into public.workspaces (id, name, active, settings)
 values
-  ('20000000-0000-4000-8000-000000000001', 'AGVLOG E2E A', 'enterprise', 'America/Sao_Paulo', '{"fixture":true}'),
-  ('20000000-0000-4000-8000-000000000002', 'AGVLOG E2E B', 'enterprise', 'America/Sao_Paulo', '{"fixture":true}')
-on conflict (id) do update set name = excluded.name, settings = excluded.settings, updated_at = now();
+  ('21000000-0000-4000-8000-000000000001', 'AGVLOG E2E Workspace A', true, '{"fixture":true}'),
+  ('21000000-0000-4000-8000-000000000002', 'AGVLOG E2E Workspace B', true, '{"fixture":true}')
+on conflict (id) do update
+set name = excluded.name, active = excluded.active, settings = excluded.settings, updated_at = now();
+
+insert into public.tenants (id, name, plan_key, timezone, settings, workspace_id)
+values
+  ('20000000-0000-4000-8000-000000000001', 'AGVLOG E2E A', 'enterprise', 'America/Sao_Paulo', '{"fixture":true}', '21000000-0000-4000-8000-000000000001'),
+  ('20000000-0000-4000-8000-000000000002', 'AGVLOG E2E B', 'enterprise', 'America/Sao_Paulo', '{"fixture":true}', '21000000-0000-4000-8000-000000000002')
+on conflict (id) do update
+set name = excluded.name, settings = excluded.settings, workspace_id = excluded.workspace_id, updated_at = now();
 
 insert into public.tenant_memberships (id, tenant_id, user_id, role, active)
 values
