@@ -4,6 +4,7 @@ Antes de alterar um fluxo publicado ou preparar um release, leia [o roteiro de e
 
 ## Regras de trabalho
 
+- A homologação local segue o [guia do ambiente interno](docs/qa/local-staging-guide.md) e seu [registro de implantação](docs/qa/release-log-2026-09-28-local-staging.md). Use o workdir `.local-staging` sem vínculo remoto. Infraestrutura vazia não aprova a aplicação; restaure e compare um baseline revisado antes dos forwards, seed, hook de Auth e testes integrados. Não reutilize credenciais, cron ou configurações de produção no ambiente local.
 - Confirme o SHA realmente publicado, as versões das Edge Functions e o contrato SQL em produção antes de assumir que `main` representa o ambiente público. O histórico local e o banco divergiam em 26/09/2026.
 - Antes de publicar Edge Functions, compare o bundle completo de cada função afetada, incluindo módulos compartilhados, com a versão ativa. Não execute uma publicação de todas as funções a partir de um checkout sem essa reconciliação. Os checkpoints de `ssx-sync-governance` v14 e `agvlog-pipeline-run` v153 precisaram ser recuperados dos pacotes publicados; a comparação também inclui `ssx-sync-units` v146 e `ssx-sync-rule-violations` v13. O [registro de reconciliação](docs/qa/edge-reconciliation-2026-09-26.json) documenta fontes e diferenças candidatas. Reconfirme as versões ativas antes de promover.
 - Faça a mudança em checkout isolado e preserve alterações de outros trabalhos. Use migrações novas e incrementais; não reescreva uma migração já aplicada para corrigir produção.
