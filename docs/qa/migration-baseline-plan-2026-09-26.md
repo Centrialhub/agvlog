@@ -1,5 +1,7 @@
 # Proposta de baseline verificável para CI e staging
 
+**Atualização em 28/09:** a [captura autoritativa](authoritative-schema-capture-2026-09-28.md) foi concluída via autenticação temporária oficial da CLI. O esquema e os papéis sem senhas permanecem privados para revisão; o catálogo antes/depois e o corte de 896 migrações coincidiram. A infraestrutura local está iniciada. Revisão, montagem/restauração do baseline e comparação continuam pendentes; as entradas históricas abaixo não representam mais bloqueio de acesso à fonte.
+
 **Estado em 26/09/2026: captura e restauração ainda não executadas.** O manifesto do candidato e a consulta de comparação de catálogo estão implementados. Nenhum dump, baseline novo, staging ou alteração no banco foi criado por este plano. O histórico SQL aplicado permanece intacto. A decisão de promoção continua sujeita ao [roteiro de estabilidade](production-stability-playbook-2026-09-26.md) e ao [preflight de paridade](migration-parity-preflight-2026-09-26.md).
 
 ## Por que o replay atual não serve como gate

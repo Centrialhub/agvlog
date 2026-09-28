@@ -5,7 +5,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LOCAL_STAGING_CLI_VERSION, verifyLocalStaging } from './prepare-local-staging.mjs';
 
-// Verifies the reviewed EMPTY bootstrap only. Never starts, resets or stops services.
+// Both accepted stages require an EMPTY database. Prepared baseline files do not
+// prove a restore or catalog comparison. Never starts, restores, resets or stops services.
 const scriptPath = fileURLToPath(import.meta.url);
 const root = resolve(dirname(scriptPath), '..');
 const project = 'agvlog-local-staging';
@@ -82,9 +83,12 @@ async function probe(path, url, headers = {}, maxRedirects = 0) {
 
 try {
   requireCondition(process.platform === 'linux', 'linux_required');
-  requireCondition(process.argv.length === 2, 'arguments_not_supported');
+  const args = process.argv.slice(2);
+  requireCondition(args.length === 0 || (args.length === 2 && args[0] === '--baseline-approval-sha256' &&
+    /^[a-f0-9]{64}$/.test(args[1])), 'arguments_not_supported');
+  const approvedSha256 = args.length ? args[1] : undefined;
   stage = 'prepared_files';
-  verifyLocalStaging({ root });
+  const prepared = verifyLocalStaging({ root, approvedSha256 });
 
   stage = 'versions';
   const cliVersion = cli('--version');
@@ -163,10 +167,12 @@ try {
   const verifierSha256 = createHash('sha256').update(readFileSync(scriptPath)).digest('hex');
   stage = 'prepared_files_after_status';
   // CLI read commands may refresh their version cache; reject any unreviewed artifact afterwards.
-  verifyLocalStaging({ root });
+  verifyLocalStaging({ root, approvedSha256 });
   console.log(JSON.stringify({
-    capturedAt: new Date().toISOString(), project, state: 'empty-infrastructure-verified',
-    applicationReady: false, approvedFlows: [], baseline: 'pending', sourceSha, workingTreeClean,
+    capturedAt: new Date().toISOString(), project,
+    state: prepared.state === 'reviewed-baseline-prepared' ? 'reviewed-baseline-preparation-verified' : 'empty-infrastructure-verified',
+    applicationReady: false, approvedFlows: [], baseline: approvedSha256 ? 'reviewed-artifacts-not-restored' : 'pending',
+    ...(approvedSha256 ? { baselineApprovalSha256: approvedSha256, catalogCompared: false } : {}), sourceSha, workingTreeClean,
     verifierSha256, cliVersion, dockerVersion, postgresVersion: database.version, publicTableCount: 0,
     network: { name: networkName, driver: 'bridge', exclusive: true, defaultBinding: '127.0.0.1' },
     containers, probes,

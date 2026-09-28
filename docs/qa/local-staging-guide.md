@@ -106,7 +106,7 @@ Não usar `--all` nem `--no-backup`. A rede exclusiva pode permanecer para a pr�
 
 ## 4. Restaurar o contrato publicado antes de testar o candidato
 
-Seguir a [proposta de baseline](migration-baseline-plan-2026-09-26.md). Faltam uma DSN protegida com leitura suficiente ou um dump de esquema fornecido pelo responsável pelo banco. Credenciais devem ser disponibilizadas em armazenamento local/protegido, nunca no chat ou Git.
+Seguir a [proposta de baseline](migration-baseline-plan-2026-09-26.md). A [captura autoritativa de 28/09](authoritative-schema-capture-2026-09-28.md) foi concluída com autenticação temporária oficial da CLI; não depende mais de receber a senha permanente do banco. Os artefatos privados ainda exigem revisão e montagem do baseline local. Credenciais e SQL bruto não devem ser enviados ao chat ou Git.
 
 1. Reconfirmar versão PostgreSQL, schemas e ledger antes e depois da captura. O corte observado em 26/09 foi de 896 versões, máximo `20260924155758`; reconfirmar, pois esse registro é histórico.
 2. Capturar somente esquema em área restrita. Revisar definições quanto a literais sensíveis antes de compartilhá-las. Não exportar os comandos SQL completos do ledger nem dados de clientes.
@@ -117,6 +117,20 @@ Seguir a [proposta de baseline](migration-baseline-plan-2026-09-26.md). Faltam u
 7. Preparar Edge e frontend com credenciais exclusivas. Conferir que `release.json.supabaseOrigin` e o backend esperado dos testes coincidam.
 
 O baseline de teste fica fora de `supabase/migrations` do release e jamais é aplicado no banco de produção.
+
+### Preparação explícita dos artefatos revisados
+
+O preparador admite a etapa `reviewed-baseline-prepared`. Ela apenas copia o SQL revisado e os 13 forwards para `.local-staging/baseline/`; não executa SQL, altera o TOML ou ativa seed, hook, Edge ou replay. A entrada deve estar em diretório privado **fora do checkout**, com arquivos regulares e sem links. Os artefatos brutos da captura não são entradas aprovadas.
+
+O arquivo `approval.json` fixa a fonte, data, PostgreSQL 17, método de captura, SHA-256 do esquema e do ledger exportados, contagem/última versão/MD5 do catálogo do ledger antes e depois, decisão e evidência da revisão, tamanho/hash de cada SQL e a lista exata dos forwards. `application-schema` e `managed-customizations` são obrigatórios; complementos de papéis, extensões e buckets são admitidos com revisão. O manifesto não constitui uma revisão automática do SQL. Quem aprova deve conferir o conteúdo e registrar evidência antes de fornecer o hash do manifesto ao comando.
+
+```text
+node scripts/prepare-local-staging.mjs --baseline-manifest /caminho-privado/approval.json --approved-sha256 HASH_SHA256_REVISADO
+node scripts/prepare-local-staging.mjs --check --approved-sha256 HASH_SHA256_REVISADO
+node scripts/verify-local-staging-runtime.mjs --baseline-approval-sha256 HASH_SHA256_REVISADO
+```
+
+O último comando roda no Linux e continua exigindo o banco vazio: arquivos preparados não comprovam restauração. Hash divergente, entrada alterada, revisão incompleta, ledger divergente, forward adicional ou vínculo remoto bloqueiam o preparo. Repetir com os mesmos bytes é idempotente. O modo inicial sem argumentos permanece exclusivo da infraestrutura vazia; depois de preparar um baseline, conferir sempre com o hash externo revisado. A passagem para banco restaurado/comparado exige seu próprio registro e verificador.
 
 ## 5. Aprovação e prevenção de regressões
 

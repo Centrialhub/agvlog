@@ -1,7 +1,8 @@
-import { createHash } from 'node:crypto';
-import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, parse, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadReviewedLocalBaseline } from './local-staging-baseline.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const templatePath = 'infra/local-staging/config.toml';
@@ -39,13 +40,13 @@ function rejectLinks(path) {
   }
 }
 
-function readRegularFile(path) {
+function readRegularFile(path, asBuffer = false) {
   rejectLinks(path);
   if (!lstatSync(path).isFile()) throw new Error('Expected a regular local staging source file.');
-  return readFileSync(path, 'utf8');
+  return readFileSync(path, asBuffer ? undefined : 'utf8');
 }
 
-function expectedFiles(root) {
+function expectedFiles(root, reviewed = null) {
   const packageJson = JSON.parse(readRegularFile(join(root, 'package.json')));
   if (packageJson.devDependencies?.supabase !== LOCAL_STAGING_CLI_VERSION) {
     throw new Error('Review the local staging template before changing the pinned Supabase CLI.');
@@ -81,10 +82,30 @@ function expectedFiles(root) {
       'Approve critical flows only after tests on the same candidate and backend; infrastructure is not homologation.',
     ],
   };
-  return new Map([
-    ['supabase/config.toml', config],
-    ['manifest.json', `${JSON.stringify(manifest, null, 2)}\n`],
-  ]);
+  const files = new Map([['supabase/config.toml', config]]);
+  if (reviewed) {
+    manifest.formatVersion = 2;
+    manifest.state = 'reviewed-baseline-prepared';
+    manifest.baseline = {
+      state: 'reviewed-artifacts-prepared-not-restored', approvalSha256: reviewed.approvedSha256,
+      approvalArtifact: 'baseline/approval.json', catalogCompared: false,
+      source: reviewed.approval.source,
+      artifacts: reviewed.approval.artifacts,
+      forwards: reviewed.approval.candidate.forwards,
+    };
+    manifest.nextRequirements = [
+      'The supplied approval digest fixes reviewed artifacts; JSON declarations alone do not establish a review.',
+      'No SQL has been executed by this preparation. Confirm isolated runtime identity before any separate restore.',
+      'Restore and compare the baseline before applying forwards, seeds, Auth hook or application functions.',
+      'A separate restore procedure and catalog/behavior verification remain required; no application flow is approved.',
+    ];
+    for (const [relative, bytes] of reviewed.files) {
+      files.set(relative, bytes);
+      manifest.files[relative] = { sha256: sha256(bytes) };
+    }
+  }
+  files.set('manifest.json', `${JSON.stringify(manifest, null, 2)}\n`);
+  return files;
 }
 
 function validateExistingTree(output, files) {
@@ -97,7 +118,8 @@ function validateExistingTree(output, files) {
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
       const path = join(directory, entry.name);
       rejectLinks(path);
-      if (allowedDirectories.has(relative) && entry.isDirectory()) {
+      const baselineDirectory = files.has('baseline/approval.json') && ['baseline', 'baseline/forwards'].includes(relative);
+      if ((allowedDirectories.has(relative) || baselineDirectory) && entry.isDirectory()) {
         inspect(path, relative);
       } else if (runtimeMetadata.has(relative)) {
         const rule = runtimeMetadata.get(relative);
@@ -111,7 +133,8 @@ function validateExistingTree(output, files) {
         }
         if (!rule.accepts(readRegularFile(path))) throw new Error('Invalid local CLI metadata content.');
       } else if (entry.isFile() && files.has(relative)) {
-        if (readRegularFile(path) !== files.get(relative)) {
+        const expected = Buffer.from(files.get(relative));
+        if (lstatSync(path).size !== expected.length || !readRegularFile(path, true).equals(expected)) {
           throw new Error('Existing staging artifact was modified; no files were overwritten.');
         }
       } else {
@@ -123,46 +146,87 @@ function validateExistingTree(output, files) {
   inspect(output);
 }
 
-export function prepareLocalStaging({ root = repositoryRoot, ...unknownOptions } = {}) {
+export function prepareLocalStaging({ root = repositoryRoot, baselineManifest, approvedSha256, ...unknownOptions } = {}) {
   if (Object.keys(unknownOptions).length > 0) throw new Error('Unsupported local staging preparation option.');
   rejectLinks(root);
   root = realpathSync(root);
   const output = join(root, '.local-staging');
-  const files = expectedFiles(root);
-  validateExistingTree(output, files);
+  const baselineRequested = baselineManifest !== undefined || approvedSha256 !== undefined;
+  if (baselineRequested && (typeof baselineManifest !== 'string' || !baselineManifest || typeof approvedSha256 !== 'string' || !approvedSha256)) {
+    throw new Error('Baseline preparation requires a private manifest and its external approval hash.');
+  }
+  const reviewed = baselineRequested ? loadReviewedLocalBaseline({ root, manifestPath: baselineManifest, approvedSha256 }) : null;
+  const files = expectedFiles(root, reviewed);
+  const manifestPath = join(output, 'manifest.json');
+  const emptyManifest = expectedFiles(root).get('manifest.json');
+  const manifestStat = statIfPresent(manifestPath);
+  if (manifestStat?.size > 256 * 1024) throw new Error('Existing staging manifest exceeds the reviewed size limit.');
+  const currentManifest = manifestStat ? readRegularFile(manifestPath) : null;
+  const transitioning = reviewed && currentManifest === emptyManifest;
+  const currentFiles = new Map(files);
+  if (transitioning) currentFiles.set('manifest.json', emptyManifest);
+  validateExistingTree(output, currentFiles);
   // Complete validation before the first write. Exclusive creation also prevents overwrites in a race.
   mkdirSync(join(output, 'supabase'), { recursive: true });
   for (const [relative, content] of files) {
     const path = join(output, relative);
     rejectLinks(path);
+    mkdirSync(dirname(path), { recursive: true });
     if (!statIfPresent(path)) writeFileSync(path, content, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
   }
+  if (transitioning) {
+    // Only the exact validated bootstrap manifest can advance. Config and SQL are never overwritten.
+    if (readRegularFile(manifestPath) !== emptyManifest) throw new Error('Staging manifest changed during baseline preparation.');
+    const temporary = join(output, `.manifest-${randomUUID()}.tmp`);
+    try {
+      writeFileSync(temporary, files.get('manifest.json'), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+      renameSync(temporary, manifestPath);
+    } finally {
+      if (statIfPresent(temporary)) unlinkSync(temporary);
+    }
+  }
   validateExistingTree(output, files);
-  return { workdir: output, manifest: join(output, 'manifest.json'), applicationReady: false };
+  return { workdir: output, manifest: manifestPath, applicationReady: false,
+    ...(reviewed ? { state: 'reviewed-baseline-prepared', approvalSha256: reviewed.approvedSha256 } : {}) };
 }
 
-export function verifyLocalStaging({ root = repositoryRoot, ...unknownOptions } = {}) {
+export function verifyLocalStaging({ root = repositoryRoot, approvedSha256, ...unknownOptions } = {}) {
   if (Object.keys(unknownOptions).length > 0) throw new Error('Unsupported local staging verification option.');
   rejectLinks(root);
   root = realpathSync(root);
   const output = join(root, '.local-staging');
-  const files = expectedFiles(root);
+  const reviewed = approvedSha256 === undefined ? null : loadReviewedLocalBaseline({ root,
+    manifestPath: join(output, 'baseline/approval.json'), approvedSha256, prepared: true });
+  const files = expectedFiles(root, reviewed);
   validateExistingTree(output, files);
   for (const relative of files.keys()) {
     if (!statIfPresent(join(output, relative))) throw new Error('Local staging preparation is incomplete.');
   }
-  return { workdir: output, manifest: join(output, 'manifest.json'), applicationReady: false };
+  return { workdir: output, manifest: join(output, 'manifest.json'), applicationReady: false,
+    ...(reviewed ? { state: 'reviewed-baseline-prepared', approvalSha256: reviewed.approvedSha256 } : {}) };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
-    if (args.length && (args.length !== 1 || args[0] !== '--check')) {
-      throw new Error('Only --check is accepted; destination and empty-bootstrap scope are fixed.');
+    let result;
+    let checking = false;
+    if (args.length === 0) result = prepareLocalStaging();
+    else if (args.length === 1 && args[0] === '--check') {
+      checking = true;
+      result = verifyLocalStaging();
+    } else if (args.length === 3 && args[0] === '--check' && args[1] === '--approved-sha256') {
+      checking = true;
+      result = verifyLocalStaging({ approvedSha256: args[2] });
+    } else if (args.length === 4 && args[0] === '--baseline-manifest' && args[2] === '--approved-sha256') {
+      result = prepareLocalStaging({ baselineManifest: args[1], approvedSha256: args[3] });
+    } else {
+      throw new Error('Only --check is accepted unless explicit reviewed-baseline options are supplied.');
     }
-    const result = args.length ? verifyLocalStaging() : prepareLocalStaging();
-    console.log(`${args.length ? 'Verified' : 'Prepared'} ${result.workdir}`);
-    console.log('Empty infrastructure only. Baseline pending; applicationReady=false; no services started.');
+    console.log(`${checking ? 'Verified' : 'Prepared'} ${result.workdir}`);
+    console.log(result.state === 'reviewed-baseline-prepared'
+      ? 'Reviewed baseline artifacts prepared; not restored; applicationReady=false; no SQL executed or services started.'
+      : 'Empty infrastructure only. Baseline pending; applicationReady=false; no services started.');
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

@@ -133,3 +133,23 @@ A revisão seguinte identificou sobreposição possível no workflow hospedado: 
 O YAML foi carregado e revisado; **10/10 testes existentes** de URL, ambiente protegido e backend passaram em Node 22.23.2; `git diff --check` passou. Nenhum workflow hospedado foi disparado para ensaiar a concorrência: o ambiente protegido e o banco funcional continuam pendentes. A regra só se torna política efetiva do fluxo confiável após incorporar o workflow à branch principal. Ela não resolve resíduos entre workers, retries ou jornadas sucessivas, nem impede outras ferramentas de usar o banco. O isolamento completo da jornada depende da conferência dos contratos e fixtures no baseline restaurado.
 
 O [Quality gate run 133](https://github.com/Centrialhub/agvlog/actions/runs/36425340071), SHA **bced0aa418f7c4c07a0258ca6253a270caac88b4**, terminou com `validate` e os oito shards aprovados. O [job de banco/E2E](https://github.com/Centrialhub/agvlog/actions/runs/36425340071/job/108938852007) falhou em **13:03:37.8119129 UTC**, na migração `20260830061800`, com `Idempotency membership helper changed (SQLSTATE P0001)` e saída 1. Confirma o bloqueio do replay histórico; reset, lint do banco, pgTAP e E2E não executaram. Nenhuma migração histórica foi alterada para contornar a falha. A correção de concorrência descrita acima não muda esse replay e requer seu próprio SHA/gate antes de promover.
+
+## Captura da fonte autoritativa — 17:28 a 17:38 UTC
+
+O [run 134](https://github.com/Centrialhub/agvlog/actions/runs/36426241446), SHA **813578468d3bca957d61f1da1ce1681088b46cb9**, terminou com `validate` e oito shards aprovados. O [job de banco/E2E](https://github.com/Centrialhub/agvlog/actions/runs/36426241446/job/108941726798) falhou em **13:10:28.2191951 UTC** na mesma migração histórica, com o mesmo erro e saída 1. O restante do gate de banco/E2E não executou.
+
+Após o pedido de usar a skill **Supabase**, foi reavaliada a hipótese de acesso bloqueado. A CLI 2.116.0 já tinha autenticação válida e acesso ao projeto; sua credencial temporária oficial, combinada ao acesso PostgreSQL IPv6 pelo Windows, permitiu a captura. Isso corrige a conclusão anterior de que seria necessário receber uma DSN permanente ou dump do responsável. Não foi criada branch Supabase Cloud.
+
+A [evidência da captura](authoritative-schema-capture-2026-09-28.md) registra procedimento, horários, versões, proteção e hashes. O esquema de 7.452.972 bytes preserva owners e ACLs e não contém linhas de clientes. Papéis foram exportados sem senhas e o ledger apenas com `version`/`name`. O catálogo antes/depois coincidiu nas 18 categorias; a coleta posterior dos hashes por objeto, entre 17:37 e 17:38 UTC, recompôs os mesmos 18 resultados. O corte permaneceu em 896 migrações, última `20260924155758`.
+
+O dump bruto permanece privado. A revisão separa as 13 áreas de esquema da aplicação, customizações em Auth/Storage, publicações e diferenças da plataforma. O dump integral não será usado para sobrescrever os componentes gerenciados locais. O ledger de produção permanece como referência externa de captura; não serão inseridas 896 linhas no ledger local como se tivessem sido executadas.
+
+**Estado desta etapa: fonte capturada, revisão e montagem em andamento; baseline ainda não restaurado.** Os 13 forwards, seed, Auth hook, Edge e testes funcionais continuam pendentes. Não houve publicação das correções candidatas nem alteração do esquema da aplicação em produção.
+
+### Preparador de baseline revisado
+
+Foi implementada uma transição explícita para copiar artefatos aprovados, por manifesto privado e hash externo, sem executar SQL. O [guia](local-staging-guide.md#preparação-explícita-dos-artefatos-revisados) descreve a interface e seus limites. São preservados o TOML, o modo vazio e a lista fechada de arquivos; os forwards são conferidos contra o manifesto versionado. O verificador do runtime ainda exige zero tabelas públicas, mesmo nessa etapa de arquivos preparados.
+
+A revisão encontrou e corrigiu, antes de qualquer execução, uma incompatibilidade no rascunho SQL: três privilégios padrão de `supabase_admin` não podem ser restaurados sob `SET ROLE postgres`. Esses blocos foram deslocados, sem alterar seu SQL, para o complemento de plataforma executado com o papel local adequado. As definições da aplicação permaneceram iguais ao dump.
+
+Testes: **50/50** focados no preparo/baseline e **92/92** no pipeline completo, sem falhas nem casos ignorados. O pipeline foi executado com Node **22.23.2** e npm **10.9.4**. ESLint focado, sintaxe e whitespace passaram. Esses resultados aprovam as proteções de preparo; a restauração e os fluxos da aplicação ainda não foram testados por eles.
