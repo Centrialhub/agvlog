@@ -1,5 +1,7 @@
 # Roteiro de estabilidade e promoção
 
+Atualização de infraestrutura em 28/09: a alternativa autorizada é a [homologação local em Linux/WSL](local-staging-guide.md), com [log próprio](release-log-2026-09-28-local-staging.md). A infraestrutura vazia iniciou; a restauração do baseline continua pendente. Essa decisão substitui a espera por aprovação de custo de uma branch Supabase Cloud citada no histórico abaixo.
+
 Estado em 26/09/2026: este roteiro descreve o candidato no [PR #3 em draft](https://github.com/Centrialhub/agvlog/pull/3), criado a partir do publicado `17a7592d`. Confira o SHA atual na aba Commits antes de executar qualquer gate; resultados de um SHA anterior não aprovam automaticamente um novo diff. As correções do candidato ainda não foram publicadas. O [log desta rodada](production-stability-log-2026-09-26.md) registra as evidências e pendências. Para releases seguintes, crie um log novo a partir do [template](release-log-template.md).
 
 ## Por que as regressões reaparecem

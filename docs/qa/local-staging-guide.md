@@ -4,7 +4,7 @@
 
 Em 28/09/2026 o responsável autorizou começar por um ambiente local isolado, com possibilidade de levar a configuração para um servidor interno. A primeira etapa usa Supabase CLI **2.116.0**, já fixada no projeto, e Docker Engine em Linux no WSL 2. Um ambiente compartilhado permanente deverá usar a distribuição oficial de self-hosting com Docker Compose, com versões e diferenças de plataforma revisadas.
 
-**O ambiente ainda não está em execução.** Em 28/09 às 12:12 UTC, WSL 2.7.13 estava instalado e a ativação dos componentes Windows retornou sucesso, com **reinicialização obrigatória pendente**. Após o reinício, conferir WSL 2 antes de instalar Ubuntu e Docker. O [log desta implantação](release-log-2026-09-28-local-staging.md) registra as verificações e pendências. Não há branch Supabase Cloud criada por este procedimento.
+**A infraestrutura vazia está em execução desde 28/09/2026.** Após o reinício do computador, foram instalados Ubuntu 24.04.5 no WSL 2, Docker Engine 29.8.1 e as ferramentas Linux. Nove serviços iniciaram; PostgreSQL, Auth, REST e Studio responderam às verificações, com portas publicadas apenas em loopback. O esquema da aplicação ainda não foi restaurado e nenhum fluxo está homologado. O [log desta implantação](release-log-2026-09-28-local-staging.md) registra as evidências e pendências. Não há branch Supabase Cloud criada por este procedimento.
 
 ## Separação dos ambientes
 
@@ -20,7 +20,7 @@ Em 28/09/2026 o responsável autorizou começar por um ambiente local isolado, c
 | Dados | Sintéticos, contas `.invalid`, senha de teste aleatória |
 | Integrações | Sem credenciais de produção; fiscal em homologação e SSX simulado inicialmente |
 
-As URLs são destinos planejados; uma porta definida no arquivo não prova que o serviço esteja ativo ou restrito à interface local. A partida exige binding loopback comprovado. Não abrir portas da rede da empresa nem publicar um túnel para compensar a falta de configuração.
+API, banco, Studio e e-mail foram verificados em 28/09; o frontend ainda é planejado. Reconfirmar disponibilidade e binding loopback a cada partida. Não abrir portas da rede da empresa nem publicar um túnel para compensar a falta de configuração.
 
 ## 1. Habilitar o host Windows
 
@@ -46,11 +46,11 @@ Referências: [instalação do WSL](https://learn.microsoft.com/en-us/windows/ws
 
 ## 2. Preparar Docker e ferramentas Linux
 
-Dentro da distribuição Linux, instalar Docker Engine e Compose a partir do [repositório oficial para Ubuntu](https://docs.docker.com/engine/install/ubuntu/). Registrar versões instaladas e verificar o daemon. Não expor o socket Docker por TCP. Não remover um runtime existente nem substituir sua configuração sem inspecioná-lo.
+O [procedimento Linux versionado](local-staging-linux-runtime.md) fixa versões e hashes e descreve o script `scripts/provision-local-staging-linux.sh`, executado nesta instalação. Docker Engine e Compose vêm do [repositório oficial para Ubuntu](https://docs.docker.com/engine/install/ubuntu/). Registrar versões instaladas e verificar o daemon. Não expor o socket Docker por TCP. Não remover um runtime existente nem substituir sua configuração sem inspecioná-lo.
 
 Para executar aplicação e testes dentro de Linux, usar checkout e dependências próprios nesse sistema: Node 22, npm 10.9.4 e `npm ci`. Não compartilhar `node_modules` do Windows, pois há binários específicos de plataforma. Transportar o candidato por Git após registrar as alterações em commit; conferir o mesmo SHA e diff. Um checkout diferente não pode ser apresentado como o candidato validado.
 
-O preparo de arquivos pode ser executado já no Windows pelo comando da próxima seção. A partida dos containers e os testes completos dependem do runtime Linux disponível. Para servidor interno permanente, revisar Compose, DNS/HTTPS, acesso privado, armazenamento e backups; portar o contrato validado, sem presumir equivalência entre a stack da CLI e a distribuição self-hosted. Consultar as [diferenças e instalação oficial](https://supabase.com/docs/guides/self-hosting/docker).
+O checkout Linux atual é `/home/agvqa/agvlog-main`, transportado por bundle Git verificado. Seu `origin` aponta ao bundle; novos commits exigem outra transferência e comparação de SHA. O preparo de arquivos também pode ser executado no Windows. Para servidor interno permanente, revisar Compose, DNS/HTTPS, acesso privado, armazenamento e backups; portar o contrato validado, sem presumir equivalência entre a stack da CLI e a distribuição self-hosted. Consultar as [diferenças e instalação oficial](https://supabase.com/docs/guides/self-hosting/docker).
 
 ## 3. Gerar somente a infraestrutura inicial
 
@@ -69,7 +69,7 @@ O arquivo gerado descreve um bootstrap vazio. A ativação posterior do baseline
 
 ### Partida após disponibilizar o runtime
 
-Sequência preparada, **ainda não executada**. Usar checkout Linux com ferramentas instaladas e confirmar `npx --no-install supabase --version` em 2.116.0. Exigir Docker Engine 28 ou superior para evitar a limitação de isolamento loopback em versões antigas descrita pela [documentação Docker](https://docs.docker.com/engine/network/port-publishing/).
+Sequência executada em 28/09. Usar checkout Linux com ferramentas instaladas e confirmar `npx --no-install supabase --version` em 2.116.0. Exigir Docker Engine 28 ou superior para evitar a limitação de isolamento loopback em versões antigas descrita pela [documentação Docker](https://docs.docker.com/engine/network/port-publishing/). No WSL, manter uma sessão Linux ativa durante o uso, conforme o [procedimento de ciclo de vida](local-staging-linux-runtime.md#ciclo-de-vida-no-windows).
 
 Criar uma rede exclusiva com binding padrão local. Se o nome já existir, inspecionar driver, opções e containers conectados antes de reutilizar; não apagar nem substituir uma rede existente para fazer a sequência passar.
 
@@ -92,7 +92,9 @@ A CLI pode exibir chaves locais: não copiar esse output integral para logs vers
 
 Listar apenas os containers pelo rótulo `com.supabase.cli.project=agvlog-local-staging`; inspecionar nomes/portas, sem extrair `.Config.Env`. O loopback é o do host Docker dentro do WSL. Verificar o acesso pelo Windows separadamente; não criar encaminhamento público para resolver eventual falha desse acesso.
 
-O preparador e `staging:local:check` são verificadores **anteriores à partida**. Sua lista fechada também recusa metadados que a CLI possa criar depois, como `.temp`; isso não é um health check nem motivo para apagar esses arquivos. Após a partida, conferir saúde e identidade pelo runtime. A admissão desses metadados em uma próxima versão do verificador exige revisão específica; `project-ref` remoto continua proibido.
+O preparador e `staging:local:check` verificam arquivos, inclusive após a partida. A lista fechada admite somente os metadados locais revisados da CLI: `.temp/cli-latest` (versão disponível) e `.branches/_current_branch` (`main`). Esses arquivos são preservados. Outros metadados, incluindo `.temp/project-ref`, continuam proibidos. Uma indicação de versão mais recente no cache não altera a CLI fixada do projeto.
+
+Executar `npm run staging:local:health` dentro do checkout Linux. O verificador somente lê o runtime e emite JSON sanitizado: identidade dos serviços, saúde, imagens, bindings, versão do banco e probes HTTP. Exige configuração íntegra, CLI fixada, rede local esperada e zero tabelas públicas nesta etapa. O sucesso não comprova restauração do baseline ou funcionamento da aplicação. Depois da restauração, esse contrato de infraestrutura vazia deverá ser revisto explicitamente.
 
 Para parar apenas esse projeto preservando os dados locais:
 

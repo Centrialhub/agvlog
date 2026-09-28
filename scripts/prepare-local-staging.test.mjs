@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +22,14 @@ function fixture(t) {
   writeFileSync(join(root, 'package.json'), JSON.stringify({ devDependencies: { supabase: '2.116.0' } }));
   writeFileSync(join(root, 'infra/local-staging/config.toml'), template);
   return { root, directory, output: join(root, '.local-staging') };
+}
+
+function addRuntimeMetadata(output, latest = 'v2.118.0', branch = 'main') {
+  for (const [relative, value] of [['supabase/.temp/cli-latest', latest], ['supabase/.branches/_current_branch', branch]]) {
+    const path = join(output, relative);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, value);
+  }
 }
 
 test('prepares only isolated config and an explicitly unapproved manifest, without copying production artifacts', (t) => {
@@ -57,6 +65,94 @@ test('repeated preparation preserves bytes and modification times', (t) => {
   assert.deepEqual(readFileSync(path), before.bytes);
   assert.equal(lstatSync(path).mtimeMs, before.mtime);
 });
+
+test('observed CLI metadata survives preparation and verification byte-for-byte without approving application flows', (t) => {
+  const { root, output } = fixture(t);
+  prepareLocalStaging({ root });
+  addRuntimeMetadata(output);
+  const paths = ['supabase/.temp/cli-latest', 'supabase/.branches/_current_branch', 'supabase/config.toml', 'manifest.json'];
+  const before = paths.map((relative) => ({ path: join(output, relative), bytes: readFileSync(join(output, relative)), mtime: lstatSync(join(output, relative)).mtimeMs }));
+  assert.equal(prepareLocalStaging({ root }).applicationReady, false);
+  assert.equal(verifyLocalStaging({ root }).applicationReady, false);
+  for (const { path, bytes, mtime } of before) {
+    assert.deepEqual(readFileSync(path), bytes);
+    assert.equal(lstatSync(path).mtimeMs, mtime);
+  }
+  const manifest = JSON.parse(readFileSync(join(output, 'manifest.json'), 'utf8'));
+  assert.equal(manifest.applicationReady, false);
+  assert.deepEqual(manifest.approvedFlows, []);
+  assert.equal(manifest.cliVersion, '2.116.0');
+  assert.equal(manifest.baseline.artifact, null);
+});
+
+test('accepts bounded future stable update notices without changing the pinned CLI', (t) => {
+  const { root, output } = fixture(t);
+  prepareLocalStaging({ root });
+  for (const latest of ['2.119.0', 'v3.0.0', 'v99999.99999.99999']) {
+    addRuntimeMetadata(output, latest);
+    assert.equal(verifyLocalStaging({ root }).applicationReady, false);
+    assert.equal(readFileSync(join(output, 'supabase/.temp/cli-latest'), 'utf8'), latest);
+  }
+});
+
+test('rejects empty, oversized, noncanonical and nonstable update metadata without rewriting it', (t) => {
+  const { root, output } = fixture(t);
+  prepareLocalStaging({ root });
+  for (const latest of ['', 'v2.118.0\n', 'v2.118.0\r\n', 'v02.118.0', 'v2.118.0-beta.1', '2.118.0+build', 'latest', 'v100000.0.0', 'x'.repeat(1024 * 1024), Buffer.from([0xff, 0xff, 0xff, 0xff, 0xff])]) {
+    addRuntimeMetadata(output, latest);
+    assert.throws(() => prepareLocalStaging({ root }), /Invalid local CLI metadata/);
+    assert.throws(() => verifyLocalStaging({ root }), /Invalid local CLI metadata/);
+    assert.deepEqual(readFileSync(join(output, 'supabase/.temp/cli-latest')), Buffer.from(latest));
+  }
+});
+
+test('accepts only the exact local main branch marker', (t) => {
+  const { root, output } = fixture(t);
+  prepareLocalStaging({ root });
+  for (const branch of ['', 'main\n', 'main\r\n', 'MAIN', 'prod', 'feature', Buffer.from([0xff, 0xff, 0xff, 0xff])]) {
+    addRuntimeMetadata(output, 'v2.118.0', branch);
+    assert.throws(() => verifyLocalStaging({ root }), /Invalid local CLI metadata/);
+    assert.deepEqual(readFileSync(join(output, 'supabase/.branches/_current_branch')), Buffer.from(branch));
+  }
+});
+
+for (const artifact of ['supabase/.temp/project-ref', 'supabase/.temp/postgres-version', 'supabase/.branches/feature', 'supabase/.temp/.env', 'supabase/.branches/baseline.sql']) {
+  test(`legitimate metadata does not admit ${artifact}`, (t) => {
+    const { root, output } = fixture(t);
+    prepareLocalStaging({ root });
+    addRuntimeMetadata(output);
+    writeFileSync(join(output, artifact), 'synthetic-content-not-to-be-printed');
+    assert.throws(() => verifyLocalStaging({ root }), (error) => {
+      assert.match(error.message, /Unknown artifact/);
+      assert.doesNotMatch(error.message, /synthetic-content/);
+      return true;
+    });
+    assert.throws(() => prepareLocalStaging({ root }), /Unknown artifact/);
+    assert.equal(readFileSync(join(output, artifact), 'utf8'), 'synthetic-content-not-to-be-printed');
+  });
+}
+
+for (const relative of ['supabase/.temp/cli-latest', 'supabase/.branches/_current_branch']) {
+  test(`refuses a directory, junction and hard link at metadata path ${relative}`, (t) => {
+    const { root, output, directory } = fixture(t);
+    prepareLocalStaging({ root });
+    const path = join(output, relative);
+    mkdirSync(path, { recursive: true });
+    assert.throws(() => verifyLocalStaging({ root }), /regular, unlinked local CLI metadata file/);
+    rmdirSync(path);
+    const outside = join(directory, 'metadata-source');
+    mkdirSync(outside);
+    symlinkSync(outside, path, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.throws(() => verifyLocalStaging({ root }), /symlinks or junctions/);
+    rmSync(path);
+    const source = join(outside, 'original');
+    const original = relative.endsWith('cli-latest') ? 'v2.118.0' : 'main';
+    writeFileSync(source, original);
+    linkSync(source, path);
+    assert.throws(() => verifyLocalStaging({ root }), /hard-linked files/);
+    assert.equal(readFileSync(source, 'utf8'), original);
+  });
+}
 
 test('a modified config blocks all writes and is preserved', (t) => {
   const { root, output } = fixture(t);

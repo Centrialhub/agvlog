@@ -8,6 +8,13 @@ const templatePath = 'infra/local-staging/config.toml';
 const templateSha256 = 'df0703b59d0ecac3d5ef7fd98a3cc20c878a861afc7f84cee349a7ff01b7a021';
 export const LOCAL_STAGING_CLI_VERSION = '2.116.0';
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
+const allowedDirectories = new Set(['supabase', 'supabase/.temp', 'supabase/.branches']);
+const runtimeMetadata = new Map([
+  // This is an update notice, not permission to change the pinned CLI version.
+  // Stable semver only, optional v, canonical numbers of at most five digits.
+  ['supabase/.temp/cli-latest', { minBytes: 5, maxBytes: 18, accepts: (value) => /^v?(?:0|[1-9]\d{0,4})\.(?:0|[1-9]\d{0,4})\.(?:0|[1-9]\d{0,4})(?![\s\S])/.test(value) }],
+  ['supabase/.branches/_current_branch', { minBytes: 4, maxBytes: 4, accepts: (value) => value === 'main' }],
+]);
 
 function statIfPresent(path) {
   try {
@@ -89,8 +96,19 @@ function validateExistingTree(output, files) {
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
       const path = join(directory, entry.name);
       rejectLinks(path);
-      if (relative === 'supabase' && entry.isDirectory()) {
+      if (allowedDirectories.has(relative) && entry.isDirectory()) {
         inspect(path, relative);
+      } else if (runtimeMetadata.has(relative)) {
+        const rule = runtimeMetadata.get(relative);
+        const metadataStat = lstatSync(path);
+        if (!metadataStat.isFile() || metadataStat.nlink !== 1) {
+          throw new Error('Expected a regular, unlinked local CLI metadata file.');
+        }
+        // Bound the read before opening; no trimming or rewriting.
+        if (metadataStat.size < rule.minBytes || metadataStat.size > rule.maxBytes) {
+          throw new Error('Invalid local CLI metadata size.');
+        }
+        if (!rule.accepts(readRegularFile(path))) throw new Error('Invalid local CLI metadata content.');
       } else if (entry.isFile() && files.has(relative)) {
         if (readRegularFile(path) !== files.get(relative)) {
           throw new Error('Existing staging artifact was modified; no files were overwritten.');

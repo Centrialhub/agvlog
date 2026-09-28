@@ -27,6 +27,7 @@
     "db:start": "supabase start",
     "staging:local:prepare": "node scripts/prepare-local-staging.mjs",
     "staging:local:check": "node scripts/prepare-local-staging.mjs --check",
+    "staging:local:health": "node scripts/verify-local-staging-runtime.mjs",
     "db:reset:test": "supabase db reset --local",
     "db:test": "supabase test db",
     "db:test:delivery-concurrency": "node --experimental-strip-types scripts/test-delivery-concurrency.mjs",

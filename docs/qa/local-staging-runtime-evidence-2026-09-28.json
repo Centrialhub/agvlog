@@ -1,0 +1,117 @@
+{
+  "capturedAt": "2026-09-28T12:41:03.399Z",
+  "project": "agvlog-local-staging",
+  "sourceSha": "4044c23d85da464f6f5678f1c9c149cb827813fb",
+  "applicationReady": false,
+  "baseline": "pending",
+  "postgresVersion": "17.6",
+  "publicTableCount": 0,
+  "containers": [
+    {
+      "name": "supabase_studio_agvlog-local-staging",
+      "image": "public.ecr.aws/supabase/studio:2026.08.17-sha-0c1da8f",
+      "imageId": "sha256:08dc77f12e08faacc55960fef1dce37fa73d16acb52abeb216aa23dc5e70824b",
+      "running": true,
+      "health": "healthy",
+      "bindings": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "55323"
+        }
+      ]
+    },
+    {
+      "name": "supabase_pg_meta_agvlog-local-staging",
+      "image": "public.ecr.aws/supabase/postgres-meta:v0.98.0",
+      "imageId": "sha256:cef71ba901751dcc242cc685cf13786935ea8926820fb342f23bb0fbef77de5a",
+      "running": true,
+      "health": "healthy",
+      "bindings": []
+    },
+    {
+      "name": "supabase_storage_agvlog-local-staging",
+      "image": "public.ecr.aws/supabase/storage-api:v1.70.3",
+      "imageId": "sha256:528ec49c3c32561908b07ee91bced7f8456f3b688164e341eaa422441767a0bd",
+      "running": true,
+      "health": "healthy",
+      "bindings": []
+    },
+    {
+      "name": "supabase_rest_agvlog-local-staging",
+      "image": "public.ecr.aws/supabase/postgrest:v16.1",
+      "imageId": "sha256:5922bde07147b82b1c9d8f749e48c1e5b99ebb233f3888bb7ab65f07cf4ac82d",
+      "running": true,
+      "health": "not-configured",
+      "bindings": []
+    },
+    {
+      "name": "supabase_realtime_agvlog-local-staging",
+      "image": "public.ecr.aws/supabase/realtime:v2.129.3",
+      "imageId": "sha256:3211f8ebd59edcd0aa772186f1c8249c82c6b1ae5565f40dedb7aa93e951fe37",
+      "running": true,
+      "health": "healthy",
+      "bindings": []
+    },
+    {
+      "name": "supabase_inbucket_agvlog-local-staging",
+      "image": "public.ecr.aws/supabase/mailpit:v1.30.2",
+      "imageId": "sha256:37a38e48e9338cd7e89dfeb487f37b02ebfcd9cb23111bed2d345e79d37d6dd6",
+      "running": true,
+      "health": "healthy",
+      "bindings": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "55324"
+        }
+      ]
+    },
+    {
+      "name": "supabase_auth_agvlog-local-staging",
+      "image": "public.ecr.aws/supabase/gotrue:v2.196.0",
+      "imageId": "sha256:c0c25187a6b835e65a6f6e6c6b39d090e832d40e6de5186f2c038e0411944232",
+      "running": true,
+      "health": "healthy",
+      "bindings": []
+    },
+    {
+      "name": "supabase_kong_agvlog-local-staging",
+      "image": "public.ecr.aws/supabase/kong:2.8.1",
+      "imageId": "sha256:1b53405d8680a09d6f44494b7990bf7da2ea43f84a258c59717d4539abf09f6d",
+      "running": true,
+      "health": "healthy",
+      "bindings": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "55321"
+        }
+      ]
+    },
+    {
+      "name": "supabase_db_agvlog-local-staging",
+      "image": "public.ecr.aws/supabase/postgres:17.6.1.165",
+      "imageId": "sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518",
+      "running": true,
+      "health": "healthy",
+      "bindings": [
+        {
+          "HostIp": "127.0.0.1",
+          "HostPort": "55322"
+        }
+      ]
+    }
+  ],
+  "probes": [
+    {
+      "path": "/auth/v1/health",
+      "status": 200
+    },
+    {
+      "path": "/rest/v1/",
+      "status": 200
+    },
+    {
+      "path": "studio",
+      "status": 200
+    }
+  ]
+}
