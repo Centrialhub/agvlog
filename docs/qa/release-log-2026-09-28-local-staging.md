@@ -9,7 +9,7 @@
 | Alvo | Computador local; projeto planejado `agvlog-local-staging` |
 | Checkout | Worktree `production-stability`, branch `codex/production-stability`, PR #3 |
 | Base desta etapa | `31731e2c7d57d33d0f83b157f13353fcaa53ed69`; novas alterações de infraestrutura devem ser registradas no próximo commit |
-| Estado | Preparação; WSL bloqueado por privilégio de administrador; baseline autoritativo pendente |
+| Estado | Preparação; WSL instalado e componente Windows ativado, aguardando reinício; baseline autoritativo pendente |
 | Publicação | Nenhuma alteração de banco, Edge ou frontend de produção nesta etapa |
 | Responsáveis | Implementação: agente desta conversa; instalação administrativa: responsável do computador; revisão de baseline: responsável pelo banco a definir |
 
@@ -45,7 +45,7 @@ Foi solicitado ao responsável executar a instalação em PowerShell como admini
 | Gate | Estado |
 | --- | --- |
 | Gerador/configuração e testes de proteção | Arquivos gerados; verificação passou; 12/12 testes de proteção passaram |
-| WSL 2 e distribuição Linux | Pendente de instalação administrativa |
+| WSL 2 e distribuição Linux | WSL 2.7.13 instalado; componente Windows ativado com reinício pendente; distribuição ainda ausente |
 | Docker Engine e binding loopback | Pendente |
 | Stack vazia iniciada e health checks | Não executado |
 | Dump revisado, complementos e comparação de catálogo | Pendente de fonte autoritativa |
@@ -66,3 +66,11 @@ A revisão da fonte CLI confirmou suporte a uma rede bridge pré-criada com bind
 O pipeline Node completo passou em **54/54 testes** após a integração dos 12 novos casos. A CLI 2.116.0 foi exercitada com `status --workdir` em diretório temporário separado: o TOML válido chegou à inspeção do Docker e retornou `LegacyStatusDbInspectError` por runtime ausente; TOML malformado retornou `LegacyStatusConfigLoadError/CliConfigParseError`. Isso comprova leitura/sintaxe do arquivo, não validação completa das opções nem funcionamento da stack. Nenhum `start` foi executado.
 
 Às 12:09 UTC, a execução com as versões do projeto (`npm exec --yes --package=node@22.23.2 --package=npm@10.9.4 -- npm run test:pipeline`) também havia concluído **54/54**, sem falhas nem casos ignorados. O verificador de higiene passou para 4.593 arquivos no índice, e o diff preparado passou na conferência de whitespace. O Quality gate remoto não foi repetido por esta preparação; permanece necessária uma execução completa após disponibilizar o baseline válido.
+
+## Continuação após a instalação administrativa — 12:12 UTC
+
+O responsável informou a instalação concluída. `wsl --version` confirmou **2.7.13.0**, kernel **6.18.33.2-2**, com WSL 2 como padrão; `wsl --list --verbose` confirmou ausência de distribuições. `wsl --status` ainda informou indisponibilidade da virtualização do Windows e recomendou habilitar a Plataforma da Máquina Virtual.
+
+Foi executado `wsl --install --no-distribution`. O comando retornou **código 0** e sucesso, informando que as alterações só terão efeito após reinicializar o sistema. O agente não reiniciou o computador. `wsl --list --online` confirmou disponibilidade de **Ubuntu-24.04**.
+
+Próxima retomada: após o reinício feito pelo usuário, conferir `wsl --status`, instalar Ubuntu-24.04 com `--no-launch`, validar a inicialização real de WSL 2 e prosseguir com Docker. Não há motivo confirmado para alterar a BIOS: a inspeção anterior indicou virtualização de firmware habilitada. Banco, Docker e aplicação continuam sem inicialização nesta etapa.

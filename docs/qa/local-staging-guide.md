@@ -4,7 +4,7 @@
 
 Em 28/09/2026 o responsável autorizou começar por um ambiente local isolado, com possibilidade de levar a configuração para um servidor interno. A primeira etapa usa Supabase CLI **2.116.0**, já fixada no projeto, e Docker Engine em Linux no WSL 2. Um ambiente compartilhado permanente deverá usar a distribuição oficial de self-hosting com Docker Compose, com versões e diferenças de plataforma revisadas.
 
-**O ambiente ainda não está em execução.** A instalação do WSL neste computador falhou por falta de privilégio de administrador (`0x80073d28`). O [log desta implantação](release-log-2026-09-28-local-staging.md) registra as verificações e pendências. Não há branch Supabase Cloud criada por este procedimento.
+**O ambiente ainda não está em execução.** Em 28/09 às 12:12 UTC, WSL 2.7.13 estava instalado e a ativação dos componentes Windows retornou sucesso, com **reinicialização obrigatória pendente**. Após o reinício, conferir WSL 2 antes de instalar Ubuntu e Docker. O [log desta implantação](release-log-2026-09-28-local-staging.md) registra as verificações e pendências. Não há branch Supabase Cloud criada por este procedimento.
 
 ## Separação dos ambientes
 
@@ -24,7 +24,7 @@ As URLs são destinos planejados; uma porta definida no arquivo não prova que o
 
 ## 1. Habilitar o host Windows
 
-O computador inspecionado tem Windows 11 Pro, aproximadamente 32 GB de RAM, virtualização de firmware habilitada e espaço livre suficiente. Docker não foi encontrado no PATH nem no caminho padrão do Docker Desktop. `wsl --status` informou que WSL não está instalado.
+O computador inspecionado tem Windows 11 Pro, aproximadamente 32 GB de RAM, virtualização de firmware habilitada e espaço livre suficiente. Docker não foi encontrado no PATH nem no caminho padrão do Docker Desktop. WSL estava ausente na primeira inspeção; o responsável instalou a versão 2.7.13 e o componente Windows foi ativado em seguida. Não repetir a instalação abaixo quando `wsl --version` já confirmar essa versão.
 
 O responsável com acesso de administrador deve abrir **PowerShell como administrador** e instalar a versão verificada:
 
