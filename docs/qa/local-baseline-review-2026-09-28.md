@@ -1,6 +1,6 @@
 # Revisão do baseline local — 28/09/2026
 
-**Preparação revisada; restauração ainda em ensaio. Nenhum fluxo da aplicação aprovado.** Fonte e hashes brutos: [captura autoritativa](authoritative-schema-capture-2026-09-28.md). Os SQLs e relatórios detalhados permanecem em armazenamento privado.
+**Baseline restaurado às 18:01 UTC; comparação em andamento. Nenhum fluxo da aplicação aprovado.** Fonte e hashes brutos: [captura autoritativa](authoritative-schema-capture-2026-09-28.md). Os SQLs e relatórios detalhados permanecem em armazenamento privado.
 
 ## Composição
 
@@ -48,3 +48,19 @@ A revisão encontrou um problema no próprio verificador: o primeiro ramo do `UN
 A consulta versionada passou a usar `n.nspname::text` nesse primeiro ramo. A comparação da restauração deve usar a nova captura com nomes completos em ambos os ambientes, preservar multiplicidades e apontar categorias inteiras ausentes. Não aceitar um mapa que descarte silenciosamente chaves repetidas. Ordem de ACL, posições históricas de colunas e diferenças gerenciadas devem ser investigadas separadamente, mantendo owners, grantors e privilégios na prova.
 
 Às **17:58:15.692 UTC**, uma consulta somente de leitura confirmou `objectKeyType=text`, **zero chaves duplicadas** e chaves de até **354 bytes** para rotinas. O ledger permaneceu em 896 versões, máximo `20260924155758`. SHA-256 da consulta corrigida: `d537a4ac6e96d6b1e11b8f680038f00a997fa15da165a3ba0035b7d2ba703aac`.
+
+## Segundo ensaio — restauração concluída
+
+Execução entre **18:01:20.365 e 18:01:25.934 UTC**, checkout Linux limpo **4850412c19bec6cc4134fb48e1f9e3b4c1ee65fd**. A [evidência sanitizada](local-baseline-restore-evidence-2026-09-28.json) fixa o hash da aprovação e do SQL combinado efetivamente executado. Os cinco arquivos foram aplicados em uma transação, com `ON_ERROR_STOP`; a conexão inicial foi `supabase_admin` e os papéis de criação foram ajustados nos blocos revisados.
+
+Resultado: **327 tabelas públicas, zero sem RLS, oito buckets, zero jobs de cron, zero segredos no Vault e zero requisições na fila HTTP**. A primeira aprovação e seus artefatos foram preservados. A aplicação permanece sem seed, Auth hook ou Edge habilitados; os 13 forwards não foram aplicados.
+
+O verificador de infraestrutura vazia não se aplica ao banco já restaurado: seu bloqueio por tabelas existentes é esperado. Não remover essa proteção ou zerar o banco para obter sinal verde. A próxima evidência é a comparação completa do catálogo e a evolução explícita do contrato de verificação para essa fase.
+
+## Comparação e ensaio incremental concluídos
+
+O [parecer por objeto](local-baseline-comparison-2026-09-28.md) fechou a comparação anterior aos forwards: equivalência da aplicação no escopo capturado, 85 diferenças de ACL explicadas, 28 colunas ativas de geofences equivalentes, oito CHECKs equivalentes e locale PostgreSQL idêntico. Diferenças gerenciadas continuam limitações explícitas de plataforma.
+
+Os [13 forwards aprovados](local-forward-evidence-2026-09-28.json) foram aplicados entre **18:18:58.340 e 18:18:58.554 UTC**, em uma transação, pelo socket Docker local fixado. Os bytes correspondem ao manifesto. Permaneceram 327 tabelas com RLS, oito buckets e zero usuários, jobs, segredos Vault ou itens de fila HTTP. Não foram fabricados registros de execução do histórico de produção.
+
+O contrato somente de leitura `baseline_contract.sql`, executado em **18:19:31.832–18:19:31.937 UTC**, falhou: `anon can execute 8 public functions` (saída psql 3). São funções internas preexistentes que retornam `trigger`; o resultado não significa oito endpoints RPC utilizáveis. A regra de privilégios continua exigida e será corrigida por forward novo separado, sem modificar a aprovação ou os 13 arquivos já ensaiados. Fixtures de workspace e claims de tenant também exigem atualização antes do pgTAP. Aplicação ainda não homologada.

@@ -163,3 +163,31 @@ A restauração em uma transação foi interrompida na criação de `ensure_rls`
 O procedimento passou a admitir revisões imutáveis dos artefatos, com hash anterior e novo explícitos, preservando o SQL e o manifesto anteriores. Essa proteção registra as tentativas sem sobrescrever a evidência e continua sem afirmar que o banco foi restaurado.
 
 Após essa alteração, passaram **58/58 testes focados** e **100/100 no pipeline completo**, novamente com Node 22.23.2 e npm 10.9.4. A revisão do verificador de catálogo identificou truncamento de chaves longas pelo tipo PostgreSQL `name`; a consulta foi corrigida para `text`. A [revisão do baseline](local-baseline-review-2026-09-28.md#correção-da-consulta-de-comparação) explica a limitação dos hashes anteriores e a necessidade da captura corrigida em ambos os ambientes.
+
+### Baseline restaurado — 18:01 UTC
+
+O segundo ensaio concluiu com sucesso entre **18:01:20.365 e 18:01:25.934 UTC**, no checkout Linux limpo **4850412c19bec6cc4134fb48e1f9e3b4c1ee65fd**. A [evidência sanitizada](local-baseline-restore-evidence-2026-09-28.json) registra aprovação, hash do SQL combinado, identidade do container e contagens. Resultado: **327 tabelas públicas, todas com RLS; oito buckets; zero jobs de cron, segredos Vault ou itens na fila HTTP**. Forwards aplicados: **zero**.
+
+A recaptura de produção com chaves `text` foi conferida em **18:08:11.594 UTC**: 18 categorias, 20.728 objetos, zero colisões; as listas por objeto recompõem exatamente os agregados anterior (17:58:15.692) e posterior (18:07:35.171). O corte permaneceu em 896 migrações, máximo `20260924155758`.
+
+A comparação local de **18:06:41.369 UTC** usa a mesma consulta e exclui somente o ledger histórico, preservado como referência externa. Coincidem integralmente: **1.678 rotinas, 1.336 políticas, 816 tipos, 14 definições de views, seis privilégios padrão, seis sequências e oito buckets**. A comparação inclui owners e ACLs nas categorias correspondentes. Diferenças em relações/permissões, posições de colunas, constraints e componentes gerenciados estão sendo classificadas por objeto. Não equivalem automaticamente a defeito nem podem ser ignoradas como equivalentes sem investigação. **Baseline restaurado, comparação ainda não aprovada; aplicação não homologada.**
+
+### Comparação aprovada para o ensaio e 13 forwards aplicados — 18:18 UTC
+
+O [parecer por objeto](local-baseline-comparison-2026-09-28.md) concluiu a classificação: 85 ACLs equivalentes, 28 colunas ativas de geofences equivalentes, oito CHECKs estruturalmente equivalentes, catálogo da aplicação preservado no escopo capturado. Os nove metadados de locale/encoding/provider/versão coincidiram na fonte e no local; última captura local anterior aos forwards às **18:17:55.796 UTC**. Limitações de plataforma Storage, Auth, Realtime, GraphQL, pg_net e papéis permanecem expressas no parecer.
+
+Execução dos forwards entre **18:18:58.340 e 18:18:58.554 UTC**, no checkout Linux limpo **4850412c19bec6cc4134fb48e1f9e3b4c1ee65fd**. Os 13 arquivos conferiram byte/hash com o manifesto e foram aplicados em uma transação com `ON_ERROR_STOP`, pelo socket Docker Unix fixado, sob `postgres`. Não havia COMMIT, metacomandos ou chamadas HTTP/cron no lote revisado. O [JSON sanitizado](local-forward-evidence-2026-09-28.json) registra lista, hashes, horários e inventários. SQL combinado SHA-256 **dc2f37c1f38ea0762a0e741d4e57e1cc2969ba922c30975c46710403c95d5668**.
+
+Antes/depois: **327 tabelas públicas, zero sem RLS, oito buckets, zero usuários Auth, cron jobs, segredos Vault e itens de fila HTTP**. O ledger histórico permaneceu referência externa. Os artefatos do baseline e a aprovação anterior não foram alterados.
+
+### Contrato de segurança revelou divergência — 18:19 UTC
+
+`supabase/verify/baseline_contract.sql`, SHA-256 **30137b12200c6f924ff534da2164873554f24ff1674bb961fc2b7aa90855d1a7**, foi executado em transação somente de leitura, de **18:19:31.832 a 18:19:31.937 UTC**. Falhou com saída psql **3**: `anon can execute 8 public functions`. A investigação identificou oito funções internas preexistentes, owner `postgres`, retorno `trigger`, ACL nula. Isso não equivale a oito RPCs de negócio expostos, mas viola a regra explícita de privilégios do projeto. Correção em forward novo separado; nenhum gate enfraquecido.
+
+A revisão da seed e do pgTAP também identificou divergências com o contrato publicado: tenant agora requer workspace explícito; claims authenticated requerem active_tenant_id; a jornada antiga usa entrega aposentada e não prepara o controle de carga exigido para partida. Correções das fixtures/testes em andamento, mantendo os triggers e as restrições reais. Seed e jornadas ainda não executadas neste registro.
+
+### Restauração reproduzível
+
+Foram adicionados os [comandos de restauração inicial](local-staging-guide.md#comando-de-restauração-para-um-banco-vazio), com preflight vazio, aprovação/hash externo, SHA limpo, contagens esperadas obrigatórias, transação única, invariantes antes do COMMIT e logs exclusivos privados. Duas revisões independentes não encontraram bloqueador concreto. A execução real das 18:01 usou o runner privado anterior; o novo launcher não foi executado sobre o banco preenchido.
+
+Pipeline com Node **22.23.2** e npm **10.9.4**: **111 testes passaram, zero falhas, um teste de permissões exclusivo de Linux ignorado no Windows**. A conferência Linux e a recusa real de restaurar sobre o banco preenchido serão registradas após transportar o commit limpo. Esses testes verificam a ferramenta, não homologam a aplicação.

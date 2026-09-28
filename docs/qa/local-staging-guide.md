@@ -4,7 +4,7 @@
 
 Em 28/09/2026 o responsável autorizou começar por um ambiente local isolado, com possibilidade de levar a configuração para um servidor interno. A primeira etapa usa Supabase CLI **2.116.0**, já fixada no projeto, e Docker Engine em Linux no WSL 2. Um ambiente compartilhado permanente deverá usar a distribuição oficial de self-hosting com Docker Compose, com versões e diferenças de plataforma revisadas.
 
-**A infraestrutura vazia está em execução desde 28/09/2026.** Após o reinício do computador, foram instalados Ubuntu 24.04.5 no WSL 2, Docker Engine 29.8.1 e as ferramentas Linux. Nove serviços iniciaram; PostgreSQL, Auth, REST e Studio responderam às verificações, com portas publicadas apenas em loopback. O esquema da aplicação ainda não foi restaurado e nenhum fluxo está homologado. O [log desta implantação](release-log-2026-09-28-local-staging.md) registra as evidências e pendências. Não há branch Supabase Cloud criada por este procedimento.
+**A infraestrutura está em execução, o baseline foi restaurado e os 13 forwards foram aplicados localmente em 28/09/2026.** Após o reinício do computador, foram instalados Ubuntu 24.04.5 no WSL 2, Docker Engine 29.8.1 e as ferramentas Linux. Nove serviços iniciaram; PostgreSQL, Auth, REST e Studio responderam às verificações, com portas publicadas apenas em loopback. A [restauração revisada](local-baseline-review-2026-09-28.md) criou 327 tabelas públicas com RLS e oito buckets privados; a [comparação por objeto](local-baseline-comparison-2026-09-28.md) aprovou seu uso no ensaio dos forwards, com limitações de plataforma explícitas. O contrato de segurança e as fixtures apontaram ajustes adicionais; seed e testes funcionais continuam pendentes. Nenhum fluxo está homologado. O [log desta implantação](release-log-2026-09-28-local-staging.md) registra as evidências e pendências. Não há branch Supabase Cloud criada por este procedimento.
 
 ## Separação dos ambientes
 
@@ -106,7 +106,7 @@ Não usar `--all` nem `--no-backup`. A rede exclusiva pode permanecer para a pr�
 
 ## 4. Restaurar o contrato publicado antes de testar o candidato
 
-Seguir a [proposta de baseline](migration-baseline-plan-2026-09-26.md). A [captura autoritativa de 28/09](authoritative-schema-capture-2026-09-28.md) foi concluída com autenticação temporária oficial da CLI; não depende mais de receber a senha permanente do banco. Os artefatos privados ainda exigem revisão e montagem do baseline local. Credenciais e SQL bruto não devem ser enviados ao chat ou Git.
+Seguir a [proposta de baseline](migration-baseline-plan-2026-09-26.md). A [captura autoritativa de 28/09](authoritative-schema-capture-2026-09-28.md) foi concluída com autenticação temporária oficial da CLI; não depende mais de receber a senha permanente do banco. Os artefatos privados foram revisados, restaurados e [comparados por objeto](local-baseline-comparison-2026-09-28.md). Credenciais e SQL bruto não devem ser enviados ao chat ou Git.
 
 1. Reconfirmar versão PostgreSQL, schemas e ledger antes e depois da captura. O corte observado em 26/09 foi de 896 versões, máximo `20260924155758`; reconfirmar, pois esse registro é histórico.
 2. Capturar somente esquema em área restrita. Revisar definições quanto a literais sensíveis antes de compartilhá-las. Não exportar os comandos SQL completos do ledger nem dados de clientes.
@@ -139,6 +139,23 @@ node scripts/prepare-local-staging.mjs --revise-baseline /caminho-privado/revisa
 ```
 
 Cada revisão fica em `baseline/revisions/HASH_NOVO/`; SQL anterior e configuração são preservados. O manifesto gerado só avança após validar os arquivos antigos e copiar integralmente o novo pacote. O verificador exige a cadeia completa, limitada a oito revisões, e os hashes externos. Uma cópia interrompida pode ser retomada apenas com os mesmos bytes previstos. Este comando não restaura nem reverte banco: conferir o estado real antes de repetir SQL. O [ensaio do baseline](local-baseline-review-2026-09-28.md) registra o caso que motivou essa revisão.
+
+### Comando de restauração para um banco vazio
+
+O comando versionado abaixo é exclusivo da restauração inicial. Exige Linux, checkout limpo no SHA informado, cadeia de aprovação íntegra, preflight da infraestrutura vazia e diretório privado de logs já existente fora do checkout, com modo `0700`:
+
+```sh
+node scripts/restore-local-staging-baseline.mjs \
+  --approved-sha256 HASH_SHA256_REVISADO \
+  --expected-source-sha SHA_COMPLETO_DO_CHECKOUT \
+  --expected-public-tables 327 --expected-buckets 8 \
+  --log-directory /home/agvqa/.local/state/agvlog-staging \
+  --check
+```
+
+`--check` apenas confere as condições e não executa SQL. Removê-lo executa os artefatos na ordem aprovada, em uma transação, com `ON_ERROR_STOP`, pelo socket Docker local fixado. O comando verifica ausência de dados da aplicação e de estados externos antes do COMMIT; grava logs exclusivos `0600`. Os forwards ficam fora dessa transação. Sucesso significa `baseline-restored-comparison-pending`, nunca aplicação homologada.
+
+Não repetir esse comando no banco já preenchido: o bloqueio por tabelas existentes é esperado. Em timeout ou erro, conferir o estado real e o log privado antes de qualquer nova tentativa; falha do processo não prova rollback. A execução histórica das 18:01 UTC usou o runner privado registrado no log, anterior a este comando reutilizável.
 
 ## 5. Aprovação e prevenção de regressões
 
