@@ -17,7 +17,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-candidate-${{ github.event.inputs.candidate_sha }}
+  # Different candidate SHAs use the same staging backend.
+  group: release-candidate-staging
   cancel-in-progress: false
 
 jobs:

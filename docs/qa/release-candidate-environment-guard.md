@@ -10,4 +10,10 @@ O preflight usa somente o `GITHUB_TOKEN` temporário com `actions: read`, consul
 
 **Required reviewers** e **Prevent self-review** podem ser configurados quando houver um processo de aprovação com outra pessoa. Não são exigidos pelo preflight e não são condição para executar o teste.
 
+## Concorrência e isolamento dos dados de teste
+
+Todos os SHAs candidatos usam o mesmo backend definido por `STAGING_SUPABASE_URL`. O grupo fixo `release-candidate-staging` limita a uma execução ativa deste workflow por vez no repositório; `cancel-in-progress: false` preserva a execução em andamento quando outro candidato é solicitado. Pela configuração padrão do GitHub, há no máximo uma execução pendente, que pode ser substituída por uma solicitação mais recente. [Comportamento de concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+
+Esse controle evita sobreposição entre execuções deste workflow. Ele não isola workers, retries, execuções sucessivas ou outras ferramentas que usem o mesmo banco. A jornada do motorista ainda altera fixtures compartilhadas e cria histórico imutável: sua aprovação depende de backend descartável exclusivo por tentativa ou entidades completas independentes com ciclo de vida comprovado, conforme o [roteiro de estabilidade](production-stability-playbook-2026-09-26.md). O bloqueio de verificação funcional permanece até esse isolamento ser demonstrado no baseline restaurado.
+
 Referências: [environments e regras de branch](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments), [API de environments](https://docs.github.com/en/rest/deployments/environments), [API de regras de branch](https://docs.github.com/en/rest/deployments/branch-policies).
