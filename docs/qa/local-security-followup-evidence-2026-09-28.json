@@ -1,0 +1,41 @@
+{
+  "startedAtUtc": "2026-09-28T18:42:15.628Z",
+  "completedAtUtc": "2026-09-28T18:42:15.77Z",
+  "sourceSha": "0b592fef70cfef0beff006a1654683a1aa05b5a5",
+  "approvalSha256": "501f7c02e647c5c4e6e69267812067cb0a184524f44f9db2a4e5b1853152a649",
+  "supplementSha256": "7fb25c0ef9d1ef34d83f087ecb9686acdece99bec9e8da229914a496c347cff8",
+  "inputSha256": "72c6e563c3613107b9a6e79c81ac93b2ed3aa11d2d57ac390242afdec2ebfabc",
+  "contractSha256": "30137b12200c6f924ff534da2164873554f24ff1674bb961fc2b7aa90855d1a7",
+  "exitCode": 0,
+  "baselineContractPassed": true,
+  "followupsApplied": 2,
+  "followups": [
+    {
+      "version": "20260928182208",
+      "filename": "20260928182208_restrict_internal_trigger_execute.sql",
+      "sha256": "9485feff43bd405aa5adf796d376f44e63ff9097bfb19cc35d31b9c8c5b93e76"
+    },
+    {
+      "version": "20260928182647",
+      "filename": "20260928182647_remove_redundant_event_message_read_policy.sql",
+      "sha256": "947127e572f903dffff344a4873687cf23b2c0e83e5a16f9a6b84aaed1e24ebf"
+    }
+  ],
+  "before": {
+    "publicTables": 327,
+    "authUsers": 0,
+    "cronJobs": 0,
+    "vaultSecrets": 0,
+    "httpQueue": 0,
+    "anonymousApplicationFunctions": 8
+  },
+  "after": {
+    "publicTables": 327,
+    "authUsers": 0,
+    "cronJobs": 0,
+    "vaultSecrets": 0,
+    "httpQueue": 0,
+    "anonymousApplicationFunctions": 0
+  },
+  "applicationReady": false
+}

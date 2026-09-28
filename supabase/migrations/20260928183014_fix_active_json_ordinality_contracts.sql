@@ -1,6 +1,6 @@
 -- Restore two active JSON operations found by linting the live-equivalent schema.
--- Keep the published bodies, authorization, grants and receipt-summary hotfix;
--- change only the JSON expansion that prevents successful execution.
+-- Preserve captured bodies and historical bodies with the receipt-summary hotfix.
+-- Accept only the two reviewed exact pallet forms; change only JSON expansion.
 set local lock_timeout = '3s';
 set local statement_timeout = '30s';
 
@@ -9,6 +9,8 @@ declare
   target record;
   function_oid oid;
   definition text;
+  changed text;
+  variant integer;
   original_count integer;
   corrected_count integer;
 begin
@@ -16,25 +18,27 @@ begin
     (
       'public.edit_pallet_return_protocol_v1(jsonb)',
       false,
-      $pallet_old$from jsonb_to_recordset(v_items) with ordinality as x(
+      array[$pallet_old$from jsonb_to_recordset(v_items) with ordinality as x(
       pallet_type_id uuid,pallet_type_code text,pallet_type_name text,pallet_color text,
       quantity numeric,notes text,sort_order integer,ord bigint
     )$pallet_old$,
-      $pallet_new$from jsonb_array_elements(v_items) with ordinality as item(value,ord)
+      $pallet_captured_old$from jsonb_to_recordset(v_items) with ordinality as x(pallet_type_id uuid,pallet_type_code text,pallet_type_name text,pallet_color text,quantity numeric,notes text,sort_order integer,ord bigint)$pallet_captured_old$],
+      array[$pallet_new$from jsonb_array_elements(v_items) with ordinality as item(value,ord)
     cross join lateral jsonb_to_record(item.value) as x(
       pallet_type_id uuid,pallet_type_code text,pallet_type_name text,pallet_color text,
       quantity numeric,notes text,sort_order integer
-    )$pallet_new$
+    )$pallet_new$,
+      $pallet_captured_new$from jsonb_array_elements(v_items) with ordinality as item(value,ord) cross join lateral jsonb_to_record(item.value) as x(pallet_type_id uuid,pallet_type_code text,pallet_type_name text,pallet_color text,quantity numeric,notes text,sort_order integer)$pallet_captured_new$]
     ),
     (
       'public.get_finance_account_period_evidence_page(uuid,uuid,uuid,integer,integer,integer)',
       true,
-      $page_old$from jsonb_array_elements(case when jsonb_typeof(c.snapshot#>'{facts,movements}')='array' then c.snapshot#>'{facts,movements}' else '[]'::jsonb end) with ordinality
-  where ordinal > _movement_offset$page_old$,
-      $page_new$from jsonb_array_elements(case when jsonb_typeof(c.snapshot#>'{facts,movements}')='array' then c.snapshot#>'{facts,movements}' else '[]'::jsonb end) with ordinality as movement(value,ordinal)
-  where ordinal > _movement_offset$page_new$
+      array[$page_old$from jsonb_array_elements(case when jsonb_typeof(c.snapshot#>'{facts,movements}')='array' then c.snapshot#>'{facts,movements}' else '[]'::jsonb end) with ordinality
+  where ordinal > _movement_offset$page_old$],
+      array[$page_new$from jsonb_array_elements(case when jsonb_typeof(c.snapshot#>'{facts,movements}')='array' then c.snapshot#>'{facts,movements}' else '[]'::jsonb end) with ordinality as movement(value,ordinal)
+  where ordinal > _movement_offset$page_new$]
     )
-  ) as patch(signature, expected_definer, original, corrected)
+  ) as patch(signature, expected_definer, originals, corrected)
   loop
     function_oid := pg_catalog.to_regprocedure(target.signature);
     if function_oid is null or not exists (
@@ -48,10 +52,16 @@ begin
       raise exception 'JSON ordinality contract changed: %', target.signature using errcode='55000';
     end if;
     definition := pg_catalog.pg_get_functiondef(function_oid);
-    original_count := (length(definition)-length(replace(definition,target.original,'')))/length(target.original);
-    corrected_count := (length(definition)-length(replace(definition,target.corrected,'')))/length(target.corrected);
+    changed := definition;
+    original_count := 0;
+    corrected_count := 0;
+    for variant in 1..array_length(target.originals,1) loop
+      original_count := original_count+(length(definition)-length(replace(definition,target.originals[variant],'')))/length(target.originals[variant]);
+      corrected_count := corrected_count+(length(definition)-length(replace(definition,target.corrected[variant],'')))/length(target.corrected[variant]);
+      changed := replace(changed,target.originals[variant],target.corrected[variant]);
+    end loop;
     if original_count=1 and corrected_count=0 then
-      execute replace(definition,target.original,target.corrected);
+      execute changed;
     elsif original_count<>0 or corrected_count<>1 then
       raise exception 'JSON ordinality body changed: %', target.signature using errcode='55000';
     end if;

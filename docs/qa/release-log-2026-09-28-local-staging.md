@@ -209,3 +209,31 @@ A seed revisada no checkout limpo **bda2c8327a38e5b6c5e67a0b282da701f5d3532b** f
 O pgTAP candidato foi atualizado para **108 verificações**, com custódia de carga e entrega atuais, replay/conflito fiscal, restrição de uma viagem ativa e erro explícito do contrato aposentado. Ainda não executado porque a seed não concluiu. As mudanças em fixtures não contam como teste aprovado antes do ensaio real.
 
 Após acrescentar os testes dos forwards e do suplemento, o pipeline executado com Node **22.23.2**/npm **10.9.4** passou em **138 testes**, sem falhas; um teste de permissões Linux foi ignorado no Windows. O checker confirmou **13 originais + três complementos revisados**. O teste Linux correspondente já havia passado na rodada do launcher. Esse resultado não substitui o contrato integral, pgTAP ou E2E.
+
+### Preflight do complemento impediu sobreposição de fonte — 18:40 UTC
+
+No checkout limpo **0b592fef70cfef0beff006a1654683a1aa05b5a5**, a tentativa transacional dos três complementos foi interrompida entre **18:40:43.472 e 18:40:43.549 UTC** pelo preflight: `JSON ordinality body changed: public.edit_pallet_return_protocol_v1(jsonb)`. O patch candidato tinha sido testado com o corpo histórico mais novo; a fonte publicada capturada usa um corpo compacto anterior, também sem os validadores de paletes inteiros. A função de paginação capturada também ainda não contém o resumo integral de recibos do histórico. Não tratar essas diferenças funcionais como whitespace.
+
+Saída psql **3**, conexão encerrada e transação revertida; o inventário confirmou os mesmos oito EXECUTEs anônimos, 327 tabelas e zero usuários/estados externos. Nenhum dos três complementos foi persistido nessa tentativa. A versão recusada do terceiro arquivo tinha SHA-256 **18dbd1debc36cb282db1ccd5237d5ac5992a371e1a363c9ad736324dab8e93c1**; a tentativa e os bytes permanecem no histórico. Sua revisão, antes de qualquer aplicação bem-sucedida, deve aceitar somente os corpos exatos revisados e testar a fonte capturada. Validação de paletes e resumo financeiro terão forwards próprios.
+
+### Contrato integral de segurança aprovado — 18:42 UTC
+
+Os dois primeiros complementos, independentes do SQL de ordinalidade, foram aplicados em transação própria entre **18:42:15.628 e 18:42:15.770 UTC**, no mesmo SHA **0b592fef**. O contrato `baseline_contract.sql` foi executado dentro dessa transação antes do COMMIT e passou. [Evidência sanitizada](local-security-followup-evidence-2026-09-28.json): **zero funções da aplicação executáveis por anon**, 327 tabelas e estados externos vazios. São **13 forwards originais + dois complementos** persistidos nesse instante; o terceiro permanece pendente.
+
+### Seed legítima e primeira suíte integrada — 18:43–18:45 UTC
+
+A fixture revisada conserva documento `confirmed` e POD `pending`, sem destinatário, assinatura ou evidência de entrega inventados. No checkout limpo **6606d3a929b5d449026dd20f73e44e0b770067c0**, a seed concluiu entre **18:43:01.460 e 18:43:01.957 UTC**: **sete usuários sintéticos, duas workspaces, dois tenants, zero flags de integração habilitadas, cron/Vault/fila HTTP vazios**. [Evidência da seed](local-seed-evidence-2026-09-28.json). Constraints foram verificadas antes do COMMIT; a proteção de entrega permaneceu ativa.
+
+A primeira chamada da CLI `test db` não iniciou testes porque procurou a rede Docker padrão, ausente neste ambiente. A imagem `pg_prove:3.36`, digest `sha256:eda7c5e68719e9c8287e78c017118407b48df904a51c935f5ab6098b8c0bc6bc`, foi obtida pela CLI. Com a opção documentada `--network-id agvlog-local-staging-loopback`, a suíte executou entre **18:45:15.010 e 18:45:17.878 UTC**: **110 verificações, 105 passaram, cinco falharam**, saída **1**. [Evidência do pgTAP](local-pgtap-evidence-2026-09-28.json).
+
+As falhas foram quatro assertions do convite (`invitation_access_not_found`) e uma expectativa de total zero após excluir item. O contrato atual usa `prepare_auth_invite_v2` com papel de acesso; a API de exclusão remove a carga elegível quando fica vazia, por isso a consulta antiga retornou NULL. Atualização das expectativas em revisão, sem relaxar regras da aplicação. A jornada SQL de custódia, partida, entrega, snapshot fiscal e replay passou, mas isso não aprova upload real, login, interface ou integração externa.
+
+## 28/09 — 18:48:57–18:49:00 UTC: pgTAP integrado aprovado
+
+No SHA `5436bf76e9265441f83a725195048f561c608a9e`, `supabase test db --local --workdir .local-staging --network-id agvlog-local-staging-loopback --agent yes` executou **114/114 verificações com sucesso**. [Evidência sanitizada](local-pgtap-114-evidence-2026-09-28.json); SQL SHA-256 `78b92c09f8df4853a4fabcdc3436c1c695fff937c35dfb3974aed862ad2f4ddc`.
+
+As cinco falhas anteriores eram expectativas desatualizadas: o convite vigente exige `prepare_auth_invite_v2` com papel explícito; a exclusão auditada do último item remove legitimamente a carga elegível vazia. Os testes foram alinhados aos contratos capturados, ampliados para 114 asserções e executados em transação com rollback. Incluem isolamento, convite, operação e jornada de entrega; os sete usuários sintéticos do seed permanecem. Não comprovam upload físico, navegador, emissão fiscal ou integração externa. Hook Auth e frontend ainda pendentes neste ponto.
+
+## 28/09 — revisão dos cinco forwards funcionais pendentes
+
+A revisão independente e os testes reais PGlite fecharam os candidatos de ordinality (9 testes), rotas (6), auditoria fiscal (12) e integridade de paletes/resumo financeiro (15). A [revisão do suplemento](local-followup-review-2026-09-28.md) registra o erro de fixture da primeira tentativa, os hashes anterior e corrigido e a ordem exigida. O manifesto original de 13 arquivos e os dois forwards de segurança já aplicados não foram alterados. Aplicação no banco local e verificação nativa desses cinco forwards ainda pendentes nesta entrada.

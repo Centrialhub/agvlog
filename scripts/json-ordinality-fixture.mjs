@@ -23,10 +23,11 @@ export const dependencies = [
   { source_kind: 'payable', source_id: 'a0', revision: 'r4' },
 ];
 
-// Executes complete historical RPCs and the real receipt-summary hotfix.
+// Executes complete historical RPCs + receipt hotfix, or captured baseline RPCs.
 // Supporting tables and membership helpers are intentionally minimal; this suite
 // validates these RPC contracts, not the full Supabase/RLS application boundary.
-export async function createOrdinalityDatabase() {
+export async function createOrdinalityDatabase({ source = 'historical' } = {}) {
+  if (!['historical', 'captured'].includes(source)) throw new Error('Unknown ordinality fixture source');
   const db = new PGlite();
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
@@ -72,6 +73,11 @@ export async function createOrdinalityDatabase() {
   if (end < 0) throw new Error('Complete evidence-page historical function not found');
   await db.exec(history.slice(0, end + 'end$$;'.length));
   await db.exec(readMigration('20260922038000_summarize_full_period_movement_receipts.sql'));
+  if (source === 'captured') {
+    for (const filename of ['pallet-edit-captured-2026-09-28.sql', 'finance-period-evidence-captured-2026-09-28.sql']) {
+      await db.exec(readFileSync(new URL(`./fixtures/${filename}`, import.meta.url), 'utf8'));
+    }
+  }
   await db.exec(`REVOKE ALL ON FUNCTION ${signatures[1]} FROM PUBLIC,anon,authenticated,service_role;
     GRANT EXECUTE ON FUNCTION ${signatures[1]} TO authenticated;
     COMMENT ON FUNCTION ${signatures[0]} IS 'Synthetic metadata preservation marker';`);
