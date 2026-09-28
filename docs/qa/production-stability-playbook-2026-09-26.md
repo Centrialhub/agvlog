@@ -10,6 +10,8 @@ A auditoria identificou causas concretas: frontend chama RPCs ausentes no banco 
 
 O trabalho futuro deve começar pelo contrato publicado e terminar com evidência do mesmo fluxo no ambiente final. Mudanças pequenas por contrato, testes que reproduzem o defeito e publicação coordenada entre banco, Edge e frontend reduzem as oportunidades de regressão.
 
+O ensaio de 28/09 acrescentou uma causa verificável: testes de paginação financeira conferiam trechos do arquivo SQL e chamadas simuladas, mas não executavam a RPC publicada. O lint do banco restaurado identificou uma referência a `ordinal` sem o alias correspondente e uma expansão JSON inválida no ajuste de paletes. Testes desse tipo podem passar enquanto a operação falha. Para alterações SQL, exigir reprodução antes da correção e execução real depois, preservando autorização e verificando os efeitos; cobertura de texto ou mocks serve apenas como evidência complementar.
+
 ## Quatro estados que precisam coincidir
 
 | Camada | Identidade a registrar | Situação observada |

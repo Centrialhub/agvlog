@@ -118,6 +118,8 @@ Seguir a [proposta de baseline](migration-baseline-plan-2026-09-26.md). A [captu
 
 O baseline de teste fica fora de `supabase/migrations` do release e jamais é aplicado no banco de produção.
 
+Correções descobertas após o lote original entram no [manifesto complementar](baseline-followup-manifest.json), com [revisão própria](local-followup-review-2026-09-28.md). Não acrescentá-las retroativamente aos 13 arquivos ou à aprovação do baseline. O checker exige que todos os arquivos posteriores estejam em um desses lotes revisados; o suplemento não executa SQL.
+
 ### Preparação explícita dos artefatos revisados
 
 O preparador admite a etapa `reviewed-baseline-prepared`. Ela apenas copia o SQL revisado e os 13 forwards para `.local-staging/baseline/`; não executa SQL, altera o TOML ou ativa seed, hook, Edge ou replay. A entrada deve estar em diretório privado **fora do checkout**, com arquivos regulares e sem links. Os artefatos brutos da captura não são entradas aprovadas.

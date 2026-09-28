@@ -1,0 +1,22 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-baseline-reviewed-followups",
+  "originalManifestSha256": "cdccb706be4bd1ea38f88c09eff9538f0dea55a964f094ebb7ebf08ee7838715",
+  "forwards": [
+    {
+      "version": "20260928182208",
+      "filename": "20260928182208_restrict_internal_trigger_execute.sql",
+      "sha256": "9485feff43bd405aa5adf796d376f44e63ff9097bfb19cc35d31b9c8c5b93e76"
+    },
+    {
+      "version": "20260928182647",
+      "filename": "20260928182647_remove_redundant_event_message_read_policy.sql",
+      "sha256": "947127e572f903dffff344a4873687cf23b2c0e83e5a16f9a6b84aaed1e24ebf"
+    },
+    {
+      "version": "20260928183014",
+      "filename": "20260928183014_fix_active_json_ordinality_contracts.sql",
+      "sha256": "18dbd1debc36cb282db1ccd5237d5ac5992a371e1a363c9ad736324dab8e93c1"
+    }
+  ]
+}
