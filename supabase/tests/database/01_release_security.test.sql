@@ -7,9 +7,26 @@ set local request.jwt.claim.sub = '';
 set local request.jwt.claim.role = '';
 set local request.jwt.claims = '{}';
 
-select plan(108);
+select plan(110);
 
 select has_table('public', 'tenant_feature_policy', 'tenant capability policy exists');
+
+select is(
+  (select count(*)::integer from public.fiscal_documents
+   where tenant_id in ('20000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000002')
+     and status in ('delivered', 'partial_delivery', 'returned', 'refused', 'failed', 'not_delivered')),
+  0,
+  'seed does not invent an unaudited terminal delivery result'
+);
+select ok(
+  exists (select 1 from public.proof_of_delivery
+    where id = '91000000-0000-4000-8000-000000000001'
+      and status = 'pending' and is_active
+      and receiver_name is null and received_at is null and validated_at is null
+      and content_hash is null and storage_path is null and signature_url is null
+      and photo_url is null and metadata = '{}'::jsonb),
+  'seed creates an empty pending POD without fabricated received or validated evidence'
+);
 
 select is(
   (select count(*)::integer from public.tenant_feature_policy
@@ -445,9 +462,9 @@ select throws_ok(
 );
 
 reset role;
--- Build a separate, rollback-only graph: the seeded validated POD is history
--- and the delivery RPC correctly refuses to overwrite it. Fixture setup uses
--- the test administrator; every action below runs as the assigned driver.
+-- Build a separate, rollback-only graph so this journey does not consume the
+-- open document/POD reserved for browser tests. Fixture setup uses the test
+-- administrator; every action below runs as the assigned driver.
 set local request.jwt.claims = '{}';
 insert into public.loads (id, tenant_id, load_number, driver_id, vehicle_id, status)
 values ('70000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001',

@@ -284,10 +284,10 @@ values (
   '20000000-0000-4000-8000-000000000001',
   'inbound', 'E2E-NF-001', '31260811111111000191550010000000011000000010',
   '40000000-0000-4000-8000-000000000001', 'Cliente Fixture A', current_date,
-  '70000000-0000-4000-8000-000000000001', 2, 450, 12500, 'delivered',
+  '70000000-0000-4000-8000-000000000001', 2, 450, 12500, 'confirmed',
   'Janaúba', 'MG', 'frota', '{"fixture":true}'
 )
-on conflict (id) do update set status = excluded.status, updated_at = now();
+on conflict (id) do nothing;
 
 insert into public.fiscal_documents (
   id, tenant_id, document_type, invoice_number, client_id, remitter, recipient,
@@ -327,6 +327,9 @@ values (
 )
 on conflict (id) do nothing;
 
+-- This is an open delivery and an empty POD placeholder. Terminal document
+-- status and received/validated evidence must come from the audited delivery
+-- APIs; the seed must not fabricate a completed delivery or receipt.
 insert into public.proof_of_delivery (
   id, tenant_id, fiscal_document_id, load_id, dispatch_trip_id, dispatch_stop_id,
   proof_type, status, receiver_name, received_at, validated_at, metadata,
@@ -339,10 +342,10 @@ values (
   '70000000-0000-4000-8000-000000000001',
   '80000000-0000-4000-8000-000000000001',
   '82000000-0000-4000-8000-000000000001',
-  'pod_photo', 'validated', 'Recebedor Fixture', now(), now(), '{"fixture":true}',
-  encode(digest('agvlog-e2e-pod', 'sha256'), 'hex'), null
+  'receiver_confirmation', 'pending', null, null, null, '{}',
+  null, null
 )
-on conflict (id) do update set status = excluded.status, updated_at = now();
+on conflict (id) do nothing;
 
 insert into public.delivery_occurrences (
   id, tenant_id, fiscal_document_id, load_id, client_id, driver_id,
