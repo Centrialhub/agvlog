@@ -237,3 +237,15 @@ As cinco falhas anteriores eram expectativas desatualizadas: o convite vigente e
 ## 28/09 — revisão dos cinco forwards funcionais pendentes
 
 A revisão independente e os testes reais PGlite fecharam os candidatos de ordinality (9 testes), rotas (6), auditoria fiscal (12) e integridade de paletes/resumo financeiro (15). A [revisão do suplemento](local-followup-review-2026-09-28.md) registra o erro de fixture da primeira tentativa, os hashes anterior e corrigido e a ordem exigida. O manifesto original de 13 arquivos e os dois forwards de segurança já aplicados não foram alterados. Aplicação no banco local e verificação nativa desses cinco forwards ainda pendentes nesta entrada.
+## 28/09 — 18:57:38 UTC: cinco forwards funcionais aplicados
+
+SHA `573f2f32a584f3d2997bd2ec5254623fe511bde2`, checkout Linux limpo, baseline aprovado `501f7c02…`, hashes do suplemento e de cada SQL conferidos. Cinco arquivos pendentes foram aplicados em uma única transação, com `ON_ERROR_STOP`, timeout e `baseline_contract.sql` antes do COMMIT. **Sucesso**, [evidência](local-functional-followup-evidence-2026-09-28.json). Entrada SQL SHA-256 `080bad760b0dddb4e21f052f6021046ebdcc53a1bd20d48809073870caee5456`. Estado passou a **13 originais + 7 complementos**. Permaneceram 327 tabelas públicas, sete usuários, zero funções de aplicação executáveis por anon e zero cron/Vault/fila HTTP. Nenhuma publicação em produção.
+
+## 28/09 — 18:58:22–18:58:31 UTC: verificações após o lote
+
+- **pgTAP 114/114 PASS**, mesmo SQL de segurança/jornada, transação com rollback: [evidência](local-pgtap-post-followups-evidence-2026-09-28.json).
+- `db advisors --local --type security --level warn --fail-on error`: **exit 0, No issues found**, 18:58:29.247–18:58:31.978 UTC.
+- `db lint --local --level error --fail-on error`: **exit 1, 31 achados**, 18:58:26.211–18:58:28.623 UTC. Os quatro defeitos de caminhos ativos tratados pelo lote desapareceram; permanecem os 21 achados em rotinas legadas, dois FOREACH, dois dependentes de contexto e seis internos PostGIS descritos na [triagem](local-database-lint-triage-2026-09-28.md). O gate não foi liberado nem recebeu exclusões.
+- Suíte de scripts no Windows, Node 22.23.2/npm 10.9.4: **174 aprovados, zero falhas, um teste de permissões exclusivo de Linux ignorado**. Esse resultado cobre o estado de arquivos no momento da execução; não aprova automaticamente mudanças posteriores do perfil Auth.
+
+Logs detalhados preservados em diretório privado com nomes por execução. Login real, armazenamento físico, interface e integrações externas continuam pendentes. As correções específicas receberão testes nativos de seus efeitos além do pgTAP geral.
