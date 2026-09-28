@@ -7,7 +7,7 @@ set local request.jwt.claim.sub = '';
 set local request.jwt.claim.role = '';
 set local request.jwt.claims = '{}';
 
-select plan(110);
+select plan(114);
 
 select has_table('public', 'tenant_feature_policy', 'tenant capability policy exists');
 
@@ -53,13 +53,14 @@ select ok(
 
 set local role service_role;
 select lives_ok(
-  $$select public.prepare_auth_invite(
+  $$select public.prepare_auth_invite_v2(
     'invite-contract@agvlog-e2e.invalid',
     '20000000-0000-4000-8000-000000000001',
     '10000000-0000-4000-8000-000000000001',
-    'pgTAP-invite-contract-nonce-000000000001'
+    'pgTAP-invite-contract-nonce-000000000001',
+    'operator'
   )$$,
-  'service role can prepare a short-lived invitation authorization'
+  'service role prepares a short-lived invitation with its tenant access role'
 );
 reset role;
 
@@ -95,6 +96,25 @@ select ok(
     true
   ),
   'accepted auth user does not retain the invitation nonce'
+);
+
+select results_eq(
+  $$select tenant_id, role::text, active from public.tenant_memberships
+    where user_id = '10000000-0000-4000-8000-000000000101'$$,
+  $$values ('20000000-0000-4000-8000-000000000001'::uuid, 'operator'::text, true)$$,
+  'accepted invitation attaches exactly the authorized tenant and role'
+);
+select is(
+  (select count(*)::integer from public.tenant_memberships
+   where user_id = '10000000-0000-4000-8000-000000000101'
+     and tenant_id = '20000000-0000-4000-8000-000000000002'),
+  0,
+  'invitation does not propagate access into the separate tenant B workspace'
+);
+select ok(
+  not has_function_privilege('authenticated',
+    'public.prepare_auth_invite_v2(text,uuid,uuid,text,public.app_role,uuid,text,jsonb)', 'EXECUTE'),
+  'browser sessions cannot prepare invitation access directly'
 );
 
 select throws_ok(
@@ -381,9 +401,14 @@ select is(
 );
 
 select is(
-  (select total_weight_kg from public.loads where id = md5('agvlog-e2e-load-a-1')::uuid),
-  0::numeric,
-  'delete recalculates totals back to zero'
+  (select count(*)::integer from public.loads where id = md5('agvlog-e2e-load-a-1')::uuid),
+  0,
+  'deleting the last manual item removes this eligible empty load'
+);
+select is(
+  (select count(*)::integer from public.load_items where load_id = md5('agvlog-e2e-load-a-1')::uuid),
+  0,
+  'empty-load cleanup leaves no orphan cargo items'
 );
 
 select throws_ok(
