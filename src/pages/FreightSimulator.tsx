@@ -20,7 +20,7 @@ import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { localDateInputValue } from '@/lib/utils/formatDate';
 import { deduplicateFreightDocuments } from '@/lib/freight/freightSimulatorDocuments';
-import { readLoadFreightContext } from '@/lib/fiscalDocuments/loadFreightContext';
+import { readFreightSimulatorSource } from '@/lib/freight/freightSimulatorSource';
 
 const NONE = '__none__';
 export default function FreightSimulator() {
@@ -249,13 +249,9 @@ export default function FreightSimulator() {
       let sourceDocumentIds: string[] | undefined;
       let recipientId: string | null = null;
       if (docId && docId !== NONE) {
-        const { data: document, error } = await supabase.from('fiscal_documents')
-          .select('id, client_id, document_type, load_id').eq('tenant_id', tenantId)
-          .eq('id', docId).is('deleted_at', null).single();
-        if (error) throw error;
-        recipientId = document.client_id;
-        sourceDocumentIds = document.document_type === 'inbound' ? [document.id]
-          : document.load_id ? (await readLoadFreightContext(tenantId, document.load_id)).documents.map(nf => nf.id) : [];
+        const source = await readFreightSimulatorSource(tenantId, docId, clientId === NONE ? null : clientId);
+        recipientId = source.recipientId;
+        sourceDocumentIds = source.sourceDocumentIds;
       }
       const r = await calculateFreight({
         tenantId,
@@ -500,6 +496,7 @@ export default function FreightSimulator() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Fornecedor</Label>
+              <p className="text-xs text-muted-foreground">Para CT-e, selecione o fornecedor/remetente das NF-es de origem.</p>
               <Select value={clientId} onValueChange={setClientId} disabled={catalogsUnavailable}>
                 <SelectTrigger><SelectValue placeholder="Qualquer" /></SelectTrigger>
                 <SelectContent>

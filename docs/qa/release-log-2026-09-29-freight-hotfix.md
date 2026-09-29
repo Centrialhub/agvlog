@@ -19,3 +19,14 @@
 ## Estado
 
 Pacote em preparação/validação, ainda não promovido. Registrar SHA final, deployment, testes e eventual exceção antes da promoção. Não usar o build local com configuração fictícia como artefato de produção; a Vercel deve reconstruir com as configurações do projeto.
+
+## Revisão e autorização emergencial
+
+Após receber o pedido explícito de exceção aos gates pendentes, o usuário reiterou: “publique o hotfix agora é crucial para produção”. Autorização emergencial registrada para este hotfix isolado, sem mudanças SQL/Edge. Smoke autenticado completo continua pendente; não representa aprovação geral da estabilidade do sistema.
+
+A revisão encontrou e corrigiu dois problemas no candidato antes da promoção:
+
+- O simulador havia adquirido dependência de `get_load_freight_context_v1`, ausente em produção. Removida essa dependência nova. NF-e mantém resolução automática; para CT-e, o usuário informa explicitamente o fornecedor das notas, sem inferi-lo do CNPJ da transportadora. Consultas permanecem na empresa ativa e excluem documentos removidos.
+- A aplicação tardia do frete podia sobrescrever base/valor ICMS editados durante o carregamento. O merge agora preserva esses campos alterados, mantendo recálculo quando não houve edição.
+
+Adicionados quatro testes de regressão para esses casos. O pacote permanece limitado ao frontend; RPCs ausentes de fluxos anteriores continuam no trabalho separado de estabilidade.
