@@ -69,6 +69,7 @@ export interface FiscalDocument {
   weight_kg: number | null;
   value: number | null;
   freight_value: number | null;
+  freight_overridden?: boolean | null;
   freight_breakdown: Json | null;
   freight_table_id: string | null;
   client_load_number: string | null;
@@ -385,31 +386,21 @@ export function useUpdateFiscalDocument() {
           // Pull NF-e context from the same load
           let clientId: string | null = doc.client_id || null;
           let nfeTotalValue = 0;
+          let sourceDocumentIds: string[] = [];
           if (doc.load_id) {
             const context = await readLoadFreightContext(currentTenant.id, doc.load_id);
             const nfeDocs = context.documents;
+            sourceDocumentIds = nfeDocs.map(document => document.id);
             nfeTotalValue = nfeDocs.reduce((sum, document) => sum + (Number(document.value) || 0), 0);
             if (!clientId) {
               const ref = nfeDocs.find((document) => document.client_id);
               clientId = ref?.client_id || null;
             }
           }
-          let payerGroup: string | null = null;
-          if (clientId) {
-            const { data: cli, error: clientError } = await supabase
-              .from('clients')
-              .select('payer_group')
-              .eq('id', clientId)
-              .eq('tenant_id', currentTenant.id)
-              .maybeSingle();
-            if (clientError) throw clientError;
-            payerGroup = cli?.payer_group || null;
-          }
-
           const result = await calculateFreight({
             tenantId: currentTenant.id,
             clientId,
-            payerGroup,
+            sourceDocumentIds,
             destination: doc.recipient || doc.recipient_city,
             destinationState: doc.recipient_state,
             destinationMunicipality: doc.recipient_city,

@@ -20,6 +20,7 @@ import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
 import { localDateInputValue } from '@/lib/utils/formatDate';
 import { deduplicateFreightDocuments } from '@/lib/freight/freightSimulatorDocuments';
+import { readFreightSimulatorSource } from '@/lib/freight/freightSimulatorSource';
 
 const NONE = '__none__';
 export default function FreightSimulator() {
@@ -68,7 +69,7 @@ export default function FreightSimulator() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, company_name, payer_group')
+        .select('id, company_name, payer_group, tax_id')
         .eq('tenant_id', tenantId!)
         .eq('is_supplier', true)
         .order('company_name');
@@ -99,7 +100,7 @@ export default function FreightSimulator() {
     queryFn: async () => {
       const rows = await fetchAllPostgrestPages((from, to) => {
       let q = supabase.from('fiscal_documents')
-        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date, status, created_at, is_duplicate')
+        .select('id, invoice_number, access_key, remitter, remitter_cnpj, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date, status, created_at, is_duplicate')
         .eq('tenant_id', tenantId!)
         .order('issue_date', { ascending: false, nullsFirst: false })
         .order('id').range(from, to);
@@ -145,9 +146,9 @@ export default function FreightSimulator() {
   }, [regions, clients]);
 
   const filteredRegions = useMemo(() => {
-    if (clientId === NONE) return regions;
-    return regions.filter((r) => !r.client_id || r.client_id === clientId);
-  }, [regions, clientId]);
+    const recipientId = docs.find(document => document.id === docId)?.client_id;
+    return regions.filter(r => !r.client_id || r.client_id === recipientId);
+  }, [regions, docs, docId]);
 
   const filteredDocs = useMemo(() => {
     if (docTypeFilter === 'all') return docs;
@@ -155,24 +156,26 @@ export default function FreightSimulator() {
     return docs.filter((d) => d.document_type === 'inbound');
   }, [docs, docTypeFilter]);
 
+  function supplierForRemitter(taxId: string | null) {
+    const digits = taxId?.replace(/\D/g, '');
+    if (!digits) return NONE;
+    const matches = clients.filter(client => client.tax_id?.replace(/\D/g, '') === digits);
+    return matches.length === 1 ? matches[0].id : NONE;
+  }
+
   function loadFromDoc(id: string) {
     setDocId(id);
     if (!id || id === NONE) return;
     const d = docs.find((x) => x.id === id);
     if (!d) return;
-    setClientId(d.client_id || NONE);
+    setClientId(d.document_type === 'inbound' ? supplierForRemitter(d.remitter_cnpj) : NONE);
+    setPayerGroup(NONE);
     setTotalValue(String(d.value || 0));
     setTotalWeight(String(d.weight_kg || 0));
     setTotalPallets(String(d.pallet_count || 0));
     setDestState(d.recipient_state || '');
     setDestMunicipality(d.recipient_city || '');
-    // Try to auto-suggest region
-    const match = regions.find(
-      (r) =>
-        r.municipality?.toLowerCase() === (d.recipient_city || '').toLowerCase() &&
-        (!d.recipient_state || r.state_code === d.recipient_state),
-    );
-    setRegionId(match?.id || NONE);
+    setRegionId(NONE);
     setResult(null);
   }
 
@@ -200,7 +203,7 @@ export default function FreightSimulator() {
     try {
       let query = supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date, status, created_at, is_duplicate')
+        .select('id, invoice_number, access_key, remitter, remitter_cnpj, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date, status, created_at, is_duplicate')
         .eq('tenant_id', tenantId)
         .or(`invoice_number.eq.${term},access_key.ilike.%${term}%`);
       if (docTypeFilter === 'cte') query = query.eq('document_type', 'outbound');
@@ -219,18 +222,14 @@ export default function FreightSimulator() {
       if (candidates.length > 1) { toast.error(`Foram encontrados ${candidates.length} documentos. Informe a chave de acesso ou selecione o emitente correto na lista.`); return; }
       const d = candidates[0];
       setDocId(d.id);
-      setClientId(d.client_id || NONE);
+      setClientId(d.document_type === 'inbound' ? supplierForRemitter(d.remitter_cnpj) : NONE);
+      setPayerGroup(NONE);
       setTotalValue(String(d.value || 0));
       setTotalWeight(String(d.weight_kg || 0));
       setTotalPallets(String(d.pallet_count || 0));
       setDestState(d.recipient_state || '');
       setDestMunicipality(d.recipient_city || '');
-      const match = regions.find(
-        (r) =>
-          r.municipality?.toLowerCase() === (d.recipient_city || '').toLowerCase() &&
-          (!d.recipient_state || r.state_code === d.recipient_state),
-      );
-      setRegionId(match?.id || NONE);
+      setRegionId(NONE);
       setResult(null);
       toast.success(`Documento ${d.invoice_number || term} carregado (fora do período atual)`);
     } catch (error: unknown) {
@@ -247,10 +246,18 @@ export default function FreightSimulator() {
     setLoading(true);
     try {
       const region = regions.find((r) => r.id === regionId);
+      let sourceDocumentIds: string[] | undefined;
+      let recipientId: string | null = null;
+      if (docId && docId !== NONE) {
+        const source = await readFreightSimulatorSource(tenantId, docId, clientId === NONE ? null : clientId);
+        recipientId = source.recipientId;
+        sourceDocumentIds = source.sourceDocumentIds;
+      }
       const r = await calculateFreight({
         tenantId,
-        clientId: clientId === NONE ? null : clientId,
-        payerName: clientId === NONE ? null : clients.find(client => client.id === clientId)?.company_name || null,
+        clientId: recipientId,
+        supplierId: clientId === NONE ? null : clientId,
+        sourceDocumentIds,
         payerGroup: payerGroup === NONE ? region?.payer_group || null : payerGroup,
         destination: region?.region_name || destMunicipality || null,
         destinationState: destState || region?.state_code || null,
@@ -270,7 +277,7 @@ export default function FreightSimulator() {
     } finally {
       if (generation === calculationGeneration.current) setLoading(false);
     }
-  }, [toast, tenantId, catalogsUnavailable, regions, regionId, clientId, clients, payerGroup, destMunicipality, destState, vehicleType, totalValue, totalWeight, totalPallets, docs, docId]);
+  }, [toast, tenantId, catalogsUnavailable, regions, regionId, clientId, payerGroup, destMunicipality, destState, vehicleType, totalValue, totalWeight, totalPallets, docs, docId]);
 
   // A prévia só é válida para a combinação exata que a produziu. Além de
   // ocultá-la, a geração invalida uma resposta antiga que ainda esteja em voo.
@@ -489,6 +496,7 @@ export default function FreightSimulator() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Fornecedor</Label>
+              <p className="text-xs text-muted-foreground">Para CT-e, selecione o fornecedor/remetente das NF-es de origem.</p>
               <Select value={clientId} onValueChange={setClientId} disabled={catalogsUnavailable}>
                 <SelectTrigger><SelectValue placeholder="Qualquer" /></SelectTrigger>
                 <SelectContent>

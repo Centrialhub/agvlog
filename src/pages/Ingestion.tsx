@@ -936,12 +936,14 @@ export default function Ingestion() {
               }
             }
             let freightValue: number | null = null;
+            let freightError = '';
             let freightBreakdown: FreightBreakdown | null = null;
             let freightTableId: string | null = null;
             if (currentTenant) {
               const freightResult = await calculateFreight({
                 tenantId: currentTenant.id,
                 clientId: doc.matchedClientId,
+                supplierTaxIds: [doc.source.emitterCnpj],
                 destination: doc.source.recipientCity || null,
                 destinationState: doc.source.recipientState || null,
                 destinationMunicipality: doc.source.recipientCity || null,
@@ -953,7 +955,7 @@ export default function Ingestion() {
                 freightValue = freightResult.value;
                 freightBreakdown = freightResult.breakdown;
                 freightTableId = freightResult.breakdown.tableId || null;
-              }
+              } else { freightError = freightResult.error || 'Nenhuma tabela compatível'; }
             }
 
             const created = await createDoc.mutateAsync({
@@ -1030,7 +1032,7 @@ export default function Ingestion() {
               doc, created.id, loadId ? 'saved_and_linked' : 'saved', freightBreakdown,
             );
 
-            const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : '';
+            const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : `; ⚠️ frete pendente: ${freightError || 'não calculado'}`;
             const auditLabel = auditWarnings.length ? `; ⚠️ auditoria pendente (${auditWarnings.join(' | ')})` : '';
             results.push(`✅ NF ${doc.source.invoiceNumber} salva${freightLabel}${auditLabel}`);
           }
@@ -1107,6 +1109,7 @@ export default function Ingestion() {
     const validDocs = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate && !d._savedId);
     let savedCount = 0;
     let auditWarningCount = 0;
+    const freightWarnings: string[] = [];
     for (const doc of validDocs) {
       try {
         let freightValue: number | null = null;
@@ -1116,6 +1119,7 @@ export default function Ingestion() {
           const freightResult = await calculateFreight({
             tenantId: currentTenant.id,
             clientId: doc.matchedClientId,
+            supplierTaxIds: [doc.source.emitterCnpj],
             destination: doc.source.recipientCity || null,
             destinationState: doc.source.recipientState || null,
             destinationMunicipality: doc.source.recipientCity || null,
@@ -1127,7 +1131,7 @@ export default function Ingestion() {
             freightValue = freightResult.value;
             freightBreakdown = freightResult.breakdown;
             freightTableId = freightResult.breakdown.tableId || null;
-          }
+          } else { freightWarnings.push(`NF ${doc.source.invoiceNumber}: ${freightResult.error || 'Nenhuma tabela compatível'}`); }
         }
 
         const created = await createDoc.mutateAsync({
@@ -1211,6 +1215,10 @@ export default function Ingestion() {
     }
 
     refreshImportedDocuments();
+    if (freightWarnings.length) {
+      toast({ title: `${freightWarnings.length} NF-e(s) com frete pendente`,
+        description: freightWarnings.slice(0, 3).join('; '), variant: 'destructive' });
+    }
     if (savedCount > 0) {
       toast({
         title: `${savedCount} NF-e(s) salvas automaticamente`,
@@ -1270,12 +1278,14 @@ export default function Ingestion() {
           // Fallback: save now if somehow not saved earlier
           try {
             let freightValue: number | null = null;
+            let freightError = '';
             let freightBreakdown: FreightBreakdown | null = null;
             let freightTableId: string | null = null;
             if (currentTenant) {
               const freightResult = await calculateFreight({
                 tenantId: currentTenant.id,
                 clientId: doc.matchedClientId,
+                supplierTaxIds: [doc.source.emitterCnpj],
                 destination: doc.source.recipientCity || null,
                 destinationState: doc.source.recipientState || null,
                 destinationMunicipality: doc.source.recipientCity || null,
@@ -1287,7 +1297,7 @@ export default function Ingestion() {
                 freightValue = freightResult.value;
                 freightBreakdown = freightResult.breakdown;
                 freightTableId = freightResult.breakdown.tableId || null;
-              }
+              } else { freightError = freightResult.error || 'Nenhuma tabela compatível'; }
             }
 
             const created = await createDoc.mutateAsync({
@@ -1362,7 +1372,7 @@ export default function Ingestion() {
 
             const auditWarnings = await recordPostCreateAudits(doc, created.id, 'imported_on_execute', freightBreakdown);
 
-            const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : ' (sem tabela de frete)';
+            const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : `; ⚠️ frete pendente: ${freightError || 'não calculado'}`;
             const auditLabel = auditWarnings.length ? `; ⚠️ auditoria pendente (${auditWarnings.join(' | ')})` : '';
             results.push(`✅ NF ${doc.source.invoiceNumber} importada${freightLabel}${auditLabel}`);
           } catch (e: unknown) {
