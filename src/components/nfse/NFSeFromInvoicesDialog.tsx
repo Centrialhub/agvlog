@@ -37,7 +37,6 @@ import { allocateCurrency } from '@/lib/fiscal/nfseBatchAllocation';
 import { consultOfficialTaxRegistry } from '@/lib/fiscal/taxRegistryClient';
 import { stateFromNfeAccessKey } from '@/lib/fiscal/cteAddressAutocomplete';
 import {
-  canonicalizeNFSeTomadorPostalAddress,
   findActiveNFSeTaxProfile,
   mergeOfficialProfileIntoNFSeTomador,
   missingNFSeTomadorFields,
@@ -345,7 +344,13 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   }, [tomador, isEditingTomador]);
 
   useEffect(() => {
-    if (!open || environment !== 'production' || !emitterId || !tomador || isEditingTomador) return;
+    if (!open) return;
+    if (environment !== 'production' || !emitterId || !tomador || isEditingTomador
+      || !needsNFSeTomadorRegistryEnrichment(tomador)) {
+      setTomadorRegistryStatus('idle');
+      setTomadorRegistryMessage('');
+      return;
+    }
     const cnpj = onlyDigits(tomador.cnpj);
     const inferredUf = tomador.uf || (
       tomadorMode === 'remetente' ? stateFromNfeAccessKey(selectedDocs[0]?.access_key) : ''
@@ -358,7 +363,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
     let cancelled = false;
     setTomadorRegistryStatus('loading');
-    setTomadorRegistryMessage('Conferindo cadastro fiscal e validade postal do endereço do tomador…');
+    setTomadorRegistryMessage('Consultando cadastro fiscal do tomador…');
     void (async () => {
       let completed = tomador;
       if (needsNFSeTomadorRegistryEnrichment(tomador)) {
@@ -373,7 +378,6 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         if (!profile) throw new Error('CNPJ não localizado como ativo no cadastro fiscal.');
         completed = mergeOfficialProfileIntoNFSeTomador(tomador, profile, inferredUf);
       }
-      completed = await canonicalizeNFSeTomadorPostalAddress(completed);
       return completed;
     })().then((completed) => {
       if (cancelled) return;
@@ -384,7 +388,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         throw new Error('Cadastro fiscal não retornou a IE. Informe a IE ou marque como ISENTO antes de emitir.');
       }
       setTomadorRegistryStatus('filled');
-      setTomadorRegistryMessage('IE, CEP e município do tomador conferidos antes da emissão.');
+      setTomadorRegistryMessage('Dados cadastrais do tomador preenchidos.');
     }).catch((error: unknown) => {
       if (cancelled) return;
       setTomadorRegistryStatus('error');
@@ -472,7 +476,6 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
           if (!profile) throw new Error(`Tomador ${candidate.nome || cnpj}: CNPJ não localizado como ativo no cadastro fiscal.`);
           completed = mergeOfficialProfileIntoNFSeTomador(candidate, profile, uf);
         }
-        completed = await canonicalizeNFSeTomadorPostalAddress(completed);
         const missing = missingNFSeTomadorFields(completed);
         if (missing.length > 0) {
           throw new Error(`Tomador ${candidate.nome || cnpj}: cadastro fiscal não retornou ${missing.join(', ')}.`);
@@ -1332,7 +1335,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             ) : (
               <Button
                 onClick={handleEmit}
-                disabled={issuing || create.isPending || issueBatch.isPending || isFetching || !!docsError || (!batchAttempt && (tomadorRegistryStatus === 'loading' || (environment === 'production' && needsTomadorRegistryEnrichment)))}
+                disabled={issuing || create.isPending || issueBatch.isPending || isFetching || !!docsError || (!batchAttempt && needsTomadorRegistryEnrichment && (tomadorRegistryStatus === 'loading' || environment === 'production'))}
               >
                 {issuing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
                 {batchAttempt ? 'Tentar novamente com segurança' : 'Emitir NFS-e'}
