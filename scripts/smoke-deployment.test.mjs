@@ -8,14 +8,21 @@ let origin;
 let sourceMapMode = "missing";
 let redirectRoot = false;
 let releaseFetches = 0;
+let requestCount = 0;
+let signupRequests = 0;
+let releaseSupabaseOrigin;
 const appHtml = '<!doctype html><script type="module" src="/assets/app.js"></script>';
 
 before(async () => {
   server = createServer((request, response) => {
+    requestCount += 1;
     if (request.url === "/release.json") {
       releaseFetches += 1;
       response.setHeader("content-type", "application/json");
-      response.end(JSON.stringify({ release: "a".repeat(40), buildHash: "b".repeat(16) }));
+      response.end(JSON.stringify({
+        release: "a".repeat(40), buildHash: "b".repeat(16),
+        supabaseOrigin: releaseSupabaseOrigin ?? origin,
+      }));
       return;
     }
     if (request.url === "/assets/app.js") {
@@ -31,6 +38,7 @@ before(async () => {
       return;
     }
     if (request.url === "/auth/v1/signup" && request.method === "POST") {
+      signupRequests += 1;
       response.writeHead(422, { "content-type": "application/json" });
       response.end(JSON.stringify({ error_code: "signup_disabled", message: "Signups not allowed" }));
       return;
@@ -63,7 +71,7 @@ after(async () => {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 });
 
-function runSmoke(expectedRelease) {
+function runSmoke(expectedRelease, { bypassSecret = "" } = {}) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, ["scripts/smoke-deployment.mjs"], {
       cwd: process.cwd(),
@@ -74,6 +82,7 @@ function runSmoke(expectedRelease) {
         DEPLOY_EXPECTED_RELEASE: expectedRelease,
         DEPLOY_SUPABASE_URL: origin,
         DEPLOY_SUPABASE_PUBLISHABLE_KEY: "public-test-key",
+        VERCEL_AUTOMATION_BYPASS_SECRET: bypassSecret,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -99,6 +108,32 @@ test("rejects a deployed artifact from another commit", async () => {
   assert.match(result.stderr, /Candidate release mismatch/);
 });
 
+test("rejects a different build backend before touching hosted Auth", async () => {
+  releaseSupabaseOrigin = "https://another-project.supabase.co";
+  try {
+    const before = signupRequests;
+    const result = await runSmoke("a".repeat(40));
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Supabase origin is absent or differs/);
+    assert.equal(signupRequests, before);
+  } finally {
+    releaseSupabaseOrigin = undefined;
+  }
+});
+
+test("rejects missing build backend identity before touching hosted Auth", async () => {
+  releaseSupabaseOrigin = "";
+  try {
+    const before = signupRequests;
+    const result = await runSmoke("a".repeat(40));
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Supabase origin is absent or differs/);
+    assert.equal(signupRequests, before);
+  } finally {
+    releaseSupabaseOrigin = undefined;
+  }
+});
+
 test("accepts SPA HTML fallback for an absent source map", async () => {
   sourceMapMode = "fallback";
   const result = await runSmoke("a".repeat(40));
@@ -122,4 +157,13 @@ test("rejects a candidate that redirects before checking its release", async () 
   } finally {
     redirectRoot = false;
   }
+});
+
+test("refuses to send a Vercel bypass secret to an unapproved origin", async () => {
+  const before = requestCount;
+  const result = await runSmoke("a".repeat(40), { bypassSecret: "test-only-bypass-secret" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /bypass may only target/);
+  assert.equal(requestCount, before);
+  assert.doesNotMatch(result.stderr, /test-only-bypass-secret/);
 });

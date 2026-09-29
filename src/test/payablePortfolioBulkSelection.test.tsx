@@ -1,10 +1,10 @@
-import {fireEvent,render,screen} from '@testing-library/react';
+import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach,expect,it,vi} from 'vitest';
 
 const api=vi.hoisted(()=>({read:vi.fn()}));
 vi.mock('@/lib/financial/payablePortfolioClient',()=>({readPayablePortfolio:api.read}));
-vi.mock('@/components/financial/PayableBulkSettlementDialog',()=>({PayableBulkSettlementDialog:({titles}:{titles:{payable_id:string}[]})=><p>Diálogo em lote com {titles.length} títulos</p>}));
+vi.mock('@/components/financial/PayableBulkSettlementDialog',()=>({PayableBulkSettlementDialog:({titles}:{titles:{payable_id:string;open_cents:string}[]})=><><p>Diálogo em lote com {titles.length} títulos</p><p>Valores para baixa: {titles.map(title=>title.open_cents).join(',')}</p></>}));
 import {PayablePortfolioWorkspace} from '@/components/financial/PayablePortfolioPanel';
 
 const tenant=crypto.randomUUID(),actor=crypto.randomUUID(),revision='a'.repeat(32);
@@ -47,4 +47,44 @@ it('selects pending and cancelled titles and supports selecting the whole page',
   expect(screen.getByRole('checkbox',{name:'Selecionar título — Nota B'})).toBeChecked();
   expect(screen.getByRole('button',{name:'Excluir selecionados (2)'})).toBeEnabled();
   expect(screen.getByRole('button',{name:'Baixar títulos selecionados (0)'})).toBeDisabled();
+});
+
+it('drops stale first-page balances when a refetch changes the portfolio revision',async()=>{
+  const base=await api.read();
+  const cache=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  render(<QueryClientProvider client={cache}><PayablePortfolioWorkspace tenant={tenant} actor={actor}/></QueryClientProvider>);
+  await screen.findByText('Nota A');
+  fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota A'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota B'}));
+  fireEvent.click(screen.getByRole('button',{name:'Baixar títulos selecionados (2)'}));
+  expect(screen.getByText('Valores para baixa: 10000,10000')).toBeInTheDocument();
+
+  api.read.mockResolvedValue({
+    ...base,revision:'b'.repeat(32),nominal_cents:'30000',open_cents:'30000',
+    rows:rows.map(row=>({...row,nominal_cents:'15000',open_cents:'15000'})),
+  });
+  await act(async()=>{await cache.invalidateQueries({queryKey:['finance-payable-portfolio',tenant,actor]});});
+
+  await waitFor(()=>expect(screen.getByText(/Os saldos da carteira mudaram/)).toBeInTheDocument());
+  expect(screen.queryByText('Valores para baixa: 10000,10000')).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Baixar títulos selecionados (0)'})).toBeDisabled();
+  expect(screen.getByRole('checkbox',{name:'Selecionar título — Nota A'})).not.toBeChecked();
+
+  fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota A'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota B'}));
+  fireEvent.click(screen.getByRole('button',{name:'Baixar títulos selecionados (2)'}));
+  expect(screen.getByText('Valores para baixa: 15000,15000')).toBeInTheDocument();
+});
+
+it('keeps first-page selections when a refetch preserves the portfolio revision',async()=>{
+  const cache=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  render(<QueryClientProvider client={cache}><PayablePortfolioWorkspace tenant={tenant} actor={actor}/></QueryClientProvider>);
+  await screen.findByText('Nota A');
+  fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota A'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Selecionar título — Nota B'}));
+
+  await act(async()=>{await cache.invalidateQueries({queryKey:['finance-payable-portfolio',tenant,actor]});});
+
+  expect(screen.getByRole('button',{name:'Baixar títulos selecionados (2)'})).toBeEnabled();
+  expect(screen.queryByText(/Os saldos da carteira mudaram/)).not.toBeInTheDocument();
 });

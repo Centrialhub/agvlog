@@ -1,6 +1,8 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 
 import { accounts, fixtureIds } from "./fixtures/accounts";
+import { preTripChecklistPayload } from "./fixtures/driverChecklist";
+import { cleanupSyntheticManualLoad } from "./fixtures/loadCleanup";
 import { loginThroughUi, passwordToken } from "./fixtures/session";
 
 type Session = Awaited<ReturnType<typeof passwordToken>>;
@@ -31,21 +33,22 @@ test("operator creates a load and mutates composition/status only through audite
   const session = await passwordToken(request, accounts.operator);
   const loadId = crypto.randomUUID();
   const loadNumber = `E2E-RPC-${loadId.slice(0, 8)}`;
-
-  const created = await request.post(`${session.backendUrl}/rest/v1/loads`, {
-    headers: apiHeaders(session, "return=representation"),
-    data: {
-      id: loadId,
-      tenant_id: fixtureIds.tenantA,
-      load_number: loadNumber,
-      origin: "Montes Claros/MG",
-      destination: "Janaúba/MG",
-      status: "planned",
-    },
-  });
-  expect(created.ok(), await created.text()).toBeTruthy();
+  let itemId: string | null = null;
 
   try {
+    const created = await request.post(`${session.backendUrl}/rest/v1/loads`, {
+      headers: apiHeaders(session, "return=representation"),
+      data: {
+        id: loadId,
+        tenant_id: fixtureIds.tenantA,
+        load_number: loadNumber,
+        origin: "Montes Claros/MG",
+        destination: "Janaúba/MG",
+        status: "planned",
+      },
+    });
+    expect(created.ok(), await created.text()).toBeTruthy();
+
     const itemCreated = await rpc(request, session, "upsert_load_item_v3", {
       p_tenant_id: fixtureIds.tenantA,
       p_load_id: loadId,
@@ -57,7 +60,8 @@ test("operator creates a load and mutates composition/status only through audite
       p_status: "pending",
     });
     expect(itemCreated.ok(), await itemCreated.text()).toBeTruthy();
-    const itemId = await itemCreated.json() as string;
+    itemId = await itemCreated.json() as string;
+    expect(itemId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 
     const recalculated = await request.get(
       `${session.backendUrl}/rest/v1/loads?id=eq.${loadId}&select=id,total_pallet_count,total_weight_kg,total_volume_m3,status`,
@@ -102,10 +106,18 @@ test("operator creates a load and mutates composition/status only through audite
       p_item_id: itemId,
     });
     expect(deleted.ok(), await deleted.text()).toBeTruthy();
+    expect(await deleted.json(), "Canonical item deletion must be confirmed").toBe(true);
   } finally {
-    await rpc(request, session, "delete_load_safely", {
-      _tenant_id: fixtureIds.tenantA,
-      _load_id: loadId,
+    await test.step("Remove and verify the isolated manual load", async () => {
+      try {
+        await cleanupSyntheticManualLoad(request, session, {
+          tenantId: fixtureIds.tenantA, loadId, loadNumber, itemId,
+        });
+      } catch (error) {
+        // A cleanup failure must fail the run without replacing a primary
+        // assertion that was already thrown by the operational journey.
+        expect.soft(error, "Synthetic load cleanup failed; investigate the isolated fixture").toBeUndefined();
+      }
     });
   }
 });
@@ -151,7 +163,7 @@ test("driver records canonical expense and delivery outcome with recoverable eve
   const checklist = await rpc(request, session, "driver_save_checklist", {
     _trip_id: fixtureIds.tripA,
     _kind: "pre",
-    _payload: { tires: true, lights: true, source: "e2e" },
+    _payload: preTripChecklistPayload(),
   });
   expect(checklist.ok(), await checklist.text()).toBeTruthy();
 

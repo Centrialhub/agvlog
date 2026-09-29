@@ -1,0 +1,18 @@
+{
+  "startedAtUtc": "2026-09-28T18:43:01.46Z",
+  "completedAtUtc": "2026-09-28T18:43:01.957Z",
+  "sourceSha": "6606d3a929b5d449026dd20f73e44e0b770067c0",
+  "seedSha256": "30b74324568f35aa15e1814de6d2e7cead442feb0ac4a33bf1428341351db695",
+  "inputSha256": "fbdff13be44f457f8b0caa3e12d4b0f1bc21f2ff81bc4261e6bc31ee7fc184e6",
+  "exitCode": 0,
+  "counts": {
+    "authUsers": 7,
+    "workspaces": 2,
+    "tenants": 2,
+    "enabledFeatures": 0,
+    "cronJobs": 0,
+    "vaultSecrets": 0,
+    "httpQueue": 0
+  },
+  "applicationReady": false
+}

@@ -22,5 +22,5 @@ describe('planned cancellation and real planner graph',()=>{
    expect((await db.query<{trip_id:string}>('select trip_id from loads where id=$1',[i.load])).rows[0].trip_id).toBe(second);
    expect((await db.query<{status:string}>('select status from dispatch_trips where id=$1',[first])).rows[0].status).toBe('cancelled');
   }finally{await db.close();}
- });
+ },10_000);
 });

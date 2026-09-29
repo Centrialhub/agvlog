@@ -1,8 +1,32 @@
 begin;
 
-select plan(90);
+-- Every request context is transaction-local, including any legacy scalar
+-- claims inherited from the psql session. No test state survives the rollback.
+set local request.headers = '{}';
+set local request.jwt.claim.sub = '';
+set local request.jwt.claim.role = '';
+set local request.jwt.claims = '{}';
+
+select plan(114);
 
 select has_table('public', 'tenant_feature_policy', 'tenant capability policy exists');
+
+select is(
+  (select count(*)::integer from public.fiscal_documents
+   where tenant_id in ('20000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000002')
+     and status in ('delivered', 'partial_delivery', 'returned', 'refused', 'failed', 'not_delivered')),
+  0,
+  'seed does not invent an unaudited terminal delivery result'
+);
+select ok(
+  exists (select 1 from public.proof_of_delivery
+    where id = '91000000-0000-4000-8000-000000000001'
+      and status = 'pending' and is_active
+      and receiver_name is null and received_at is null and validated_at is null
+      and content_hash is null and storage_path is null and signature_url is null
+      and photo_url is null and metadata = '{}'::jsonb),
+  'seed creates an empty pending POD without fabricated received or validated evidence'
+);
 
 select is(
   (select count(*)::integer from public.tenant_feature_policy
@@ -29,13 +53,14 @@ select ok(
 
 set local role service_role;
 select lives_ok(
-  $$select public.prepare_auth_invite(
+  $$select public.prepare_auth_invite_v2(
     'invite-contract@agvlog-e2e.invalid',
     '20000000-0000-4000-8000-000000000001',
     '10000000-0000-4000-8000-000000000001',
-    'pgTAP-invite-contract-nonce-000000000001'
+    'pgTAP-invite-contract-nonce-000000000001',
+    'operator'
   )$$,
-  'service role can prepare a short-lived invitation authorization'
+  'service role prepares a short-lived invitation with its tenant access role'
 );
 reset role;
 
@@ -71,6 +96,25 @@ select ok(
     true
   ),
   'accepted auth user does not retain the invitation nonce'
+);
+
+select results_eq(
+  $$select tenant_id, role::text, active from public.tenant_memberships
+    where user_id = '10000000-0000-4000-8000-000000000101'$$,
+  $$values ('20000000-0000-4000-8000-000000000001'::uuid, 'operator'::text, true)$$,
+  'accepted invitation attaches exactly the authorized tenant and role'
+);
+select is(
+  (select count(*)::integer from public.tenant_memberships
+   where user_id = '10000000-0000-4000-8000-000000000101'
+     and tenant_id = '20000000-0000-4000-8000-000000000002'),
+  0,
+  'invitation does not propagate access into the separate tenant B workspace'
+);
+select ok(
+  not has_function_privilege('authenticated',
+    'public.prepare_auth_invite_v2(text,uuid,uuid,text,public.app_role,uuid,text,jsonb)', 'EXECUTE'),
+  'browser sessions cannot prepare invitation access directly'
 );
 
 select throws_ok(
@@ -198,7 +242,7 @@ reset role;
 
 select set_config(
   'request.jwt.claims',
-  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","aal":"aal1"}',
+  '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","aal":"aal1","active_tenant_id":"20000000-0000-4000-8000-000000000001"}',
   true
 );
 set local role authenticated;
@@ -357,9 +401,14 @@ select is(
 );
 
 select is(
-  (select total_weight_kg from public.loads where id = md5('agvlog-e2e-load-a-1')::uuid),
-  0::numeric,
-  'delete recalculates totals back to zero'
+  (select count(*)::integer from public.loads where id = md5('agvlog-e2e-load-a-1')::uuid),
+  0,
+  'deleting the last manual item removes this eligible empty load'
+);
+select is(
+  (select count(*)::integer from public.load_items where load_id = md5('agvlog-e2e-load-a-1')::uuid),
+  0,
+  'empty-load cleanup leaves no orphan cargo items'
 );
 
 select throws_ok(
@@ -438,66 +487,121 @@ select throws_ok(
 );
 
 reset role;
-select set_config(
-  'request.jwt.claims',
-  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","aal":"aal1"}',
-  true
-);
+-- Build a separate, rollback-only graph so this journey does not consume the
+-- open document/POD reserved for browser tests. Fixture setup uses the test
+-- administrator; every action below runs as the assigned driver.
+set local request.jwt.claims = '{}';
+insert into public.loads (id, tenant_id, load_number, driver_id, vehicle_id, status)
+values ('70000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001',
+  'PGTAP-JOURNEY-003', '60000000-0000-4000-8000-000000000001',
+  '50000000-0000-4000-8000-000000000001', 'planned');
+insert into public.dispatch_trips (id, tenant_id, load_id, driver_id, vehicle_id, status)
+values ('80000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001',
+  '70000000-0000-4000-8000-000000000003', '60000000-0000-4000-8000-000000000001',
+  '50000000-0000-4000-8000-000000000001', 'planned');
+insert into public.dispatch_trip_loads (tenant_id, dispatch_trip_id, load_id)
+values ('20000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000003',
+  '70000000-0000-4000-8000-000000000003');
+insert into public.dispatch_stops (id, tenant_id, dispatch_trip_id, stop_order,
+  destination, client_id, status, latitude, longitude)
+values ('82000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001',
+  '80000000-0000-4000-8000-000000000003', 1, 'Entrega pgTAP',
+  '40000000-0000-4000-8000-000000000001', 'pending', -15.802, -43.313);
+insert into public.fiscal_documents (id, tenant_id, document_type, invoice_number,
+  client_id, recipient, issue_date, load_id, pallet_count, weight_kg, value, status)
+values ('90000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001',
+  'inbound', 'PGTAP-NF-003', '40000000-0000-4000-8000-000000000001', 'Cliente Fixture A',
+  current_date, '70000000-0000-4000-8000-000000000003', 2, 450, 12500, 'confirmed');
+insert into public.dispatch_stop_documents (tenant_id, dispatch_stop_id, fiscal_document_id, load_id)
+values ('20000000-0000-4000-8000-000000000001', '82000000-0000-4000-8000-000000000003',
+  '90000000-0000-4000-8000-000000000003', '70000000-0000-4000-8000-000000000003');
+
+create temporary table release_test_trips (name text primary key, id uuid not null);
+insert into release_test_trips values ('delivery', '80000000-0000-4000-8000-000000000003');
+insert into release_test_trips
+select 'planned', result_id from public.idempotency_keys
+where tenant_id = '20000000-0000-4000-8000-000000000001'
+  and operation = 'plan_dispatch_trip' and idempotency_key = 'pgtap-route-plan-contract-001';
+grant select on release_test_trips to authenticated;
+create temporary table release_delivery_request (details jsonb not null);
+grant select, insert on release_delivery_request to authenticated;
+
+-- Storage metadata is a SQL fixture, not an upload/download test. All rows and
+-- evidence paths are synthetic and disappear with this transaction.
+insert into storage.objects (bucket_id, name)
+select 'receipts', '20000000-0000-4000-8000-000000000001/trip-cargo/' || trip.id || '/' || photo.name
+from release_test_trips trip cross join (values ('loading.jpg'), ('tie-down.jpg')) photo(name);
+insert into storage.objects (bucket_id, name)
+select 'receipts', '20000000-0000-4000-8000-000000000001/deliveries/80000000-0000-4000-8000-000000000003/82000000-0000-4000-8000-000000000003/' || photo.name
+from (values ('receipt/original/photo.jpg'), ('receipt/processed/scan.jpg'), ('signatures/signature.png')) photo(name);
+
+-- Invoker helpers only assemble fixture payloads from the driver's RLS-visible
+-- checks; they grant no application privileges and do not change app state.
+create function pg_temp.release_cargo_payload(trip_id uuid) returns jsonb
+language sql stable security invoker set search_path = '' as $fixture$
+  select jsonb_build_object(
+    'vehicle_checked', true, 'tie_down_confirmed', true,
+    'seal_not_applicable_reason', 'Veículo de teste sem ponto de lacre',
+    'documents', coalesce((select jsonb_agg(check_row.id order by check_row.id)
+      from public.trip_cargo_document_checks check_row
+      join public.trip_cargo_controls control on control.id = check_row.control_id
+      where control.dispatch_trip_id = trip_id), '[]'::jsonb),
+    'loads', coalesce((select jsonb_agg(jsonb_build_object('load_id', check_row.load_id,
+      'volume_count', coalesce(check_row.expected_volume_count, 0),
+      'pallet_count', coalesce(check_row.expected_pallet_count, 0),
+      'weight_kg', coalesce(check_row.expected_weight_kg, 0)) order by check_row.load_id)
+      from public.trip_cargo_load_checks check_row
+      join public.trip_cargo_controls control on control.id = check_row.control_id
+      where control.dispatch_trip_id = trip_id), '[]'::jsonb),
+    'evidence', jsonb_build_array(
+      jsonb_build_object('kind', 'loading', 'path', '20000000-0000-4000-8000-000000000001/trip-cargo/' || trip_id || '/loading.jpg'),
+      jsonb_build_object('kind', 'tie_down', 'path', '20000000-0000-4000-8000-000000000001/trip-cargo/' || trip_id || '/tie-down.jpg')))
+$fixture$;
+
+select set_config('request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","aal":"aal1","active_tenant_id":"20000000-0000-4000-8000-000000000001"}', true);
 set local role authenticated;
 
+select throws_ok(
+  $$select public.driver_start_trip('80000000-0000-4000-8000-000000000003')$$,
+  '23514', 'trip_cargo_departure_confirmation_required',
+  'driver cannot start before the cargo departure gate');
+
+select throws_ok(
+  $$select public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000002',
+    '80000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001',
+    'accept', '{"vehicle_id":"50000000-0000-4000-8000-000000000002"}')$$,
+  '42501', 'trip_cargo_not_authorized', 'driver cannot accept cargo in another tenant');
+
+select is(public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',
+  '80000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000002',
+  'accept', '{"vehicle_id":"50000000-0000-4000-8000-000000000001"}') ->> 'status',
+  'accepted', 'driver accepts the assigned vehicle and cargo');
+select is(public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',
+  '80000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000003',
+  'confirm_cargo', pg_temp.release_cargo_payload('80000000-0000-4000-8000-000000000003')) ->> 'status',
+  'ready_to_depart', 'driver confirms documents, quantities and loading evidence');
 select lives_ok(
-  $$select public.driver_start_trip((
-    select result_id from public.idempotency_keys
-    where tenant_id = '20000000-0000-4000-8000-000000000001'
-      and operation = 'plan_dispatch_trip'
-      and idempotency_key = 'pgtap-route-plan-contract-001'
-  ))$$,
-  'assigned driver starts the newly planned route'
-);
-
-select is(
-  (select status from public.dispatch_trips where id = (
-    select result_id from public.idempotency_keys
-    where tenant_id = '20000000-0000-4000-8000-000000000001'
-      and operation = 'plan_dispatch_trip'
-      and idempotency_key = 'pgtap-route-plan-contract-001'
-  )),
-  'in_transit',
-  'starting the newly planned route persists its trip status'
-);
-
-select ok(
-  (select actual_start_at is not null from public.dispatch_trips where id = (
-    select result_id from public.idempotency_keys
-    where tenant_id = '20000000-0000-4000-8000-000000000001'
-      and operation = 'plan_dispatch_trip'
-      and idempotency_key = 'pgtap-route-plan-contract-001'
-  )),
-  'starting a route persists its actual start timestamp atomically'
-);
-
-select is(
-  (select trip_id from public.loads where id = md5('agvlog-e2e-load-a-2')::uuid),
-  (select result_id from public.idempotency_keys
-   where tenant_id = '20000000-0000-4000-8000-000000000001'
-     and operation = 'plan_dispatch_trip'
-     and idempotency_key = 'pgtap-route-plan-contract-001'),
-  'starting a route synchronizes the load trip mirror'
-);
+  $$select public.driver_save_checklist('80000000-0000-4000-8000-000000000003',
+    'pre', '{"checked_items":[0,1,2,3,4,5,6,7],"total_items":8}')$$,
+  'driver saves the complete pre-trip checklist');
+select is(public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',
+  '80000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000004',
+  'mark_departed') ->> 'status', 'departed', 'cargo departure requires the completed checklist');
 
 select lives_ok(
-  $$select public.driver_start_trip('80000000-0000-4000-8000-000000000001')$$,
+  $$select public.driver_start_trip('80000000-0000-4000-8000-000000000003')$$,
   'assigned driver starts the canonical trip through an RPC'
 );
 
 select is(
-  (select status from public.dispatch_trips where id = '80000000-0000-4000-8000-000000000001'),
+  (select status from public.dispatch_trips where id = '80000000-0000-4000-8000-000000000003'),
   'in_transit',
   'trip start updates canonical trip status'
 );
 
 select is(
-  (select status from public.loads where id = '70000000-0000-4000-8000-000000000001'),
+  (select status from public.loads where id = '70000000-0000-4000-8000-000000000003'),
   'in_transit',
   'trip start synchronizes assigned load status'
 );
@@ -505,7 +609,7 @@ select is(
 select ok(
   exists (
     select 1 from public.dispatch_events
-    where dispatch_trip_id = '80000000-0000-4000-8000-000000000001'
+    where dispatch_trip_id = '80000000-0000-4000-8000-000000000003'
       and event_type = 'trip_started'
   ),
   'trip start creates an audit event'
@@ -541,7 +645,7 @@ select throws_ok(
 
 select throws_ok(
   $$select public.driver_create_event(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'lunch'
   )$$,
   '23514',
@@ -549,18 +653,10 @@ select throws_ok(
   'driver cannot pause a journey before starting it'
 );
 
-select lives_ok(
-  $$select public.driver_save_checklist(
-    '80000000-0000-4000-8000-000000000001',
-    'pre',
-    '{"checked_items":[0,1,2,3,4,5,6,7],"total_items":8}'::jsonb
-  )$$,
-  'driver saves the complete pre-trip checklist'
-);
 
 select lives_ok(
   $$select public.driver_create_event(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'start_shift'
   )$$,
   'driver starts the journey after the pre-trip checklist'
@@ -568,7 +664,7 @@ select lives_ok(
 
 select throws_ok(
   $$select public.driver_create_event(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'start_shift'
   )$$,
   '23514',
@@ -578,7 +674,7 @@ select throws_ok(
 
 select lives_ok(
   $$select public.driver_create_event(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'lunch'
   )$$,
   'working driver starts a lunch pause'
@@ -586,7 +682,7 @@ select lives_ok(
 
 select throws_ok(
   $$select public.driver_create_event(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'rest'
   )$$,
   '23514',
@@ -596,7 +692,7 @@ select throws_ok(
 
 select lives_ok(
   $$select public.driver_create_event(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'resume'
   )$$,
   'paused driver resumes the journey'
@@ -604,7 +700,7 @@ select lives_ok(
 
 select throws_ok(
   $$select public.driver_create_event(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'resume'
   )$$,
   '23514',
@@ -614,7 +710,7 @@ select throws_ok(
 
 select throws_ok(
   $$select public.driver_create_event(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'end_shift'
   )$$,
   '23514',
@@ -624,7 +720,7 @@ select throws_ok(
 
 select lives_ok(
   $$select public.driver_save_checklist(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'post',
     '{"checked_items":[0,1,2,3,4],"total_items":5}'::jsonb
   )$$,
@@ -633,7 +729,7 @@ select lives_ok(
 
 select lives_ok(
   $$select public.driver_create_event(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'end_shift'
   )$$,
   'working driver ends the journey after the post-trip checklist'
@@ -641,7 +737,7 @@ select lives_ok(
 
 select throws_ok(
   $$select public.driver_create_event(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'resume'
   )$$,
   '23514',
@@ -651,7 +747,7 @@ select throws_ok(
 
 select lives_ok(
   $$select public.driver_create_operational_occurrence(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'other',
     'pgTAP trip-level occurrence',
     'medium',
@@ -676,11 +772,11 @@ select results_eq(
 
 select lives_ok(
   $$select public.driver_create_operational_occurrence(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'damaged',
     'pgTAP stop occurrence',
     'high',
-    '82000000-0000-4000-8000-000000000001',
+    '82000000-0000-4000-8000-000000000003',
     '40000000-0000-4000-8000-000000000001'
   )$$,
   'driver creates an occurrence for an explicit stop'
@@ -696,10 +792,10 @@ select results_eq(
     from public.operational_events
     where description = 'pgTAP stop occurrence'$$,
   $$values (
-    '82000000-0000-4000-8000-000000000001'::text,
+    '82000000-0000-4000-8000-000000000003'::text,
     '40000000-0000-4000-8000-000000000001'::text,
-    '70000000-0000-4000-8000-000000000001'::text,
-    '90000000-0000-4000-8000-000000000001'::text,
+    '70000000-0000-4000-8000-000000000003'::text,
+    '90000000-0000-4000-8000-000000000003'::text,
     false
   )$$,
   'explicit stop occurrence derives its tenant graph but remains internal'
@@ -707,7 +803,7 @@ select results_eq(
 
 select throws_ok(
   $$select public.driver_create_operational_occurrence(
-    '80000000-0000-4000-8000-000000000001',
+    '80000000-0000-4000-8000-000000000003',
     'other',
     'cross-tenant stop attempt',
     'medium',
@@ -721,7 +817,7 @@ select throws_ok(
 
 select throws_ok(
   $$select public.driver_mark_arrival(
-    '82000000-0000-4000-8000-000000000001',
+    '82000000-0000-4000-8000-000000000003',
     -19.932,
     -44.053,
     10
@@ -733,7 +829,7 @@ select throws_ok(
 
 select lives_ok(
   $$select public.driver_mark_arrival(
-    '82000000-0000-4000-8000-000000000001',
+    '82000000-0000-4000-8000-000000000003',
     -15.802,
     -43.313,
     10
@@ -742,7 +838,7 @@ select lives_ok(
 );
 
 select is(
-  (select status from public.dispatch_stops where id = '82000000-0000-4000-8000-000000000001'),
+  (select status from public.dispatch_stops where id = '82000000-0000-4000-8000-000000000003'),
   'arrived',
   'arrival persists on the stop'
 );
@@ -750,7 +846,7 @@ select is(
 select is(
   (select payload ->> 'geofence_verified'
    from public.dispatch_events
-   where dispatch_stop_id = '82000000-0000-4000-8000-000000000001'
+   where dispatch_stop_id = '82000000-0000-4000-8000-000000000003'
      and event_type = 'arrival'
    order by event_at desc
    limit 1),
@@ -758,59 +854,136 @@ select is(
   'arrival persists verified GPS evidence'
 );
 
-select lives_ok(
+select throws_ok(
   $$select public.driver_finalize_delivery(
-    '82000000-0000-4000-8000-000000000001',
+    '82000000-0000-4000-8000-000000000003',
     'Recebedor pgTAP',
     null,
     array['20000000-0000-4000-8000-000000000001/deliveries/pgtap.jpg']
   )$$,
-  'assigned driver finalizes the delivery through the canonical RPC'
+  '42501', 'permission denied for function driver_finalize_delivery',
+  'authenticated driver cannot execute the retired delivery RPC'
 );
+reset role;
+set local role service_role;
+select throws_ok(
+  $$select public.driver_finalize_delivery(
+    '82000000-0000-4000-8000-000000000003', 'Recebedor pgTAP', null,
+    array['20000000-0000-4000-8000-000000000001/deliveries/pgtap.jpg'])$$,
+  '55000', 'driver_legacy_delivery_contract_retired',
+  'service caller also receives the explicit retired delivery contract error'
+);
+reset role;
+set local role authenticated;
+
+insert into release_delivery_request (details)
+select jsonb_build_object(
+  'receiver_name', 'Recebedor pgTAP', 'notes', 'Entrega de teste com evidências sintéticas',
+  'latitude', -15.802, 'longitude', -43.313, 'accuracy_m', 10,
+  'signature_path', prefix || 'signatures/signature.png',
+  'photo_paths', jsonb_build_array(prefix || 'receipt/processed/scan.jpg'),
+  'receipt_original_path', prefix || 'receipt/original/photo.jpg',
+  'receipt_processed_path', prefix || 'receipt/processed/scan.jpg',
+  'receipt_original_hash', repeat('a', 64), 'receipt_processed_hash', repeat('b', 64),
+  'receipt_scan_mode', 'document_scan',
+  'receipt_scan_quality', jsonb_build_object('accepted', true, 'sharpness', 10),
+  'receipt_crop', jsonb_build_object('left', 0.02, 'top', 0.02, 'right', 0.98, 'bottom', 0.98),
+  'receipt_rotation', 0, 'receipt_quality_confirmed', true, 'captured_at', clock_timestamp(),
+  'fiscal_snapshot', public.get_driver_delivery_fiscal_snapshot_v1(
+    '20000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000003',
+    '82000000-0000-4000-8000-000000000003'))
+from (values ('20000000-0000-4000-8000-000000000001/deliveries/80000000-0000-4000-8000-000000000003/82000000-0000-4000-8000-000000000003/')) fixture(prefix);
+
+select is(public.driver_record_delivery_outcome('82000000-0000-4000-8000-000000000003',
+  'delivered', (select jsonb_set(details, '{fiscal_snapshot,revision}', to_jsonb(repeat('0', 32)))
+    from release_delivery_request), 'a0000000-0000-4000-8000-000000000010', 'arrived') ->> 'error_code',
+  'delivery_fiscal_snapshot_changed', 'stale fiscal snapshot rejects delivery confirmation');
+select is((select status from public.dispatch_stops where id = '82000000-0000-4000-8000-000000000003'),
+  'arrived', 'fiscal snapshot conflict leaves the stop open');
+select is(public.driver_record_delivery_outcome('82000000-0000-4000-8000-000000000003',
+  'delivered', (select details from release_delivery_request),
+  'a0000000-0000-4000-8000-000000000011', 'arrived') ->> 'stop_outcome',
+  'delivered', 'assigned driver confirms delivery with fiscal snapshot, GPS and scan evidence');
+select is(public.driver_record_delivery_outcome('82000000-0000-4000-8000-000000000003',
+  'delivered', (select details from release_delivery_request),
+  'a0000000-0000-4000-8000-000000000011', 'arrived') ->> 'replayed',
+  'true', 'identical delivery request replays after the stop is closed');
+select is((select count(*)::integer from public.dispatch_events
+  where dispatch_stop_id = '82000000-0000-4000-8000-000000000003' and event_type = 'delivery_delivered'),
+  1, 'delivery replay does not duplicate its dispatch event');
 
 select is(
-  (select status from public.dispatch_stops where id = '82000000-0000-4000-8000-000000000001'),
+  (select status from public.dispatch_stops where id = '82000000-0000-4000-8000-000000000003'),
   'delivered',
   'delivery finalization closes the stop'
 );
 
 select is(
-  (select status from public.dispatch_trips where id = '80000000-0000-4000-8000-000000000001'),
+  (select status from public.dispatch_trips where id = '80000000-0000-4000-8000-000000000003'),
   'completed',
   'last terminal stop completes the trip'
 );
 
 select is(
   (select receiver_name from public.proof_of_delivery
-   where fiscal_document_id = '90000000-0000-4000-8000-000000000001'),
+   where fiscal_document_id = '90000000-0000-4000-8000-000000000003'),
   'Recebedor pgTAP',
   'delivery finalization persists POD receiver evidence'
 );
 
+-- Complete custody of the first trip before starting the second route. The
+-- driver's one-active-trip invariant remains enabled throughout the test.
+select is(public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',
+  '80000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000012',
+  'mark_returned') ->> 'status', 'returned', 'driver returns cargo after terminal stops and post-checklist');
+select is(public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',
+  (select id from release_test_trips where name = 'planned'), 'a0000000-0000-4000-8000-000000000013',
+  'accept', '{"vehicle_id":"50000000-0000-4000-8000-000000000001"}') ->> 'status',
+  'accepted', 'driver accepts cargo for the second planned route');
+select is(public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',
+  (select id from release_test_trips where name = 'planned'), 'a0000000-0000-4000-8000-000000000014',
+  'confirm_cargo', pg_temp.release_cargo_payload((select id from release_test_trips where name = 'planned'))) ->> 'status',
+  'ready_to_depart', 'second route confirms its own cargo graph and evidence');
+select lives_ok(
+  $$select public.driver_save_checklist((select id from release_test_trips where name = 'planned'),
+    'pre', '{"checked_items":[0,1,2,3,4,5,6,7],"total_items":8}')$$,
+  'second route requires a new pre-trip checklist after the previous shift');
+select is(public.driver_update_trip_cargo_v1('20000000-0000-4000-8000-000000000001',
+  (select id from release_test_trips where name = 'planned'), 'a0000000-0000-4000-8000-000000000015',
+  'mark_departed') ->> 'status', 'departed', 'second route independently satisfies the departure gate');
+
+select lives_ok(
+  $$select public.driver_start_trip((
+    select id from release_test_trips where name = 'planned'
+  ))$$,
+  'assigned driver starts the newly planned route'
+);
+
+select is(
+  (select status from public.dispatch_trips where id = (
+    select id from release_test_trips where name = 'planned'
+  )),
+  'in_transit',
+  'starting the newly planned route persists its trip status'
+);
+
+select ok(
+  (select actual_start_at is not null from public.dispatch_trips where id = (
+    select id from release_test_trips where name = 'planned'
+  )),
+  'starting a route persists its actual start timestamp atomically'
+);
+
+select is(
+  (select trip_id from public.loads where id = md5('agvlog-e2e-load-a-2')::uuid),
+  (select id from release_test_trips where name = 'planned'),
+  'starting a route synchronizes the load trip mirror'
+);
+
 reset role;
 select set_config(
   'request.jwt.claims',
-  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}',
-  true
-);
-set local role authenticated;
-
-select is(
-  (select count(*)::integer from public.get_user_tenant_ids()),
-  0,
-  'owner tenant access is denied at AAL1'
-);
-
-select is(
-  public.is_tenant_admin('20000000-0000-4000-8000-000000000001'),
-  false,
-  'owner is not authorized as admin at AAL1'
-);
-
-reset role;
-select set_config(
-  'request.jwt.claims',
-  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2"}',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1","active_tenant_id":"20000000-0000-4000-8000-000000000001"}',
   true
 );
 set local role authenticated;
@@ -818,13 +991,45 @@ set local role authenticated;
 select is(
   (select count(*)::integer from public.get_user_tenant_ids()),
   1,
-  'owner tenant access is restored at AAL2'
+  'owner tenant access remains available at AAL1'
 );
 
 select is(
   public.is_tenant_admin('20000000-0000-4000-8000-000000000001'),
   true,
-  'owner is authorized as admin at AAL2'
+  'owner is authorized as admin at AAL1'
+);
+
+select is(
+  public.is_tenant_admin('20000000-0000-4000-8000-000000000002'),
+  false,
+  'owner cannot administer another tenant at AAL1'
+);
+
+reset role;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal2","active_tenant_id":"20000000-0000-4000-8000-000000000001"}',
+  true
+);
+set local role authenticated;
+
+select is(
+  (select count(*)::integer from public.get_user_tenant_ids()),
+  1,
+  'owner tenant access remains available at AAL2'
+);
+
+select is(
+  public.is_tenant_admin('20000000-0000-4000-8000-000000000001'),
+  true,
+  'owner remains authorized as admin at AAL2'
+);
+
+select is(
+  public.is_tenant_admin('20000000-0000-4000-8000-000000000002'),
+  false,
+  'owner cannot administer another tenant at AAL2'
 );
 
 select ok(
@@ -879,5 +1084,8 @@ select is(
   'classified legacy and internal SECURITY DEFINER routines are not executable by authenticated users'
 );
 
+-- ROLLBACK does not run deferred constraint triggers. Exercise the same graph
+-- constraints a COMMIT would check before discarding this test's mutations.
+set constraints all immediate;
 select * from finish();
 rollback;

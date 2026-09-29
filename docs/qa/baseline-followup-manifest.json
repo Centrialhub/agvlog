@@ -1,0 +1,42 @@
+{
+  "formatVersion": 1,
+  "purpose": "agvlog-baseline-reviewed-followups",
+  "originalManifestSha256": "cdccb706be4bd1ea38f88c09eff9538f0dea55a964f094ebb7ebf08ee7838715",
+  "forwards": [
+    {
+      "version": "20260928182208",
+      "filename": "20260928182208_restrict_internal_trigger_execute.sql",
+      "sha256": "9485feff43bd405aa5adf796d376f44e63ff9097bfb19cc35d31b9c8c5b93e76"
+    },
+    {
+      "version": "20260928182647",
+      "filename": "20260928182647_remove_redundant_event_message_read_policy.sql",
+      "sha256": "947127e572f903dffff344a4873687cf23b2c0e83e5a16f9a6b84aaed1e24ebf"
+    },
+    {
+      "version": "20260928183014",
+      "filename": "20260928183014_fix_active_json_ordinality_contracts.sql",
+      "sha256": "6455b4bdc2ae6a9afdf008f202b534771a12721e9b7ff2db773a779182926163"
+    },
+    {
+      "version": "20260928183948",
+      "filename": "20260928183948_fix_route_template_waypoint_ordinality.sql",
+      "sha256": "5f861102533dab2ac67c6a89ca006232d9d65e18ee2000f27e5b9df908c19cee"
+    },
+    {
+      "version": "20260928184134",
+      "filename": "20260928184134_repair_legacy_cte_poll_audit_event.sql",
+      "sha256": "020f69d730bf93bc0fcc88abc228d64c7ef756c97b9405f3642e003cc7ed7464"
+    },
+    {
+      "version": "20260928184443",
+      "filename": "20260928184443_restore_whole_pallet_edit_guards.sql",
+      "sha256": "29957e771dc6f2d14d210d653917f2936482485701561e72cf7e3277798fb411"
+    },
+    {
+      "version": "20260928184444",
+      "filename": "20260928184444_restore_integral_movement_receipt_summary.sql",
+      "sha256": "76e03c86ffe2d8dd2c265f449f536f55bcb804e2e409e98c098e267a1da5eedc"
+    }
+  ]
+}

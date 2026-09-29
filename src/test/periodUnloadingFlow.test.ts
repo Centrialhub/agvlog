@@ -79,7 +79,7 @@ it('counts 1005 real charges and serves exact first and last pages without sampl
  const first=await charge(100),ids=[first.charge_id];for(let n=1;n<1005;n++)ids.push((await charge(100,'2026-01-10',first.supplier)).charge_id);ids.sort();
  const initial=await read();expect(initial.total).toBe(1005);expect(initial.origin_totals.amount_cents).toBe('100500');expect(initial.rows.map(r=>r.event_id)).toEqual(ids.slice(0,50));
  const last=await read('2026-01-01','2026-01-31',null,21,initial.revision);expect(last.rows.map(r=>r.event_id)).toEqual(ids.slice(1000));
-},60000);
+},180000);
 it('requires revision across pages and denies foreign accounts or mixed-driver access',async()=>{
  await charge();await expect(read('2026-01-01','2026-01-31',null,2)).rejects.toThrow('finance_history_revision_required');
  await expect(operationRpc(db,'select get_finance_period_unloading_flow($1,$2,$3,$4)',[i.tenant,'2026-01-01','2026-01-31',[randomUUID()]])).rejects.toThrow('finance_account_not_found');

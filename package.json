@@ -25,6 +25,9 @@
     "test:driver-offline-browser": "playwright test -c playwright.driver-offline.config.ts",
     "e2e:critical:3": "playwright test --grep @critical --repeat-each=3",
     "db:start": "supabase start",
+    "staging:local:prepare": "node scripts/prepare-local-staging.mjs",
+    "staging:local:check": "node scripts/prepare-local-staging.mjs --check",
+    "staging:local:health": "node scripts/verify-local-staging-runtime.mjs",
     "db:reset:test": "supabase db reset --local",
     "db:test": "supabase test db",
     "db:test:delivery-concurrency": "node --experimental-strip-types scripts/test-delivery-concurrency.mjs",
@@ -33,9 +36,11 @@
     "lockfile:check": "node scripts/check-lockfile.mjs",
     "repository:check": "node scripts/check-repository-hygiene.mjs",
     "supabase:release:check": "node scripts/check-supabase-release.mjs",
+    "supabase:baseline-candidate:check": "node scripts/check-baseline-candidate.mjs",
+    "supabase:parity:check": "node scripts/check-supabase-migration-parity.mjs",
     "quality:baseline": "node scripts/check-code-quality-baseline.mjs",
     "smoke:deploy": "node scripts/smoke-deployment.mjs",
-    "check": "npm run lockfile:check && npm run repository:check && npm run supabase:release:check && npm run test:pipeline && npm run typecheck && npm run lint:errors && npm run lint:critical-types && npm run quality:baseline && npm run edge:syntax && npm run test:coverage && npm run build:check"
+    "check": "npm run lockfile:check && npm run repository:check && npm run supabase:release:check && npm run supabase:baseline-candidate:check && npm run test:pipeline && npm run typecheck && npm run lint:errors && npm run lint:critical-types && npm run quality:baseline && npm run edge:syntax && npm run test:coverage && npm run build:check"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

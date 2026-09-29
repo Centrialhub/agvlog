@@ -72,3 +72,41 @@ it('switches to the exact request written by another tab after a storage event',
   fireEvent.click(screen.getByRole('button',{name:'Retomar mesma baixa'}));
   await waitFor(()=>expect(api.apply).toHaveBeenCalledWith(saved,actor));
 });
+
+it('rejects a stale selected balance even when the server would accept the old partial amount',async()=>{
+  api.preview.mockResolvedValue({
+    ...context,items:[{...context.items[0],remaining_cents:'35000'},context.items[1]],
+    eligible:true,blockers:[],
+  });
+  mount();
+  fireEvent.click(await screen.findByRole('button',{name:/Fornecedor QA · Banco QA/}));
+  fireEvent.change(screen.getByLabelText('Motivo da baixa em lote'),{target:{value:'Pagamento agrupado conferido'}});
+  fireEvent.click(screen.getByRole('button',{name:'Revisar baixa em lote'}));
+
+  expect(await screen.findByText(/O saldo de um ou mais títulos mudou desde a seleção/)).toBeInTheDocument();
+  expect(api.preview).toHaveBeenCalledWith(tenant,actor,movement,[
+    {payable_id:payableA,amount_cents:'30000'},
+    {payable_id:payableB,amount_cents:'20000'},
+  ]);
+  expect(screen.queryByRole('region',{name:'Revisão da baixa em lote'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Confirmar baixa em lote'})).not.toBeInTheDocument();
+  expect(api.apply).not.toHaveBeenCalled();
+  expect(localStorage.getItem(payableBulkStorageKey(tenant,actor))).toBeNull();
+});
+
+it('allows an intentional partial amount when selected and authoritative balances agree',async()=>{
+  api.preview.mockResolvedValue({
+    ...context,total_cents:'45000',
+    items:[{...context.items[0],amount_cents:'25000'},context.items[1]],
+  });
+  mount();
+  fireEvent.change(screen.getByLabelText('Valor da baixa — Nota A'),{target:{value:'250,00'}});
+  await review();
+
+  expect(api.preview).toHaveBeenCalledWith(tenant,actor,movement,[
+    {payable_id:payableA,amount_cents:'25000'},
+    {payable_id:payableB,amount_cents:'20000'},
+  ]);
+  expect(screen.getByRole('button',{name:'Confirmar baixa em lote'})).toBeEnabled();
+  expect(api.apply).not.toHaveBeenCalled();
+});

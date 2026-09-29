@@ -1,0 +1,170 @@
+# Ambiente interno de homologação
+
+## Decisão e estado
+
+Em 28/09/2026 o responsável autorizou começar por um ambiente local isolado, com possibilidade de levar a configuração para um servidor interno. A primeira etapa usa Supabase CLI **2.116.0**, já fixada no projeto, e Docker Engine em Linux no WSL 2. Um ambiente compartilhado permanente deverá usar a distribuição oficial de self-hosting com Docker Compose, com versões e diferenças de plataforma revisadas.
+
+**A infraestrutura está em execução, com baseline restaurado, 13 forwards originais e sete complementos aplicados localmente em 28/09/2026.** Após o reinício do computador, foram instalados Ubuntu 24.04.5 no WSL 2, Docker Engine 29.8.1 e as ferramentas Linux. Nove serviços iniciaram com portas apenas em loopback. A [restauração revisada](local-baseline-review-2026-09-28.md) criou 327 tabelas públicas com RLS e oito buckets privados; a [comparação por objeto](local-baseline-comparison-2026-09-28.md) aprovou o ensaio dos forwards, com limitações de plataforma explícitas. O seed criou sete usuários e dois workspaces/tenants sintéticos. O contrato de segurança, a auditoria de segurança e as [114 verificações pgTAP](local-pgtap-post-followups-evidence-2026-09-28.json) passaram após as correções. O lint ainda tem 31 achados, e autenticação real, interface e integrações seguem pendentes. O [log desta implantação](release-log-2026-09-28-local-staging.md) registra resultados e limites. Não há branch Supabase Cloud criada por este procedimento.
+
+## Separação dos ambientes
+
+| Item | Homologação local |
+| --- | --- |
+| Identificador | `agvlog-local-staging` |
+| Diretório gerado | `.local-staging/`, ignorado pelo Git |
+| API | `http://127.0.0.1:55321` |
+| PostgreSQL 17 | Porta `55322`; shadow reservado em `55320` |
+| Studio | `http://127.0.0.1:55323` |
+| Caixa de e-mail de teste | `http://127.0.0.1:55324`; sem entrega SMTP externa |
+| Aplicação futura | `http://127.0.0.1:5175`; só iniciar após configurar backend e validar baseline |
+| Dados | Sintéticos, contas `.invalid`, senha de teste aleatória |
+| Integrações | Sem credenciais de produção; fiscal em homologação e SSX simulado inicialmente |
+
+API, banco, Studio e e-mail foram verificados em 28/09; o frontend ainda é planejado. Reconfirmar disponibilidade e binding loopback a cada partida. Não abrir portas da rede da empresa nem publicar um túnel para compensar a falta de configuração.
+
+## 1. Habilitar o host Windows
+
+O computador inspecionado tem Windows 11 Pro, aproximadamente 32 GB de RAM, virtualização de firmware habilitada e espaço livre suficiente. Docker não foi encontrado no PATH nem no caminho padrão do Docker Desktop. WSL estava ausente na primeira inspeção; o responsável instalou a versão 2.7.13 e o componente Windows foi ativado em seguida. Não repetir a instalação abaixo quando `wsl --version` já confirmar essa versão.
+
+O responsável com acesso de administrador deve abrir **PowerShell como administrador** e instalar a versão verificada:
+
+```powershell
+winget install --id Microsoft.WSL --exact --version 2.7.13 --source winget
+```
+
+Depois, conferir `wsl --version` e `wsl --help`. Usar `wsl --install --no-distribution` para habilitar os componentes necessários, seguindo o resultado do instalador. Se o Windows solicitar reinicialização, salvar o trabalho e reiniciar em momento definido pelo usuário. Nenhum script deste projeto reinicia o computador.
+
+Após WSL funcional, consultar `wsl --list --online`, instalar Ubuntu 24.04 se disponível nessa lista, conferir WSL 2 e concluir a criação do usuário Linux:
+
+```powershell
+wsl --install --distribution Ubuntu-24.04 --no-launch
+wsl --list --verbose
+wsl --distribution Ubuntu-24.04
+```
+
+Referências: [instalação do WSL](https://learn.microsoft.com/en-us/windows/wsl/install) e [comandos e opções](https://learn.microsoft.com/en-us/windows/wsl/basic-commands). A instalação pode exigir atuação do administrador e reinicialização; não considerar WSL disponível apenas porque `wsl.exe` existe.
+
+## 2. Preparar Docker e ferramentas Linux
+
+O [procedimento Linux versionado](local-staging-linux-runtime.md) fixa versões e hashes e descreve o script `scripts/provision-local-staging-linux.sh`, executado nesta instalação. Docker Engine e Compose vêm do [repositório oficial para Ubuntu](https://docs.docker.com/engine/install/ubuntu/). Registrar versões instaladas e verificar o daemon. Não expor o socket Docker por TCP. Não remover um runtime existente nem substituir sua configuração sem inspecioná-lo.
+
+Para executar aplicação e testes dentro de Linux, usar checkout e dependências próprios nesse sistema: Node 22, npm 10.9.4 e `npm ci`. Não compartilhar `node_modules` do Windows, pois há binários específicos de plataforma. Transportar o candidato por Git após registrar as alterações em commit; conferir o mesmo SHA e diff. Um checkout diferente não pode ser apresentado como o candidato validado.
+
+O checkout Linux atual é `/home/agvqa/agvlog-main`, transportado por bundle Git verificado. Seu `origin` aponta ao bundle; novos commits exigem outra transferência e comparação de SHA. O preparo de arquivos também pode ser executado no Windows. Para servidor interno permanente, revisar Compose, DNS/HTTPS, acesso privado, armazenamento e backups; portar o contrato validado, sem presumir equivalência entre a stack da CLI e a distribuição self-hosted. Consultar as [diferenças e instalação oficial](https://supabase.com/docs/guides/self-hosting/docker).
+
+## 3. Gerar somente a infraestrutura inicial
+
+Na raiz do checkout candidato:
+
+```text
+npm run staging:local:prepare
+npm run staging:local:check
+```
+
+O preparador cria configuração independente e manifesto em `.local-staging`. Não copia `.env`, vínculo remoto, histórico SQL, seed ou funções da produção. Migrações, seed e hook de Auth ficam desativados nesta etapa. O verificador confere os arquivos preparados; seu sucesso **não** comprova Docker disponível, banco iniciado ou aplicação homologada.
+
+Não executar os atalhos antigos `npm run db:start` e `npm run db:reset:test` para este ambiente: eles apontam para o diretório Supabase histórico. O novo workdir ainda não contém baseline aprovado. Não usar `link`, `db push`, `db reset --linked`, reparo automático do ledger ou replay de todas as migrações para inicializá-lo.
+
+O arquivo gerado descreve um bootstrap vazio. A ativação posterior do baseline exige uma revisão explícita do preparador e manifesto; não editar o arquivo gerado e aceitar a divergência como novo estado aprovado.
+
+### Partida após disponibilizar o runtime
+
+Sequência executada em 28/09. Usar checkout Linux com ferramentas instaladas e confirmar `npx --no-install supabase --version` em 2.116.0. Exigir Docker Engine 28 ou superior para evitar a limitação de isolamento loopback em versões antigas descrita pela [documentação Docker](https://docs.docker.com/engine/network/port-publishing/). No WSL, manter uma sessão Linux ativa durante o uso, conforme o [procedimento de ciclo de vida](local-staging-linux-runtime.md#ciclo-de-vida-no-windows).
+
+Criar uma rede exclusiva com binding padrão local. Se o nome já existir, inspecionar driver, opções e containers conectados antes de reutilizar; não apagar nem substituir uma rede existente para fazer a sequência passar.
+
+```sh
+docker network create --driver bridge --opt com.docker.network.bridge.host_binding_ipv4=127.0.0.1 agvlog-local-staging-loopback
+docker network inspect agvlog-local-staging-loopback --format '{{.Driver}} {{json .Options}}'
+```
+
+Prosseguir somente se o driver for `bridge` e a opção `com.docker.network.bridge.host_binding_ipv4` for `127.0.0.1`. A CLI 2.116.0 aceita `--network-id` e publica portas sem IP explícito, usando o padrão da rede. Esse ajuste limita acesso de entrada; não bloqueia a saída dos containers para a internet. [Opções da rede bridge](https://docs.docker.com/engine/network/drivers/bridge/).
+
+A conferência está vinculada ao tag `v2.116.0`, commit `997a1e69a4a83466964ed874d3a604c88a7b3866`: [construção das portas](https://github.com/supabase/cli/blob/v2.116.0/apps/cli/src/legacy/shared/db-bootstrap/docker-create-args.ts), [seleção da rede](https://github.com/supabase/cli/blob/v2.116.0/apps/cli/src/legacy/commands/start/start.handler.ts) e [preservação da rede existente](https://github.com/supabase/cli/blob/v2.116.0/apps/cli/src/legacy/shared/db-bootstrap/container-lifecycle.ts). Revalidar ao atualizar a CLI. Manter o modo NAT padrão da bridge.
+
+Após conferir o workdir preparado e ausência de vínculo remoto, iniciar somente a infraestrutura vazia:
+
+```sh
+npx --no-install supabase start --workdir .local-staging --network-id agvlog-local-staging-loopback
+```
+
+A CLI pode exibir chaves locais: não copiar esse output integral para logs versionados ou chat. Inspecionar as portas efetivamente publicadas em `NetworkSettings.Ports` para cada container deste projeto; exigir `HostIp=127.0.0.1` (ou `::1`) em todos os bindings. Se algum for `0.0.0.0`, `::` ou outro endereço, parar o projeto e corrigir antes de usar.
+
+Listar apenas os containers pelo rótulo `com.supabase.cli.project=agvlog-local-staging`; inspecionar nomes/portas, sem extrair `.Config.Env`. O loopback é o do host Docker dentro do WSL. Verificar o acesso pelo Windows separadamente; não criar encaminhamento público para resolver eventual falha desse acesso.
+
+O preparador e `staging:local:check` verificam arquivos, inclusive após a partida. A lista fechada admite somente os metadados locais revisados da CLI: `.temp/cli-latest` (versão disponível) e `.branches/_current_branch` (`main`), além do diretório vazio `supabase/snippets` usado pelo Studio. Esses artefatos são preservados. Arquivos de snippets, outros metadados, incluindo `.temp/project-ref`, e diretórios desconhecidos continuam proibidos. Uma indicação de versão mais recente no cache não altera a CLI fixada do projeto.
+
+Executar `npm run staging:local:health` dentro do checkout Linux. O verificador somente lê o runtime e emite JSON sanitizado: identidade dos serviços, saúde, imagens, bindings, versão do banco e probes HTTP. Exige configuração íntegra, CLI fixada, rede local esperada e zero tabelas públicas nesta etapa. O sucesso não comprova restauração do baseline ou funcionamento da aplicação. Depois da restauração, esse contrato de infraestrutura vazia deverá ser revisto explicitamente.
+
+Para parar apenas esse projeto preservando os dados locais:
+
+```sh
+npx --no-install supabase stop --project-id agvlog-local-staging --workdir .local-staging
+```
+
+Não usar `--all` nem `--no-backup`. A rede exclusiva pode permanecer para a próxima inicialização. A aplicação segue indisponível até a etapa seguinte.
+
+## 4. Restaurar o contrato publicado antes de testar o candidato
+
+Seguir a [proposta de baseline](migration-baseline-plan-2026-09-26.md). A [captura autoritativa de 28/09](authoritative-schema-capture-2026-09-28.md) foi concluída com autenticação temporária oficial da CLI; não depende mais de receber a senha permanente do banco. Os artefatos privados foram revisados, restaurados e [comparados por objeto](local-baseline-comparison-2026-09-28.md). Credenciais e SQL bruto não devem ser enviados ao chat ou Git.
+
+1. Reconfirmar versão PostgreSQL, schemas e ledger antes e depois da captura. O corte observado em 26/09 foi de 896 versões, máximo `20260924155758`; reconfirmar, pois esse registro é histórico.
+2. Capturar somente esquema em área restrita. Revisar definições quanto a literais sensíveis antes de compartilhá-las. Não exportar os comandos SQL completos do ledger nem dados de clientes.
+3. Completar e revisar customizações de Auth/Storage, buckets, extensões, grants, owners, políticas, triggers e publicações Realtime. Excluir segredos, jobs ativos e configurações reais de integrações.
+4. Restaurar em banco descartável e comparar o catálogo anterior ao PR. Investigar diferenças de plataforma por objeto; hashes agregados são apenas triagem.
+5. Aplicar os 13 forwards revisados em `baseline-candidate-manifest.json`, após executar `npm run supabase:baseline-candidate:check`. Preservar os hotfixes publicados.
+6. Ativar hook de Auth e seed revisada somente após seus objetos e permissões estarem presentes. A seed atual desativa fiscal/SSX e precisa de massa adicional para validação financeira.
+7. Preparar Edge e frontend com credenciais exclusivas. Conferir que `release.json.supabaseOrigin` e o backend esperado dos testes coincidam.
+
+O baseline de teste fica fora de `supabase/migrations` do release e jamais é aplicado no banco de produção.
+
+Correções descobertas após o lote original entram no [manifesto complementar](baseline-followup-manifest.json), com [revisão própria](local-followup-review-2026-09-28.md). Não acrescentá-las retroativamente aos 13 arquivos ou à aprovação do baseline. O checker exige que todos os arquivos posteriores estejam em um desses lotes revisados; o suplemento não executa SQL.
+
+### Preparação explícita dos artefatos revisados
+
+O preparador admite a etapa `reviewed-baseline-prepared`. Ela apenas copia o SQL revisado e os 13 forwards para `.local-staging/baseline/`; não executa SQL, altera o TOML ou ativa seed, hook, Edge ou replay. A entrada deve estar em diretório privado **fora do checkout**, com arquivos regulares e sem links. Os artefatos brutos da captura não são entradas aprovadas.
+
+O arquivo `approval.json` fixa a fonte, data, PostgreSQL 17, método de captura, SHA-256 do esquema e do ledger exportados, contagem/última versão/MD5 do catálogo do ledger antes e depois, decisão e evidência da revisão, tamanho/hash de cada SQL e a lista exata dos forwards. `application-schema` e `managed-customizations` são obrigatórios; complementos de papéis, extensões e buckets são admitidos com revisão. O manifesto não constitui uma revisão automática do SQL. Quem aprova deve conferir o conteúdo e registrar evidência antes de fornecer o hash do manifesto ao comando.
+
+```text
+node scripts/prepare-local-staging.mjs --baseline-manifest /caminho-privado/approval.json --approved-sha256 HASH_SHA256_REVISADO
+node scripts/prepare-local-staging.mjs --check --approved-sha256 HASH_SHA256_REVISADO
+node scripts/verify-local-staging-runtime.mjs --baseline-approval-sha256 HASH_SHA256_REVISADO
+```
+
+O último comando roda no Linux e continua exigindo o banco vazio: arquivos preparados não comprovam restauração. Hash divergente, entrada alterada, revisão incompleta, ledger divergente, forward adicional ou vínculo remoto bloqueiam o preparo. Repetir com os mesmos bytes é idempotente. O modo inicial sem argumentos permanece exclusivo da infraestrutura vazia; depois de preparar um baseline, conferir sempre com o hash externo revisado. A passagem para banco restaurado/comparado exige seu próprio registro e verificador.
+
+Uma correção no procedimento pode exigir revisar os artefatos preparados. Usar um novo manifesto `formatVersion: 2`, com `supersedesApprovalSha256` apontando à aprovação anterior, e o comando explícito:
+
+```text
+node scripts/prepare-local-staging.mjs --revise-baseline /caminho-privado/revisao/approval.json --previous-approved-sha256 HASH_ANTERIOR --approved-sha256 HASH_NOVO
+```
+
+Cada revisão fica em `baseline/revisions/HASH_NOVO/`; SQL anterior e configuração são preservados. O manifesto gerado só avança após validar os arquivos antigos e copiar integralmente o novo pacote. O verificador exige a cadeia completa, limitada a oito revisões, e os hashes externos. Uma cópia interrompida pode ser retomada apenas com os mesmos bytes previstos. Este comando não restaura nem reverte banco: conferir o estado real antes de repetir SQL. O [ensaio do baseline](local-baseline-review-2026-09-28.md) registra o caso que motivou essa revisão.
+
+### Comando de restauração para um banco vazio
+
+O comando versionado abaixo é exclusivo da restauração inicial. Exige Linux, checkout limpo no SHA informado, cadeia de aprovação íntegra, preflight da infraestrutura vazia e diretório privado de logs já existente fora do checkout, com modo `0700`:
+
+```sh
+node scripts/restore-local-staging-baseline.mjs \
+  --approved-sha256 HASH_SHA256_REVISADO \
+  --expected-source-sha SHA_COMPLETO_DO_CHECKOUT \
+  --expected-public-tables 327 --expected-buckets 8 \
+  --log-directory /home/agvqa/.local/state/agvlog-staging \
+  --check
+```
+
+`--check` apenas confere as condições e não executa SQL. Removê-lo executa os artefatos na ordem aprovada, em uma transação, com `ON_ERROR_STOP`, pelo socket Docker local fixado. O comando verifica ausência de dados da aplicação e de estados externos antes do COMMIT; grava logs exclusivos `0600`. Os forwards ficam fora dessa transação. Sucesso significa `baseline-restored-comparison-pending`, nunca aplicação homologada.
+
+Não repetir esse comando no banco já preenchido: o bloqueio por tabelas existentes é esperado. Em timeout ou erro, conferir o estado real e o log privado antes de qualquer nova tentativa; falha do processo não prova rollback. A execução histórica das 18:01 UTC usou o runner privado registrado no log, anterior a este comando reutilizável.
+
+## 5. Aprovação e prevenção de regressões
+
+Executar lint de banco, `supabase/verify/baseline_contract.sql`, pgTAP e a matriz do [roteiro de estabilidade](production-stability-playbook-2026-09-26.md). Importação, fiscal e financeiro precisam comprovar ação e efeito persistido, inclusive erro, repetição e concorrência.
+
+A jornada do motorista altera fixtures compartilhadas e cria histórico imutável. Cada tentativa deve ter backend descartável exclusivo ou entidades completas independentes com ciclo de vida comprovado. Reduzir workers ou retirar retries não demonstra isolamento. Não reutilizar banco de homologação manual em testes que o reinicializem.
+
+Registrar SHA, identidade do backend, versões de CLI/imagens, hash do baseline, forwards, horário UTC, comandos, resultados e pendências. Logs de falha incluem operação, código de erro e correlação, sem JWTs, senhas, XMLs ou dados pessoais. Os resultados só aprovam a versão e o ambiente efetivamente exercitados.
+
+Estados permitidos no log: **arquivos preparados → infraestrutura iniciada → baseline restaurado/comparado → candidato testado → homologação aprovada**. Nenhuma etapa implica automaticamente a seguinte. A promoção pública continua sujeita ao gate completo e ao plano de retorno.

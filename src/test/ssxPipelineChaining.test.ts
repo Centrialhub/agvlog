@@ -16,7 +16,15 @@ const state = vi.hoisted(() => ({
   role: 'owner',
   clientCreations: 0,
   healthWrites: [] as Row[],
+  checkpointClaims: [] as Row[],
+  checkpointFinishes: [] as Row[],
+  checkpointDecisions: {} as Record<string, 'claimed' | 'cached' | 'deferred'>,
+  checkpointResults: {} as Record<string, Row>,
   nestedCalls: [] as Array<{ name: string; headers: Headers; body: Row }>,
+  unitResponse: { status: 200, body: {
+    success: true, source_mode: 'tracking_discovery', vehicles_received: 1,
+    normalized_count: 1, skipped_non_vehicle: 0, skipped_missing_stable_code: 0, upserted: 1,
+  } } as { status: number; body: Row },
   pollResponse: {
     success: true, total_units: 1, total_inserted: 1, touched_vehicles: 1,
   } as Row,
@@ -45,6 +53,22 @@ vi.mock('@supabase/supabase-js', () => ({
       },
       from: (table: string) => query(table),
       rpc: async (name: string, args: Row) => {
+        if (name === 'claim_ssx_sync_checkpoint_v1') {
+          state.checkpointClaims.push(args);
+          const resource = String(args._resource);
+          const decision = state.checkpointDecisions[resource] || 'claimed';
+          if (decision === 'deferred') {
+            return { data: { decision, error_code: 'rate_limited', retry_after_seconds: 300 }, error: null };
+          }
+          if (decision === 'cached') {
+            return { data: { decision, result: state.checkpointResults[resource] }, error: null };
+          }
+          return { data: { decision, lease_token: 'test-lease' }, error: null };
+        }
+        if (name === 'finish_ssx_sync_checkpoint_v1') {
+          state.checkpointFinishes.push(args);
+          return { data: true, error: null };
+        }
         if (name !== 'merge_tenant_pipeline_health_v1') throw new Error(`Unexpected RPC: ${name}`);
         state.healthWrites.push(args._patch as Row);
         return { data: args._patch, error: null };
@@ -103,7 +127,7 @@ function nestedResponse(name: string): { status: number; body: Row } {
   if (name === 'ssx-sync-telemetry') {
     return { status: 200, body: { success: true, catalogs: { telemetry: 2 } } };
   }
-  if (name === 'ssx-sync-units') return { status: 200, body: { success: true, upserted: 1 } };
+  if (name === 'ssx-sync-units') return state.unitResponse;
   if (name === 'ssx-sync-governance') {
     return { status: 200, body: { success: true, snapshots: { logged_rule: 2 } } };
   }
@@ -162,7 +186,15 @@ beforeEach(() => {
   state.role = 'owner';
   state.clientCreations = 0;
   state.healthWrites = [];
+  state.checkpointClaims = [];
+  state.checkpointFinishes = [];
+  state.checkpointDecisions = {};
+  state.checkpointResults = {};
   state.nestedCalls = [];
+  state.unitResponse = { status: 200, body: {
+    success: true, source_mode: 'tracking_discovery', vehicles_received: 1,
+    normalized_count: 1, skipped_non_vehicle: 0, skipped_missing_stable_code: 0, upserted: 1,
+  } };
   state.pollResponse = {
     success: true, total_units: 1, total_inserted: 1, touched_vehicles: 1,
   };
@@ -249,6 +281,130 @@ describe('SSX pipeline post-ingestion chaining', () => {
       'agvlog-run-queue', 'update-trip-live-status', 'agvlog-aggregate-daily',
       'agvlog-compute-state',
     ]);
+    expect(state.checkpointClaims.map(claim => claim._resource)).toEqual([
+      'pipeline_reference_catalogs', 'pipeline_units',
+    ]);
+  });
+
+  it('accepts a valid cached zero-unit result and still runs governance', async () => {
+    state.checkpointDecisions.pipeline_units = 'cached';
+    state.checkpointResults.pipeline_units = {
+      upserted: 0, source_mode: 'tracking_discovery', vehicles_received: 0,
+      normalized_count: 0, skipped_non_vehicle: 0, skipped_missing_stable_code: 0,
+    };
+    const response = await request({ mode: 'full' });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, synced_units: 0, governance_snapshots: 2 });
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-units');
+    expect(state.nestedCalls.map(call => call.name)).toContain('ssx-sync-governance');
+  });
+
+  it('accepts a genuinely empty tracking source and checkpoints its evidence', async () => {
+    state.unitResponse = { status: 200, body: {
+      success: true, source_mode: 'tracking_discovery', vehicles_received: 0,
+      normalized_count: 0, skipped_non_vehicle: 0, skipped_missing_stable_code: 0, upserted: 0,
+    } };
+    const response = await request({ mode: 'full' });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, synced_units: 0, governance_snapshots: 2 });
+    expect(state.checkpointFinishes.find(call => call._resource === 'pipeline_units')).toMatchObject({
+      _error_code: null,
+      _result: { vehicles_received: 0, normalized_count: 0, skipped_missing_stable_code: 0, upserted: 0 },
+    });
+  });
+
+  it('fails a tracking discovery with only missing stable identities before checkpoint success or governance', async () => {
+    state.unitResponse = { status: 200, body: {
+      success: true, source_mode: 'tracking_discovery', vehicles_received: 3,
+      normalized_count: 0, skipped_non_vehicle: 0, skipped_missing_stable_code: 3, upserted: 0,
+    } };
+    const response = await request({ mode: 'full' });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ errors: [expect.stringContaining('missing_stable_identity')] });
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-governance');
+    const finishes = state.checkpointFinishes.filter(call => call._resource === 'pipeline_units');
+    expect(finishes).toHaveLength(1);
+    expect(finishes[0]).toMatchObject({ _error_code: 'missing_stable_identity', _result: {} });
+  });
+
+  it('rejects noninteger discovery evidence before checkpoint success or governance', async () => {
+    state.unitResponse = { status: 200, body: {
+      success: true, source_mode: 'tracking_discovery', vehicles_received: 1.5,
+      normalized_count: 0, skipped_non_vehicle: 0, skipped_missing_stable_code: 0, upserted: 0,
+    } };
+    const response = await request({ mode: 'full' });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ errors: [expect.stringContaining('unconfirmed_result')] });
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-governance');
+    expect(state.checkpointFinishes.find(call => call._resource === 'pipeline_units'))
+      .toMatchObject({ _error_code: 'unconfirmed_result', _result: {} });
+  });
+
+  it('keeps the run failed and skips governance after a partial unit-sync 409', async () => {
+    state.unitResponse = { status: 409, body: { error: 'Unit synchronization conflict' } };
+    const response = await request({ mode: 'full' });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({
+      success: false,
+      errors: [expect.stringContaining('SyncUnits')],
+    });
+    expect(state.nestedCalls.map(call => call.name)).toContain('ssx-sync-units');
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-governance');
+  });
+
+  it('skips governance when the unit checkpoint is deferred', async () => {
+    state.checkpointDecisions.pipeline_units = 'deferred';
+    const response = await request({ mode: 'full' });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ errors: [expect.stringContaining('rate_limited')] });
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-units');
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-governance');
+  });
+
+  it('rejects an empty cached unit result before governance', async () => {
+    state.checkpointDecisions.pipeline_units = 'cached';
+    state.checkpointResults.pipeline_units = {};
+    const response = await request({ mode: 'full' });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ errors: [expect.stringContaining('unconfirmed_result')] });
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-units');
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-governance');
+  });
+
+  it('rejects a legacy cached zero without source evidence but preserves a positive legacy cache', async () => {
+    state.checkpointDecisions.pipeline_units = 'cached';
+    state.checkpointResults.pipeline_units = { upserted: 0 };
+    const rejected = await request({ mode: 'full' });
+    expect(rejected.status).toBe(502);
+    expect(await rejected.json()).toMatchObject({ errors: [expect.stringContaining('unconfirmed_result')] });
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-governance');
+
+    state.nestedCalls = [];
+    state.checkpointResults.pipeline_units = { upserted: 1 };
+    const accepted = await request({ mode: 'full' });
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({ success: true, synced_units: 1 });
+    expect(state.nestedCalls.map(call => call.name)).toContain('ssx-sync-governance');
+  });
+
+  it('rejects a success response without a confirmed unit count', async () => {
+    state.unitResponse = { status: 200, body: { success: true } };
+    const response = await request({ mode: 'full' });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ errors: [expect.stringContaining('unconfirmed_result')] });
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-governance');
+  });
+
+  it('does not treat a skipped upstream sync without counters as a confirmed catalog', async () => {
+    state.unitResponse = { status: 200, body: {
+      success: true, skipped: true, last_sync_at: '2026-09-26T20:00:00Z',
+    } };
+    const response = await request({ mode: 'full' });
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ errors: [expect.stringContaining('unconfirmed_result')] });
+    expect(state.nestedCalls.map(call => call.name)).not.toContain('ssx-sync-governance');
+    expect(state.checkpointFinishes.find(call => call._resource === 'pipeline_units'))
+      .toMatchObject({ _error_code: 'unconfirmed_result', _result: {} });
   });
 
   it('does not refresh trip state after a persistence failure', async () => {

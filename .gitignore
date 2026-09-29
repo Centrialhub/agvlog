@@ -16,6 +16,7 @@ dist-ssr
 *.local
 coverage
 .codex-build-audit/
+.local-staging/
 .sites-*/
 .deploy-*/
 .codex-publish/

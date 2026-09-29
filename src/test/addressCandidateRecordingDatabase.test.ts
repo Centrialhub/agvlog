@@ -10,7 +10,7 @@ const stop = '30000000-0000-4000-8000-000000000001';
 const canonical = '40000000-0000-4000-8000-000000000001';
 const hash = 'a'.repeat(64);
 const snapshot = 'Rua Exemplo, 12, Belo Horizonte';
-const migration = readFileSync('supabase/migrations/20260923144034_atomic_address_candidate_recording.sql', 'utf8');
+const migration = readFileSync('supabase/migrations/20260926190513_restore_address_candidate_recording_rpc.sql', 'utf8');
 let db: PGlite;
 
 async function record(entityType: string, entityId: string, addressHash = hash, candidates: unknown[] = [{ latitude: -19.9 }]) {
@@ -46,6 +46,23 @@ beforeAll(async () => {
 afterAll(async () => { await db?.close(); });
 
 describe('atomic geocoding candidate recording', () => {
+  it('keeps the writer service-only and leaves an existing definition untouched', async () => {
+    const signature = 'public.record_address_entity_candidates_v1(uuid,text,uuid,text,text,jsonb)';
+    const before = (await db.query<{ body: string; definer: boolean; config: string[];
+      service: boolean; authenticated: boolean; anon: boolean }>(`
+      select p.prosrc body,p.prosecdef definer,p.proconfig config,
+        has_function_privilege('service_role',$1,'execute') service,
+        has_function_privilege('authenticated',$1,'execute') authenticated,
+        has_function_privilege('anon',$1,'execute') anon
+      from pg_proc p where p.oid=to_regprocedure($1)`, [signature])).rows[0];
+    expect(before).toMatchObject({ definer: false, config: ['search_path=""'],
+      service: true, authenticated: false, anon: false });
+    await db.exec(migration);
+    const after = (await db.query<{ body: string }>(
+      'select prosrc body from pg_proc where oid=to_regprocedure($1)', [signature])).rows[0];
+    expect(after.body).toBe(before.body);
+  });
+
   it('records the complete candidate set and client status together', async () => {
     await db.exec('set role service_role');
     try {

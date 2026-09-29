@@ -1,7 +1,25 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext } from "@playwright/test";
 
-import { accounts } from "./fixtures/accounts";
-import { loginThroughUi } from "./fixtures/session";
+import { accounts, fixtureIds } from "./fixtures/accounts";
+import { loginThroughUi, passwordToken } from "./fixtures/session";
+
+async function expectPrivilegedTenantBoundary(request: APIRequestContext, account: typeof accounts.owner | typeof accounts.admin) {
+  const session = await passwordToken(request, account);
+  const headers = { apikey: session.publishableKey, Authorization: `Bearer ${session.accessToken}` };
+  const ownClient = await request.get(
+    `${session.backendUrl}/rest/v1/clients?id=eq.${fixtureIds.clientA}&select=id,tenant_id`,
+    { headers },
+  );
+  expect(ownClient.ok(), await ownClient.text()).toBeTruthy();
+  expect(await ownClient.json()).toEqual([{ id: fixtureIds.clientA, tenant_id: fixtureIds.tenantA }]);
+
+  const otherTenantClient = await request.get(
+    `${session.backendUrl}/rest/v1/clients?id=eq.${fixtureIds.clientB}&select=id,tenant_id`,
+    { headers },
+  );
+  expect(otherTenantClient.ok(), await otherTenantClient.text()).toBeTruthy();
+  expect(await otherTenantClient.json()).toEqual([]);
+}
 
 test("@critical public auth is invite-only and protected routes redirect", async ({ page }) => {
   await page.goto("/loads");
@@ -33,17 +51,20 @@ test("@critical client is routed to its scoped portal", async ({ page }) => {
   await expect(page.getByText("Em trânsito", { exact: true })).toBeVisible();
 });
 
-test("owner is stopped at MFA enrollment before tenant data renders", async ({ page }) => {
+test("@critical owner signs in with password and retains tenant-scoped management access", async ({ page, request }) => {
   await loginThroughUi(page, accounts.owner);
-  await expect(page.getByRole("heading", { name: "Verificação em duas etapas" })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText(/Escaneie o QR code|aplicativo autenticador/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Cargas" })).toHaveCount(0);
+  await page.goto("/orders");
+  await expect(page.getByRole("heading", { name: "Pedidos", exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Novo Pedido" })).toBeVisible();
+  await expectPrivilegedTenantBoundary(request, accounts.owner);
 });
 
-test("admin is stopped at the same mandatory MFA boundary", async ({ page }) => {
+test("@critical admin signs in with password and retains tenant-scoped management access", async ({ page, request }) => {
   await loginThroughUi(page, accounts.admin);
-  await expect(page.getByRole("heading", { name: "Verificação em duas etapas" })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByLabel("Código de 6 dígitos")).toBeVisible();
+  await page.goto("/orders");
+  await expect(page.getByRole("heading", { name: "Pedidos", exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Novo Pedido" })).toBeVisible();
+  await expectPrivilegedTenantBoundary(request, accounts.admin);
 });
 
 test("multi-tenant operator can switch tenant without gaining a new role", async ({ page }, testInfo) => {

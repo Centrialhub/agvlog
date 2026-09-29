@@ -29,6 +29,7 @@ import { InsuranceSettings } from '@/components/settings/InsuranceSettings';
 import EmittersSettings from '@/components/settings/EmittersSettings';
 import { IntegrationUnavailable } from '@/components/integrations/IntegrationUnavailable';
 import {useWorkspaceSsxAccounts} from '@/hooks/useWorkspaceSsxAccounts';
+import { ssxSyncError, type SsxSyncError } from '@/lib/ssxSyncError';
 
 type IntegrationAccount = Pick<
   Tables<'integration_accounts'>,
@@ -56,11 +57,6 @@ interface SsxAccountSettings {
   sync_units_backoff_until?: string;
   last_units_sync_at?: string;
   credential_reentry_required?: boolean;
-}
-
-interface SsxMutationError extends Error {
-  retryAt?: string;
-  cooldownActive?: boolean;
 }
 
 function errorMessage(error: unknown): string {
@@ -327,24 +323,8 @@ function IntegrationSection({ ssxEnabled }: { ssxEnabled: boolean }) {
   const syncUnitsMutation = useMutation({
     mutationFn: async ({ accountId, force }: { accountId: string; force?: boolean }) => {
       const { data, error } = await supabase.functions.invoke('ssx-sync-units', { body: { integration_account_id: accountId, force: !!force } });
-      // Parse error from any source (SDK puts body in error.message, error.context, or even data for some versions)
-      const parsed = parseObject(error?.message) || parseObject(error?.context);
-      if (error) {
-        const info = parsed || parseObject(data) || {};
-        if (info.cooldown_active || info.retry_at) {
-          const err = new Error(String(info.error || 'Rate limit')) as SsxMutationError;
-          err.retryAt = typeof info.retry_at === 'string' ? info.retry_at : undefined;
-          err.cooldownActive = info.cooldown_active === true;
-          throw err;
-        }
-        throw new Error(String(info.error || error.message || 'Erro desconhecido'));
-      }
-      if (data?.error) {
-        const err = new Error(data.error) as SsxMutationError;
-        err.retryAt = data.retry_at;
-        err.cooldownActive = data.cooldown_active;
-        throw err;
-      }
+      const failure = await ssxSyncError(error, data);
+      if (failure) throw failure;
       return data;
     },
     onSuccess: (data) => {
@@ -361,7 +341,7 @@ function IntegrationSection({ ssxEnabled }: { ssxEnabled: boolean }) {
         toast.success(`Sincronizado (${method}${endpoint}): ${data.upserted} rastreadores, ${data.vehicles_created || 0} veículos, ${data.links_created || 0} vínculos`);
       }
     },
-    onError: (e: SsxMutationError) => {
+    onError: (e: SsxSyncError) => {
       if (e.retryAt || e.cooldownActive) {
         const retryTime = e.retryAt ? new Date(e.retryAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
         toast.error(`Limite SSX excedido. Tente novamente${retryTime ? ` às ${retryTime}` : ' em alguns minutos'}.`, { duration: 8000 });
