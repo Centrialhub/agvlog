@@ -370,26 +370,17 @@ export default function LoadDetail() {
     setPreviewResult(null);
     try {
       // Gather NF context (client / payer / destination)
-      const { data: nfeDocs } = await supabase
+      const { data: nfeDocs, error: nfeError } = await supabase
         .from('fiscal_documents')
-        .select('value, client_id, recipient_state, recipient_city')
+        .select('id, value, client_id, recipient_state, recipient_city')
         .eq('load_id', load.id)
         .eq('tenant_id', currentTenant.id)
-        .eq('document_type', 'inbound');
+        .eq('document_type', 'inbound').is('deleted_at', null);
+      if (nfeError) throw nfeError;
 
       const nfeTotalValue = (nfeDocs || []).reduce((sum, document) => sum + (Number(document.value) || 0), 0);
       const refDoc = (nfeDocs || []).find(document => document.client_id) ?? nfeDocs?.[0];
       const clientId = refDoc?.client_id ?? null;
-
-      let payerGroup: string | null = null;
-      if (clientId) {
-        const { data: cli } = await supabase
-          .from('clients')
-          .select('payer_group')
-          .eq('id', clientId)
-          .maybeSingle();
-        payerGroup = cli?.payer_group || null;
-      }
 
       const totalPallets = items.reduce((sum, item) => sum + (item.pallet_count || 0), 0)
         || load.total_pallet_count || 0;
@@ -399,7 +390,7 @@ export default function LoadDetail() {
       const r = await calculateFreight({
         tenantId: currentTenant.id,
         clientId,
-        payerGroup,
+        sourceDocumentIds: (nfeDocs || []).map(document => document.id),
         destination: load.destination || refDoc?.recipient_city || null,
         destinationState: refDoc?.recipient_state || null,
         destinationMunicipality: refDoc?.recipient_city || null,

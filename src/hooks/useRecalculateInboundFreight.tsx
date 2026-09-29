@@ -8,7 +8,7 @@ import type { Tables } from '@/integrations/supabase/types';
 type RecalculationDocument = Pick<
   Tables<'fiscal_documents'>,
   'id' | 'client_id' | 'recipient' | 'recipient_state' | 'recipient_city' | 'weight_kg' |
-  'pallet_count' | 'value' | 'freight_overridden'
+  'pallet_count' | 'value' | 'freight_overridden' | 'remitter_cnpj'
 >;
 
 /**
@@ -32,27 +32,13 @@ export function useRecalculateInboundFreight() {
       for (let i = 0; i < docIds.length; i += chunk) {
         const { data, error } = await supabase
           .from('fiscal_documents')
-          .select('id, client_id, recipient, recipient_state, recipient_city, weight_kg, pallet_count, value, freight_overridden')
+          .select('id, client_id, recipient, recipient_state, recipient_city, weight_kg, pallet_count, value, freight_overridden, remitter_cnpj')
           .eq('tenant_id', currentTenant.id)
           .eq('document_type', 'inbound')
+          .is('deleted_at', null)
           .in('id', docIds.slice(i, i + chunk));
         if (error) throw error;
         docs.push(...(data || []));
-      }
-
-      // Cache payer_group by client_id
-      const clientIds = Array.from(new Set(
-        docs.map(d => d.client_id).filter((id): id is string => id !== null),
-      ));
-      const payerGroupByClient = new Map<string, string | null>();
-      if (clientIds.length > 0) {
-        const { data: clients, error: clientsError } = await supabase
-          .from('clients')
-          .select('id, payer_group')
-          .eq('tenant_id', currentTenant.id)
-          .in('id', clientIds);
-        if (clientsError) throw clientsError;
-        (clients || []).forEach((client) => payerGroupByClient.set(client.id, client.payer_group || null));
       }
 
       let updated = 0, skipped = 0;
@@ -64,7 +50,7 @@ export function useRecalculateInboundFreight() {
           const calcParams = {
             tenantId: currentTenant.id,
             clientId: d.client_id || null,
-            payerGroup: d.client_id ? payerGroupByClient.get(d.client_id) || null : null,
+            supplierTaxIds: [d.remitter_cnpj],
             destination: d.recipient || d.recipient_city,
             destinationState: d.recipient_state,
             destinationMunicipality: d.recipient_city,

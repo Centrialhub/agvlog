@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,6 +63,10 @@ import {
 } from '@/lib/fiscal/cteAddressAutocomplete';
 import { isDefinitiveCteIssueError } from '@/lib/fiscal/cteIssueOutcome';
 import { recalcIcms } from '@/lib/fiscal/ctePreviewIcms';
+import { applyCteFreightPatch, resolveCtePreviewFreight } from '@/lib/fiscal/ctePreviewFreight';
+import { calculateFreight } from '@/hooks/useFreightCalculator';
+import { useTenant } from '@/hooks/useTenant';
+import { CteFreightInput } from './CteFreightInput';
 
 
 interface DriverOpt {
@@ -148,6 +152,8 @@ interface EditableCte {
   cfop: string;
   observations: string;
   freightValue: number;
+  freightError: string;
+  _freightManual?: boolean;
   cargoValue: number;
   weightKg: number;
   palletCount: number;
@@ -299,6 +305,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     cfop: '',
     observations: '',
     freightValue: g.freight_value,
+    freightError: '',
     cargoValue: g.cargo_value,
     weightKg: g.weight_kg,
     palletCount: g.pallet_count,
@@ -532,9 +539,10 @@ interface Props {
 
 export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) {
   const toast = useSonnerToast();
-  const { data: emitters = [] } = useEmitters();
+  const { currentTenant } = useTenant();
+  const { data: emitters = [], isLoading: emittersLoading } = useEmitters();
   const { data: vehicles = [] } = useVehicles();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [], isLoading: clientsLoading } = useClients();
   const issueCte = useIssueCTe();
   const { data: insuranceProfile } = useInsuranceProfile();
   const saveInsuranceProfile = useUpdateInsuranceProfile();
@@ -542,6 +550,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const { data: driverCatalog = [] } = useDrivers({ enabled: open });
   const drivers = driverCatalog as DriverOpt[];
   const [items, setItems] = useState<EditableCte[]>([]);
+  const initializedBatch = useRef<string | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const [transmitting, setTransmitting] = useState(false);
   const [defaultsStatus,setDefaultsStatus]=useState<'loading'|'ready'|'error'>('loading');
@@ -570,7 +579,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   // A consulta anterior é descartada quando a seleção muda, evitando que uma
   // resposta tardia restaure no modal as notas do lote anterior.
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open) { initializedBatch.current = null; return undefined; }
+    if (!currentTenant || clientsLoading || emittersLoading) return undefined;
     let cancelled = false;
     setDefaultsStatus('loading');
     setDefaultsError('');
@@ -585,14 +595,21 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       return it;
     });
 
-    setItems(baseItems);
-    setActiveIdx(0);
+    const batch = `${currentTenant.id}:${groupsSignature}`;
+    const preserveDraft = initializedBatch.current === batch;
+    initializedBatch.current = batch;
+    setItems(previous => preserveDraft
+      ? baseItems.map(base => previous.find(item => item.key === base.key) ?? base)
+      : baseItems);
+    if (!preserveDraft) setActiveIdx(0);
 
     if (baseItems.length === 0) return () => { cancelled = true; };
 
     (async () => {
       const patched = await Promise.all(
-        baseItems.map(async (it) => {
+        baseItems.map(async (baseItem, index) => {
+          const freight = await resolveCtePreviewFreight(groups[index], currentTenant.id, clients, calculateFreight);
+          const it = { ...baseItem, ...freight };
           if (it.loadIds.length === 0) return it;
           const { data,error } = await supabase.rpc('cte_defaults_for_group', {
             p_load_ids: it.loadIds,
@@ -638,11 +655,15 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           const previous = previousByKey.get(it.key);
           const base = baseByKey.get(it.key);
           if (!previous || !base) return it;
-          return mergeCteDraftAfterAsyncDefaults(
+          const merged = mergeCteDraftAfterAsyncDefaults(
             base as unknown as Record<string, unknown>,
             previous as unknown as Record<string, unknown>,
             preserveInsurerFields(previous, it) as unknown as Record<string, unknown>,
           ) as unknown as EditableCte;
+          // A delayed calculation must retain any manual value typed meanwhile.
+          return { ...applyCteFreightPatch(merged, {
+            freightValue: previous._freightManual ? previous.freightValue : merged.freightValue,
+          }), freightError: previous._freightManual ? previous.freightError : merged.freightError };
         });
       });
       setDefaultsStatus('ready');
@@ -654,7 +675,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, groupsSignature, defaultEmitter?.id, clients.length, defaultsRetry]);
+  }, [open, groupsSignature, currentTenant?.id, clientsLoading, emittersLoading, defaultsRetry]);
 
   const hasIncompleteInsurance = items.some(
     (it) => !it.insurerName || !it.insurerCnpj || !it.insurerPolicy,
@@ -865,6 +886,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   );
 
   function patch(patch: Partial<EditableCte>, tabScope?: 'partes' | 'tomador' | 'transporte' | 'carga' | 'fiscal') {
+    if (transmitting || active?.transmitted === 'ok') return;
+    if (patch.freightValue !== undefined || patch.fcFreightWeight !== undefined) {
+      patch = { ...patch, _freightManual: true };
+    }
     // Chaves específicas de cada CT-e que NUNCA devem ser replicadas.
     const PER_ITEM_ONLY = new Set<keyof EditableCte>([
       'key', 'transmitted', 'transmitMessage',
@@ -881,7 +906,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     else if (tabScope === 'fiscal') shouldBulk = bulkEditFiscal;
 
     if (!shouldBulk) {
-      setItems((arr) => arr.map((it, i) => (i === activeIdx ? { ...it, ...patch } : it)));
+      setItems((arr) => arr.map((it, i) => (i === activeIdx ? applyCteFreightPatch(it, patch) : it)));
       return;
     }
 
@@ -906,8 +931,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     const activePart = Object.fromEntries(activeEntries) as Partial<EditableCte>;
     setItems((arr) =>
       arr.map((it, i) => {
-        const base = { ...it, ...bulkPart };
-        return i === activeIdx ? { ...base, ...activePart } : base;
+        if (it.transmitted === 'ok') return it;
+        return applyCteFreightPatch(it, i === activeIdx ? { ...bulkPart, ...activePart } : bulkPart);
       }),
     );
   }
@@ -1341,6 +1366,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               </Alert>
             )}
 
+            <fieldset disabled={transmitting || active.transmitted === 'ok'}>
             <Tabs defaultValue="partes">
               <TabsList>
                 <TabsTrigger value="partes">Partes</TabsTrigger>
@@ -1798,9 +1824,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   <div>
-                    <Label>Frete peso — frete base (R$)</Label>
-                    <Input type="number" step="0.01" value={Number(active.freightValue ?? 0).toFixed(2)}
-                      onChange={(e) => patch({ freightValue: Math.round(Number(e.target.value) * 100) / 100 }, 'carga')} />
+                    <Label htmlFor="cte-freight-value">Frete peso — frete base (R$)</Label>
+                    <CteFreightInput key={active.key} value={active.freightValue}
+                      onChange={(freightValue) => patch({ freightValue }, 'carga')} />
+                    {active.freightError && <p role="alert" className="text-sm text-destructive">{active.freightError}</p>}
                   </div>
                   <div>
                     <Label>Valor carga (R$)</Label>
@@ -2138,6 +2165,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 </div>
               </TabsContent>
             </Tabs>
+            </fieldset>
           </div>
         </div>
 

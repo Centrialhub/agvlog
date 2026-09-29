@@ -116,17 +116,6 @@ export function useGenerateCTe() {
       const clientId = refDoc?.client_id || null;
       const nfeTotalValue = refDocs.reduce((sum, document) => sum + (Number(document.value) || 0), 0);
 
-      let payerGroup: string | null = null;
-      if (clientId) {
-        const { data: client, error: clientError } = await supabase
-          .from('clients')
-          .select('payer_group')
-          .eq('id', clientId)
-          .maybeSingle();
-        if (clientError) throw clientError;
-        payerGroup = client?.payer_group || null;
-      }
-
       const destState = refDoc?.recipient_state || null;
       const destMunicipality = refDoc?.recipient_city || null;
 
@@ -134,7 +123,7 @@ export function useGenerateCTe() {
       const freightResult = await calculateFreight({
         tenantId: currentTenant.id,
         clientId,
-        payerGroup,
+        sourceDocumentIds: refDocs.map(document => document.id),
         destination: load.destination || destMunicipality,
         destinationState: destState,
         destinationMunicipality: destMunicipality,
@@ -153,7 +142,6 @@ export function useGenerateCTe() {
       const warnings: string[] = [];
       const missingContext: string[] = [];
       if (!clientId) missingContext.push('cliente (NF-e sem client_id vinculado)');
-      if (!payerGroup) missingContext.push('payer_group (cliente sem grupo pagador definido)');
       if (!destState) missingContext.push('UF de destino');
       if (!destMunicipality) missingContext.push('município de destino');
       if (!load.destination && !destMunicipality) missingContext.push('destino da carga');
