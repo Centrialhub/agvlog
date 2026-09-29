@@ -54,7 +54,7 @@ async function visibleEvents(actor: string) {
   return result.rows.map(row => row.event_id);
 }
 async function policies() {
-  return (await db.query(`
+  return (await db.query<{ polname: string }>(`
     select polname,polcmd,polpermissive,polroles,
       pg_get_expr(polqual,polrelid) as using_expression,pg_get_expr(polwithcheck,polrelid) as check_expression
     from pg_policy where polrelid='public.operational_event_messages'::regclass order by polname

@@ -25,6 +25,11 @@ interface Doc {
   document_type: string;
   remitter: string | null;
   recipient: string | null;
+  client_id?: string | null;
+  recipient_state?: string | null;
+  recipient_city?: string | null;
+  recipient_cnpj?: string | null;
+  remitter_cnpj?: string | null;
   pallet_count: number | null;
   weight_kg: number | null;
   value: number | null;
@@ -109,6 +114,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
   }), [selectedDocs]);
   const selectionKey = useMemo(() => JSON.stringify({
     loadId, destination, ids: selectedDocs.map(document => document.id).sort(), ...totals,
+    context: selectedDocs.map(doc => [doc.client_id, doc.recipient_cnpj, doc.recipient, doc.recipient_state, doc.recipient_city, doc.remitter_cnpj]),
   }), [destination, loadId, selectedDocs, totals]);
   const selectionKeyRef = useRef(selectionKey);
   selectionKeyRef.current = selectionKey;
@@ -127,8 +133,18 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
   const handleCalcFreight = async () => {
     if (!currentTenant) return;
     const requestedSelection = selectionKey;
+    const contexts = new Set(selectedDocs.map(doc => JSON.stringify([doc.client_id, doc.recipient_cnpj, doc.recipient, doc.recipient_state, doc.recipient_city])));
+    if (contexts.size !== 1) {
+      setCalculation(null);
+      toast.error('Selecione notas do mesmo destinatário e destino para calcular o frete.');
+      return;
+    }
     const result = await calculateFreight({
       tenantId: currentTenant.id,
+      sourceDocumentIds: selectedDocs.map(document => document.id),
+      clientId: selectedDocs[0]?.client_id,
+      destinationState: selectedDocs[0]?.recipient_state,
+      destinationMunicipality: selectedDocs[0]?.recipient_city,
       destination,
       totalValue: totals.value,
       totalWeight: totals.weight,

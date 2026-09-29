@@ -37,9 +37,11 @@ export function useRecalculateCTeFreight() {
       // Pull NF-e context (client / payer group / value) from the same load
       let clientId = cte.client_id || null;
       let nfeTotalValue = 0;
+      let sourceDocumentIds: string[] = [];
       if (cte.load_id) {
         const context = await readLoadFreightContext(currentTenant.id, cte.load_id);
         const nfeDocs = context.documents;
+        sourceDocumentIds = nfeDocs.map(document => document.id);
         nfeTotalValue = nfeDocs.reduce((sum, document) => sum + (Number(document.value) || 0), 0);
         if (!clientId) {
           const referenceDocument = nfeDocs.find((document) => document.client_id);
@@ -47,21 +49,10 @@ export function useRecalculateCTeFreight() {
         }
       }
 
-      let payerGroup: string | null = null;
-      if (clientId) {
-        const { data: client, error: clientError } = await supabase
-          .from('clients')
-          .select('payer_group')
-          .eq('id', clientId)
-          .maybeSingle();
-        if (clientError) throw clientError;
-        payerGroup = client?.payer_group || null;
-      }
-
       const result = await calculateFreight({
         tenantId: currentTenant.id,
         clientId,
-        payerGroup,
+        sourceDocumentIds,
         destination: cte.recipient || cte.recipient_city,
         destinationState: cte.recipient_state,
         destinationMunicipality: cte.recipient_city,

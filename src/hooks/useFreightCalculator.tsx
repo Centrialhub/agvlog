@@ -2,12 +2,18 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Json, Tables, TablesInsert } from '@/integrations/supabase/types';
 import { localDateInputValue } from '@/lib/utils/formatDate';
 import { fetchAllPostgrestPages } from '@/lib/supabase/fetchAllPages';
+import { resolveFreightSupplier } from '@/lib/fiscalDocuments/freightSupplierContext';
 
 type FreightTable = Tables<'freight_tables'>;
 
 export interface FreightInput {
   tenantId: string;
+  /** Recipient identity, used only for destination regions. */
   clientId?: string | null;
+  /** Supplier owns freight_tables.client_id; never substitute the recipient. */
+  supplierId?: string | null;
+  supplierTaxIds?: (string | null | undefined)[];
+  sourceDocumentIds?: string[];
   payerName?: string | null;
   payerGroup?: string | null;
   destination?: string | null;
@@ -196,7 +202,7 @@ export function computeSpecificity(table: Partial<FreightTable>, input: FreightI
     }
   };
 
-  check('client_id', table.client_id, input.clientId);
+  check('client_id', table.client_id, input.supplierId);
   check('payer_group', table.payer_group, input.payerGroup);
   check('payer', table.payer, input.payerName);
   check('origin_state', table.origin_state, input.originState);
@@ -243,17 +249,22 @@ function computeFreightValue(table: FreightTable, input: FreightInput): FreightB
 export async function calculateFreight(input: FreightInput): Promise<FreightResult> {
   const metricError = freightMetricValidationError(input);
   if (metricError) return { success: false, value: 0, breakdown: null, error: metricError };
+  try {
+    input = await resolveFreightSupplier(input);
+  } catch (error) {
+    return { success: false, value: 0, breakdown: null, error: error instanceof Error ? error.message : 'Falha ao consultar o fornecedor do frete.' };
+  }
   const today = input.referenceDate?.slice(0, 10) || localDateInputValue();
 
-  // ===== Auto-fallback: detect missing critical fields and substitute with UNKNOWN =====
+  // Record missing context for diagnostics; explicit tariff criteria still require a match.
   const missingFields: string[] = [];
   const unknownSubstitutions: Record<string, string> = {};
   const UNKNOWN = 'UNKNOWN';
 
   const normalizedInput: FreightInput = { ...input };
-  if (!normalizedInput.clientId) {
-    missingFields.push('client_id');
-    unknownSubstitutions['client_id'] = UNKNOWN;
+  if (!normalizedInput.supplierId) {
+    missingFields.push('supplier_id');
+    unknownSubstitutions['supplier_id'] = UNKNOWN;
   }
   if (!normalizedInput.payerGroup) {
     missingFields.push('payer_group');
@@ -276,18 +287,30 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
   let regionName: string | null = null;
   let regionId: string | null = null;
   if (input.destinationMunicipality) {
-    const regions = await fetchAllPostgrestPages((from, to) => {
-      let query = supabase.from('client_regions').select('id, region_name, municipality, state_code, client_id, payer_group')
-        .eq('tenant_id', input.tenantId).order('id').range(from, to);
-      if (input.destinationState) query = query.eq('state_code', input.destinationState);
-      if (input.clientId) query = query.eq('client_id', input.clientId);
-      if (input.payerGroup) query = query.eq('payer_group', input.payerGroup);
-      return query;
-    });
-    const normalize = (value: string | null | undefined) => (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
-    const exact = regions.filter(region => normalize(region.municipality) === normalize(input.destinationMunicipality));
-    if (exact.length === 1) { regionId = exact[0].id; regionName = exact[0].region_name; }
-    else if (exact.length > 1) return { success: false, value: 0, breakdown: null, error: 'Região de destino ambígua para o cliente/UF informados' };
+    try {
+      const regions = await fetchAllPostgrestPages((from, to) => {
+        const query = supabase.from('client_regions').select('id, region_name, municipality, state_code, client_id, payer_group')
+          .eq('tenant_id', input.tenantId).order('id').range(from, to);
+        return query;
+      });
+      const normalize = (value: string | null | undefined) => (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+      // NULL scope is shared. Explicit scopes must match; never borrow another
+      // client's/group's region when the caller has incomplete context.
+      const exact = regions.filter(region =>
+        normalize(region.municipality) === normalize(input.destinationMunicipality) &&
+        (!input.destinationState || normalize(region.state_code) === normalize(input.destinationState)) &&
+        (!region.client_id || region.client_id === input.clientId) &&
+        (!region.payer_group || normalize(region.payer_group) === normalize(input.payerGroup)),
+      );
+      const specificity = (region: typeof exact[number]) => Number(Boolean(region.client_id)) + Number(Boolean(region.payer_group));
+      exact.sort((a, b) => specificity(b) - specificity(a));
+      if (exact.length > 1 && specificity(exact[0]) === specificity(exact[1])) {
+        return { success: false, value: 0, breakdown: null, error: 'Região de destino ambígua para o cliente/UF/grupo informados' };
+      }
+      if (exact.length) { regionId = exact[0].id; regionName = exact[0].region_name; }
+    } catch {
+      return { success: false, value: 0, breakdown: null, error: 'Falha ao consultar regiões de frete. Tente novamente antes de calcular.' };
+    }
   }
   normalizedInput.destination = regionName || normalizedInput.destination;
 
@@ -307,7 +330,7 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
     return { success: false, value: 0, breakdown: null, error: 'Nenhuma tabela de frete vigente' };
   }
 
-  // Score each table — using normalized input (missing fields treated as wildcards / null)
+  // Only empty table criteria are wildcards; missing input cannot satisfy a restriction.
   const scored = valid.map((table) => {
     const { score, eligible, matched, ignored } = computeSpecificity(table, normalizedInput);
     return { table, score, eligible, matched, ignored };
