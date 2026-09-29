@@ -56,3 +56,11 @@ export function applyCteFreightPatch<T extends FreightDraft>(item: T, patch: Par
   return { ...next, freightValue: value, fcFreightWeight: value,
     icmsBase: tax.base, icmsValor: tax.valor, freightError: '' };
 }
+
+/** Keep tax edits made while defaults were loading, just like other draft fields. */
+export function applyCteFreightDefaults<T extends FreightDraft>(base: T, previous: T, merged: T, freightValue: number): T {
+  const next = applyCteFreightPatch(merged, { freightValue } as Partial<T>);
+  return { ...next,
+    icmsBase: previous.icmsBase !== base.icmsBase ? previous.icmsBase : next.icmsBase,
+    icmsValor: previous.icmsValor !== base.icmsValor ? previous.icmsValor : next.icmsValor };
+}

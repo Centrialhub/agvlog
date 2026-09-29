@@ -5,7 +5,7 @@
 - Solicitação: preenchimento automático de frete ausente e dificuldade de informar/transmitir o valor manual na versão pública atual.
 - Fonte pública conferida por HTTPS em `https://agvlogistica.vercel.app/release.json`: release `17a7592dca01f31b1aa7b63340fbaf28bb116347`, build `fecb84c9daaa7348`, data embutida `2026-09-23T17:23:14-03:00`.
 - Base do candidato: `bb9e5d51`, branch `codex/production-stability`, PR #3. Os quatro arquivos de prévia, agrupamento, builder e hook de emissão não tinham diferenças em relação ao SHA publicado antes desta correção.
-- Estado: **corrigido no candidato; não publicado**. Nenhuma emissão fiscal real, mudança SQL ou publicação Edge nesta rodada.
+- Estado atualizado: **correção de frete publicada isoladamente em 29/09, 14:16 UTC**, pelo PR #4. O restante do candidato de estabilidade continua sem promoção. Nenhuma emissão fiscal real, mudança SQL ou publicação Edge nesta rodada. Ver [evidência da publicação](freight-hotfix-production-evidence-2026-09-29.md).
 - Commit das correções de código: `4492eb78b454faaa9b11aabfaf81a060e92dfbb0`.
 
 ## Causas verificadas no código

@@ -63,7 +63,7 @@ import {
 } from '@/lib/fiscal/cteAddressAutocomplete';
 import { isDefinitiveCteIssueError } from '@/lib/fiscal/cteIssueOutcome';
 import { recalcIcms } from '@/lib/fiscal/ctePreviewIcms';
-import { applyCteFreightPatch, resolveCtePreviewFreight } from '@/lib/fiscal/ctePreviewFreight';
+import { applyCteFreightDefaults, applyCteFreightPatch, resolveCtePreviewFreight } from '@/lib/fiscal/ctePreviewFreight';
 import { calculateFreight } from '@/hooks/useFreightCalculator';
 import { useTenant } from '@/hooks/useTenant';
 import { CteFreightInput } from './CteFreightInput';
@@ -661,9 +661,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             preserveInsurerFields(previous, it) as unknown as Record<string, unknown>,
           ) as unknown as EditableCte;
           // A delayed calculation must retain any manual value typed meanwhile.
-          return { ...applyCteFreightPatch(merged, {
-            freightValue: previous._freightManual ? previous.freightValue : merged.freightValue,
-          }), freightError: previous._freightManual ? previous.freightError : merged.freightError };
+          return { ...applyCteFreightDefaults(base, previous, merged,
+            previous._freightManual ? previous.freightValue : merged.freightValue),
+            freightError: previous._freightManual ? previous.freightError : merged.freightError };
         });
       });
       setDefaultsStatus('ready');
