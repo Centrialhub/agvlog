@@ -291,16 +291,20 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     [insurerName, insurerCnpj, insurerPolicy, insurerEndorsement, insuredAmount, insurancePremium],
   );
 
-  // Spinner do botão só reflete recálculo manual (clique do usuário).
-  // O auto-recálculo em background não deve prender o botão.
+  // O preparo aguarda o recálculo manual e a consulta dos valores atualizados.
   const [manualRecalcing, setManualRecalcing] = useState(false);
+  const freightRecalcPending = useRef(false);
 
   async function handleRecalc() {
+    if (freightRecalcPending.current) return;
     const ids = selectedDocs.map((document) => document.id);
     if (!ids.length) { toast.error('Selecione ao menos uma NF para recalcular'); return; }
+    freightRecalcPending.current = true;
     setManualRecalcing(true);
     try {
       const res = await recalcFreight.mutateAsync(ids);
+      const refreshed = await refetch();
+      if (refreshed.error) throw refreshed.error;
       const summary = `Frete recalculado: ${res.updated} atualizadas, ${res.skipped} com override, ${res.failed} falharam`;
       if (res.failed === 0) toast.success(summary);
       else {
@@ -314,6 +318,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         description: error instanceof Error ? error.message : 'Falha ao consultar NF-es ou grupos pagadores.',
       });
     } finally {
+      freightRecalcPending.current = false;
       setManualRecalcing(false);
     }
   }
@@ -425,6 +430,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     && (effectiveEmissionMode === 'unified' ? allSameTomador : true);
 
   const handleEmit = async () => {
+    if (freightRecalcPending.current || manualRecalcing || isFetching || docsError) {
+      toast.error('Aguarde a conclusão do recálculo e a atualização dos fretes.');
+      return;
+    }
     if (batchAttempt) {
       setIssuing(true);
       try {
@@ -895,12 +904,13 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                 </div>
                 <Button
                   onClick={() => {
+                    if (freightRecalcPending.current || isFetching || docsError) return;
                     setStep(2);
                     // Preenche observações automaticamente ao avançar
                     const nfList = selectedDocs.map((d) => d.invoice_number || d.access_key?.slice(-9)).join(', ');
                     setObservacoes(`NFS-e referente a(s) NF ${nfList}`);
                   }}
-                  disabled={!canAdvance || isFetching || !!docsError}
+                  disabled={!canAdvance || manualRecalcing || isFetching || !!docsError}
                 >
                   Avançar <ArrowRight className="h-4 w-4 ml-1" />
                 </Button>
@@ -1315,7 +1325,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
           )}
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={issuing}>Cancelar</Button>
           {step === 2 && (
-            <Button onClick={() => setStep(3)} disabled={invalidServiceValues}>
+            <Button onClick={() => { if (!freightRecalcPending.current && !isFetching && !docsError) setStep(3); }} disabled={invalidServiceValues || manualRecalcing || isFetching || !!docsError}>
               Avançar <ArrowRight className="h-4 w-4 ml-1" />
             </Button>
           )}
@@ -1325,7 +1335,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             ) : (
               <Button
                 onClick={handleEmit}
-                disabled={issuing || create.isPending || issueBatch.isPending || isFetching || !!docsError || (!batchAttempt && (invalidServiceValues || (needsTomadorRegistryEnrichment && (tomadorRegistryStatus === 'loading' || environment === 'production'))))}
+                disabled={issuing || manualRecalcing || create.isPending || issueBatch.isPending || isFetching || !!docsError || (!batchAttempt && (invalidServiceValues || (needsTomadorRegistryEnrichment && (tomadorRegistryStatus === 'loading' || environment === 'production'))))}
               >
                 {issuing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
                 {batchAttempt ? 'Tentar novamente com segurança' : 'Emitir NFS-e'}

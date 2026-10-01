@@ -176,7 +176,8 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const { data: clients = [], isPending: clientsLoading, isError: clientsError, refetch: refetchClients } = useClients();
 
   const [form, setForm] = useState<NFSeFormState>(EMPTY_FORM);
-  const [items, setItems] = useState<NFSeItem[]>([]);
+  const [itemInputs, setItems] = useState<NFSeItem[]>([]);
+  const manualItemIds = useRef(new Set<string>());
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [invoiceSearch, setInvoiceSearch] = useState('');
   const [clientSearchOpen, setClientSearchOpen] = useState(false);
@@ -252,6 +253,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     }
 
     const manualItems = items.filter(item => !item.fiscal_document_id);
+    manualItemIds.current = new Set([...manualItemIds.current].filter(id => nextIds.has(id)));
     const existingByDocument = new Map(items.filter(item => item.fiscal_document_id).map(item => [item.fiscal_document_id!, item]));
     const linkedItems = selected.map(document => existingByDocument.get(document.id) ?? {
       description: `Serviço de transporte ref. NF ${document.invoice_number || ''}`,
@@ -304,7 +306,20 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       ? new Set<string>() : new Set(filteredDocs.map(document => document.id)),
   );
 
-  const { data: allDocs = [] } = useFiscalDocuments();
+  const fiscalDocumentsQuery = useFiscalDocuments();
+  const allDocs = useMemo(() => fiscalDocumentsQuery.data ?? [], [fiscalDocumentsQuery.data]);
+  const sourceQuery = loadId ? loadDocumentsQuery : fiscalDocumentsQuery;
+  const sourceDocuments = loadId ? loadDocuments : allDocs;
+  const items = useMemo(() => {
+    const byId = new Map(sourceDocuments.map(document => [document.id, document]));
+    return itemInputs.map(item => {
+      if (!item.fiscal_document_id || manualItemIds.current.has(item.fiscal_document_id)) return item;
+      const freight = resolveNFSeServiceValue(byId.get(item.fiscal_document_id)?.freight_value);
+      return { ...item, unit_value: freight, total: +(num(item.quantity) * freight).toFixed(2) };
+    });
+  }, [itemInputs, sourceDocuments]);
+  const sourceRefreshPending = items.some(item => item.fiscal_document_id)
+    && (sourceQuery.data === undefined || sourceQuery.isFetching || !!sourceQuery.error);
 
   const clientOptions = useMemo(() => {
     return clients
@@ -384,6 +399,8 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       load_id: loadId ?? initial?.load_id ?? null,
       related_cte_ids: initial?.related_cte_ids || [],
     });
+    // RPS já salvo conserva seu valor configurado; não inferimos a origem histórica.
+    manualItemIds.current = new Set(initial?.items?.flatMap(item => item.fiscal_document_id ? [item.fiscal_document_id] : []) ?? []);
     setItems(
       initial?.items?.map((item) => ({
         description: item.description || '',
@@ -491,9 +508,14 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
 
   const addItem = () => setItems(arr => [...arr, { description: '', quantity: 1, unit_value: 0, total: 0 }]);
   const updateItem = (i: number, patch: Partial<NFSeItem>) => {
+    const currentItem = items[i];
+    if (!currentItem) return;
+    if (currentItem.fiscal_document_id && (patch.unit_value !== undefined || patch.quantity !== undefined)) {
+      manualItemIds.current.add(currentItem.fiscal_document_id);
+    }
     setItems(arr => arr.map((it, idx) => {
       if (idx !== i) return it;
-      const merged = { ...it, ...patch };
+      const merged = { ...currentItem, ...patch };
       merged.total = +(num(merged.quantity) * num(merged.unit_value)).toFixed(2);
       return merged;
     }));
@@ -532,6 +554,8 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       const tomador = resolveNFSeTomador(doc, 'destinatario', clients);
 
       // Preenche os dados do tomador
+      const manualItem = items.find(item => item.fiscal_document_id === doc.id && manualItemIds.current.has(doc.id));
+      const serviceValue = manualItem?.total ?? resolveNFSeServiceValue(doc.freight_value);
       setForm(prev => ({
         ...prev,
       cliente_id: tomador.cliente_id || doc.client_id || null,
@@ -550,13 +574,12 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       cliente_email: tomador.email,
       cliente_telefone: tomador.telefone,
         reference_number: doc.invoice_number || prev.reference_number,
-        valor_servicos: resolveNFSeServiceValue(doc.freight_value),
+        valor_servicos: serviceValue,
         description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
         notes: `NFS-e referente a(s) NF ${doc.invoice_number || ''}`
       }));
 
-      const serviceValue = resolveNFSeServiceValue(doc.freight_value);
-      setItems([{
+      setItems([manualItem ?? {
         description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
         quantity: 1,
         unit_value: serviceValue,
@@ -602,6 +625,10 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   };
 
   const handleSave = async () => {
+    if (sourceRefreshPending) {
+      toast.error('Aguarde a atualização das NF-es e dos fretes antes de salvar.');
+      return;
+    }
     if (!Number.isFinite(totalServicos) || totalServicos <= 0 || items.some(item =>
       item.fiscal_document_id && (!Number.isFinite(item.total) || item.total <= 0)
     )) {
@@ -997,9 +1024,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
           </TabsContent>
         </Tabs>
 
+        {sourceRefreshPending && <p role="status" className="text-sm text-muted-foreground">
+          {sourceQuery.error ? 'Não foi possível atualizar os fretes das notas.' : 'Atualizando os fretes das notas.'}
+          {sourceQuery.error && <Button variant="outline" onClick={() => void sourceQuery.refetch()}>Atualizar notas</Button>}
+        </p>}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={create.isPending || update.isPending}>
+          <Button onClick={handleSave} disabled={create.isPending || update.isPending || sourceRefreshPending}>
             {editing ? 'Salvar alterações' : 'Criar RPS (rascunho)'}
           </Button>
         </DialogFooter>
