@@ -76,6 +76,23 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('NFS-e uses configured freight independently of products', () => {
+  it.each([null, 333.33])('drops an obsolete manual marker after switching imported invoices and follows refreshed freight %s', async freight => {
+    state.docs = [source(123.45), source(76.56, '2')];
+    const client = new QueryClient();
+    const view = render(<QueryClientProvider client={client}><NFSeFormDialog open onOpenChange={() => {}} /></QueryClientProvider>);
+    const search = () => screen.getByPlaceholderText('Nº da NF ou Chave de Acesso');
+    fireEvent.change(search(), { target: { value: '1' } }); await click('Puxar dados');
+    await userEvent.click(screen.getByRole('tab', { name: 'Itens / Valores' }));
+    fireEvent.change(within(screen.getAllByRole('row')[1]).getAllByRole('spinbutton')[1], { target: { value: '222.22' } });
+    await userEvent.click(screen.getByRole('tab', { name: 'Dados Gerais' }));
+    fireEvent.change(search(), { target: { value: '2' } }); await click('Puxar dados');
+    fireEvent.change(search(), { target: { value: '1' } }); await click('Puxar dados');
+    state.docs = [source(freight), source(76.56, '2')];
+    view.rerender(<QueryClientProvider client={client}><NFSeFormDialog open onOpenChange={() => {}} /></QueryClientProvider>);
+    await click('Criar RPS (rascunho)');
+    if (freight === null) expect(state.create).not.toHaveBeenCalled();
+    else { await waitFor(() => expect(state.drafts).toHaveLength(1)); expect(state.drafts[0].valor_servicos).toBe(freight); }
+  });
   it('does not issue the final wizard preview while its source query is refreshing', async () => {
     const view = render(wizard()); await selectAndAdvance(); await click(/Avançar/);
     state.docsFetching = true; view.rerender(wizard());

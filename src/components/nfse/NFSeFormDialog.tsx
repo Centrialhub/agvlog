@@ -556,6 +556,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       // Preenche os dados do tomador
       const manualItem = items.find(item => item.fiscal_document_id === doc.id && manualItemIds.current.has(doc.id));
       const serviceValue = manualItem?.total ?? resolveNFSeServiceValue(doc.freight_value);
+      manualItemIds.current = new Set(manualItem ? [doc.id] : []);
       setForm(prev => ({
         ...prev,
       cliente_id: tomador.cliente_id || doc.client_id || null,
