@@ -15,6 +15,7 @@ import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { useEmitters } from '@/hooks/useEmitters';
 import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normalizePhone, onlyDigits } from '@/lib/fiscal/fiscalAddress';
 import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
+import { resolveNFSeServiceValue } from '@/lib/fiscal/nfseServiceValue';
 import { useClients } from '@/hooks/useClients';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -255,8 +256,8 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     const linkedItems = selected.map(document => existingByDocument.get(document.id) ?? {
       description: `Serviço de transporte ref. NF ${document.invoice_number || ''}`,
       quantity: 1,
-      unit_value: num(document.freight_value || document.value || 0),
-      total: num(document.freight_value || document.value || 0),
+      unit_value: resolveNFSeServiceValue(document.freight_value),
+      total: resolveNFSeServiceValue(document.freight_value),
       fiscal_document_id: document.id,
       access_key: document.access_key,
     });
@@ -549,12 +550,12 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       cliente_email: tomador.email,
       cliente_telefone: tomador.telefone,
         reference_number: doc.invoice_number || prev.reference_number,
-        valor_servicos: num(doc.freight_value || doc.value || 0),
+        valor_servicos: resolveNFSeServiceValue(doc.freight_value),
         description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
         notes: `NFS-e referente a(s) NF ${doc.invoice_number || ''}`
       }));
 
-      const serviceValue = num(doc.freight_value || doc.value || 0);
+      const serviceValue = resolveNFSeServiceValue(doc.freight_value);
       setItems([{
         description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
         quantity: 1,
@@ -601,6 +602,12 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   };
 
   const handleSave = async () => {
+    if (!Number.isFinite(totalServicos) || totalServicos <= 0 || items.some(item =>
+      item.fiscal_document_id && (!Number.isFinite(item.total) || item.total <= 0)
+    )) {
+      toast.error('Informe um valor de serviço positivo para cada NF selecionada.');
+      return;
+    }
     let preparedForm = form;
     if (environment === 'production' && needsNFSeTomadorRegistryEnrichment(formTomador)) {
       try {

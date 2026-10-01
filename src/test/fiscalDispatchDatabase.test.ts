@@ -4,6 +4,8 @@ import {createFiscalReadinessDatabase,prepareFiscal,fiscalSnapshot} from './help
 import {fiscalServiceAdapter} from './helpers/fiscalServiceAdapter';
 import {operationIds as i} from './helpers/operationOutcomeDatabase';
 import {dispatchFiscalEmission} from '../../supabase/functions/_shared/fiscal-dispatch';
+import {buildNFSeEmitPayload,type BuildNFSeInput} from '@/lib/fiscal/nfseBuilder';
+import {resolveNFSeServiceValue} from '@/lib/fiscal/nfseServiceValue';
 let context:Awaited<ReturnType<typeof createFiscalReadinessDatabase>>;
 beforeAll(async()=>{context=await createFiscalReadinessDatabase();},30000);
 beforeEach(async()=>{await context.db.exec('begin');});afterEach(async()=>{await context.db.exec('rollback');});afterAll(async()=>{await context?.db.close();});
@@ -56,4 +58,29 @@ it('does not attach an unrelated receipt from an error response',async()=>{
  const args=await input();args.call.mockResolvedValue({status:502,data:{document:{id:'wrong-hub',status:'error',idIntegracao:'other',environment:args.environment,emitterCnpj:'wrong'}}});
  await dispatchFiscalEmission(args);await dispatchFiscalEmission(args);
  expect((await context.db.query('select hub_document_id from hub_fiscal_emissions')).rows[0]).toEqual({hub_document_id:null});expect(args.call).toHaveBeenCalledOnce();
+});
+
+it.each([undefined,222.22])('keeps configured NFS-e freight/manual edit %s through the real claim RPC and effective transport',async manual=>{
+ const {db,emitter,client}=context;
+ const nfseId='fa200000-0000-4000-8000-000000000001';
+ await db.query('update fiscal_documents set value=9876.54,freight_value=123.45 where id=$1',[i.doc]);
+ const amount=resolveNFSeServiceValue(123.45,manual);
+ await db.query("insert into nfse_documents(id,tenant_id,emitter_id,cliente_id,fiscal_document_ids,valor_servicos,valor_total,issue_date,status) values($1,$2,$3,$4,$5,$6,$6,current_date,'draft')",
+  [nfseId,i.tenant,emitter,client,[i.doc],amount]);
+ const doc:BuildNFSeInput['doc']={id:nfseId,rps_number:'1',issue_date:'2026-10-01',cod_servico:'160201',
+  cliente_cnpj:'11222333000181',cliente_nome:'Tomador QA',cliente_municipio:'Belo Horizonte',cliente_cod_municipio:'3106200',
+  cliente_uf:'MG',cliente_cep:'30110000',cliente_endereco:'Rua QA',cliente_numero:'10',cliente_bairro:'Centro',
+  valor_servicos:amount,aliquota_iss:7,iss_retido:true,valor_iss:12.34,valor_pis:1.23,
+  fiscal_document_ids:[i.doc],items:[{fiscal_document_id:i.doc,access_key:'29260614998371003215550000004411101880763852',unit_value:amount,total:amount}]};
+ const built=buildNFSeEmitPayload({doc,environment:'homologation',emitter:{id:emitter,cnpj:'11222333000181',razao_social:'Emitente QA',im:'123',city_code:'3106200',regime_tributario:'normal',
+  endereco:{uf:'MG',municipio:'Belo Horizonte',logradouro:'Rua QA',numero:'10',bairro:'Centro',cep:'30110000'}} as BuildNFSeInput['emitter']});
+ const call=vi.fn().mockImplementation(async(method,path,query,body)=>{
+  expect(method).toBe('POST');expect(path).toBe('/hub_documents_emit');expect(query).toEqual({type:'nfse'});
+  expect(body.payload.servico[0]).toMatchObject({codigo:'160201',valor:{servico:amount,pis:1.23},iss:{aliquota:7,retido:true,valor:12.34}});
+  const stored=(await db.query<{request_payload:unknown}>('select request_payload from hub_fiscal_emissions where nfse_document_id=$1',[nfseId])).rows[0];
+  expect(stored.request_payload).toEqual(body);return response();
+ });
+ expect((await dispatchFiscalEmission({admin:fiscalServiceAdapter(db),tenant:i.tenant,actor:i.operator,emitter,type:'nfse',environment:'homologation',nfseId,body:built,call})).status).toBe(200);
+ expect(call).toHaveBeenCalledOnce();
+ expect((await db.query('select value,freight_value from fiscal_documents where id=$1',[i.doc])).rows[0]).toEqual({value:'9876.54',freight_value:'123.45'});
 });
