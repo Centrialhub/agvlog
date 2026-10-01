@@ -6,7 +6,7 @@ import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreig
 import { resolveNFSeServiceValue } from '@/lib/fiscal/nfseServiceValue';
 
 type Row = Record<string, unknown>;
-const state = vi.hoisted(() => ({ rows: {} as Record<string, Row[]>, writes: [] as Row[] }));
+const state = vi.hoisted(() => ({ rows: {} as Record<string, Row[]>, writes: [] as Row[], beforeWrite: null as (() => void) | null }));
 vi.mock('@/hooks/useTenant', () => ({ useTenant: () => ({ currentTenant: { id: 'tenant' } }) }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ user: { id: 'user' } }) }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: (table: string) => {
@@ -17,9 +17,18 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: (table: str
     eq: (key: string, value: unknown) => { predicates.push(row => row[key] === value); return query; },
     is: (key: string, value: unknown) => { predicates.push(row => row[key] === value); return query; },
     in: (key: string, values: unknown[]) => { predicates.push(row => values.includes(row[key])); return query; },
+    or: (expression: string) => {
+      const alternatives = expression.split(',').map(part => {
+        const [key, operator, literal] = part.split('.');
+        if (!['is', 'eq'].includes(operator) || !['null', 'true', 'false'].includes(literal)) throw new Error('Unsupported fixture filter');
+        const value = literal === 'null' ? null : literal === 'true';
+        return (row: Row) => row[key] === value;
+      });
+      predicates.push(row => alternatives.some(predicate => predicate(row))); return query;
+    },
     lte: (key: string, value: string) => { predicates.push(row => String(row[key]) <= value); return query; },
     range: (from: number, to: number) => { start = from; end = to; return query; },
-    update: (value: Row) => { patch = value; return query; },
+    update: (value: Row) => { patch = value; state.beforeWrite?.(); return query; },
     upsert: () => query,
     then: (resolve: (value: unknown) => unknown) => {
       const rows = (state.rows[table] || []).filter(row => predicates.every(predicate => predicate(row))).slice(start, end + 1);
@@ -43,6 +52,7 @@ function mount() {
 }
 beforeEach(() => {
   state.writes = [];
+  state.beforeWrite = null;
   state.rows = {
     clients: [{ id: 'supplier', tenant_id: 'tenant', tax_id: '11222333000181', is_supplier: true, payer_group: 'GROUP' }],
     client_regions: [],
@@ -75,4 +85,25 @@ it('preserves manual freight and explicitly reports a failed source without subs
   expect(state.writes).toEqual([]);
   expect(state.rows.fiscal_documents[0].freight_value).toBe(33.33);
   expect(resolveNFSeServiceValue(state.rows.fiscal_documents[1].freight_value)).toBe(0);
+});
+
+it('does not overwrite a manual edit committed while automatic recalculation is running', async () => {
+  state.beforeWrite = () => Object.assign(state.rows.fiscal_documents[0], { freight_value: 42.42, freight_overridden: true });
+  const { result } = mount();
+  let outcome;
+  await act(async () => {
+    outcome = await result.current.mutateAsync(['nf-1']);
+  });
+  expect(state.rows.fiscal_documents[0].freight_value).toBe(42.42);
+  expect(state.writes).toEqual([]);
+  expect(outcome).toEqual({ updated: 0, skipped: 1, failed: 0, failedIds: [] });
+});
+
+it('recalculates legacy notes whose manual override flag is null', async () => {
+  state.rows.fiscal_documents[0].freight_overridden = null;
+  const { result } = mount();
+  await act(async () => {
+    expect(await result.current.mutateAsync(['nf-1'])).toEqual({ updated: 1, skipped: 0, failed: 0, failedIds: [] });
+  });
+  expect(state.rows.fiscal_documents[0].freight_value).toBe(80);
 });
