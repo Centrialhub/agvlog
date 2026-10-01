@@ -36,6 +36,14 @@ function mount() {
 beforeEach(() => { state.rpc.mockReset(); state.emit.mockReset(); });
 afterEach(cleanup);
 describe('frete manual até o limite de despacho: builder e hook reais, RPC/provedor simulados', () => {
+  it.each([0, null, undefined, -1, NaN])('blocks empty/invalid freight %s before reservation or provider calls', async freight => {
+    const request = input();
+    request.totals.freight_value = freight as number;
+    const { result } = mount();
+    await act(async () => { await expect(result.current.mutateAsync(request)).rejects.toThrow('Valor do frete'); });
+    expect(state.rpc).not.toHaveBeenCalled();
+    expect(state.emit).not.toHaveBeenCalled();
+  });
   it('reserva e despacha o mesmo valor decimal preenchido', async () => {
     state.rpc.mockImplementation(async (_name, args) => ({ error: null, data: {
       id: '10000000-0000-4000-8000-000000000099', tenant_id: 'tenant-a', emitter_id: 'emitter-a',

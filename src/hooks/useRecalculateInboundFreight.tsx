@@ -67,7 +67,7 @@ export function useRecalculateInboundFreight() {
             continue; 
           }
 
-          const { error: upErr } = await supabase
+          const { data: updatedDocuments, error: upErr } = await supabase
             .from('fiscal_documents')
             .update({
               freight_value: result.value,
@@ -77,8 +77,11 @@ export function useRecalculateInboundFreight() {
               updated_at: new Date().toISOString(),
             })
             .eq('id', d.id)
-            .eq('tenant_id', currentTenant.id);
+            .eq('tenant_id', currentTenant.id)
+            .or('freight_overridden.is.null,freight_overridden.eq.false')
+            .select('id');
           if (upErr) { failedIds.push(d.id); continue; }
+          if (!updatedDocuments?.length) { skipped++; continue; }
 
           try {
             await logFreightCalculation(currentTenant.id, d.id, 'nfe', result.breakdown, user?.id);

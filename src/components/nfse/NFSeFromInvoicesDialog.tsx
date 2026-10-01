@@ -34,6 +34,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { allocateCurrency } from '@/lib/fiscal/nfseBatchAllocation';
+import { resolveNFSeServiceValue } from '@/lib/fiscal/nfseServiceValue';
 import { consultOfficialTaxRegistry } from '@/lib/fiscal/taxRegistryClient';
 import { stateFromNfeAccessKey } from '@/lib/fiscal/cteAddressAutocomplete';
 import {
@@ -112,7 +113,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [recipientCity, setRecipientCity] = useState('');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  // Passo 2 — valor de serviço editável por NF (pré-preenchido com o frete)
+  // Somente edições manuais; valores automáticos acompanham o frete atualizado.
   const [serviceValues, setServiceValues] = useState<Record<string, number>>({});
 
   // Step 2 — dados fiscais da NFS-e
@@ -242,10 +243,9 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   );
 
   const valorPorDoc = useCallback((document: FiscalDocument) => {
-    const override = serviceValues[document.id];
-    if (override !== undefined) return num(override);
-    return num(document.freight_value ?? document.value ?? 0);
+    return resolveNFSeServiceValue(document.freight_value, serviceValues[document.id]);
   }, [serviceValues]);
+  const invalidServiceValues = selectedDocs.length === 0 || selectedDocs.some(document => valorPorDoc(document) <= 0);
   const totalServicos = useMemo(
     () => selectedDocs.reduce((total, document) => total + valorPorDoc(document), 0),
     [selectedDocs, valorPorDoc],
@@ -291,16 +291,20 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     [insurerName, insurerCnpj, insurerPolicy, insurerEndorsement, insuredAmount, insurancePremium],
   );
 
-  // Spinner do botão só reflete recálculo manual (clique do usuário).
-  // O auto-recálculo em background não deve prender o botão.
+  // O preparo aguarda o recálculo manual e a consulta dos valores atualizados.
   const [manualRecalcing, setManualRecalcing] = useState(false);
+  const freightRecalcPending = useRef(false);
 
   async function handleRecalc() {
+    if (freightRecalcPending.current) return;
     const ids = selectedDocs.map((document) => document.id);
     if (!ids.length) { toast.error('Selecione ao menos uma NF para recalcular'); return; }
+    freightRecalcPending.current = true;
     setManualRecalcing(true);
     try {
       const res = await recalcFreight.mutateAsync(ids);
+      const refreshed = await refetch();
+      if (refreshed.error) throw refreshed.error;
       const summary = `Frete recalculado: ${res.updated} atualizadas, ${res.skipped} com override, ${res.failed} falharam`;
       if (res.failed === 0) toast.success(summary);
       else {
@@ -314,6 +318,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         description: error instanceof Error ? error.message : 'Falha ao consultar NF-es ou grupos pagadores.',
       });
     } finally {
+      freightRecalcPending.current = false;
       setManualRecalcing(false);
     }
   }
@@ -425,6 +430,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     && (effectiveEmissionMode === 'unified' ? allSameTomador : true);
 
   const handleEmit = async () => {
+    if (freightRecalcPending.current || manualRecalcing || isFetching || docsError) {
+      toast.error('Aguarde a conclusão do recálculo e a atualização dos fretes.');
+      return;
+    }
     if (batchAttempt) {
       setIssuing(true);
       try {
@@ -446,6 +455,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
       }
       return;
     }
+    if (invalidServiceValues) { toast.error('Informe um valor de serviço positivo para cada NF selecionada.'); return; }
     if (!emitterId) { toast.error('Selecione o emitente fiscal'); return; }
     
     setIssuing(true);
@@ -894,22 +904,13 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                 </div>
                 <Button
                   onClick={() => {
-                    // Pré-preenche valor de serviço com o frete atual de cada NF selecionada
-                    setServiceValues(prev => {
-                      const next = { ...prev };
-                      selectedDocs.forEach((d) => {
-                        if (next[d.id] === undefined) {
-                          next[d.id] = num(d.freight_value ?? d.value ?? 0);
-                        }
-                      });
-                      return next;
-                    });
+                    if (freightRecalcPending.current || isFetching || docsError) return;
                     setStep(2);
                     // Preenche observações automaticamente ao avançar
                     const nfList = selectedDocs.map((d) => d.invoice_number || d.access_key?.slice(-9)).join(', ');
                     setObservacoes(`NFS-e referente a(s) NF ${nfList}`);
                   }}
-                  disabled={!canAdvance || isFetching || !!docsError}
+                  disabled={!canAdvance || manualRecalcing || isFetching || !!docsError}
                 >
                   Avançar <ArrowRight className="h-4 w-4 ml-1" />
                 </Button>
@@ -936,8 +937,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                 </thead>
                 <tbody>
                   {selectedDocs.map((d) => {
-                    const freteCalc = num(d.freight_value ?? 0);
-                    const val = serviceValues[d.id] ?? freteCalc;
+                    const freteCalc = resolveNFSeServiceValue(d.freight_value);
+                    const val = valorPorDoc(d);
                     return (
                       <tr key={d.id} className="border-t">
                         <td className="p-2 font-mono">{d.invoice_number || d.access_key?.slice(-9)}</td>
@@ -1296,10 +1297,9 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
               </div>
             </div>
 
-            {totalServicos <= 0 && (
+            {invalidServiceValues && (
               <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-800">
-                Valor de serviços está zerado. Volte ao passo 1 e clique em <strong>Recalcular frete</strong> para calcular
-                a partir da tabela de frete das NFs selecionadas.
+                Informe um valor de serviço positivo para cada NF selecionada ou volte ao passo 1 e clique em <strong>Recalcular frete</strong>.
               </div>
             )}
 
@@ -1325,7 +1325,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
           )}
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={issuing}>Cancelar</Button>
           {step === 2 && (
-            <Button onClick={() => setStep(3)} disabled={totalServicos <= 0}>
+            <Button onClick={() => { if (!freightRecalcPending.current && !isFetching && !docsError) setStep(3); }} disabled={invalidServiceValues || manualRecalcing || isFetching || !!docsError}>
               Avançar <ArrowRight className="h-4 w-4 ml-1" />
             </Button>
           )}
@@ -1335,7 +1335,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             ) : (
               <Button
                 onClick={handleEmit}
-                disabled={issuing || create.isPending || issueBatch.isPending || isFetching || !!docsError || (!batchAttempt && needsTomadorRegistryEnrichment && (tomadorRegistryStatus === 'loading' || environment === 'production'))}
+                disabled={issuing || manualRecalcing || create.isPending || issueBatch.isPending || isFetching || !!docsError || (!batchAttempt && (invalidServiceValues || (needsTomadorRegistryEnrichment && (tomadorRegistryStatus === 'loading' || environment === 'production'))))}
               >
                 {issuing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
                 {batchAttempt ? 'Tentar novamente com segurança' : 'Emitir NFS-e'}
